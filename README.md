@@ -2,7 +2,7 @@
 
 **Monitor AI model usage, cost and quotas in OpenCode.**
 
-Cost Guard is a local monitoring and analysis tool for [OpenCode](https://opencode.ai/). It shows how AI prompts and sessions consume model usage, compares relative model costs, tracks account quotas, and can monitor active OpenCode sessions in real time.
+Cost Guard is a local monitoring and analysis tool for [OpenCode](https://opencode.ai/). It shows how OpenCode prompts and sessions use AI models, compares relative model costs, tracks account quotas, and can monitor active OpenCode sessions in real time.
 
 ![Cost Guard Watch: OpenCode sessions and quotas](docs/images/cost-guard-watch.png)
 
@@ -97,7 +97,7 @@ Details: [normal report](#normal-report), [model comparison](#model-comparison),
 
 ![Cost Guard Token Mix: model/category usage and CCost](docs/images/cost-guard-token-mix.png)
 
-See [Token Mix reference](#token-mix--by-model---token-mix). Replace static screenshots manually for substantial UI changes, not every release.
+See [Token Mix reference](#token-mix--by-model---token-mix). Screenshots are illustrative and may show an earlier Cost Guard release.
 
 ## Requirements
 
