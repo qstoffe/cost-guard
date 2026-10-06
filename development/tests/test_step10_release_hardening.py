@@ -12,8 +12,8 @@ ROOT = Path(__file__).resolve().parents[2]
 class ReleaseDocumentationTests(unittest.TestCase):
     def test_root_readme_documents_public_baseline_and_retains_proof_limits(self) -> None:
         text = (ROOT / "README.md").read_text(encoding="utf-8")
-        self.assertIn(f"{DISPLAY_VERSION} is the Python 3.11+ public baseline", text)
-        self.assertIn(f"{DISPLAY_VERSION} establishes the clean public-repository baseline", text)
+        self.assertIn(DISPLAY_VERSION, text)
+        self.assertIn("v80.0 is the Python 3.11+ public baseline", text)
         self.assertIn("Claude quotas remain experimental", text)
         self.assertIn("need separate live evidence", text)
         self.assertIn("## Setup and usage", text)

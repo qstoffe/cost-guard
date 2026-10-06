@@ -21,6 +21,10 @@ REQUIRED_FILES = {
     "LICENSE",
     "cost-guard.py",
     "README.md",
+    "docs/usage-and-cost.md",
+    "docs/images/cost-guard-watch.png",
+    "docs/images/cost-guard-report.png",
+    "docs/images/cost-guard-token-mix.png",
     "VERSION_HISTORY.md",
     "config/default-config.jsonc",
     "src/__init__.py",
@@ -149,6 +153,10 @@ def file_kind(root: Path, path: Path) -> str:
         return "fixture"
     if rp.startswith("development/") and path.suffix in {".md", ".txt"}:
         return "developmentProse"
+    if rp.startswith("docs/images/") and path.suffix == ".png":
+        # Static documentation images are binary assets, not otherText.
+        # Retain the existing universal file cap; no text budget is raised.
+        return "universalFile"
     return "otherText"
 
 

@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.1 — 2026-10-06
+
+- Introduce Cost Guard as an OpenCode AI usage, cost and quota tool, with static Watch/report/Token Mix images and an early Windows/macOS/CLI quick start.
+- Preserve detailed mode documentation and link the exact counting, valuation and symbol contracts in `docs/usage-and-cost.md`; runtime behavior and screenshot-independent release semantics are unchanged.
+
 ## v80.0 — 2026-10-06
 
 - Establish the clean 0BSD public-repository baseline with a fresh root history, retaining the current Python functionality and cross-platform launchers.

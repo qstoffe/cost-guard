@@ -51,6 +51,26 @@ def copy_package(destination: Path) -> Path:
 
 
 class ValidationTests(unittest.TestCase):
+    def test_documentation_images_use_existing_binary_cap_not_text_cap(self) -> None:
+        from development.tools.validate_package import Results, check_budgets, file_kind
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "development").mkdir()
+            shutil.copyfile(ROOT / "development/file-budgets.json", root / "development/file-budgets.json")
+            image = root / "docs/images/example.png"
+            image.parent.mkdir(parents=True)
+            self.assertEqual("universalFile", file_kind(root, image))
+            self.assertEqual("otherText", file_kind(root, root / "docs/example.md"))
+            image.write_bytes(b"\0" * 65537)
+            results = Results()
+            check_budgets(root, results)
+            self.assertEqual([], results.failures)
+            image.write_bytes(b"\0" * 2097153)
+            results = Results()
+            check_budgets(root, results)
+            self.assertIn("universal file cap", [label for label, _ in results.failures])
+
     def test_current_skeleton_passes_validator(self) -> None:
         proc = run_python(str(VALIDATOR), "--working-tree")
         self.assertEqual(0, proc.returncode, proc.stdout + proc.stderr)
@@ -121,6 +141,9 @@ class ValidationTests(unittest.TestCase):
                     self.assertTrue(mode & 0o100, f"{name} not executable in archive metadata: {oct(mode)}")
             self.assertIn("src/cache/database.py", names)
             self.assertIn("src/cache/repository.py", names)
+            for name in ("watch", "report", "token-mix"):
+                self.assertIn(f"docs/images/cost-guard-{name}.png", names)
+            self.assertIn("docs/usage-and-cost.md", names)
             self.assertFalse(any(name == "cache" or name.startswith("cache/") for name in names))
 
     def test_release_builder_default_output_is_gitignored_releases_directory(self) -> None:

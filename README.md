@@ -1,8 +1,103 @@
-# Cost Guard CLI
+# Cost Guard
 
-Cost Guard compares model prices, account quotas and token mix, with session/context analysis and reference valuation (**CCost**). **v80.0 is the Python 3.11+ public baseline**; V1/V2 share one analysis core.
+**Monitor AI model usage, cost and quotas in OpenCode.**
 
-Session detail is opt-in, not a billing ledger.
+Cost Guard is a local monitoring and analysis tool for [OpenCode](https://opencode.ai/). It shows how AI prompts and sessions consume model usage, compares relative model costs, tracks account quotas, and can monitor active OpenCode sessions in real time.
+
+![Cost Guard Watch: OpenCode sessions and quotas](docs/images/cost-guard-watch.png)
+
+Live OpenCode prompts/sessions: model/effort, CCost, calls, context development and account quotas.
+
+## At a glance
+
+- Monitor active OpenCode prompts and sessions in real time.
+- Compare AI model costs; see CCost per prompt/session.
+- Analyze Token Mix across input, cache read, cache write and output.
+- Track context growth and causal usage, including subagents.
+- Monitor account/subscription quotas across supported providers.
+- Inspect available historical OpenCode sessions and prompts.
+- Compare available AI models using your observed workload mix.
+
+## Why Cost Guard?
+
+Multiple OpenCode models, providers and subscriptions make relative cost, token mix, context growth and independent quotas hard to follow together. Cost Guard combines these signals locally.
+
+## Quick start
+
+Extract the [release ZIP](https://github.com/qstoffe/cost-guard/releases/latest), keeping its folder structure. Install **Python 3.11+**. Standard supported OpenCode installations need no Cost Guard configuration.
+
+### Windows
+
+Double-click the ready-to-use `.cmd` launchers under `windows/`; no manual Python commands needed:
+
+| Launcher | Mode |
+| --- | --- |
+| `Cost Guard.cmd` | Normal model comparison/account quota report. |
+| `Cost Guard Watch.cmd` | Live/global Watch; Ctrl+C exits. |
+| `Cost Guard Diagnostics.cmd` | Privacy-safe diagnostics ZIP; shows its path. |
+
+The report console stays open. See [download trust](#open-source-license-and-windows-download-trust) for warnings.
+
+### macOS
+
+Equivalent `.command` launchers are under `macos/`:
+
+| Launcher | Mode |
+| --- | --- |
+| `Cost Guard.command` | Normal report. |
+| `Cost Guard Watch.command` | Live/global Watch; Ctrl+C exits. |
+| `Cost Guard Diagnostics.command` | Privacy-safe diagnostics ZIP. |
+
+Files ship executable. Use Finder's **Open** for quarantine prompts; never bypass Gatekeeper.
+
+### Python CLI
+
+From the extracted package root:
+
+```text
+python cost-guard.py                # Normal report
+python cost-guard.py --watch        # Live/global Watch; Ctrl+C exits
+python cost-guard.py --token-mix    # Usage by model/token category
+python cost-guard.py --sessions 10  # Latest 10 root sessions
+python cost-guard.py --help
+```
+
+Use `python3` on macOS if needed, or `py -3` on Windows. See [all commands](#setup-and-usage).
+
+## Core concepts
+
+### What Cost Guard counts
+
+Distinct signals:
+
+- **Usage:** observed model requests and input/cache/output/reasoning tokens.
+- **CCost:** reference token valuation, not verified billing or credits deducted.
+- **Billed:** actual monetary spend with reported or explicit subscription/zero-billing evidence; otherwise `N/A`.
+- **Quotas / limits:** independent account-native windows, credits, budgets and availability.
+
+CCost uses GitHub reference rates in Copilot AI-credit-equivalent units. Included subscription work can have positive CCost and Billed $0.00. Unknown prices stay partial/unknown, never replaced with billed cost. A quota credential does **not** prove historical request-account attribution.
+
+### Symbols and token categories
+
+Token Mix uses **I/C/W/O** for uncached input/cache read/cache write/output (including reasoning). See the [usage and cost reference](docs/usage-and-cost.md) for exact counting, rounding, symbols and attribution caveats. Session detail is opt-in, not a billing ledger.
+
+## Reports and usage analysis
+
+### Model comparison and account overview
+
+This cropped normal-report example shows model pricing/comparison and account quotas, not every report section. Comparisons use your observed workload mix.
+
+![Cost Guard: model comparison and account quotas](docs/images/cost-guard-report.png)
+
+Details: [normal report](#normal-report), [model comparison](#model-comparison), [account quotas](#account-quota-blocks).
+
+### Token Mix
+
+`--token-mix` breaks available historical usage down by model and input/cache-read/cache-write/output token category, together with CCost.
+
+![Cost Guard Token Mix: model/category usage and CCost](docs/images/cost-guard-token-mix.png)
+
+See [Token Mix reference](#token-mix--by-model---token-mix). Replace static screenshots manually for substantial UI changes, not every release.
 
 ## Requirements
 
@@ -19,9 +114,7 @@ Session detail is opt-in, not a billing ledger.
 
 ## Setup and usage
 
-1. Extract the ZIP to a folder.
-2. Make sure `python --version` (or the Windows `py` launcher) resolves to Python 3.11+.
-3. Run Cost Guard from the extracted folder:
+Check `python --version` is 3.11+. Full commands, from the extracted folder:
 
 ```text
 python cost-guard.py                            # Available models + account quotas
@@ -38,13 +131,7 @@ python cost-guard.py --version
 python cost-guard.py --help
 ```
 
-Launchers live under `windows/` (`.cmd`) and under `macos/` (`.command`):
-
-- `Cost Guard`: normal report, leaving the console open.
-- `Cost Guard Watch.cmd` / `Cost Guard Watch.command`: global Watch; Ctrl+C exits through Python.
-- `Cost Guard Diagnostics.cmd` / `Cost Guard Diagnostics.command`: privacy-safe ZIP under `diagnostics/`, keeping its path visible.
-
-The `.command` files ship executable. Use Finder's **Open** for quarantine; Gatekeeper is never bypassed.
+See [Quick start](#quick-start) for launchers. Diagnostics ZIPs go under `diagnostics/`.
 
 Cost Guard uses `config/default-config.jsonc`. Create optional `config/user-config.jsonc` beside it only for overrides.
 
@@ -77,40 +164,6 @@ The shipped default is:
 With V2 selected, a metadata-only V1 check may warn of missing/newer legacy sessions. Cost Guard never combines, repairs or writes OpenCode history/migration state.
 
 Reports show `OpenCode not found` only after source selection fails and neither a PATH executable nor standard installation/data evidence exists. Usable V1/V2 sources work without the CLI; offline installations keep source errors. Watch still waits/retries.
-
-## What Cost Guard counts
-
-Usage includes all canonical provider IDs. **CCost** values observed tokens using replaceable GitHub reference rates, independent of subscription/billing. Unknown prices yield partial/unknown CCost, never billed-cost substitution. **Billed** needs reported spend or explicit subscription/zero-billing evidence; otherwise `N/A`. Legacy monetary fallback is not actual billing. A quota credential does **not** prove historical request-account attribution.
-
-**CCost scale:** 1 CCost = 1 GitHub Copilot AI-credit-equivalent of reference value; currently $1 of Copilot reference value = 100 CCost. It is not verified billing or credits deducted from a Copilot account. OpenAI/Anthropic subscription usage can have positive CCost with Billed $0.00. Actual billing, balances, budgets and native quota-to-money information remain monetary.
-
-**Numeric display:** CCost is naked (`437`, `?437`), including Token Mix % parentheses. Exact zero is `0`; positive amounts below 0.1 show `<0.1`; 0.1–<1 use one upward-rounded decimal; amounts ≥1 round upward to whole CCost. Internal Decimal analysis is never display-rounded. Rates/limits preserve source precision without unnecessary zeros. Used AI credits round upward; Remaining and Remaining/day/workday round downward, retaining tenths below 1 (`<0.1` for smaller positives). No quantity uses thousands separators; intentional K/M/B abbreviations remain.
-
-Successful reference/current-price fallback is Diagnostics-only. Missing reference pricing still warns of incomplete CCost, even when actual billing is known.
-
-Date totals de-duplicate exact fork-cloned requests; session views retain available history. Child/subagent work and eligible synthetic continuations belong to their initiating prompt. Completed `/compact` remains separate, including native V2 checkpoints without billable summaries.
-
-Deleted OpenCode sessions leave reports and Rel CCost samples; caches keep no ledger.
-
-Three independent concepts:
-
-- **Usage:** observed input/cache/output/reasoning token activity and requests.
-- **CCost / Billed:** independent reference valuation and actual monetary spend. Included subscription work can have positive CCost and zero Billed.
-- **Quota / limits:** account-native windows, credits, budgets and availability; provider identity is not account identity.
-
-Reports retain Copilot's native $0.01/AI-credit conversion; Watch omits that conversion/unit. Percentage-only quotas never imply dollar capacity.
-
-## Symbols and token categories
-
-- `I` = **uncached input**, `C` = **cache read**, `W` = **cache write**, `O` = **output** (including separately reported reasoning).
-- Token Mix % divides raw counts (`Input`/`Cache`/`Write`/`Output` = I/C/W/O). Largest-remainder rounding selects tenths summing to exactly 100%; trailing `.0` is omitted. Tiny shares may round to `0%`. Incomplete telemetry or zero totals show `--`; no samples show `no token data yet`. Absent fields are not zero.
-- Category CCost uses each request's model/tier; the four unrounded amounts reconcile with the same requests' CCost. Rounded cells need not sum exactly; `0.4% (24)` is a small but expensive share.
-- `~` marks approximate diagnostics (`~Ictx`, `~Ictx CCost`, `~Extra CCost`), never pricing provenance or Rel CCost.
-- `?` before a CCost cell means only the priced subset is shown. Completely unpriced workloads show `N/A`.
-- `N/A` means unavailable.
-- A trailing `*` on a model means linked child/subagent work used an additional model.
-- Numbered `*1`, `*2`, ... markers on a session header point to matching context-warning footnotes.
-- `Δctx -> Next Ictx` describes change in the session's effective next-input context state, not a billed-token total.
 
 ## Normal report
 
@@ -271,12 +324,6 @@ The cache is disposable, not authoritative history. Stop Cost Guard before delet
 
 SQLite WAL, short transactions and bounded waits support concurrent report/global/session Watch.
 
-## Release status
-
-v80.0 establishes the clean public-repository baseline, retaining current CCost, quotas, Token Mix and Watch behavior. Claude quotas remain experimental; physical restart/sleep and visual terminal behavior need separate live evidence.
-
-Quick is the hosted-AI gate; Full adds package/release/performance checks; Diagnostics covers the affected workstation.
-
 ## Diagnostics for environment-specific problems
 
 Use the Diagnostics launcher or run from the package root:
@@ -288,6 +335,12 @@ python development/tools/collect_diagnostics.py
 Creates `diagnostics/cost-guard-diagnostics-YYYYMMDD-HHMMSS.zip`: **Full/local** tests, package validation (including failures), environment/version, source/wire statistics, timings and provider health. `--no-network` skips pricing/quotas; `--skip-validation` is emergency/recursive-only.
 
 Bundles omit prompt text, titles, raw payloads/auth, tokens and account labels/IDs; session IDs are hashed. Account evidence is limited to plan/status, numeric quota shape, parser classification and HTTP status.
+
+## Release status
+
+**v80.1** refreshes documentation and static images; runtime behavior is unchanged. v80.0 is the Python 3.11+ public baseline; V1/V2 share one analysis core. Claude quotas remain experimental; physical restart/sleep and visual terminal behavior need separate live evidence.
+
+Quick is the hosted-AI gate; Full adds package/release/performance checks; Diagnostics covers the affected workstation.
 
 ## Development
 
