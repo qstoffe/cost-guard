@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "limits": {
+    "rootEntrypoint": { "designBytes": 4096, "hardBytes": 8192 },
+    "rootReadme": { "designBytes": 24576, "hardBytes": 32768 },
+    "versionHistory": { "hardBytes": 32768, "majorMaxBullets": 10, "maxExplicitMajors": 5, "summaryMaxBytes": 4096 },
+    "defaultConfig": { "designBytes": 24576, "hardBytes": 32768 },
+    "maintainer": { "designBytes": 24576, "hardBytes": 32768 },
+    "architecture": { "designBytes": 24576, "hardBytes": 32768 },
+    "developmentProse": { "hardBytes": 32768 },
+    "pythonModule": { "designBytes": 32768, "hardBytes": 65536 },
+    "testModule": { "designBytes": 32768, "hardBytes": 65536 },
+    "jsonConfig": { "hardBytes": 32768 },
+    "otherText": { "hardBytes": 65536 },
+    "fixture": { "hardBytes": 2097152 },
+    "universalFile": { "hardBytes": 2097152 }
+  }
+}

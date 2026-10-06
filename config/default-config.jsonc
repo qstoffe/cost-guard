@@ -1,0 +1,237 @@
+{
+  // IANA timezone used for timestamps, "today", and workday calculations.
+  "timezone": "Europe/Stockholm",
+
+  // OpenCode history source. "auto" selects the highest supported healthy
+  // generation (V2 first, otherwise V1). Set "v1" or "v2" only to force
+  // one generation for troubleshooting or an intentional legacy workflow.
+  "openCode": {
+    "source": "auto"
+  },
+
+  // Best-effort account-level GitHub Copilot AI-credit quota via direct GitHub HTTPS endpoints.
+  // Cost Guard reuses OpenCode's existing OAuth refresh credential only in memory.
+  "copilotQuota": {
+    "enabled": true,
+    // null = <user home>/.local/share/opencode/auth.json on Windows/macOS/Linux.
+    // Set an explicit path only if OpenCode stores auth.json elsewhere; ~ is supported.
+    "authJsonPath": null
+  },
+
+  // Best-effort ChatGPT/Codex subscription windows. This read-only integration
+  // reuses an existing OpenAI OAuth access token in memory and calls the usage
+  // surface used by OpenAI's Codex client. The endpoint is not a public REST
+  // compatibility contract; failures never block local Cost Guard reports.
+  // Cost Guard never refreshes, rotates, or writes the credential.
+  "openAiQuota": {
+    "enabled": true,
+    // null = configured OpenCode V2 accounts (read-only local database), then
+    // legacy <user home>/.local/share/opencode/auth.json when that integration has no V2 account.
+    // An explicit path selects only that auth.json file.
+    "authJsonPath": null
+  },
+
+  // Detect configured Anthropic accounts. API accounts are visible; subscription
+  // quota needs a supported source (no undocumented OAuth endpoint is probed).
+  "anthropicQuota": {
+    "enabled": true,
+    "authJsonPath": null
+  },
+
+  // Workday calendar. "SE" excludes weekends and Swedish public holidays.
+  // Use an empty value to exclude weekends only.
+  "workdayCalendar": "SE",
+
+  // Maximum age in hours of locally fetched GitHub pricing/model metadata before
+  // Cost Guard tries to refresh it. Decimals are supported. If refresh fails after
+  // at least one successful fetch, Cost Guard falls back to that local cache.
+  "pricingMaxAgeHours": 6,
+
+  // Legacy compatibility only: same-prompt comparison tables were removed from
+  // the v78 terminal product. This setting is still accepted so an older
+  // user-config.jsonc does not fail validation; it has no runtime effect.
+  "matchedModelComparisons": {
+    "enabled": false
+  },
+
+  // Warn on a still-running prompt once observed causal CCost reaches this
+   // CCost amount. Set to 0 to disable. Cost Guard never aborts OpenCode automatically.
+  "runningPromptWarningCCost": 1800,
+
+  // "auto" adapts the post-refresh delay to measured local refresh work and
+  // clamps it to 5–30 seconds. Explicit integer values remain compatible;
+  // while idle they use max(30 seconds, 3 × the configured interval).
+  "sessionWatchIntervalSeconds": "auto",
+
+  // Normal retained-row cap for the persistent watch dashboard. Completed rows
+  // outside watchRecentEventSeconds are evicted oldest-completed-first when needed;
+  // running and still-recent completed rows are never evicted just to enforce the
+  // cap, so the live table may temporarily exceed this value. Session header rows
+  // are presentation-only and do not count toward this cap. Values below 1 clamp to 1.
+  "watchDashboardMaxRows": 14,
+
+  // Observation-based recent-event window for persistent watch. A newly observed
+  // running event shows "+"; any prompt first observed completed or later observed
+  // transitioning to completed shows "✓" and the watchRecentCompleted row color
+  // for this many seconds. The same window protects recently completed rows from
+  // row-cap eviction. Aborted prompts keep [ABORTED] permanently but use the
+  // critical row color only for this many seconds after first observation; actual
+  // errors keep permanent critical styling. Set to 0 to disable transient effects.
+  "watchRecentEventSeconds": 30,
+
+  "thresholds": {
+    // Prompt-table metric coloring activates only when at least this many comparable
+    // values exist for that metric and they are not all tied.
+    "promptCostMinSamples": 5,
+
+    // Percentiles (0..100) reused independently for CCost, ~Ictx CCost, ~Extra CCost,
+    // and each I/C/W/O percentage component.
+    "promptCostP50": 50,
+    "promptCostP75": 75,
+    "promptCostP90": 90,
+
+    // Turn Next Ictx yellow when it reaches this percentage of the next
+    // higher-price input-token tier. Crossing the tier remains a hard warning.
+    "nextIctxPriceThresholdWarningPercent": 75,
+
+    // Legacy quota-to-workday warning settings: accepted for saved config
+    // compatibility; Accounts & quotas does not extrapolate native capacity.
+    "costQuotaCostTodayWarningPercent": 100,
+    "costQuotaCostTodayElevatedPercent": 150,
+    "costQuotaCostTodayCriticalPercent": 200,
+
+    // Legacy projection warning settings, retained as compatible no-ops.
+    "costQuotaProjectedMonthWarningPercent": 100,
+    "costQuotaProjectedMonthElevatedPercent": 125,
+    "costQuotaProjectedMonthCriticalPercent": 150
+  },
+
+  // Base console color scheme. Available built-in schemes:
+  // - "classic": traditional colors, with amber Next-Ictx economic warnings.
+  // - "modus-operandi-tinted": darker/no-background accents intended for the
+  //   light Modus Operandi Tinted terminal/editor palette and similar light themes.
+  // Individual entries under `colors` override the selected scheme.
+  "colorScheme": "classic",
+
+  // Built-in base schemes are intentionally visible here so users can inspect the
+  // exact styles. Supported foreground/background names are PowerShell ConsoleColor
+  // values: Black, DarkBlue, DarkGreen, DarkCyan, DarkRed, DarkMagenta, DarkYellow,
+  // Gray, DarkGray, Blue, Green, Cyan, Red, Magenta, Yellow, White.
+  // `ansi256` is optional (0..255); on VT-capable terminals it overrides foreground
+  // when no background is configured.
+  "colorSchemes": {
+    "classic": {
+      "activeRunning":       { "foreground": "Yellow",     "background": null,    "ansi256": null },
+      "lightWarning":        { "foreground": "DarkYellow", "background": null,    "ansi256": 172 },
+      "firstRunNotice":      { "foreground": "Yellow",     "background": null,    "ansi256": null },
+      "promptCostP50":       { "foreground": "Yellow",     "background": null,    "ansi256": null },
+      "promptCostP75":       { "foreground": "DarkYellow", "background": null,    "ansi256": 208 },
+      "promptCostP90":       { "foreground": "Red",        "background": null,    "ansi256": null },
+      "promptIctxPriceThreshold": { "foreground": "DarkYellow", "background": null, "ansi256": 208 },
+      "nextIctxWarning":     { "foreground": "DarkYellow", "background": null,    "ansi256": 172 },
+      "nextIctxWarningReason": { "foreground": "DarkYellow", "background": null,    "ansi256": 172 },
+      "watchRunningWarning": { "foreground": "Yellow",     "background": null,    "ansi256": null },
+      "watchRecentCompleted": { "foreground": "Green",      "background": null,    "ansi256": 118 },
+      "watchSessionHeader":   { "foreground": "DarkGray",   "background": null,    "ansi256": 245 },
+      "watchToolActivity":    { "foreground": "DarkYellow", "background": null,    "ansi256": 136 },
+      "watchLiveTotalCost":  { "foreground": "Yellow",     "background": null,    "ansi256": null },
+      "watchSummary":        { "foreground": "Green",      "background": "Black", "ansi256": null },
+      "watchSummaryCost":    { "foreground": "Cyan",       "background": "Black", "ansi256": null },
+      "costQuotaWarning":     { "foreground": "Yellow",     "background": null,    "ansi256": null },
+      "costQuotaElevated":    { "foreground": "DarkYellow", "background": null,    "ansi256": 208 },
+      "costQuotaCritical":    { "foreground": "Red",        "background": null,    "ansi256": null },
+      "copilotPausedWarning": { "foreground": "Red", "background": null, "ansi256": null },
+      "costQuotaBarWarning":  { "foreground": "Yellow", "background": "Yellow", "ansi256": null },
+      "costQuotaBarElevated": { "foreground": "DarkYellow", "background": "DarkYellow", "ansi256": null },
+      "costQuotaBarCritical": { "foreground": "Red",        "background": "Red",        "ansi256": null },
+      "modelComparisonPromotion": { "foreground": "DarkYellow", "background": null, "ansi256": 214 },
+      "reportDefinitionLabel": { "foreground": "Yellow", "background": null, "ansi256": null },
+      "reportDefinitionValue": { "foreground": "Yellow", "background": null, "ansi256": null },
+      "modelComparisonNew": { "foreground": "Green", "background": null, "ansi256": 118 },
+      "samePromptComparison":      { "foreground": "Cyan",       "background": null, "ansi256": 51 },
+      "dailyCostFilled":          { "foreground": "White",    "background": "White",    "ansi256": null },
+      "dailyCostProjected":       { "foreground": "Gray",     "background": null,       "ansi256": 245 },
+      "dailyCostEmpty":           { "foreground": "DarkGray", "background": "DarkGray", "ansi256": null },
+      "dailyCostDate":            { "foreground": "Gray",     "background": null,       "ansi256": null },
+      "dailyCostCurrentDate":     { "foreground": "Green",    "background": null,       "ansi256": 118 },
+      "dailyCostNonWorkdayDate":  { "foreground": "Red",      "background": null,       "ansi256": null }
+    },
+    "modus-operandi-tinted": {
+      "activeRunning":       { "foreground": "Yellow",  "background": null, "ansi256": null },
+      "lightWarning":        { "foreground": "DarkYellow",  "background": null, "ansi256": 130 },
+      "firstRunNotice":      { "foreground": "DarkYellow",  "background": null, "ansi256": 130 },
+      "promptCostP50":       { "foreground": "DarkYellow",  "background": null, "ansi256": 130 },
+      "promptCostP75":       { "foreground": "DarkMagenta", "background": null, "ansi256": 166 },
+      "promptCostP90":       { "foreground": "Red",     "background": null, "ansi256": 160 },
+      "promptIctxPriceThreshold": { "foreground": "DarkMagenta", "background": null, "ansi256": 166 },
+      "nextIctxWarning":     { "foreground": "DarkYellow",  "background": null, "ansi256": 130 },
+      "nextIctxWarningReason": { "foreground": "DarkYellow", "background": null, "ansi256": 130 },
+      "watchRunningWarning": { "foreground": "DarkYellow",  "background": null, "ansi256": 130 },
+      "watchRecentCompleted": { "foreground": "DarkGreen",   "background": null, "ansi256": 28 },
+      "watchSessionHeader":   { "foreground": "DarkGray",    "background": null, "ansi256": 238 },
+      "watchToolActivity":    { "foreground": "DarkYellow",  "background": null, "ansi256": 94 },
+      "watchLiveTotalCost":  { "foreground": "DarkYellow",  "background": null, "ansi256": 130 },
+      "watchSummary":        { "foreground": "DarkGreen",   "background": null, "ansi256": 28 },
+      "watchSummaryCost":    { "foreground": "DarkCyan",    "background": null, "ansi256": 30 },
+      "costQuotaWarning":     { "foreground": "DarkYellow",  "background": null, "ansi256": 130 },
+      "costQuotaElevated":    { "foreground": "DarkMagenta", "background": null, "ansi256": 166 },
+      "costQuotaCritical":    { "foreground": "Red",     "background": null, "ansi256": 160 },
+      "copilotPausedWarning": { "foreground": "Red", "background": null, "ansi256": 160 },
+      "costQuotaBarWarning":  { "foreground": "DarkYellow",  "background": "DarkYellow",  "ansi256": null },
+      "costQuotaBarElevated": { "foreground": "DarkMagenta", "background": "DarkMagenta", "ansi256": null },
+      "costQuotaBarCritical": { "foreground": "DarkRed",     "background": "DarkRed",     "ansi256": null },
+      "modelComparisonPromotion": { "foreground": "DarkYellow", "background": null, "ansi256": 130 },
+      "reportDefinitionLabel": { "foreground": "DarkYellow", "background": null, "ansi256": 130 },
+      "reportDefinitionValue": { "foreground": "DarkYellow", "background": null, "ansi256": 130 },
+      "modelComparisonNew": { "foreground": "DarkGreen", "background": null, "ansi256": 28 },
+      "samePromptComparison":      { "foreground": "DarkCyan",    "background": null, "ansi256": 30 },
+      "dailyCostFilled":          { "foreground": "DarkGray", "background": "DarkGray", "ansi256": null },
+      "dailyCostProjected":       { "foreground": "Gray",     "background": null,       "ansi256": 244 },
+      "dailyCostEmpty":           { "foreground": null,         "background": null,       "ansi256": null },
+      "dailyCostDate":            { "foreground": "DarkGray",  "background": null,       "ansi256": 238 },
+      "dailyCostCurrentDate":     { "foreground": "DarkGreen", "background": null,       "ansi256": 28 },
+      "dailyCostNonWorkdayDate":  { "foreground": "Red",   "background": null,       "ansi256": 160 }
+    }
+  },
+
+  // Per-color overrides. "default" means: inherit this style from `colorScheme`.
+  // Replace any one value with an object such as
+  // { "foreground": "Cyan", "background": null, "ansi256": 44 } to override
+  // only that color. Partial objects are merged on top of the selected scheme.
+  "colors": {
+    "activeRunning": "default",
+    "lightWarning": "default",
+    "firstRunNotice": "default",
+    "promptCostP50": "default",
+    "promptCostP75": "default",
+    "promptCostP90": "default",
+    "promptIctxPriceThreshold": "default",
+    "nextIctxWarning": "default",
+    "nextIctxWarningReason": "default",
+    "watchRunningWarning": "default",
+    "watchRecentCompleted": "default",
+    "watchSessionHeader": "default",
+    "watchToolActivity": "default",
+    "watchLiveTotalCost": "default",
+    "watchSummary": "default",
+    "watchSummaryCost": "default",
+    "costQuotaWarning": "default",
+    "costQuotaElevated": "default",
+    "costQuotaCritical": "default",
+    "copilotPausedWarning": "default",
+    "costQuotaBarWarning": "default",
+    "costQuotaBarElevated": "default",
+    "costQuotaBarCritical": "default",
+    "modelComparisonPromotion": "default",
+    "reportDefinitionLabel": "default",
+    "reportDefinitionValue": "default",
+    "modelComparisonNew": "default",
+    "samePromptComparison": "default",
+    "dailyCostFilled": "default",
+    "dailyCostProjected": "default",
+    "dailyCostEmpty": "default",
+    "dailyCostDate": "default",
+    "dailyCostCurrentDate": "default",
+    "dailyCostNonWorkdayDate": "default"
+  }
+}

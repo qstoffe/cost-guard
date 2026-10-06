@@ -1,0 +1,33 @@
+{
+  "info": {"version": "2.0.18", "pid": 4242},
+  "projects": [
+    {"id": "project-a", "worktree": "/repo"},
+    {"id": "project-b", "worktree": "/other"}
+  ],
+  "sessions": {
+    "/repo": [
+      {"id": "ses_root", "projectID": "project-a", "directory": "/repo", "title": "Root", "time": {"created": 1000, "updated": 9000}, "cost": 0.7, "tokens": {"input": 200, "output": 26, "reasoning": 6, "cache": {"read": 53, "write": 11}}},
+      {"id": "ses_child", "parentID": "ses_root", "projectID": "project-a", "directory": "/repo", "title": "Child", "time": {"created": 2500, "updated": 7000}, "cost": 0.2, "tokens": {"input": 20, "output": 5, "reasoning": 0, "cache": {"read": 2, "write": 1}}}
+    ],
+    "/other": [
+      {"id": "ses_other", "projectID": "project-b", "directory": "/other", "title": "Other", "time": {"created": 1500, "updated": 3000, "archived": 2900}, "cost": 0, "tokens": {"input": 0, "output": 0, "reasoning": 0, "cache": {"read": 0, "write": 0}}}
+    ]
+  },
+  "messages": {
+    "ses_root": [
+      {"info": {"id": "msg_user", "sessionID": "ses_root", "role": "user", "time": {"created": 1100}, "agent": "build", "model": {"providerID": "github-copilot", "modelID": "gpt-test", "variant": "high"}}, "parts": [{"id": "prt_user_text", "messageID": "msg_user", "sessionID": "ses_root", "type": "text", "text": "Hello Cost Guard", "synthetic": false, "time": {"start": 1101, "end": 1101}}]},
+      {"info": {"id": "msg_assistant", "sessionID": "ses_root", "role": "assistant", "time": {"created": 1200, "completed": 1500}, "parentID": "msg_user", "providerID": "github-copilot", "modelID": "gpt-test", "variant": "high", "agent": "build", "finish": "stop", "cost": 9.99, "tokens": {"input": 999, "output": 999, "reasoning": 999, "cache": {"read": 999, "write": 999}}}, "parts": [{"id": "prt_step_1", "messageID": "msg_assistant", "sessionID": "ses_root", "type": "step-finish", "reason": "tool-calls", "cost": 0.1, "tokens": {"input": 100, "output": 10, "reasoning": 2, "cache": {"read": 30, "write": 5}}, "time": {"start": 1300, "end": 1300}}, {"id": "prt_step_2", "messageID": "msg_assistant", "sessionID": "ses_root", "type": "step-finish", "reason": "stop", "cost": 0.2, "tokens": {"input": 40, "output": 7, "reasoning": 3, "cache": {"read": 20, "write": 4}}, "time": {"start": 1450, "end": 1450}}]},
+      {"info": {"id": "msg_compact", "sessionID": "ses_root", "role": "user", "time": {"created": 2000}, "agent": "build"}, "parts": [{"id": "prt_compact", "messageID": "msg_compact", "sessionID": "ses_root", "type": "compaction", "auto": true, "tail_start_id": "msg_user", "time": {"start": 2001, "end": 2001}}]},
+      {"info": {"id": "msg_summary", "sessionID": "ses_root", "role": "assistant", "time": {"created": 2100, "completed": 2300}, "parentID": "msg_compact", "providerID": "github-copilot", "modelID": "gpt-test", "summary": true, "finish": "stop", "cost": 0.4, "tokens": {"input": 40, "output": 4, "reasoning": 1, "cache": {"read": 3, "write": 2}}}, "parts": [{"id": "prt_summary_text", "messageID": "msg_summary", "sessionID": "ses_root", "type": "text", "text": "summary", "time": {"start": 2200, "end": 2200}}]},
+      {"info": {"id": "msg_synthetic", "sessionID": "ses_root", "role": "user", "time": {"created": 2400}, "agent": "build"}, "parts": [{"id": "prt_synthetic", "messageID": "msg_synthetic", "sessionID": "ses_root", "type": "text", "synthetic": true, "text": "Summarize the task tool output above and continue with your task.", "time": {"start": 2401, "end": 2401}}]}
+    ],
+    "ses_child": [
+      {"info": {"id": "msg_child_user", "sessionID": "ses_child", "role": "user", "time": {"created": 2600}, "agent": "general"}, "parts": [{"id": "prt_child_subtask", "messageID": "msg_child_user", "sessionID": "ses_child", "type": "subtask", "prompt": "Inspect module", "description": "Inspect module", "agent": "general", "command": "task", "model": {"providerID": "github-copilot", "modelID": "claude-test"}, "time": {"start": 2601, "end": 2601}}]},
+      {"info": {"id": "msg_child_assistant", "sessionID": "ses_child", "role": "assistant", "time": {"created": 2700, "completed": 2800}, "parentID": "msg_child_user", "providerID": "github-copilot", "modelID": "claude-test", "finish": "stop", "cost": 0.2, "tokens": {"input": 20, "output": 5, "reasoning": 0, "cache": {"read": 2, "write": 1}}}, "parts": [{"id": "prt_child_text", "messageID": "msg_child_assistant", "sessionID": "ses_child", "type": "text", "text": "done", "time": {"start": 2750, "end": 2750}}]}
+    ],
+    "ses_other": []
+  },
+  "events": [
+    {"payload": {"id": "evt-1", "type": "session.updated", "properties": {"info": {"id": "ses_root"}}}}
+  ]
+}

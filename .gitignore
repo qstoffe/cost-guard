@@ -1,0 +1,18 @@
+# Optional user-specific overrides; never shipped in a release ZIP.
+/config/user-config.jsonc
+
+# Disposable runtime state. These directories may be removed while Cost Guard is stopped.
+/cache/
+/diagnostics/
+
+# Generated release artifacts; never source and never nested into a release ZIP.
+/releases/
+
+# Python-generated local artifacts.
+__pycache__/
+*.py[cod]
+
+# Local/editor/OS noise.
+.DS_Store
+.vscode/
+.idea/

@@ -1,0 +1,1 @@
+"""Cost Guard application package."""

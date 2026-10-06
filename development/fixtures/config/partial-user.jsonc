@@ -1,0 +1,9 @@
+{
+  // Representative v77 partial override plus new v78 source selection.
+  "openCode": { "source": "V2" },
+  "copilotQuota": { "enabled": false },
+  "thresholds": { "promptCostP75": 70 },
+  "colors": {
+    "watchSummary": { "foreground": "Cyan", "background": null }
+  }
+}
