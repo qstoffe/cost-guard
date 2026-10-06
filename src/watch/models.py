@@ -19,6 +19,8 @@ class ToolObservation:
     failed_count: int = 0
     running_tool: str = ""
     running_ms: int = 0
+    background_kinds: tuple[str, ...] = ()
+    background_ms: int = 0
 
     @property
     def has_active_todo(self) -> bool:
@@ -30,7 +32,7 @@ class ToolObservation:
 
     @property
     def has_status_row(self) -> bool:
-        return bool(self.running_tool) or self.has_open_todo
+        return bool(self.running_tool) or bool(self.background_kinds) or self.has_open_todo
 
 
 @dataclass(frozen=True, slots=True)

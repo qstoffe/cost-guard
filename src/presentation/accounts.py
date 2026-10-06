@@ -194,6 +194,10 @@ def account_capacity_parts(account: AccountProjection, timezone_id: str, *, now_
         cause = _FAILURE_CAUSES.get(str(snapshot.observations.get("parser_reason")))
         if cause and snapshot.availability in {"error", "stale"}:
             state += f" ({cause})"
+        # Provider-authored remedy for a durable state; report mode prints the full reason instead.
+        action = snapshot.observations.get("user_action")
+        if watch and isinstance(action, str) and action and snapshot.availability == "unavailable":
+            state += " · " + action
         state += " · Retrying..." if recovering else ""
         parts.append(StyledText(((state, "costQuotaWarning"),)))
     elif recovering:

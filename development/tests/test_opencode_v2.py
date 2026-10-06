@@ -163,6 +163,7 @@ class CurrentV2Service:
             },
         ]
         self.active = {}
+        self.shells = None  # running-job registry; None answers 404 (unobservable)
         self.messages = {
             "ses_current": [
                 {
@@ -221,6 +222,10 @@ class CurrentV2Service:
                     return
                 if parsed.path == "/api/session/active":
                     self._json({"data": owner.active})
+                    return
+                if parsed.path == "/api/shell" and owner.shells is not None:
+                    here = query.get("location[directory]") == ["/private/repo"]  # location-scoped
+                    self._json({"location": {"directory": "/private/repo"}, "data": owner.shells if here else []})
                     return
                 if parsed.path == "/api/session":
                     cursor = query.get("cursor", [None])[0]

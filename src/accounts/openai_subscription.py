@@ -35,6 +35,8 @@ from .base import normalize_quota
 from .credentials import configured_credentials, resolve_auth_path
 
 USAGE_URL = "https://chatgpt.com/backend-api/wham/usage"
+# OpenCode renews the OAuth token when it next calls OpenAI; Cost Guard never does.
+EXPIRED_REASON = "OpenAI token expired; it renews automatically on your next OpenAI prompt in OpenCode."
 
 
 @dataclass(frozen=True, slots=True)
@@ -147,7 +149,7 @@ def load_v2_credential(path: Path, *, now_ms: int) -> OpenAICredential | None:
     if isinstance(expires, (int, float)) and not isinstance(expires, bool):
         expiration_ms = expires if expires > 10_000_000_000 else expires * 1000
         if expiration_ms <= now_ms:
-            return OpenAICredential(False, reason="OpenAI OAuth token expired; Cost Guard does not refresh credentials")
+            return OpenAICredential(False, reason=EXPIRED_REASON)
     return credential
 
 
@@ -307,6 +309,11 @@ def _unavailable(reason: str, now_ms: int, *, plan: str | None = None) -> QuotaS
     )
 
 
+def _expired(now_ms: int) -> QuotaSnapshot:
+    return replace(_unavailable(EXPIRED_REASON, now_ms), observations={
+        "parser_reason": "credential_expired", "user_action": "Token expired; your next prompt with this account renews it"})
+
+
 class OpenAIAccountProvider:
     provider_id = "openai"
     # A usable OAuth token for quota lookup does not establish which connection
@@ -349,7 +356,7 @@ class OpenAIAccountProvider:
             return _unavailable("disabled in config", now)
         credential = self._credential(now)
         if not credential.available:
-            return _unavailable(credential.reason, now)
+            return _expired(now) if credential.reason == EXPIRED_REASON else _unavailable(credential.reason, now)
         return self._fetch(credential, now)
 
     def get_account_snapshots(self):
@@ -369,7 +376,7 @@ class OpenAIAccountProvider:
                 expires = _decimal(record.value.get("expires"))
                 expiration_ms = expires * 1000 if expires is not None and expires < 10_000_000_000 else expires
                 if expiration_ms is not None and expiration_ms <= now:
-                    quota = _unavailable("OpenAI OAuth token expired; Cost Guard does not refresh credentials", now)
+                    quota = _expired(now)
                 elif credential.available:
                     quota = self._fetch(credential, now)
                 else:
@@ -390,8 +397,9 @@ class OpenAIAccountProvider:
                 snapshot = convert_usage_payload(response.payload, fetched_at_ms=now)
                 return replace(snapshot, observations={**snapshot.observations, "http_status": response.status_code})
             if response.status_code in (401, 403):
-                return replace(_unavailable("OpenAI usage authentication was rejected; Cost Guard does not refresh credentials", now),
-                               observations={"http_status": response.status_code, "parser_reason": "auth_failure"})
+                return replace(_unavailable("OpenAI sign-in was rejected; reconnect OpenAI in OpenCode.", now),
+                               observations={"http_status": response.status_code, "parser_reason": "auth_failure",
+                                             "user_action": "Sign-in rejected; reconnect OpenAI in OpenCode"})
             if response.network_error:
                 return replace(_unavailable("OpenAI usage request failed (network)", now), availability="error",
                                observations={"http_status": 0, "parser_reason": "network_failure"})

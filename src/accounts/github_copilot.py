@@ -408,8 +408,10 @@ class GitHubCopilotAccountProvider:
             if entitlement_result is not None and entitlement_result.usage_status is not AccountUsageStatus.UNKNOWN:
                 return entitlement_result
             if user_probe.status_code in (401, 403):
-                return replace(_unavailable("GitHub Copilot authentication was rejected", fetched_at_ms=now),
-                               availability="unavailable", observations={"http_status": user_probe.status_code, "parser_reason": "auth_failure"})
+                return replace(_unavailable("GitHub Copilot sign-in was rejected; sign in to GitHub Copilot again in OpenCode.", fetched_at_ms=now),
+                               availability="unavailable", observations={
+                                   "http_status": user_probe.status_code, "parser_reason": "auth_failure",
+                                   "user_action": "Sign-in rejected; sign in to GitHub again in OpenCode"})
             if user_probe.network_error and entitlement_probe.network_error:
                 return replace(_unavailable("GitHub Copilot quota request failed (network)", fetched_at_ms=now),
                                availability="error", observations={"http_status": 0, "parser_reason": "network_failure"})

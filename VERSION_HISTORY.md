@@ -1,5 +1,14 @@
 # Cost Guard version history
 
+## v80.3 — 2026-10-06
+
+- Explain rejected sign-ins with the fix: reconnect OpenAI or sign in to GitHub again in OpenCode, or run `claude auth login`. Account providers supply the short remedy that Watch shows after `Quota unavailable`; the report prints the full sentence.
+- Keep a Watch prompt running while verified OpenCode V2 background work (e.g. a backgrounded shell) is outstanding: Duration continues, Calls/CCost stay usage-based, a `background: shell 2m18s` status row and `background shell` footer replace `Idle`, and the automatic resume stays on the same row. Model work resumed after such jobs, previously outside every prompt row, now counts on its prompt; native job IDs are never shown.
+
+## v80.2 — 2026-10-06
+
+- Explain an expired OpenAI OAuth token: the report says it renews automatically on the next OpenAI prompt in OpenCode, and Watch adds a short renewal hint to `Quota unavailable`. Cost Guard still never refreshes or writes credentials.
+
 ## v80.1 — 2026-10-06
 
 - Introduce Cost Guard as an OpenCode AI usage, cost and quota tool, with static Watch/report/Token Mix images and an early Windows/macOS/CLI quick start.

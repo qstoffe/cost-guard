@@ -8,7 +8,10 @@ import time
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import replace
 
-from src.domain import CostDisposition, EventKind, MessageRole, NormalizedMessage, NormalizedPart, SessionSnapshot, TerminalOutcome
+from src.domain import (
+    BackgroundActivity, CostDisposition, EventKind, MessageRole, NormalizedMessage, NormalizedPart, SessionSnapshot,
+    TerminalOutcome,
+)
 
 from .billing import CostEstimator, ProviderScope, measure_prompt_billing, provider_matches
 from .models import PromptRecord, PromptReference, TraceEntry
@@ -136,22 +139,42 @@ def prompt_references(snapshot: SessionSnapshot, *, since_ms: int = 0) -> tuple[
     return tuple(refs)
 
 
-def _synthetic_parent_ids(snapshot: SessionSnapshot, ref: PromptReference) -> set[str]:
-    ids = {ref.prompt_id}
-    if ref.prompt_kind != "subtask":
-        return ids
+def prompt_parent_ids(snapshot: SessionSnapshot, prompt_id: str, prompt_time_ms: int, *, subtask: bool) -> set[str]:
+    """Events whose assistant work continues one logical root prompt.
+
+    Background-completion notices resume the prompt current at that time, so
+    work after them stays on that prompt's row; subtasks also own synthetic
+    task-summary continuations. Each event falls in exactly one prompt window.
+    """
+    kinds = {EventKind.BACKGROUND_COMPLETION} | ({EventKind.SYNTHETIC_CONTINUATION} if subtask else set())
     next_visible = min(
-        (event.created_at_ms for event in _visible_prompt_events(snapshot) if event.created_at_ms > ref.prompt_time_ms),
+        (event.created_at_ms for event in _visible_prompt_events(snapshot) if event.created_at_ms > prompt_time_ms),
         default=2**63 - 1,
     )
-    for event in snapshot.events:
-        if (
-            event.session_id == ref.session_id
-            and event.kind is EventKind.SYNTHETIC_CONTINUATION
-            and ref.prompt_time_ms < event.created_at_ms < next_visible
-        ):
-            ids.add(event.event_id)
-    return ids
+    return {prompt_id} | {
+        event.event_id for event in snapshot.events
+        if event.session_id == snapshot.root.session_id and event.kind in kinds
+        and prompt_time_ms < event.created_at_ms < next_visible
+    }
+
+
+def _synthetic_parent_ids(snapshot: SessionSnapshot, ref: PromptReference) -> set[str]:
+    return prompt_parent_ids(snapshot, ref.prompt_id, ref.prompt_time_ms, subtask=ref.prompt_kind == "subtask")
+
+
+def _outstanding_background(
+    snapshot: SessionSnapshot, messages: Sequence[NormalizedMessage], *, superseded: bool,
+) -> tuple[BackgroundActivity, ...]:
+    """Running background work the current prompt is still waiting on.
+
+    Completion resumes the conversation inside the newest prompt, so work an
+    earlier prompt started hands its wait over to that prompt; a superseded
+    prompt never waits on background work.
+    """
+    if superseded:
+        return ()
+    sessions = {snapshot.root.session_id} | _prompt_child_ids(messages)
+    return tuple(item for item in snapshot.background if item.running and item.session_id in sessions)
 
 
 def _is_aborted_message(message: NormalizedMessage) -> bool:
@@ -237,6 +260,10 @@ def _prompt_activity_end(
     values.extend(
         session.updated_at_ms for session in snapshot.sessions if session.session_id in child_ids
     )
+    # Background work the prompt started is part of its wall-clock lifetime.
+    owners = {message.message_id for message in messages}
+    values.extend(item.ended_at_ms for item in snapshot.background
+                  if item.owner_message_id in owners and item.ended_at_ms)
     return max(values)
 
 
@@ -435,12 +462,24 @@ def build_prompt_record(
     superseded = any(event.created_at_ms > ref.prompt_time_ms for event in _visible_prompt_events(snapshot))
     compacting = active_compaction_event(snapshot)
     superseded = superseded or bool(compacting and compacting.created_at_ms > ref.prompt_time_ms)
-    active_work = _prompt_has_active_work(
+    foreground_work = _prompt_has_active_work(
         snapshot, assistant_messages, continuation_superseded=superseded
     )
-    in_progress = (not explicitly_aborted or bool(evidence and active_work)) and not bool(compacting and compacting.created_at_ms > ref.prompt_time_ms) and _assistant_in_progress(
-        assistant_messages, now_ms=now_ms, continuation_superseded=superseded,
-        active_work=active_work,
+    background = _outstanding_background(snapshot, assistant_messages, superseded=superseded)
+
+    def running(active_work: bool) -> bool:
+        return (not explicitly_aborted or bool(evidence and active_work)) and not bool(
+            compacting and compacting.created_at_ms > ref.prompt_time_ms
+        ) and _assistant_in_progress(
+            assistant_messages, now_ms=now_ms, continuation_superseded=superseded, active_work=active_work,
+        )
+
+    in_progress = running(foreground_work or bool(background))
+    background_only = in_progress and not running(foreground_work)
+    background_fields = dict(
+        background_kinds=tuple(item.kind for item in background) if in_progress else (),
+        background_started_ms=min((item.started_at_ms for item in background), default=0) if in_progress else 0,
+        background_only=background_only,
     )
 
     all_entries = [
@@ -505,6 +544,7 @@ def build_prompt_record(
             in_progress=in_progress,
             completed_successfully=successful_final,
             duration_ms=max(0, terminal_time - ref.prompt_time_ms) if evidence else 0,
+            **background_fields,
         )
 
     first, last = root_entries[0], root_entries[-1]
@@ -572,6 +612,7 @@ def build_prompt_record(
         last_root_entry=last_root_for_next, aborted=aborted, watch_error=watch_error,
         abort_time_ms=abort_time, in_progress=in_progress,
         completed_successfully=successful_final,
+        **background_fields,
     )
 
 

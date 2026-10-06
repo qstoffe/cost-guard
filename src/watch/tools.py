@@ -3,38 +3,19 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
+from src.analysis.causal import prompt_parent_ids
 from src.domain import EventKind, MessageRole, SessionSnapshot
 
 from .models import ToolObservation
 
 
 def _parent_ids(snapshot: SessionSnapshot, event_id: str, *, is_compaction: bool) -> set[str]:
-    ids = {event_id}
     if is_compaction:
-        return ids
+        return {event_id}
     event = next((item for item in snapshot.events if item.event_id == event_id), None)
-    if event is None or event.kind is not EventKind.SUBTASK:
-        return ids
-    visible = sorted(
-        (
-            item for item in snapshot.events
-            if item.session_id == snapshot.root.session_id
-            and item.kind in {EventKind.USER_PROMPT, EventKind.SUBTASK}
-        ),
-        key=lambda item: (item.created_at_ms, item.event_id),
-    )
-    next_time = min(
-        (item.created_at_ms for item in visible if item.created_at_ms > event.created_at_ms),
-        default=2**63 - 1,
-    )
-    for item in snapshot.events:
-        if (
-            item.session_id == snapshot.root.session_id
-            and item.kind is EventKind.SYNTHETIC_CONTINUATION
-            and event.created_at_ms < item.created_at_ms < next_time
-        ):
-            ids.add(item.event_id)
-    return ids
+    if event is None:
+        return {event_id}
+    return prompt_parent_ids(snapshot, event_id, event.created_at_ms, subtask=event.kind is EventKind.SUBTASK)
 
 
 def _part_start(part) -> int:

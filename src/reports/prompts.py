@@ -211,6 +211,9 @@ def build_prompt_block(
             watch_next_context_fresh_ccost=watch_state.fresh_ccost,
             watch_next_context_warning=watch_warning.text,
             watch_next_context_warning_severity=watch_warning.price_severity,
+            background_kinds=record.background_kinds,
+            background_started_ms=record.background_started_ms,
+            background_only=record.background_only,
         ))
     for compaction in bundle.compactions:
         if start_ms is not None and compaction.created_at_ms < start_ms:

@@ -212,7 +212,7 @@ class WatchRenderer:
         if kind == "tools":
             segments = tool_summary_segments(tool, width)
         else:
-            segments = status_segments(tool, width, _duration(tool.running_ms))
+            segments = status_segments(tool, width, _duration(tool.running_ms), _duration(tool.background_ms))
         segments = [(prefix, BASE_ROLE)] + segments
         padding = max(0, span_width - sum(len(text) for text, _role in segments))
         body = "".join(self.styler.apply(text, role) for text, role in segments)

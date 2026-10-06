@@ -297,6 +297,26 @@ class AccountProviderTests(unittest.TestCase):
             self.assertNotIn("LEAK-ME-NOT", snap.reason)
             self.assertNotIn("LEAK-ME-NOT", repr(snap))
 
+    def test_rejected_sign_in_tells_user_how_to_restore_quota(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            home = Path(td); auth = home / ".local/share/opencode/auth.json"; auth.parent.mkdir(parents=True)
+            auth.write_text(json.dumps({"github-copilot": {"type": "oauth", "refresh": "REVOKED-SECRET"},
+                                        "openai": {"type": "oauth", "access": "REVOKED-SECRET"}}), encoding="utf-8")
+            for status in (401, 403):
+                copilot = GitHubCopilotAccountProvider(
+                    home=home, json_get=lambda *_: JsonResponse(False, status, None), now_ms=lambda: 5).get_quota_snapshot()
+                openai = OpenAIAccountProvider(
+                    home=home, usage_get=lambda *_: UsageResponse(False, status), now_ms=lambda: 5).get_quota_snapshot()
+                for snap, reason, action in (
+                    (copilot, "GitHub Copilot sign-in was rejected; sign in to GitHub Copilot again in OpenCode.",
+                     "Sign-in rejected; sign in to GitHub again in OpenCode"),
+                    (openai, "OpenAI sign-in was rejected; reconnect OpenAI in OpenCode.",
+                     "Sign-in rejected; reconnect OpenAI in OpenCode"),
+                ):
+                    self.assertEqual((reason, action, "auth_failure"),
+                                     (snap.reason, snap.observations["user_action"], snap.observations["parser_reason"]))
+                    self.assertNotIn("REVOKED-SECRET", repr(snap))
+
     def test_openai_usage_maps_windows_by_duration_plan_reset_and_credits(self) -> None:
         snap = convert_usage_payload({
             "plan_type": "plus",
@@ -374,8 +394,13 @@ class AccountProviderTests(unittest.TestCase):
             )
             snap = provider.get_quota_snapshot()
             self.assertFalse(snap.available)
-            self.assertIn("expired", snap.reason)
+            self.assertEqual("OpenAI token expired; it renews automatically on your next OpenAI prompt in OpenCode.", snap.reason)
+            self.assertEqual("credential_expired", snap.observations["parser_reason"])
             self.assertNotIn("SECRET", repr(snap))
+            (account,) = provider.get_account_snapshots()
+            self.assertEqual(("unavailable", snap.reason), (account.availability, account.reason))
+            self.assertEqual("credential_expired", account.observations["parser_reason"])
+            self.assertEqual("Token expired; your next prompt with this account renews it", account.observations["user_action"])
 
     def test_explicit_legacy_path_takes_precedence_over_v2_account(self) -> None:
         with tempfile.TemporaryDirectory() as td:

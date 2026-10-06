@@ -22,6 +22,8 @@ class EventKind(str, Enum):
     SUBTASK = "subtask"
     COMPACTION = "compaction"
     SYNTHETIC_CONTINUATION = "synthetic_continuation"
+    # Source-generated notice that background work ended and the model resumes.
+    BACKGROUND_COMPLETION = "background_completion"
     OTHER = "other"
 
 
@@ -236,6 +238,27 @@ class ContextBoundary:
 
 
 @dataclass(frozen=True, slots=True)
+class BackgroundActivity:
+    """Verified work a model detached from its turn, e.g. a background shell.
+
+    ``activity_id`` is an opaque source-scoped identity, never a native job ID.
+    ``running`` stays True until native evidence ends it: a completion notice
+    (``ended_at_ms``/``outcome`` where known) or the native registry no longer
+    listing it (outcome unknown). Inactivity or elapsed time never ends it.
+    """
+
+    activity_id: str
+    session_id: str
+    kind: str
+    started_at_ms: int
+    owner_message_id: str
+    running: bool = True
+    ended_at_ms: int | None = None
+    outcome: TerminalOutcome | None = None
+    completion_event_id: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class SessionSnapshot:
     root: NormalizedSession
     sessions: tuple[NormalizedSession, ...]
@@ -245,6 +268,7 @@ class SessionSnapshot:
     invocations: tuple[ModelInvocation, ...]
     source_revision: str
     context_boundaries: tuple[ContextBoundary, ...] = ()
+    background: tuple[BackgroundActivity, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

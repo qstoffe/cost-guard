@@ -62,13 +62,22 @@ def tool_summary_segments(tool: ToolObservation, width: int) -> list[Segment]:
     return _clip(_tool_candidate(tool, noun, 0), width)
 
 
-def status_segments(tool: ToolObservation, width: int, running_duration: str) -> list[Segment]:
-    """Optional second row: long-running tool and/or compact TODO progress and text."""
+def background_label(kinds: tuple[str, ...]) -> str:
+    """One job names its kind; several summarize as a count, never native IDs."""
+    if len(kinds) == 1:
+        return kinds[0]
+    return f"{len(kinds)}× {kinds[0]}" if len(set(kinds)) == 1 else f"{len(kinds)} jobs"
+
+
+def status_segments(tool: ToolObservation, width: int, running_duration: str, background_duration: str = "") -> list[Segment]:
+    """Optional second row: long-running tool, background wait and/or compact TODO progress and text."""
     if not tool.has_status_row:
         return []
     parts: list[str] = []
     if tool.running_tool:
         parts.append(f"running: {tool.running_tool} {running_duration}")
+    if tool.background_kinds:
+        parts.append(f"background: {background_label(tool.background_kinds)} {background_duration}".rstrip())
     if tool.has_open_todo:
         parts.append(f"TODO {tool.todo_completed}/{tool.todo_total} done")
     text = SEPARATOR.join(parts)

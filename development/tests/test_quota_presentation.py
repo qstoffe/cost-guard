@@ -132,6 +132,23 @@ class VisibilityTests(unittest.TestCase):
         self.assertNotIn("AI credits", watch_text(quotas(row), width=180))
         self.assertIn("Extra credits 500 AI credits remaining", report_text(quotas(row)))
 
+    def test_sign_in_remedy_appears_once_per_surface(self):
+        reason = "Provider sign-in was rejected; sign in again to restore quotas."
+        action = "Sign-in rejected; sign in again"
+        row = rolling(label="Any provider")
+        row = replace(row, account=replace(row.account, quotas=(), availability="unavailable", reason=reason,
+                                           observations={"parser_reason": "auth_failure", "user_action": action}))
+        watch = watch_text(quotas(row), width=180)
+        self.assertIn("Quota unavailable · " + action, watch)
+        self.assertNotIn(reason, watch)
+        report = report_text(quotas(row))
+        self.assertIn(reason, report)
+        self.assertNotIn(action, report)
+        for availability, observations in (("unavailable", {"parser_reason": "auth_failure"}),
+                                           ("error", {"parser_reason": "auth_failure", "user_action": action})):
+            other = replace(row, account=replace(row.account, availability=availability, observations=observations))
+            self.assertNotIn(action, watch_text(quotas(other), width=180))
+
     def test_unknown_operational_balance_state_and_native_budgets_remain(self):
         row = rolling()
         row = replace(row, account=replace(row.account, availability="stale", billing=(

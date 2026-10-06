@@ -250,15 +250,15 @@ Copilot Business/Enterprise plan, usage and `hasQuota=false` survive zero, poole
 
 ## Watch
 
-Watch shares report analysis and groups sessions by latest activity (oldest first; session-ID ties). `watchDashboardMaxRows` defaults to 14, is user-configurable, and limits retained/displayed prompts only; active/recent rows remain protected, so it is not a hard maximum. Prompt/compaction order is preserved.
+Watch shares report analysis and groups sessions by latest activity (oldest first; session-ID ties). `watchDashboardMaxRows` (default 14) limits retained/displayed prompts only; active/recent rows stay protected, so it is not a hard maximum. Prompt/compaction order is preserved.
 
 | Column | Meaning |
 | --- | --- |
-| `Session / prompt` | Session grouping plus prompt/event rows. Running prompts show tool counts (`8× read · 3× other · 2 failed`) and, for a ≥10 s tool/open TODO, `running: bash 34s · TODO 2/4 done · text`. Both subordinate arrows align with `#`; failures stay red. |
+| `Session / prompt` | Session grouping plus prompt/event rows. Running prompts show tool counts (`8× read · 3× other · 2 failed`) and, for a ≥10 s tool, background job or open TODO, `running: bash 34s · background: shell 2m · TODO 2/4 done · text`. Arrows align with `#`; failures stay red. |
 | `Model / effort` | Same as report: explicit/request-proven effort, otherwise `(Default)` for a known normal request. No model-family default guesses or `Default -> X`. Compaction shows only its own explicit effort. |
 | `CCost` | Current observed prompt/event reference valuation, not billing. |
 | `Calls` | Completed causal model requests. |
-| `Duration` | Wall-clock prompt duration; running durations continue between source refreshes. |
+| `Duration` | Wall-clock duration; a prompt stays running (footer `background shell`) while its verified background job runs. |
 | `Δctx -> Next Ictx` | Context-state change and next context when available. |
 
 `Token Mix % · N prompts` shows unique prompts, shares and CCost this run, without volume/bar. Startup-running requests, between-poll completions, child work and compactions count; pre-Watch completed history does not. Row eviction/resync/disappearance never removes qualifying run usage. `Watch total CCost` below it sums that run usage: 0 at start, never re-added by rescans or moves.
@@ -338,7 +338,7 @@ Bundles omit prompt text, titles, raw payloads/auth, tokens and account labels/I
 
 ## Release status
 
-**v80.1** refreshes documentation and static images; runtime behavior is unchanged. v80.0 is the Python 3.11+ public baseline; V1/V2 share one analysis core. Claude quotas remain experimental; physical restart/sleep and visual terminal behavior need separate live evidence.
+**v80.3** follows background jobs and explains sign-in failures. v80.0 is the Python 3.11+ public baseline; V1/V2 share one analysis core. Claude quotas remain experimental; physical restart/sleep and visual terminal behavior need separate live evidence.
 
 Quick is the hosted-AI gate; Full adds package/release/performance checks; Diagnostics covers the affected workstation.
 

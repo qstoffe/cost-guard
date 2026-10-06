@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
 from copy import deepcopy
 from dataclasses import dataclass, replace
 from decimal import Decimal, InvalidOperation
@@ -15,15 +14,14 @@ from pathlib import Path
 from typing import Any, Iterator, Mapping, Sequence
 
 from src.domain import (
+    BackgroundActivity,
     ContextBoundary,
     CostKind,
     CostObservation,
-    EventKind,
     IntegrationHealth,
     MessageRole,
     ModelInvocation,
     ModelRef,
-    NormalizedEvent,
     NormalizedMessage,
     NormalizedPart,
     NormalizedSession,
@@ -45,7 +43,9 @@ from .errors import SourceDataError, SourceUnavailableError
 from .model_availability import settled_v2_model_ids
 from .opencode_errors import normalize_error_name as _error_name
 from .opencode_tokens import token_usage
+from .opencode_v2_background import background_activities, running_jobs
 from .opencode_v2_diagnostics import summarize_v2_diagnostics
+from .opencode_v2_events import normalize_event
 from .opencode_v2_transport import V2Endpoint, V2HttpClient, normalize_local_service_url
 from .opencode_v2_wire import (
     fetch_global_sessions,
@@ -71,11 +71,6 @@ V2_CAPABILITIES = SessionCapabilities(
     live_changes=True,
 )
 
-_SYNTHETIC_CONTINUATION = re.compile(
-    r"^\s*Summarize the task tool output above and continue with your task\.?\s*$",
-    flags=re.IGNORECASE,
-)
-_VISIBLE_USER_PARTS = frozenset({"text", "file", "subtask"})
 
 
 
@@ -148,87 +143,6 @@ def _part_times(data: Mapping[str, Any], message_created: int, message_completed
     return start, end
 
 
-def _event_text(parts: Sequence[NormalizedPart]) -> str:
-    values: list[str] = []
-    for part in parts:
-        data = part.data
-        if part.kind not in _VISIBLE_USER_PARTS or bool(data.get("synthetic", False)):
-            continue
-        if part.kind == "text":
-            text = str(data.get("text", "")).strip()
-            if text:
-                values.append(text)
-        elif part.kind == "file":
-            filename = str(data.get("filename", "")).strip()
-            if filename:
-                values.append(f"[file: {filename}]")
-        elif part.kind == "subtask":
-            command = str(data.get("command", "")).strip()
-            description = str(data.get("description", "")).strip()
-            prompt = str(data.get("prompt", "")).strip()
-            prefix = f"/{command}" if command else "[subtask]"
-            if description:
-                values.append(f"{prefix} - {description}")
-            elif prompt:
-                preview = " ".join(prompt.split())[:240]
-                values.append(f"{prefix} - {preview}")
-            else:
-                values.append(prefix)
-    return " ".join(" ".join(values).replace("\t", " ").split())
-
-
-def _event_kind(parts: Sequence[NormalizedPart]) -> EventKind:
-    if any(part.kind == "compaction" for part in parts):
-        return EventKind.COMPACTION
-    visible = [
-        part for part in parts
-        if part.kind in _VISIBLE_USER_PARTS and not bool(part.data.get("synthetic", False))
-    ]
-    if any(part.kind == "subtask" for part in visible):
-        return EventKind.SUBTASK
-    if visible:
-        return EventKind.USER_PROMPT
-    for part in parts:
-        if part.kind == "text" and bool(part.data.get("synthetic", False)):
-            if _SYNTHETIC_CONTINUATION.match(str(part.data.get("text", ""))):
-                return EventKind.SYNTHETIC_CONTINUATION
-    return EventKind.OTHER
-
-
-def _event_metadata(message: NormalizedMessage) -> dict[str, str]:
-    metadata: dict[str, str] = {}
-    if message.model:
-        metadata["provider_id"] = message.model.provider
-        metadata["model_id"] = message.model.model
-    if message.variant:
-        metadata["variant"] = message.variant
-    if message.agent:
-        metadata["agent"] = message.agent
-    for part in message.parts:
-        if part.kind == "subtask":
-            model = part.data.get("model")
-            if isinstance(model, Mapping):
-                for source_key, target_key in (("providerID", "provider_id"), ("modelID", "model_id"), ("variant", "variant")):
-                    value = str(model.get(source_key, "")).strip()
-                    if value:
-                        metadata[target_key] = value
-        elif part.kind == "compaction":
-            metadata["auto"] = "true" if bool(part.data.get("auto", False)) else "false"
-            model = part.data.get("model")
-            if isinstance(model, Mapping):
-                provider = model.get("providerID")
-                model_id = model.get("id", model.get("modelID"))
-                if provider not in (None, ""):
-                    metadata["provider_id"] = str(provider)
-                if model_id not in (None, ""):
-                    metadata["model_id"] = str(model_id)
-                variant = model.get("variant")
-                if isinstance(variant, str) and variant.strip():
-                    metadata["variant"] = variant
-            tail = part.data.get("tail_start_id", part.data.get("tailStartId"))
-            if tail:
-                metadata["tail_start_id"] = str(tail)
-    return metadata
 
 
 
@@ -544,19 +458,6 @@ class OpenCodeV2Source:
         )
         return message, tuple(parts)
 
-    def _normalize_event(self, message: NormalizedMessage) -> NormalizedEvent | None:
-        if message.role is not MessageRole.USER:
-            return None
-        return NormalizedEvent(
-            event_id=message.message_id,
-            session_id=message.session_id,
-            kind=_event_kind(message.parts),
-            created_at_ms=message.created_at_ms,
-            provenance=message.provenance,
-            text=_event_text(message.parts) or None,
-            metadata=_event_metadata(message),
-        )
-
     def _normalize_invocations(self, message: NormalizedMessage) -> list[ModelInvocation]:
         if message.role is not MessageRole.ASSISTANT or message.model is None:
             return []
@@ -606,13 +507,16 @@ class OpenCodeV2Source:
             error_name=message.error_name,
         )]
 
-    def _load_messages(
-        self, native: _NativeSession
-    ) -> tuple[tuple[NormalizedMessage, ...], tuple[NormalizedPart, ...], tuple[ContextBoundary, ...]]:
+    def _load_messages(self, native: _NativeSession) -> tuple[
+        tuple[NormalizedMessage, ...], tuple[NormalizedPart, ...], tuple[ContextBoundary, ...],
+        tuple[BackgroundActivity, ...], frozenset[str],
+    ]:
         session_id = str(native.data["id"])
         items, contract, pages, rejected_routes = fetch_messages(
             self._client(), session_id=session_id, directory=native.directory
         )
+        background, notices = background_activities(
+            items, session_id=session_id, running_jobs=lambda: running_jobs(self._client(), native.directory))
         bundles, shape = normalize_message_items(items, session=native.data)
         if rejected_routes:
             self._diagnostics["message_route_rejections"][session_id] = "+".join(rejected_routes)
@@ -657,7 +561,7 @@ class OpenCodeV2Source:
         self._diagnostics["message_shapes"][session_id] = shape
         self._diagnostics["message_items"][session_id] = len(items)
         self._diagnostics.setdefault("message_pages", {})[session_id] = pages
-        return tuple(messages), tuple(parts), location_boundaries(items, session_id=session_id)
+        return tuple(messages), tuple(parts), location_boundaries(items, session_id=session_id), background, notices
 
     def load_session_snapshot(self, session_id: str) -> SessionSnapshot:
         for attempt in range(2):
@@ -667,18 +571,23 @@ class OpenCodeV2Source:
             messages: list[NormalizedMessage] = []
             parts: list[NormalizedPart] = []
             boundaries: list[ContextBoundary] = []
+            background: list[BackgroundActivity] = []
+            notices: set[str] = set()
             for native in before_tree:
-                native_messages, native_parts, native_boundaries = self._load_messages(native)
+                native_messages, native_parts, native_boundaries, native_background, native_notices = self._load_messages(native)
                 messages.extend(native_messages)
                 parts.extend(native_parts)
                 boundaries.extend(native_boundaries)
+                background.extend(native_background)
+                notices.update(native_notices)
             after_all = self._list_native_sessions(refresh=True)
             after_tree = self._tree(after_all, session_id)
             after_revision = self._revision(after_tree)
             if before_revision == after_revision:
                 sessions = tuple(self._normalize_session(item) for item in before_tree)
                 events = tuple(
-                    event for message in messages if (event := self._normalize_event(message)) is not None
+                    event for message in messages
+                    if (event := normalize_event(message, frozenset(notices))) is not None
                 )
                 invocations: list[ModelInvocation] = []
                 for message in messages:
@@ -697,6 +606,7 @@ class OpenCodeV2Source:
                     invocations=tuple(invocations),
                     source_revision=after_revision,
                     context_boundaries=tuple(boundaries),
+                    background=tuple(background),
                 )
             if attempt == 1:
                 break

@@ -70,6 +70,8 @@ class ClaudeAccountTests(unittest.TestCase):
         p.auth_reader.side_effect = None; p.auth_reader.return_value = {**LOGIN, "loggedIn": False}
         account, = p.get_account_snapshots()
         self.assertEqual("unavailable", account.availability); p.usage_reader.assert_not_called()
+        self.assertEqual("Claude CLI is signed out; run 'claude auth login' to restore quotas.", account.reason)
+        self.assertEqual("Signed out; run 'claude auth login'", account.observations["user_action"])
 
     def test_discovery_separate_from_quota_and_probe_does_not_fetch_usage(self):
         p = provider()
@@ -111,6 +113,10 @@ class ClaudeAccountTests(unittest.TestCase):
             self.assertFalse(account.quotas)
             self.assertEqual(state, account.availability)
             self.assertEqual(reason, account.observations["parser_reason"])
+            rejected = reason == "auth_failure"
+            self.assertEqual(rejected, "claude auth login" in account.reason)
+            self.assertEqual("Sign-in rejected; run 'claude auth login'" if rejected else None,
+                             account.observations.get("user_action"))
         p = provider(); p.usage_reader.side_effect = TimeoutError("private secret")
         account, = p.get_account_snapshots()
         self.assertEqual("error", account.availability)

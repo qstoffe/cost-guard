@@ -21,6 +21,8 @@ def snapshot_is_stable(snapshot: SessionSnapshot) -> bool:
     """
     if any(session.active is True for session in snapshot.sessions):
         return False
+    if any(activity.running for activity in snapshot.background):
+        return False
     for message in snapshot.messages:
         if message.role is MessageRole.ASSISTANT and message.completed_at_ms is None and not message.error_name:
             return False

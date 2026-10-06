@@ -65,13 +65,13 @@ Hydration reads one root plus its recursive descendant tree inside one pinned SQ
 
 ### OpenCode V2 boundary (implemented)
 
-`opencode_v2_transport.py` owns stdlib HTTP/SSE; `opencode_v2.py` interprets/normalizes V2. Discovery reads the standard service registration, validates loopback, ignores ambient proxies and probes `/api/info`. Registration auth is never logged. No V2 SQLite or CLI/subprocess is used.
+`opencode_v2_transport.py` owns stdlib HTTP/SSE; `opencode_v2*.py` interpret/normalize V2. Discovery reads the standard service registration, validates loopback, ignores ambient proxies and probes `/api/info`. Registration auth is never logged. No V2 SQLite or CLI/subprocess is used.
 
 Global discovery uses cursor-paginated sessions, falling back to project enumeration/de-duplication. Current and transitional message APIs share canonical V1/V2 session/message/part/event/invocation contracts; synthetic histories verify semantic parity.
 
 The adapter caches the latest complete V2 session catalog in-process, avoiding `N roots × all projects` listing. Discovery/resync replaces it; live events invalidate it. This is change-gating input, never durable truth. Hydration rechecks a fresh tree revision and retries once on metadata change; repeated instability fails rather than persisting mixed generations.
 
-`opencode_v2_wire.py` binds qualified persisted `idle` outcomes to the preceding assistant as neutral `TerminalEvidence`. Intervening boundaries, ambiguous timestamps or later tool work block attribution. Status/inactivity/transport failure alone proves no end. Native completion/usage/billing stays unchanged; Diagnostics counts terminal evidence separately. Path-free `location-switched` items become `SessionSnapshot.context_boundaries`: never usage; they retire a Next-Ictx anchor not yet followed by a request.
+`opencode_v2_wire.py` binds qualified persisted `idle` outcomes to the preceding assistant as neutral `TerminalEvidence`. Intervening boundaries, ambiguous timestamps or later tool work block attribution. Status/inactivity/transport failure alone proves no end. Native completion/usage/billing stays unchanged; Diagnostics counts terminal evidence separately. Path-free `location-switched` items become `SessionSnapshot.context_boundaries`: never usage; they retire a Next-Ictx anchor not yet followed by a request. `opencode_v2_background.py` maps background jobs/completion notices to neutral `BackgroundActivity`/`BACKGROUND_COMPLETION`; a job without notice runs until its location's shell registry drops it.
 
 `/api/event` is a non-replaying live hint. Stream end, disconnect or failure requires resync: Watch must obtain an authoritative snapshot before trusting subsequent live state.
 
@@ -131,7 +131,7 @@ Date boundaries use `zoneinfo` where available. Because clean Windows Python may
 
 Source differences normalize before analysis. `analysis/effort.py` distinguishes explicit, request-resolved/unresolved Default and unattributable effort. Only matching root-request variants resolve Default, never model/pricing maps or mutable session selection. Both renderers share one label, no `Default -> X`; compaction uses its own explicit variant. V2 never stamps session effort onto history.
 
-The latest assistant's `termination` ends running/duration and distinguishes success/failure/cancellation, even without usage. Actual root/child or newer tool activity stays live; stale tool flags do not. Reports/Watch/resync share this truth. Incomplete inference stays uncached; older algorithm keys are invalidated.
+The latest assistant's `termination` ends running/duration and distinguishes success/failure/cancellation, even without usage. Actual root/child or newer tool activity stays live; stale tool flags do not. Reports/Watch/resync share this truth. Running background work keeps the newest prompt active without usage; resumes stay on it. Incomplete inference stays uncached; older algorithm keys are invalidated.
 
 ## Reports
 
@@ -156,7 +156,7 @@ Disposable `cache/` uses generation-named SQLite files, WAL, short transactions,
 Watch is coordinator-owned and source-driven.
 
 - V1 source observation: cheap in-process SQLite polling/change probes.
-- V2 source observation: non-replayable live event hints plus authoritative snapshot/resync after disconnect, stream end or uncertainty. V2 historical reads are dual-contract: current global cursor-paginated session/message APIs and the transitional project-scoped/array compatibility API both normalize through one canonical wire adapter.
+- V2 source observation: non-replayable live event hints plus authoritative snapshot/resync after disconnect, stream end or uncertainty (wire contracts: V2 boundary above).
 
 The coordinator owns lifecycle, cadence/rendering and provider refreshes; sources own observation. Watch reuses `ReportService` and the report analysis/cache/context truth, never a second billing implementation.
 

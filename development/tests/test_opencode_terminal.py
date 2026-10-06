@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import copy
 from dataclasses import replace
+import io
 import json
+from pathlib import Path
 import subprocess
 import sys
 import tempfile
@@ -13,7 +15,8 @@ from development.tests.test_opencode_v2 import source_with_current_service
 from development.tests.test_step8_watch import make_service
 from src.analysis.causal import build_prompt_records
 from src.analysis.core import analyze_snapshot
-from src.domain import MessageRole
+from src.domain import EventKind, MessageRole, TerminalOutcome
+from src.presentation import WatchRenderer
 from src.reports import ReportKind, ReportRequest
 from src.sources.opencode_v2 import OpenCodeV2Source
 from src.watch import WatchCoordinator
@@ -36,6 +39,35 @@ def idle(*, at=5000, outcome="failed", identity="msg_terminal"):
 def records(source, *, now=10_000):
     return build_prompt_records(source.load_session_snapshot("ses_current"),
                                 tracked_provider=None, now_ms=now)
+
+
+def job(identity, *, at, name="shell"):
+    """Current-V2 backgrounded tool call: returns at once, the job keeps running."""
+    return {"type": "tool", "id": "call_" + identity, "name": name,
+            "time": {"created": at - 10, "ran": at, "completed": at + 5},
+            "state": {"status": "completed", "input": {"command": "private command", "background": True},
+                      "metadata": {"status": "running", "shellID": identity}}}
+
+
+def notice(identity, *, at, state="completed", exit_code=0):
+    return {"id": "msg_notice_" + identity, "type": "synthetic", "text": "private job output",
+            "time": {"created": at}, "metadata": {"source": "shell", "shellID": identity, "jobID": identity,
+                                                 "state": state, "exit": exit_code}}
+
+
+def resumed(identity, *, at, finish="stop", content=()):
+    return {"id": identity, "type": "assistant", "agent": "build", "content": list(content),
+            "model": {"providerID": "openai", "id": "gpt-5.6", "variant": "medium"}, "finish": finish,
+            "cost": 0.5, "tokens": {"input": 100, "output": 10, "reasoning": 0, "cache": {"read": 0, "write": 0}},
+            "time": {"created": at, "completed": at + 500}}
+
+
+def waiting(native, *jobs, registry=True):
+    """The model started background jobs, then its own turn ended (idle)."""
+    native.messages["ses_current"][1].update(finish="tool-calls", content=[
+        job(identity, at=3500 + index) for index, identity in enumerate(jobs)])
+    native.messages["ses_current"].append(idle(at=4100, outcome="succeeded", identity="msg_idle_1"))
+    native.shells = [{"id": identity, "status": "running"} for identity in jobs] if registry else None
 
 
 class TerminalLifecycleTests(unittest.TestCase):
@@ -276,6 +308,145 @@ print(json.dumps([row.in_progress, row.duration_ms, row.watch_error,
                 config=config, session_id="ses_current", clock_ms=lambda: 100_000).initialize().projection
             self.assertEqual(0, restored.active_count)
             self.assertEqual(2000, restored.rows[0].prompt.duration_ms)
+
+
+class BackgroundLifecycleTests(unittest.TestCase):
+    def test_background_job_keeps_idle_model_prompt_active_without_usage_growth(self):
+        with source_with_current_service() as (source, native, _):
+            waiting(native, "sh_job1")
+            snapshot = source.load_session_snapshot("ses_current")
+            activity, = snapshot.background
+            self.assertEqual(("shell", True, None), (activity.kind, activity.running, activity.outcome))
+            self.assertNotIn("sh_job1", activity.activity_id)
+            self.assertFalse(analyze_snapshot(snapshot, tracked_provider=None).cacheable)
+            early, = records(source, now=10_000)
+            late, = records(source, now=70_000)
+            for record, duration in ((early, 7000), (late, 67_000)):
+                self.assertTrue(record.in_progress)
+                self.assertTrue(record.background_only)
+                self.assertEqual(("shell",), record.background_kinds)
+                self.assertEqual(3500, record.background_started_ms)
+                self.assertEqual(duration, record.duration_ms)
+            self.assertEqual((1, early.cost), (late.model_calls, late.cost))
+
+    def test_completion_resumes_same_prompt_and_repeated_cycles_stay_one_prompt(self):
+        with source_with_current_service() as (source, native, _):
+            waiting(native, "sh_job1")
+            native.messages["ses_current"] += [
+                notice("sh_job1", at=8000),
+                resumed("msg_resume_1", at=8100, finish="tool-calls", content=[job("sh_job2", at=8200)]),
+                idle(at=8700, outcome="succeeded", identity="msg_idle_2")]
+            native.shells = [{"id": "sh_job2", "status": "running"}]
+            record, = records(source, now=20_000)
+            self.assertTrue(record.in_progress and record.background_only)
+            self.assertEqual((2, 17_000), (record.model_calls, record.duration_ms))
+            native.messages["ses_current"] += [
+                notice("sh_job2", at=12_000), resumed("msg_resume_2", at=12_100),
+                idle(at=12_700, outcome="succeeded", identity="msg_idle_3")]
+            native.shells = []
+            snapshot = source.load_session_snapshot("ses_current")
+            self.assertEqual(2, sum(event.kind is EventKind.BACKGROUND_COMPLETION for event in snapshot.events))
+            self.assertEqual([TerminalOutcome.SUCCESS] * 2, [item.outcome for item in snapshot.background])
+            record, = build_prompt_records(snapshot, tracked_provider=None, now_ms=50_000)
+            self.assertFalse(record.in_progress)
+            self.assertTrue(record.completed_successfully)
+            self.assertEqual(3, record.model_calls, "resumed work stays on the initiating row, once each")
+            self.assertEqual(len(snapshot.invocations), record.model_calls)
+            self.assertEqual(9700, record.duration_ms)
+            self.assertEqual(((), False), (record.background_kinds, record.background_only))
+
+    def test_prompt_waits_for_last_of_several_jobs(self):
+        with source_with_current_service() as (source, native, _):
+            waiting(native, "sh_job1", "sh_job2")
+            self.assertEqual(("shell", "shell"), records(source)[0].background_kinds)
+            native.messages["ses_current"] += [notice("sh_job1", at=6000), resumed("msg_resume_1", at=6100),
+                                               idle(at=6700, outcome="succeeded", identity="msg_idle_2")]
+            native.shells = [{"id": "sh_job2", "status": "running"}]
+            record, = records(source)
+            self.assertTrue(record.in_progress and record.background_only)
+            self.assertEqual(("shell",), record.background_kinds)
+            native.messages["ses_current"].append(notice("sh_job2", at=9000))
+            native.shells = []
+            record, = records(source, now=60_000)
+            self.assertFalse(record.in_progress)
+            self.assertEqual(6000, record.duration_ms, "the last job's end bounds the logical task")
+
+    def test_failure_cancellation_and_unknown_ends_close_without_success(self):
+        for state, exit_code, outcome in (("completed", 1, TerminalOutcome.FAILURE),
+                                          ("killed", None, TerminalOutcome.CANCELLATION),
+                                          ("timeout", None, TerminalOutcome.FAILURE),
+                                          ("future-state", 0, None)):
+            with self.subTest(state=state), source_with_current_service() as (source, native, _):
+                waiting(native, "sh_job1")
+                native.messages["ses_current"].append(notice("sh_job1", at=6000, state=state, exit_code=exit_code))
+                native.shells = []
+                snapshot = source.load_session_snapshot("ses_current")
+                activity, = snapshot.background
+                self.assertEqual((False, outcome, 6000), (activity.running, activity.outcome, activity.ended_at_ms))
+                record, = build_prompt_records(snapshot, tracked_provider=None, now_ms=60_000)
+                self.assertFalse(record.in_progress)
+                self.assertEqual(3000, record.duration_ms)
+
+    def test_end_needs_native_evidence_not_idle_time_or_unobservable_registry(self):
+        with source_with_current_service() as (source, native, _):
+            waiting(native, "sh_job1", registry=False)  # registry unavailable: never invent an end
+            for now in (10_000, 10_000_000):
+                self.assertTrue(records(source, now=now)[0].in_progress)
+            native.shells = [{"id": "sh_other", "status": "running"}]  # registry no longer lists the job
+            snapshot = source.load_session_snapshot("ses_current")
+            activity, = snapshot.background
+            self.assertEqual((False, None, None), (activity.running, activity.outcome, activity.ended_at_ms))
+            record, = build_prompt_records(snapshot, tracked_provider=None, now_ms=60_000)
+            self.assertFalse(record.in_progress)
+            self.assertEqual(1100, record.duration_ms)
+
+    def test_newer_prompt_takes_over_the_wait_and_old_row_stops(self):
+        with source_with_current_service() as (source, native, _):
+            waiting(native, "sh_job1")
+            native.messages["ses_current"] += [
+                {"id": "msg_next_user", "type": "user", "text": "next", "time": {"created": 5000}},
+                resumed("msg_next_answer", at=5100),
+                idle(at=5700, outcome="succeeded", identity="msg_idle_2")]
+            old, new = records(source)
+            self.assertFalse(old.in_progress)
+            self.assertTrue(new.in_progress and new.background_only)
+
+    def test_watch_footer_and_status_stay_active_through_resume(self):
+        with source_with_current_service() as (source, native, _), tempfile.TemporaryDirectory() as td:
+            waiting(native, "sh_job1")
+            config, selection, reports, _ = make_service(td, source)
+            clock = [10_000]
+            watch = WatchCoordinator(selection=selection, report_service=reports, config=config,
+                                     session_id="ses_current", clock_ms=lambda: clock[0])
+            projection = watch.initialize().projection
+            self.assertEqual(1, projection.active_count)
+            self.assertIn("1 prompt running · background shell · Next refresh:", projection.status)
+            clock[0] = 70_000
+            projection = watch.poll_once().projection
+            row, = projection.rows
+            self.assertEqual((1, 67_000), (row.prompt.calls, row.prompt.duration_ms))
+            self.assertEqual((("shell",), 66_500), (row.tool.background_kinds, row.tool.background_ms))
+            stream = io.StringIO()
+            WatchRenderer(config, stream=stream, interactive=False, terminal_width=160).render(projection)
+            self.assertIn("background: shell 1m7s", stream.getvalue())
+            self.assertNotIn("sh_job1", stream.getvalue())
+            native.messages["ses_current"] += [notice("sh_job1", at=71_000), resumed("msg_resume_1", at=71_100),
+                                               idle(at=71_700, outcome="succeeded", identity="msg_idle_2")]
+            native.shells = []
+            native.sessions[0]["time"]["updated"] = 71_700
+            clock[0] = 80_000
+            projection = watch.poll_once(force_resync=True).projection
+            row, = projection.rows
+            self.assertEqual(0, projection.active_count)
+            self.assertTrue(projection.status.startswith("Idle"))
+            self.assertEqual((2, 68_700), (row.prompt.calls, row.prompt.duration_ms))
+
+    def test_core_and_watch_never_read_native_background_fields(self):
+        root = Path(__file__).resolve().parents[2] / "src"
+        for path in [*root.glob("analysis/*.py"), *root.glob("watch/*.py"), *root.glob("presentation/*.py")]:
+            text = path.read_text(encoding="utf-8")
+            for native_field in ("shellID", "jobID", '"synthetic"'):
+                self.assertNotIn(native_field, text, f"{path.name} reads native field {native_field}")
 
 
 if __name__ == "__main__":

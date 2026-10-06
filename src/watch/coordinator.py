@@ -277,7 +277,12 @@ class WatchCoordinator:
             active_rows = [row for row in visible if row.prompt.in_progress]
             only_compactions = len(active_rows) == active_count and all(row.prompt.is_compaction for row in active_rows)
             noun = ("compaction" if active_count == 1 else "compactions") if only_compactions else ("prompt" if active_count == 1 else "prompts")
-            return f"{active_count} {noun} running · Next refresh: {countdown}"
+            # Rows waiting only on background work keep the footer active and say why.
+            waiting = [kind for row in active_rows if row.prompt.background_only for kind in row.prompt.background_kinds]
+            background = ""
+            if waiting:
+                background = f" · background {waiting[0]}" if len(waiting) == 1 else f" · {len(waiting)} background jobs"
+            return f"{active_count} {noun} running{background} · Next refresh: {countdown}"
         return f"Idle · Next prompt check: {countdown}"
 
     @staticmethod

@@ -158,6 +158,19 @@ class StatusRowTests(unittest.TestCase):
         self.assertEqual("running: task 2m14s · TODO 2/4 done · Implement Watch renderer",
                          text(status_segments(both, 80, "2m14s")))
 
+    def test_background_wait_names_one_kind_and_counts_several(self):
+        cases = ((("shell",), "background: shell 2m18s"), (("shell", "shell"), "background: 2× shell 2m18s"),
+                 (("shell", "task", "shell"), "background: 3 jobs 2m18s"))
+        for kinds, expected in cases:
+            waiting = ToolObservation(tool_count=1, background_kinds=kinds, background_ms=138_000)
+            self.assertEqual(expected, text(status_segments(waiting, 80, "", "2m18s")))
+        both = ToolObservation(tool_count=1, running_tool="bash", todo_completed=1, todo_total=2,
+                               background_kinds=("shell",))
+        self.assertEqual("running: bash 34s · background: shell 2m18s · TODO 1/2 done",
+                         text(status_segments(both, 80, "34s", "2m18s")))
+        self.assertEqual("background: shell...", text(status_segments(
+            ToolObservation(background_kinds=("shell",)), 20, "", "2m18s")))
+
     def test_todo_text_is_trimmed_before_progress(self):
         todo = ToolObservation(todo_completed=2, todo_total=4, active_todo="Implement Watch renderer")
         self.assertEqual("TODO 2/4 done · Implement Watch ren...", text(status_segments(todo, 38, "")))

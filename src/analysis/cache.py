@@ -12,7 +12,7 @@ from src.domain import AccountRef, CostDisposition, ModelRef, NormalizedSession,
 
 from .models import CompactionRecord, PromptRecord, RootAnalysisBundle, TraceEntry
 
-ANALYSIS_ALGORITHM_VERSION = "v78-analysis-9-ccost"
+ANALYSIS_ALGORITHM_VERSION = "v78-analysis-10-background"
 _CACHE_NAMESPACE = "derived-analysis"
 
 
@@ -103,6 +103,7 @@ def _prompt_from_dict(data: Mapping[str, Any]) -> PromptRecord:
     values["model_costs"] = {str(key): Decimal(str(value)) for key, value in values.get("model_costs", {}).items()}
     for key in ("previous_entry", "pre_prompt_entry", "last_root_entry"):
         values[key] = _trace_from_dict(values[key]) if values.get(key) else None
+    values["background_kinds"] = tuple(str(value) for value in values.get("background_kinds", ()))
     return PromptRecord(**values)
 
 

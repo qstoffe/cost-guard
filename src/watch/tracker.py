@@ -7,8 +7,19 @@ from typing import Mapping
 from src.domain import EventKind, SessionSnapshot
 from src.reports.models import PromptProjection, SessionPromptBlock
 
-from .models import WatchRow
+from .models import ToolObservation, WatchRow
 from .tools import observe_tools
+
+
+def _activity(snapshot: SessionSnapshot, prompt: PromptProjection, event_id: str, now_ms: int) -> ToolObservation | None:
+    """Tool/TODO status of a running row plus the background work it waits on."""
+    if not prompt.in_progress:
+        return None
+    tool = observe_tools(snapshot, event_id, is_compaction=prompt.is_compaction, now_ms=now_ms)
+    if not prompt.background_kinds:
+        return tool
+    return replace(tool, background_kinds=prompt.background_kinds,
+                   background_ms=max(0, now_ms - prompt.background_started_ms))
 
 
 @dataclass(slots=True)
@@ -164,8 +175,7 @@ class WatchRowTracker:
             marker = "✓"
         else:
             marker = ""
-        tool = observe_tools(snapshot, event_id, is_compaction=prompt.is_compaction, now_ms=now_ms) if prompt.in_progress else None
-        return WatchRow(block.session_id, block.title, prompt, marker, tool)
+        return WatchRow(block.session_id, block.title, prompt, marker, _activity(snapshot, prompt, event_id, now_ms))
 
     def _retained_missing_rows(
         self,
@@ -241,7 +251,7 @@ class WatchRowTracker:
             if self.session_scope and not session_rows and block.rows:
                 prompt = block.rows[-1]
                 event_id = prompt.event_id or f"{prompt.at_ms}:{prompt.prompt_number}:{prompt.label}"
-                tool = observe_tools(snapshot, event_id, is_compaction=prompt.is_compaction, now_ms=now_ms) if prompt.in_progress else None
+                tool = _activity(snapshot, prompt, event_id, now_ms)
                 session_rows.append(WatchRow(
                     block.session_id, block.title, prompt,
                     "+" if prompt.in_progress and self.recent_ms > 0 else "", tool,

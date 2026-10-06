@@ -105,6 +105,10 @@ class PromptRecord:
     abort_time_ms: int = 0
     in_progress: bool = False
     completed_successfully: bool = False
+    # Outstanding background work keeping a running prompt active (kinds only).
+    background_kinds: tuple[str, ...] = ()
+    background_started_ms: int = 0
+    background_only: bool = False
 
     @property
     def model_calls(self) -> int:

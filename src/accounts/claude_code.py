@@ -11,6 +11,10 @@ import time
 from src.domain import AccountRef, AccountSnapshot, AccountUsageStatus, IntegrationHealth, ProviderCapabilities, QuotaComponent
 from .claude_transport import read_claude_auth, read_claude_usage
 
+# The Claude CLI renews its own login; only an explicit sign-in needs the user.
+SIGNED_OUT_REASON = "Claude CLI is signed out; run 'claude auth login' to restore quotas."
+REJECTED_REASON = "Claude sign-in was rejected; run 'claude auth login' to restore quotas."
+
 
 def _plan(value: object) -> str | None:
     return {"pro": "Pro", "max": "Max", "team": "Team", "enterprise": "Enterprise"}.get(
@@ -104,8 +108,9 @@ class ClaudeCodeAccountProvider:
         try:
             metadata = self.auth_reader()
             if not isinstance(metadata, Mapping) or metadata.get("loggedIn") is not True:
-                return replace(self._last, quotas=(), availability="unavailable", reason="Claude CLI not signed in",
-                               observations={"parser_reason": "auth_failure"}) if self._last else None
+                return replace(self._last, quotas=(), availability="unavailable", reason=SIGNED_OUT_REASON,
+                               observations={"parser_reason": "auth_failure",
+                                             "user_action": "Signed out; run 'claude auth login'"}) if self._last else None
             backend = metadata.get("apiProvider")
             subscription = backend == "firstParty" and metadata.get("authMethod") == "claude.ai"
             identity = _identity(metadata.get("email"), metadata.get("orgId"))
@@ -142,7 +147,11 @@ class ClaudeCodeAccountProvider:
         if account.observations.get("account_kind") == "subscription" and account.observations.get("auth_status") == "authenticated":
             try:
                 result = self.usage_reader()
-                if result.availability != "available":
+                if result.availability != "available" and result.reason == "auth_failure":
+                    account = replace(account, availability="unavailable", reason=REJECTED_REASON,
+                                      observations={**account.observations, "parser_reason": result.reason,
+                                                    "user_action": "Sign-in rejected; run 'claude auth login'"})
+                elif result.availability != "available":
                     account = replace(account, availability=result.availability, reason="Experimental Claude quota source unavailable",
                                       observations={**account.observations, "parser_reason": result.reason})
                 elif (result.account.get("apiProvider") != "firstParty" or self._quota_identity is None

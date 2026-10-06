@@ -75,6 +75,10 @@ class PromptProjection:
     completed_successfully: bool = False
     next_context_warning_severity: PriceWarningSeverity = PriceWarningSeverity.NONE
     watch_next_context_warning_severity: PriceWarningSeverity = PriceWarningSeverity.NONE
+    # Outstanding background work of a running prompt; never usage or cost.
+    background_kinds: tuple[str, ...] = ()
+    background_started_ms: int = 0
+    background_only: bool = False
 
 
 @dataclass(frozen=True, slots=True)
