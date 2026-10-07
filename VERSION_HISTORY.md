@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.9 — 2026-10-07
+
+- Unify all three Windows launchers behind one persistent PowerShell session in the original console. The outer batch exits before Python runs; explicitly restored Ctrl+C handling stops Watch without a batch confirmation. Completion, failure and Ctrl+C leave an ordinary package-root prompt, without a Watch-only Enter-to-close path. Python 3.11+ detection and actionable errors live in the shared launcher boundary.
+- Treat only a typed session-disappearance/archive event as a non-fatal session Watch end. Unexpected ValueError and other terminal runtime/source failures reach bootstrap's non-zero result; Ctrl+C during Watch initialization also remains an intentional stop.
+
 ## v80.8 — 2026-10-07
 
 - Make Watch session `Σ` the Decimal subtotal of exactly its displayed prompt/event rows, preserving unresolved `?`/`N/A` and native zero-cost compaction behavior. Attaching mid-prompt now includes that row's full known CCost in its session subtotal; row eviction changes the subtotal, not run accounting.
@@ -13,15 +18,11 @@
 ## v80.6 — 2026-10-07
 
 - Keep a running Watch alive when its selected OpenCode source is temporarily unavailable: the last dashboard stays visible with `OpenCode V2 source unavailable · retrying every 5s`, the same source is retried without V1 fallback, CLI starts or extra account requests, and V2 resumes only after a fresh snapshot and a restarted event stream. A restarted V2 service on a new port is picked up from its rewritten registration. Unsupported schemas still end Watch; data that stays unreadable for about a minute does too.
-- The Windows Watch launcher keeps its window open after a non-zero Cost Guard exit, showing the error and `Cost Guard Watch exited unexpectedly (code N).` until Enter; a clean Ctrl+C stop still closes it.
+- Introduce Windows Watch error visibility on non-zero exits; superseded by the common persistent PowerShell launcher in v80.9.
 
 ## v80.5 — 2026-10-07
 
 - Scope V1→V2 migration-gap notices to what is shown: Watch never displays them; normal reports add an informational note only while missing/newer V1 activity reaches the latest-prompt sample, date reports only for overlapping periods, session reports only for the requested root, and all-history views for any gap. Diagnostics still records the full counts; source selection and non-merging are unchanged.
-
-## v80.4 — 2026-10-07
-
-- Keep the user-facing `windows/` and `macos/` folders to Cost Guard and Cost Guard Watch; the unchanged Diagnostics launchers move to `development/windows/` and `development/macos/`, and package validation rejects extra public launchers.
 
 ## Earlier v80 history
 
@@ -29,6 +30,7 @@
 - v80.1 introduced Cost Guard as an OpenCode AI usage, cost and quota tool in the README, with static Watch/report/Token Mix images, an early quick start and the detailed contracts linked in `docs/usage-and-cost.md`.
 - v80.2 added the OpenAI token-expiry explanation: the next OpenCode prompt renews it; Cost Guard never refreshes or writes credentials.
 - v80.3 added provider-supplied sign-in remedies and kept prompts active during verified V2 background jobs, with continuing duration, background status and resumed model work attributed to the same prompt; jobs themselves add no usage.
+- v80.4 moved Diagnostics launchers under `development/windows|macos/`, keeping public launcher folders to normal report and Watch with validator-enforced placement.
 
 ## Earlier versions (v1-v78)
 

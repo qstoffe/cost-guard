@@ -160,13 +160,13 @@ The coordinator owns lifecycle, cadence/rendering and provider refreshes over ab
 
 V1 batches root revisions in one recursive SQLite query without payload parsing. V2 hints use a five-second cooldown; disconnect forces resync, with bounded adaptive safety resync otherwise. Native active-session/tool state proves liveness. Quota refresh is independent of source activity: normally once per minute, with bounded resume retries. Local quota projection may refresh without another provider request.
 
-After initialization the coordinator owns source recovery: a poll's `SourceError` keeps the last projection and retries only the selected source every 5s (no reselection, subprocess or account refresh); V2 resumes from a fresh snapshot plus new event pump. Schema errors are terminal, unreadable data bounded. V2 rereads a rewritten registration.
+Source recovery retains the last projection and retries only the selected source every 5s (no reselection, subprocess or account refresh); V2 resumes with a fresh snapshot/event pump and rereads rewritten registration. Schema errors are terminal; unreadable data is bounded. Only `WatchedSessionEnded` intentionally ends an existing scoped Watch; unexpected errors reach bootstrap non-zero. Ctrl+C is intentional, including initialization.
 
 ## Presentation and CLI
 
 Presentation renders projections/progress, never integration queries or analysis. One-shot tables shrink flexible text, not identifiers/numbers/costs. Watch retains fixed geometry and one overwriteable status row, including empty-dashboard startup progress. `cost-guard.py` stays thin; `src/bootstrap.py` wires concrete layers.
 
-`config/` owns shipped/default and optional user configuration files; runtime `diagnostics/` is disposable and never packaged. The Python CLI preserves v77 normal/session/date/date-range and global/session Watch argument shapes. Everyday launchers live in `windows/`/`macos/`, Diagnostics ones in `development/windows|macos/`; all run relative Python 3.11+ entry points with no business logic. Watch launchers hand Ctrl-C directly to Python rather than adding confirmation prompts; Windows Watch waits for Enter only after a non-zero exit.
+CLI retains v77 report/Watch argument shapes. Public `windows/|macos/` hold everyday launchers; Diagnostics lives under `development/windows|macos/`. Windows `.cmd` files hand off with `start /b` then exit; `src/windows_launcher.ps1` restores inherited Ctrl+C handling, detects Python 3.11+ and runs the relative entry point. `-NoExit` leaves one usable shell after completion/failure/Ctrl+C, never an Enter-to-close or batch confirmation.
 
 ## Dependency direction
 

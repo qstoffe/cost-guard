@@ -268,6 +268,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             coordinator.run_until_inactive(WatchRenderer(config))
         return 0
+    except KeyboardInterrupt:
+        if watch_renderer is None:
+            raise
+        if progress is not None:
+            progress.stop()
+        watch_renderer.finish("Watch stopped.")
+        return 0
     except (SourceError, ValueError, RuntimeError, OSError) as exc:
         if progress is not None:
             progress.stop()

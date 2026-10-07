@@ -62,23 +62,28 @@ class WindowsLauncherTests(unittest.TestCase):
         text = (ROOT / "windows/Cost Guard.cmd").read_text(encoding="utf-8")
         self.assertIn("powershell.exe", text.lower())
         self.assertIn("-NoExit", text)
-        self.assertIn("cost-guard.py", text)
-        self.assertIn("sys.version_info >= (3,11)", text)
+        self.assertIn("/b powershell.exe", text)
+        self.assertIn("-Mode report", text)
+        driver = (ROOT / "src/windows_launcher.ps1").read_text(encoding="utf-8")
+        self.assertIn("cost-guard.py", driver)
+        self.assertIn("sys.version_info >= (3,11)", driver)
 
     def test_watch_launcher_exits_batch_before_ctrl_c_path(self) -> None:
         text = (ROOT / "windows/Cost Guard Watch.cmd").read_text(encoding="utf-8")
         self.assertIn("powershell.exe", text.lower())
-        self.assertIn("--watch", text)
-        self.assertNotIn("-NoExit", text)
-        self.assertIn("Terminate batch job", text)
-        self.assertIn("if ($code)", text)  # only a non-zero exit waits for Enter
+        self.assertIn("-Mode watch", text)
+        self.assertIn("-NoExit", text)
+        self.assertIn("/b powershell.exe", text)
+        self.assertNotIn("Read-Host", text)
         self.assertLess(text.index('start "Cost Guard Watch"'), text.index("exit /b 0"))
 
     def test_diagnostics_launcher_is_double_clickable(self) -> None:
         text = (ROOT / "development/windows/Cost Guard Diagnostics.cmd").read_text(encoding="utf-8")
-        self.assertIn('set "CG_ROOT=%~dp0..\\.."', text)
-        self.assertIn("\\development\\tools\\collect_diagnostics.py", text)
-        self.assertIn("--test-service-start", text)
+        self.assertIn('%~dp0..\\..\\src\\windows_launcher.ps1', text)
+        self.assertIn("-Mode diagnostics", text)
+        driver = (ROOT / "src/windows_launcher.ps1").read_text(encoding="utf-8")
+        self.assertIn("development\\tools\\collect_diagnostics.py", driver)
+        self.assertIn("--test-service-start", driver)
         self.assertIn("-NoExit", text)
 
 

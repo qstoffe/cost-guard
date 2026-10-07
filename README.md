@@ -33,9 +33,9 @@ Double-click the ready-to-use `.cmd` launchers under `windows/`; no manual Pytho
 | Launcher | Mode |
 | --- | --- |
 | `Cost Guard.cmd` | Normal model comparison/account quota report. |
-| `Cost Guard Watch.cmd` | Live/global Watch; Ctrl+C exits. |
+| `Cost Guard Watch.cmd` | Live/global Watch; Ctrl+C stops Watch only. |
 
-The report console stays open. See [download trust](#open-source-license-and-windows-download-trust) for warnings.
+All three Windows launchers reuse one persistent PowerShell console: completion, errors and Watch Ctrl+C leave a usable package-root prompt. See [download trust](#open-source-license-and-windows-download-trust).
 
 ### macOS
 
@@ -269,7 +269,7 @@ Aborted labels persist after red emphasis expires. Quota errors retain values fo
 
 Full redraws clear screen/scrollback; countdowns replace only the status line. V1 Watch uses process-free SQLite gating; V2 events are hints with a five-second cooldown and authoritative resync. `"auto"` refresh adapts within 5–30 seconds; quota refresh is independently rate-limited.
 
-**Watch troubleshooting.** During a temporary OpenCode outage Watch keeps its last dashboard with `Watch: OpenCode V2 source unavailable · retrying every 5s`, retries the same source (no V1 fallback or CLI start) and resumes from a fresh snapshot. Unsupported schemas, or data unreadable for about a minute, end Watch with the error. On Windows a non-zero exit stays open until Enter; Ctrl+C closes. Closing the window or killing its terminal (e.g. security software) still ends Watch.
+**Watch troubleshooting.** OpenCode outages keep the last dashboard with `Watch: OpenCode V2 source unavailable · retrying every 5s`; retries use the same source, no V1 fallback/CLI start, then resume from a fresh snapshot. Unsupported schemas or data unreadable for about a minute end Watch with an error. Runtime failures exit non-zero; missing/archived session targets stop normally. Windows returns to PowerShell. Closing/killing the terminal still ends Watch.
 
 ## Pricing, quota and network behavior
 
@@ -330,7 +330,7 @@ Bundles omit prompt text, titles, raw payloads/auth, tokens and account labels/I
 
 ## Release status
 
-**v80.8** reconciles Watch `Σ` with displayed rows, preserving run totals/Token Mix. v80.0 is the Python 3.11+ public baseline. Claude quotas remain experimental; provider fixtures do not prove personal account coverage. Physical restart/sleep and visual terminal behavior need separate live evidence.
+**v80.9** keeps Windows PowerShell open and Watch errors non-zero. v80.0 is the Python 3.11+ public baseline. Claude quotas remain experimental; account coverage, restart/sleep and terminal behavior need separate live evidence.
 
 Quick is the hosted-AI gate; Full adds package/release/performance checks; Diagnostics covers the affected workstation.
 

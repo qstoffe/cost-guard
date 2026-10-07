@@ -54,6 +54,7 @@ REQUIRED_FILES = {
     "src/presentation/terminal.py",
     "src/presentation/progress.py",
     "src/presentation/report.py",
+    "src/windows_launcher.ps1",
     "windows/Cost Guard.cmd",
     "windows/Cost Guard Watch.cmd",
     "macos/Cost Guard.command",

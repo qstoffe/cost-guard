@@ -251,16 +251,16 @@ class WatchSourceRecoveryTests(unittest.TestCase):
 
 
 class WatchLauncherExitTests(unittest.TestCase):
-    def test_windows_watch_launcher_preserves_only_unexpected_exit(self):
+    def test_windows_watch_launcher_preserves_shell_and_nonzero_result(self):
         text = (ROOT / "windows/Cost Guard Watch.cmd").read_text(encoding="utf-8")
-        command = text.split('start "Cost Guard Watch" powershell.exe', 1)[1].splitlines()[0]
-        self.assertNotIn("-NoExit", command, "a clean stop must still close the window")
-        self.assertIn("$code = $LASTEXITCODE; if ($code)", command)
-        self.assertIn("'Cost Guard Watch exited unexpectedly (code ' + $code + ').'", command)
-        self.assertIn("Read-Host 'Press Enter to close'", command)
-        self.assertLess(command.index("--watch"), command.index("exited unexpectedly"),
-                        "the launcher message follows Cost Guard's own output")
-        self.assertIn("exit $code", command)
+        self.assertIn('start "Cost Guard Watch" /b powershell.exe', text)
+        self.assertIn("-NoExit", text)
+        driver = (ROOT / "src/windows_launcher.ps1").read_text(encoding="utf-8")
+        self.assertIn("$code = $LASTEXITCODE", driver)
+        self.assertIn("$global:LASTEXITCODE = $code", driver)
+        self.assertIn("if ($code -ne 0)", driver)
+        self.assertNotIn("Read-Host", driver)
+        self.assertNotIn("exit $code", driver)
 
 
 if __name__ == "__main__":

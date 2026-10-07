@@ -31,6 +31,10 @@ SOURCE_RETRY_SECONDS = 5.0
 SOURCE_UNREADABLE_RETRIES = 12
 
 
+class WatchedSessionEnded(ValueError):
+    """The selected session/root disappeared or was archived, not a runtime bug."""
+
+
 def _clock_ms() -> int:
     return int(time.time() * 1000)
 
@@ -174,7 +178,7 @@ class WatchCoordinator:
     def _selected_roots(self, observation: CatalogObservation) -> tuple[NormalizedSession, ...]:
         if self.session_id is not None:
             if not observation.roots:
-                raise ValueError(f"OpenCode session '{self.session_id}' was not found or is archived.")
+                raise WatchedSessionEnded(f"OpenCode session '{self.session_id}' was not found or is archived.")
             return observation.roots
         activity = _root_activity(observation.sessions, observation.root_by_session)
         return tuple(sorted(
@@ -623,9 +627,11 @@ class WatchCoordinator:
             # Bootstrap prints the normalized error and exits non-zero.
             renderer.finish(f"Watch stopped: OpenCode {self.selection.selected.upper()} source failed.")
             raise
-        except ValueError as exc:
+        except WatchedSessionEnded as exc:
             # A session-scoped Watch may naturally disappear when its root is
             # archived.  Initial invalid selection still fails before this loop.
+            if self.session_id is None:
+                raise
             renderer.finish(str(exc))
         finally:
             if self._event_pump is not None:
