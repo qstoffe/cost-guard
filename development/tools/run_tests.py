@@ -38,6 +38,7 @@ QUICK_PATTERNS: tuple[str, ...] = (
     "test_step7_reports_cli.py",
     "test_step8_watch.py",
     "test_watch_grouping.py",
+    "test_watch_subtotals.py",
     "test_watch_rendering.py",
     "test_watch_tool_activity.py",
     "test_watch_source_recovery.py",
@@ -80,7 +81,7 @@ PROFILES: dict[str, tuple[str, ...]] = {
     "foundation": ("test_foundation_quick.py",),
     "sources": ("test_opencode_v1.py", "test_opencode_v2.py", "test_opencode_aborts.py", "test_opencode_terminal.py", "test_source_selection.py", "test_v7814_regressions.py"),
     "analysis": ("test_analysis_core.py", "test_step6_context_comparisons.py", "test_effort_presentation.py", "test_step6_pricing_accounts.py"),
-    "runtime": ("test_step7_reports_cli.py", "test_step8_watch.py", "test_watch_grouping.py", "test_watch_rendering.py", "test_watch_tool_activity.py", "test_watch_source_recovery.py", "test_token_mix.py", "test_token_mix_economics.py", "test_report_definitions.py", "test_session_move.py", "test_opencode_aborts.py", "test_opencode_terminal.py", "test_v786_regressions.py", "test_v788_regressions.py", "test_v7810_regressions.py", "test_v7811_regressions.py", "test_v7814_regressions.py"),
+    "runtime": ("test_step7_reports_cli.py", "test_step8_watch.py", "test_watch_grouping.py", "test_watch_subtotals.py", "test_watch_rendering.py", "test_watch_tool_activity.py", "test_watch_source_recovery.py", "test_token_mix.py", "test_token_mix_economics.py", "test_report_definitions.py", "test_session_move.py", "test_opencode_aborts.py", "test_opencode_terminal.py", "test_v786_regressions.py", "test_v788_regressions.py", "test_v7810_regressions.py", "test_v7811_regressions.py", "test_v7814_regressions.py"),
     "release": FULL_ONLY_PATTERNS,
 }
 

@@ -8,12 +8,12 @@ from typing import Mapping, TextIO
 
 from src.version import mode_heading
 from src.numbers import ccost_amount
-from src.watch.models import ToolObservation, WatchProjection, WatchRow
+from src.watch.models import ToolObservation, WatchProjection, WatchRow, WatchSessionSubtotal
 
 from .terminal import AnsiStyler, Column, StyledText, fit, render_table
 from .terminal import terminal_content_width
 from .accounts import account_capacity_parts, capacity_lines, quota_label
-from .token_mix import prompt_scope, session_subtotal_text, token_mix_line, token_mix_lines, watch_total_line
+from .token_mix import prompt_scope, token_mix_line, token_mix_lines, watch_total_line
 from src.analysis.token_mix import TokenMix
 from src.analysis.context import PriceWarningSeverity
 from .context_warnings import WARNING_ROLE, next_ictx_ccost, warning_explanation_lines
@@ -84,6 +84,11 @@ def _context_cell(row: WatchRow, row_role: str | None) -> StyledText:
 def _empty_row(text: str) -> tuple[str, ...]:
     """A single placeholder row keeps the table from ending in a double rule."""
     return ("  " + text, "", "", "", "", "")
+
+
+def _session_subtotal_text(subtotal: WatchSessionSubtotal | None) -> str:
+    """Format the projected row subtotal, including unresolved provenance."""
+    return "Σ " + ("N/A" if subtotal is None else ccost_amount(subtotal.ccost, unresolved=subtotal.unresolved_cost))
 
 
 class WatchRenderer:
@@ -180,7 +185,7 @@ class WatchRenderer:
                     title = StyledText(((marker, WARNING_ROLE), (" " + name, "watchSessionHeader")))
                 else:
                     title = row.session_title
-                subtotal = session_subtotal_text(projection.session_mix.get(row.session_id))
+                subtotal = _session_subtotal_text(projection.session_subtotals.get(row.session_id))
                 rows.append((title, "", subtotal, "", "", ""))
                 styles.append(("watchSessionHeader", None, None, None, None, None))
                 previous_session = row.session_id

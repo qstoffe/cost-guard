@@ -100,10 +100,5 @@ def watch_total_line(mix: TokenMix) -> str:
     return "Watch total CCost: " + ("0" if not mix.request_count else total_cost_text(mix))
 
 
-def session_subtotal_text(mix: TokenMix | None) -> str:
-    """`Σ <value>` for CCost newly observed in this session during the Watch run."""
-    return "Σ " + ("0" if mix is None or not mix.request_count else total_cost_text(mix))
-
-
 def token_mix_line(scope: str, mix: TokenMix) -> str:
     return token_mix_lines(scope, mix)[0]

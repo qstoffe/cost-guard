@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.8 — 2026-10-07
+
+- Make Watch session `Σ` the Decimal subtotal of exactly its displayed prompt/event rows, preserving unresolved `?`/`N/A` and native zero-cost compaction behavior. Attaching mid-prompt now includes that row's full known CCost in its session subtotal; row eviction changes the subtotal, not run accounting.
+- Keep `Watch total CCost` and `Token Mix %` run-scoped and deduplicated: completed pre-Watch requests remain excluded, so the run total may intentionally differ from session subtotals. Remove the unused per-session run partition and include row-subtotal amount/completeness in dashboard change detection.
+
 ## v80.7 — 2026-10-07
 
 - Add maintained Simple HTTP Account Providers behind the existing account abstraction: bounded read-only Bearer HTTPS GET, declarative JSON mappings, per-credential identities, isolated fail-soft observations and sanitized diagnostics, without custom HTTP configuration or new runtime dependencies.
@@ -18,16 +23,12 @@
 
 - Keep the user-facing `windows/` and `macos/` folders to Cost Guard and Cost Guard Watch; the unchanged Diagnostics launchers move to `development/windows/` and `development/macos/`, and package validation rejects extra public launchers.
 
-## v80.3 — 2026-10-06
-
-- Explain rejected sign-ins with the fix: reconnect OpenAI or sign in to GitHub again in OpenCode, or run `claude auth login`. Account providers supply the short remedy that Watch shows after `Quota unavailable`; the report prints the full sentence.
-- Keep a Watch prompt running while verified OpenCode V2 background work (e.g. a backgrounded shell) is outstanding: Duration continues, Calls/CCost stay usage-based, a `background: shell 2m18s` status row and `background shell` footer replace `Idle`, and the automatic resume stays on the same row. Model work resumed after such jobs, previously outside every prompt row, now counts on its prompt; native job IDs are never shown.
-
 ## Earlier v80 history
 
 - v80.0 established the clean 0BSD public-repository baseline with a fresh root history, retaining the Python functionality and cross-platform launchers, explicit bounded test-suite membership and public product identifiers.
 - v80.1 introduced Cost Guard as an OpenCode AI usage, cost and quota tool in the README, with static Watch/report/Token Mix images, an early quick start and the detailed contracts linked in `docs/usage-and-cost.md`.
 - v80.2 added the OpenAI token-expiry explanation: the next OpenCode prompt renews it; Cost Guard never refreshes or writes credentials.
+- v80.3 added provider-supplied sign-in remedies and kept prompts active during verified V2 background jobs, with continuing duration, background status and resumed model work attributed to the same prompt; jobs themselves add no usage.
 
 ## Earlier versions (v1-v78)
 

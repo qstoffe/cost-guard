@@ -150,22 +150,17 @@ Disposable `cache/` uses generation-named SQLite files, WAL, short transactions,
 
 ## Watch
 
-Watch is coordinator-owned and source-driven.
+The coordinator owns lifecycle, cadence/rendering and provider refreshes over abstract source/report contracts; lower layers never import Watch. V1 polls cheap in-process SQLite probes; V2 non-replaying event hints require authoritative resync after disconnect/end/uncertainty. Watch shares `ReportService` analysis/cache/context, never a second billing implementation or recurring subprocess.
 
-- V1 source observation: cheap in-process SQLite polling/change probes.
-- V2 source observation: non-replayable live event hints plus authoritative snapshot/resync after disconnect, stream end or uncertainty (wire contracts: V2 boundary above).
+`watch/token_mix.py` owns run-scoped `Watch total CCost`/`Token Mix %`, keyed by source/session/message/step. Completed pre-Watch requests are excluded. Discovery: 20 roots, independent of row cap (default 14). Updates replace usage; steps replace message fallback. Eviction/completion/removal/countdown/resync retain observations until exit; new coordinators start empty. No account queries or persisted ledger.
 
-The coordinator owns lifecycle, cadence/rendering and provider refreshes; sources own observation. Watch reuses `ReportService` and the report analysis/cache/context truth, never a second billing implementation.
-
-`watch/token_mix.py` aggregates run requests before the configurable row cap (default 14), keyed by source/session/message/step. Startup discovery stays at 20 roots, independent of display caps. Updates replace usage; steps replace message fallback. Eviction/completion/removal/countdown/resync retain observations until exit; new coordinators start empty. Mix never queries accounts or persists a ledger.
+`WatchSessionSubtotal` sums selected rows' `PromptProjection.ccost` as Decimals, propagating unresolved provenance. Presentation formats `Σ`; native non-billable compactions contribute known zero. Amount/completeness enter change detection. Row subtotals need not partition run totals; no per-session run aggregate exists.
 
 `watch/accounts.py` reconciles by full account key. Normal stale TTL is five minutes. Unobserved waits (>90s plus configured cadence) or a new account's first error permit 60s recovery and 5/10/20s retries; processing time is excluded. Grace/retries use an injectable monotonic clock. Retention never refreshes successful-seen timestamps; normalized auth/unavailability bypasses it. Per-account projection flags own reconnecting UX. Success/expiry ends recovery. Prompt success cannot regress to aborted; labels persist while red emphasis decays.
 
 V1 batches root revisions in one recursive SQLite query without payload parsing. V2 hints use a five-second cooldown; disconnect forces resync, with bounded adaptive safety resync otherwise. Native active-session/tool state proves liveness. Quota refresh is independent of source activity: normally once per minute, with bounded resume retries. Local quota projection may refresh without another provider request.
 
 After initialization the coordinator owns source recovery: a poll's `SourceError` keeps the last projection and retries only the selected source every 5s (no reselection, subprocess or account refresh); V2 resumes from a fresh snapshot plus new event pump. Schema errors are terminal, unreadable data bounded. V2 rereads a rewritten registration.
-
-Watch depends on abstract source/report contracts, never concrete OpenCode/GitHub integrations. Lower layers never import Watch. Idle change detection must not add recurring external process starts.
 
 ## Presentation and CLI
 

@@ -20,7 +20,6 @@ from src.analysis.context import PriceWarningSeverity, watch_context_state
 from src.domain import ContextBoundary, EventKind, MessageRole, ModelInvocation, NormalizedEvent, TokenUsage
 from src.numbers import ccost_amount
 from src.presentation import ReportRenderer, WatchRenderer
-from src.presentation.token_mix import session_subtotal_text
 from src.reports.prompts import build_prompt_block
 from src.watch import WatchCoordinator
 from src.watch.token_mix import WatchTokenMix
@@ -163,14 +162,14 @@ class WatchTotalAndMoveTests(unittest.TestCase):
     def header_cost(self, projection):
         return next(line for line in self.rendered(projection).splitlines() if "Σ" in line)
 
-    def test_session_header_subtotal_zero_then_accumulates_without_history_or_double_count(self):
+    def test_session_header_subtotal_follows_rows_without_double_count_across_moves(self):
         with tempfile.TemporaryDirectory() as td:
             source = MutableSource(completed_history())
             config, selection, service, _ = make_service(td, source)
             clock = [4000]
             watch = WatchCoordinator(selection=selection, report_service=service, config=config, clock_ms=lambda: clock[0])
             initial = watch.initialize().projection
-            self.assertEqual({}, dict(initial.session_mix), "no pre-Watch history in any subtotal")
+            self.assertEqual({}, dict(initial.session_subtotals), "no selected rows in global Watch yet")
 
             usage = TokenUsage(input=50, output=5)
             source.snapshot = with_prompt(source.snapshot, "new", 4100, usage)
@@ -179,34 +178,45 @@ class WatchTotalAndMoveTests(unittest.TestCase):
             amount = ccost_amount(service._load_comparison_catalog().reference_valuation(MODEL, usage))
             self.assertRegex(self.header_cost(first), rf"\| +Σ {re.escape(amount)} \|")
             self.assertIn("Watch total CCost: " + amount, self.rendered(first))
-            self.assertRegex(self.header_cost(replace(first, session_mix={})), r"\| +Σ 0 \|", "known session, nothing new")
+            self.assertEqual(sum((row.prompt.ccost for row in first.rows), Decimal(0)),
+                             first.session_subtotals["root"].ccost)
 
             source.snapshot = moved(source.snapshot, 4600, "moved-to-worktree")
             clock[0] = 4700
             for cycle in (watch.poll_once(), watch.poll_once(force_resync=True), watch.poll_once()):
-                self.assertEqual(first.session_mix, cycle.projection.session_mix)
+                self.assertEqual(first.session_subtotals, cycle.projection.session_subtotals)
+                self.assertEqual(first.token_mix, cycle.projection.token_mix)
             self.assertEqual(1, self.rendered(watch._last_projection).count("Σ"), "one subtotal after the move")
             self.assertRegex(self.header_cost(watch._last_projection), rf"\| +Σ {re.escape(amount)} \|")
 
-    def test_session_subtotals_partition_the_run_total(self):
+    def test_run_total_counts_requests_once_across_roots_and_repeated_hydration(self):
         usages = {"a": TokenUsage(input=50, output=5), "b": TokenUsage(input=400, output=40), "c": TokenUsage(input=7, output=1)}
         with tempfile.TemporaryDirectory() as td:
             _config, _selection, service, _ = make_service(td, MutableSource(completed_history()))
             valuation = service.token_category_valuation()
         tracker = WatchTokenMix(4000)
         base = completed_history()
+        expected = Decimal(0)
         for root, key, at in (("alpha", "a", 4100), ("beta", "b", 4200), ("alpha", "c", 4300)):
             snapshot = with_prompt(base, key, at, usages[key])
-            snapshot = replace(snapshot, root=replace(snapshot.root, session_id=root))
+            session = replace(snapshot.root, session_id=root)
+            messages = tuple(replace(item, session_id=root) for item in snapshot.messages
+                             if item.message_id in {f"u_{key}", f"a_{key}"})
+            snapshot = replace(snapshot, root=session, sessions=(session,), messages=messages,
+                               parts=tuple(part for item in messages for part in item.parts),
+                               events=tuple(replace(item, session_id=root) for item in snapshot.events
+                                            if item.event_id == f"u_{key}"),
+                               invocations=tuple(replace(item, session_id=root) for item in snapshot.invocations
+                                                 if item.invocation_id == f"i_{key}"))
             for _ in range(2):
                 tracker.observe(snapshot, analyze_snapshot(snapshot, now_ms=9000))
+            expected += service._load_comparison_catalog().reference_valuation(MODEL, usages[key])
         total = tracker.project(valuation)
-        parts = tracker.project_sessions(valuation)
-        self.assertEqual({"alpha", "beta"}, set(parts))
-        self.assertEqual((2, 1), (parts["alpha"].request_count, parts["beta"].request_count))
-        self.assertEqual(total.request_count, sum(part.request_count for part in parts.values()))
-        self.assertEqual(sum(total.costs), sum(sum(part.costs) for part in parts.values()))
-        self.assertEqual("Σ 0", session_subtotal_text(None))
+        self.assertEqual(3, total.request_count)
+        self.assertEqual(3, total.sample_size)
+        self.assertEqual(expected, sum(total.costs))
+        self.assertEqual(tuple(sum(getattr(usage, field) for usage in usages.values())
+                               for field in ("input", "cache_read", "cache_write", "output")), total.totals)
 
 
     @staticmethod

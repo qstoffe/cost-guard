@@ -17,10 +17,7 @@ class WatchTokenMix:
         self._stepped: set[tuple[str | None, str, str]] = set()
         # Initiating user prompt per observed request, for the prompt count.
         self._prompts: dict[tuple[tuple[str | None, str, str], str], tuple[str, str]] = {}
-        # Root session that first owned each observed message; a location move keeps the session ID.
-        self._roots: dict[tuple[str | None, str, str], str] = {}
         self._projection = TokenMix()
-        self._session_projection: dict[str, TokenMix] = {}
         self._valuation: CategoryValuation | None = None
         self._dirty = False
 
@@ -48,7 +45,6 @@ class WatchTokenMix:
             if not request and key in self._stepped:
                 continue
             observed = self._messages.setdefault(key, {})
-            self._roots.setdefault(key, snapshot.root.session_id)
             if request and key not in self._stepped:
                 observed.pop("", None)
                 self._prompts.pop((key, ""), None)
@@ -74,27 +70,17 @@ class WatchTokenMix:
         self._refresh(valuation)
         return self._projection
 
-    def project_sessions(self, valuation: CategoryValuation | None = None) -> dict[str, TokenMix]:
-        """Run mix per root session; their requests partition exactly the global run mix."""
-        self._refresh(valuation)
-        return self._session_projection
-
     def _refresh(self, valuation: CategoryValuation | None) -> None:
         # Countdown rendering must not rescan an ever-growing run's history.
         if not (self._dirty or valuation != self._valuation):
             return
 
-        def build(keys) -> TokenMix:
-            items = tuple(item for key in keys for item in self._messages[key].values())
-            prompts = len({self._prompts[(key, request)] for key in keys
-                           for request in self._messages[key] if (key, request) in self._prompts})
-            return (priced_token_mix(((model, usage) for usage, model in items), valuation, sample_size=prompts)
-                    if valuation is not None else token_mix((usage for usage, _model in items), sample_size=prompts))
-
-        by_root: dict[str, list] = {}
-        for key in self._messages:
-            by_root.setdefault(self._roots[key], []).append(key)
-        self._projection = build(tuple(self._messages))
-        self._session_projection = {root: build(keys) for root, keys in by_root.items()}
+        items = tuple(item for requests in self._messages.values() for item in requests.values())
+        prompts = len({self._prompts[(key, request)] for key, requests in self._messages.items()
+                       for request in requests if (key, request) in self._prompts})
+        self._projection = (
+            priced_token_mix(((model, usage) for usage, model in items), valuation, sample_size=prompts)
+            if valuation is not None else token_mix((usage for usage, _model in items), sample_size=prompts)
+        )
         self._valuation = valuation
         self._dirty = False

@@ -12,7 +12,7 @@ from src.sources.base import LiveSessionSource
 from src.sources.errors import SourceError, SourceSchemaError, SourceUnavailableError
 from src.sources.selection import SourceSelection
 
-from .models import WatchProjection, WatchRow
+from .models import WatchProjection, WatchRow, WatchSessionSubtotal
 from .observers import CatalogObservation, LiveEventPump, observe_catalog
 from .tracker import WatchRowTracker
 from .token_mix import WatchTokenMix
@@ -322,7 +322,7 @@ class WatchCoordinator:
         warnings = tuple((projection.session_warnings or {}).items())
         return (rows, projection.quota, projection.quota_stale, projection.quota_recovering_accounts,
                 projection.source_warnings, warnings, projection.recent_model_notice,
-                projection.recent_promotion_notices, projection.token_mix, tuple(projection.session_mix.items()))
+                projection.recent_promotion_notices, projection.token_mix, tuple(projection.session_subtotals.items()))
 
     @staticmethod
     def _transient_signature(projection: WatchProjection) -> tuple[object, ...]:
@@ -346,7 +346,14 @@ class WatchCoordinator:
         rows = self.tracker.project(self.blocks, self.snapshots, now_ms=now_ms)
         active = sum(1 for row in rows if row.prompt.in_progress)
         session_warnings: dict[str, str] = {}
+        session_subtotals: dict[str, WatchSessionSubtotal] = {}
         for row in rows:
+            # Sum the final retained/capped rows, not this Watch run's requests.
+            previous = session_subtotals.get(row.session_id, WatchSessionSubtotal())
+            session_subtotals[row.session_id] = WatchSessionSubtotal(
+                ccost=previous.ccost + row.prompt.ccost,
+                unresolved_cost=previous.unresolved_cost or row.prompt.unresolved_cost,
+            )
             warning = row.next_context_warning
             if warning:
                 session_warnings[row.session_id] = warning
@@ -369,7 +376,7 @@ class WatchCoordinator:
             recent_model_notice=self.report_service.recent_model_notice_text(),
             recent_promotion_notices=self.report_service.recent_promotion_notice_texts(),
             token_mix=self.token_mix.project(self._token_valuation()),
-            session_mix=dict(self.token_mix.project_sessions(self._token_valuation())),
+            session_subtotals=session_subtotals,
         )
         self._last_projection = projection
         return projection

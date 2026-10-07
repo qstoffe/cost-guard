@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from decimal import Decimal
 from typing import Mapping
 
 from src.reports.models import AccountsQuotasProjection, PromptProjection
@@ -70,6 +71,13 @@ class WatchRow:
 
 
 @dataclass(frozen=True, slots=True)
+class WatchSessionSubtotal:
+    """CCost of the selected Watch rows in one displayed session block."""
+    ccost: Decimal = Decimal(0)
+    unresolved_cost: bool = False
+
+
+@dataclass(frozen=True, slots=True)
 class WatchProjection:
     title: str
     source_label: str
@@ -86,4 +94,4 @@ class WatchProjection:
     quota_recovering_accounts: tuple[tuple[str, str, str], ...] = ()
     token_mix: TokenMix = field(default_factory=TokenMix)
     recent_promotion_notices: tuple[str, ...] = ()
-    session_mix: Mapping[str, TokenMix] = field(default_factory=dict)
+    session_subtotals: Mapping[str, WatchSessionSubtotal] = field(default_factory=dict)

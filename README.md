@@ -252,7 +252,9 @@ Watch shares report analysis and groups sessions by latest activity (oldest firs
 | `Duration` | Wall-clock duration; a prompt stays running (footer `background shell`) while its verified background job runs. |
 | `Δctx -> Next Ictx` | Context-state change and next context when available. |
 
-`Token Mix % · N prompts` shows unique prompts, shares and CCost this run, without volume/bar. Startup-running requests, between-poll completions, child work and compactions count; pre-Watch completed history does not. Row eviction/resync/disappearance never removes qualifying run usage. `Watch total CCost` below it sums that run usage: 0 at start, never re-added by rescans or moves.
+Session `Σ` sums its displayed prompt/event CCost before rounding, preserving `?`/`N/A`. Native non-billable compactions contribute zero with blank row cost. Rounded row strings need not sum to the subtotal.
+
+`Token Mix % · N prompts` shows run-scoped unique prompts, shares and CCost without volume/bar. Startup-running requests, between-poll completions, child work and compactions qualify; completed pre-Watch history does not. `Watch total CCost` sums qualifying usage (zero when none), unchanged by eviction/disappearance, resync or moves. It may differ from `Σ`: mid-prompt startup can show `Σ 78`, row `78`, run total `59`; eviction changes only row subtotals.
 
 Any account count uses compact rows when they fit, otherwise individual wrapped blocks. Resets use `Reset@...`; fixed quotas with Remaining omit duplicate compact reset text, retained in reports/narrow fallback:
 
@@ -328,7 +330,7 @@ Bundles omit prompt text, titles, raw payloads/auth, tokens and account labels/I
 
 ## Release status
 
-**v80.7** adds reusable maintained HTTP account providers for OpenRouter/DeepSeek and a first-class MiniMax Token Plan adapter, retaining v80.6 Watch outage recovery. v80.0 is the Python 3.11+ public baseline; V1/V2 share one analysis core. Claude quotas remain experimental; provider fixtures do not prove personal live-account coverage, and physical restart/sleep and visual terminal behavior need separate live evidence.
+**v80.8** reconciles Watch `Σ` with displayed rows, preserving run totals/Token Mix. v80.0 is the Python 3.11+ public baseline. Claude quotas remain experimental; provider fixtures do not prove personal account coverage. Physical restart/sleep and visual terminal behavior need separate live evidence.
 
 Quick is the hosted-AI gate; Full adds package/release/performance checks; Diagnostics covers the affected workstation.
 
