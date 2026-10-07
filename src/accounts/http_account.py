@@ -8,6 +8,7 @@ import time
 from src.domain import AccountSnapshot, IntegrationHealth, ProviderCapabilities
 from .credentials import configured_credentials, resolve_auth_path
 from .http_transport import bearer_key, get_account_json, validate_json_tree
+from src.runtime_errors import recoverable, recovered
 
 
 class HttpAccountProvider:
@@ -41,7 +42,8 @@ class HttpAccountProvider:
 
     def get_account_snapshots(self):
         accounts = []
-        for record in self.records():
+        for index, record in enumerate(self.records()):
+            component = self.provider_id + f"-account-parser-{index}"
             now = self.clock_ms()
             category = "api" if record.value.get("type") == "api" else "oauth"
             key = bearer_key(record.value)
@@ -57,7 +59,12 @@ class HttpAccountProvider:
                 continue
             evidence["request_attempted"] = True
             try:
-                response = self.http_get(endpoint, key)
+                try:
+                    response = self.http_get(endpoint, key)
+                except (OSError, ValueError):
+                    accounts.append(replace(account, availability="error", reason="Account request failed",
+                        observations={**evidence, "parser_reason": "network_failure", "parser_status": "error"}))
+                    continue
                 evidence["http_status"] = response.http_status
                 if response.classification:
                     auth = response.classification in {"auth_failure", "credential_invalid"}
@@ -67,11 +74,17 @@ class HttpAccountProvider:
                                       "parser_status": "unavailable" if auth else "error",
                                       **({"user_action": "Reconnect this account in OpenCode"} if auth else {})}))
                     continue
-                validate_json_tree(response.payload)
+                try:
+                    validate_json_tree(response.payload)
+                except ValueError:
+                    accounts.append(replace(account, availability="error", reason="Account response could not be normalized",
+                        observations={**evidence, "parser_reason": "parser_failure", "parser_status": "error"}))
+                    continue
                 normalized = self.normalize_response(account, response.payload)
                 accounts.append(replace(normalized, observations={**evidence, **normalized.observations}))
-            except Exception:
-                # Never persist exception strings; injected/changed parsers may include keys/payloads.
-                accounts.append(replace(account, availability="error", reason="Account response could not be normalized",
-                                        observations={**evidence, "parser_reason": "parser_failure", "parser_status": "error"}))
+                recovered(component)
+            except Exception as exc:
+                recoverable(exc, component)
+                accounts.append(replace(account, availability="error", reason="ERROR: Account refresh failed internally",
+                    observations={**evidence, "parser_reason": "software_failure", "parser_status": "error"}))
         return tuple(accounts)

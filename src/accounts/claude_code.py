@@ -9,7 +9,8 @@ from typing import Callable, Mapping
 import time
 
 from src.domain import AccountRef, AccountSnapshot, AccountUsageStatus, IntegrationHealth, ProviderCapabilities, QuotaComponent
-from .claude_transport import read_claude_auth, read_claude_usage
+from .claude_transport import ClaudeUsageResult, read_claude_auth, read_claude_usage
+from src.runtime_errors import recoverable, recovered
 
 # The Claude CLI renews its own login; only an explicit sign-in needs the user.
 SIGNED_OUT_REASON = "Claude CLI is signed out; run 'claude auth login' to restore quotas."
@@ -107,28 +108,29 @@ class ClaudeCodeAccountProvider:
             return None
         try:
             metadata = self.auth_reader()
-            if not isinstance(metadata, Mapping) or metadata.get("loggedIn") is not True:
-                return replace(self._last, quotas=(), availability="unavailable", reason=SIGNED_OUT_REASON,
-                               observations={"parser_reason": "auth_failure",
-                                             "user_action": "Signed out; run 'claude auth login'"}) if self._last else None
-            backend = metadata.get("apiProvider")
-            subscription = backend == "firstParty" and metadata.get("authMethod") == "claude.ai"
-            identity = _identity(metadata.get("email"), metadata.get("orgId"))
-            # accountInfo.organization is the organization NAME, not auth
-            # status.orgId. Keep both distinctions; compare only like fields.
-            self._quota_identity = _identity(metadata.get("email"), metadata.get("orgName"))
-            locator = hashlib.sha256(str(metadata.get("configDirectory", "default")).encode()).hexdigest()
-            ref = AccountRef("claude-cli:" + locator, "claude-code", account_id=identity, source_account="current-login")
-            api = backend == "firstParty" and metadata.get("authMethod") in {"api_key", "api-key", "api"}
-            return AccountSnapshot(ref, self.now_ms(), "Claude Code",
-                plan=_plan(metadata.get("subscriptionType")) if subscription else ("API pay as you go" if api else None),
-                availability="unavailable", reason="Claude subscription quotas unavailable",
-                observations={"auth_status": "authenticated", "backend_status": "first_party" if backend == "firstParty" else "external",
-                              "account_kind": "subscription" if subscription else "api_or_external"})
-        except Exception:
+        except (OSError, ValueError):
             return replace(self._last, quotas=(), availability="error", reason="Claude account metadata unavailable",
                            observations={**self._last.observations, "auth_status": "unknown",
                                          "parser_reason": "discovery_failure"}) if self._last else None
+        # Transport's expected failures are handled above, not around internal
+        # identity/normalization code (where even ValueError is a software fault).
+        if not isinstance(metadata, Mapping) or metadata.get("loggedIn") is not True:
+            return replace(self._last, quotas=(), availability="unavailable", reason=SIGNED_OUT_REASON,
+                           observations={"parser_reason": "auth_failure",
+                                         "user_action": "Signed out; run 'claude auth login'"}) if self._last else None
+        backend = metadata.get("apiProvider")
+        subscription = backend == "firstParty" and metadata.get("authMethod") == "claude.ai"
+        identity = _identity(metadata.get("email"), metadata.get("orgId"))
+        # Compare organization NAME to name, never auth status.orgId to name.
+        self._quota_identity = _identity(metadata.get("email"), metadata.get("orgName"))
+        locator = hashlib.sha256(str(metadata.get("configDirectory", "default")).encode()).hexdigest()
+        ref = AccountRef("claude-cli:" + locator, "claude-code", account_id=identity, source_account="current-login")
+        api = backend == "firstParty" and metadata.get("authMethod") in {"api_key", "api-key", "api"}
+        return AccountSnapshot(ref, self.now_ms(), "Claude Code",
+            plan=_plan(metadata.get("subscriptionType")) if subscription else ("API pay as you go" if api else None),
+            availability="unavailable", reason="Claude subscription quotas unavailable",
+            observations={"auth_status": "authenticated", "backend_status": "first_party" if backend == "firstParty" else "external",
+                          "account_kind": "subscription" if subscription else "api_or_external"})
 
     def probe(self):
         self._pending = self._discover()
@@ -146,13 +148,14 @@ class ClaudeCodeAccountProvider:
             return ()
         if account.observations.get("account_kind") == "subscription" and account.observations.get("auth_status") == "authenticated":
             try:
-                result = self.usage_reader()
+                result = self._usage_result()
                 if result.availability != "available" and result.reason == "auth_failure":
                     account = replace(account, availability="unavailable", reason=REJECTED_REASON,
                                       observations={**account.observations, "parser_reason": result.reason,
                                                     "user_action": "Sign-in rejected; run 'claude auth login'"})
                 elif result.availability != "available":
-                    account = replace(account, availability=result.availability, reason="Experimental Claude quota source unavailable",
+                    account = replace(account, availability=result.availability,
+                                      reason="ERROR: Claude metadata reader failed internally" if result.reason == "software_failure" else "Experimental Claude quota source unavailable",
                                       observations={**account.observations, "parser_reason": result.reason})
                 elif (result.account.get("apiProvider") != "firstParty" or self._quota_identity is None
                       or self._quota_identity != _identity(result.account.get("email"), result.account.get("organization"))):
@@ -163,8 +166,17 @@ class ClaudeCodeAccountProvider:
                 else:
                     account = replace(account, availability="error", reason="Experimental Claude quota format unavailable",
                                       observations={**account.observations, "parser_reason": "format_changed"})
-            except Exception:
-                account = replace(account, availability="error", reason="Experimental Claude quota source failed",
-                                  observations={**account.observations, "parser_reason": "transport_failure"})
+                recovered("claude-quota")
+            except Exception as exc:
+                recoverable(exc, "claude-quota")
+                account = replace(account, quotas=(), availability="error", reason="ERROR: Claude quota refresh failed internally",
+                                  observations={**account.observations, "parser_reason": "software_failure"})
         self._last = account
         return (account,)
+
+    def _usage_result(self):
+        try:
+            return self.usage_reader()
+        except (OSError, ValueError):
+            # Expected metadata/transport contract only, not normalization code.
+            return ClaudeUsageResult(availability="error", reason="transport_failure")

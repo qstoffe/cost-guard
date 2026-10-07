@@ -309,17 +309,32 @@ class ReportService:
                 if not (health.available and health.healthy):
                     continue
                 if hasattr(provider, "get_account_snapshots"):
-                    accounts = provider.get_account_snapshots()
+                    accounts = tuple(provider.get_account_snapshots())
                 else:
                     # Compatibility adapters retain distinct provenance even
                     # when multiple adapters have the same provider ID.
                     ref = AccountRef(self.source.source_id, provider.provider_id,
                                      source_account=f"adapter:{index}")
                     accounts = (normalize_quota(provider.get_quota_snapshot(), ref, getattr(provider, "display_name", provider.provider_id)),)
-                for account in accounts:
-                    snapshots[account.key] = account
-            except Exception:
-                continue
+            except Exception as exc:
+                # A provider owns isolated native quota observations, never
+                # historical usage/CCost. Replace failure with a visible ERROR.
+                from src.runtime_errors import recoverable
+                expected = isinstance(exc, OSError)
+                if not expected:
+                    recoverable(exc, f"account-provider-{index}")
+                ref = AccountRef(self.source.source_id, provider.provider_id, source_account=f"adapter:{index}")
+                account = AccountSnapshot(ref, self.now_ms, provider.provider_id, availability="error",
+                                          reason="Account request unavailable" if expected else "ERROR: Optional account provider refresh failed internally",
+                                          observations={"parser_reason": "network_failure" if expected else "software_failure"})
+                accounts = (account,)
+            else:
+                from src.runtime_errors import recovered
+                recovered(f"account-provider-{index}")
+            # Only fully acquired observations are accepted. Key/projection
+            # invariants are orchestration truth and have no recovery contract.
+            for account in accounts:
+                snapshots[account.key] = account
         return tuple(snapshots.values())
 
     def _range_comparison(self, roots: Sequence[_AnalyzedRoot], start_ms: int, end_ms: int | None = None) -> ComparisonCost:

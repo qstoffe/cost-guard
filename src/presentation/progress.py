@@ -6,6 +6,7 @@ import sys
 import threading
 import textwrap
 from typing import Callable, TextIO
+from src.runtime_errors import recoverable
 
 _FRAMES = ("|", "/", "-", "\\")
 
@@ -69,6 +70,7 @@ class StartupProgress:
         self._blocks = _supports_blocks(self.stream)
         self._active = False
         self._closed = False
+        self._degraded = False
         self._percent = 0
         self._label = "Initializing"
         self._frame_index = 0
@@ -136,11 +138,37 @@ class StartupProgress:
     def _ensure_worker(self) -> None:
         if not self.interactive or not self.animate or self._worker is not None:
             return
-        self._worker = threading.Thread(target=self._animate, name="cost-guard-startup-progress", daemon=True)
+        self._worker = threading.Thread(target=self._animation_root, name="cost-guard-startup-progress", daemon=True)
         self._worker.start()
 
+    def _animation_root(self) -> None:
+        try:
+            self._animate()
+        except Exception as exc:
+            # Animation never owns analysis state. Disable it permanently and
+            # replace its transient output with a truthful degradation notice.
+            with self._lock:
+                self._active = False
+                self._degraded = True
+                self._stop_event.set()
+                self.interactive = False
+            recoverable(exc, "startup-animation")
+            notice = "ERROR: Startup animation failed internally; report continues."
+            try:
+                if self.line_sink is not None:
+                    self.line_sink(notice)
+                else:
+                    self.stream.write("\r" + " " * self._last_length + "\r" + notice + "\n")
+                    self.stream.flush()
+            except Exception as rendering:
+                # The original output sink may be the fault. Use the independent
+                # plain stderr sink; failure there goes to the worker safety net.
+                recoverable(rendering, "startup-animation-output")
+                sys.stderr.write(notice + "\n")
+                sys.stderr.flush()
+
     def update(self, label: str, percent: int | None = None) -> None:
-        if self._closed:
+        if self._closed or self._degraded:
             return
         text = str(label).strip() or "Initializing"
         if not self.interactive:

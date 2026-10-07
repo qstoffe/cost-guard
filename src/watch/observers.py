@@ -9,6 +9,7 @@ from typing import Mapping, Sequence
 from src.domain import NormalizedSession
 from src.sources.base import LiveSessionSource, SessionSource, SourceChange
 from src.sources.errors import SourceError, SourceResyncRequiredError
+from src.runtime_errors import recoverable, recovered
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,6 +78,7 @@ class PumpResult:
     change: SourceChange | None = None
     resync_required: bool = False
     error: str = ""
+    software_fault: bool = False
 
 
 class LiveEventPump:
@@ -105,6 +107,7 @@ class LiveEventPump:
             for change in self.source.iter_changes():
                 if self._stop.is_set():
                     return
+                recovered("watch-event-observer")
                 self._queue.put(PumpResult(change=change))
         except SourceResyncRequiredError as exc:
             if not self._stop.is_set():
@@ -112,9 +115,14 @@ class LiveEventPump:
         except SourceError as exc:
             if not self._stop.is_set():
                 self._queue.put(PumpResult(resync_required=True, error=str(exc)))
-        except Exception as exc:  # fail closed at the integration boundary
-            if not self._stop.is_set():
-                self._queue.put(PumpResult(resync_required=True, error=type(exc).__name__))
+        except Exception as exc:
+            if self._stop.is_set():
+                raise  # Retired pump has no ERROR surface: use the fatal hook.
+            # Hints are disposable; only an authoritative snapshot may
+            # restore correctness. The coordinator shows ERROR until resync.
+            recoverable(exc, "watch-event-observer")
+            self._queue.put(PumpResult(resync_required=True, software_fault=True,
+                error="ERROR: Watch event observer failed · resynchronizing"))
 
     def get(self, timeout: float) -> PumpResult | None:
         try:

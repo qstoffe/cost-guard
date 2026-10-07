@@ -364,7 +364,7 @@ def _apply_expired_promotions(catalog: PricingCatalog, now_ms: int) -> PricingCa
         try:
             decoded = json.loads(raw_standard)
             standard = tuple(_tier_from_dict(dict(item)) for item in decoded if isinstance(item, dict))
-        except Exception:
+        except (TypeError, ValueError, InvalidOperation):
             continue
         if not standard:
             continue
@@ -485,6 +485,10 @@ def _preserve_cached_release_dates(
     return tuple(result)
 
 
+class PricingUnavailableError(RuntimeError):
+    """External pricing document no longer satisfies the supported schema."""
+
+
 class GitHubCopilotPricingProvider:
     provider_id = "github-copilot"
     capabilities = ProviderCapabilities(model_pricing=True, long_context_pricing=True)
@@ -507,7 +511,7 @@ class GitHubCopilotPricingProvider:
         try:
             catalog = self.get_catalog()
             return IntegrationHealth(bool(catalog.models), bool(catalog.models), f"{len(catalog.models)} priced models")
-        except Exception as exc:
+        except PricingUnavailableError as exc:
             return IntegrationHealth(True, False, f"GitHub Copilot pricing unavailable: {type(exc).__name__}")
 
     def get_model_pricing(self) -> tuple[ModelPricing, ...]:
@@ -524,7 +528,7 @@ class GitHubCopilotPricingProvider:
             return cached
         try:
             catalog = self._fetch_catalog(cached)
-        except Exception:
+        except PricingUnavailableError:
             if cached is not None:
                 safe_cached = _apply_expired_promotions(cached, self.now_ms())
                 self._catalog = safe_cached
@@ -550,18 +554,22 @@ class GitHubCopilotPricingProvider:
         return False
 
     def _fetch_catalog(self, previous: PricingCatalog | None = None) -> PricingCatalog:
-        pricing = self.fetch_text(DOCS_API_BODY + PRICING_ARTICLE_PATH, 20)
+        try:
+            pricing = self.fetch_text(DOCS_API_BODY + PRICING_ARTICLE_PATH, 20)
+        except OSError:
+            raise PricingUnavailableError("GitHub pricing source unavailable; retry later") from None
         models = list(_annotate_promotions(parse_pricing_markdown(pricing), pricing))
         models = list(_preserve_known_promotions(models, previous, self.now_ms()))
         if len(models) < 5:
-            raise RuntimeError(f"GitHub pricing parser found only {len(models)} models")
+            raise PricingUnavailableError(f"GitHub pricing parser found only {len(models)} models")
         # Release dates are enrichment only.  A failed optional fetch must never invalidate fresh pricing.
         try:
             raw_metadata = json.loads(self.fetch_text(MODELS_DEV_URL, 15))
+        except (OSError, ValueError):
+            models = list(_preserve_cached_release_dates(models, previous.models if previous else ()))
+        else:
             if isinstance(raw_metadata, dict):
                 models = list(_add_release_dates(models, raw_metadata, previous.models if previous else ()))
-        except Exception:
-            models = list(_preserve_cached_release_dates(models, previous.models if previous else ()))
         now = self.now_ms()
         revision = hashlib.sha256(pricing.encode("utf-8")).hexdigest()
         expiries = [

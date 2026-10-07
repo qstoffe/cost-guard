@@ -16,6 +16,11 @@ import subprocess
 import threading
 import time
 from typing import Mapping
+from src.runtime_errors import recoverable, recovered
+
+
+class ClaudeReaderFault(Exception):
+    """Isolated reader failed internally; never represents absent metadata."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,6 +90,7 @@ class _ControlReader:
     def __init__(self, process: subprocess.Popen, deadline: float):
         self.process, self.deadline = process, deadline
         self.messages: queue.Queue = queue.Queue(maxsize=64)
+        self.failed = False
         self.thread = threading.Thread(target=self._read, daemon=True, name="claude-metadata")
         self.thread.start()
 
@@ -101,6 +107,9 @@ class _ControlReader:
                     break
         except OSError:
             pass
+        except Exception as exc:
+            self.failed = True
+            recoverable(exc, "claude-metadata-reader")
         finally:
             try:
                 self.messages.put_nowait(None)
@@ -112,6 +121,8 @@ class _ControlReader:
                                              "request": request}) + "\n").encode("utf-8"))
         self.process.stdin.flush()
         while True:
+            if self.failed:
+                raise ClaudeReaderFault
             remaining = self.deadline - time.monotonic()
             if remaining <= 0:
                 raise TimeoutError
@@ -119,7 +130,11 @@ class _ControlReader:
                 value = self.messages.get(timeout=remaining)
             except queue.Empty:
                 raise TimeoutError from None
+            if self.failed:
+                raise ClaudeReaderFault
             if value is None:
+                if self.failed:
+                    raise ClaudeReaderFault
                 raise ValueError("Claude metadata transport ended")
             response = value.get("response")
             if isinstance(response, dict) and response.get("request_id") == identity:
@@ -165,8 +180,11 @@ def read_claude_usage(*, timeout_seconds: float = 20) -> ClaudeUsageResult:
         if not isinstance(usage, Mapping):
             return ClaudeUsageResult(account, None, "error", "format_changed")
         # Drop session/transcript data; no user/model message has been written.
+        recovered("claude-metadata-reader")
         return ClaudeUsageResult(account, {key: usage[key] for key in
             ("subscription_type", "rate_limits_available", "rate_limits") if key in usage})
+    except ClaudeReaderFault:
+        return ClaudeUsageResult(account, None, "error", "software_failure")
     except (TimeoutError, subprocess.TimeoutExpired):
         return ClaudeUsageResult(account, None, "error", "timeout")
     except (OSError, ValueError):

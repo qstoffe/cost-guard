@@ -20,6 +20,7 @@ from .cli import CliUsageError, CommandKind, help_text, parse_command, startup_m
 from .config import ConfigError, load_configuration
 from .presentation import ReportRenderer, StartupProgress, WatchRenderer
 from .pricing.github_copilot import GitHubCopilotPricingProvider
+from .pricing.github_copilot import PricingUnavailableError
 from .reports import ReportKind, ReportRequest, ReportService
 from .sources.errors import SourceError, SourceUnavailableError
 from .sources.discovery import default_opencode_data_dir, has_opencode_installation_evidence
@@ -27,6 +28,8 @@ from .sources.model_availability import FallbackModelAvailabilitySource, OpenCod
 from .sources.selection import SourceSelector
 from .version import DISPLAY_VERSION, PRODUCT_NAME, mode_heading
 from .watch import WatchCoordinator
+from .watch.coordinator import WatchedSessionEnded
+from .runtime_errors import check_pending, context
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 
@@ -177,6 +180,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
 
     _prepare_console_output()
+    context(mode=startup_mode(command), phase="startup")
     progress: StartupProgress | None = None
     watch_renderer: WatchRenderer | None = None
     try:
@@ -192,6 +196,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             progress = StartupProgress(mode="normal", heading=mode_heading(startup_mode(command)))
 
         progress.update("Selecting OpenCode source")
+        context(phase="source selection")
         requested_source = str(config["openCode"]["source"])
         try:
             selection = _select_source(requested_source)
@@ -215,6 +220,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             watch_renderer.render_initializing(selection.selected.upper())
 
         progress.update("Initializing cache")
+        context(phase="cache initialization")
         database = CacheDatabase(PACKAGE_ROOT)
         database.initialize()
         repository = CacheRepository(database)
@@ -239,6 +245,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         if command.watch:
             progress.update("Initializing Watch")
+            context(phase="Watch initialization")
             coordinator = WatchCoordinator(
                 selection=selection,
                 report_service=service,
@@ -248,14 +255,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             initial_cycle = coordinator.initialize()
             progress.stop()
             assert watch_renderer is not None
+            context(phase="Watch runtime")
             coordinator.run_forever(watch_renderer, initial_cycle=initial_cycle)
             return 0
 
+        context(phase="report analysis")
         if command.kind is CommandKind.TOKEN_MIX:
             projection = service.build_token_mix_history(progress.update)
         else:
             projection = service.build(_report_request(command))
         progress.stop()
+        context(phase="report presentation")
         ReportRenderer(config).render(projection)
         if command.kind is CommandKind.SESSION and any(
             row.in_progress for block in projection.prompt_blocks for row in block.rows
@@ -269,13 +279,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             coordinator.run_until_inactive(WatchRenderer(config))
         return 0
     except KeyboardInterrupt:
+        check_pending()
         if watch_renderer is None:
             raise
         if progress is not None:
             progress.stop()
         watch_renderer.finish("Watch stopped.")
         return 0
-    except (SourceError, ValueError, RuntimeError, OSError) as exc:
+    except (SourceError, WatchedSessionEnded, PricingUnavailableError) as exc:
         if progress is not None:
             progress.stop()
         _print_error("Cost Guard - Runtime error", str(exc) or type(exc).__name__)

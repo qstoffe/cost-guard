@@ -165,6 +165,8 @@ def account_capacity_parts(account: AccountProjection, timezone_id: str, *, now_
                            compact: bool = False, recovering: bool = False, watch: bool = False,
                            primary_label_width: int = 0) -> tuple[StyledText, ...]:
     snapshot = account.account
+    if snapshot.observations.get("parser_reason") == "software_failure":
+        return (StyledText((("ERROR: Account refresh failed internally · retrying", "costQuotaWarning"),)),)
     parts = []
     labels = [quota_label(item.label) for item in snapshot.quotas] + (["Remaining"] if account.pace else [])
     label_width = max([4] + [len(label) for label in labels])

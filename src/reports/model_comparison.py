@@ -4,6 +4,8 @@ from __future__ import annotations
 from src.pricing.catalog import PricingCatalog
 from src.numbers import reference_rate
 from src.sources.model_availability import ModelAvailabilitySource
+from src.sources.errors import SourceError
+from src.runtime_errors import recoverable, recovered
 
 
 def selectable_catalog(
@@ -19,8 +21,13 @@ def selectable_catalog(
     """
     try:
         available_ids = availability_source.available_model_ids() if availability_source else None
-    except Exception:
+    except (SourceError, OSError):
         available_ids = None
+    except Exception as exc:
+        recoverable(exc, "model-availability")
+        return catalog, ("ERROR: Model availability lookup failed internally; showing full pricing catalog.",)
+    else:
+        recovered("model-availability")
     if available_ids is None:
         return catalog, ("⚠ Could not determine available OpenCode models; showing full pricing catalog.",)
 

@@ -15,6 +15,7 @@ def durable_quota_failure(snapshot: AccountSnapshot | None) -> bool:
     return snapshot is not None and (
         snapshot.availability == "unavailable"
         or snapshot.observations.get("parser_reason") == "auth_failure"
+        or snapshot.observations.get("parser_reason") == "software_failure"
         or snapshot.observations.get("http_status") in (401, 403)
     )
 

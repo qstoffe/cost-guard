@@ -2,7 +2,7 @@
 
 **Monitor AI model usage, cost and quotas in OpenCode.**
 
-Cost Guard is a local monitoring and analysis tool for [OpenCode](https://opencode.ai/). It shows how OpenCode prompts and sessions use AI models, compares relative model costs, tracks account quotas, and can monitor active OpenCode sessions in real time.
+Cost Guard analyzes [OpenCode](https://opencode.ai/) prompts/sessions, relative model costs and account quotas locally, with real-time Watch.
 
 ![Cost Guard Watch: OpenCode sessions and quotas](docs/images/cost-guard-watch.png)
 
@@ -17,10 +17,6 @@ Live OpenCode prompts/sessions: model/effort, CCost, calls, context development 
 - Monitor account/subscription quotas across supported providers.
 - Inspect available historical OpenCode sessions and prompts.
 - Compare available AI models using your observed workload mix.
-
-## Why Cost Guard?
-
-Multiple OpenCode models, providers and subscriptions make relative cost, token mix, context growth and independent quotas hard to follow together. Cost Guard combines these signals locally.
 
 ## Quick start
 
@@ -83,7 +79,7 @@ Token Mix uses **I/C/W/O** for uncached input/cache read/cache write/output (inc
 
 ### Model comparison and account overview
 
-This cropped normal-report example shows model pricing/comparison and account quotas, not every report section. Comparisons use your observed workload mix.
+Normal-report excerpt: model pricing/comparison using your observed workload mix, plus account quotas.
 
 ![Cost Guard: model comparison and account quotas](docs/images/cost-guard-report.png)
 
@@ -328,17 +324,17 @@ Creates `diagnostics/cost-guard-diagnostics-YYYYMMDD-HHMMSS.zip`: **Full/local**
 
 Bundles omit prompt text, titles, raw payloads/auth, tokens and account labels/IDs; session/account-source IDs are hashed. Account evidence includes plan/status, numeric quota shape, credential discovery/category (never values), request/HTTP/schema classification, normalized component categories, malformed/ignored counts and MiniMax window/form recognition. Provider inventory is available even without live accounts.
 
+### Internal software faults
+
+**`COST GUARD FAILED`** means an unexpected software fault: non-zero exit, an error-only log under `diagnostics/errors/` and an individual report under `diagnostics/crashes/` to send to a maintainer. Isolated faults show ERROR while safe results continue. Healthy runs/expected operational conditions create no software log. [Error diagnostics](docs/runtime-errors.md) explains privacy, 30-day retention and reporting fallback; crashes never invoke full Diagnostics automatically.
+
 ## Release status
 
-**v80.9** keeps Windows PowerShell open and Watch errors non-zero. v80.0 is the Python 3.11+ public baseline. Claude quotas remain experimental; account coverage, restart/sleep and terminal behavior need separate live evidence.
-
-Quick is the hosted-AI gate; Full adds package/release/performance checks; Diagnostics covers the affected workstation.
+**v80.10** adds process/worker failure containment and error-only diagnostics, preserving PowerShell/Watch stops. v80.0 is the Python 3.11+ public baseline. Claude quotas remain experimental; account coverage/restart/sleep need separate live evidence.
 
 ## Development
 
 `AGENTS.md` routes maintainers to self-contained architecture, FR, test and release guidance under `development/`.
-
-From the package root:
 
 ```text
 python development/tools/run_tests.py --suite quick      # default; bounded hosted-AI gate

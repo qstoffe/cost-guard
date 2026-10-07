@@ -354,13 +354,21 @@ def check_entrypoint(root: Path, results: Results) -> None:
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     except Exception:
         return
-    forbidden_nodes = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
-    if any(isinstance(node, forbidden_nodes) for node in tree.body):
-        results.fail("entry-point architecture", "cost-guard.py may not define functions/classes")
+    # Only the thin guarded import/status seam is allowed, never business logic.
+    definitions = [node for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))]
+    if any(not isinstance(node, ast.FunctionDef) or node.name not in {"run", "start"} for node in definitions):
+        results.fail("entry-point architecture", "cost-guard.py may define only run/start failure-boundary functions")
     imports = imported_modules(path)
-    disallowed = sorted(m for m in imports if m not in {"src.bootstrap", "sys"})
+    disallowed = sorted(m for m in imports if m not in {"src.bootstrap", "src.runtime_errors", "pathlib", "sys"})
     if disallowed:
-        results.fail("entry-point architecture", f"cost-guard.py may import only sys and src.bootstrap, found {disallowed}")
+        results.fail("entry-point architecture", f"cost-guard.py may import only the minimal process boundary/bootstrap, found {disallowed}")
+    if any(isinstance(node, ast.ImportFrom) and node.module == "src.bootstrap" for node in tree.body):
+        results.fail("entry-point architecture", "bootstrap import must occur inside the guarded application callback")
+    runtime = root / "src/runtime_errors.py"
+    if runtime.exists():
+        disallowed = sorted(m for m in imported_modules(runtime) if m.startswith("src.") or m.startswith(".") and m != ".version")
+        if disallowed:
+            results.fail("runtime-error architecture", f"minimal reporter imports application layers: {disallowed}")
     results.ok("thin entry-point architecture checked")
 
 

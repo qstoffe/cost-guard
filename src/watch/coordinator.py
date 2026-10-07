@@ -11,6 +11,7 @@ from src.reports import ReportService, SessionPromptBlock
 from src.sources.base import LiveSessionSource
 from src.sources.errors import SourceError, SourceSchemaError, SourceUnavailableError
 from src.sources.selection import SourceSelection
+from src.runtime_errors import check_pending
 
 from .models import WatchProjection, WatchRow, WatchSessionSubtotal
 from .observers import CatalogObservation, LiveEventPump, observe_catalog
@@ -127,6 +128,7 @@ class WatchCoordinator:
         # Ephemeral lifecycle evidence for this process only; never persisted.
         self.source_recoveries = 0
         self.last_source_recovery_kind = ""
+        self._observer_error = ""
 
     def _record_refresh_duration(self, seconds: float) -> None:
         value = max(0.001, float(seconds))
@@ -221,10 +223,7 @@ class WatchCoordinator:
         if not force and not retry_due and self._last_account_refresh_ms and now_ms - self._last_account_refresh_ms < QUOTA_REFRESH_MS:
             return expired
         self.report_service.set_now_ms(now_ms)
-        try:
-            fresh = self.report_service.account_quota_snapshots()
-        except Exception:
-            fresh = ()
+        fresh = self.report_service.account_quota_snapshots()
         completed_ms = int(self.clock_ms())
         recovering = self._quota_recovery_until is not None and self._monotonic() < self._quota_recovery_until
         previous = self._account_quotas
@@ -273,14 +272,9 @@ class WatchCoordinator:
         ):
             return
         self.report_service.set_now_ms(now_ms)
-        try:
-            self.quota = self.report_service.build_watch_quota(
-                observation.sessions, quota_snapshots=self._account_quotas, query_account=False
-            )
-        except Exception:
-            # Local Watch rows remain useful even when quota projection is unavailable.
-            if self.quota is None:
-                self.quota = None
+        self.quota = self.report_service.build_watch_quota(
+            observation.sessions, quota_snapshots=self._account_quotas, query_account=False
+        )
         self._last_quota_refresh_ms = now_ms
 
     @staticmethod
@@ -340,13 +334,10 @@ class WatchCoordinator:
         return cls._visible_signature(previous) != cls._visible_signature(current)
 
     def _token_valuation(self):
-        try:
-            return self.report_service.token_category_valuation()
-        except Exception:
-            # Without a reference catalog the mix still renders its shares.
-            return None
+        return self.report_service.token_category_valuation()
 
     def _projection(self, *, now_ms: int, status: str = "", status_active: bool = False) -> WatchProjection:
+        check_pending()
         rows = self.tracker.project(self.blocks, self.snapshots, now_ms=now_ms)
         active = sum(1 for row in rows if row.prompt.in_progress)
         session_warnings: dict[str, str] = {}
@@ -373,7 +364,7 @@ class WatchCoordinator:
             quota_stale=self._quota_stale,
             quota_recovering_accounts=self._quota_recovering_accounts,
             active_count=active,
-            status=status,
+            status=self._observer_error or status,
             status_active=status_active,
             now_ms=now_ms,
             session_warnings=session_warnings,
@@ -530,6 +521,9 @@ class WatchCoordinator:
             if result is None:
                 continue
             if result.resync_required:
+                if result.software_fault:
+                    self._observer_error = result.error
+                    renderer.render_status(self.activity_projection(result.error))
                 resync_required = True
                 hinted_deadline = min(deadline, started + 5.0)
                 continue
@@ -571,6 +565,7 @@ class WatchCoordinator:
             cycle = self._recover_source(renderer, exc)
         else:
             if resync:
+                self._observer_error = ""
                 self._start_event_pump()
         if self._needs_full_render(previous_projection, cycle.projection, cycle):
             renderer.render(cycle.projection)
@@ -622,6 +617,7 @@ class WatchCoordinator:
             while True:
                 cycle = self._advance(renderer, cycle)
         except KeyboardInterrupt:
+            check_pending()
             renderer.finish("Watch stopped.")
         except SourceError:
             # Bootstrap prints the normalized error and exits non-zero.

@@ -18,7 +18,8 @@ Core product principles:
 
 ```text
 cost-guard.py
-    -> src.bootstrap (composition root)
+    -> src.runtime_errors (minimal process guard, before application import)
+       -> src.bootstrap (composition root)
        -> CLI/config/source/provider selection
        -> Session Source(s) -> normalized domain
        -> Account Provider(s) -> normalized quota/account domain
@@ -37,16 +38,7 @@ Configuration must be validated before any OpenCode/provider/network/runtime-cac
 
 ## Session Sources
 
-A Session Source normalizes native agent/session history before returning it to core.
-
-Supported sources:
-
-- **OpenCode V1:** read-only local SQLite adapter. No recurring `opencode db` subprocess path.
-- **OpenCode V2:** registered local background service over loopback HTTP. The live event stream is a non-durable change-hint mechanism for Watch; it is never the only state authority and any end/disconnect requires snapshot/resync.
-
-`openCode.source` supports `auto|v1|v2`. `auto` selects one highest supported healthy source: V2, otherwise V1. If no requested source is usable at startup, the composition root may invoke the installed OpenCode CLI's read-only API info command once to let OpenCode start its shared background service, then reselect; it never launches Desktop/TUI or runs a recurring Watch subprocess. V1 and V2 histories are never unioned; see migration-gap diagnostics below.
-
-Domain records retain provenance/source identity so a future explicitly designed multi-source reconciliation layer remains possible.
+A Session Source normalizes agent history into provenance-bearing domain records. V1 is read-only SQLite; V2 is registered loopback HTTP with non-durable Watch hints. `openCode.source=auto|v1|v2` selects one healthy generation, preferring V2; histories are never unioned. Only bootstrap may wake the shared service once through the installed CLI's read-only API info command before reselecting; no Desktop/TUI or recurring Watch subprocess. Selection/recovery contracts follow below.
 
 `src/sources/opencode_errors.py` is the shared V1/V2 native error boundary. Known cancellation identifiers and bounded message forms in top-level/data error fields normalize to canonical `AbortedError`; arbitrary payload/stack substring matches are not cancellation evidence. Analysis uses the terminal logical attempt, never lets zero usage override an explicit generic error, and retains terminal errors with missing usage. Watch's persistent aborted label and transient emphasis remain separate presentation/lifecycle concerns.
 
@@ -56,7 +48,7 @@ Domain records retain provenance/source identity so a future explicitly designed
 
 Hydration reads one root plus its recursive descendant tree inside one pinned SQLite read transaction, then normalizes native rows into canonical sessions, messages, parts, events and model invocations. If `step-finish` parts exist, their per-step tokens/cost are the invocation source instead of cumulative assistant-message values. Source-specific message/part structure is preserved only through canonical types needed by later compaction/tool/context analysis.
 
-`get_session_tree_revision()` is deliberately cheaper than hydration: it hashes causal-tree membership and compact row-level session/message/part metadata without parsing JSON payloads. It includes counts, update/create aggregates and IDs so unchanged `session.time_updated` alone cannot hide relevant message/part or descendant-tree changes. The revision is a change/caching signal, not business truth.
+`get_session_tree_revision()` hashes tree membership plus compact session/message/part counts, timestamps and IDs without parsing JSON. Unchanged `session.time_updated` cannot hide descendant/message changes; this cheap cache/change gate is never business truth.
 
 ### OpenCode V2 boundary (implemented)
 
@@ -91,8 +83,6 @@ Providers return independent native account/quota/billing components. Copilot pr
 First-class adapters (including MiniMax) own complex auth/semantics; Simple HTTP definitions handle DeepSeek/OpenRouter. `http_account.py` owns per-record acquisition, `http_transport.py` network/JSON safety, and `simple_http_mapping.py`/`simple_http.py` bounded normalization/definitions. [HTTP contracts](simple-http-accounts.md) own security/semantics/diagnostics: no custom HTTP/scripts, inferred capacity/CCost, attribution, renderer branches or second polling/cache layer; future local estimates must be visibly distinct.
 
 `pricing/github_copilot.py` normalizes GitHub Docs tiered I/C/W/O rates, release dates and explicit promotion dates into reconstructible metadata. Refresh uses age, UTC month and expiry; expired rates revert to verified standard rates or are withheld. `pricing/promotions.py` owns structured validity/recency; unknown starts never imply recent offers. Reports retain active promotions for their full lifetime; Watch notices require a start within seven days. Presentation owns markers/alignment and label-only notice color, not validity.
-
-Analysis imports neutral pricing contracts, never concrete providers; the validator enforces this.
 
 ## Canonical domain
 
@@ -189,6 +179,10 @@ domain
 
 The release validator enforces the most important forbidden import directions. Architecture changes that require new directions must update this document and validator together, not bypass the check.
 
+
+## Software-failure boundaries
+
+`cost-guard.py` and Diagnostics guard application imports with stdlib-only `src/runtime_errors.py`; it imports no application layers except stable version metadata. It owns error-only logs/crash reports, deduplication, 30-day retention, hooks and emergency stderr. Unexpected faults default fatal; only isolated worker/provider owners may log and expose ERROR while continuing. Pricing/valuation/quota orchestration defects propagate; user Ctrl+C and local operational handling remain distinct. [Failure policy, root inventory and exception audit](runtime-failures.md) is the detailed boundary contract; future roots require explicit ownership and regression tests.
 
 ## Diagnostics boundary
 

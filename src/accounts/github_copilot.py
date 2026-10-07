@@ -94,7 +94,7 @@ def load_opencode_copilot_credential(path: Path) -> OAuthCredential:
         return OAuthCredential(False, reason="OpenCode auth.json not found")
     try:
         auth = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
+    except (OSError, UnicodeError, ValueError):
         return OAuthCredential(False, reason="OpenCode auth.json could not be parsed")
     return credential_from_auth_object(auth)
 
@@ -363,9 +363,9 @@ class GitHubCopilotAccountProvider:
         records = configured_credentials(self.auth_json_path, self.credential_db_path,
                                          ("github-copilot", "github-copilot-enterprise"))
         accounts = []
-        for record in records:
+        for index, record in enumerate(records):
             credential = credential_from_auth_object({record.ref.provider_id: record.value})
-            snapshot = self._fetch(credential, self.now_ms()) if credential.available else _unavailable(credential.reason)
+            snapshot = self._fetch(credential, self.now_ms(), f"copilot-account-refresh-{index}") if credential.available else _unavailable(credential.reason)
             ref = replace(record.ref, provider_id="github-copilot")
             account = normalize_quota(snapshot, ref, "GitHub Copilot")
             quotas = tuple(replace(component,
@@ -375,12 +375,23 @@ class GitHubCopilotAccountProvider:
             accounts.append(replace(account, quotas=quotas))
         return tuple(accounts)
 
-    def _fetch(self, credential: OAuthCredential, now: int) -> QuotaSnapshot:
+    def _fetch(self, credential: OAuthCredential, now: int, component="copilot-account-refresh") -> QuotaSnapshot:
+        from src.runtime_errors import recoverable, recovered
+        try:
+            result = self._request_quota(credential, now)
+        except Exception as exc:
+            recoverable(exc, component)
+            return replace(_unavailable("ERROR: Copilot account refresh failed internally", fetched_at_ms=now),
+                           availability="error", observations={"parser_reason": "software_failure"})
+        recovered(component)
+        return result
+
+    def _request_quota(self, credential: OAuthCredential, now: int) -> QuotaSnapshot:
         token = credential.token
         try:
             try:
                 entitlement_probe = self.json_get(ENTITLEMENT_URL, token, False, 15)
-            except Exception:
+            except OSError:
                 entitlement_probe = JsonResponse(False, 0, None, True)
             entitlement_result: QuotaSnapshot | None = None
             if entitlement_probe.succeeded:
@@ -393,7 +404,7 @@ class GitHubCopilotAccountProvider:
 
             try:
                 user_probe = self.json_get(INTERNAL_USER_URL, token, True, 20)
-            except Exception:
+            except OSError:
                 user_probe = JsonResponse(False, 0, None, True)
             if user_probe.succeeded:
                 mapped = convert_internal_user_payload(user_probe.payload, fetched_at_ms=now)

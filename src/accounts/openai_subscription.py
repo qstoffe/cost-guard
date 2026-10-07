@@ -67,7 +67,7 @@ def _jwt_account_id(token: str) -> str:
         payload = token.split(".")[1]
         payload += "=" * (-len(payload) % 4)
         value = json.loads(base64.urlsafe_b64decode(payload.encode("ascii")))
-    except Exception:
+    except (ValueError, IndexError, UnicodeError):
         return ""
     if not isinstance(value, Mapping):
         return ""
@@ -110,7 +110,7 @@ def load_credential(path: Path) -> OpenAICredential:
         return OpenAICredential(False, reason="OpenCode auth.json not found")
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
+    except (OSError, UnicodeError, ValueError):
         return OpenAICredential(False, reason="OpenCode auth.json could not be parsed")
     return credential_from_auth_object(value)
 
@@ -363,7 +363,7 @@ class OpenAIAccountProvider:
         if not self.enabled:
             return ()
         accounts = []
-        for record in configured_credentials(self.auth_json_path, self.credential_db_path, ("openai", "openai-codex", "codex")):
+        for index, record in enumerate(configured_credentials(self.auth_json_path, self.credential_db_path, ("openai", "openai-codex", "codex"))):
             ref = replace(record.ref, provider_id="openai")
             now = self.now_ms()
             if record.value.get("type") == "api":
@@ -378,7 +378,7 @@ class OpenAIAccountProvider:
                 if expiration_ms is not None and expiration_ms <= now:
                     quota = _expired(now)
                 elif credential.available:
-                    quota = self._fetch(credential, now)
+                    quota = self._fetch(credential, now, f"openai-account-refresh-{index}")
                 else:
                     quota = _unavailable(credential.reason, now)
             account = normalize_quota(quota, ref, "OpenAI")
@@ -386,12 +386,23 @@ class OpenAIAccountProvider:
             accounts.append(replace(account, plan=plan))
         return tuple(accounts)
 
-    def _fetch(self, credential: OpenAICredential, now: int) -> QuotaSnapshot:
+    def _fetch(self, credential: OpenAICredential, now: int, component="openai-account-refresh") -> QuotaSnapshot:
+        from src.runtime_errors import recoverable, recovered
+        try:
+            result = self._request_quota(credential, now)
+        except Exception as exc:
+            recoverable(exc, component)
+            return replace(_unavailable("ERROR: OpenAI account refresh failed internally", now),
+                           availability="error", observations={"parser_reason": "software_failure"})
+        recovered(component)
+        return result
+
+    def _request_quota(self, credential: OpenAICredential, now: int) -> QuotaSnapshot:
         token = credential.access_token
         try:
             try:
                 response = self.usage_get(USAGE_URL, token, credential.account_id, 15)
-            except Exception:
+            except OSError:
                 response = UsageResponse(False, network_error=True)
             if response.succeeded:
                 snapshot = convert_usage_payload(response.payload, fetched_at_ms=now)

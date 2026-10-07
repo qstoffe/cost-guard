@@ -87,9 +87,10 @@ class AnthropicAccountProvider:
             if self.quota_reader is not None:
                 try:
                     payload = self.quota_reader(record.ref)
+                except (OSError, ValueError):
+                    account = replace(account, availability="error", reason="Quota source failed")
+                else:
                     if isinstance(payload, Mapping):
                         account = normalize_anthropic_usage(account, payload)
-                except Exception:
-                    account = replace(account, availability="error", reason="Quota source failed")
             accounts.append(account)
         return tuple(accounts)

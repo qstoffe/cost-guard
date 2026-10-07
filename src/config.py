@@ -97,7 +97,7 @@ def read_jsonc(path: Path) -> dict[str, Any]:
     try:
         raw = path.read_text(encoding="utf-8")
         value = json.loads(remove_json_comments(raw))
-    except Exception as exc:
+    except (OSError, UnicodeError, ValueError) as exc:
         # Never echo parser excerpts: user config may contain credential paths/secrets.
         raise ConfigError(
             f"File: {path.name}\nSetting: JSONC\n"

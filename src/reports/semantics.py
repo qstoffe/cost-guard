@@ -114,7 +114,7 @@ def active_promotion_notes(
                 if "." in discount_text:
                     discount_text = discount_text.rstrip("0").rstrip(".")
                 description = f"{discount_text}% off standard GitHub Copilot rates"
-            except Exception:
+            except (ValueError, ArithmeticError):
                 pass
         label = "* Price Promotion:" if recent_only else f"*{marker} Price Promotion:"
         ending = f" through {through}." if recent_only else f" through {through}; standard pricing resumes {resumes}."

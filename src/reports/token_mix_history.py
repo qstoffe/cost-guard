@@ -48,8 +48,19 @@ def build_token_mix_history(service: ReportService, progress: HistoryProgress) -
     try:
         source = service.model_availability_source
         available = source.available_model_ids() if source is not None else None
-    except Exception:
+    except Exception as exc:
+        from src.sources.errors import SourceError
+        from src.runtime_errors import recoverable
+        if not isinstance(exc, (SourceError, OSError)):
+            recoverable(exc, "history-model-availability")
+            software_fault = True
+        else:
+            software_fault = False
         available = None
+    else:
+        from src.runtime_errors import recovered
+        recovered("history-model-availability")
+        software_fault = False
     progress("Pricing token categories", 96)
     usage = unique_usage(entries)
     groups = model_token_mixes(usage, prompt_of, reference.reference_category_valuation, model_key=_model_key)
@@ -57,6 +68,8 @@ def build_token_mix_history(service: ReportService, progress: HistoryProgress) -
     # All-history scope: any V1 gap may make the result incomplete.
     notes = [HISTORY_NOTE, *migration_gap_notes(service.selection.migration_gap)]
     if available is None:
+        if software_fault:
+            warnings += ("ERROR: Model availability lookup failed internally; showing all historically used models.",)
         # Fail open: hiding usable history is worse than an unverified filter.
         warnings += ("⚠ Could not verify currently selectable OpenCode models; showing all historically used models.",)
     else:

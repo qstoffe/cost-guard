@@ -7,6 +7,30 @@ debugging source discovery, provider health, cache behaviour and report wiring.
 """
 from __future__ import annotations
 
+import sys
+
+if __name__ == "__main__":
+    # Guard ALL normal imports/initialization, including the diagnostic tooling.
+    try:
+        from pathlib import Path
+        root = Path(__file__).resolve().parents[2]
+        sys.path.insert(0, str(root))
+        from src.runtime_errors import RuntimeErrors
+        def start():
+            import runpy
+            return runpy.run_path(__file__, run_name="cost_guard_diagnostics")["main"]()
+        code = RuntimeErrors(root, mode="Diagnostics").run(start, preserve_hooks=True)
+    except KeyboardInterrupt:
+        code = 130
+    except BaseException as exc:
+        try:
+            sys.stderr.write(f"COST GUARD FAILED\nUnhandled {type(exc).__name__}\n"
+                             "Crash report could not be written: runtime boundary unavailable\n")
+        except BaseException:
+            pass
+        code = 1
+    raise SystemExit(code)
+
 import argparse
 import hashlib
 import json
@@ -14,7 +38,6 @@ import os
 import platform
 import re
 import subprocess
-import sys
 import time
 import traceback
 import zipfile
@@ -40,6 +63,9 @@ from src.sources.discovery import default_opencode_data_dir  # noqa: E402
 from src.sources.opencode_v2 import OpenCodeV2Source  # noqa: E402
 from src.sources.selection import SourceSelector  # noqa: E402
 from src.version import DISPLAY_VERSION, PRODUCT_NAME, RELEASE_DATE, mode_heading  # noqa: E402
+from src.runtime_errors import recoverable, recovered  # noqa: E402
+from src.sources.errors import SourceError  # noqa: E402
+from src.config import ConfigError  # noqa: E402
 
 
 
@@ -60,8 +86,8 @@ def _home_redacted(path: Path | str | None) -> str | None:
         home = str(Path.home())
         if os.path.normcase(text).startswith(os.path.normcase(home)):
             return "~" + text[len(home):]
-    except Exception:
-        pass
+    except (OSError, RuntimeError):
+        return "<unavailable>"
     return text
 
 
@@ -83,11 +109,16 @@ def _timed(call: Callable[[], Any]) -> tuple[Any | None, dict[str, Any]]:
         value = call()
         return value, {"ok": True, "elapsed_ms": round((time.perf_counter() - start) * 1000, 2)}
     except Exception as exc:
+        # Each diagnostic section is explicitly isolated: failed acquisition
+        # becomes an honest error record, never fabricated application truth.
+        expected = isinstance(exc, (SourceError, ConfigError, OSError, ValueError))
+        if not expected:
+            recoverable(exc, "diagnostics-section")
         return None, {
             "ok": False,
             "elapsed_ms": round((time.perf_counter() - start) * 1000, 2),
             "error_type": type(exc).__name__,
-            "error": str(exc)[:500],
+            "error": "Operational collection failure" if expected else "ERROR: Diagnostic section failed internally",
         }
 
 
@@ -380,8 +411,10 @@ def collect(*, network: bool, snapshots: int, test_service_start: bool = False) 
     try:
         data["sources"]["v2"]["wire_observation"] = dict(v2.diagnostic_metadata())
     except Exception as exc:
+        if not isinstance(exc, (SourceError, OSError)):
+            recoverable(exc, "diagnostics-wire-observation")
         data["sources"]["v2"]["wire_observation"] = {
-            "error_type": type(exc).__name__, "error": str(exc)[:500]
+            "error_type": type(exc).__name__, "error": "ERROR: Wire observation unavailable"
         }
     selection, selection_timing = _timed(lambda: SourceSelector().select(loaded.open_code_source))
     data["selection_timing"] = selection_timing
@@ -453,9 +486,11 @@ def collect(*, network: bool, snapshots: int, test_service_start: bool = False) 
             if quotas is not None:
                 data["github_copilot_account"]["accounts"] = [sanitized_account_observation(item) for item in quotas]
     except Exception as exc:
+        if not isinstance(exc, (OSError, ValueError)):
+            recoverable(exc, "diagnostics-account-observation")
         data["github_copilot_account"] = {
             "probe": None,
-            "probe_timing": {"ok": False, "error_type": type(exc).__name__, "error": str(exc)[:500]},
+            "probe_timing": {"ok": False, "error_type": type(exc).__name__, "error": "ERROR: Account observation unavailable"},
         }
     return data
 
@@ -473,7 +508,10 @@ def main(argv: list[str] | None = None) -> int:
         "--skip-validation", action="store_true",
         help="Emergency/recursive mode: collect diagnostics without the full local test + package validation tier.",
     )
-    args = parser.parse_args(argv)
+    try:
+        args = parser.parse_args(argv)
+    except SystemExit as usage:
+        return int(usage.code or 0)  # Only argparse's deliberate help/usage exit.
     output_dir = args.output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -491,13 +529,8 @@ def main(argv: list[str] | None = None) -> int:
         else:
             data["validation"] = {"tier": "skipped", "ok": None}
         progress.update("Writing diagnostic bundle", 96)
-    except Exception as exc:
-        data = {
-            "schema_version": 2,
-            "generated_at_utc": datetime.now(timezone.utc).isoformat(),
-            "validation": validation,
-            "fatal": {"error_type": type(exc).__name__, "error": str(exc)[:1000]},
-        }
+    finally:
+        progress.stop()
     json_bytes = json.dumps(data, indent=2, ensure_ascii=False, sort_keys=True).encode("utf-8")
     text_bytes = _text_summary(data).encode("utf-8") if "cost_guard" in data else (json.dumps(data, indent=2) + "\n").encode("utf-8")
     with zipfile.ZipFile(bundle, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
@@ -507,7 +540,3 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Diagnostic bundle created: {bundle}")
     print("Prompt text, session titles, auth tokens and raw OpenCode payloads are not included.")
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

@@ -13,6 +13,7 @@ from src import bootstrap
 from src.sources.errors import SourceDataError, SourceSchemaError
 from src.watch import WatchCoordinator
 from src.watch.coordinator import WatchedSessionEnded
+from src.runtime_errors import RuntimeErrors
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -36,8 +37,8 @@ def bootstrap_watch(watch):
          mock.patch.object(bootstrap, "CacheDatabase"), mock.patch.object(bootstrap, "CacheRepository"), \
          mock.patch.object(bootstrap, "GitHubCopilotPricingProvider"), \
          mock.patch.object(bootstrap, "_account_providers", return_value=()), \
-         mock.patch("sys.stdout", output):
-        code = bootstrap.main(["--watch"])
+         mock.patch("sys.stdout", output), tempfile.TemporaryDirectory() as errors_root:
+        code = RuntimeErrors(Path(errors_root), stream=output).run(lambda: bootstrap.main(["--watch"]))
     return code, output.getvalue()
 
 
@@ -52,8 +53,11 @@ class WatchLifecycleTests(unittest.TestCase):
                     with mock.patch.object(watch, "_advance", side_effect=error):
                         code, output = bootstrap_watch(watch)
                     self.assertEqual(1, code)
-                    self.assertIn("Cost Guard - Runtime error", output)
-                    self.assertIn(str(error), output)
+                    if isinstance(error, SourceSchemaError):
+                        self.assertIn("Cost Guard - Runtime error", output)
+                    else:
+                        self.assertIn("COST GUARD FAILED", output)
+                        self.assertIn(type(error).__name__, output)
 
     def test_global_watch_does_not_swallow_a_scoped_lifecycle_exception(self):
         with watch_for() as (watch, _):

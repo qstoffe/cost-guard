@@ -8,6 +8,7 @@ import subprocess
 import time
 import unicodedata
 from typing import Any, Callable, Mapping, Protocol
+from src.sources.errors import SourceError
 
 
 class ModelAvailabilitySource(Protocol):
@@ -104,7 +105,7 @@ class FallbackModelAvailabilitySource:
         for source in self.sources:
             try:
                 result = source.available_model_ids()
-            except Exception:
+            except (SourceError, OSError):
                 # Advisory lookup errors must not leak private payloads/messages.
                 continue
             if result is not None:
