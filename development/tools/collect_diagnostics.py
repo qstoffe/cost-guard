@@ -385,6 +385,11 @@ def collect(*, network: bool, snapshots: int, test_service_start: bool = False) 
         }
     selection, selection_timing = _timed(lambda: SourceSelector().select(loaded.open_code_source))
     data["selection_timing"] = selection_timing
+    # Inventory even when no network/account is available, without raw records,
+    # labels, locators or secret material. Normalized request evidence is in report.
+    data["account_provider_inventory"] = [provider.diagnostic_inventory()
+        for provider in _account_providers(cfg, selection.selected if selection else "v1")
+        if callable(getattr(provider, "diagnostic_inventory", None))]
     if test_service_start:
         before = bool((data["sources"]["v2"].get("probe") or {}).get("healthy"))
         if selection is None:

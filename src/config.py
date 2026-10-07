@@ -260,6 +260,9 @@ def validate_configuration(config: dict[str, Any], defaults: dict[str, Any], ove
         "copilotQuota": {"enabled", "authJsonPath"},
         "openAiQuota": {"enabled", "authJsonPath"},
         "anthropicQuota": {"enabled", "authJsonPath"},
+        "openrouterQuota": {"enabled", "authJsonPath"},
+        "deepseekQuota": {"enabled", "authJsonPath"},
+        "minimaxQuota": {"enabled", "authJsonPath"},
         # Legacy no-op accepted so v77/early-v78 user configs keep loading after
         # same-prompt comparison tables were removed from the terminal product.
         "matchedModelComparisons": {"enabled"},
@@ -268,10 +271,11 @@ def validate_configuration(config: dict[str, Any], defaults: dict[str, Any], ove
         value = config.get(group)
         _assert_object(value, group, allowed, _setting_source(group, overrides))
         assert isinstance(value, dict)
-        if group in {"copilotQuota", "openAiQuota", "anthropicQuota", "matchedModelComparisons"} and not isinstance(value.get("enabled"), bool):
-            raise _invalid(_setting_source(f"{group}.enabled", overrides), f"{group}.enabled", value.get("enabled"), "true or false")
+        if group.endswith("Quota") or group == "matchedModelComparisons":
+            if not isinstance(value.get("enabled"), bool):
+                raise _invalid(_setting_source(f"{group}.enabled", overrides), f"{group}.enabled", value.get("enabled"), "true or false")
 
-    for group in ("copilotQuota", "openAiQuota", "anthropicQuota"):
+    for group in ("copilotQuota", "openAiQuota", "anthropicQuota", "openrouterQuota", "deepseekQuota", "minimaxQuota"):
         auth = config[group].get("authJsonPath")
         if auth is not None and not isinstance(auth, str):
             path = f"{group}.authJsonPath"

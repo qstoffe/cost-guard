@@ -37,6 +37,7 @@ from .semantics import (
 from .model_comparison import price_summary, selectable_catalog
 from .prompts import build_prompt_block
 from .accounts import accounts_quota_projection
+from .migration_notice import migration_gap_notes
 from .token_mix_history import HistoryProgress, build_token_mix_history
 
 from .models import (
@@ -501,15 +502,19 @@ class ReportService:
             key=lambda item: (root_activity.get(item.session_id, item.updated_at_ms), item.session_id), reverse=True,
         ))
         source_warnings = tuple(self.selection.warnings)
+        gap = self.selection.migration_gap
 
         if request.kind is ReportKind.SESSIONS:
             if request.session_limit is not None and request.session_limit < 1:
                 raise ValueError("Session limit must be positive or all")
             selected = roots if request.session_limit is None else roots[:request.session_limit]
             analyzed = tuple(self._analyze(root) for root in selected)
+            # A truncated listing only covers activity since its oldest listed root.
+            cutoff = (root_activity.get(selected[-1].session_id, selected[-1].updated_at_ms)
+                      if selected and len(selected) < len(roots) else None)
             return ReportProjection(
                 ReportKind.SESSIONS, "Available sessions", self.selection.selected.upper(), source_warnings,
-                session_usage=self._session_rows(analyzed),
+                session_usage=self._session_rows(analyzed), notes=migration_gap_notes(gap, start_ms=cutoff),
             )
 
         if request.kind is ReportKind.SESSION:
@@ -527,7 +532,8 @@ class ReportService:
                 source_warnings,
                 prompt_blocks=(block,),
                 notes=(("WARNING: CCost totals are incomplete because some reference pricing is unavailable.",)
-                       if not block.comparison_cost_complete else ()),
+                       if not block.comparison_cost_complete else ())
+                + migration_gap_notes(gap, root_id=root.session_id),
             )
 
         if request.kind is ReportKind.DATE:
@@ -548,7 +554,8 @@ class ReportService:
                 self.selection.selected.upper(),
                 source_warnings,
                 prompt_blocks=blocks,
-                notes=(f"CCost for range: {range_text}; reference valuation, not billing.",),
+                notes=(f"CCost for range: {range_text}; reference valuation, not billing.",)
+                + migration_gap_notes(gap, start_ms=date_range.start_ms, end_ms=date_range.end_ms),
             )
 
         analyzed = self._recent_sample_roots(roots, root_activity)
@@ -564,6 +571,10 @@ class ReportService:
         reference = self._load_comparison_catalog()
         coverage = comparison_cost(entries, reference.reference_valuation)
         mix_prompts = self._latest_token_prompts(analyzed)
+        # Full bounded samples cover activity since their oldest prompt; a short
+        # sample already spans all available history.
+        sample_cutoff = (min(sample_prompts[-1].prompt_time_ms, mix_prompts[-1].prompt_time_ms)
+                         if len(sample_prompts) == len(mix_prompts) == 100 else None)
         return ReportProjection(
             request.kind,
             "Cost Guard",
@@ -574,6 +585,7 @@ class ReportService:
             pricing_retrieved_at_ms=catalog.retrieved_at_ms,
             model_comparison_promotion_notes=promo_notes,
             accounts_quotas=quota_projection,
+            notes=migration_gap_notes(gap, start_ms=sample_cutoff),
             recent_model_notice=recent,
             token_mix=priced_token_mix(((entry.model, entry.tokens) for entry in unique_usage(
                 entry for prompt in mix_prompts for entry in prompt.entries)),

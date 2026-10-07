@@ -135,10 +135,12 @@ class ValidationTests(unittest.TestCase):
                 for name in (
                     "macos/Cost Guard.command",
                     "macos/Cost Guard Watch.command",
-                    "macos/Cost Guard Diagnostics.command",
+                    "development/macos/Cost Guard Diagnostics.command",
                 ):
                     mode = (archive.getinfo(name).external_attr >> 16) & 0o777
                     self.assertTrue(mode & 0o100, f"{name} not executable in archive metadata: {oct(mode)}")
+            self.assertIn("development/windows/Cost Guard Diagnostics.cmd", names)
+            self.assertFalse(any(name.startswith(("windows/", "macos/")) and "Diagnostics" in name for name in names))
             self.assertIn("src/cache/database.py", names)
             self.assertIn("src/cache/repository.py", names)
             for name in ("watch", "report", "token-mix"):

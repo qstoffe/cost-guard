@@ -34,7 +34,6 @@ Double-click the ready-to-use `.cmd` launchers under `windows/`; no manual Pytho
 | --- | --- |
 | `Cost Guard.cmd` | Normal model comparison/account quota report. |
 | `Cost Guard Watch.cmd` | Live/global Watch; Ctrl+C exits. |
-| `Cost Guard Diagnostics.cmd` | Privacy-safe diagnostics ZIP; shows its path. |
 
 The report console stays open. See [download trust](#open-source-license-and-windows-download-trust) for warnings.
 
@@ -46,7 +45,6 @@ Equivalent `.command` launchers are under `macos/`:
 | --- | --- |
 | `Cost Guard.command` | Normal report. |
 | `Cost Guard Watch.command` | Live/global Watch; Ctrl+C exits. |
-| `Cost Guard Diagnostics.command` | Privacy-safe diagnostics ZIP. |
 
 Files ship executable. Use Finder's **Open** for quarantine prompts; never bypass Gatekeeper.
 
@@ -110,6 +108,7 @@ See [Token Mix reference](#token-mix--by-model---token-mix). Screenshots are ill
 - Optional OpenAI subscription quota is fail-soft. Read-only V2 accounts take priority; legacy `auth.json` applies only without V2 rows. Credentials are never refreshed, rotated or written.
 - Configured OpenAI/Anthropic API accounts are distinct from **Claude Code subscriptions**, discovered through the optional installed `claude` CLI. Cost Guard never reads/copies Claude credentials or attributes current login to history.
 - Claude Code quotas use optional experimental SDK-control metadata (no prompts, transcript scans or new dependencies); accounts stay visible when quotas fail. See [Claude integration and limitations](development/claude-code.md).
+- OpenRouter/DeepSeek accounts reuse configured OpenCode API keys through maintained read-only HTTPS endpoints. MiniMax Token Plan uses its dedicated subscription integration; generic API keys do not establish subscription entitlement.
 - No third-party Python packages are required.
 
 ## Setup and usage
@@ -161,7 +160,7 @@ The shipped default is:
 
 `auto` selects **one** healthy source: V2 first, otherwise V1; histories are never merged. Force `v1`/`v2` only for troubleshooting or a legacy workflow.
 
-With V2 selected, a metadata-only V1 check may warn of missing/newer legacy sessions. Cost Guard never combines, repairs or writes OpenCode history/migration state.
+With V2 selected, a metadata-only V1 check finds missing/newer legacy sessions. Reports note them only if they can affect the shown scope (latest-prompt sample, dates, session, all history); Watch never; Diagnostics always counts them. Nothing is repaired/written.
 
 Reports show `OpenCode not found` only after source selection fails and neither a PATH executable nor standard installation/data evidence exists. Usable V1/V2 sources work without the CLI; offline installations keep source errors. Watch still waits/retries.
 
@@ -236,17 +235,9 @@ Persisted V2 terminal evidence ends the matching attempt (duration freezes) and 
 
 Only detected/configured accounts appear. Same-provider accounts retain source-aware identities. Upstream labels distinguish identical provider/plan rows; unknown labels use neutral ordinals, never invented Personal/Work labels.
 
-Aligned 10-cell remaining bars and matching native amounts share a row. Reports align every quota bar and Remaining using one report-wide label column; Watch globally aligns only primary bars, with individual narrow fallback. Native money/units remain in reports; warnings indent and zero/unknown balances hide unless significant.
+Accounts share aligned 10-cell remaining bars, native values, resets and narrow fallback. Bars require real provider-reported capacity (a denominator or explicit percentage); balance/spend alone stays textual and is never CCost.
 
-Copilot `Usage Today` is absent: GitHub's billing usage API requires a classic PAT, not Copilot OAuth, so no substitute is added.
-
-`Remaining: X/day · Y/workday` (formerly Pace) spreads reported included credits over days/workdays until the reported reset, rounded down. Today counts as a day and, when applicable, a `workdayCalendar` workday. No history is needed; extra credits are excluded. Missing balance/reset hides it; organization pools are not personal allocations. Reports use a separate Remaining line and retain units/money/reset.
-
-Positive reported Copilot overage allowances show separately as `Extra credit limit N` (report: `N AI credits`), never an inferred purchased/remaining balance or included Remaining. Paused states and independent billing/balances remain. No extra polling.
-
-Report/vertical Watch resets: <24h → `Reset in Nmin, HH:MM`; 24h–<7d → `Reset in Nh, Weekday HH:MM`; ≥7d → `Reset at YYYY-MM-DD HH:MM`. Elapsed-time tiers, whole units, configured timezone/English weekdays; no negative countdowns.
-
-Copilot Business/Enterprise plan, usage and `hasQuota=false` survive zero, pooled or unusable entitlement; known blocked state shows `⚠  COPILOT PAUSED`, while errors alone never imply blocked.
+**OpenRouter** shows authenticated-key Day/Week/Month spend and genuine key limits; **DeepSeek** shows separate native balances without a fabricated bar; **MiniMax Token Plan** supports native subscription windows, not entitlement inferred from a generic key. See [account support](docs/account-support.md) for all providers, Copilot Remaining/overage semantics, alignment, resets and limitations.
 
 ## Watch
 
@@ -270,13 +261,13 @@ GitHub Copilot Pro+   Month  ██████████ 100% · 7000/7000 ·
 OpenAI Plus          5h     ████████░░  82% · Reset@22:49 | Week ██████████  98% · Reset@Sunday 07:59
 ```
 
-`Watch:` stays last. Interactive startup uses `Cost Guard vX.Y (YYYY-MM-DD) — <Mode>` with progress immediately below, no blank row. Modes include Report, Watch, Diagnostics, Token Mix, All Models, Sessions, Session, Date and Date Range. Transient UI disappears before final reports/Watch dashboards; redirected output remains plain, without animation.
+`Watch:` stays last. Interactive startup uses `Cost Guard vX.Y (YYYY-MM-DD) — <Mode>` with progress immediately below, no blank row. Transient UI disappears before final reports/Watch dashboards; redirected output remains plain, without animation.
 
 Aborted labels persist after red emphasis expires. Quota errors retain values for five minutes; scheduling gaps/first startup errors allow 60s `STALE / RECONNECTING` recovery with 5/10/20s retries. Auth rejection remains visible.
 
-Interactive full redraws clear screen/scrollback and erase below the status row; countdowns replace only the status line.
+Full redraws clear screen/scrollback; countdowns replace only the status line. V1 Watch uses process-free SQLite gating; V2 events are hints with a five-second cooldown and authoritative resync. `"auto"` refresh adapts within 5–30 seconds; quota refresh is independently rate-limited.
 
-V1 Watch uses process-free SQLite gating; V2 events are hints with a five-second cooldown and authoritative resync. `sessionWatchIntervalSeconds: "auto"` adapts refreshes within 5–30 seconds. Quota refresh is independently rate-limited.
+**Watch troubleshooting.** During a temporary OpenCode outage Watch keeps its last dashboard with `Watch: OpenCode V2 source unavailable · retrying every 5s`, retries the same source (no V1 fallback or CLI start) and resumes from a fresh snapshot. Unsupported schemas, or data unreadable for about a minute, end Watch with the error. On Windows a non-zero exit stays open until Enter; Ctrl+C closes. Closing the window or killing its terminal (e.g. security software) still ends Watch.
 
 ## Pricing, quota and network behavior
 
@@ -292,7 +283,7 @@ Read-only V2 inventory takes priority over legacy auth; inactive accounts do not
 
 Useful settings include:
 
-- `runningPromptWarningCCost`: warn for a running prompt at 1800 CCost by default (0 disables). **Breaking in v78.36:** remove `runningPromptWarningUsd` and `thresholds.watchCostDeltaDisplayUsd` from saved configs; the latter is dead and has no replacement. Obsolete keys fail as unrecognized properties before source/provider/cache work. No aliases, silent migration or automatic config rewrite.
+- `runningPromptWarningCCost`: warn for a running prompt at 1800 CCost by default (0 disables). Obsolete `runningPromptWarningUsd`/`thresholds.watchCostDeltaDisplayUsd` (removed in v78.36) fail startup as unrecognized; delete them.
 
 - `openCode.source`: `auto`, `v1` or `v2`.
 - `timezone`: local day/timestamp zone. The shipped `Europe/Stockholm` default works without an external tzdata package; other custom IANA zones require host/Python zoneinfo data.
@@ -300,6 +291,7 @@ Useful settings include:
 - `copilotQuota.enabled` / `authJsonPath`: optional account lookup controls.
 - `openAiQuota.enabled` / `authJsonPath`: fail-soft OpenAI ChatGPT/Codex usage lookup controls.
 - `anthropicQuota.enabled`: Anthropic API and Claude CLI account lookup; `authJsonPath` overrides only the API-account inventory.
+- `openrouterQuota`, `deepseekQuota`, `minimaxQuota`: `enabled` / `authJsonPath` only; maintained endpoints and mappings cannot be customized.
 - `sessionWatchIntervalSeconds`: `"auto"` (default, adaptive 5–30 seconds) or an explicit compatible integer.
 - `pricingMaxAgeHours`: pricing/model metadata cache age.
 - `thresholds`: running-cost, context, percentile and quota warning thresholds.
@@ -307,9 +299,7 @@ Useful settings include:
 
 `modelComparisonNew`: lime (classic 118) for new names/dates/notice labels. `modelComparisonPromotion`: gold (214) for active rates/Rel CCost/notice labels. `reportDefinitionLabel`/`reportDefinitionValue`: plain Yellow for report definition labels/live values. Light scheme: green 28/ochre 130. Other text is normal; release date stays last.
 
-Invalid configuration fails at startup.
-
-Legacy `monthlyAiCredits` is tolerated but ignored; it is not shipped or displayed.
+Invalid configuration fails at startup; legacy `monthlyAiCredits` is ignored.
 
 ## Cache and concurrent Cost Guard processes
 
@@ -326,7 +316,7 @@ SQLite WAL, short transactions and bounded waits support concurrent report/globa
 
 ## Diagnostics for environment-specific problems
 
-Use the Diagnostics launcher or run from the package root:
+For troubleshooting, use `Cost Guard Diagnostics` under `development/windows/` or `development/macos/`, or run from the package root:
 
 ```text
 python development/tools/collect_diagnostics.py
@@ -334,11 +324,11 @@ python development/tools/collect_diagnostics.py
 
 Creates `diagnostics/cost-guard-diagnostics-YYYYMMDD-HHMMSS.zip`: **Full/local** tests, package validation (including failures), environment/version, source/wire statistics, timings and provider health. `--no-network` skips pricing/quotas; `--skip-validation` is emergency/recursive-only.
 
-Bundles omit prompt text, titles, raw payloads/auth, tokens and account labels/IDs; session IDs are hashed. Account evidence is limited to plan/status, numeric quota shape, parser classification and HTTP status.
+Bundles omit prompt text, titles, raw payloads/auth, tokens and account labels/IDs; session/account-source IDs are hashed. Account evidence includes plan/status, numeric quota shape, credential discovery/category (never values), request/HTTP/schema classification, normalized component categories, malformed/ignored counts and MiniMax window/form recognition. Provider inventory is available even without live accounts.
 
 ## Release status
 
-**v80.3** follows background jobs and explains sign-in failures. v80.0 is the Python 3.11+ public baseline; V1/V2 share one analysis core. Claude quotas remain experimental; physical restart/sleep and visual terminal behavior need separate live evidence.
+**v80.7** adds reusable maintained HTTP account providers for OpenRouter/DeepSeek and a first-class MiniMax Token Plan adapter, retaining v80.6 Watch outage recovery. v80.0 is the Python 3.11+ public baseline; V1/V2 share one analysis core. Claude quotas remain experimental; provider fixtures do not prove personal live-account coverage, and physical restart/sleep and visual terminal behavior need separate live evidence.
 
 Quick is the hosted-AI gate; Full adds package/release/performance checks; Diagnostics covers the affected workstation.
 
@@ -359,4 +349,4 @@ python development/tools/build_release.py --quick-already-run  # after same-tree
 python development/tools/build_release.py --full-verification  # unrestricted local build
 ```
 
-The builder validates inventory/architecture and source/archive bytes, then repeats its test tier and validation from a clean extraction. Quick is default; final releases require Full/local evidence. ZIPs live under git-ignored `releases/`; runtime/cache/diagnostic/user-config/checkpoint/credential/bytecode/Git debris never ships.
+The builder repeats its test tier and validation from a clean extraction; final releases require Full/local evidence. ZIPs go to git-ignored `releases/` and never include runtime, user-config, credential or Git debris.

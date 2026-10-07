@@ -38,6 +38,23 @@
     "authJsonPath": null
   },
 
+  // Maintained read-only API-key account endpoints. No custom URLs/headers.
+  // V2 rows win per integration; explicit auth paths stay file-only.
+  "openrouterQuota": {
+    "enabled": true,
+    "authJsonPath": null
+  },
+  "deepseekQuota": {
+    "enabled": true,
+    "authJsonPath": null
+  },
+  // Token Plan requires a subscription integration and native quota evidence.
+  // A generic MiniMax key never establishes subscription entitlement.
+  "minimaxQuota": {
+    "enabled": true,
+    "authJsonPath": null
+  },
+
   // Workday calendar. "SE" excludes weekends and Swedish public holidays.
   // Use an empty value to exclude weekends only.
   "workdayCalendar": "SE",

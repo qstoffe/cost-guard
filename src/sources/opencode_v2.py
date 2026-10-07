@@ -169,6 +169,7 @@ class OpenCodeV2Source:
         self._candidate = candidate
         self._timeout_seconds = timeout_seconds
         self._endpoint: V2Endpoint | None = None
+        self._endpoint_marker: tuple[int, int] | None = None
         self._catalog_cache: tuple[_NativeSession, ...] | None = None
         self._diagnostics: dict[str, Any] = {
             "session_contract": None, "session_pages": 0, "raw_sessions": 0,
@@ -198,8 +199,21 @@ class OpenCodeV2Source:
         self._endpoint = endpoint
         return endpoint
 
+    def _current_endpoint(self) -> V2Endpoint:
+        """Reuse the registration until OpenCode rewrites it (a restarted service may move port/auth)."""
+        try:
+            stat = self._candidate.path.stat()
+            marker: tuple[int, int] | None = (stat.st_mtime_ns, stat.st_size)
+        except OSError:
+            marker = None
+        if self._endpoint is None or marker != self._endpoint_marker:
+            endpoint = self._read_endpoint()
+            self._endpoint_marker = marker
+            return endpoint
+        return self._endpoint
+
     def _client(self) -> V2HttpClient:
-        return V2HttpClient(self._endpoint or self._read_endpoint(), timeout_seconds=self._timeout_seconds)
+        return V2HttpClient(self._current_endpoint(), timeout_seconds=self._timeout_seconds)
 
     @property
     def source_instance(self) -> str | None:

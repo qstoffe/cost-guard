@@ -72,7 +72,7 @@ def verify_archive_bytes(archive_path: Path, files: list[Path], extracted_root: 
     expected_names = {path.relative_to(ROOT).as_posix() for path in files}
     with zipfile.ZipFile(archive_path, "r") as archive:
         actual_names = set(archive.namelist())
-        for name in sorted(value for value in actual_names if value.startswith("macos/") and value.endswith(".command")):
+        for name in sorted(value for value in actual_names if value.endswith(".command")):
             mode = (archive.getinfo(name).external_attr >> 16) & 0o777
             if not (mode & 0o100):
                 raise RuntimeError(f"macOS launcher is not executable in archive metadata: {name}")
@@ -132,9 +132,9 @@ def main(argv: list[str] | None = None) -> int:
             # Normalize archive permissions instead of inheriting host filesystem
             # modes. This keeps release output portable when built on Windows or
             # rebuilt from a Python-extracted ZIP (which does not restore Unix
-            # executable bits). Finder-launchable macOS .command files must be
-            # executable in the release archive; ordinary files are 0644.
-            mode = 0o100755 if relative.startswith("macos/") and relative.endswith(".command") else 0o100644
+            # executable bits). Finder-launchable macOS .command files (public
+            # and development/macos/) must be executable; ordinary files are 0644.
+            mode = 0o100755 if relative.endswith(".command") else 0o100644
             info = zipfile.ZipInfo.from_file(path, arcname=relative)
             info.create_system = 3
             info.external_attr = mode << 16
@@ -156,8 +156,10 @@ def main(argv: list[str] | None = None) -> int:
             required = {
                 "AGENTS.md", "cost-guard.py", "README.md", "VERSION_HISTORY.md", "LICENSE",
                 "config/default-config.jsonc", "development/MAINTAINER.md",
-                "windows/Cost Guard.cmd", "windows/Cost Guard Watch.cmd", "windows/Cost Guard Diagnostics.cmd",
-                "macos/Cost Guard.command", "macos/Cost Guard Watch.command", "macos/Cost Guard Diagnostics.command",
+                "windows/Cost Guard.cmd", "windows/Cost Guard Watch.cmd",
+                "macos/Cost Guard.command", "macos/Cost Guard Watch.command",
+                "development/windows/Cost Guard Diagnostics.cmd",
+                "development/macos/Cost Guard Diagnostics.command",
             }
             names = {path.relative_to(extracted).as_posix() for path in extracted.rglob("*") if path.is_file()}
             missing = sorted(required - names)
@@ -165,6 +167,7 @@ def main(argv: list[str] | None = None) -> int:
                 name for name in names
                 if name.startswith("cache/") or name.startswith("diagnostics/")
                 or name.startswith("releases/") or name == "config/user-config.jsonc"
+                or (name.startswith(("windows/", "macos/")) and "Diagnostics" in name)
             )
             if missing or forbidden:
                 raise RuntimeError(f"release inventory invalid: missing={missing}, forbidden={forbidden}")

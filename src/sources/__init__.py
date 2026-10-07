@@ -21,10 +21,12 @@ from .errors import (
 from .model_availability import ModelAvailabilitySource, OpenCodeModelAvailabilitySource
 from .opencode_v1 import OpenCodeV1Source, V1SchemaInfo
 from .opencode_v2 import OpenCodeV2Source, V2Endpoint
-from .selection import MigrationGapDiagnostic, SourceSelection, SourceSelector, inspect_v1_v2_migration_gap
+from .selection import (
+    MigrationGapDiagnostic, MigrationGapSession, SourceSelection, SourceSelector, inspect_v1_v2_migration_gap,
+)
 
 __all__ = [
-    "DatabaseCandidate", "LiveSessionSource", "MigrationGapDiagnostic", "ModelAvailabilitySource",
+    "DatabaseCandidate", "LiveSessionSource", "MigrationGapDiagnostic", "MigrationGapSession", "ModelAvailabilitySource",
     "OpenCodeModelAvailabilitySource", "OpenCodeV1Source",
     "OpenCodeV2Source", "ServiceRegistration", "ServiceRegistrationCandidate",
     "ServiceRegistrationError", "SessionSource", "SourceChange", "SourceDataError", "SourceError",

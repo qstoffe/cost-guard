@@ -56,10 +56,10 @@ REQUIRED_FILES = {
     "src/presentation/report.py",
     "windows/Cost Guard.cmd",
     "windows/Cost Guard Watch.cmd",
-    "windows/Cost Guard Diagnostics.cmd",
     "macos/Cost Guard.command",
     "macos/Cost Guard Watch.command",
-    "macos/Cost Guard Diagnostics.command",
+    "development/windows/Cost Guard Diagnostics.cmd",
+    "development/macos/Cost Guard Diagnostics.command",
     "src/cache/database.py",
     "src/cache/repository.py",
     "development/README.md",
@@ -76,6 +76,12 @@ REQUIRED_FILES = {
     "development/tests/test_source_selection.py",
     "development/fixtures/opencode_v1/schema.sql",
     "development/fixtures/opencode_v2/service-fixture.json",
+}
+
+# User-facing launcher folders hold only everyday modes; Diagnostics lives under development/.
+PUBLIC_LAUNCHERS = {
+    "windows": {"Cost Guard.cmd", "Cost Guard Watch.cmd"},
+    "macos": {"Cost Guard.command", "Cost Guard Watch.command"},
 }
 
 FORBIDDEN_TOP_LEVEL = {"cache", "diagnostics", ".git", "data"}
@@ -164,6 +170,12 @@ def check_required_layout(root: Path, results: Results) -> None:
     for rp in sorted(REQUIRED_FILES):
         if not (root / rp).is_file():
             results.fail("required layout", f"missing required file: {rp}")
+
+    for folder, expected in sorted(PUBLIC_LAUNCHERS.items()):
+        directory = root / folder
+        actual = {path.name for path in directory.iterdir()} if directory.is_dir() else set()
+        for name in sorted(actual - expected):
+            results.fail("public launchers", f"unexpected entry in user-facing launcher folder: {folder}/{name}")
 
     for name in sorted(FORBIDDEN_TOP_LEVEL):
         if (root / name).exists():

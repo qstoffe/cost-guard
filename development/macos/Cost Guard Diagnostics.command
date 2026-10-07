@@ -1,6 +1,6 @@
 #!/bin/zsh
 set -u
-CG_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+CG_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 
 find_python() {
   for candidate in python3 python; do

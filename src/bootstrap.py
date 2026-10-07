@@ -13,6 +13,8 @@ from .accounts.github_copilot import GitHubCopilotAccountProvider
 from .accounts.openai_subscription import OpenAIAccountProvider
 from .accounts.anthropic import AnthropicAccountProvider
 from .accounts.claude_code import ClaudeCodeAccountProvider
+from .accounts.minimax import MiniMaxAccountProvider
+from .accounts.simple_http import SIMPLE_HTTP_PROVIDERS, SimpleHttpAccountProvider
 from .cache import CacheDatabase, CacheRepository
 from .cli import CliUsageError, CommandKind, help_text, parse_command, startup_mode
 from .config import ConfigError, load_configuration
@@ -63,12 +65,17 @@ def _account_providers(config, selected_source):
         ("copilotQuota", GitHubCopilotAccountProvider),
         ("openAiQuota", OpenAIAccountProvider),
         ("anthropicQuota", AnthropicAccountProvider),
+        ("minimaxQuota", MiniMaxAccountProvider),
     ):
         settings = config.get(config_key) if isinstance(config.get(config_key), dict) else {}
         providers.append(provider_type(enabled=bool(settings.get("enabled", True)),
             auth_json_path=settings.get("authJsonPath"), credential_db_path=db_path))
     settings = config.get("anthropicQuota") or {}
     providers.append(ClaudeCodeAccountProvider(enabled=bool(settings.get("enabled", True))))
+    for definition in SIMPLE_HTTP_PROVIDERS:
+        settings = config.get(definition.provider_id + "Quota") or {}
+        providers.append(SimpleHttpAccountProvider(definition, enabled=bool(settings.get("enabled", True)),
+            auth_json_path=settings.get("authJsonPath"), credential_db_path=db_path))
     return tuple(providers)
 
 

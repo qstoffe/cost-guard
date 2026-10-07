@@ -1,7 +1,7 @@
 """Coordinator-owned Watch lifecycle over abstract Session Sources."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import math
 import time
 from typing import Callable, Mapping, Sequence
@@ -9,7 +9,7 @@ from typing import Callable, Mapping, Sequence
 from src.domain import NormalizedSession, SessionSnapshot
 from src.reports import ReportService, SessionPromptBlock
 from src.sources.base import LiveSessionSource
-from src.sources.errors import SourceError
+from src.sources.errors import SourceError, SourceSchemaError, SourceUnavailableError
 from src.sources.selection import SourceSelection
 
 from .models import WatchProjection, WatchRow
@@ -25,10 +25,21 @@ RESUME_GAP_MS = 90_000
 QUOTA_RECOVERY_SECONDS = 60.0
 QUOTA_RETRY_SECONDS = (5.0, 10.0, 20.0)
 INITIAL_ROOT_SAMPLE = 20
+SOURCE_RETRY_SECONDS = 5.0
+# Unreadable (not merely unreachable) data gets about a minute to settle before
+# Watch reports it as a terminal failure instead of retrying forever.
+SOURCE_UNREADABLE_RETRIES = 12
 
 
 def _clock_ms() -> int:
     return int(time.time() * 1000)
+
+
+def source_failure_kind(error: SourceError) -> str | None:
+    """Normalized recovery category; None means the selected source contract is unsupported."""
+    if isinstance(error, SourceSchemaError):
+        return None
+    return "unavailable" if isinstance(error, SourceUnavailableError) else "unreadable"
 
 
 def _root_activity(sessions: Sequence[NormalizedSession], root_by_session: Mapping[str, str]) -> dict[str, int]:
@@ -46,6 +57,7 @@ class WatchCycle:
     changed_roots: tuple[str, ...]
     hydrated_roots: tuple[str, ...]
     resynced: bool = False
+    recovered: bool = False
 
 
 class WatchCoordinator:
@@ -108,6 +120,9 @@ class WatchCoordinator:
         self._last_account_refresh_ms = 0
         self._last_quota_refresh_ms = 0
         self._last_projection: WatchProjection | None = None
+        # Ephemeral lifecycle evidence for this process only; never persisted.
+        self.source_recoveries = 0
+        self.last_source_recovery_kind = ""
 
     def _record_refresh_duration(self, seconds: float) -> None:
         value = max(0.001, float(seconds))
@@ -316,7 +331,7 @@ class WatchCoordinator:
 
     @classmethod
     def _needs_full_render(cls, previous: WatchProjection, current: WatchProjection, cycle: WatchCycle) -> bool:
-        if cycle.changed_roots or cycle.resynced or current.active_count > 0:
+        if cycle.changed_roots or cycle.resynced or cycle.recovered or current.active_count > 0:
             return True
         return cls._visible_signature(previous) != cls._visible_signature(current)
 
@@ -524,50 +539,83 @@ class WatchCoordinator:
         renderer.render(cycle.projection)
         try:
             while cycle.projection.active_count > 0:
-                if self.live:
-                    resync, hints = self._v2_wait(renderer)
-                    previous_projection = self._last_projection or cycle.projection
-                    renderer.render_status(self.activity_projection("Refreshing..."))
-                    cycle = self.poll_once(force_resync=resync, hinted_session_ids=hints)
-                    if resync:
-                        self._start_event_pump()
-                else:
-                    self._v1_wait(renderer)
-                    previous_projection = self._last_projection or cycle.projection
-                    renderer.render_status(self.activity_projection("Refreshing..."))
-                    cycle = self.poll_once()
-                if self._needs_full_render(previous_projection, cycle.projection, cycle):
-                    renderer.render(cycle.projection)
-                else:
-                    renderer.render_status(cycle.projection)
+                cycle = self._advance(renderer, cycle)
             renderer.finish("Prompt completed.")
         finally:
             if self._event_pump is not None:
                 self._event_pump.stop()
+
+    def _advance(self, renderer, cycle: WatchCycle) -> WatchCycle:
+        """Wait one cadence, poll the selected source and render the result."""
+        if self.live:
+            resync, hints = self._v2_wait(renderer)
+        else:
+            self._v1_wait(renderer)
+            resync, hints = False, ()
+        previous_projection = self._last_projection or cycle.projection
+        renderer.render_status(self.activity_projection("Refreshing..."))
+        try:
+            cycle = self.poll_once(force_resync=resync, hinted_session_ids=hints)
+        except SourceError as exc:
+            cycle = self._recover_source(renderer, exc)
+        else:
+            if resync:
+                self._start_event_pump()
+        if self._needs_full_render(previous_projection, cycle.projection, cycle):
+            renderer.render(cycle.projection)
+        else:
+            renderer.render_status(cycle.projection)
+        return cycle
+
+    def _recover_source(self, renderer, error: SourceError) -> WatchCycle:
+        """Keep Watch alive across transient failures of the already-selected source.
+
+        The last dashboard stays visible. Recovery retries only this selection
+        (no generation switch, subprocess or account-quota refresh); V2 resumes
+        only from a fresh authoritative snapshot. Unsupported schemas, and
+        unreadable data that does not settle, still end Watch visibly.
+        """
+        if self._event_pump is not None:
+            self._event_pump.stop()
+            self._event_pump = None
+        attempts = unreadable = 0
+        while True:
+            kind = source_failure_kind(error)
+            unreadable = unreadable + 1 if kind == "unreadable" else 0
+            if kind is None or unreadable > SOURCE_UNREADABLE_RETRIES:
+                raise error
+            if not attempts:
+                self.source_recoveries += 1
+            attempts += 1
+            self.last_source_recovery_kind = kind
+            status = f"OpenCode {self.selection.selected.upper()} source {kind} · retrying every {SOURCE_RETRY_SECONDS:g}s"
+            projection = self.activity_projection(status)
+            (renderer.render if attempts == 1 else renderer.render_status)(projection)
+            self.sleep(SOURCE_RETRY_SECONDS)
+            # Outage waits are observed time, not a suspend gap that would arm
+            # account-quota resume retries.
+            self._last_cycle_end_ms = int(self.clock_ms())
+            try:
+                cycle = self.poll_once(force_resync=self.live)
+            except SourceError as exc:
+                error = exc
+                continue
+            if self.live:
+                self._start_event_pump()
+            return replace(cycle, recovered=True)
 
     def run_forever(self, renderer, *, initial_cycle: WatchCycle | None = None) -> None:
         cycle = initial_cycle or self.initialize()
         renderer.render(cycle.projection)
         try:
             while True:
-                if self.live:
-                    resync, hints = self._v2_wait(renderer)
-                    previous_projection = self._last_projection or cycle.projection
-                    renderer.render_status(self.activity_projection("Refreshing..."))
-                    cycle = self.poll_once(force_resync=resync, hinted_session_ids=hints)
-                    if resync:
-                        self._start_event_pump()
-                else:
-                    self._v1_wait(renderer)
-                    previous_projection = self._last_projection or cycle.projection
-                    renderer.render_status(self.activity_projection("Refreshing..."))
-                    cycle = self.poll_once()
-                if self._needs_full_render(previous_projection, cycle.projection, cycle):
-                    renderer.render(cycle.projection)
-                else:
-                    renderer.render_status(cycle.projection)
+                cycle = self._advance(renderer, cycle)
         except KeyboardInterrupt:
             renderer.finish("Watch stopped.")
+        except SourceError:
+            # Bootstrap prints the normalized error and exits non-zero.
+            renderer.finish(f"Watch stopped: OpenCode {self.selection.selected.upper()} source failed.")
+            raise
         except ValueError as exc:
             # A session-scoped Watch may naturally disappear when its root is
             # archived.  Initial invalid selection still fails before this loop.

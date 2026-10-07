@@ -29,16 +29,11 @@ cost-guard.py
        -> presentation
 ```
 
-Splits preserve layer ownership.
-
-
 ## Configuration
 
 `src/config.py` owns JSONC, v77-compatible recursive merging, legacy normalization and startup validation. Omitted properties inherit defaults; explicit null overrides. Optional `config/user-config.jsonc` is never auto-created.
 
 Configuration must be validated before any OpenCode/provider/network/runtime-cache work. Errors use terminal-default presentation and must not echo arbitrary configured paths/secrets. `openCode.source` is normalized to `auto|v1|v2`; concrete source selection remains outside the config layer.
-
-Clean Windows may lack IANA data. A dependency-free CET/CEST fallback (plus UTC) keeps the shipped `Europe/Stockholm` default zero-config; other custom zones require host zoneinfo and fail actionably when unavailable.
 
 ## Session Sources
 
@@ -49,7 +44,7 @@ Supported sources:
 - **OpenCode V1:** read-only local SQLite adapter. No recurring `opencode db` subprocess path.
 - **OpenCode V2:** registered local background service over loopback HTTP. The live event stream is a non-durable change-hint mechanism for Watch; it is never the only state authority and any end/disconnect requires snapshot/resync.
 
-`openCode.source` supports `auto|v1|v2`. `auto` selects one highest supported healthy source: V2, otherwise V1. If no requested source is usable at startup, the composition root may invoke the installed OpenCode CLI's read-only API info command once to let OpenCode start its shared background service, then reselect; it never launches Desktop/TUI or runs a recurring Watch subprocess. v78 does not union V1 and V2 histories. When V2 is selected, a metadata-only V1 migration-gap diagnostic may warn about apparently missing/newer legacy sessions; it never changes selected history and never writes OpenCode state.
+`openCode.source` supports `auto|v1|v2`. `auto` selects one highest supported healthy source: V2, otherwise V1. If no requested source is usable at startup, the composition root may invoke the installed OpenCode CLI's read-only API info command once to let OpenCode start its shared background service, then reselect; it never launches Desktop/TUI or runs a recurring Watch subprocess. V1 and V2 histories are never unioned; see migration-gap diagnostics below.
 
 Domain records retain provenance/source identity so a future explicitly designed multi-source reconciliation layer remains possible.
 
@@ -80,7 +75,7 @@ The adapter caches the latest complete V2 session catalog in-process, avoiding `
 `src/sources/selection.py` selects process-free `auto|v1|v2`: healthy V2 first, otherwise healthy V1. Forced generations never silently fall back. Unhealthy V2 fallback warns; normal V1-only installations do not. Only `src/bootstrap.py` owns one-time CLI service wake after selection failure.
 After failed selection/wake, Watch retries process-free selection every five seconds, constructing reports/coordinator only once healthy. Reports fail promptly: installation wording requires no PATH CLI and no standard filesystem evidence; otherwise retain source errors. Healthy V1 auto-selection never switches later.
 
-When V2 is selected and readable V1 metadata is available, a best-effort metadata-only diagnostic compares session identities/update times and can warn when V1 contains sessions missing from V2 or appears newer for the same session. The diagnostic never hydrates both histories into one analysis, never changes the selected source, and never writes/repairs OpenCode migration state.
+With V2 selected and readable V1 metadata, a best-effort metadata-only diagnostic finds V1 sessions missing from V2 or newer than their V2 copy, without merged hydration, source changes or OpenCode writes. It is evidence, not a source warning: each gap carries its V1 root and possibly unrepresented activity window; `reports/migration_notice.py` notes it only when that window meets the report scope (sample cutoff, dates, requested root, all history). Watch never shows it; Diagnostics keeps full counts.
 
 ## Account and Pricing Providers
 
@@ -91,7 +86,9 @@ These are intentionally separate roles.
 
 `src/accounts/credentials.py` inventories configured accounts only within the selected OpenCode installation. V2 credential rows take precedence per integration; legacy `auth.json` is used only when that integration has no V2 rows. Read errors fail closed, explicit auth overrides remain file-only, and secrets stay memory-only. Stable account IDs or source-row locators distinguish accounts; identical proven identity may deduplicate, never provider ID alone. Quota-visible inactive accounts do not change inference routing or historical attribution.
 
-Providers return `AccountSnapshot` with independent native `QuotaComponent`/`BillingComponent` values. Copilot preserves plan/status/usage with unusable denominators; only explicit `unlimited` proves unlimited capacity. OpenAI normalizes rolling/model windows and credits. Anthropic API accounts remain separate from `accounts/claude_code.py`'s CLI-owned login. Its `claude_transport.py` uses optional published SDK initialize/get_usage metadata only: bounded timeout, skipped behaviors, no prompts/hooks/MCP/persistence, helper cleanup. Quota failure preserves the account; matching current email/organization-name provenance is required. No Claude credentials, private HTTP/OAuth routes or mandatory dependencies are introduced. See [Claude contract/evidence](claude-code.md). Cost Guard never refreshes/writes credentials; conflicting blocked state stays unknown.
+Providers return independent native account/quota/billing components. Copilot preserves degraded evidence; unlimited/blocked requires explicit native state. OpenAI owns rolling/model windows/credits. Anthropic API and Claude Code logins stay separate; [Claude contracts](claude-code.md) own SDK, identity and privacy boundaries.
+
+First-class adapters (including MiniMax) own complex auth/semantics; Simple HTTP definitions handle DeepSeek/OpenRouter. `http_account.py` owns per-record acquisition, `http_transport.py` network/JSON safety, and `simple_http_mapping.py`/`simple_http.py` bounded normalization/definitions. [HTTP contracts](simple-http-accounts.md) own security/semantics/diagnostics: no custom HTTP/scripts, inferred capacity/CCost, attribution, renderer branches or second polling/cache layer; future local estimates must be visibly distinct.
 
 `pricing/github_copilot.py` normalizes GitHub Docs tiered I/C/W/O rates, release dates and explicit promotion dates into reconstructible metadata. Refresh uses age, UTC month and expiry; expired rates revert to verified standard rates or are withheld. `pricing/promotions.py` owns structured validity/recency; unknown starts never imply recent offers. Reports retain active promotions for their full lifetime; Watch notices require a start within seven days. Presentation owns markers/alignment and label-only notice color, not validity.
 
@@ -113,7 +110,7 @@ Equal numbers are not interchangeable. Analysis consumes capabilities/domain sem
 
 `domain/ccost.py` owns reference conversion (100 CCost/USD), `CCostPricing` and valuation contracts. Catalog `models` remain native monetary metadata; immutable `ccost_models` are converted once before reference usage/category/context/comparison analysis, never billing fallback. Unknown currencies are unpriceable, not guessed FX. CCost is Copilot AI-credit-equivalent reference value, not deduction/billing; projections use explicit CCost fields.
 
-`numbers.py` shares standard-library display semantics: adaptive upward CCost/consumption, downward Remaining, exact rates/limits, no grouping; analysis never calls it. `version.mode_heading` owns adjacent startup grammar, CLI selects modes, progress clears transient rows. Reports align all quota labels; Watch only primary labels. v78.36 rejects obsolete USD keys before runtime and starts cache generation 2 / `v78-analysis-9-ccost`, without derived-value migration.
+`numbers.py` shares standard-library display semantics: adaptive upward CCost/consumption, downward Remaining, exact rates/limits, no grouping; analysis never calls it. `version.mode_heading` owns adjacent startup grammar, CLI selects modes, progress clears transient rows. Reports align all quota labels; Watch only primary labels.
 
 ## Analysis
 
@@ -166,13 +163,15 @@ The coordinator owns lifecycle, cadence/rendering and provider refreshes; source
 
 V1 batches root revisions in one recursive SQLite query without payload parsing. V2 hints use a five-second cooldown; disconnect forces resync, with bounded adaptive safety resync otherwise. Native active-session/tool state proves liveness. Quota refresh is independent of source activity: normally once per minute, with bounded resume retries. Local quota projection may refresh without another provider request.
 
+After initialization the coordinator owns source recovery: a poll's `SourceError` keeps the last projection and retries only the selected source every 5s (no reselection, subprocess or account refresh); V2 resumes from a fresh snapshot plus new event pump. Schema errors are terminal, unreadable data bounded. V2 rereads a rewritten registration.
+
 Watch depends on abstract source/report contracts, never concrete OpenCode/GitHub integrations. Lower layers never import Watch. Idle change detection must not add recurring external process starts.
 
 ## Presentation and CLI
 
 Presentation renders projections/progress, never integration queries or analysis. One-shot tables shrink flexible text, not identifiers/numbers/costs. Watch retains fixed geometry and one overwriteable status row, including empty-dashboard startup progress. `cost-guard.py` stays thin; `src/bootstrap.py` wires concrete layers.
 
-`config/` owns shipped/default and optional user configuration files; runtime `diagnostics/` is disposable and never packaged. The Python CLI preserves v77 normal/session/date/date-range and global/session Watch argument shapes. Platform convenience launchers live under lowercase `windows/` and `macos/`, invoke relative Python entry points, require Python 3.11+, and contain no business logic. Watch launchers hand Ctrl-C directly to Python rather than adding confirmation prompts.
+`config/` owns shipped/default and optional user configuration files; runtime `diagnostics/` is disposable and never packaged. The Python CLI preserves v77 normal/session/date/date-range and global/session Watch argument shapes. Everyday launchers live in `windows/`/`macos/`, Diagnostics ones in `development/windows|macos/`; all run relative Python 3.11+ entry points with no business logic. Watch launchers hand Ctrl-C directly to Python rather than adding confirmation prompts; Windows Watch waits for Enter only after a non-zero exit.
 
 ## Dependency direction
 

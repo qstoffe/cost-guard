@@ -71,24 +71,46 @@ class WindowsLauncherTests(unittest.TestCase):
         self.assertIn("--watch", text)
         self.assertNotIn("-NoExit", text)
         self.assertIn("Terminate batch job", text)
+        self.assertIn("if ($code)", text)  # only a non-zero exit waits for Enter
         self.assertLess(text.index('start "Cost Guard Watch"'), text.index("exit /b 0"))
 
     def test_diagnostics_launcher_is_double_clickable(self) -> None:
-        text = (ROOT / "windows/Cost Guard Diagnostics.cmd").read_text(encoding="utf-8")
-        self.assertIn("collect_diagnostics.py", text)
+        text = (ROOT / "development/windows/Cost Guard Diagnostics.cmd").read_text(encoding="utf-8")
+        self.assertIn('set "CG_ROOT=%~dp0..\\.."', text)
+        self.assertIn("\\development\\tools\\collect_diagnostics.py", text)
         self.assertIn("--test-service-start", text)
         self.assertIn("-NoExit", text)
+
+
+class LauncherPlacementTests(unittest.TestCase):
+    def test_public_folders_hold_only_everyday_launchers(self) -> None:
+        self.assertEqual({"Cost Guard.cmd", "Cost Guard Watch.cmd"},
+                         {path.name for path in (ROOT / "windows").iterdir()})
+        self.assertEqual({"Cost Guard.command", "Cost Guard Watch.command"},
+                         {path.name for path in (ROOT / "macos").iterdir()})
+
+    def test_validator_rejects_diagnostics_launcher_in_public_folder(self) -> None:
+        from development.tools.validate_package import check_required_layout
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "windows").mkdir()
+            (root / "windows/Cost Guard Diagnostics.cmd").write_text("@echo off\n", encoding="utf-8")
+            results = Results()
+            check_required_layout(root, results)
+            self.assertIn(("public launchers", "unexpected entry in user-facing launcher folder: windows/Cost Guard Diagnostics.cmd"),
+                          results.failures)
 
 
 class MacOSLauncherTests(unittest.TestCase):
     def test_macos_launchers_exist_are_executable_and_relative(self) -> None:
         expected = {
-            "Cost Guard.command": "cost-guard.py",
-            "Cost Guard Watch.command": "--watch",
-            "Cost Guard Diagnostics.command": "collect_diagnostics.py",
+            "macos/Cost Guard.command": "cost-guard.py",
+            "macos/Cost Guard Watch.command": "--watch",
+            "development/macos/Cost Guard Diagnostics.command": "/development/tools/collect_diagnostics.py",
         }
         for name, needle in expected.items():
-            path = ROOT / "macos" / name
+            path = ROOT / name
             self.assertTrue(path.is_file(), name)
             # Source filesystem mode is intentionally not asserted here: Python
             # ZIP extraction and Windows worktrees do not reliably preserve Unix
@@ -101,6 +123,8 @@ class MacOSLauncherTests(unittest.TestCase):
             self.assertIn(needle, text, name)
         watch = (ROOT / "macos/Cost Guard Watch.command").read_text(encoding="utf-8")
         self.assertIn('exec "$PYTHON"', watch)
+        diagnostics = (ROOT / "development/macos/Cost Guard Diagnostics.command").read_text(encoding="utf-8")
+        self.assertIn('CG_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"', diagnostics)
 
 
 class DiagnosticBundleTests(unittest.TestCase):

@@ -5,6 +5,7 @@ Everything in this directory exists to design, maintain, test, validate and rele
 - **Implement/change/release:** read `MAINTAINER.md` first, then the active task/FR and `ARCHITECTURE.md` when boundaries are affected. In constrained AI environments use `python development/tools/run_tests.py --suite quick` plus `python development/tools/validate_package.py --working-tree`; unrestricted/local work uses Full or the Diagnostics launcher. The release builder repeats its selected tier and clean-extract verification.
 - **Brainstorm/design/Feature Requests:** read `FR_GUIDE.md`. Discussion does not modify/package Cost Guard until the user explicitly transitions to implementation.
 - **Architecture:** `ARCHITECTURE.md` owns runtime layering, dependency direction, source/provider contracts, cache ownership and Watch ownership.
+- **HTTP account providers:** `simple-http-accounts.md` owns maintained definition/mapping limits, network/credential safety, provider evidence and extension guidance; complex providers stay first-class adapters.
 - **Budgets:** `file-budgets.json` is the machine-readable authority for design warnings and hard file caps.
 - **Fixtures:** `fixtures/` contains only deterministic synthetic non-secret test inputs.
 - **Tools:** `tools/` contains the stdlib-only test runner, release validator and release builder.

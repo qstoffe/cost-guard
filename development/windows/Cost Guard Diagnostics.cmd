@@ -1,6 +1,6 @@
 @echo off
 setlocal
-set "CG_ROOT=%~dp0.."
+set "CG_ROOT=%~dp0..\.."
 call :detect_python
 if errorlevel 1 goto :python_error
 start "Cost Guard Diagnostics" powershell.exe -NoProfile -NoExit -Command "& %CG_RUN% '%CG_ROOT%\development\tools\collect_diagnostics.py' --test-service-start"

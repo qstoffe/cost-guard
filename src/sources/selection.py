@@ -12,30 +12,39 @@ from .opencode_v1 import OpenCodeV1Source
 from .opencode_v2 import OpenCodeV2Source
 
 
+MISSING_IN_V2 = "missing_in_v2"
+NEWER_IN_V1 = "newer_in_v1"
+
+
+@dataclass(frozen=True, slots=True)
+class MigrationGapSession:
+    """Normalized V1 activity window that the selected V2 history may lack.
+
+    ``first_ms``/``last_ms`` bound the possibly unrepresented activity: a whole
+    missing session, or only V1 activity after its V2 copy's last update.
+    """
+
+    session_id: str
+    root_session_id: str
+    kind: str
+    first_ms: int
+    last_ms: int
+
+    def overlaps(self, start_ms: int, end_ms: int | None = None) -> bool:
+        return self.last_ms >= start_ms and (end_ms is None or self.first_ms < end_ms)
+
+
 @dataclass(frozen=True, slots=True)
 class MigrationGapDiagnostic:
     inspected: bool
     missing_in_v2: tuple[str, ...] = ()
     newer_in_v1: tuple[str, ...] = ()
     detail: str = ""
+    sessions: tuple[MigrationGapSession, ...] = ()
 
     @property
     def has_gap(self) -> bool:
         return bool(self.missing_in_v2 or self.newer_in_v1)
-
-    def warning(self) -> str | None:
-        if not self.has_gap:
-            return None
-        pieces: list[str] = []
-        if self.missing_in_v2:
-            pieces.append(f"{len(self.missing_in_v2)} legacy V1 session(s) are missing from V2")
-        if self.newer_in_v1:
-            pieces.append(f"{len(self.newer_in_v1)} legacy V1 session(s) are newer than their V2 copy")
-        return (
-            "OpenCode V1 contains history that may not be represented in the selected V2 source: "
-            + "; ".join(pieces)
-            + ". Cost Guard will not merge sources automatically; set openCode.source to v1 to inspect legacy history."
-        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,7 +80,40 @@ def inspect_v1_v2_migration_gap(v1: SessionSource, v2: SessionSource) -> Migrati
         for session_id, legacy_session in legacy.items()
         if session_id in modern and legacy_session.updated_at_ms > modern[session_id].updated_at_ms
     )
-    return MigrationGapDiagnostic(True, tuple(missing), tuple(newer), "metadata-only session comparison complete")
+    evidence = tuple(
+        MigrationGapSession(
+            session_id, _legacy_root(legacy, session_id), MISSING_IN_V2,
+            min(legacy[session_id].created_at_ms, legacy[session_id].updated_at_ms),
+            _last_activity_ms(legacy[session_id]),
+        )
+        for session_id in missing
+    ) + tuple(
+        MigrationGapSession(
+            session_id, _legacy_root(legacy, session_id), NEWER_IN_V1,
+            modern[session_id].updated_at_ms, _last_activity_ms(legacy[session_id]),
+        )
+        for session_id in newer
+    )
+    return MigrationGapDiagnostic(
+        True, tuple(missing), tuple(newer), "metadata-only session comparison complete", evidence,
+    )
+
+
+def _last_activity_ms(session: NormalizedSession) -> int:
+    return max(session.created_at_ms, session.updated_at_ms, session.archived_at_ms or 0)
+
+
+def _legacy_root(legacy: dict[str, NormalizedSession], session_id: str) -> str:
+    current = legacy[session_id]
+    seen = {session_id}
+    while current.parent_session_id and current.parent_session_id not in seen:
+        parent = legacy.get(current.parent_session_id)
+        if parent is None:
+            # An unlisted parent is still the best available causal-root identity.
+            return current.parent_session_id
+        seen.add(parent.session_id)
+        current = parent
+    return current.session_id
 
 
 class SourceSelector:
@@ -109,12 +151,11 @@ class SourceSelector:
         gap: MigrationGapDiagnostic | None = None
         # Gap inspection is explicitly best-effort and metadata-only.  It can
         # never switch the selected source or fail an otherwise healthy V2 run.
+        # It is evidence, not a source warning: reports decide scope relevance
+        # and Watch never shows it.
         try:
             v1 = self._v1_factory()
             gap = inspect_v1_v2_migration_gap(v1, v2)
-            warning = gap.warning()
-            if warning:
-                result_warnings.append(warning)
         except (SourceError, OSError, ValueError):
             gap = MigrationGapDiagnostic(False, detail="legacy V1 migration-gap inspection was unavailable")
         return SourceSelection(v2, "v2", tuple(result_warnings), health, gap)

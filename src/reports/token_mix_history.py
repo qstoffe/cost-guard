@@ -13,6 +13,7 @@ from src.analysis.valuation import unique_usage
 from src.domain import ModelRef
 from src.pricing.identities import reference_identity
 
+from .migration_notice import migration_gap_notes
 from .models import ModelTokenMixProjection, ReportKind, ReportProjection
 
 if TYPE_CHECKING:
@@ -53,7 +54,8 @@ def build_token_mix_history(service: ReportService, progress: HistoryProgress) -
     usage = unique_usage(entries)
     groups = model_token_mixes(usage, prompt_of, reference.reference_category_valuation, model_key=_model_key)
     warnings = tuple(service.selection.warnings)
-    notes = [HISTORY_NOTE]
+    # All-history scope: any V1 gap may make the result incomplete.
+    notes = [HISTORY_NOTE, *migration_gap_notes(service.selection.migration_gap)]
     if available is None:
         # Fail open: hiding usable history is worse than an unverified filter.
         warnings += ("⚠ Could not verify currently selectable OpenCode models; showing all historically used models.",)
