@@ -37,7 +37,7 @@ from src.domain import (
 )
 
 from .discovery import DatabaseCandidate, discover_v1_database_candidate
-from .errors import SourceDataError, SourceSchemaError, SourceUnavailableError
+from .errors import SourceDataError, SourceError, SourceSchemaError, SourceUnavailableError
 from .opencode_errors import normalize_error_name as _error_name
 from .opencode_tokens import token_usage
 from .opencode_v1_revision import batch_revisions, revision_from_rows, revision_rows

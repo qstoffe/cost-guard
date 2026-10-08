@@ -457,7 +457,7 @@ def collect(*, network: bool, snapshots: int, test_service_start: bool = False) 
     # Read-only V1 SQLite triage: no rows, SQL content or local paths included.
     try:
         import sqlite3
-        path = v1.database_path
+        path = Path(v1.database_path)
         if not path.is_file():
             data["v1_sqlite_triage"] = {"phase": "discovery", "status": "missing"}
         else:

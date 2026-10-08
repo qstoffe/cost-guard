@@ -1,5 +1,11 @@
 # Cost Guard version history
 
+## v80.14 — 2026-10-08
+
+- Close synthetic SQLite connections before Windows temporary-directory cleanup, fix the missing V1 SourceError import and accept string-backed database paths in read-only Diagnostics triage.
+- Keep the SQLite runtime read-only, preserve sanitized failure reporting and restore all-platform diagnostic regression coverage.
+
+
 ## v80.13 — 2026-10-08
 
 - Guard V1 SQLite read errors including InterfaceError and OperationalError with sanitized source failures instead of unhandled SQLite exceptions.
@@ -22,12 +28,9 @@
 - Own unexpected Python failures before application/Diagnostics imports and at the final process boundary. Fatal faults show `COST GUARD FAILED`, return non-zero, and write a daily software-error log plus a standalone privacy-conscious crash report; intentional Ctrl+C/help/usage and expected operational conditions remain distinct.
 - Add explicit isolated worker/provider ERROR states, authoritative Watch observer resync, defensive thread/unraisable hooks, in-process repetition summaries, emergency stderr reporting and best-effort 30-day retention. Healthy runs create no software-error log; no third-party dependency or full Diagnostics invocation is added to the crash path.
 
-## v80.9 — 2026-10-07
-
-- Unify all three Windows launchers behind one persistent PowerShell session in the original console. The outer batch exits before Python runs; explicitly restored Ctrl+C handling stops Watch without a batch confirmation. Completion, failure and Ctrl+C leave an ordinary package-root prompt, without a Watch-only Enter-to-close path. Python 3.11+ detection and actionable errors live in the shared launcher boundary.
-- Treat only a typed session-disappearance/archive event as a non-fatal session Watch end. Unexpected ValueError and other terminal runtime/source failures reach bootstrap's non-zero result; Ctrl+C during Watch initialization also remains an intentional stop.
-
 ## Earlier v80 history
+
+- v80.9 unified the Windows launchers under a persistent PowerShell session and corrected Watch Ctrl+C and error handling.
 
 - v80.8 aligned Watch session subtotals with visible rows while preserving run-scoped CCost accounting.
 

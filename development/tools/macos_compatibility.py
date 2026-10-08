@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from contextlib import closing
 import sqlite3
 import sys
 import tempfile
@@ -90,7 +91,7 @@ class MacCompatibilityChecks(unittest.TestCase):
     def test_v1_sqlite_readonly_valid_schema(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "opencode.db"
-            with sqlite3.connect(path) as connection:
+            with closing(sqlite3.connect(path)) as connection:
                 for table, columns in REQUIRED_COLUMNS.items():
                     connection.execute(
                         f'CREATE TABLE "{table}" (' +
@@ -103,7 +104,7 @@ class MacCompatibilityChecks(unittest.TestCase):
     def test_v1_sqlite_missing_schema_is_unhealthy(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "opencode.db"
-            with sqlite3.connect(path) as connection:
+            with closing(sqlite3.connect(path)) as connection:
                 connection.execute("CREATE TABLE unrelated (id TEXT)")
             self.assertFalse(OpenCodeV1Source(path).probe().healthy)
 
@@ -117,7 +118,7 @@ class MacCompatibilityChecks(unittest.TestCase):
     def test_v1_sqlite_concurrent_wal_writer(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "opencode.db"
-            with sqlite3.connect(path) as writer:
+            with closing(sqlite3.connect(path)) as writer:
                 writer.execute("PRAGMA journal_mode=WAL")
                 for table, columns in REQUIRED_COLUMNS.items():
                     writer.execute(f'CREATE TABLE "{table}" (' +
@@ -136,7 +137,6 @@ class MacCompatibilityChecks(unittest.TestCase):
             path.write_bytes(b"dummy")
             source = OpenCodeV1Source(path)
             # Opening succeeds in mock; SQL operation fails in the guarded read phase.
-            from contextlib import contextmanager
             class FailingConnection:
                 def execute(self, *args, **kwargs):
                     raise sqlite3.InterfaceError("private-path-or-secret")

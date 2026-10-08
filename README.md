@@ -330,7 +330,7 @@ Bundles omit prompt text, titles, raw payloads/auth, tokens and account labels/I
 
 ## Release status
 
-**v80.13** hardens V1 SQLite read errors and adds isolated SQLite tests and read-only diagnostic triage. v80.0 is the Python 3.11+ public baseline. Claude quotas remain experimental; account coverage/restart/sleep need separate live evidence.
+**v80.14** fixes Windows SQLite test cleanup, V1 source errors and Diagnostics path handling. v80.0 is the Python 3.11+ public baseline. Claude quotas remain experimental; account coverage/restart/sleep need separate live evidence.
 
 ## Development
 
