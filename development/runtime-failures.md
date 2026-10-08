@@ -15,6 +15,7 @@ Expected product conditions use local domain handling. Unexpected software fault
 | `cost-guard-v2-events` / `LiveEventPump._run` | SourceError uses existing resync; software Exception is logged and hints discarded | Watch status ERROR until authoritative resync; failed rebuild propagates |
 | `cost-guard-startup-progress` / `_animation_root` | Disable transient animation; no ownership of calculated report state | ERROR through startup sink or independent plain stderr |
 | `claude-metadata` / `_ControlReader._read` | Expected OSError/JSON/queue/end become transport state; software faults discard reader output | Typed reader failure → optional provider ERROR, never default thread traceback |
+| `cost-guard-model-metadata` / `WatchModelDiscovery` worker | At most one release-date refresh; prices, retrieval time and in-run CCost never change; a software fault discards that result | Classified `unexpected_internal_error` in metadata state/Diagnostics plus software log; bounded retry continues |
 | Future/unclassified threads | No assumed isolation; `threading.excepthook` defaults fatal | Original stack/report plus pending fatal main-thread handoff |
 | Unraisable/finalizer code | Defensive hook; no repr(object)/err_msg/local capture; defaults fatal | Log/report and pending failure before successful application return |
 
@@ -34,7 +35,7 @@ This v80.10 audit covers every production broad catch, including those removed o
 | ReportService `_quotas` | Failed provider result becomes explicit provider ERROR, not silent omission; materialize generators before accepting observations; unexpected orchestration outside acquisition propagates |
 | Pricing promotion-cache decoding | Narrow malformed persisted data; no generic catch |
 | Pricing probe / refresh | External fetch OSError becomes typed PricingUnavailableError, including cold/no-cache outage; only that domain condition permits normal unavailability/verified cached fallback; software faults propagate |
-| Pricing optional release enrichment | Expected I/O/JSON errors keep cached enrichment; unexpected faults propagate |
+| Pricing optional release enrichment | Every outcome is classified (DNS/connection/TLS/HTTP/timeout/parse/schema/match); verified dates are kept. An unexpected enrichment fault is logged, recorded as `unexpected_internal_error` and retried with backoff; pricing itself is unaffected |
 | Reports promotion wording | Narrow Decimal/ValueError formatting fallback; programming defects propagate |
 | Model availability / history filter | Expected SourceError/OSError fail open with ordinary warning; software faults log, return the unchanged full catalog/history and show ERROR |
 | Source availability fallback | Only operational source/I/O failures try another established availability adapter; software faults propagate to the visible report boundary |
@@ -47,10 +48,10 @@ The shared reporter is active only during a user-facing guarded execution; direc
 
 ## Artifacts, privacy and lifetime
 
-`diagnostics/errors/` contains daily software-error logs only after an actual defect. `diagnostics/crashes/` contains one exclusive-created report per fatal incident; PID plus bounded suffix prevents same-second collisions. Logs reference the crash report; reports reference the daily log. Files remain excluded through the existing ignored runtime diagnostics root.
+`logs/errors/` contains daily software-error logs only after an actual defect, plus `cost-guard-metadata-<date>.log` failure-period events for release metadata (first failure, change, bounded summaries, recovery). `logs/crashes/` contains one exclusive-created report per fatal incident; PID plus bounded suffix prevents same-second collisions. Logs reference the crash report; reports reference the daily log. Files remain excluded through the existing ignored runtime diagnostics root.
 
 Full chained stack structure includes file/function/line and exception type, never source lines/locals or arbitrary exception message text. Paths are package-relative; external frames omit directory paths. No arbitrary exception serialization, object repr, prompt/provider/auth payload capture or automatic full Diagnostics collection occurs. Individual reports can be sent directly to a maintainer after user review.
 
 Episodes use component/type/final stack identity, never message text. First occurrence logs the stack; repeats count in memory, flush after 60 seconds of recurring failure, on changed fingerprint, explicit recovery or process end. The episode map is bounded. Cleanup scans only two known directories, at most 2048 entries each, removing only Cost Guard-owned filenames older than 30 days; maintenance failure is deliberately fail-soft and non-recursive.
 
-Crash reporting uses plain stderr independently of normal renderers, optionally red for a working terminal. Primary I/O/formatting/render failure emits an emergency original-type notice and cannot turn status into success. Process entry points retain safety hooks through interpreter teardown; reusable library/test executions restore prior hooks. Retired Watch pumps have their stop flag set and cannot publish further results. Python shutdown/native corruption/force-kill cannot be guaranteed.
+Crash reporting uses plain stderr independently of normal renderers, optionally red for a working terminal. Fatal reports and stopping product errors (not Ctrl+C, intentional Watch ends or self-healing outages) end with the absolute, OS-specific Diagnostics launcher path; Diagnostics is never started automatically. Primary I/O/formatting/render failure emits an emergency original-type notice and cannot turn status into success. Process entry points retain safety hooks through interpreter teardown; reusable library/test executions restore prior hooks. Retired Watch pumps have their stop flag set and cannot publish further results. Python shutdown/native corruption/force-kill cannot be guaranteed.

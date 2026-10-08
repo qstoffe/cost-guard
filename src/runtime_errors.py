@@ -19,13 +19,29 @@ import time
 from typing import Callable
 
 _active: RuntimeErrors | None = None
-_OWNED = re.compile(r"cost-guard-(?:errors-\d{4}-\d{2}-\d{2}\.log|crash-\d{8}-\d{6}-\d+(?:-\d+)?\.txt)\Z")
+_OWNED = re.compile(r"cost-guard-(?:(?:errors|metadata)-\d{4}-\d{2}-\d{2}\.log|crash-\d{8}-\d{6}-\d+(?:-\d+)?\.txt)\Z")
+_RECOVERY_FILES = frozenset({"watch-recovery.json", "model-metadata.json"})
+
+
+def diagnostics_hint(root: Path | None = None) -> str:
+    """Absolute Diagnostics launcher for this installation/OS; never starts it."""
+    try:
+        base = Path(root) if root is not None else Path(__file__).resolve().parents[1]
+        if sys.platform == "win32":
+            target = str(base / "development" / "windows" / "Cost Guard Diagnostics.cmd")
+        elif sys.platform == "darwin":
+            target = str(base / "development" / "macos" / "Cost Guard Diagnostics.command")
+        else:
+            target = f'python3 "{base / "development" / "tools" / "collect_diagnostics.py"}"'
+        return f"\nNeed help? Run Cost Guard Diagnostics:\n{target}\n"
+    except BaseException:
+        return ""  # Help text is optional; never mask the original failure.
 
 
 def emergency(original: BaseException, reporting: BaseException, stream=None) -> None:
     """Never recurse or hide the original failure, even with a broken stderr."""
     text = (f"COST GUARD FAILED\nUnhandled {type(original).__name__}\n"
-            f"Crash report could not be written: {type(reporting).__name__}\n")
+            f"Crash report could not be written: {type(reporting).__name__}\n" + diagnostics_hint())
     try:
         (stream or sys.stderr).write(text)
         (stream or sys.stderr).flush()
@@ -107,7 +123,8 @@ class RuntimeErrors:
         fingerprint, frame = self._identity(exc, component)
         # Unknown future roots may name threads after private account/session
         # data. Keep known product names; identify everything else by hash.
-        if thread not in {"MainThread", "cost-guard-v2-events", "cost-guard-startup-progress", "claude-metadata"}:
+        if thread not in {"MainThread", "cost-guard-v2-events", "cost-guard-startup-progress", "claude-metadata",
+                          "cost-guard-model-metadata"}:
             thread = "thread#" + hashlib.sha256(thread.encode()).hexdigest()[:12]
         return (f"Timestamp: {datetime.now().astimezone().isoformat()}\nCost Guard: {self.version}\n"
                 f"Mode: {self.mode}\nPhase: {self.phase}\nSeverity: {severity}\nComponent: {component}\n"
@@ -183,7 +200,8 @@ class RuntimeErrors:
                 color = bool(getattr(output, "isatty", lambda: False)())
                 output.write(("\x1b[31m" if color else "") + "\nCOST GUARD FAILED\n" +
                              f"Unhandled {type(exc).__name__}\n{frame}\n\nCrash report:\n"
-                             f"{crash.relative_to(self.root)}\n" + ("\x1b[0m" if color else ""))
+                             f"{crash.relative_to(self.root)}\n" + ("\x1b[0m" if color else "")
+                             + ("" if self.mode == "Diagnostics" else diagnostics_hint(self.root)))
                 output.flush()
         except BaseException as reporting:
             emergency(exc, reporting, self.stream)
@@ -202,7 +220,7 @@ class RuntimeErrors:
                         if index >= 2048:
                             break
                         try:
-                            if ((_OWNED.fullmatch(entry.name) or (folder == "recovery" and entry.name == "watch-recovery.json")) and not entry.is_symlink()
+                            if ((_OWNED.fullmatch(entry.name) or (folder == "recovery" and entry.name in _RECOVERY_FILES)) and not entry.is_symlink()
                                     and entry.is_file(follow_symlinks=False) and entry.stat().st_mtime < cutoff):
                                 os.unlink(entry.path)
                         except OSError:

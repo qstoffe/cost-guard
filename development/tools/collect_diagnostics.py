@@ -67,8 +67,9 @@ from src.runtime_errors import recoverable, recovered  # noqa: E402
 from src.sources.errors import SourceError  # noqa: E402
 from src.watch.recovery_events import recent_events  # noqa: E402
 from development.tools.diagnostic_logs import create_bundle  # noqa: E402
-from src.pricing.github_copilot import CACHE_NAMESPACE, CACHE_KEY, _catalog_from_payload  # noqa: E402
-from src.config import ConfigError  # noqa: E402
+from development.tools.diagnostic_metadata import model_metadata_section  # noqa: E402
+from development.tools.diagnostic_screen import render_result  # noqa: E402
+from src.config import ConfigError, read_jsonc  # noqa: E402
 
 
 
@@ -379,6 +380,8 @@ def _text_summary(data: dict[str, Any]) -> str:
     validator_ok = (validation.get("package_validator") or {}).get("ok")
     tests_text = "SKIPPED" if tests_ok is None else str(bool(tests_ok))
     validator_text = "SKIPPED" if validator_ok is None else str(bool(validator_ok))
+    cache = (data.get("model_metadata") or {}).get("cache") or {}
+    summary = (data.get("model_metadata") or {}).get("summary") or {}
     lines = [
         f"Cost Guard diagnostics {data['cost_guard']['version']}",
         f"Generated: {data['generated_at_utc']}",
@@ -394,7 +397,9 @@ def _text_summary(data: dict[str, Any]) -> str:
         f"  Package validator: {validator_text}",
         "",
         f"V1 SQLite triage: {(data.get('v1_sqlite_triage') or {}).get('status', 'unavailable')}",
-        f"Model cache: {(data.get('model_freshness') or {}).get('model_count', 'N/A')} priced models, age {(data.get('model_freshness') or {}).get('cache_age_minutes', 'N/A')} min",
+        f"Model cache: {cache.get('model_count', 'N/A')} priced models, {cache.get('release_dates_known', 'N/A')} dated, age {cache.get('cache_age_minutes', 'N/A')} min",
+        f"Release metadata: {summary.get('health', 'unknown')}; failing sources: {', '.join(summary.get('failing_sources') or ()) or 'none'}; "
+        f"recovered sources: {', '.join(summary.get('recovered_sources') or ()) or 'none'}",
         f"Watch source recovery transitions (30 days, max 24): {len(data.get('watch_source_recovery_events') or ())}",
         f"Configured source: {data.get('config', {}).get('open_code_source')}",
         f"Selected source: {(data.get('selection') or {}).get('selected')}",
@@ -460,33 +465,10 @@ def collect(*, network: bool, snapshots: int, test_service_start: bool = False) 
     }
 
     data["watch_source_recovery_events"] = recent_events()
-    try:
-        database = CacheDatabase(ROOT)
-        # Inspect only an existing cache; Diagnostics must not create runtime state.
-        if database.paths.database.is_file():
-            database.initialize()
-            entry = CacheRepository(database).get(CACHE_NAMESPACE, CACHE_KEY)
-        else:
-            entry = None
-        catalog = _catalog_from_payload(entry.payload) if entry else None
-        if catalog is not None:
-            now_ms = int(time.time() * 1000)
-            data["model_freshness"] = {
-                "cache_present": True,
-                "cache_age_minutes": max(0, (now_ms - catalog.retrieved_at_ms) // 60_000),
-                "model_count": len(catalog.models),
-                "release_dates_known": sum(bool(m.metadata.get("release_date")) for m in catalog.models),
-                "configured_price_interval_minutes": int(float(cfg.get("pricingMaxAgeHours", 1)) * 60),
-                "watch_availability_interval_minutes": 15,
-                "watch_price_interval_minutes": 60,
-                "release_metadata_status": "cache_only",
-                "undated_model_count": sum(not bool(m.metadata.get("release_date")) for m in catalog.models),
-                "note": "Watch availability is independent from Copilot pricing and may lag desktop availability",
-            }
-        else:
-            data["model_freshness"] = {"cache_present": False, "status": "no_cached_catalog"}
-    except (OSError, ValueError, TypeError) as exc:
-        data["model_freshness"] = {"status": "unavailable", "error_type": type(exc).__name__}
+    # Includes failures that happened (and possibly self-healed) during earlier Watch runs.
+    metadata, metadata_timing = _timed(lambda: model_metadata_section(
+        ROOT, cfg, network=network, database_factory=CacheDatabase))
+    data["model_metadata"] = metadata if metadata is not None else {"collection_error": metadata_timing}
 
     data["sources"]["v1"] = _safe_source_stats(v1, snapshots=snapshots)
     # Read-only V1 SQLite triage: no rows, SQL content or local paths included.
@@ -589,32 +571,6 @@ def collect(*, network: bool, snapshots: int, test_service_start: bool = False) 
         data["report"] = None
         data["report_timing"] = {"ok": False, "error": "source selection failed"}
 
-    # Independent metadata diagnostic: never includes raw remote JSON or URLs
-    # with credentials, and does not affect report/cache acceptance.
-    if network:
-        try:
-            from src.pricing.github_copilot import MODELS_DEV_URL, _default_fetch_text, _add_release_dates
-            payload = json.loads(_default_fetch_text(MODELS_DEV_URL, 6))
-            cached_catalog = catalog if "catalog" in locals() else None
-            if isinstance(payload, dict):
-                source_count = len(payload)
-                compared = _add_release_dates(cached_catalog.models, payload) if cached_catalog else ()
-                matched = sum(bool(x.metadata.get("release_date")) for x in compared)
-                data["release_metadata_probe"] = {
-                    "status": "matched" if matched else "no_match",
-                    "source_model_count": source_count,
-                    "matched_model_count": matched,
-                    "catalog_model_count": len(compared),
-                }
-            else:
-                data["release_metadata_probe"] = {"status": "unexpected_shape"}
-        except (OSError, ValueError, TypeError) as exc:
-            data["release_metadata_probe"] = {
-                "status": "fetch_or_parse_failed", "error_type": type(exc).__name__
-            }
-    else:
-        data["release_metadata_probe"] = {"status": "skipped_no_network"}
-
     quota_cfg = cfg.get("copilotQuota") if isinstance(cfg.get("copilotQuota"), dict) else {}
     try:
         account = GitHubCopilotAccountProvider(
@@ -705,25 +661,23 @@ def main(argv: list[str] | None = None) -> int:
     json_bytes = json.dumps(data, indent=2, ensure_ascii=False, sort_keys=True).encode("utf-8")
     text_bytes = _text_summary(data).encode("utf-8") if "cost_guard" in data else (json.dumps(data, indent=2) + "\n").encode("utf-8")
     try:
-        archive_report = create_bundle(
+        create_bundle(
             bundle, root=ROOT, json_bytes=json_bytes, text_bytes=text_bytes,
             include_logs=os.environ.get("COST_GUARD_TEST_MODE") != "1",
             cleanup_old=os.environ.get("COST_GUARD_TEST_MODE") != "1",
         )
     except (OSError, ValueError, zipfile.BadZipFile) as exc:
-        print("\nERROR: Diagnostic file could not be created.")
-        print("Reason: " + type(exc).__name__)
-        print("The previous diagnostic ZIP, if any, was preserved.")
-        print("Please close programs using the ZIP, check disk space and retry.")
+        # Details go to the error log; the previous verified ZIP stays untouched.
+        recoverable(exc, "diagnostics-bundle-publish")
+        render_result(error=exc)
         return 1
-    print("\n")
-    print("SUCCESS: Diagnostic file created successfully!")
-    print("Diagnostic file: " + str(bundle.resolve()))
-    print("\nNext step: Attach this ZIP to an email and send it to:")
-    print("  " + str(load_configuration(ROOT).values["diagnostics"]["supportEmail"]))
-    print("No email is sent automatically. Review the ZIP before sharing.")
-    if not data.get("validation", {}).get("ok") and data.get("validation", {}).get("ok") is not None:
-        print("NOTE: Tests completed with errors. Please still send the diagnostic ZIP.")
-    print("Archived {} logs; removed {} inactive logs.".format(
-        archive_report["archived_logs"], archive_report["removed_logs"]))
+    # Test failures are evidence inside the ZIP, never a failed Diagnostics run.
+    render_result(path=bundle.resolve(), email=_support_email())
     return 0
+
+
+def _support_email() -> str:
+    try:
+        return str(load_configuration(ROOT).values["diagnostics"]["supportEmail"])
+    except ConfigError:  # a broken user config must not hide the support address
+        return str(read_jsonc(ROOT / "config/default-config.jsonc")["diagnostics"]["supportEmail"])

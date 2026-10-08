@@ -31,7 +31,7 @@ Double-click the ready-to-use `.cmd` launchers under `windows/`; no manual Pytho
 | `Cost Guard.cmd` | Normal model comparison/account quota report. |
 | `Cost Guard Watch.cmd` | Live/global Watch; Ctrl+C stops Watch only. |
 
-All three Windows launchers reuse one persistent PowerShell console: completion, errors and Watch Ctrl+C leave a usable package-root prompt. See [download trust](#open-source-license-and-windows-download-trust).
+Windows launchers reuse one persistent PowerShell console: completion, errors and Ctrl+C leave a usable prompt. See [download trust](#open-source-license-and-windows-download-trust).
 
 ### macOS
 
@@ -42,7 +42,7 @@ Equivalent `.command` launchers are under `macos/`:
 | `Cost Guard.command` | Normal report. |
 | `Cost Guard Watch.command` | Live/global Watch; Ctrl+C exits. |
 
-Files ship executable. Use Finder's **Open** for quarantine prompts; never bypass Gatekeeper.
+Files ship executable. Use Finder's **Open** for quarantine prompts.
 
 ### Python CLI
 
@@ -69,7 +69,7 @@ Distinct signals:
 - **Billed:** actual monetary spend with reported or explicit subscription/zero-billing evidence; otherwise `N/A`.
 - **Quotas / limits:** independent account-native windows, credits, budgets and availability.
 
-CCost uses GitHub reference rates in Copilot AI-credit-equivalent units. Included subscription work can have positive CCost and Billed $0.00. Unknown prices stay partial/unknown, never replaced with billed cost. A quota credential does **not** prove historical request-account attribution.
+CCost uses GitHub reference rates in Copilot AI-credit-equivalent units. Included subscription work can have positive CCost and Billed $0.00. Unknown prices stay unknown, never replaced with billed cost. A quota credential does **not** prove historical request-account attribution.
 
 ### Symbols and token categories
 
@@ -98,8 +98,8 @@ See [Token Mix reference](#token-mix--by-model---token-mix). Screenshots are ill
 - Python **3.11 or newer**.
 - A supported OpenCode installation/history:
   - **V1:** Cost Guard reads the local legacy OpenCode SQLite database directly in read-only/query-only mode.
-  - **V2:** Read-only registered-service loopback HTTP. If unavailable, `auto`/`v2` may call `opencode api get /api/info` once (no Desktop/TUI); Watch retries process-free every five seconds. Diagnostics `--test-service-start --no-network --snapshots 0` tests cold startup; never stop a shared active service.
-- Internet access when GitHub Copilot pricing/model metadata needs its first fetch or refresh.
+  - **V2:** Read-only registered-service loopback HTTP. If unavailable, `auto`/`v2` may call `opencode api get /api/info` once (no Desktop/TUI); Watch retries process-free every five seconds. Diagnostics `--test-service-start` tests cold startup without stopping a shared service.
+- Internet access for GitHub Copilot pricing/model metadata fetches.
 - Optional Copilot quota reuses OpenCode OAuth in memory, without login, credential writes or GitHub CLI.
 - Optional OpenAI subscription quota is fail-soft. Read-only V2 accounts take priority; legacy `auth.json` applies only without V2 rows. Credentials are never refreshed, rotated or written.
 - Configured OpenAI/Anthropic API accounts are distinct from **Claude Code subscriptions**, discovered through the optional installed `claude` CLI. Cost Guard never reads/copies Claude credentials or attributes current login to history.
@@ -134,7 +134,7 @@ Cost Guard uses `config/default-config.jsonc`. Create optional `config/user-conf
 
 Cost Guard uses **0BSD**: use, modify and redistribute, including commercially, without attribution. See `LICENSE`.
 
-Windows may show SmartScreen warnings for unsigned Internet-downloaded launchers. Cost Guard does not bypass this. After verifying the ZIP's source, you may optionally remove its download mark:
+Windows may show SmartScreen warnings for unsigned downloaded launchers. After verifying the ZIP's source, you may remove its download mark:
 
 ```powershell
 Get-ChildItem -Recurse | Unblock-File
@@ -158,7 +158,7 @@ The shipped default is:
 
 With V2 selected, a metadata-only V1 check finds missing/newer legacy sessions. Reports note them only if they can affect the shown scope (latest-prompt sample, dates, session, all history); Watch never; Diagnostics always counts them. Nothing is repaired/written.
 
-Reports show `OpenCode not found` only after source selection fails and neither a PATH executable nor standard installation/data evidence exists. Usable V1/V2 sources work without the CLI; offline installations keep source errors. Watch still waits/retries.
+Reports show `OpenCode not found` only when selection fails and no PATH executable or standard installation evidence exists. Usable sources work without the CLI; Watch still waits/retries.
 
 ## Normal report
 
@@ -168,7 +168,7 @@ Reports show `OpenCode not found` only after source selection fails and neither 
 
 **Rel CCost applies your Token Mix %** from up to 100 latest completed visible prompts to each model's CCost/M rates; the cheapest is `1.0x`. Running/aborted prompts are excluded. Without a sample, Rel CCost stays blank: a hidden synthetic I/C/W/O 2/96/1/1 mix sorts rows through the same pricing path, never shown as observed usage. Real samples replace it automatically. Multipliers are relative CCost, not predictions of model behavior.
 
-Availability uses V2's settled `/api/model` selectable IDs (V1: `opencode models`). Exact/verified aliases match reference prices; explicit variant rates win and unknown/ambiguous prices stay unknown. Lookup failures warn and show the **pricing catalog, not proven availability**. Unpriced models have no row.
+Availability uses V2's settled `/api/model` selectable IDs (V1: `opencode models`). Exact/verified aliases match reference prices; explicit variant rates win and unknown/ambiguous prices stay unknown. Lookup failures warn and show the **pricing catalog**. Unpriced models have no row.
 
 `--all-models` uses the full downloaded catalog and the same sample/table/highlights, without availability lookup or account discovery/quota fetches.
 
@@ -180,7 +180,7 @@ Availability uses V2's settled `/api/model` selectable IDs (V1: `opencode models
 | `Copilot CCost/M tokens I/C/W/O` | Reference CCost per million input/cache-read/cache-write/output tokens; exact rates, `→` separates tiers. |
 | `Release date` | Public model release date when confidently available. Recently released models are highlighted/notified. |
 
-✦ New Models lasts seven UTC days after release; report promotion markers/highlights last through validity. Watch promotion notices require a proven start within seven days and never survive expiry; unknown starts are not guessed from release/first fetch. Only notice labels are colored.
+✦ New Models lasts seven UTC days after release (Watch: or after a verified catalog addition when no date exists; never invented); report promotion markers last through validity. Watch promotion notices need a proven start within seven days. Only notice labels are colored.
 
 ## Token Mix % by model: `--token-mix`
 
@@ -269,7 +269,7 @@ Full redraws clear screen/scrollback; countdowns replace only the status line. V
 
 ## Pricing, quota and network behavior
 
-Watch checks Copilot hourly. V2 checks every 15 minutes only trigger an immediate forced Copilot refresh for newly observed model IDs. ✦ New Models shows only confirmed priced catalog models; CCost stays pinned. Expired promotions revert to verified standard rates or are withheld. Failed refresh can reuse a prior successful snapshot.
+Watch checks Copilot hourly. V2 checks every 15 minutes only trigger an immediate forced Copilot refresh for newly observed model IDs. ✦ New Models shows only confirmed priced catalog models; CCost stays pinned. Release dates (models.dev, else the Copilot changelog) are health-checked separately; failures retry after ~1/5/15 min, then hourly (honoring 429), across restarts, keeping verified dates. Expired promotions revert to verified standard rates or are withheld.
 
 GitHub Copilot quota uses OpenCode's existing OAuth credential by default. `copilotQuota.authJsonPath` may override the path when a non-standard OpenCode setup requires it. Cost Guard reads credentials only for the request and never stores them in its own cache.
 
@@ -320,17 +320,17 @@ For troubleshooting, use `Cost Guard Diagnostics` under `development/windows/` o
 python development/tools/collect_diagnostics.py
 ```
 
-Creates `diagnostics/cost-guard-diagnostics.zip`: **Full/local** tests, package validation (including failures), environment/version, source/wire statistics, timings and provider health. `--no-network` skips pricing/quotas; `--skip-validation` is emergency/recursive-only.
+Creates `diagnostics/cost-guard-diagnostics.zip`: **Full/local** tests, package validation (including failures), environment/version, source/wire statistics, timings, provider health and model-metadata health (classified per-source errors, even self-healed). The final screen shows only result, path and support address. `--no-network` skips pricing/quotas; `--skip-validation` is emergency/recursive-only.
 
 Bundles omit prompt text, titles, raw payloads/auth, tokens and account labels/IDs; session/account-source IDs are hashed. Account evidence includes plan/status, numeric quota shape, credential discovery/category (never values), request/HTTP/schema classification, normalized component categories, malformed/ignored counts and MiniMax window/form recognition. Provider inventory is available even without live accounts.
 
 ### Internal software faults
 
-**`COST GUARD FAILED`** means an unexpected software fault: non-zero exit, an error-only log under `diagnostics/errors/` and an individual report under `diagnostics/crashes/` to send to a maintainer. Isolated faults show ERROR while safe results continue. Healthy runs/expected operational conditions create no software log. [Error diagnostics](docs/runtime-errors.md) explains privacy, 30-day retention and reporting fallback; crashes never invoke full Diagnostics automatically.
+**`COST GUARD FAILED`** means an unexpected software fault: non-zero exit, an error log under `logs/errors/` and a report under `logs/crashes/`. It and other stopping errors end with the Diagnostics launcher path to run; nothing starts automatically. Isolated faults show ERROR while safe results continue. [Error diagnostics](docs/runtime-errors.md) explains privacy, 30-day retention and reporting fallback.
 
 ## Release status
 
-**v80.18** adds live Watch model discovery and stronger V2 recovery. v80.0 is the Python 3.11+ public baseline. Claude quotas remain experimental; account coverage/restart/sleep need separate live evidence.
+**v80.19** adds self-healing release-date metadata and a minimal Diagnostics result screen. v80.0 is the Python 3.11+ public baseline. Claude quotas remain experimental; account coverage/restart/sleep need separate live evidence.
 
 ## Development
 

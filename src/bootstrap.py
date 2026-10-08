@@ -29,7 +29,7 @@ from .sources.selection import SourceSelector
 from .version import DISPLAY_VERSION, PRODUCT_NAME, mode_heading
 from .watch import WatchCoordinator
 from .watch.coordinator import WatchedSessionEnded
-from .runtime_errors import check_pending, context
+from .runtime_errors import check_pending, context, diagnostics_hint
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 
@@ -140,7 +140,7 @@ def _wait_for_watch_source(requested: str, renderer: WatchRenderer, *, sleep=tim
     if not renderer.interactive:
         renderer._write(message)
     while True:
-        renderer.render_startup_status(message)
+        renderer.render_startup_status(message, active=True)  # a waiting status, not loading
         try:
             sleep(5)
             return selector.select(requested)
@@ -228,6 +228,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         pricing = GitHubCopilotPricingProvider(
             cache=repository,
             max_age_hours=float(config.get("pricingMaxAgeHours", 1)),
+            # Watch recovers release-date metadata on a background worker.
+            defer_metadata_refresh=command.watch,
         )
         needs_accounts = command.watch or command.kind is CommandKind.NORMAL
         accounts = _account_providers(config, selection.selected) if needs_accounts else ()
@@ -290,6 +292,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         if progress is not None:
             progress.stop()
         _print_error("Cost Guard - Runtime error", str(exc) or type(exc).__name__)
+        if not isinstance(exc, WatchedSessionEnded):
+            # Stopping product errors only; recoverable outages never reach here.
+            print(diagnostics_hint(PACKAGE_ROOT), end="")
         return 1
     finally:
         if progress is not None:

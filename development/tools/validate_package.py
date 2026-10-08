@@ -600,7 +600,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json", action="store_true")
     parser.add_argument(
         "--working-tree", action="store_true",
-        help="Validate the distributable view of a live extracted tree while ignoring runtime cache/diagnostics/releases/user config/bytecode.",
+        help="Validate the distributable view of a live extracted tree while ignoring runtime cache/diagnostics/logs/releases/user config/bytecode.",
     )
     args = parser.parse_args(argv)
     root = (args.root.resolve() if args.root else Path(__file__).resolve().parents[2])
@@ -612,7 +612,7 @@ def main(argv: list[str] | None = None) -> int:
             current = Path(directory).resolve()
             ignored = {name for name in names if name in {".git", "__pycache__"} or name.endswith((".pyc", ".zip"))}
             if current == root:
-                ignored.update(name for name in ("cache", "diagnostics", "releases") if name in names)
+                ignored.update(name for name in ("cache", "diagnostics", "logs", "releases") if name in names)
             if current == (root / "config").resolve() and "user-config.jsonc" in names:
                 ignored.add("user-config.jsonc")
             return ignored

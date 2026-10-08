@@ -13,10 +13,13 @@ _MAX_FILE_BYTES = 512 * 1024
 _MAX_TOTAL_BYTES = 4 * 1024 * 1024
 _QUIET_SECONDS = 60
 _OWNED = {
-    "errors": re.compile(r"cost-guard-errors-\d{4}-\d{2}-\d{2}\.log\Z"),
+    "errors": re.compile(r"cost-guard-(?:errors|metadata)-\d{4}-\d{2}-\d{2}\.log\Z"),
     "crashes": re.compile(r"cost-guard-crash-\d{8}-\d{6}-\d+(?:-\d+)?\.txt\Z"),
-    "recovery": re.compile(r"watch-recovery\.json\Z"),
+    "recovery": re.compile(r"(?:watch-recovery|model-metadata)\.json\Z"),
 }
+# Live retry/health state is archived but never pruned: deleting it would
+# reset the metadata backoff and erase the evidence of an ongoing failure.
+_LIVE_STATE = frozenset({"model-metadata.json"})
 
 
 def _owned_files(root: Path):
@@ -111,7 +114,8 @@ def create_bundle(path: Path, *, root: Path, json_bytes: bytes, text_bytes: byte
     removed = 0
     for candidate, fingerprint in records:
         try:
-            if candidate.is_symlink() or candidate.stat().st_mtime >= time.time() - _QUIET_SECONDS:
+            if (candidate.name in _LIVE_STATE or candidate.is_symlink()
+                    or candidate.stat().st_mtime >= time.time() - _QUIET_SECONDS):
                 continue
             if _fingerprint(candidate, candidate.read_bytes()) == fingerprint:
                 candidate.unlink()

@@ -296,12 +296,14 @@ class WatchRenderer:
             return
         self._clear()
         self._write(mode_heading("Watch"))
-        self._write_status("Initializing...", active=True, newline=False)
+        # Startup loading uses the default foreground like every other mode;
+        # activeRunning stays reserved for the steady-state Watch status row.
+        self._write_status("Initializing...", active=False, newline=False)
 
-    def render_startup_status(self, line: str) -> None:
+    def render_startup_status(self, line: str, *, active: bool = False) -> None:
         if not self.interactive:
             return
-        self.stream.write("\r\x1b[2K" + self.styler.apply(line, "activeRunning"))
+        self.stream.write("\r\x1b[2K" + self.styler.apply(line, "activeRunning" if active else None))
         self.stream.flush()
         self._status_visible = True
 

@@ -1,5 +1,16 @@
 # Cost Guard version history
 
+## v80.19 — 2026-10-08
+
+- Release-date metadata has its own health, separate from fresh pricing: a catalog with priced models but missing dates is refreshed at Watch start, after resume and on the first V2 list, retried after ~1/5/15 minutes then hourly (honoring HTTP 429) across restarts, without blocking Watch or changing CCost, and never erasing verified dates.
+- models.dev and the official Copilot changelog are independent, classified sources (DNS, connection, TLS, HTTP, timeout, parse, schema, missing fields, zero/partial matches, cache fallback, skipped, internal); dates record their source and never move to another model identity.
+- Watch ✦ New Models never shows a model whose verified release date is old; catalog-history models without a date still qualify for seven days.
+- Persistent metadata state and failure-period logs (start, change, bounded summaries, recovery) feed a new Diagnostics model-metadata section, so self-healed failures stay analyzable.
+- Diagnostics ends on a cleared screen with only the green result, ZIP path and support address, or a red short reason; test failures inside a verified ZIP still count as success.
+- Fatal and stopping errors end with the absolute OS-specific Diagnostics launcher path; Watch startup loading is white like other modes while Watch statuses keep their colors.
+- Working-tree package validation excludes root runtime logs just like the ZIP builder; extracted packages still reject them, with regression coverage preserving nested source files and original logs.
+
+
 ## v80.18 — 2026-10-08
 
 - Reports mark new models with the same ✦ New Models notice as Watch, keeping the hanging indent when the notice wraps.
@@ -27,15 +38,9 @@
 - Default pricing cache age to one hour; add isolated cross-platform regression tests.
 
 
-## v80.14 — 2026-10-08
-
-- Close synthetic SQLite connections before Windows temporary-directory cleanup, fix the missing V1 SourceError import and accept string-backed database paths in read-only Diagnostics triage.
-- Keep the SQLite runtime read-only, preserve sanitized failure reporting and restore all-platform diagnostic regression coverage.
-
-
 ## Earlier v80 history
 
-- v80.11-v80.13 added simulated macOS compatibility in Diagnostics, Windows path/release-check fixes and sanitized V1 SQLite read-error guards with read-only SQLite triage.
+- v80.11-v80.14 added simulated macOS compatibility in Diagnostics, Windows path/release-check fixes, sanitized V1 SQLite read-error guards with read-only triage and Windows-safe synthetic SQLite cleanup.
 
 - v80.8-v80.9 aligned Watch session subtotals with visible rows (run-scoped CCost preserved) and unified the Windows launchers under a persistent PowerShell session with corrected Ctrl+C and error handling.
 

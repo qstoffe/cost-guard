@@ -8,27 +8,29 @@ from __future__ import annotations
 
 import hashlib
 import json
-from email.utils import parsedate_to_datetime
-from xml.etree import ElementTree
 import re
+import threading
 import time
-import urllib.error
 import urllib.request
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Callable, Iterable
 
 from src.cache import CacheRepository
 from src.domain import IntegrationHealth, ModelPricing, ModelRef, PricingTier, ProviderCapabilities
+from src.runtime_errors import recoverable, recovered
 from src.version import DISPLAY_VERSION
 
 from .catalog import PricingCatalog, canonical_model_name
+from .metadata_health import COMPONENT as METADATA_COMPONENT, MetadataHealthStore, default_root
+from .release_metadata import (
+    COPILOT_CHANGELOG_URL, INTERNAL, MODELS_DEV_URL, MetadataAttempt, SourceResult,
+    enrich_release_dates, merge_release_dates, valid_date,
+)
 
 PRICING_ARTICLE_PATH = "/en/copilot/reference/copilot-billing/models-and-pricing"
 DOCS_API_BODY = "https://docs.github.com/api/article/body?pathname="
-MODELS_DEV_URL = "https://models.dev/models.json"
-COPILOT_CHANGELOG_URL = "https://github.blog/changelog/feed/"
 CACHE_NAMESPACE = "pricing.github-copilot"
 CACHE_KEY = "catalog"
 CACHE_FORMAT_VERSION = 1
@@ -464,30 +466,6 @@ def _preserve_known_promotions(
     return tuple(result)
 
 
-def _preserve_cached_release_dates(
-    models: Iterable[ModelPricing], previous: Iterable[ModelPricing],
-) -> tuple[ModelPricing, ...]:
-    dates = {
-        canonical_model_name(model.model.model): str(model.metadata.get("release_date"))
-        for model in previous if model.metadata.get("release_date")
-    }
-    result: list[ModelPricing] = []
-    for model in models:
-        date = dates.get(canonical_model_name(model.model.model))
-        if not date:
-            result.append(model)
-            continue
-        meta = dict(model.metadata)
-        meta.setdefault("release_date", date)
-        result.append(ModelPricing(
-            model=model.model, currency=model.currency,
-            per_million_input=model.per_million_input, per_million_cache_read=model.per_million_cache_read,
-            per_million_cache_write=model.per_million_cache_write, per_million_output=model.per_million_output,
-            tiers=model.tiers, metadata=meta,
-        ))
-    return tuple(result)
-
-
 class PricingUnavailableError(RuntimeError):
     """External pricing document no longer satisfies the supported schema."""
 
@@ -503,14 +481,19 @@ class GitHubCopilotPricingProvider:
         max_age_hours: float = 6.0,
         fetch_text: FetchText = _default_fetch_text,
         now_ms: Callable[[], int] | None = None,
+        metadata_store: MetadataHealthStore | None = None,
+        defer_metadata_refresh: bool = False,
     ) -> None:
         self.cache = cache
         self.max_age_hours = max(0.0, float(max_age_hours))
         self.fetch_text = fetch_text
         self.now_ms = now_ms or (lambda: int(time.time() * 1000))
         self._catalog: PricingCatalog | None = None
-        self.release_metadata_status = "not_checked"
-        self.release_metadata_matches = 0
+        self.metadata = metadata_store if metadata_store is not None else MetadataHealthStore(default_root())
+        # Watch runs metadata-only refreshes on its own worker; reports may block briefly.
+        self.defer_metadata_refresh = bool(defer_metadata_refresh)
+        self._lock = threading.RLock()
+        self._metadata_active = threading.Lock()
 
     def probe(self) -> IntegrationHealth:
         try:
@@ -523,6 +506,16 @@ class GitHubCopilotPricingProvider:
         return self.get_catalog().models
 
     def get_catalog(self, *, force: bool = False) -> PricingCatalog:
+        with self._lock:
+            catalog = self._load_or_fetch(force)
+        # Fresh prices do not imply healthy release dates (separate health/backoff).
+        if not self.defer_metadata_refresh:
+            reason = self.metadata_refresh_reason(catalog)
+            if reason:
+                catalog = self.refresh_release_metadata(reason=reason) or catalog
+        return catalog
+
+    def _load_or_fetch(self, force: bool) -> PricingCatalog:
         if self._catalog is not None and not force and not self._expired(self._catalog):
             return self._catalog
         cached_entry = self.cache.get(CACHE_NAMESPACE, CACHE_KEY)
@@ -542,6 +535,67 @@ class GitHubCopilotPricingProvider:
         self.cache.put(CACHE_NAMESPACE, CACHE_KEY, _catalog_payload(catalog), algorithm_version=f"pricing-{CACHE_FORMAT_VERSION}")
         self._catalog = catalog
         return catalog
+
+    def metadata_refresh_reason(self, catalog: PricingCatalog | None = None, *,
+                                now_ms: int | None = None, hint: str = "") -> str:
+        catalog = catalog or self._catalog
+        if catalog is None:
+            return ""
+        return self.metadata.refresh_reason(
+            priced=len(catalog.models),
+            dated=sum(bool(valid_date(m.metadata.get("release_date"))) for m in catalog.models),
+            retrieved_at_ms=catalog.retrieved_at_ms,
+            now_ms=self.now_ms() if now_ms is None else int(now_ms), hint=hint,
+        )
+
+    def metadata_diagnostics(self) -> dict:
+        return self.metadata.snapshot()
+
+    def _enrich(self, models, previous, *, reason: str) -> tuple[ModelPricing, ...]:
+        """Optional enrichment; every outcome, including defects, is classified and recorded."""
+        models, previous = tuple(models), tuple(previous)
+        try:
+            enriched, attempt = enrich_release_dates(models, previous, self.fetch_text)
+        except Exception as exc:
+            recoverable(exc, METADATA_COMPONENT)
+            enriched = merge_release_dates(models, previous)[0]
+            attempt = MetadataAttempt(
+                (SourceResult("metadata", "failed", INTERNAL, "internal", reason=type(exc).__name__),),
+                len(enriched), sum(bool(valid_date(m.metadata.get("release_date"))) for m in enriched),
+                cache_fallback=True,
+            )
+        else:
+            recovered(METADATA_COMPONENT)
+        self.metadata.record(attempt, self.now_ms(), reason=reason)
+        return enriched
+
+    def refresh_release_metadata(self, *, reason: str = "manual") -> PricingCatalog | None:
+        """Metadata-only refresh: prices and retrieval time never change."""
+        if not self._metadata_active.acquire(blocking=False):
+            self.metadata.skipped("already_running", self.now_ms())
+            return None
+        try:
+            with self._lock:
+                entry = self.cache.get(CACHE_NAMESPACE, CACHE_KEY)
+                base = (_catalog_from_payload(entry.payload) if entry else None) or self._catalog
+            if base is None:
+                self.metadata.skipped("no_catalog", self.now_ms())
+                return None
+            enriched = self._enrich(base.models, base.models, reason=reason)
+            with self._lock:
+                # Merge into the CURRENT catalog; a concurrent price refresh wins for prices.
+                entry = self.cache.get(CACHE_NAMESPACE, CACHE_KEY)
+                current = (_catalog_from_payload(entry.payload) if entry else None) or base
+                models, _ = merge_release_dates(current.models, enriched)
+                updated = PricingCatalog(models=models, retrieved_at_ms=current.retrieved_at_ms,
+                                         source_revision=current.source_revision,
+                                         refresh_not_after_ms=current.refresh_not_after_ms)
+                self.cache.put(CACHE_NAMESPACE, CACHE_KEY, _catalog_payload(updated),
+                               algorithm_version=f"pricing-{CACHE_FORMAT_VERSION}")
+                self._catalog = _apply_expired_promotions(updated, self.now_ms())
+                return self._catalog
+        finally:
+            self._metadata_active.release()
 
     def _expired(self, catalog: PricingCatalog) -> bool:
         if catalog.retrieved_at_ms <= 0:
@@ -567,31 +621,9 @@ class GitHubCopilotPricingProvider:
         models = list(_preserve_known_promotions(models, previous, self.now_ms()))
         if len(models) < 5:
             raise PricingUnavailableError(f"GitHub pricing parser found only {len(models)} models")
-        # Release dates are enrichment only.  A failed optional fetch must never invalidate fresh pricing.
-        try:
-            raw_metadata = json.loads(self.fetch_text(MODELS_DEV_URL, 15))
-        except (OSError, ValueError) as exc:
-            self.release_metadata_status = "fetch_or_parse_" + type(exc).__name__
-            models = list(_preserve_cached_release_dates(models, previous.models if previous else ()))
-        else:
-            if isinstance(raw_metadata, dict):
-                models = list(_add_release_dates(models, raw_metadata, previous.models if previous else ()))
-                self.release_metadata_matches = sum(bool(item.metadata.get("release_date")) for item in models)
-                self.release_metadata_status = "matched" if self.release_metadata_matches else "no_matching_dates"
-            else:
-                self.release_metadata_status = "unexpected_shape"
-                models = list(_preserve_cached_release_dates(models, previous.models if previous else ()))
-        # Official GitHub announcements are a second, independently fetched
-        # metadata source. Exact title matching avoids inventing release dates.
-        if any(not model.metadata.get("release_date") for model in models):
-            try:
-                feed = self.fetch_text(COPILOT_CHANGELOG_URL, 8)
-                models = list(_add_changelog_dates(models, feed))
-            except (OSError, ValueError, ElementTree.ParseError):
-                pass
-        self.release_metadata_matches = sum(bool(item.metadata.get("release_date")) for item in models)
-        if self.release_metadata_matches and self.release_metadata_status != "matched":
-            self.release_metadata_status += "+changelog_matched"
+        # Release dates are enrichment only. A failed optional fetch never
+        # invalidates fresh pricing and never erases previously verified dates.
+        models = list(self._enrich(models, previous.models if previous else (), reason="pricing_refresh"))
         now = self.now_ms()
         revision = hashlib.sha256(pricing.encode("utf-8")).hexdigest()
         expiries = [
@@ -609,77 +641,3 @@ class GitHubCopilotPricingProvider:
             ),
             now,
         )
-
-
-def _add_changelog_dates(models: Iterable[ModelPricing], feed: str) -> tuple[ModelPricing, ...]:
-    """Strict official GitHub Copilot title/date evidence, never fuzzy name guesses."""
-    tree = ElementTree.fromstring(feed)
-    dates: dict[str, set[str]] = {}
-    for entry in tree.findall(".//item")[:80]:
-        title = str(entry.findtext("title") or "").strip()
-        match = re.fullmatch(r"(.+?) in GitHub Copilot", title, re.I)
-        date_text = entry.findtext("pubDate")
-        if not match or not date_text:
-            continue
-        try:
-            date = parsedate_to_datetime(date_text).astimezone(timezone.utc).date().isoformat()
-        except (TypeError, ValueError, OverflowError):
-            continue
-        key = canonical_model_name(match.group(1))
-        dates.setdefault(key, set()).add(date)
-    result = []
-    for model in models:
-        metadata = dict(model.metadata)
-        key = canonical_model_name(model.model.display_name or model.model.model)
-        if not metadata.get("release_date") and len(dates.get(key, ())) == 1:
-            metadata["release_date"] = next(iter(dates[key]))
-        result.append(ModelPricing(
-            model=model.model, currency=model.currency,
-            per_million_input=model.per_million_input, per_million_cache_read=model.per_million_cache_read,
-            per_million_cache_write=model.per_million_cache_write, per_million_output=model.per_million_output,
-            tiers=model.tiers, metadata=metadata,
-        ))
-    return tuple(result)
-
-
-def _add_release_dates(
-    models: Iterable[ModelPricing], metadata: dict[str, object], previous: Iterable[ModelPricing] = (),
-) -> tuple[ModelPricing, ...]:
-    previous_dates = {
-        canonical_model_name(item.model.model): str(item.metadata.get("release_date"))
-        for item in previous if item.metadata.get("release_date")
-    }
-    result: list[ModelPricing] = []
-    for model in models:
-        publisher = str(model.metadata.get("publisher", ""))
-        target = canonical_model_name(model.model.display_name or model.model.model)
-        prefixes = {
-            "OpenAI": ("openai/",), "Anthropic": ("anthropic/",), "Google": ("google/",),
-            "Microsoft": ("microsoft/",), "xAI": ("xai/", "x-ai/"), "Moonshot AI": ("moonshotai/", "moonshot/"),
-        }.get(publisher, ())
-        matches: set[str] = set()
-        for model_id, raw in metadata.items():
-            lower = str(model_id).lower()
-            if prefixes and not any(lower.startswith(prefix) for prefix in prefixes):
-                continue
-            if not isinstance(raw, dict):
-                continue
-            name_key = canonical_model_name(str(raw.get("name") or ""))
-            leaf_key = canonical_model_name(lower.rsplit("/", 1)[-1])
-            if target not in {name_key, leaf_key}:
-                continue
-            date = str(raw.get("release_date") or "")
-            if re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
-                matches.add(date)
-        meta = dict(model.metadata)
-        if len(matches) == 1:
-            meta["release_date"] = next(iter(matches))
-        elif canonical_model_name(model.model.model) in previous_dates:
-            meta["release_date"] = previous_dates[canonical_model_name(model.model.model)]
-        result.append(ModelPricing(
-            model=model.model, currency=model.currency,
-            per_million_input=model.per_million_input, per_million_cache_read=model.per_million_cache_read,
-            per_million_cache_write=model.per_million_cache_write, per_million_output=model.per_million_output,
-            tiers=model.tiers, metadata=meta,
-        ))
-    return tuple(result)

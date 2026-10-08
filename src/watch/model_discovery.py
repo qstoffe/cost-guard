@@ -1,11 +1,17 @@
 """Watch-only model discovery; V2 is an early pricing-refresh hint, not release evidence.
 
 CCost always uses the report service's pinned catalog. These later catalog
-observations change only the Watch new-model notice.
+observations change only the Watch new-model notice. Release-date metadata
+recovers on its own bounded worker so a slow or failing metadata source never
+blocks Watch polling.
 """
 from __future__ import annotations
 
+import threading
+from typing import Callable
+
 from src.pricing.catalog import PricingCatalog, canonical_model_name
+from src.pricing.release_metadata import valid_date
 from src.reports.semantics import model_is_recent
 from src.runtime_errors import recoverable, recovered
 from src.sources.errors import SourceError
@@ -32,10 +38,18 @@ def _priced(model) -> bool:
                for t in options)
 
 
+def _released(model) -> str:
+    return valid_date(model.metadata.get("release_date"))
+
+
+def _thread_runner(work: Callable[[], None]) -> None:
+    threading.Thread(target=work, name="cost-guard-model-metadata", daemon=True).start()
+
+
 class WatchModelDiscovery:
     """Poll V2 every 15 minutes; a new ID forces one immediate Copilot fetch."""
 
-    def __init__(self, service) -> None:
+    def __init__(self, service, *, run_async: Callable[[Callable[[], None]], None] | None = None) -> None:
         self.service = service
         self.catalog: PricingCatalog | None = None
         self._catalog_keys: set[str] = set()
@@ -48,6 +62,13 @@ class WatchModelDiscovery:
         self._last_v2_price_trigger_ms: int | None = None
         self.last_price_error = ""
         self.last_availability_error = ""
+        self._run_async = run_async or _thread_runner
+        self._metadata_lock = threading.Lock()
+        self._metadata_active = False
+        self._metadata_result: PricingCatalog | None = None
+        self._metadata_runs = 0
+        self._metadata_reason = ""
+        self.last_metadata_error = ""
 
     def _repository(self):
         return getattr(self.service, "cache_repository", None)
@@ -81,16 +102,26 @@ class WatchModelDiscovery:
                             and len(value) == 2 and isinstance(value[0], str)
                             and type(value[1]) is int and 0 <= now_ms - value[1] < NEW_NOTICE_MS):
                             self._first_seen[key] = (value[0], value[1])
+                # Without earlier history a first read proves nothing new.
                 if isinstance(known, list):
                     known_ids = {key for key in known if isinstance(key, str)}
                     for model in self.catalog.models:
                         key = _key(model)
-                        if (key and key not in known_ids and _priced(model)
-                            and not model_is_recent(str(model.metadata.get("release_date") or ""), now_ms=now_ms)):
+                        if key and key not in known_ids and _priced(model) and not _released(model):
                             self._first_seen[key] = (_name(model), now_ms)
             except (OSError, ValueError):
                 pass
         self._last_price_check_ms = now_ms
+        self._persist_known()
+
+    def _observe(self, latest: PricingCatalog, now_ms: int) -> None:
+        """Catalog-diff evidence is needed only while no verified date exists."""
+        for model in latest.models:
+            key = _key(model)
+            if key and key not in self._catalog_keys and _priced(model) and not _released(model):
+                self._first_seen[key] = (_name(model), now_ms)
+        self._catalog_keys.update(_key(model) for model in latest.models)
+        self.catalog = latest
         self._persist_known()
 
     def _refresh_catalog(self, now_ms: int, *, force: bool = False) -> None:
@@ -106,14 +137,47 @@ class WatchModelDiscovery:
             return
         recovered("watch-model-discovery-pricing")
         self.last_price_error = ""
-        for model in latest.models:
-            key = _key(model)
-            if (key and key not in self._catalog_keys and _priced(model)
-                and not model_is_recent(str(model.metadata.get("release_date") or ""), now_ms=now_ms)):
-                self._first_seen[key] = (_name(model), now_ms)
-        self._catalog_keys.update(_key(model) for model in latest.models)
-        self.catalog = latest
-        self._persist_known()
+        self._observe(latest, now_ms)
+
+    def _adopt_metadata(self, now_ms: int) -> None:
+        with self._metadata_lock:
+            result, self._metadata_result = self._metadata_result, None
+        if result is not None and self.catalog is not None and result.retrieved_at_ms >= self.catalog.retrieved_at_ms:
+            self._observe(result, now_ms)
+
+    def _maybe_refresh_metadata(self, now_ms: int, hint: str = "") -> None:
+        """At most one bounded metadata worker; the provider owns backoff/429 rules."""
+        provider = self.service.pricing_provider
+        reason_of = getattr(provider, "metadata_refresh_reason", None)
+        refresh = getattr(provider, "refresh_release_metadata", None)
+        if not callable(reason_of) or not callable(refresh) or self.catalog is None:
+            return
+        with self._metadata_lock:
+            if self._metadata_active:
+                return
+        reason = reason_of(self.catalog, now_ms=now_ms, hint=hint)
+        if not reason:
+            return
+        with self._metadata_lock:
+            self._metadata_active = True
+        self._metadata_runs += 1
+        self._metadata_reason = reason
+
+        def work() -> None:
+            result, error = None, ""
+            try:
+                result = refresh(reason=reason)
+                recovered("watch-model-metadata")
+            except Exception as exc:  # isolated optional enrichment worker
+                error = type(exc).__name__
+                recoverable(exc, "watch-model-metadata")
+            finally:
+                with self._metadata_lock:
+                    self._metadata_active = False
+                    self.last_metadata_error = error
+                    if result is not None:
+                        self._metadata_result = result
+        self._run_async(work)
 
     def refresh(self, now_ms: int, *, resumed: bool = False) -> None:
         now_ms = int(now_ms)
@@ -122,6 +186,9 @@ class WatchModelDiscovery:
         elif (resumed or self._last_price_check_ms is None
               or now_ms - self._last_price_check_ms >= PRICE_CHECK_MS):
             self._refresh_catalog(now_ms)
+        self._adopt_metadata(now_ms)
+        # Startup, resume and every poll: due only by health/backoff state.
+        self._maybe_refresh_metadata(now_ms)
 
         # Read only the selected V2 service. No CLI fallback, process startup,
         # quota queries or provider entitlements are inferred.
@@ -141,24 +208,35 @@ class WatchModelDiscovery:
                 if result is None:
                     self.last_availability_error = "unverified"
                 else:
-                    ids = {item.lower(): item for item in result if isinstance(item, str)}
-                    previous = {item.lower() for item in (self.available_ids or ())}
-                    novel = ({key for key in ids if key.startswith("github-copilot/") and key not in previous}
-                             if self._availability_known else set())
-                    self.available_ids = tuple(ids.values())
-                    self._availability_known = True
-                    self.last_availability_error = ""
-                    if novel:
-                        # Bypass even a fresh 60-minute pricing cache. V2-only
-                        # models NEVER appear in the user-facing notice.
-                        self._v2_price_triggers += 1
-                        self._last_v2_price_trigger_ms = now_ms
-                        self._refresh_catalog(now_ms, force=True)
+                    self._observe_availability(result, now_ms)
 
         self._first_seen = {
             key: item for key, item in self._first_seen.items()
             if 0 <= now_ms - item[1] < NEW_NOTICE_MS
         }
+
+    def _observe_availability(self, result, now_ms: int) -> None:
+        ids = {item.lower(): item for item in result if isinstance(item, str)}
+        first_read = not self._availability_known
+        previous = {item.lower() for item in (self.available_ids or ())}
+        novel = ({key for key in ids if key.startswith("github-copilot/") and key not in previous}
+                 if not first_read else set())
+        self.available_ids = tuple(ids.values())
+        self._availability_known = True
+        self.last_availability_error = ""
+        if novel:
+            # Bypass even a fresh 60-minute pricing cache. V2-only
+            # models NEVER appear in the user-facing notice.
+            self._v2_price_triggers += 1
+            self._last_v2_price_trigger_ms = now_ms
+            self._refresh_catalog(now_ms, force=True)
+        elif first_read and self.catalog is not None:
+            # The initial list proves nothing new, but a selectable model
+            # still lacking a verified date is a reason to recheck metadata.
+            selectable = {canonical_model_name(key) for key in ids if key.startswith("github-copilot/")}
+            if any(_key(model) in selectable and _priced(model) and not _released(model)
+                   for model in self.catalog.models):
+                self._maybe_refresh_metadata(now_ms, hint="v2_undated_model")
 
     def notice(self, now_ms: int) -> str:
         """One Unicode heading; only verified priced catalog models qualify."""
@@ -168,9 +246,11 @@ class WatchModelDiscovery:
             if not _priced(model):
                 continue
             key = _key(model)
-            released = str(model.metadata.get("release_date") or "")
-            if model_is_recent(released, now_ms=now_ms):
-                names[key] = (_name(model), released)
+            released = _released(model)
+            if released:
+                # A verified old release date is never "new", whatever the history.
+                if model_is_recent(released, now_ms=now_ms):
+                    names[key] = (_name(model), released)
             elif key in self._first_seen and 0 <= now_ms - self._first_seen[key][1] < NEW_NOTICE_MS:
                 names[key] = (_name(model), "")
         if not names:
@@ -181,12 +261,16 @@ class WatchModelDiscovery:
         return "✦ New Models: " + ", ".join(labels) + suffix
 
     def diagnostics(self, now_ms: int) -> dict[str, object]:
+        provider_metadata = getattr(self.service.pricing_provider, "metadata_diagnostics", None)
+        with self._metadata_lock:
+            active, error = self._metadata_active, self.last_metadata_error
         return {
             "pricing_check_interval_minutes": PRICE_CHECK_MS // 60_000,
             "availability_check_interval_minutes": AVAILABILITY_CHECK_MS // 60_000,
             "catalog_models": len(self.catalog.models) if self.catalog else None,
+            "dated_catalog_models": sum(bool(_released(m)) for m in self.catalog.models) if self.catalog else None,
             "verified_release_models": sum(
-                model_is_recent(str(m.metadata.get("release_date") or ""), now_ms=now_ms)
+                model_is_recent(_released(m), now_ms=now_ms)
                 for m in self.catalog.models if _priced(m)
             ) if self.catalog else None,
             "availability_known": self._availability_known,
@@ -196,4 +280,9 @@ class WatchModelDiscovery:
             "new_catalog_model_count": len(self._first_seen),
             "v2_price_refresh_triggers": self._v2_price_triggers,
             "last_v2_price_refresh_ms": self._last_v2_price_trigger_ms,
+            "metadata_refresh_runs": self._metadata_runs,
+            "metadata_refresh_active": active,
+            "last_metadata_refresh_reason": self._metadata_reason,
+            "metadata_worker_status": error or "ok",
+            "metadata": provider_metadata() if callable(provider_metadata) else None,
         }

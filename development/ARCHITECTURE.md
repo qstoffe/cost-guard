@@ -84,6 +84,8 @@ First-class adapters (including MiniMax) own complex auth/semantics; Simple HTTP
 
 `pricing/github_copilot.py` normalizes GitHub Docs tiered I/C/W/O rates, release dates and explicit promotion dates into reconstructible metadata. Refresh uses age, UTC month and expiry; expired rates revert to verified standard rates or are withheld. `pricing/promotions.py` owns structured validity/recency; unknown starts never imply recent offers. Reports retain active promotions for their full lifetime; Watch notices require a start within seven days. Presentation owns markers/alignment and label-only notice color, not validity.
 
+`pricing/release_metadata.py` owns date sources (models.dev, else Copilot changelog), failure classes and safe merging; `pricing/metadata_health.py` owns date health, persisted backoff and failure logs. Date refreshes keep prices; Watch uses one worker.
+
 ## Canonical domain
 
 The domain separates:
@@ -182,8 +184,8 @@ The release validator enforces the most important forbidden import directions. A
 
 ## Software-failure boundaries
 
-`cost-guard.py` and Diagnostics guard application imports with stdlib-only `src/runtime_errors.py`; it imports no application layers except stable version metadata. It owns error-only logs/crash reports, deduplication, 30-day retention, hooks and emergency stderr. Unexpected faults default fatal; only isolated worker/provider owners may log and expose ERROR while continuing. Pricing/valuation/quota orchestration defects propagate; user Ctrl+C and local operational handling remain distinct. [Failure policy, root inventory and exception audit](runtime-failures.md) is the detailed boundary contract; future roots require explicit ownership and regression tests.
+`cost-guard.py` and Diagnostics guard application imports with stdlib-only `src/runtime_errors.py` (no application layers except version metadata). It owns error-only logs/crash reports, deduplication, 30-day retention, hooks, emergency stderr and the Diagnostics-launcher hint. Unexpected faults default fatal; only isolated worker/provider owners may log and expose ERROR while continuing. [Failure policy, root inventory and exception audit](runtime-failures.md) is the detailed boundary contract; future roots require explicit ownership and regression tests.
 
 ## Diagnostics boundary
 
-`development/tools/collect_diagnostics.py` may compose public runtime boundaries for troubleshooting, but its persisted bundle is metadata/statistics only. On unrestricted/local machines it also owns the user-facing Full verification workflow (full deterministic tier plus distributable-view package validation) and displays progress while those checks run; validation failure is diagnostic evidence and must not suppress bundle creation. The Quick hosted-AI tier remains a separate bounded development/release gate. Diagnostics must hash sampled session IDs and exclude prompt text, session titles, raw provider payloads, auth tokens and auth-file contents. `diagnostics/` is runtime output, not product source.
+`development/tools/collect_diagnostics.py` may compose public runtime boundaries for troubleshooting; its bundle is metadata/statistics only. Locally it also runs the user-facing Full tier plus distributable-view validation with progress; validation failure is evidence and never suppresses the bundle. Quick remains a separate bounded gate. Diagnostics hashes sampled session IDs and excludes prompts, titles, raw payloads and auth data. Sibling `diagnostic_*` modules own logs/ZIP, metadata health and the result screen. `diagnostics/` is runtime output, not product source.

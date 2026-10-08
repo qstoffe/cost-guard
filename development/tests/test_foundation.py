@@ -38,10 +38,10 @@ def copy_package(destination: Path) -> Path:
     root = destination / "package"
 
     def ignore(directory: str, names: list[str]) -> set[str]:
-        ignored = {name for name in names if name == "__pycache__" or name.endswith((".pyc", ".zip"))}
+        ignored = {name for name in names if name in {".git", "__pycache__"} or name.endswith((".pyc", ".zip"))}
         current = Path(directory).resolve()
         if current == ROOT.resolve():
-            ignored.update(name for name in ("cache", "diagnostics", "releases") if name in names)
+            ignored.update(name for name in ("cache", "diagnostics", "logs", "releases") if name in names)
         if current == (ROOT / "config").resolve() and "user-config.jsonc" in names:
             ignored.add("user-config.jsonc")
         return ignored
@@ -85,6 +85,32 @@ class ValidationTests(unittest.TestCase):
             proc = run_python(str(copy / "development/tools/validate_package.py"), "--root", str(copy), cwd=copy)
             self.assertNotEqual(0, proc.returncode)
             self.assertIn("forbidden packaged top-level path: cache", proc.stdout)
+
+    def test_runtime_logs_are_excluded_only_from_distributable_view(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            copy = copy_package(Path(tmp))
+            runtime_log = copy / "logs/errors/synthetic.log"
+            nested_log = copy / "src/cache/logs/synthetic.txt"
+            for path in (runtime_log, nested_log):
+                path.parent.mkdir(parents=True)
+                path.write_text("synthetic evidence", encoding="utf-8")
+            validator = str(copy / "development/tools/validate_package.py")
+            proc = run_python(validator, "--working-tree", cwd=copy)
+            self.assertEqual(0, proc.returncode, proc.stdout + proc.stderr)
+            proc = run_python(validator, cwd=copy)
+            self.assertNotEqual(0, proc.returncode)
+            self.assertIn("forbidden packaged top-level path: logs", proc.stdout)
+            output = Path(tmp) / "release.zip"
+            proc = run_python(
+                str(copy / "development/tools/build_release.py"),
+                "--output", str(output), cwd=copy, release_nested=True,
+            )
+            self.assertEqual(0, proc.returncode, proc.stdout + proc.stderr)
+            with zipfile.ZipFile(output) as archive:
+                names = set(archive.namelist())
+            self.assertFalse(any(name.startswith("logs/") for name in names))
+            self.assertIn("src/cache/logs/synthetic.txt", names)
+            self.assertEqual("synthetic evidence", runtime_log.read_text(encoding="utf-8"))
 
     def test_validator_rejects_report_layer_import_of_concrete_provider(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

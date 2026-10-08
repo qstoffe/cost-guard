@@ -85,7 +85,7 @@ class PricingProviderTests(unittest.TestCase):
             self.assertIsNotNone(provider)
 
     def test_official_changelog_exact_model_release_date_fallback(self) -> None:
-        from src.pricing.github_copilot import _add_changelog_dates
+        from src.pricing.release_metadata import _changelog_dates, merge_release_dates
         from src.domain import ModelPricing, ModelRef
         sample = (
             ModelPricing(ModelRef("github-copilot", "claude-haiku-5-5", "Claude Haiku 5.5"), "USD"),
@@ -95,8 +95,9 @@ class PricingProviderTests(unittest.TestCase):
         <pubDate>Wed, 07 Oct 2026 11:00:00 +0000</pubDate></item>
         <item><title>Unrelated AI news</title>
         <pubDate>Wed, 07 Oct 2026 11:00:00 +0000</pubDate></item></channel></rss>"""
-        models = _add_changelog_dates(sample, feed)
+        models, _ = merge_release_dates(sample, (), changelog=_changelog_dates(sample, feed))
         self.assertEqual("2026-10-07", models[0].metadata.get("release_date"))
+        self.assertEqual("github-changelog", models[0].metadata.get("release_date_source"))
         self.assertFalse(models[1].metadata.get("release_date"))
         self.assertEqual(sample[0].per_million_input, models[0].per_million_input)
 

@@ -244,7 +244,7 @@ class MigrationGapScopeTests(unittest.TestCase):
             selector.return_value.select.return_value = selected
             result = diag.collect(network=False, snapshots=0)
             self.assertFalse((Path(root) / "cache").exists())  # read-only freshness probe
-        self.assertEqual({"cache_present": False, "status": "no_cached_catalog"}, result["model_freshness"])
+        self.assertEqual({"cache_present": False, "status": "no_cached_catalog"}, result["model_metadata"]["cache"])
         self.assertEqual({"inspected": True, "missing_in_v2": 2, "newer_in_v1": 1, "detail": "complete"},
                          result["selection"]["migration_gap"])
 
