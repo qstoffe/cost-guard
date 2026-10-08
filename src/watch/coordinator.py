@@ -133,6 +133,7 @@ class WatchCoordinator:
         self._observer_error = ""
         self.model_discovery = WatchModelDiscovery(report_service)
         self._resume_pending = False
+        self._resume_recovery_deadline_ms = 0
 
     def _record_refresh_duration(self, seconds: float) -> None:
         value = max(0.001, float(seconds))
