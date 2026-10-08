@@ -21,7 +21,7 @@ PYTHON="$(find_python)" || {
   exit 1
 }
 
-"$PYTHON" "$CG_ROOT/development/tools/collect_diagnostics.py"
+"$PYTHON" "$CG_ROOT/development/tools/collect_diagnostics.py" --test-service-start
 status=$?
 echo
 read -r '?Press Return to close...'
