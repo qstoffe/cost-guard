@@ -76,7 +76,7 @@ class SyntheticSortingTests(unittest.TestCase):
             self.assertEqual(0, report.token_mix.request_count)
             text = compact.rendered(report)
             self.assertIn("Cache heavy", text)
-            self.assertIn("Rel CCost stays blank", text)
+            self.assertIn("Relative CCost stays blank", text)
             self.assertNotIn("Input: 2%", text)
 
 

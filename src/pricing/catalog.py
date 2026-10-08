@@ -186,8 +186,16 @@ def token_mix_unit_price(
 ) -> Decimal | None:
     if model is None or mix[4] <= 0:
         return None
-    tier = model.selected_tier(0)
+    return token_mix_tier_price(mix, model.selected_tier(0))
+
+
+def token_mix_tier_price(
+    mix: tuple[Decimal, Decimal, Decimal, Decimal, int], tier: PricingTier | None,
+) -> Decimal | None:
+    """One tier under the shared I/C/W/O mix; never derive tier factors."""
+    if mix[4] <= 0:
+        return None
     if tier is None or tier.per_million_input is None or tier.per_million_cache_read is None or tier.per_million_output is None:
         return None
-    write_rate = tier.per_million_cache_write or tier.per_million_input
+    write_rate = tier.per_million_cache_write if tier.per_million_cache_write is not None else tier.per_million_input
     return mix[0] * tier.per_million_input + mix[1] * tier.per_million_cache_read + mix[2] * write_rate + mix[3] * tier.per_million_output

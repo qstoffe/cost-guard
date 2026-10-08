@@ -17,6 +17,7 @@ from .token_mix import MIX_TERM, aligned_mix_cells, compact_tokens, mix_cells, p
 from .definitions import concept_lines
 from .context_warnings import WARNING_ROLE, next_ictx_ccost, warning_explanation_lines
 from .pricing_notices import pricing_notice_lines
+from .model_comparison import aligned_price_summaries as _aligned_price_summaries, aligned_relative_costs
 
 
 def _context_k(value: int | None) -> str:
@@ -52,38 +53,6 @@ def _duration(ms: int | None) -> str:
 
 def _mix(value) -> str:
     return "N/A" if value is None else "/".join(str(part) for part in value)
-
-
-def _aligned_price_summaries(values: Iterable[str]) -> list[str]:
-    """Align I/C/W/O slash positions while keeping v77-style compact rate text."""
-    raw = [str(value or "N/A") for value in values]
-    parsed: list[list[list[str]]] = []
-    tier_count = 0
-    for value in raw:
-        tiers = [part.strip() for part in value.replace(" -> ", "→").split("→")]
-        parts = [tier.split("/") if tier != "N/A" else ["N/A"] for tier in tiers]
-        parsed.append(parts)
-        tier_count = max(tier_count, len(parts))
-    widths = [[0, 0, 0, 0] for _ in range(tier_count)]
-    for tiers in parsed:
-        for tier_index, parts in enumerate(tiers):
-            if len(parts) != 4:
-                continue
-            for part_index, part in enumerate(parts):
-                widths[tier_index][part_index] = max(widths[tier_index][part_index], len(part))
-    result: list[str] = []
-    for original, tiers in zip(raw, parsed):
-        if original == "N/A":
-            result.append(original)
-            continue
-        formatted: list[str] = []
-        for tier_index, parts in enumerate(tiers):
-            if len(parts) != 4:
-                formatted.append("/".join(parts))
-                continue
-            formatted.append("/".join(part.rjust(max(1, widths[tier_index][part_index])) for part_index, part in enumerate(parts)))
-        result.append("→".join(formatted))
-    return result
 
 
 def _percentile(values: list[Decimal], percentile: Decimal) -> Decimal:
@@ -183,23 +152,21 @@ class ReportRenderer:
         rows = []
         styles = []
         aligned_prices = _aligned_price_summaries(item.price_summary for item in report.model_comparison)
-        relatives = ["" if item.relative_cost is None else f"{item.relative_cost:.1f}x" for item in report.model_comparison]
-        markers = [f"*{item.promotion_marker}" if item.promotion_marker is not None else "" for item in report.model_comparison]
-        marker_width = max(map(len, markers), default=0)
-        relative_width = max(len("Rel CCost"), max(map(len, relatives), default=0) + (marker_width + 1 if marker_width else 0))
-        for item, price_text, relative, marker in zip(report.model_comparison, aligned_prices, relatives, markers):
-            if marker_width:
-                relative = f"{marker:<{marker_width}} {relative:>{relative_width - marker_width - 1}}"
-            rows.append((item.publisher or "N/A", item.model, relative, price_text, item.release_date or "N/A"))
+        relatives = aligned_relative_costs(report.model_comparison)
+        all_models = report.kind == ReportKind.ALL_MODELS
+        for item, price_text, relative in zip(report.model_comparison, aligned_prices, relatives):
+            rows.append((item.publisher or "N/A", item.model, relative,
+                         *((price_text,) if all_models else ()), item.release_date or "N/A"))
             promo = "modelComparisonPromotion" if item.promotional else None
             recent = "modelComparisonNew" if item.recent else None
-            styles.append((None, recent, promo, promo, recent))
+            styles.append((None, recent, promo, *((promo,) if all_models else ()), recent))
         for line in render_table(
             (
                 Column("Publisher", min_width=8, max_width=40, flexible=True),
                 Column("Model", min_width=12, max_width=80, flexible=True),
-                Column("Rel CCost", True, max_width=max(16, relative_width)),
-                Column("Copilot CCost/M tokens I/C/W/O", False, max_width=96),
+                Column("Relative CCost", fixed_width=max(map(len, relatives), default=0)),
+                *((Column("GitHub USD/M I/C/W/O", fixed_width=max(map(len, aligned_prices), default=0)),)
+                  if all_models else ()),
                 Column("Release date", True, max_width=16),
             ), rows, styles=styles, styler=self.styler, target_width=self.table_width,
         ):

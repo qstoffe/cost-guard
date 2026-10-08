@@ -162,22 +162,23 @@ Reports show `OpenCode not found` only when selection fails and no PATH executab
 
 ## Normal report
 
-`python cost-guard.py` shows `CCost:`, `Token Mix %:` and `Rel CCost:` definitions, models/notices, then `Accounts Overview`. Token Mix % covers up to 100 latest visible prompts with telemetry, including running/interrupted/child work: prompt count, volume (`137.1M`), shares and CCost. No monthly usage, prompt detail or graph is built.
+`python cost-guard.py` shows `CCost:`, `Token Mix %:` and `Relative CCost:` definitions, models/notices, then `Accounts Overview`. Token Mix % covers up to 100 latest visible prompts with telemetry, including running/interrupted/child work: prompt count, volume (`137.1M`), shares and CCost. No monthly usage, prompt detail or graph is built.
 
 ### Model comparison
 
-**Rel CCost applies your Token Mix %** from up to 100 latest completed visible prompts to each model's CCost/M rates; the cheapest is `1.0x`. Running/aborted prompts are excluded. Without a sample, Rel CCost stays blank: a hidden synthetic I/C/W/O 2/96/1/1 mix sorts rows through the same pricing path, never shown as observed usage. Real samples replace it automatically. Multipliers are relative CCost, not predictions of model behavior.
+**Relative CCost** applies the latest-100 completed-prompt I/C/W/O mix to each published tier, against the same cheapest comparable **base** price (`1.0x`). Illustrative `8.0x → 16.0x (>200K)` means a price increase above 200000 input tokens; `≥` is inclusive. Actual rates apply at every tier. Running/aborted prompts are excluded. Without samples, values stay blank; hidden 2/96/1/1 sorts prices, never shown as observed usage.
 
-Availability uses V2's settled `/api/model` selectable IDs (V1: `opencode models`). Exact/verified aliases match reference prices; explicit variant rates win and unknown/ambiguous prices stay unknown. Lookup failures warn and show the **pricing catalog**. Unpriced models have no row.
+Availability uses settled V2 `/api/model` IDs (V1: `opencode models`). Exact/verified aliases match; explicit variant rates win, ambiguous prices stay unknown. Lookup failures warn and show the catalog. Unpriced models have no row.
 
-`--all-models` uses the full downloaded catalog and the same sample/table/highlights, without availability lookup or account discovery/quota fetches.
+Both modes sort by full-Decimal base/higher price descending, earlier context boundary, then name alphabetically; repeat for later tiers. One-decimal display never controls order; unknown prices stay unknown.
+
+`--all-models` adds exact native **GitHub USD/M I/C/W/O**: all tiers/boundaries even without a mix, no availability/accounts. Normal reports have four columns:
 
 | Column | Meaning |
 | --- | --- |
-| `Publisher` | Model creator/group when identifiable from metadata. |
+| `Publisher` | Model creator/group. |
 | `Model` | Model display name. |
-| `Rel CCost` | Token Mix % CCost relative to the least expensive comparable model; promotion markers align left, multipliers right. |
-| `Copilot CCost/M tokens I/C/W/O` | Reference CCost per million input/cache-read/cache-write/output tokens; exact rates, `→` separates tiers. |
+| `Relative CCost` | Shared-reference tier multipliers: markers left, multipliers right, reserved arrows/threshold fields. |
 | `Release date` | Public model release date when confidently available. Recently released models are highlighted/notified. |
 
 ✦ New Models lasts seven UTC days after release (Watch: or after a verified catalog addition when no date exists; never invented); report promotion markers last through validity. Watch promotion notices need a proven start within seven days. Only notice labels are colored.
@@ -295,7 +296,7 @@ Useful settings include:
 - `thresholds`: running-cost, context, percentile and quota warning thresholds.
 - `colorScheme`, `colorSchemes`, `colors`: terminal palette selection and per-role overrides.
 
-`modelComparisonNew`: lime (classic 118) for new names/dates/notice labels. `modelComparisonPromotion`: gold (214) for active rates/Rel CCost/notice labels. `reportDefinitionLabel`/`reportDefinitionValue`: plain Yellow for report definition labels/live values. Light scheme: green 28/ochre 130. Other text is normal; release date stays last.
+`modelComparisonNew`: lime (classic 118) for new names/dates/notice labels. `modelComparisonPromotion`: gold (214) for active rates/Relative CCost/notice labels. `reportDefinitionLabel`/`reportDefinitionValue`: plain Yellow for definitions/live values. Light scheme: green 28/ochre 130. Other text is normal; release date stays last.
 
 Invalid configuration fails at startup; legacy `monthlyAiCredits` is ignored.
 
@@ -330,7 +331,7 @@ Bundles omit prompt text, titles, raw payloads/auth, tokens and account labels/I
 
 ## Release status
 
-**v80.19** adds self-healing release-date metadata and a minimal Diagnostics result screen. v80.0 is the Python 3.11+ public baseline. Claude quotas remain experimental; account coverage/restart/sleep need separate live evidence.
+**v80.20** simplifies model comparisons, adds exact USD tiers in `--all-models` and refines Diagnostics/state. v80.0 is the Python 3.11+ public baseline. Claude quotas remain experimental; account coverage/restart/sleep need separate live evidence.
 
 ## Development
 

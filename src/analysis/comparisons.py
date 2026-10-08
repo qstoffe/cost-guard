@@ -2,17 +2,25 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import Decimal
 from typing import Iterable
 
-from src.pricing.catalog import PricingCatalog, canonical_model_name, normalized_average_token_mix, token_mix_unit_price
+from src.pricing.catalog import PricingCatalog, normalized_average_token_mix, token_mix_tier_price
+from src.pricing.tiers import lower_bound, ordered_tiers
 
 from .models import PromptRecord
 from .effort import EffortSelection, interpret_effort
 
-# Sorting only: never exposed as observed usage or a Rel CCost sample.
+# Sorting only: never exposed as observed usage or a Relative CCost sample.
 _DEFAULT_SORT_MIX = (Decimal("0.02"), Decimal("0.96"), Decimal("0.01"), Decimal("0.01"), 1)
+
+
+@dataclass(frozen=True, slots=True)
+class RelativePriceLevel:
+    relative_cost: Decimal | None
+    threshold_tokens: int | None = None
+    threshold_operator: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,6 +31,7 @@ class ModelComparisonRow:
     relative_to_lowest: Decimal | None
     release_date: str | None = None
     promotional: bool = False
+    relative_levels: tuple[RelativePriceLevel, ...] = ()
 
 
 
@@ -32,11 +41,14 @@ def model_comparison_rows(records: Iterable[PromptRecord], catalog: PricingCatal
     sampled = mix[4] > 0
     sorting_mix = mix if sampled else _DEFAULT_SORT_MIX
     rows: list[ModelComparisonRow] = []
-    scores: dict[ModelComparisonRow, Decimal | None] = {}
+    scores: list[tuple[Decimal | None, ...]] = []
+    bounds: list[tuple[tuple[str, int] | None, ...]] = []
     for model in catalog.ccost_models:
-        unit = token_mix_unit_price(sorting_mix, model)
+        tiers = ordered_tiers(model)
+        units = tuple(token_mix_tier_price(sorting_mix, tier) for tier in tiers) or (None,)
+        unit = units[0]
         if sampled and unit is None:
-            continue
+            continue  # Preserve the observed-mix comparable-model selection.
         # Normalize the shared observed mix to one million tokens.  The absolute
         # number is diagnostic only; relative ordering is the important contract.
         rows.append(ModelComparisonRow(
@@ -47,26 +59,36 @@ def model_comparison_rows(records: Iterable[PromptRecord], catalog: PricingCatal
             release_date=model.metadata.get("release_date"),
             promotional=str(model.metadata.get("promotion_active", "false")).lower() == "true",
         ))
-        scores[rows[-1]] = unit
+        scores.append(units)
+        bounds.append(tuple(None if index == 0 else lower_bound(tier, tiers[index - 1])
+                            for index, tier in enumerate(tiers)) or (None,))
     if not rows:
         return ()
-    if not sampled:
-        return tuple(sorted(
-            rows,
-            key=lambda row: (
-                scores[row] is None,
-                -(scores[row] or Decimal(0)),
-                row.model_name.lower(),
-            ),
-        ))
-    lowest = min(row.estimated_ccost for row in rows if row.estimated_ccost is not None and row.estimated_ccost > 0) if any(row.estimated_ccost is not None and row.estimated_ccost > 0 for row in rows) else Decimal(0)
-    return tuple(sorted((
-        ModelComparisonRow(
-            row.model_name, row.publisher, row.estimated_ccost,
-            (row.estimated_ccost / lowest) if lowest > 0 and row.estimated_ccost is not None else None,
-            row.release_date, row.promotional,
-        ) for row in rows
-    ), key=lambda row: (-(row.estimated_ccost or Decimal(0)), row.model_name.lower())))
+    lowest = min((units[0] for units in scores if units[0] is not None and units[0] > 0), default=Decimal(0))
+    projected = []
+    for row, units, thresholds in zip(rows, scores, bounds):
+        levels = tuple(RelativePriceLevel(
+            value / lowest if sampled and lowest > 0 and value is not None else None,
+            bound[1] if bound else None, bound[0] if bound else None,
+        ) for value, bound in zip(units, thresholds))
+        projected.append(replace(row, relative_to_lowest=levels[0].relative_cost, relative_levels=levels))
+    # Use raw shared-mix costs for sorting: dividing by the same positive
+    # reference cannot change order, and must not introduce division rounding.
+    depth = max(map(len, scores))
+    def sort_key(index: int) -> tuple:
+        units, thresholds = scores[index], bounds[index]
+        key: list = [(units[0] is None, -(units[0] or Decimal(0)))]
+        for level in range(1, depth):
+            value = units[level] if level < len(units) else units[-1]
+            previous = units[level - 1] if level < len(units) else units[-1]
+            boundary = thresholds[level] if level < len(thresholds) else None
+            increasing = value is not None and previous is not None and value > previous
+            # Missing rates stay unknown; absence of a tier means unchanged.
+            start = boundary[1] + (boundary[0] == ">") if boundary and increasing else None
+            key.extend(((value is None, -(value or Decimal(0))),
+                        (start is None, start or 0)))
+        return (*key, rows[index].model_name.casefold(), rows[index].model_name)
+    return tuple(projected[index] for index in sorted(range(len(rows)), key=sort_key))
 
 
 

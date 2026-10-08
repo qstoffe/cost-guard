@@ -12,7 +12,7 @@ import re
 import threading
 import time
 import urllib.request
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Callable, Iterable
@@ -131,10 +131,14 @@ def _parse_threshold(value: str | None) -> tuple[int | None, int | None]:
     elif unit == "m":
         number *= 1_000_000
     integer = int(number.to_integral_value())
+    if "≥" in value or ">=" in value:
+        return integer, None
     if ">" in value:
         return integer + 1, None
-    if "≤" in value or "<" in value:
+    if "≤" in value or "<=" in value:
         return None, integer
+    if "<" in value:
+        return None, integer - 1
     return None, None
 
 
@@ -194,6 +198,9 @@ def parse_pricing_markdown(markdown: str) -> tuple[ModelPricing, ...]:
                 per_million_cache_read=cached_rate,
                 per_million_cache_write=_parse_decimal(row.get("cache write")),
                 per_million_output=output_rate,
+                input_threshold_operator=("≥" if "≥" in row.get("threshold (input tokens)", "")
+                                          or ">=" in row.get("threshold (input tokens)", "") else ">")
+                                         if min_tokens is not None else None,
             ))
             index += 1
         continue
@@ -202,7 +209,14 @@ def parse_pricing_markdown(markdown: str) -> tuple[ModelPricing, ...]:
         metadata = dict(value["metadata"])
         metadata["key"] = key
         metadata["publisher"] = str(value["provider"])
-        tiers = tuple(value["tiers"])
+        tiers = tuple(sorted(value["tiers"], key=lambda tier: tier.min_input_tokens or 0))
+        # A later published lower bound closes an otherwise open prior range.
+        # This keeps three-or-more context levels selectable, not shadowed by
+        # the first long-context tier; explicit upper bounds stay authoritative.
+        tiers = tuple(replace(tier, max_input_tokens=tiers[i + 1].min_input_tokens - 1)
+                      if tier.max_input_tokens is None and i + 1 < len(tiers)
+                      and tiers[i + 1].min_input_tokens is not None else tier
+                      for i, tier in enumerate(tiers))
         first = tiers[0] if tiers else PricingTier()
         result.append(ModelPricing(
             model=ModelRef(provider="github-copilot", model=key, display_name=str(value["name"])),
@@ -222,6 +236,7 @@ def _tier_to_dict(tier: PricingTier) -> dict[str, object]:
         "name": tier.name,
         "min": tier.min_input_tokens,
         "max": tier.max_input_tokens,
+        "threshold_operator": tier.input_threshold_operator,
         "i": str(tier.per_million_input) if tier.per_million_input is not None else None,
         "c": str(tier.per_million_cache_read) if tier.per_million_cache_read is not None else None,
         "w": str(tier.per_million_cache_write) if tier.per_million_cache_write is not None else None,
@@ -239,6 +254,7 @@ def _tier_from_dict(value: dict[str, object]) -> PricingTier:
         max_input_tokens=int(value["max"]) if value.get("max") is not None else None,
         per_million_input=decimal("i"), per_million_cache_read=decimal("c"),
         per_million_cache_write=decimal("w"), per_million_output=decimal("o"),
+        input_threshold_operator=value.get("threshold_operator") if value.get("threshold_operator") in (">", "≥") else None,
     )
 
 
@@ -310,6 +326,7 @@ def _scaled_standard_tiers(tiers: tuple[PricingTier, ...], discount_percent: Dec
         per_million_cache_read=scale(tier.per_million_cache_read),
         per_million_cache_write=scale(tier.per_million_cache_write),
         per_million_output=scale(tier.per_million_output),
+        input_threshold_operator=tier.input_threshold_operator,
     ) for tier in tiers)
 
 
@@ -416,7 +433,11 @@ def _catalog_from_payload(payload: object) -> PricingCatalog | None:
 
 
 def _tier_sets_equal(left: tuple[PricingTier, ...], right: tuple[PricingTier, ...]) -> bool:
-    return left == right
+    # Published glyphs are display provenance, not a rate change. Older caches
+    # have identical inclusive bounds but no operator field; retain their offer
+    # validity/start evidence rather than silently treating them as new prices.
+    return tuple(replace(tier, input_threshold_operator=None) for tier in left) == tuple(
+        replace(tier, input_threshold_operator=None) for tier in right)
 
 
 def _preserve_known_promotions(

@@ -1,5 +1,14 @@
 # Cost Guard version history
 
+## v80.20 — 2026-10-08
+
+- Normal model comparison now has four columns, centered on Relative CCost; `--all-models` adds original, exact GitHub USD/M I/C/W/O rates with every published tier and boundary, including without observed token data.
+- Each context tier uses the same completed-prompt I/C/W/O mix and cheapest comparable base reference; dynamically aligned promotion markers, multipliers, arrows and exact > / ≥ K/M boundaries share one column.
+- Both modes share full-precision descending base/next-tier price ordering, earlier price-increase thresholds and alphabetical final ties; additional tiers extend both the chain and tie-breakers. Fallback mix, model selection, CCost, Watch and quotas are preserved.
+- Diagnostics removes the blank before the support address and ends success/failure with one blank before the shell prompt, preserving minimal colors and screen clearing.
+- Metadata state migrates non-destructively to cache/state/, retaining retry/history/date evidence and a legacy fallback; actual failures and recoveries have separate logs, and Diagnostics exports all categories without pruning live state.
+
+
 ## v80.19 — 2026-10-08
 
 - Release-date metadata has its own health, separate from fresh pricing: a catalog with priced models but missing dates is refreshed at Watch start, after resume and on the first V2 list, retried after ~1/5/15 minutes then hourly (honoring HTTP 429) across restarts, without blocking Watch or changing CCost, and never erasing verified dates.
@@ -31,28 +40,22 @@
 - Restore version history release validation and add regression coverage for model and log lifecycle behavior.
 
 
-## v80.15 — 2026-10-08
-
-- Refresh Copilot catalog/notifications hourly in running Watch while keeping in-run CCost pricing stable; separately check V2 OpenCode selectability every 15 minutes and use ✦/✧ Unicode discovery notices without assuming account entitlement.
-- Bound extra V2 recovery time after detected sleep/wake. Record sanitized recovery transitions and cached model-freshness metrics in Diagnostics without sessions, IDs or credentials.
-- Default pricing cache age to one hour; add isolated cross-platform regression tests.
-
-
 ## Earlier v80 history
+
+- v80.15 added hourly Copilot catalog refresh with pinned in-run CCost, 15-minute V2 selectability checks, bounded sleep/wake recovery, sanitized metadata evidence and one-hour default pricing-cache age.
 
 - v80.11-v80.14 added simulated macOS compatibility in Diagnostics, Windows path/release-check fixes, sanitized V1 SQLite read-error guards with read-only triage and Windows-safe synthetic SQLite cleanup.
 
 - v80.8-v80.9 aligned Watch session subtotals with visible rows (run-scoped CCost preserved) and unified the Windows launchers under a persistent PowerShell session with corrected Ctrl+C and error handling.
 
 - v80.7 added shared Simple HTTP account providers and adapters for OpenRouter, DeepSeek and MiniMax, with sanitized diagnostics and no fabricated CCost.
-- v80.6 made Watch survive temporary source outages and retry V2 without a V1 fallback.
+- v80.6 made Watch survive temporary source outages and retry V2 without a V1 fallback; v80.5 scoped read-only V1→V2 migration-gap notices to report windows, never merging histories or showing them in Watch.
 
 - v80.0 established the clean 0BSD public-repository baseline with a fresh root history, retaining the Python functionality and cross-platform launchers, explicit bounded test-suite membership and public product identifiers.
 - v80.1 introduced Cost Guard as an OpenCode AI usage, cost and quota tool in the README, with static Watch/report/Token Mix images, an early quick start and the detailed contracts linked in `docs/usage-and-cost.md`.
 - v80.2 added the OpenAI token-expiry explanation: the next OpenCode prompt renews it; Cost Guard never refreshes or writes credentials.
 - v80.3 added provider-supplied sign-in remedies and kept prompts active during verified V2 background jobs, with continuing duration, background status and resumed model work attributed to the same prompt; jobs themselves add no usage.
 - v80.4 moved Diagnostics launchers under `development/windows|macos/`, keeping public launcher folders to normal report and Watch with validator-enforced placement.
-- v80.5 scoped V1→V2 migration-gap notices to report windows; Watch omits them and Diagnostics retains full counts, without merging or source changes.
 
 ## Earlier versions (v1-v78)
 

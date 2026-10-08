@@ -6,6 +6,7 @@ from src.numbers import reference_rate
 from src.sources.model_availability import ModelAvailabilitySource
 from src.sources.errors import SourceError
 from src.runtime_errors import recoverable, recovered
+from src.pricing.tiers import lower_bound, ordered_tiers
 
 
 def selectable_catalog(
@@ -43,15 +44,14 @@ def selectable_catalog(
 
 
 def price_summary(catalog: PricingCatalog, model_name: str) -> str:
-    model = catalog.reference_prices(model_name, exact=False)
-    if model is None:
+    model = catalog.resolve_reference(model_name)
+    if model is None or model.currency != "USD":
         return "N/A"
-    fallback_tier = model.selected_tier(0)
-    tiers = model.tiers or ((fallback_tier,) if fallback_tier is not None else ())
+    tiers = ordered_tiers(model)
     if not tiers:
         return "N/A"
     parts: list[str] = []
-    for tier in tiers:
+    for index, tier in enumerate(tiers):
         write = tier.per_million_cache_write
         values = (
             reference_rate(tier.per_million_input),
@@ -59,5 +59,8 @@ def price_summary(catalog: PricingCatalog, model_name: str) -> str:
             reference_rate(write),
             reference_rate(tier.per_million_output),
         )
-        parts.append("/".join(values))
+        bound = lower_bound(tier, tiers[index - 1]) if index else None
+        # Always carry exact numeric boundaries, including with no observed mix.
+        suffix = f" ({bound[0]}{bound[1]})" if bound else ""
+        parts.append("/".join(values) + suffix)
     return "→".join(parts)

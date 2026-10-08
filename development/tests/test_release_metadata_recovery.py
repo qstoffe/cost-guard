@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from email.message import Message
 import json
+import os
 from pathlib import Path
 import socket
 import ssl
@@ -14,8 +15,14 @@ import time
 from types import SimpleNamespace
 import unittest
 import urllib.error
+from unittest.mock import patch
+from zipfile import ZipFile
 
 from src.cache import CacheDatabase, CacheRepository
+from src.cache.metadata_state import STATE_FILE, LEGACY_STATE_FILE
+from src.runtime_errors import RuntimeErrors
+from development.tools.diagnostic_logs import create_bundle
+from development.tools.diagnostic_metadata import model_metadata_section
 from src.domain import ModelPricing, ModelRef, PricingTier
 from src.pricing.catalog import PricingCatalog
 from src.pricing.github_copilot import (
@@ -263,6 +270,140 @@ class ScheduleAndPersistenceTests(unittest.TestCase):
         store = MetadataHealthStore(None)
         store.record(self.failure, NOW, reason="x")
         self.assertEqual(1, store.state["consecutive_failures"])
+
+
+class MetadataStateMigrationTests(unittest.TestCase):
+    failure = ScheduleAndPersistenceTests.failure
+    success = ScheduleAndPersistenceTests.success
+
+    def legacy_state(self, root):
+        store = MetadataHealthStore(root)
+        store.record(self.failure, NOW, reason="missing_release_dates")
+        current = root / STATE_FILE
+        legacy = root / LEGACY_STATE_FILE
+        legacy.parent.mkdir(parents=True, exist_ok=True)
+        raw = current.read_bytes()
+        legacy.write_bytes(raw)
+        current.unlink()
+        return raw
+
+    def test_migration_preserves_failure_retry_history_extra_fields_and_verified_catalog_dates(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = self.legacy_state(root)
+            state = json.loads(raw)
+            state["verified_dates"] = {"gpt-test": "2025-01-01"}
+            legacy = root / LEGACY_STATE_FILE
+            legacy.write_text(json.dumps(state), encoding="utf-8")
+            database = CacheDatabase(root)
+            database.initialize()
+            repository = CacheRepository(database)
+            catalog = PricingCatalog(models=(model("GPT-Test", date="2025-01-01"),), retrieved_at_ms=NOW)
+            repository.put(CACHE_NAMESPACE, CACHE_KEY, _catalog_payload(catalog), algorithm_version="pricing-1")
+            old_logs = {p: p.read_bytes() for p in (root / "logs/errors").glob("*.log")}
+            old_legacy = legacy.read_bytes()
+
+            migrated = MetadataHealthStore(root)
+
+            self.assertEqual(state, read_state(root))
+            self.assertEqual(state, json.loads((root / STATE_FILE).read_text(encoding="utf-8")))
+            self.assertEqual(old_legacy, legacy.read_bytes())
+            self.assertEqual(old_logs, {p: p.read_bytes() for p in old_logs})
+            self.assertEqual("", migrated.refresh_reason(priced=32, dated=0, retrieved_at_ms=NOW, now_ms=NOW + 30000))
+            self.assertEqual(catalog.models, _catalog_from_payload(repository.get(CACHE_NAMESPACE, CACHE_KEY).payload).models)
+            migrated.record(self.success, NOW + 60000, reason="retry_after_failure")
+            restarted = MetadataHealthStore(root)
+            self.assertEqual(0, restarted.state["consecutive_failures"])
+            self.assertEqual(1, restarted.state["sources"]["models.dev"]["last_recovery"]["failed_attempts"])
+            self.assertEqual(state["verified_dates"], restarted.state["verified_dates"])
+            self.assertEqual(old_legacy, legacy.read_bytes())
+
+    def test_read_only_diagnostics_sees_legacy_without_migrating_and_new_state_takes_precedence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.legacy_state(root)
+            section = model_metadata_section(root, {}, network=False, database_factory=CacheDatabase)
+            self.assertEqual(NOW + 60000, section["summary"]["next_retry_ms"])
+            self.assertFalse((root / STATE_FILE).exists())
+            migrated = MetadataHealthStore(root)
+            migrated.record(self.success, NOW + 60000, reason="retry_after_failure")
+            self.assertEqual("healthy", read_state(root)["health"])
+            self.assertEqual("unavailable", json.loads((root / LEGACY_STATE_FILE).read_text(encoding="utf-8"))["health"])
+            (root / STATE_FILE).write_bytes(b"corrupt")
+            self.assertEqual("unavailable", read_state(root)["health"])
+
+    def test_failed_cache_write_retains_legacy_and_safely_persists_updates_there(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            original = self.legacy_state(root)
+            replace_path = Path.replace
+            def fail_cache(path, target):
+                if Path(target) == root / STATE_FILE:
+                    raise PermissionError("fixture")
+                return replace_path(path, target)
+            with patch.object(Path, "replace", fail_cache), patch("src.cache.metadata_state.os.link", side_effect=PermissionError("fixture")):
+                migrated = MetadataHealthStore(root)
+                self.assertEqual(original, (root / LEGACY_STATE_FILE).read_bytes())
+                migrated.record(self.failure, NOW + 60000, reason="retry_after_failure")
+            self.assertFalse((root / STATE_FILE).exists())
+            self.assertEqual(2, read_state(root)["consecutive_failures"])
+            self.assertEqual(NOW + 360000, read_state(root)["next_retry_ms"])
+            self.assertFalse(list((root / "cache/state").glob("*.tmp")))
+
+    def test_concurrent_new_state_wins_over_legacy_migration(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.legacy_state(root)
+            newer = {"schema": 1, "health": "healthy", "next_retry_ms": None, "last_complete_ms": NOW + 60000}
+            link = os.link
+            def concurrent_write(source, target):
+                Path(target).write_text(json.dumps(newer), encoding="utf-8")
+                return link(source, target)
+            with patch("src.cache.metadata_state.os.link", concurrent_write):
+                MetadataHealthStore(root)
+            self.assertEqual(newer, read_state(root))
+            self.assertFalse(list((root / "cache/state").glob("*.tmp")))
+
+    def test_retention_and_zip_export_preserve_state_and_separate_real_events(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.legacy_state(root)
+            store = MetadataHealthStore(root)
+            store.record(self.success, NOW + 60000, reason="retry_after_failure")
+            state_paths = (root / STATE_FILE, root / LEGACY_STATE_FILE)
+            old = time.time() - 40 * 86400
+            for path in state_paths:
+                os.utime(path, (old, old))
+            RuntimeErrors(root).cleanup()
+            self.assertTrue(all(path.is_file() for path in state_paths))
+            errors = next((root / "logs/errors").glob("*.log"))
+            recovery = next((root / "logs/recovery").glob("*.log"))
+            self.assertNotIn('"event": "recovered"', errors.read_text(encoding="utf-8"))
+            self.assertIn('"event": "recovered"', recovery.read_text(encoding="utf-8"))
+            for path in (errors, recovery):
+                os.utime(path, (time.time() - 120, time.time() - 120))
+            bundle = root / "diagnostics/bundle.zip"
+            create_bundle(bundle, root=root, json_bytes=b"{}", text_bytes=b"ok")
+            with ZipFile(bundle) as archive:
+                self.assertEqual((root / STATE_FILE).read_bytes(), archive.read("state/model-metadata.json"))
+                self.assertIn("logs/recovery/model-metadata.json", archive.namelist())
+                self.assertIn("logs/errors/" + errors.name, archive.namelist())
+                self.assertIn("logs/recovery/" + recovery.name, archive.namelist())
+            self.assertTrue(all(path.is_file() for path in state_paths))
+            self.assertFalse(errors.exists())
+            self.assertFalse(recovery.exists())
+
+    def test_healthy_state_is_not_an_error_or_a_recovery_event(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            store = MetadataHealthStore(root)
+            store.record(self.success, NOW, reason="unverified_cache")
+            section = model_metadata_section(root, {}, network=False, database_factory=CacheDatabase)
+            self.assertEqual("healthy", section["summary"]["health"])
+            self.assertEqual([], section["failure_events"])
+            self.assertEqual([], section["summary"]["failing_sources"])
+            self.assertEqual([], section["summary"]["recovered_sources"])
+            self.assertFalse((root / "logs").exists())
 
 
 class BlockingProvider:

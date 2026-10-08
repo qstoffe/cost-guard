@@ -58,11 +58,11 @@ def render_result(stream=None, *, path=None, email: str = "", error: BaseExcepti
 
     if error is None:
         lines = [styled("Diagnostic file successfully created!", GREEN), "", str(path), "",
-                 styled("Please attach this file to an email and send it to:", BOLD), "",
+                 styled("Please attach this file to an email and send it to:", BOLD),
                  styled(email, BOLD)]
     else:
         lines = [styled("Diagnostic file creation failed!", RED), "", "Reason: " + failure_reason(error)]
     # Paths are never wrapped or truncated; the terminal soft-wraps long lines
     # so the full path remains copyable at any width.
-    stream.write((CLEAR if ansi else "\n") + "\n".join(lines) + "\n")
+    stream.write((CLEAR if ansi else "\n") + "\n".join(lines) + "\n\n")
     stream.flush()

@@ -110,7 +110,7 @@ class CompactReportTests(unittest.TestCase):
                         "CCost is reference valuation"):
             self.assertNotIn(omitted, text)
         self.assertLess(text.index("Pricing/cache metadata:"), text.index("| Publisher"))
-        self.assertLess(text.index("Rel CCost: Applies Token Mix %"), text.index("| Publisher"))
+        self.assertLess(text.index("Relative CCost: Applies Token Mix %"), text.index("| Publisher"))
         self.assertNotIn("Price I/C/W/O is", text)
 
     def test_all_models_ignores_availability_accounts_and_other_views(self):
@@ -209,7 +209,7 @@ class CompactReportTests(unittest.TestCase):
         text = rendered(report)
         self.assertIn("Session id", text)
         self.assertNotIn("Total", text)
-        self.assertNotIn("Rel CCost", text)
+        self.assertNotIn("Relative CCost", text)
         self.assertNotIn("GitHub Copilot", text)
         self.assertNotIn("CCost today", text)
         self.assertNotIn("CCost month", text)
@@ -231,7 +231,7 @@ class CompactReportTests(unittest.TestCase):
         text = rendered(report)
         for expected in ("#1", "Next Ictx:", "CCost:", "I/C/W/O %:", "~Ictx:", "~Ictx CCost:", "~Extra CCost:", "not actual billing"):
             self.assertIn(expected, text)
-        self.assertNotIn("Rel CCost", text)
+        self.assertNotIn("Relative CCost", text)
         self.assertIsNone(report.accounts_quotas)
         lines = text.splitlines()
         index = next(i for i, line in enumerate(lines) if line.startswith("* Next Ictx:"))

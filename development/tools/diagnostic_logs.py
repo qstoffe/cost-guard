@@ -15,7 +15,7 @@ _QUIET_SECONDS = 60
 _OWNED = {
     "errors": re.compile(r"cost-guard-(?:errors|metadata)-\d{4}-\d{2}-\d{2}\.log\Z"),
     "crashes": re.compile(r"cost-guard-crash-\d{8}-\d{6}-\d+(?:-\d+)?\.txt\Z"),
-    "recovery": re.compile(r"(?:watch-recovery|model-metadata)\.json\Z"),
+    "recovery": re.compile(r"(?:(?:watch-recovery|model-metadata)\.json|cost-guard-metadata-\d{4}-\d{2}-\d{2}\.log)\Z"),
 }
 # Live retry/health state is archived but never pruned: deleting it would
 # reset the metadata backoff and erase the evidence of an ongoing failure.
@@ -24,6 +24,11 @@ _LIVE_STATE = frozenset({"model-metadata.json"})
 
 def _owned_files(root: Path):
     count = 0
+    # Only the owned metadata file, never arbitrary cache/database contents.
+    state = root / "cache" / "state" / "model-metadata.json"
+    if not any(p.is_symlink() for p in (state, state.parent, state.parent.parent)) and state.is_file():
+        count += 1
+        yield state, "state/model-metadata.json"
     for base in (root / "logs", root / "diagnostics"):
         if base.is_symlink():
             continue

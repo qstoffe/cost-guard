@@ -293,7 +293,7 @@ class ReportService:
     @staticmethod
     def _latest_token_prompts(roots: Sequence[_AnalyzedRoot]) -> tuple[PromptRecord, ...]:
         # Usage is meaningful even for interrupted/running prompts. Unlike
-        # Rel CCost, mix eligibility needs observed tokens, not successful completion.
+        # Relative CCost, mix eligibility needs observed tokens, not successful completion.
         return tuple(nlargest(100,
             (p for item in roots for p in item.bundle.prompts
              if any(entry.tokens.known_fields for entry in p.entries)),
@@ -405,6 +405,7 @@ class ReportService:
             rows.append(ModelComparisonProjection(
                 row.publisher, row.model_name, row.relative_to_lowest, price_text, row.release_date,
                 marker is not None, model_is_recent(row.release_date, now_ms=self.now_ms), marker,
+                row.relative_levels,
             ))
         sample_size = normalized_average_token_mix(candidates)[4]
         return tuple(rows), sample_size, promo_notes, recent_model_notice(comparison_catalog, now_ms=self.now_ms), warnings
@@ -578,7 +579,7 @@ class ReportService:
         comparisons, sample, promo_notes, recent, availability_warnings = self._model_comparison(
             analyzed, all_models=request.kind is ReportKind.ALL_MODELS,
         )
-        # Dashboard quotas use provider observations only. A bounded Rel CCost
+        # Dashboard quotas use provider observations only. A bounded Relative CCost
         # sample cannot establish complete day/month spend or account attribution.
         quota_projection = self._accounts_quotas(self._quotas()) if request.kind is ReportKind.NORMAL else None
         sample_prompts = self._latest_prompts(analyzed)

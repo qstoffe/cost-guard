@@ -54,14 +54,14 @@ class CCostDomainTests(unittest.TestCase):
         self.assertEqual(D(1470), catalog.reference_valuation(MODEL, tokens))
         self.assertEqual(D("14.7"), catalog.estimate(MODEL, tokens))
         self.assertIs(NATIVE, catalog.models[0])
-        self.assertEqual("200/20/250/1000", price_summary(catalog, "gpt-test"))
+        self.assertEqual("2/0.2/2.5/10", price_summary(catalog, "gpt-test"))
         self.assertIs(catalog.ccost_models[0], catalog.reference_prices("gpt-test"))
 
     def test_conversion_relationship_has_one_authority(self):
         with patch("src.domain.ccost.CCOST_PER_REFERENCE_USD", D(125)):
             catalog = PricingCatalog((NATIVE,))
             self.assertEqual(D(250), catalog.reference_valuation(MODEL, TokenUsage(input=1_000_000)))
-            self.assertEqual("250/25/312.5/1250", price_summary(catalog, "gpt-test"))
+            self.assertEqual("2/0.2/2.5/10", price_summary(catalog, "gpt-test"))
         # Rates already converted in the boundary are not scaled again later.
         self.assertEqual(D(250), catalog.reference_valuation(MODEL, TokenUsage(input=1_000_000)))
 
@@ -87,7 +87,7 @@ class CCostDomainTests(unittest.TestCase):
         expected = sum((price_token_usage(native, t, t.input + t.cache_read + t.cache_write) for t in requests), D(0)) * 100
         self.assertEqual(expected, sum(mix.costs, D(0)))
         self.assertNotEqual(expected, D(ccost_amount(expected)))
-        self.assertEqual("212.3456789/1.23456789/250/1000.1→412.3456789/2.34567891/550/2000.2", price_summary(catalog, "Test"))
+        self.assertEqual("2.123456789/0.0123456789/2.5/10.001→4.123456789/0.0234567891/5.5/20.002 (>1000)", price_summary(catalog, "Test"))
         records = analyze_snapshot(make_snapshot(), now_ms=4000).prompts
         rows = model_comparison_rows(records, catalog)
         # Repeating token-share division retains Decimal context precision;

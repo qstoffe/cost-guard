@@ -38,7 +38,7 @@ class ResultScreenTests(unittest.TestCase):
         diagnostic_screen.render_result(stream, path=path, email=EMAIL)
         self.assertEqual(
             f"\nDiagnostic file successfully created!\n\n{path}\n\n"
-            f"Please attach this file to an email and send it to:\n\n{EMAIL}\n", stream.getvalue())
+            f"Please attach this file to an email and send it to:\n{EMAIL}\n\n", stream.getvalue())
         self.assertNotIn("\x1b", stream.getvalue())
 
     def test_terminal_success_clears_screen_and_colors_heading_green(self) -> None:
@@ -48,7 +48,7 @@ class ResultScreenTests(unittest.TestCase):
             diagnostic_screen.render_result(stream, path="/x/cost-guard-diagnostics.zip", email=EMAIL)
         text = stream.getvalue()
         self.assertTrue(text.startswith(diagnostic_screen.CLEAR + "\x1b[1;92mDiagnostic file successfully created!\x1b[0m"))
-        self.assertTrue(text.endswith(EMAIL + "\x1b[0m\n"))
+        self.assertTrue(text.endswith(EMAIL + "\x1b[0m\n\n"))
 
     def test_failure_is_red_short_and_safe(self) -> None:
         stream = io.StringIO()
@@ -59,6 +59,7 @@ class ResultScreenTests(unittest.TestCase):
         self.assertIn("\x1b[1;91mDiagnostic file creation failed!\x1b[0m", text)
         self.assertIn("Reason: The diagnostics folder is not writable", text)
         self.assertNotIn("secret", text)
+        self.assertTrue(text.endswith("program.\n\n"))
         self.assertIn("disk is full", diagnostic_screen.failure_reason(OSError(errno.ENOSPC, "x")))
         self.assertIn("verified", diagnostic_screen.failure_reason(BadZipFile()))
 
@@ -90,7 +91,7 @@ class MainFlowTests(unittest.TestCase):
             self.assertEqual(0, code)
             self.assertTrue(bundle.is_file())
             self.assertEqual(f"{mode_heading('Diagnostics')}\n\nDiagnostic file successfully created!\n\n{bundle}\n\n"
-                             f"Please attach this file to an email and send it to:\n\n{EMAIL}\n", out)
+                             f"Please attach this file to an email and send it to:\n{EMAIL}\n\n", out)
             for hidden in ("Archived", "removed", "Review", "automatically", "Tests completed"):
                 self.assertNotIn(hidden, out)
 
@@ -99,7 +100,7 @@ class MainFlowTests(unittest.TestCase):
             code, out = self.run_main(tmp, bundle_error=PermissionError("locked"))
         self.assertEqual(1, code)
         self.assertTrue(out.endswith("\nDiagnostic file creation failed!\n\nReason: The diagnostics folder is not "
-                                     "writable or the ZIP file is open in another program.\n"))
+                                      "writable or the ZIP file is open in another program.\n\n"))
 
 
 class BundleEvidenceTests(unittest.TestCase):
@@ -123,7 +124,7 @@ class BundleEvidenceTests(unittest.TestCase):
             store.record(MetadataAttempt((SourceResult("models.dev", "ok", "partial_matches", "complete", matched=31),),
                                          32, 31, False), 61_000, reason="retry_after_failure")
             section = model_metadata_section(root, {}, network=False, database_factory=CacheDatabase)
-            self.assertFalse((root / "cache").exists())
+            self.assertFalse(CacheDatabase(root).paths.database.exists())
             self.assertEqual(["models.dev"], section["summary"]["recovered_sources"])
             self.assertEqual([], section["summary"]["failing_sources"])
             self.assertEqual(["failure_started", "recovered"], [e["event"] for e in section["failure_events"]])
@@ -132,9 +133,10 @@ class BundleEvidenceTests(unittest.TestCase):
             create_bundle(target, root=root, json_bytes=b"{}", text_bytes=b"ok")
             with ZipFile(target) as archive:
                 names = archive.namelist()
-            self.assertIn("logs/recovery/model-metadata.json", names)
+            self.assertIn("state/model-metadata.json", names)
             self.assertTrue(any(name.startswith("logs/errors/cost-guard-metadata-") for name in names))
-            self.assertTrue((root / "logs/recovery/model-metadata.json").exists())  # live retry state kept
+            self.assertTrue(any(name.startswith("logs/recovery/cost-guard-metadata-") for name in names))
+            self.assertTrue((root / "cache/state/model-metadata.json").exists())  # live retry state kept
 
 
 class StopHelpTests(unittest.TestCase):

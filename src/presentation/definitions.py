@@ -1,4 +1,4 @@
-"""Report concept definitions above the model table: CCost, Token Mix % and Rel CCost.
+"""Report concept definitions above the model table: CCost, Token Mix % and Relative CCost.
 
 Each sentence starts its own line; continuation lines hang under the first
 sentence. Labels (including the colon) and the user's own live values are
@@ -73,15 +73,16 @@ def token_mix_sentences(mix: TokenMix) -> tuple[Sentence, ...]:
 def rel_ccost_sentences(sample_size: int) -> tuple[str, ...]:
     if not sample_size:
         return ("No completed prompts with token data are available yet.",
-                "Rel CCost stays blank and models are ordered by list price.")
+                 "Relative CCost stays blank; a hidden 2/96/1/1 mix orders published prices.")
     noun = "prompt" if sample_size == 1 else "prompts"
     return (f"Applies Token Mix % from {sample_size} completed {noun} to each model's CCost/M rates.",
-            "The cheapest result is 1.0x; other models are shown relative to it.")
+            "Every tier uses this mix and the same cheapest comparable base price as 1.0x.",
+            "Arrows show context-tier prices; > or ≥ marks the published input-token boundary.")
 
 
 def concept_lines(mix: TokenMix, sample_size: int, width: int, styler: AnsiStyler) -> list[str]:
     """The three definition blocks, in order, separated by one blank line."""
     lines = definition_lines("CCost:", ccost_sentences(), width, styler, gap=2)
     lines += ["", *definition_lines("Token Mix %:", token_mix_sentences(mix), width, styler)]
-    lines += ["", *definition_lines("Rel CCost:", rel_ccost_sentences(sample_size), width, styler)]
+    lines += ["", *definition_lines("Relative CCost:", rel_ccost_sentences(sample_size), width, styler)]
     return lines

@@ -61,6 +61,7 @@ QUICK_PATTERNS: tuple[str, ...] = (
     "test_quota_presentation.py",
     "test_report_polish.py",
     "test_model_pricing_presentation.py",
+    "test_model_comparison_tiers.py",
     "test_report_definitions.py",
     "test_session_move.py",
     "test_compact_reports.py",

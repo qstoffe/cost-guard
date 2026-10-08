@@ -94,18 +94,19 @@ class RecentModelTests(unittest.TestCase):
             rows.append(ModelComparisonProjection("OpenAI", name, Decimal("2"), "1/1/1/1", released,
                                                   promotional=promo, recent=model_is_recent(released, now_ms=NOW)))
         notice = "✦ New Models: Recent (2026-09-29), Recent promo (2026-09-29)"
-        text = render(replace(sample_report(), model_comparison=tuple(rows), recent_model_notice=notice),
-                      color=True, width=160)
-        for item in rows:
-            line = next(line for line in text.splitlines() if line.startswith("|") and item.model in line
-                        and re.sub(r"\x1b\[[0-9;]*m", "", line.split("|")[2]).strip() == item.model)
-            cells = line.split("|")[1:-1]
-            self.assertEqual(item.recent, "\x1b[38;5;118m" in cells[1], item.model)
-            self.assertEqual(item.recent, "\x1b[38;5;118m" in cells[4], item.model)
-            for index in (2, 3):
-                self.assertEqual(item.promotional, "\x1b[38;5;214m" in cells[index], item.model)
-        self.assertIn(notice, re.sub(r"\x1b\[[0-9;]*m", "", text))
-        self.assertIn("\x1b[38;5;118m✦ New Models:\x1b[0m Recent", text)
+        for kind in (ReportKind.NORMAL, ReportKind.ALL_MODELS):
+            text = render(replace(sample_report(), kind=kind, model_comparison=tuple(rows), recent_model_notice=notice),
+                          color=True, width=160)
+            for item in rows:
+                line = next(line for line in text.splitlines() if line.startswith("|") and item.model in line
+                            and re.sub(r"\x1b\[[0-9;]*m", "", line.split("|")[2]).strip() == item.model)
+                cells = line.split("|")[1:-1]
+                self.assertEqual(item.recent, "\x1b[38;5;118m" in cells[1], item.model)
+                self.assertEqual(item.recent, "\x1b[38;5;118m" in cells[-1], item.model)
+                for index in ((2, 3) if kind == ReportKind.ALL_MODELS else (2,)):
+                    self.assertEqual(item.promotional, "\x1b[38;5;214m" in cells[index], item.model)
+            self.assertIn(notice, re.sub(r"\x1b\[[0-9;]*m", "", text))
+            self.assertIn("\x1b[38;5;118m✦ New Models:\x1b[0m Recent", text)
 
 
 class NoteWrappingTests(unittest.TestCase):

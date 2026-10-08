@@ -1,4 +1,4 @@
-"""Report CCost / Token Mix % / Rel CCost definitions and the --token-mix total and alignment."""
+"""Report CCost / Token Mix % / Relative CCost definitions and the --token-mix total and alignment."""
 from __future__ import annotations
 
 from dataclasses import replace
@@ -26,7 +26,7 @@ from src.reports.models import ModelTokenMixProjection
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
 CONFIG = {"timezone": "UTC", "colors": {"reportDefinitionLabel": {"ansi256": 226},
                                        "reportDefinitionValue": {"ansi256": 227}}}
-LABELS = ("CCost:", "Token Mix %:", "Rel CCost:")
+LABELS = ("CCost:", "Token Mix %:", "Relative CCost:")
 
 
 def large_mix(sample_size: int = 100) -> TokenMix:
@@ -60,7 +60,7 @@ class ReportDefinitionTests(unittest.TestCase):
         self.assertEqual(3, len(groups), "exactly one blank line between blocks")
         for group, label in zip(groups, LABELS):
             self.assertTrue(group[0].startswith(label + " "), group[0])
-        self.assertLess(text.index("Rel CCost: Applies"), text.index("| Publisher"))
+        self.assertLess(text.index("Relative CCost: Applies"), text.index("| Publisher"))
         self.assertEqual([
             "CCost:  1 CCost equals 1 Copilot AI credit.",
             "        Flat-rate accounts use Copilot's published token rates, not the billed cost.",
@@ -72,8 +72,12 @@ class ReportDefinitionTests(unittest.TestCase):
             "             Input: 3% (123)   Cache: 82% (456)   Write: 1% (12)   Output: 14% (789)",
         ], groups[1])
         self.assertEqual([
-            "Rel CCost: Applies Token Mix % from 100 completed prompts to each model's CCost/M rates.",
-            "           The cheapest result is 1.0x; other models are shown relative to it.",
+            "Relative CCost: Applies Token Mix % from 100 completed prompts to each model's CCost/M",
+            "                rates.",
+            "                Every tier uses this mix and the same cheapest comparable base price as",
+            "                1.0x.",
+            "                Arrows show context-tier prices; > or ≥ marks the published input-token",
+            "                boundary.",
         ], groups[2])
 
     def test_continuations_align_sentences_split_and_width_bounded(self):
@@ -130,7 +134,8 @@ class ReportDefinitionTests(unittest.TestCase):
         self.assertNotIn("does not predict model behavior", text)
         self.assertNotIn("Token mix", text)
         self.assertNotIn("Token Mix % · last", text)
-        self.assertIn("Copilot CCost/M tokens I/C/W/O", text)
+        self.assertIn("Relative CCost", text)
+        self.assertNotIn("GitHub USD/M I/C/W/O", text)
         self.assertEqual(1, text.count("Input: 3% (123)"), "live mix only in the definitions")
         lines = text.splitlines()
         accounts = lines.index("Accounts Overview")
@@ -150,8 +155,8 @@ class ReportDefinitionTests(unittest.TestCase):
         empty = rendered(report(TokenMix(), sample=0))
         self.assertIn("Token Mix %: The I/C/W/O percentage split of your observed token usage.", empty)
         self.assertIn("No prompts with token data are available yet.", empty)
-        self.assertIn("Rel CCost: No completed prompts with token data are available yet.", empty)
-        self.assertIn("Rel CCost stays blank", empty)
+        self.assertIn("Relative CCost: No completed prompts with token data are available yet.", empty)
+        self.assertIn("Relative CCost stays blank", empty)
 
     def test_service_samples_keep_their_distinct_eligibility(self):
         service = compact.CompactReportTests.service(self, SyntheticMonthSource(2, 60, month_start_ms=compact.START))
@@ -163,7 +168,7 @@ class ReportDefinitionTests(unittest.TestCase):
         self.assertEqual((100, 100), (built.token_mix.sample_size, built.model_comparison_sample_size))
         text = rendered(built)
         self.assertIn("Your mix uses the latest 100 prompts with token data", text)
-        self.assertIn("Rel CCost: Applies Token Mix % from 100 completed prompts", text)
+        self.assertIn("Relative CCost: Applies Token Mix % from 100 completed prompts", text)
         # Running/aborted prompts qualify only for the displayed mix, as before.
         root = roots[0]
         record = root.bundle.prompts[0]

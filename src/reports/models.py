@@ -15,6 +15,7 @@ from src.analysis.quota_pace import QuotaPace
 from src.analysis.context import PriceWarningSeverity
 from src.analysis.valuation import ComparisonCost
 from src.analysis.token_mix import TokenMix
+from src.analysis.comparisons import RelativePriceLevel
 from src.domain import AccountSnapshot
 
 
@@ -132,6 +133,7 @@ class ModelComparisonProjection:
     promotional: bool = False
     recent: bool = False
     promotion_marker: int | None = None
+    relative_levels: tuple[RelativePriceLevel, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -173,7 +175,7 @@ class ReportProjection:
     source_label: str
     source_warnings: tuple[str, ...] = ()
     model_comparison: tuple[ModelComparisonProjection, ...] = ()
-    model_comparison_sample_size: int = 0  # completed prompts behind Rel CCost; 0 leaves it blank
+    model_comparison_sample_size: int = 0  # completed prompts behind Relative CCost; 0 leaves it blank
     pricing_retrieved_at_ms: int = 0
     model_comparison_promotion_notes: tuple[str, ...] = ()
     session_usage: tuple[SessionUsageRow, ...] = ()

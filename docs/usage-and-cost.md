@@ -14,7 +14,19 @@ Successful reference/current-price fallback is Diagnostics-only. Missing referen
 
 Date totals de-duplicate exact fork-cloned requests; session views retain available history. Child/subagent work and eligible synthetic continuations belong to their initiating prompt. Model work that OpenCode resumes after a background job (for example a backgrounded shell) ends stays on the prompt that was running; waiting adds Duration only, never Calls or CCost, and native job IDs are never shown. Only explicit completion/failure/cancellation notices or the service no longer listing the job end that wait. Completed `/compact` remains separate, including native V2 checkpoints without billable summaries.
 
-Deleted OpenCode sessions leave reports and Rel CCost samples; caches keep no ledger.
+Deleted OpenCode sessions leave reports and Relative CCost samples; caches keep no ledger.
+
+## Model comparison
+
+Normal reports show Publisher, Model, Relative CCost and Release date. `--all-models` retains the full GitHub catalog and adds `GitHub USD/M I/C/W/O`: original USD per million input/cache-read/cache-write/output tokens, with exact numeric precision, all tiers and current promotions. `→` separates exact tiers; context boundaries remain visible even without an observed comparison mix. `-` means a category has no published rate. This reference column does not change CCost, Watch or quotas.
+
+Relative CCost applies the existing latest-100 completed-prompt I/C/W/O token mix separately to every published tier. All tiers divide by the same cheapest positive comparable **base-tier** price, never a separate long-context reference. Cache-write fallback remains the existing input-rate rule only when the write rate is missing; published zero is zero. No input-only shortcut or arbitrary doubling is used.
+
+For example, `8.0x → 16.0x (>200K)` (illustrative) means eight times the reference at base context and sixteen times above 200000 input tokens. `≥` is inclusive; exact K/M boundaries are never rounded. Additional levels extend the chain. Promotion markers, each multiplier, arrows and boundaries occupy dynamically aligned internal fields; colors are applied after width measurement. Numeric cells remain intact on narrow terminals (the table can exceed terminal width rather than lose prices).
+
+Both modes use one deterministic sorter: descending full-precision base price; for exact ties, descending next-tier price then ascending actual price-increase boundary, repeating for later tiers; alphabetical name last. A missing extra tier means unchanged price, an unknown rate stays unknown, and equal-price tiers introduce no artificial boundary ordering. Multipliers show exactly one decimal; only presentation rounds.
+
+Without eligible token data, Relative CCost stays blank and the existing hidden synthetic 2/96/1/1 mix drives the same sorter. It is never reported as observed Token Mix %. Completed-prompt eligibility, availability filtering in normal reports, full-catalog selection in `--all-models`, promotions, release dates and New Models notices remain unchanged.
 
 Three independent concepts:
 
@@ -29,7 +41,7 @@ Reports retain Copilot's native $0.01/AI-credit conversion; Watch omits that con
 - `I` = **uncached input**, `C` = **cache read**, `W` = **cache write**, `O` = **output** (including separately reported reasoning).
 - Token Mix % divides raw counts (`Input`/`Cache`/`Write`/`Output` = I/C/W/O). Largest-remainder rounding selects tenths summing to exactly 100%; trailing `.0` is omitted. Tiny shares may round to `0%`. Incomplete telemetry or zero totals show `--`; no samples show `no token data yet`. Absent fields are not zero.
 - Category CCost uses each request's model/tier; the four unrounded amounts reconcile with the same requests' CCost. Rounded cells need not sum exactly; `0.4% (24)` is a small but expensive share.
-- `~` marks approximate diagnostics (`~Ictx`, `~Ictx CCost`, `~Extra CCost`), never pricing provenance or Rel CCost.
+- `~` marks approximate diagnostics (`~Ictx`, `~Ictx CCost`, `~Extra CCost`), never pricing provenance or Relative CCost.
 - `?` before a CCost cell means only the priced subset is shown. Completely unpriced workloads show `N/A`.
 - `N/A` means unavailable.
 - A trailing `*` on a model means linked child/subagent work used an additional model.

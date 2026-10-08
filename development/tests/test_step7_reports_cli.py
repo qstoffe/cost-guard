@@ -402,12 +402,14 @@ class ReportProjectionTests(unittest.TestCase):
         ReportRenderer(self.config, stream=stream, color_enabled=False).render(report)
         text = stream.getvalue()
         for expected in (
-            "Rel CCost", "Copilot CCost/M tokens I/C/W/O", "GitHub Copilot", "Pricing/cache metadata",
+            "Relative CCost", "GitHub Copilot", "Pricing/cache metadata",
         ):
             self.assertIn(expected, text)
         for excluded in ("## Model comparison", "Monthly usage", "Today's user prompts", "Daily CCost", "## Accounts & quotas", "CCost today", "CCost month", "Sample:"):
             self.assertNotIn(excluded, text)
         self.assertNotIn("\x1b[", text)
+        self.assertNotIn("GitHub USD/M I/C/W/O", text)
+        self.assertNotIn("Copilot CCost/M tokens I/C/W/O", text)
         self.assertNotIn("Same prompt comparison", text)
         self.assertNotIn("* Current Ictx:", text)
 
@@ -502,11 +504,11 @@ class ReportProjectionTests(unittest.TestCase):
         self.assertFalse(cells[5].startswith("~$"), cells)
 
     def test_model_comparison_price_components_are_compact_and_slash_aligned(self) -> None:
-        report = self.service.build(ReportRequest())
+        report = self.service.build(ReportRequest(ReportKind.ALL_MODELS))
         stream = io.StringIO()
         ReportRenderer(self.config, stream=stream, color_enabled=False, terminal_width=160).render(report)
         lines = stream.getvalue().splitlines()
-        start = next(i for i, line in enumerate(lines) if line.startswith("|") and "Copilot CCost/M tokens I/C/W/O" in line)
+        start = next(i for i, line in enumerate(lines) if line.startswith("|") and "GitHub USD/M I/C/W/O" in line)
         model_rows = []
         for line in lines[start + 2:]:
             if not line.startswith("|"):
@@ -517,7 +519,7 @@ class ReportProjectionTests(unittest.TestCase):
         price_cells = [[cell for cell in row.split("|")[1:-1]][3] for row in model_rows]
         slash_positions = [[i for i, ch in enumerate(cell) if ch == "/"] for cell in price_cells]
         self.assertTrue(all(pos == slash_positions[0] for pos in slash_positions[1:]))
-        self.assertFalse(any("0.1" in cell for cell in price_cells), price_cells)
+        self.assertTrue(any("0.1" in cell for cell in price_cells), price_cells)
 
     def test_prompt_mix_colors_are_component_scoped_like_v77(self) -> None:
         report = self.service.build(ReportRequest(ReportKind.SESSION, session_id="root"))

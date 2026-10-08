@@ -20,7 +20,7 @@ from typing import Callable
 
 _active: RuntimeErrors | None = None
 _OWNED = re.compile(r"cost-guard-(?:(?:errors|metadata)-\d{4}-\d{2}-\d{2}\.log|crash-\d{8}-\d{6}-\d+(?:-\d+)?\.txt)\Z")
-_RECOVERY_FILES = frozenset({"watch-recovery.json", "model-metadata.json"})
+_RECOVERY_FILES = frozenset({"watch-recovery.json"})  # Legacy metadata state is never disposable log history.
 
 
 def diagnostics_hint(root: Path | None = None) -> str:

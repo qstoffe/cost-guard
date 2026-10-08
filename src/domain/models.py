@@ -280,6 +280,9 @@ class PricingTier:
     per_million_cache_read: Decimal | None = None
     per_million_cache_write: Decimal | None = None
     per_million_output: Decimal | None = None
+    # Preserve the published lower-bound notation; min_input_tokens remains
+    # inclusive for request valuation (a published >N is normalized to N+1).
+    input_threshold_operator: str | None = None
 
     def matches(self, request_input_tokens: int) -> bool:
         if self.min_input_tokens is not None and request_input_tokens < self.min_input_tokens:

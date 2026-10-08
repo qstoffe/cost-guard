@@ -1,9 +1,10 @@
 """Persistent, privacy-safe release-metadata health, retry schedule and failure periods.
 
-State survives restarts in `logs/recovery/model-metadata.json` (bounded). Failure
+State survives restarts in `cache/state/model-metadata.json` (bounded). Failure
 periods are appended as JSON lines to `logs/errors/cost-guard-metadata-<date>.log`:
-first failure, changed failure, bounded repeat summaries and recovery, never
-one line per attempt. Only stable codes, counts, timestamps and public source
+first failure, changed failure and bounded repeat summaries, never one line per
+attempt. Actual recovery events go to `logs/recovery/`; legacy state is retained.
+Only stable codes, counts, timestamps and public source
 names are written: no URLs with credentials, headers, payloads or messages.
 """
 from __future__ import annotations
@@ -16,6 +17,7 @@ from pathlib import Path
 import threading
 
 from src.version import DISPLAY_VERSION
+from src.cache.metadata_state import STATE_FILE, migrate_state, persist_state, read_state
 
 from .release_metadata import MetadataAttempt, SourceResult
 
@@ -23,7 +25,6 @@ RETRY_DELAYS_MS = (60_000, 300_000, 900_000, 3_600_000)
 MAX_RETRY_AFTER_MS = 6 * 3_600_000
 RECHECK_MS = 3_600_000
 COMPONENT = "pricing-release-metadata"
-STATE_FILE = Path("logs/recovery/model-metadata.json")
 _SUMMARY_ATTEMPTS = (3, 10)
 _HISTORY = 24
 _EVENT_KEYS = ("timestamp", "version", "component", "event", "source", "phase", "error_code",
@@ -48,21 +49,12 @@ def _fingerprint(result: SourceResult) -> str:
     return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
 
-def read_state(root: Path | None) -> dict:
-    if root is None:
-        return {}
-    try:
-        raw = json.loads((Path(root) / STATE_FILE).read_text(encoding="utf-8"))
-    except (OSError, ValueError, UnicodeError):
-        return {}
-    return raw if isinstance(raw, dict) and raw.get("schema") == 1 else {}
-
-
 def recent_events(root: Path, limit: int = 60) -> list[dict]:
     """Bounded whitelisted events for Diagnostics, newest last."""
     events: list[dict] = []
     try:
-        files = sorted((Path(root) / "logs/errors").glob("cost-guard-metadata-????-??-??.log"))[-31:]
+        files = [path for folder in ("errors", "recovery")
+                 for path in sorted((Path(root) / "logs" / folder).glob("cost-guard-metadata-????-??-??.log"))[-31:]]
     except OSError:
         return events
     for path in files:
@@ -77,7 +69,7 @@ def recent_events(root: Path, limit: int = 60) -> list[dict]:
                 continue
             if isinstance(raw, dict) and raw.get("component") == COMPONENT:
                 events.append({key: raw[key] for key in _EVENT_KEYS if key in raw})
-    return events[-limit:]
+    return sorted(events, key=lambda event: event.get("timestamp", ""))[-limit:]
 
 
 class MetadataHealthStore:
@@ -86,9 +78,10 @@ class MetadataHealthStore:
     def __init__(self, root: Path | None) -> None:
         self.root = Path(root) if root is not None else None
         self._lock = threading.Lock()
+        migrate_state(self.root)
         state = read_state(self.root)
         self.state: dict = {"schema": 1, "health": "unknown", "sources": {}, "history": [],
-                            "consecutive_failures": 0}
+                            "consecutive_failures": 0, **state}
         for key in ("health", "result_origin", "last_attempt_reason"):
             if isinstance(state.get(key), str):
                 self.state[key] = state[key][:40]
@@ -216,7 +209,8 @@ class MetadataHealthStore:
                 "error_code": result.code, "http_status": result.http_status,
                 "timeout_seconds": result.timeout_seconds, "retry_after_seconds": result.retry_after_seconds,
                 **values}
-        path = self.root / "logs/errors" / f"cost-guard-metadata-{datetime.now().astimezone():%Y-%m-%d}.log"
+        folder = "recovery" if event == "recovered" else "errors"
+        path = self.root / "logs" / folder / f"cost-guard-metadata-{datetime.now().astimezone():%Y-%m-%d}.log"
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
             with path.open("a", encoding="utf-8") as target:
@@ -225,16 +219,7 @@ class MetadataHealthStore:
             pass  # Logging cannot change metadata recovery or Watch behavior.
 
     def _persist(self) -> None:
-        if self.root is None:
-            return
-        path = self.root / STATE_FILE
-        try:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            temp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
-            temp.write_text(json.dumps({**self.state, "version": DISPLAY_VERSION}, sort_keys=True), encoding="utf-8")
-            temp.replace(path)
-        except OSError:
-            pass
+        persist_state(self.root, {**self.state, "version": DISPLAY_VERSION})
 
     def snapshot(self) -> dict:
         with self._lock:

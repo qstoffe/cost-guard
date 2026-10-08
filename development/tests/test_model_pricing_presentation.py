@@ -53,9 +53,9 @@ class PricingPresentationTests(unittest.TestCase):
             self.assertEqual(count, report.model_comparison_sample_size)
             text = compact.rendered(report)
             if count:
-                self.assertIn(f"Rel CCost: Applies Token Mix % from {count} completed prompt", text)
+                self.assertIn(f"Relative CCost: Applies Token Mix % from {count} completed prompt", text)
             else:
-                self.assertIn("Rel CCost stays blank", text)
+                self.assertIn("Relative CCost stays blank", text)
             self.assertNotIn("does not predict model behavior", text)
             self.assertNotIn("~RelCost", compact.rendered(report))
         root = next(iter(service._analyzed.values()))
@@ -83,13 +83,13 @@ class PricingPresentationTests(unittest.TestCase):
                     lines = [ANSI.sub("", line) for line in text.splitlines() if line.startswith("|") and re.search(r"Model \d", line)]
                     cells = [line.split("|")[3] for line in lines]
                     self.assertEqual(1, len({line.index(f"{value:.1f}x") for line, value in zip(lines, map(Decimal, ("7.5", "3.2", "1.0")))}))
-                    expected_width = max(9, max((len(f"*{m}") for m in markers if m), default=0) + (5 if any(markers) else 0))
+                    expected_width = max(len("Relative CCost"), max((len(f"*{m}") for m in markers if m), default=0) + (5 if any(markers) else 4))
                     self.assertEqual([expected_width + 2] * 3, list(map(len, cells)))
                     for line, cell, marker in zip(lines, cells, markers):
                         self.assertNotIn("*", line.split("|")[4])
                         if marker:
                             self.assertTrue(cell.startswith(f" *{marker}"), cell)
-                    self.assertIn("Copilot CCost/M tokens I/C/W/O", text)
+                    self.assertIn("GitHub USD/M I/C/W/O", text)
                     self.assertNotIn("Price I/C/W/O is", text)
 
     def test_notice_labels_only_are_colored_in_both_outputs_and_wrapped(self):
