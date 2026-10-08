@@ -125,6 +125,7 @@ class WatchCoordinator:
         self._last_cycle_end_ms: int | None = None
         self._event_pump: LiveEventPump | None = None
         self._last_account_refresh_ms = 0
+        self._last_account_started_ms: int | None = None
         self._last_quota_refresh_ms = 0
         self._last_projection: WatchProjection | None = None
         # Ephemeral lifecycle evidence for this process only; never persisted.
@@ -134,6 +135,7 @@ class WatchCoordinator:
         self.model_discovery = WatchModelDiscovery(report_service)
         self._resume_pending = False
         self._resume_recovery_deadline_ms = 0
+        self._closed = False
 
     def _record_refresh_duration(self, seconds: float) -> None:
         value = max(0.001, float(seconds))
@@ -214,11 +216,9 @@ class WatchCoordinator:
         return tuple(hydrated)
 
     def _refresh_account_quota(self, *, now_ms: int, force: bool = False) -> bool:
-        """Refresh once per minute, except for bounded post-idle recovery retries.
-
-        Source changes are deliberately not account-refresh triggers.  This keeps
-        OpenCode Watch activity from multiplying external account requests.
-        """
+        """Publish individual completions; source changes never amplify requests."""
+        if self._closed:
+            return False
         expired = self._quota_recovery_until is not None and self._monotonic() >= self._quota_recovery_until
         if expired:
             self._end_quota_recovery()
@@ -227,25 +227,30 @@ class WatchCoordinator:
                 update_seen=False,  # deadline expiry is not a new provider observation
             )
         retry_due = self._quota_retry_at is not None and self._monotonic() >= self._quota_retry_at
-        if not force and not retry_due and self._last_account_refresh_ms and now_ms - self._last_account_refresh_ms < QUOTA_REFRESH_MS:
-            return expired
         self.report_service.set_now_ms(now_ms)
-        fresh = self.report_service.account_quota_snapshots()
+        due = self._last_account_started_ms is None or now_ms - self._last_account_started_ms >= QUOTA_REFRESH_MS
+        if force or retry_due or due:
+            self.report_service.begin_account_refresh()
+            self._last_account_started_ms = now_ms
+            if retry_due:
+                self._quota_retry_at = None
+        update = self.report_service.poll_account_refresh()
+        if update is None:
+            return expired
+        fresh = update.snapshots
         completed_ms = int(self.clock_ms())
         recovering = self._quota_recovery_until is not None and self._monotonic() < self._quota_recovery_until
         previous = self._account_quotas
-        # The report service fails soft per provider. A missing snapshot means
-        # this refresh could not supply that provider, not that its last known
-        # balance suddenly became zero. Keep it briefly and label it as stale;
-        # an explicit unavailable snapshot replaces it immediately.
+        # Pending providers remain untouched; failures use bounded retention.
         self._account_quotas, self._account_quota_seen_ms, self._quota_stale = reconcile_accounts(
             previous, fresh, self._account_quota_seen_ms, now_ms=completed_ms, recovering=recovering,
+            observed_keys=update.observed_keys,
         )
         self._last_account_fresh = fresh
         self._last_account_refresh_ms = completed_ms
-        # An account that has never delivered capacity in this Watch (typically
-        # a cold provider at startup) gets the same bounded retry schedule once,
-        # instead of showing a bare error until the next minute refresh.
+        if not self.report_service.accounts_pending:
+            self._last_account_started_ms = completed_ms
+        # One bounded first-error retry window per identity.
         unseen = {item.key for item in fresh if item.availability == "error" and not durable_quota_failure(item)
                   and item.key not in self._account_quota_seen_ms and item.key not in self._quota_first_retried}
         if unseen and not recovering:
@@ -256,11 +261,12 @@ class WatchCoordinator:
         if recovering:
             self._quota_recovering_accounts = recovery_account_keys(previous, fresh, self._account_quotas)
             if self._quota_recovering_accounts:
-                self._quota_retry_at = None
-                if self._quota_retry_index < len(QUOTA_RETRY_SECONDS):
-                    self._quota_retry_at = self._monotonic() + QUOTA_RETRY_SECONDS[self._quota_retry_index]
-                    self._quota_retry_index += 1
-            else:
+                observed_failure = any(key in update.observed_keys for key in self._quota_recovering_accounts)
+                if observed_failure or (self._quota_retry_at is None and not self.report_service.accounts_pending):
+                    if self._quota_retry_index < len(QUOTA_RETRY_SECONDS):
+                        self._quota_retry_at = self._monotonic() + QUOTA_RETRY_SECONDS[self._quota_retry_index]
+                        self._quota_retry_index += 1
+            elif not self.report_service.accounts_pending:
                 self._end_quota_recovery()
         else:
             self._end_quota_recovery()
@@ -270,7 +276,7 @@ class WatchCoordinator:
         # Local usage refreshes on meaningful source changes (or at most every
         # five minutes while unchanged).  Account quota has its own one-minute
         # cadence and is reused here instead of being fetched for every change.
-        account_changed = self._refresh_account_quota(now_ms=now_ms, force=self._last_account_refresh_ms == 0)
+        account_changed = self._refresh_account_quota(now_ms=now_ms)
         if (
             not force
             and not account_changed
@@ -386,6 +392,9 @@ class WatchCoordinator:
     def initialize(self) -> WatchCycle:
         refresh_started = time.monotonic()
         now_ms = int(self.clock_ms())
+        self.report_service.set_now_ms(now_ms)
+        self.report_service.begin_account_refresh()
+        self._last_account_started_ms = now_ms
         observation = observe_catalog(self.source, session_id=self.session_id)
         self.model_discovery.refresh(now_ms)
         roots = self._selected_roots(observation)
@@ -473,6 +482,10 @@ class WatchCoordinator:
     def status_projection(self, *, seconds_until_check: int | None = None) -> WatchProjection:
         now_ms = int(self.clock_ms())
         self.report_service.set_now_ms(now_ms)
+        # The cadence's one-second main-thread wake publishes individual provider
+        # completions without waiting for source hydration or the entire batch.
+        if not self._closed and self.observation is not None:
+            self._refresh_quota(self.observation, now_ms=now_ms)
         active = 0 if self._last_projection is None else self._last_projection.active_count
         status = "Watching" if seconds_until_check is None else self._steady_status(active, seconds_until_check)
         return self._projection(now_ms=now_ms, status=status, status_active=active > 0)
@@ -548,17 +561,16 @@ class WatchCoordinator:
         session report into an indefinite Watch.  The caller decides whether the
         initial one-shot projection contained running work before invoking it.
         """
-        cycle = self.initialize()
-        if cycle.projection.active_count <= 0:
-            return
-        renderer.render(cycle.projection)
         try:
+            cycle = self.initialize()
+            if cycle.projection.active_count <= 0:
+                return
+            renderer.render(cycle.projection)
             while cycle.projection.active_count > 0:
                 cycle = self._advance(renderer, cycle)
             renderer.finish("Prompt completed.")
         finally:
-            if self._event_pump is not None:
-                self._event_pump.stop()
+            self.close()
 
     def _advance(self, renderer, cycle: WatchCycle) -> WatchCycle:
         """Wait one cadence, poll the selected source and render the result."""
@@ -624,9 +636,9 @@ class WatchCoordinator:
             return replace(cycle, recovered=True)
 
     def run_forever(self, renderer, *, initial_cycle: WatchCycle | None = None) -> None:
-        cycle = initial_cycle or self.initialize()
-        renderer.render(cycle.projection)
         try:
+            cycle = initial_cycle or self.initialize()
+            renderer.render(cycle.projection)
             while True:
                 cycle = self._advance(renderer, cycle)
         except KeyboardInterrupt:
@@ -643,5 +655,10 @@ class WatchCoordinator:
                 raise
             renderer.finish(str(exc))
         finally:
-            if self._event_pump is not None:
-                self._event_pump.stop()
+            self.close()
+
+    def close(self) -> None:
+        self._closed = True
+        self.report_service.close_accounts()
+        if self._event_pump is not None:
+            self._event_pump.stop()

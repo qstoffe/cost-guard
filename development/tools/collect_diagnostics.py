@@ -232,7 +232,9 @@ def _report_summary(selection: Any, config: dict[str, Any], *, network: bool) ->
     projection, timing = _timed(lambda: service.build(ReportRequest(ReportKind.NORMAL)))
     if projection is None:
         return None, timing
-    return _projection_summary(projection), timing
+    summary = _projection_summary(projection)
+    summary["account_acquisition"] = dict(service.account_diagnostics)
+    return summary, timing
 
 
 

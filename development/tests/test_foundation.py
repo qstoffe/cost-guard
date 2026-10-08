@@ -76,6 +76,18 @@ class ValidationTests(unittest.TestCase):
         self.assertEqual(0, proc.returncode, proc.stdout + proc.stderr)
         self.assertIn("SUMMARY failures=0", proc.stdout)
 
+    def test_product_version_and_validation_need_no_archive_and_create_none(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            copy = copy_package(Path(tmp))
+            self.assertFalse((copy / "releases").exists())
+            version = run_python(str(copy / "cost-guard.py"), "--version", cwd=copy)
+            self.assertEqual(0, version.returncode, version.stdout + version.stderr)
+            self.assertEqual(f"Cost Guard {DISPLAY_VERSION}", version.stdout.strip())
+            validation = run_python(str(copy / "development/tools/validate_package.py"), "--working-tree", cwd=copy)
+            self.assertEqual(0, validation.returncode, validation.stdout + validation.stderr)
+            self.assertFalse((copy / "releases").exists())
+            self.assertEqual([], list(copy.rglob("*.zip")))
+
     def test_validator_rejects_runtime_cache_in_package(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             copy = copy_package(Path(tmp))

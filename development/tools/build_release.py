@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build and clean-room verify one Cost Guard ZIP. Standard library only."""
+"""Explicitly build and clean-room verify one requested Cost Guard ZIP. Standard library only."""
 from __future__ import annotations
 
 import argparse
@@ -93,7 +93,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output", type=Path)
     parser.add_argument(
         "--full-verification", action="store_true",
-        help="Use the full local/unrestricted test tier instead of the default quick RC gate.",
+        help="Use the full local/unrestricted test tier instead of the default quick packaging gate.",
     )
     parser.add_argument(
         "--quick-already-run", action="store_true",

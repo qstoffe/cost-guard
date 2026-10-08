@@ -183,6 +183,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     context(mode=startup_mode(command), phase="startup")
     progress: StartupProgress | None = None
     watch_renderer: WatchRenderer | None = None
+    service: ReportService | None = None
     try:
         config = loaded.values
         if command.watch:
@@ -297,5 +298,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(diagnostics_hint(PACKAGE_ROOT), end="")
         return 1
     finally:
+        if service is not None:
+            service.close_accounts()
         if progress is not None:
             progress.stop()

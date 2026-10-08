@@ -218,6 +218,9 @@
   // Replace any one value with an object such as
   // { "foreground": "Cyan", "background": null, "ansi256": 44 } to override
   // only that color. Partial objects are merged on top of the selected scheme.
+  // Older recognized versions in model comparisons fade these resolved semantic
+  // colors automatically (gold stays gold, green stays green), using the selected
+  // dark/light theme. No extra role or user setting is required; borders stay plain.
   "colors": {
     "activeRunning": "default",
     "lightWarning": "default",

@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Mapping, Sequence, TextIO
 
+from .fade import faded_style
+
 _CONSOLE_FG = {
     "Black": 30, "DarkRed": 31, "DarkGreen": 32, "DarkYellow": 33,
     "DarkBlue": 34, "DarkMagenta": 35, "DarkCyan": 36, "Gray": 37,
@@ -93,21 +95,22 @@ class StyledText:
 
 
 class AnsiStyler:
-    def __init__(self, colors: Mapping[str, object], *, enabled: bool | None = None) -> None:
+    def __init__(self, colors: Mapping[str, object], *, enabled: bool | None = None, light_theme: bool = False) -> None:
         self.colors = colors
+        self.light_theme = light_theme
         if enabled is None:
             enabled = bool(getattr(sys.stdout, "isatty", lambda: False)()) and not os.environ.get("NO_COLOR")
         self.enabled = bool(enabled)
 
     @staticmethod
-    def _sequence(style: object) -> str:
+    def _sequence(style: object, *, faded: bool = False) -> str:
         if not isinstance(style, Mapping):
             return ""
         fg = style.get("foreground")
         bg = style.get("background")
         ansi = style.get("ansi256")
         codes: list[str] = []
-        if isinstance(ansi, int) and bg is None:
+        if isinstance(ansi, int) and (bg is None or faded):
             codes.append(f"38;5;{ansi}")
         elif isinstance(fg, str) and fg in _CONSOLE_FG:
             codes.append(str(_CONSOLE_FG[fg]))
@@ -115,10 +118,11 @@ class AnsiStyler:
             codes.append(str(_CONSOLE_BG[bg]))
         return f"\x1b[{';'.join(codes)}m" if codes else ""
 
-    def apply(self, text: str, role: str | None = None) -> str:
-        if not self.enabled or not role:
+    def apply(self, text: str, role: str | None = None, *, faded: bool = False) -> str:
+        if not self.enabled or (not role and not faded):
             return text
-        sequence = self._sequence(self.colors.get(role))
+        style = self.colors.get(role) if role else None
+        sequence = self._sequence(faded_style(style, light=self.light_theme) if faded else style, faded=faded)
         return f"{sequence}{text}\x1b[0m" if sequence else text
 
 
@@ -171,6 +175,7 @@ def _render_cell(
     right: bool,
     role: str | None,
     styler: AnsiStyler | None,
+    faded: bool = False,
 ) -> str:
     plain = str(raw if raw is not None else "")
     fitted = fit(plain, width, right=right)
@@ -185,9 +190,9 @@ def _render_cell(
     prefix = " " * left_pad
     suffix = " " * right_pad
     if isinstance(raw, StyledText) and len(plain) <= width:
-        body = "".join(styler.apply(text, segment_role or role) for text, segment_role in raw.parts)
+        body = "".join(styler.apply(text, segment_role or role, faded=faded) for text, segment_role in raw.parts)
     else:
-        body = styler.apply(visible_value, role)
+        body = styler.apply(visible_value, role, faded=faded)
     return prefix + body + suffix
 
 
@@ -209,6 +214,7 @@ def render_table(
     styler: AnsiStyler | None = None,
     target_width: int | None = None,
     separator_before_rows: Sequence[int] = (),
+    faded_rows: Sequence[int] = (),
 ) -> list[str]:
     widths = list(resolve_table_widths(columns, rows, target_width=target_width))
     separator = "|" + "|".join("-" * (width + 2) for width in widths) + "|"
@@ -216,6 +222,7 @@ def render_table(
     header = "| " + " | ".join(fit(column.name, widths[index], right=column.right) for index, column in enumerate(columns)) + " |"
     result.extend((header, separator))
     separators = set(separator_before_rows)
+    faded = set(faded_rows)
     for row_index, row in enumerate(rows):
         if row_index in separators:
             result.append(separator)
@@ -225,7 +232,8 @@ def render_table(
             role = None
             if styles and row_index < len(styles) and index < len(styles[row_index]):
                 role = styles[row_index][index]
-            cells.append(_render_cell(raw, widths[index], right=column.right, role=role, styler=styler))
+            cells.append(_render_cell(raw, widths[index], right=column.right, role=role, styler=styler,
+                                      faded=row_index in faded))
         result.append("| " + " | ".join(cells) + " |")
     result.append(separator)
     return result

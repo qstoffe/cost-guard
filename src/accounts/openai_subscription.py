@@ -32,7 +32,7 @@ from src.domain import (
     QuotaWindowKind,
 )
 from .base import normalize_quota
-from .credentials import configured_credentials, resolve_auth_path
+from .credentials import provider_credentials, resolve_auth_path
 
 USAGE_URL = "https://chatgpt.com/backend-api/wham/usage"
 # OpenCode renews the OAuth token when it next calls OpenAI; Cost Guard never does.
@@ -316,6 +316,7 @@ def _expired(now_ms: int) -> QuotaSnapshot:
 
 class OpenAIAccountProvider:
     provider_id = "openai"
+    integration_ids = ("openai", "openai-codex", "codex")
     # A usable OAuth token for quota lookup does not establish which connection
     # handled a historical model invocation (API-key traffic shares this ID).
     included_usage = False
@@ -347,7 +348,7 @@ class OpenAIAccountProvider:
     def probe(self) -> IntegrationHealth:
         if not self.enabled:
             return IntegrationHealth(True, False, "disabled in config")
-        records = configured_credentials(self.auth_json_path, self.credential_db_path, ("openai", "openai-codex", "codex"))
+        records = provider_credentials(self, self.integration_ids)
         return IntegrationHealth(bool(records), bool(records), "configured OpenAI account" if records else "OpenAI account not configured")
 
     def get_quota_snapshot(self) -> QuotaSnapshot:
@@ -363,7 +364,7 @@ class OpenAIAccountProvider:
         if not self.enabled:
             return ()
         accounts = []
-        for index, record in enumerate(configured_credentials(self.auth_json_path, self.credential_db_path, ("openai", "openai-codex", "codex"))):
+        for index, record in enumerate(provider_credentials(self, self.integration_ids)):
             ref = replace(record.ref, provider_id="openai")
             now = self.now_ms()
             if record.value.get("type") == "api":

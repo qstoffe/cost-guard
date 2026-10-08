@@ -1,5 +1,23 @@
 # Cost Guard version history
 
+## v80.23 — 2026-10-08
+
+- Supersession highlighting now recognizes xAI's stable numeric Grok versions: Grok 4.5 and 4.6 fade when Grok 4.7 is displayed; the latest stays unchanged. Numeric ordering, table-local availability and conservative unknown/variant exclusions remain intact.
+- Regression coverage reproduces the three Grok rows in normal/full-catalog reports, dark/light themes and multiple widths, preserving all cells, prices, ordering and no-color output.
+
+## v80.22 — 2026-10-08
+
+- Current `main` is the recommended/latest supported distribution during rapid development, with source-ZIP/Git instructions, Windows trust guidance and a macOS executable-bit remedy. Packaged GitHub Releases are paused until an explicit policy change.
+- Product versioning remains independent of tags, GitHub Releases and ZIPs. Ordinary implementation verifies the working tree; packaging requires an explicit request, retaining builder safety and clean-extraction coverage. Local stale generated ZIPs were cleaned; remote releases/tags were not changed.
+
+## v80.21 — 2026-10-08
+
+- Model comparison fades older recognized GPT/Claude/Gemini versions only when a newer same-manufacturer/family/variant model is displayed. Numeric matching is conservative; it does not imply official deprecation and changes no selection, ordering, promotions, prices or CCost.
+- Whole-row content receives theme-aware attenuation of its own semantic colors, retaining gold promotions and green new-model accents; borders, geometry and no-color output are unchanged.
+- Shared read-only credential inventory preserves V2 priority, legacy fallback, explicit paths and multiple accounts, without repeated parsing or checks for absent providers. Claude CLI discovery retains its own contract.
+- Up to four isolated provider jobs overlap normal-report analysis; the remaining report wait is bounded. Watch renders without waiting for quotas and publishes individual completions on its main thread, preserving recovery/identities while discovering account changes at its normal refresh cadence.
+- Timeouts, generation checks and nonblocking worker shutdown prevent stale replies or stuck providers from controlling the terminal; Diagnostics includes sanitized acquisition counts/timings. No new dependencies or required configuration.
+
 ## v80.20 — 2026-10-08
 
 - Normal model comparison now has four columns, centered on Relative CCost; `--all-models` adds original, exact GitHub USD/M I/C/W/O rates with every published tier and boundary, including without observed token data.
@@ -20,29 +38,9 @@
 - Working-tree package validation excludes root runtime logs just like the ZIP builder; extracted packages still reject them, with regression coverage preserving nested source files and original logs.
 
 
-## v80.18 — 2026-10-08
-
-- Reports mark new models with the same ✦ New Models notice as Watch, keeping the hanging indent when the notice wraps.
-- Diagnostics creates its bundle folder before staging the ZIP and never creates a runtime cache merely to report model freshness; Full-suite tests now match priced-only Watch notices, the resume-plus-forced V2 refresh and the optional changelog release-date fetch.
-
-
-## v80.17 — 2026-10-08
-
-- Treat newly observed V2 selectable Copilot IDs only as triggers for immediate forced pricing refresh; Watch notifies only verified priced catalog models, preserving the hourly catalog cadence and 15-minute V2 checks.
-- Move runtime logs to root logs/, publish one verified diagnostics ZIP, safely archive legacy/current logs, clean old date-stamped ZIPs and print precise support instructions with configurable qstoffe@hotmail.com.
-- Isolate runtime artifacts from releases, improve diagnostics error handling and extend regression tests.
-
-
-## v80.16 — 2026-10-08
-
-- Normalize Watch notices to ✦ New Models, retain bounded model-identity history between starts and expose metadata-fetch failures for diagnosis.
-- Package owned errors, crashes and recovery records into a verified Diagnostics ZIP, safely prune unchanged quiet files, isolate synthetic tests and retain 30-day expiration.
-- Restore version history release validation and add regression coverage for model and log lifecycle behavior.
-
-
 ## Earlier v80 history
 
-- v80.15 added hourly Copilot catalog refresh with pinned in-run CCost, 15-minute V2 selectability checks, bounded sleep/wake recovery, sanitized metadata evidence and one-hour default pricing-cache age.
+- v80.15-v80.18 added hourly Copilot refresh with pinned CCost, 15-minute V2 checks, sleep/wake recovery and one-hour cache age; verified priced Watch/report ✦ New Models, sanitized metadata evidence, root logs/, safe Diagnostics archival/cleanup/staging, support instructions, runtime isolation, bounded history and metadata/refresh regression coverage.
 
 - v80.11-v80.14 added simulated macOS compatibility in Diagnostics, Windows path/release-check fixes, sanitized V1 SQLite read-error guards with read-only triage and Windows-safe synthetic SQLite cleanup.
 

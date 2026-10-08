@@ -5,7 +5,8 @@ from dataclasses import dataclass
 from heapq import nlargest
 from typing import Callable, Mapping, Sequence
 
-from src.accounts.base import AccountProvider, normalize_quota
+from src.accounts.base import AccountProvider
+from src.accounts.acquisition import AccountAcquisition, AccountUpdate
 from src.analysis import (
     AnalysisDependencies,
     DerivedAnalysisCache,
@@ -22,7 +23,7 @@ from src.analysis.token_mix import CategoryValuation, priced_token_mix
 from src.analysis.valuation import ComparisonCost, comparison_cost, unique_usage
 from src.cache import CacheRepository
 from src.numbers import ccost_amount
-from src.domain import AccountRef, AccountSnapshot, NormalizedSession, SessionSnapshot
+from src.domain import AccountSnapshot, NormalizedSession, SessionSnapshot
 from src.pricing.base import PricingProvider
 from src.pricing.catalog import PricingCatalog, normalized_average_token_mix
 from src.sources.model_availability import ModelAvailabilitySource
@@ -122,6 +123,8 @@ class ReportService:
         self._analyzed: dict[str, _AnalyzedRoot] = {}
         # Current account visibility never proves historical included billing.
         self._subscription_providers = frozenset()
+        self._account_work: AccountAcquisition | None = None
+        self.account_diagnostics: Mapping[str, int | float] = {}
 
     @property
     def timezone_id(self) -> str:
@@ -301,41 +304,35 @@ class ReportService:
         ))
 
     def _quotas(self) -> tuple[AccountSnapshot, ...]:
-        snapshots: dict[tuple[str, str, str], AccountSnapshot] = {}
-        for index, provider in enumerate(self.account_providers):
-            self.progress(f"Checking {provider.provider_id} quota")
-            try:
-                health = provider.probe()
-                if not (health.available and health.healthy):
-                    continue
-                if hasattr(provider, "get_account_snapshots"):
-                    accounts = tuple(provider.get_account_snapshots())
-                else:
-                    # Compatibility adapters retain distinct provenance even
-                    # when multiple adapters have the same provider ID.
-                    ref = AccountRef(self.source.source_id, provider.provider_id,
-                                     source_account=f"adapter:{index}")
-                    accounts = (normalize_quota(provider.get_quota_snapshot(), ref, getattr(provider, "display_name", provider.provider_id)),)
-            except Exception as exc:
-                # A provider owns isolated native quota observations, never
-                # historical usage/CCost. Replace failure with a visible ERROR.
-                from src.runtime_errors import recoverable
-                expected = isinstance(exc, OSError)
-                if not expected:
-                    recoverable(exc, f"account-provider-{index}")
-                ref = AccountRef(self.source.source_id, provider.provider_id, source_account=f"adapter:{index}")
-                account = AccountSnapshot(ref, self.now_ms, provider.provider_id, availability="error",
-                                          reason="Account request unavailable" if expected else "ERROR: Optional account provider refresh failed internally",
-                                          observations={"parser_reason": "network_failure" if expected else "software_failure"})
-                accounts = (account,)
-            else:
-                from src.runtime_errors import recovered
-                recovered(f"account-provider-{index}")
-            # Only fully acquired observations are accepted. Key/projection
-            # invariants are orchestration truth and have no recovery contract.
-            for account in accounts:
-                snapshots[account.key] = account
-        return tuple(snapshots.values())
+        if self._account_work is None:
+            self._account_work = AccountAcquisition(self.account_providers, self.source.source_id)
+            if self._account_work.start(self.now_ms):
+                self.progress("Checking account quotas")
+        assert self._account_work is not None
+        try:
+            return self._account_work.finish(self.now_ms)
+        finally:
+            self.close_accounts()
+
+    def begin_account_refresh(self) -> None:
+        """Local shared inventory first; no worker touches progress or analysis."""
+        if self._account_work is None:
+            self._account_work = AccountAcquisition(self.account_providers, self.source.source_id)
+        if self._account_work.start(self.now_ms):
+            self.progress("Checking account quotas")
+
+    def poll_account_refresh(self) -> AccountUpdate | None:
+        return self._account_work.poll(self.now_ms) if self._account_work is not None else None
+
+    @property
+    def accounts_pending(self) -> bool:
+        return self._account_work is not None and self._account_work.pending
+
+    def close_accounts(self) -> None:
+        if self._account_work is not None:
+            self.account_diagnostics = self._account_work.diagnostics()
+            self._account_work.close()
+            self._account_work = None
 
     def _range_comparison(self, roots: Sequence[_AnalyzedRoot], start_ms: int, end_ms: int | None = None) -> ComparisonCost:
         entries = unique_usage(entry for item in roots for entry in item.bundle.trace_entries)
@@ -510,6 +507,14 @@ class ReportService:
         )
 
     def build(self, request: ReportRequest) -> ReportProjection:
+        try:
+            if request.kind is ReportKind.NORMAL:
+                self.begin_account_refresh()
+            return self._build(request)
+        finally:
+            self.close_accounts()
+
+    def _build(self, request: ReportRequest) -> ReportProjection:
         catalog = self._load_catalog()
         all_sessions = tuple(self.source.list_sessions())
         root_activity = self._root_activity_by_id(all_sessions)

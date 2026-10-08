@@ -18,6 +18,7 @@ from .definitions import concept_lines
 from .context_warnings import WARNING_ROLE, next_ictx_ccost, warning_explanation_lines
 from .pricing_notices import pricing_notice_lines
 from .model_comparison import aligned_price_summaries as _aligned_price_summaries, aligned_relative_costs
+from .model_supersession import superseded_rows
 
 
 def _context_k(value: int | None) -> str:
@@ -125,7 +126,8 @@ class ReportRenderer:
         self.config = config
         self.stream = stream or sys.stdout
         colors = config.get("colors") if isinstance(config.get("colors"), Mapping) else {}
-        self.styler = AnsiStyler(colors, enabled=color_enabled)
+        self.styler = AnsiStyler(colors, enabled=color_enabled,
+                                 light_theme=config.get("colorScheme") == "modus-operandi-tinted")
         self.timezone_id = str(config.get("timezone") or "Europe/Stockholm")
         self.table_width = int(terminal_width) if terminal_width is not None else terminal_content_width(self.stream)
 
@@ -169,6 +171,7 @@ class ReportRenderer:
                   if all_models else ()),
                 Column("Release date", True, max_width=16),
             ), rows, styles=styles, styler=self.styler, target_width=self.table_width,
+            faded_rows=superseded_rows([(item.publisher, item.model) for item in report.model_comparison]),
         ):
             self._write(line)
         for note in report.model_comparison_promotion_notes:

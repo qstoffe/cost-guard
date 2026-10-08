@@ -382,7 +382,7 @@ class RuntimeErrorTests(unittest.TestCase):
                 if isinstance(node, ast.Call) and ((isinstance(node.func, ast.Attribute) and node.func.attr == "Thread")
                         or (isinstance(node.func, ast.Name) and node.func.id == "Thread")):
                     roots.append(path.relative_to(ROOT).as_posix())
-        self.assertEqual(sorted(["src/accounts/claude_transport.py", "src/presentation/progress.py",
+        self.assertEqual(sorted(["src/accounts/acquisition.py", "src/accounts/claude_transport.py", "src/presentation/progress.py",
                                  "src/watch/model_discovery.py", "src/watch/observers.py"]), sorted(roots))
 
     def test_retention_30_days_only_owned_files_and_no_log_on_cleanup_failure(self):

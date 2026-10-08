@@ -13,7 +13,7 @@ import time
 from typing import Callable, Mapping
 
 from src.domain import AccountSnapshot, AccountUsageStatus, BillingComponent, IntegrationHealth, ProviderCapabilities, QuotaComponent
-from .credentials import configured_credentials, resolve_auth_path
+from .credentials import provider_credentials, resolve_auth_path
 
 
 def _number(value: object) -> Decimal | None:
@@ -60,6 +60,7 @@ def normalize_anthropic_usage(account: AccountSnapshot, payload: Mapping[str, ob
 
 class AnthropicAccountProvider:
     provider_id = "anthropic"
+    integration_ids = ("anthropic",)
     included_usage = False
     capabilities = ProviderCapabilities(account_quota=True, reset_windows=True)
 
@@ -73,14 +74,14 @@ class AnthropicAccountProvider:
     def probe(self):
         if not self.enabled:
             return IntegrationHealth(True, False, "disabled in config")
-        detected = bool(configured_credentials(self.auth_json_path, self.credential_db_path, ("anthropic",)))
+        detected = bool(provider_credentials(self, self.integration_ids))
         return IntegrationHealth(detected, detected, "configured Anthropic account" if detected else "Anthropic account not configured")
 
     def get_account_snapshots(self):
         if not self.enabled:
             return ()
         accounts = []
-        for record in configured_credentials(self.auth_json_path, self.credential_db_path, ("anthropic",)):
+        for record in provider_credentials(self, self.integration_ids):
             account = AccountSnapshot(record.ref, int(time.time() * 1000), "Anthropic",
                                       plan="API pay as you go" if record.value.get("type") == "api" else None,
                                       availability="unavailable", reason="Supported quota/billing source unavailable")

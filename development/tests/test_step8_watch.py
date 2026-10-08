@@ -15,6 +15,7 @@ from pathlib import Path
 from development.tests.test_analysis_core import make_snapshot, part
 from development.tests.test_step7_reports_cli import FakeAccountProvider, FakePricingProvider
 from src.cache import CacheDatabase, CacheRepository
+from src.accounts.acquisition import AccountUpdate
 from src.config import load_configuration
 from src.domain import AccountRef, AccountSnapshot, QuotaComponent, IntegrationHealth, SessionCapabilities, TokenUsage
 from src.presentation import ReportRenderer, WatchRenderer
@@ -97,7 +98,29 @@ def openai_account():
     ), "OpenAI Plus")
 
 
-def make_service(tmp: str, source, *, now_ms: int = 2200, account_provider=None):
+def inline_account_refresh(service):
+    """Deterministic scheduler for pre-existing cadence/recovery unit fixtures.
+
+    The real bounded asynchronous transport is covered separately using events.
+    Existing account_quota_snapshots patches remain the fixture's provider seam.
+    """
+    pending = [False]
+
+    def begin():
+        pending[0] = True
+
+    def poll():
+        if not pending[0]:
+            return None
+        pending[0] = False
+        snapshots = service.account_quota_snapshots()
+        return AccountUpdate(snapshots, tuple(item.key for item in snapshots))
+
+    service.begin_account_refresh = begin
+    service.poll_account_refresh = poll
+
+
+def make_service(tmp: str, source, *, now_ms: int = 2200, account_provider=None, async_accounts=False):
     db = CacheDatabase(Path(tmp))
     db.initialize()
     repo = CacheRepository(db)
@@ -115,6 +138,8 @@ def make_service(tmp: str, source, *, now_ms: int = 2200, account_provider=None)
         config=config,
         now_ms=now_ms,
     )
+    if not async_accounts:
+        inline_account_refresh(service)
     return config, selection, service, db
 
 

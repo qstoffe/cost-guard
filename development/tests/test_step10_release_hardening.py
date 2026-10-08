@@ -9,7 +9,7 @@ from src.version import DISPLAY_VERSION, RELEASE_DATE
 ROOT = Path(__file__).resolve().parents[2]
 
 
-class ReleaseDocumentationTests(unittest.TestCase):
+class DistributionDocumentationTests(unittest.TestCase):
     def test_root_readme_documents_public_baseline_and_retains_proof_limits(self) -> None:
         text = (ROOT / "README.md").read_text(encoding="utf-8")
         self.assertIn(DISPLAY_VERSION, text)
@@ -17,7 +17,8 @@ class ReleaseDocumentationTests(unittest.TestCase):
         self.assertIn("Claude quotas remain experimental", text)
         self.assertIn("need separate live evidence", text)
         self.assertIn("## Setup and usage", text)
-        self.assertIn("## Release status", text)
+        self.assertIn("## Current version", text)
+        self.assertNotIn("## Release status", text)
         self.assertNotIn("## Release-candidate status", text)
         self.assertIn("OpenCode V1/V2 source selection", text)
         self.assertIn("under `windows/`", text)
@@ -29,6 +30,48 @@ class ReleaseDocumentationTests(unittest.TestCase):
         self.assertNotIn("Iteration 9", text)
         self.assertNotIn("Step 10 performs", text)
         self.assertNotIn("IN DEVELOPMENT", text)
+
+    def test_current_main_is_the_only_recommended_download(self) -> None:
+        text = (ROOT / "README.md").read_text(encoding="utf-8")
+        quick_start = text.split("## Quick start", 1)[1].split("## Core concepts", 1)[0]
+        self.assertIn("current `main`", quick_start)
+        self.assertIn("latest supported Cost Guard code", quick_start)
+        self.assertIn("main → Code → Download ZIP", quick_start)
+        self.assertIn("git clone --branch main https://github.com/qstoffe/cost-guard.git", quick_start)
+        self.assertIn("git pull --ff-only", quick_start)
+        self.assertNotIn("releases/latest", text)
+        self.assertNotIn("extracted package", text)
+        self.assertIn("Packaged GitHub Releases are currently paused", text)
+        self.assertIn("they do not imply a Git tag, release ZIP or GitHub Release", text)
+        self.assertIn("version numbers never trigger it automatically", text)
+
+    def test_source_zip_launchers_and_macos_remedy_are_documented(self) -> None:
+        text = (ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn("extraction tools may not preserve it", text)
+        self.assertIn("chmod +x macos/*.command development/macos/*.command", text)
+        self.assertNotIn("Files ship executable", text)
+        self.assertIn("Windows source ZIPs use the same `.cmd` launchers", text)
+        self.assertIn("from the extracted repository root", text)
+        self.assertIn("Get-ChildItem -Recurse | Unblock-File", text)
+
+    def test_all_maintainer_routes_make_packaging_explicit_only(self) -> None:
+        for name in ("AGENTS.md", "development/MAINTAINER.md", "development/README.md"):
+            with self.subTest(path=name):
+                text = (ROOT / name).read_text(encoding="utf-8")
+                self.assertIn("Do not build a release ZIP merely because the Cost Guard product version changed", text)
+                self.assertIn("packaged ZIP, release candidate, GitHub/package release", text)
+                self.assertIn("explicit", text)
+                self.assertIn("working tree", text)
+                self.assertIn("never commit/push automatically" if name.endswith("MAINTAINER.md") else "commit or push automatically", text)
+                self.assertIn("v80.0 tag", text)
+        guide = (ROOT / "development/FR_GUIDE.md").read_text(encoding="utf-8")
+        self.assertIn("Packaging requires a separate explicit request", guide)
+        agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+        normal = agents.split("## Normal verification", 1)[1].split("## Explicit packaging only", 1)[0]
+        self.assertNotIn("build_release.py", normal)
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        development_commands = readme.split("## Development", 1)[1].split("```text", 1)[1].split("```", 1)[0]
+        self.assertNotIn("build_release.py", development_commands)
 
     def test_version_history_marks_public_baseline_and_bounds_older_generations(self) -> None:
         text = (ROOT / "VERSION_HISTORY.md").read_text(encoding="utf-8")

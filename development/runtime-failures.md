@@ -16,6 +16,7 @@ Expected product conditions use local domain handling. Unexpected software fault
 | `cost-guard-startup-progress` / `_animation_root` | Disable transient animation; no ownership of calculated report state | ERROR through startup sink or independent plain stderr |
 | `claude-metadata` / `_ControlReader._read` | Expected OSError/JSON/queue/end become transport state; software faults discard reader output | Typed reader failure → optional provider ERROR, never default thread traceback |
 | `cost-guard-model-metadata` / `WatchModelDiscovery` worker | At most one release-date refresh; prices, retrieval time and in-run CCost never change; a software fault discards that result | Classified `unexpected_internal_error` in metadata state/Diagnostics plus software log; bounded retry continues |
+| `cost-guard-account-quota` / `AccountAcquisition` workers | At most four provider attempts, one per adapter; operational failures stay native, unexpected provider exceptions are logged and isolated | Provider ERROR with no invented capacity; only the main thread publishes generation-checked results, expires deadlines and renders |
 | Future/unclassified threads | No assumed isolation; `threading.excepthook` defaults fatal | Original stack/report plus pending fatal main-thread handoff |
 | Unraisable/finalizer code | Defensive hook; no repr(object)/err_msg/local capture; defaults fatal | Log/report and pending failure before successful application return |
 
@@ -32,7 +33,7 @@ This v80.10 audit covers every production broad catch, including those removed o
 | HTTP account response parsing | Expected transport and bounded JSON-tree validation are handled at those calls; internal normalization faults log and replace only that account with ERROR |
 | Anthropic optional reader | Expected OSError/ValueError produce provider error; unknown faults reach ReportService's isolated provider boundary |
 | Claude discovery / usage | Operational transport/metadata errors retain policy; unknown discovery faults reach isolated provider boundary; unknown quota faults log and clear quotas into ERROR |
-| ReportService `_quotas` | Failed provider result becomes explicit provider ERROR, not silent omission; materialize generators before accepting observations; unexpected orchestration outside acquisition propagates |
+| AccountAcquisition provider boundary / ReportService `_quotas` | Failed provider result becomes explicit provider ERROR, not silent omission; materialize generators before accepting observations; unexpected orchestration outside acquisition propagates |
 | Pricing promotion-cache decoding | Narrow malformed persisted data; no generic catch |
 | Pricing probe / refresh | External fetch OSError becomes typed PricingUnavailableError, including cold/no-cache outage; only that domain condition permits normal unavailability/verified cached fallback; software faults propagate |
 | Pricing optional release enrichment | Every outcome is classified (DNS/connection/TLS/HTTP/timeout/parse/schema/match); verified dates are kept. An unexpected enrichment fault is logged, recorded as `unexpected_internal_error` and retried with backoff; pricing itself is unaffected |

@@ -39,14 +39,19 @@ def recovery_account_keys(
 def reconcile_accounts(
     previous: Sequence[AccountSnapshot], fresh: Sequence[AccountSnapshot],
     seen: Mapping[AccountKey, int], *, now_ms: int, recovering: bool = False, update_seen: bool = True,
+    observed_keys: Sequence[AccountKey] | None = None,
 ) -> tuple[tuple[AccountSnapshot, ...], dict[AccountKey, int], bool]:
     old = {item.key: item for item in previous}
     incoming = {item.key: item for item in fresh}
     timestamps = dict(seen)
+    observed = set(observed_keys) if observed_keys is not None else None
     result = []
     for key in dict.fromkeys((*old, *incoming)):
         prior = old.get(key)
         current = incoming.get(key)
+        if current is not None and observed is not None and key not in observed:
+            result.append(prior or current)
+            continue  # Unrelated completion cannot erase this account's stale state.
         recent = prior is not None and 0 <= now_ms - timestamps.get(key, 0) <= MAX_STALE_MS
         retain = prior is not None and not durable_quota_failure(prior) and (recent or recovering)
         if durable_quota_failure(current):
@@ -90,7 +95,7 @@ def reconcile_accounts(
                                   warnings=current.warnings or (prior.warnings if current.status is AccountUsageStatus.UNKNOWN else ()))
         if prior and current.plan is None:
             current = replace(current, plan=prior.plan)
-        if update_seen and current.availability in {"available", "partial"}:
+        if update_seen and (observed is None or key in observed) and current.availability in {"available", "partial"}:
             timestamps[key] = now_ms
         result.append(current)
     return tuple(result), timestamps, any(item.availability == "stale" for item in result)

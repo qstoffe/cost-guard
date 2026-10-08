@@ -28,6 +28,18 @@ Both modes use one deterministic sorter: descending full-precision base price; f
 
 Without eligible token data, Relative CCost stays blank and the existing hidden synthetic 2/96/1/1 mix drives the same sorter. It is never reported as observed Token Mix %. Completed-prompt eligibility, availability filtering in normal reports, full-catalog selection in `--all-models`, promotions, release dates and New Models notices remain unchanged.
 
+Recognized stable GPT/Claude/Gemini/Grok versions are faded when a numerically newer version of the same manufacturer, family and meaningful variant appears in the current table. For xAI's standard Grok names, showing Grok 4.7 fades Grok 4.5 and 4.6, not 4.7. This means only **superseded in this comparison**, not officially deprecated or better. Unknown, preview, experimental and fast-mode names remain untouched. Availability-filtered normal reports and full-catalog reports can intentionally classify the same model differently.
+
+The presentation modifier attenuates each cell's original color independently (including gold promotions and green recent-release segments), adapting to the built-in dark/light themes and resolved custom colors. Borders/headers are unchanged. No rows, rates, multipliers, token mix, ordering, promotion/New Models semantics or CCost are changed; plain output is byte-for-byte equivalent in information and geometry.
+
+## Account acquisition
+
+Local read-only credential discovery shares OpenCode auth/SQLite reads, preserves per-integration V2 priority, legacy fallback and explicit file-only paths, and never copies credentials into Cost Guard storage. Other supported identities such as Claude CLI remain separate. Presence is a candidate, never proof of a plan or entitlement.
+
+At most four provider jobs run concurrently, including multiple-account work within a provider, and overlap normal-report analysis. The report's final remaining wait is at most 15 seconds; a provider attempt expires after 45 seconds in Watch. Existing transport deadlines remain. Failures/timeouts keep unknown/partial/error semantics, not false zero capacity; unexpected provider defects use sanitized RuntimeErrors logging.
+
+Watch's first local view does not wait for HTTPS. Its main-thread one-second status wake applies individual completions; workers never render. Normal one-minute refresh rechecks inventory only as needed from source revisions (including SQLite WAL); additions/removals are reflected without restart. Identity-aware stale retention, bounded resume retries and refresh cadence remain. Expired/old-generation results are ignored; a timed-out request keeps its bounded worker slot until it actually returns, preventing retry/thread growth. Shutdown discards pending output without waiting for in-flight HTTP. Diagnostics contains only allowlisted acquisition timings/counts, not credentials.
+
 Three independent concepts:
 
 - **Usage:** observed input/cache/output/reasoning token activity and requests.

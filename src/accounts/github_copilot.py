@@ -28,7 +28,7 @@ from src.domain import (
     QuotaWindowKind,
 )
 from .base import normalize_quota
-from .credentials import configured_credentials
+from .credentials import provider_credentials
 
 ENTITLEMENT_URL = "https://github.com/github-copilot/chat/entitlement"
 INTERNAL_USER_URL = "https://api.github.com/copilot_internal/user"
@@ -321,6 +321,7 @@ def _combine_quota(entitlement: QuotaSnapshot, user: QuotaSnapshot) -> QuotaSnap
 
 class GitHubCopilotAccountProvider:
     provider_id = "github-copilot"
+    integration_ids = ("github-copilot", "github-copilot-enterprise")
     included_usage = False
     capabilities = ProviderCapabilities(account_quota=True)
 
@@ -343,8 +344,7 @@ class GitHubCopilotAccountProvider:
     def probe(self) -> IntegrationHealth:
         if not self.enabled:
             return IntegrationHealth(True, False, "disabled in config")
-        records = configured_credentials(self.auth_json_path, self.credential_db_path,
-                                         ("github-copilot", "github-copilot-enterprise"))
+        records = provider_credentials(self, self.integration_ids)
         return IntegrationHealth(bool(records), bool(records), "configured Copilot account" if records else "Copilot account not configured")
 
     def get_quota_snapshot(self) -> QuotaSnapshot:
@@ -360,8 +360,7 @@ class GitHubCopilotAccountProvider:
     def get_account_snapshots(self):
         if not self.enabled:
             return ()
-        records = configured_credentials(self.auth_json_path, self.credential_db_path,
-                                         ("github-copilot", "github-copilot-enterprise"))
+        records = provider_credentials(self, self.integration_ids)
         accounts = []
         for index, record in enumerate(records):
             credential = credential_from_auth_object({record.ref.provider_id: record.value})

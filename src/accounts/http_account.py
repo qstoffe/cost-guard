@@ -6,7 +6,7 @@ from pathlib import Path
 import time
 
 from src.domain import AccountSnapshot, IntegrationHealth, ProviderCapabilities
-from .credentials import configured_credentials, resolve_auth_path
+from .credentials import provider_credentials, resolve_auth_path
 from .http_transport import bearer_key, get_account_json, validate_json_tree
 from src.runtime_errors import recoverable, recovered
 
@@ -24,7 +24,7 @@ class HttpAccountProvider:
         self.clock_ms = clock_ms or (lambda: time.time_ns() // 1_000_000)
 
     def records(self):
-        return configured_credentials(self.auth_json_path, self.credential_db_path, self.integration_ids) if self.enabled else ()
+        return provider_credentials(self, self.integration_ids) if self.enabled else ()
 
     def diagnostic_inventory(self):
         records = self.records()

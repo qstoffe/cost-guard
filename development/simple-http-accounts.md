@@ -29,7 +29,7 @@ Rows have an explicit maximum (engine hard maximum 16); the account hard maximum
 
 ## Credentials and transport
 
-Inventory uses `credentials.py` unchanged. V2 rows win per integration, including inactive or unusable rows; legacy auth fallback follows the existing rules. Explicit `authJsonPath` stays file-only. Each record uses its existing source-aware `AccountRef`, never provider ID or secret bytes as identity. One failing record cannot hide another account. OAuth is never sent as an API key; unsupported configured credentials remain visible as unavailable without requests.
+Inventory uses `credentials.py` plus a shared read-only revision view in `discovery.py`; acquisition pins each provider's records before worker dispatch. V2 rows win per integration, including inactive or unusable rows; legacy auth fallback follows the existing rules. Explicit `authJsonPath` stays file-only. Each record uses its existing source-aware `AccountRef`, never provider ID or secret bytes as identity. One failing record cannot hide another account. OAuth is never sent as an API key; unsupported configured credentials remain visible as unavailable without requests.
 
 Only maintained HTTPS endpoints and GET are supported. Requests send Bearer authentication and `Accept: application/json`. The stdlib transport does not use ambient proxies, redirects, cookies, request bodies, arbitrary headers or login/refresh. All 3xx responses are rejected without contacting the destination. TLS uses standard certificate verification. Keys remain memory-only, are excluded from repr/diagnostics and are never cached, rewritten or refreshed.
 
@@ -62,6 +62,8 @@ The response shape is less stable than the documented endpoint. Unknown buckets/
 ## Lifecycle, presentation and diagnostics
 
 Providers participate in the existing report and independent Watch account refresh. There is no second polling/cache mechanism and no request on every redraw. Existing stale TTL, bounded recovery and auth rejection behavior applies per full account key. Model availability, pricing, CCost and source lifecycle are unaffected by failed account observations.
+
+`acquisition.py` owns at most four daemon provider workers and one in-flight attempt per adapter. Normal-report analysis overlaps acquisition; final remaining wait is capped at 15 seconds. Watch publishes individual results from its main-thread status wake, without waiting for a batch or first-view quotas. A 45-second attempt deadline invalidates output, not the underlying HTTP slot; retries cannot create concurrent duplicates. Local reinventory at the normal refresh cadence detects changed sources/WAL, account additions/removals and credential generations. Close discards output without joining stuck network calls; credentials stay memory-only. Operational failures remain native; unexpected provider faults use RuntimeErrors and an explicit ERROR snapshot.
 
 The shared account renderer owns alignment, remaining bars, money, balances and narrow fallback. No OpenRouter/DeepSeek/MiniMax renderer branches exist. Capacity with a real denominator or explicit provider-reported percentage gets a bar; balance/spend without capacity remains text. Existing zero/unknown balance visibility rules are preserved.
 

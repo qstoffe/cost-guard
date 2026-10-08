@@ -2,7 +2,7 @@
 
 ## Goals
 
-Cost Guard v80 retains the v78 Python architecture and v77 behavioral reference. New sources/providers are additions, not cross-cutting rewrites.
+Cost Guard v80 retains v78 Python/v77 behavior contracts; integrations are additions, not rewrites.
 
 Core product principles:
 
@@ -76,7 +76,9 @@ These are intentionally separate roles.
 - **Account Provider:** account/subscription quota, usage windows, balances and reset metadata.
 - **Pricing Provider:** model price/rate metadata used for repricing/comparison/fallback valuation.
 
-`src/accounts/credentials.py` inventories configured accounts only within the selected OpenCode installation. V2 credential rows take precedence per integration; legacy `auth.json` is used only when that integration has no V2 rows. Read errors fail closed, explicit auth overrides remain file-only, and secrets stay memory-only. Stable account IDs or source-row locators distinguish accounts; identical proven identity may deduplicate, never provider ID alone. Quota-visible inactive accounts do not change inference routing or historical attribution.
+`accounts/credentials.py` reads only the selected installation: V2 wins per integration, legacy applies without V2 rows, explicit overrides are file-only, read errors fail closed and secrets stay memory-only. Proven account IDs/source locators distinguish accounts, never provider alone; inactive quota visibility changes neither inference nor history.
+
+`accounts/discovery.py` shares source/WAL views; other identities keep their probe. Neutral `accounts/acquisition.py` owns four daemon workers, sequences/45s deadlines and nonblocking close. Only callers apply results; expired generations are discarded, stuck slots never multiply. Workers cannot render/mutate analysis/persistence. Normal reports overlap analysis (15s final wait); Watch publishes individual results without startup HTTPS. Only observed accounts advance timestamps; all exits close workers. [Account contracts](simple-http-accounts.md) own details.
 
 Providers return independent native account/quota/billing components. Copilot preserves degraded evidence; unlimited/blocked requires explicit native state. OpenAI owns rolling/model windows/credits. Anthropic API and Claude Code logins stay separate; [Claude contracts](claude-code.md) own SDK, identity and privacy boundaries.
 
@@ -124,17 +126,19 @@ The latest assistant's `termination` ends running/duration and distinguishes suc
 
 ## Reports
 
-`src/reports/` owns one-shot use cases and neutral projections over abstract sources/providers, analysis and cache; never concrete OpenCode/GitHub integrations, Watch or presentation. Bootstrap wires concrete implementations into these contracts.
+`src/reports/` owns use cases/neutral projections over abstract sources/providers, analysis and cache; never concrete integrations, Watch or presentation. Bootstrap wires implementations.
 
 Candidate root selection uses activity across the whole known causal session tree, not only the root session timestamp, so newly updated child work is not skipped. Hydrated snapshots/analysis remain the semantic authority; session metadata activity is only a bounded discovery gate. Session dominant model is selected by whole-session attributed CCost; listing order is recent tree activity, never cost.
 
-Immutable projections cover dashboard, full-catalog, session-list and detail/date modes. Dashboard/catalog sample 100 eligible prompts by newest tree activity; stop only when unseen activity is older than the cutoff (ties eligible). Causal hydration remains authoritative. Dashboard quotas use provider observations, not history. Other reports do not fetch quotas; lists analyze requested roots, detail/date modes project prompts. No daily graph/monthly usage projection remains.
+Immutable projections cover dashboard/catalog, lists and detail/date modes. Dashboard/catalog sample 100 eligible prompts by newest tree activity, stopping only below the cutoff (ties qualify); hydration is authoritative. Quotas use provider observations, not history; other modes fetch none. Lists analyze requested roots; detail/date project prompts. No graph/monthly usage projection remains.
 
 Dashboard mix includes running/interrupted usage; Relative CCost keeps completed eligibility/count. Scans respect both cutoffs. `reports/token_mix_history.py` scans without a ledger, with fail-open filtering and shown-request totals. `presentation/definitions.py` owns definitions; `presentation/model_comparison.py` aligns fields before color. Normal tables have four columns; full-catalog tables add exact USD tiers/boundaries even under fallback. Presentation never recomputes valuation.
 
+`presentation/model_supersession.py`/`AnsiStyler` own conservative displayed-row classification/hue fading, never pricing, sorting, selection, notices or geometry.
+
 V2 availability uses the service's global `/api/model` enabled selectable `id` (not `modelID`), only once settled: lazy location boot returns valid empty/partial lists. `sources/model_availability.py` rejects controls/malformed shapes and owns CLI compatibility, independent of quotas. Pricing owns exact reference identities and `pricing/identities.py`'s bounded verified dated/context aliases; explicit variant rates win, ambiguity stays unknown, input-token tiers remain intact; no fuzzy Claude suffix inference. Failed lookups visibly fail open to a pricing catalog; settled empty lists stay empty. Highlights follow selection; `--all-models` bypasses availability.
 
-`reports/accounts.py` retains attributed CCost/billing; visible quota never attributes history. Dashboard accounts show native quotas/status/balances, not local CCost. Billing needs evidence, not inclusion; percentage-only quota never implies dollars. `presentation/accounts.py` shares 10-cell bars, independent account/primary-label alignment, merged percentage/native values, balance visibility and elapsed reset tiers. Warnings stay indented. Watch prefers compact rows for any count with individual vertical fallback; reports retain units/money/verbose resets. Remaining renders unchanged Pace inline in Watch, separately in reports; only paced compact quotas omit duplicate resets. Watch omits AI-credit units/conversion. Copilot's positive reported overage allowance is a separate native billing limit, never a balance or included Pace. No provider-specific renderer branches. Pricing diagnostics use RelCost samples; Copilot gross daily billing is omitted.
+`reports/accounts.py` separates attributed CCost/billing from native dashboard capacity/status/balances: visibility never attributes history, inclusion never proves billing, percentages never imply money. `presentation/accounts.py` shares bars/alignment, native values, resets and warnings; Watch uses compact/vertical fallback, reports retain units/money/verbose resets. Remaining is unchanged Pace; only paced compact rows omit duplicate resets. Watch omits AI-credit conversion; Copilot overage is a separate limit, not balance/Remaining. No provider renderer branches or gross daily billing. [Account presentation](../docs/account-support.md) owns details; pricing diagnostics stay sample-scoped.
 
 ## Cache
 

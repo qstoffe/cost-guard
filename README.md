@@ -20,11 +20,24 @@ Live OpenCode prompts/sessions: model/effort, CCost, calls, context development 
 
 ## Quick start
 
-Extract the [release ZIP](https://github.com/qstoffe/cost-guard/releases/latest), keeping its folder structure. Install **Python 3.11+**. Standard supported OpenCode installations need no Cost Guard configuration.
+Cost Guard changes rapidly. Use **current `main`**: the latest supported Cost Guard code.
+
+Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Extract with the folder structure intact; download again to update.
+
+With Git:
+
+```sh
+git clone --branch main https://github.com/qstoffe/cost-guard.git
+cd cost-guard
+# Later, on main:
+git pull --ff-only
+```
+
+Install **Python 3.11+**; standard supported OpenCode installations need no configuration.
 
 ### Windows
 
-Double-click the ready-to-use `.cmd` launchers under `windows/`; no manual Python commands needed:
+Double-click the `.cmd` launchers under `windows/`:
 
 | Launcher | Mode |
 | --- | --- |
@@ -35,28 +48,22 @@ Windows launchers reuse one persistent PowerShell console: completion, errors an
 
 ### macOS
 
-Equivalent `.command` launchers are under `macos/`:
+Equivalent launchers are under `macos/`:
 
 | Launcher | Mode |
 | --- | --- |
 | `Cost Guard.command` | Normal report. |
 | `Cost Guard Watch.command` | Live/global Watch; Ctrl+C exits. |
 
-Files ship executable. Use Finder's **Open** for quarantine prompts.
+Prefer `git clone` on macOS: Git records launchers as executable. Source ZIPs carry executable metadata, but extraction tools may not preserve it. After extracting, run from the repository root:
 
-### Python CLI
-
-From the extracted package root:
-
-```text
-python cost-guard.py                # Normal report
-python cost-guard.py --watch        # Live/global Watch; Ctrl+C exits
-python cost-guard.py --token-mix    # Usage by model/token category
-python cost-guard.py --sessions 10  # Latest 10 root sessions
-python cost-guard.py --help
+```sh
+chmod +x macos/*.command development/macos/*.command
 ```
 
-Use `python3` on macOS if needed, or `py -3` on Windows. See [all commands](#setup-and-usage).
+Use Finder's **Open** for quarantine prompts.
+
+For Python CLI commands, see [setup and usage](#setup-and-usage). Use `python3` on macOS or `py -3` on Windows if needed.
 
 ## Core concepts
 
@@ -91,7 +98,7 @@ Details: [normal report](#normal-report), [model comparison](#model-comparison),
 
 ![Cost Guard Token Mix: model/category usage and CCost](docs/images/cost-guard-token-mix.png)
 
-See [Token Mix reference](#token-mix--by-model---token-mix). Screenshots are illustrative and may show an earlier Cost Guard release.
+See [Token Mix reference](#token-mix--by-model---token-mix). Screenshots are illustrative and may show an earlier Cost Guard product version.
 
 ## Requirements
 
@@ -109,7 +116,7 @@ See [Token Mix reference](#token-mix--by-model---token-mix). Screenshots are ill
 
 ## Setup and usage
 
-Check `python --version` is 3.11+. Full commands, from the extracted folder:
+Check `python --version` is 3.11+. Full commands, from the repository root:
 
 ```text
 python cost-guard.py                            # Available models + account quotas
@@ -134,7 +141,7 @@ Cost Guard uses `config/default-config.jsonc`. Create optional `config/user-conf
 
 Cost Guard uses **0BSD**: use, modify and redistribute, including commercially, without attribution. See `LICENSE`.
 
-Windows may show SmartScreen warnings for unsigned downloaded launchers. After verifying the ZIP's source, you may remove its download mark:
+Windows source ZIPs use the same `.cmd` launchers; retain the folder structure. SmartScreen may warn about unsigned downloaded launchers. Verify the ZIP came from this repository's `main` before removing download marks from the extracted repository root:
 
 ```powershell
 Get-ChildItem -Recurse | Unblock-File
@@ -162,15 +169,17 @@ Reports show `OpenCode not found` only when selection fails and no PATH executab
 
 ## Normal report
 
-`python cost-guard.py` shows `CCost:`, `Token Mix %:` and `Relative CCost:` definitions, models/notices, then `Accounts Overview`. Token Mix % covers up to 100 latest visible prompts with telemetry, including running/interrupted/child work: prompt count, volume (`137.1M`), shares and CCost. No monthly usage, prompt detail or graph is built.
+`python cost-guard.py` shows CCost/Token Mix %/Relative CCost definitions, models/notices and `Accounts Overview`. Token Mix covers up to 100 latest visible prompts with telemetry (including running/interrupted/child work): count, volume, shares and CCost. No monthly usage, prompt detail or graph is built.
 
 ### Model comparison
 
-**Relative CCost** applies the latest-100 completed-prompt I/C/W/O mix to each published tier, against the same cheapest comparable **base** price (`1.0x`). Illustrative `8.0x → 16.0x (>200K)` means a price increase above 200000 input tokens; `≥` is inclusive. Actual rates apply at every tier. Running/aborted prompts are excluded. Without samples, values stay blank; hidden 2/96/1/1 sorts prices, never shown as observed usage.
+**Relative CCost** applies the latest-100 completed-prompt I/C/W/O mix to every tier against the cheapest comparable **base** (`1.0x`). Illustrative `8.0x → 16.0x (>200K)` means an increase above 200000 input tokens; `≥` is inclusive. Running/aborted prompts are excluded. Without samples, values stay blank; hidden 2/96/1/1 drives sorting only.
 
-Availability uses settled V2 `/api/model` IDs (V1: `opencode models`). Exact/verified aliases match; explicit variant rates win, ambiguous prices stay unknown. Lookup failures warn and show the catalog. Unpriced models have no row.
+Availability uses settled V2 `/api/model` IDs (V1: `opencode models`), exact/verified aliases and explicit variant rates. Ambiguous prices stay unknown; failed lookups warn/show the catalog. Unpriced models have no row.
 
 Both modes sort by full-Decimal base/higher price descending, earlier context boundary, then name alphabetically; repeat for later tiers. One-decimal display never controls order; unknown prices stay unknown.
+
+**Faded rows** mean a newer recognized same-family/variant version is shown here, not official deprecation. Matching is conservative/numeric; selection, ordering and prices stay unchanged. See [model comparison](docs/usage-and-cost.md#model-comparison).
 
 `--all-models` adds exact native **GitHub USD/M I/C/W/O**: all tiers/boundaries even without a mix, no availability/accounts. Normal reports have four columns:
 
@@ -230,7 +239,9 @@ Persisted V2 terminal evidence ends the matching attempt (duration freezes) and 
 
 ## Account quota blocks
 
-Only detected/configured accounts appear. Same-provider accounts retain source-aware identities. Upstream labels distinguish identical provider/plan rows; unknown labels use neutral ordinals, never invented Personal/Work labels.
+Only detected/configured accounts appear, retaining source-aware identities. Upstream labels or neutral ordinals distinguish same-provider rows; Personal/Work labels are never invented.
+
+Shared read-only discovery skips absent providers. Four quota workers overlap analysis; final waiting is capped at 15s, never inventing capacity. See [acquisition contracts](docs/account-support.md#credentials-refresh-and-troubleshooting).
 
 Accounts share aligned 10-cell remaining bars, native values, resets and narrow fallback. Bars require real provider-reported capacity (a denominator or explicit percentage); balance/spend alone stays textual and is never CCost.
 
@@ -239,6 +250,8 @@ Accounts share aligned 10-cell remaining bars, native values, resets and narrow 
 ## Watch
 
 Watch shares report analysis and groups sessions by latest activity (oldest first; session-ID ties). `watchDashboardMaxRows` (default 14) limits retained/displayed prompts only; active/recent rows stay protected, so it is not a hard maximum. Prompt/compaction order is preserved.
+
+Watch's first view never waits for quotas. Accounts arrive individually on the main thread; normal refresh discovers account changes without reparsing unchanged sources. Identity/recovery rules and late-reply protection remain.
 
 | Column | Meaning |
 | --- | --- |
@@ -270,11 +283,9 @@ Full redraws clear screen/scrollback; countdowns replace only the status line. V
 
 ## Pricing, quota and network behavior
 
-Watch checks Copilot hourly. V2 checks every 15 minutes only trigger an immediate forced Copilot refresh for newly observed model IDs. ✦ New Models shows only confirmed priced catalog models; CCost stays pinned. Release dates (models.dev, else the Copilot changelog) are health-checked separately; failures retry after ~1/5/15 min, then hourly (honoring 429), across restarts, keeping verified dates. Expired promotions revert to verified standard rates or are withheld.
+Watch checks Copilot hourly; 15-minute V2 checks trigger early refresh only for newly observed IDs. ✦ New Models requires verified priced models; CCost stays pinned. Independent release-date recovery uses models.dev/changelog, ~1/5/15-minute then hourly retries, respecting 429 and retaining verified dates. Expired promotions revert to verified rates or are withheld.
 
-GitHub Copilot quota uses OpenCode's existing OAuth credential by default. `copilotQuota.authJsonPath` may override the path when a non-standard OpenCode setup requires it. Cost Guard reads credentials only for the request and never stores them in its own cache.
-
-Read-only V2 inventory takes priority over legacy auth; inactive accounts do not change login. Explicit paths stay file-only; invalid credentials are never replaced or sought in other installations. OpenAI/Claude quotas are version-sensitive/fail-soft.
+Quota credentials stay memory-only: V2 precedes legacy, explicit `authJsonPath` is file-only, inactive accounts never change login. No replacement credentials or other-installation search; OpenAI/Claude remain version-sensitive/fail-soft.
 
 ## Configuration
 
@@ -296,7 +307,9 @@ Useful settings include:
 - `thresholds`: running-cost, context, percentile and quota warning thresholds.
 - `colorScheme`, `colorSchemes`, `colors`: terminal palette selection and per-role overrides.
 
-`modelComparisonNew`: lime (classic 118) for new names/dates/notice labels. `modelComparisonPromotion`: gold (214) for active rates/Relative CCost/notice labels. `reportDefinitionLabel`/`reportDefinitionValue`: plain Yellow for definitions/live values. Light scheme: green 28/ochre 130. Other text is normal; release date stays last.
+`modelComparisonNew` colors new names/dates/notice labels; `modelComparisonPromotion` colors active rates/Relative CCost/notice labels. Classic: lime 118/gold 214; light: green 28/ochre 130. Definition roles use Yellow; release date stays last.
+
+Superseded cells fade their resolved/custom hues in dark/light themes. Gold stays gold; borders/plain output/width stay unchanged, with no new settings.
 
 Invalid configuration fails at startup; legacy `monthlyAiCredits` is ignored.
 
@@ -315,37 +328,35 @@ SQLite WAL, short transactions and bounded waits support concurrent report/globa
 
 ## Diagnostics for environment-specific problems
 
-For troubleshooting, use `Cost Guard Diagnostics` under `development/windows/` or `development/macos/`, or run from the package root:
+For troubleshooting, use `Cost Guard Diagnostics` under `development/windows/` or `development/macos/`, or run from the repository root:
 
 ```text
 python development/tools/collect_diagnostics.py
 ```
 
-Creates `diagnostics/cost-guard-diagnostics.zip`: **Full/local** tests, package validation (including failures), environment/version, source/wire statistics, timings, provider health and model-metadata health (classified per-source errors, even self-healed). The final screen shows only result, path and support address. `--no-network` skips pricing/quotas; `--skip-validation` is emergency/recursive-only.
+Creates `diagnostics/cost-guard-diagnostics.zip`: **Full/local** tests, package validation (including failures), environment, source statistics, timings, provider/metadata health and classified errors. The final screen shows result/path/support address. `--no-network` skips pricing/quotas; `--skip-validation` is emergency/recursive-only.
 
-Bundles omit prompt text, titles, raw payloads/auth, tokens and account labels/IDs; session/account-source IDs are hashed. Account evidence includes plan/status, numeric quota shape, credential discovery/category (never values), request/HTTP/schema classification, normalized component categories, malformed/ignored counts and MiniMax window/form recognition. Provider inventory is available even without live accounts.
+Bundles omit prompts, titles, raw payloads/auth, tokens and account labels/IDs; source IDs are hashed. Sanitized account evidence covers discovery/category, plan/status, numeric shape, HTTP/schema outcomes, component/malformed counts and acquisition timings. Inventory is available without live accounts.
 
 ### Internal software faults
 
 **`COST GUARD FAILED`** means an unexpected software fault: non-zero exit, an error log under `logs/errors/` and a report under `logs/crashes/`. It and other stopping errors end with the Diagnostics launcher path to run; nothing starts automatically. Isolated faults show ERROR while safe results continue. [Error diagnostics](docs/runtime-errors.md) explains privacy, 30-day retention and reporting fallback.
 
-## Release status
+## Current version
 
-**v80.20** simplifies model comparisons, adds exact USD tiers in `--all-models` and refines Diagnostics/state. v80.0 is the Python 3.11+ public baseline. Claude quotas remain experimental; account coverage/restart/sleep need separate live evidence.
+**v80.23** fixes fading of superseded xAI/Grok models. v80.0 is the Python 3.11+ public baseline. Claude quotas remain experimental; coverage/restart/sleep need separate live evidence.
+
+Product versions identify code state; they do not imply a Git tag, release ZIP or GitHub Release. Packaged GitHub Releases are currently paused. Recommending them at a slower/stable cadence requires an explicit policy change; version numbers never trigger it automatically.
 
 ## Development
 
-`AGENTS.md` routes maintainers to self-contained architecture, FR, test and release guidance under `development/`.
+`AGENTS.md` routes maintainers to `development/`. Verify the working tree, not ZIPs. Never commit or push automatically.
 
 ```text
-python development/tools/run_tests.py --suite quick      # default; bounded hosted-AI gate
-python development/tools/run_tests.py --profile runtime   # focused example
+python development/tools/run_tests.py --suite quick
 python development/tools/validate_package.py --working-tree
-python development/tools/run_tests.py --suite full       # unrestricted/local tier
-python development/tools/collect_diagnostics.py         # Full + validator + environment bundle
-python development/tools/build_release.py               # Quick-gated package build by default
-python development/tools/build_release.py --quick-already-run  # after same-tree Quick in a tight harness
-python development/tools/build_release.py --full-verification  # unrestricted local build
+python development/tools/run_tests.py --suite full
+python development/tools/collect_diagnostics.py
 ```
 
-The builder repeats its test tier and validation from a clean extraction; final releases require Full/local evidence. ZIPs go to git-ignored `releases/` and never include runtime, user-config, credential or Git debris.
+`development/tools/build_release.py` is for [explicitly requested packaging only](development/MAINTAINER.md#explicit-packaging-procedure); ZIPs go to git-ignored `releases/`.

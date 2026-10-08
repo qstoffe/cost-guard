@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deterministic release gate for Cost Guard. Python standard library only."""
+"""Deterministic working-tree and explicit-packaging gate. Python standard library only."""
 from __future__ import annotations
 
 import argparse
@@ -596,11 +596,11 @@ def check_public_hygiene(root: Path, results: Results) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--root", type=Path, help="validate an alternate extracted package root")
+    parser.add_argument("--root", type=Path, help="validate an alternate distributable tree root")
     parser.add_argument("--json", action="store_true")
     parser.add_argument(
         "--working-tree", action="store_true",
-        help="Validate the distributable view of a live extracted tree while ignoring runtime cache/diagnostics/logs/releases/user config/bytecode.",
+        help="Validate the distributable view of a working tree while ignoring runtime cache/diagnostics/logs/releases/user config/bytecode.",
     )
     args = parser.parse_args(argv)
     root = (args.root.resolve() if args.root else Path(__file__).resolve().parents[2])

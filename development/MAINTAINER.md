@@ -45,7 +45,7 @@ Do not create generic dumping grounds such as `helpers.py` or `utils.py` for unr
 
 ## File budgets and anti-bloat policy
 
-`development/tools/validate_package.py` is release-blocking. `development/file-budgets.json` is the machine-readable authority for design warnings and hard caps. Every packaged file receives at least a universal cap; important classes have stricter limits. Never raise a hard cap merely to make validation pass. Refactor/consolidate first; a cap change requires an explicit architectural decision.
+`development/tools/validate_package.py` gates both the distributable working-tree view and explicit packaging. `development/file-budgets.json` is the machine-readable authority for design warnings and hard caps. Every distributable file receives at least a universal cap; important classes have stricter limits. Never raise a hard cap merely to make validation pass. Refactor/consolidate first; a cap change requires an explicit architectural decision.
 
 The entry point has the strictest budget because it must remain a bootstrap. README, version history and maintainer/architecture prose are bounded so AI-driven append-only maintenance cannot grow them indefinitely.
 
@@ -62,7 +62,7 @@ For non-trivial changes:
 7. Review the complete change against the FR-start filesystem baseline and architecture boundaries.
 8. Run the appropriate verification tier: Quick + distributable-view validator in a constrained hosted harness; Full + validator/Diagnostics on an unrestricted local machine.
 9. Update current docs/version history only for behavior that actually exists.
-10. Package only after the available tier is green; never claim a Full/local gate that did not run and never commit/push automatically.
+10. Hand off the verified authoritative working tree; leave packaging untouched unless explicitly requested. Do not build a release ZIP merely because the Cost Guard product version changed. Never claim a Full/local gate that did not run and never commit/push automatically.
 
 Unexpected findings do not silently expand scope. Close the current todo, record evidence, then add/replan follow-up work. Repeated patch failures or long-running unfocused todos are planning failures: reread current files and decompose instead of retrying by inertia.
 
@@ -75,23 +75,25 @@ There are deliberately two verification tiers:
 - **Quick / constrained AI:** `python development/tools/run_tests.py --suite quick`. This is the default. Test files run as isolated subprocesses with hard per-file timeouts and bounded concurrency. It covers source normalization, analysis, report/Watch presentation and current regressions while excluding expensive package-mutation, builder and large benchmark checks. Use it in hosted ChatGPT/Anthropic/Google-style sandboxes or any environment with uncertain command wall-time. Pair it with `python development/tools/validate_package.py --working-tree`.
 - **Full / local unrestricted:** `python development/tools/run_tests.py --suite full`. This adds performance/parity, public diagnostics, release hardening, validator-negative and release-builder regression work. Prefer running the normal Diagnostics launcher on a real workstation because Diagnostics runs this Full tier plus distributable-view validation before collecting environment evidence, shows an interactive progress bar, and still creates a bundle when validation fails. `--skip-validation` exists only for recursive tests/emergency collection.
 
-Use focused `--profile`/`--pattern` runs while iterating. A hosted model should not start Full merely to appear thorough; bounded relevant tests plus Quick are the intended contract. A local coding agent working directly in an extracted package should run Full (or Diagnostics) before handing off when time/resources allow. Before removing a release-candidate label or declaring a final release, Full/local validation evidence is required in addition to real-environment smokes.
+Use focused `--profile`/`--pattern` runs while iterating. A hosted model should not start Full merely to appear thorough; bounded relevant tests plus Quick are the intended contract. A local coding agent working directly in the authoritative tree should run Full (or Diagnostics) before handing off. Before removing a release-candidate label or declaring a final packaged release, Full/local validation evidence is required in addition to real-environment smokes. Builder regression tests may create disposable archives in isolated test directories; they must not create a checkout deliverable.
 
 ## Secrets, runtime artifacts and packaging
 
 Never package or log credentials, OpenCode auth files, personal session exports, `config/user-config.jsonc`, runtime `cache/`, runtime `diagnostics/`, local `releases/`, `.git/`, `__pycache__`, `.pyc`, historical checkpoint artifacts or generated test/release debris. Tests/maintainer/architecture/source and root `AGENTS.md` are distributable and remain in the release ZIP so future maintainers receive the same contracts.
 
-`development/tools/build_release.py` always gates package validation plus a clean-extraction verification. In a command-time-limited harness, `--quick-already-run` may skip only the duplicate source Quick invocation after the same unchanged tree has just passed Quick; clean-extract Quick still runs. Its default behavior gate is the bounded Quick suite so RC artifacts can be produced safely in constrained AI harnesses; `--full-verification` upgrades both source and clean-extract gates to Full on an unrestricted machine. Builder calls nested inside tests may bypass only the duplicate outer behavior gate so packaging regression tests do not recurse. A final release must additionally have Full/local Diagnostics evidence; a Quick-gated RC must never be described as Full-verified.
+`development/tools/build_release.py` is explicit-only: run it only when the user requests a packaged ZIP, release candidate, GitHub/package release or package handoff requiring a distributable archive. It always gates package validation plus clean-extraction verification. In a command-time-limited harness, `--quick-already-run` may skip only the duplicate source Quick invocation after the same unchanged tree has just passed Quick; clean-extract Quick still runs. Its default behavior gate is Quick; `--full-verification` upgrades both source and clean-extract gates to Full. Builder calls nested inside tests may bypass only duplicate outer behavior gates to avoid recursion. A final packaged release additionally needs Full/local evidence; a Quick-gated RC is not Full-verified.
 
 ## Versioning and history
 
-Product versions are exactly `vMAJOR.MINOR`; no patch segment. Ordinary released work increments MINOR sequentially. A major is created only on explicit user decision. v78.0 is the final Python-rewrite baseline; subsequent feature/fix releases increment the v78 minor sequentially. A release candidate is not a completed release: its required verification must be completed or explicitly accepted before removing the candidate label.
+Product versions are exactly `vMAJOR.MINOR`; no patch segment. Ordinary completed product work increments MINOR sequentially; a major requires explicit user decision. Versions identify runtime output, Diagnostics, screenshots, troubleshooting, bug reports and version history independently of Git tags, GitHub Releases or release ZIPs; none is required for each version. v78.0 remains the Python-rewrite baseline. An explicitly requested packaged release candidate must complete its required verification or receive explicit acceptance before removing the candidate label.
+
+Current `main` is the recommended/latest supported distribution during rapid development. Packaged GitHub Releases are currently paused. Recommending them again at a slower/stable cadence requires a deliberate policy change, never an automatic version-number trigger.
 
 `VERSION_HISTORY.md` records net product state rather than every implementation attempt. Major entries contain at most 10 bullets. Keep at most the latest five explicit majors; older history collapses into a bounded `Earlier versions` summary. During an unreleased implementation checkpoint, history must not claim behavior that does not yet exist. The file has a hard size cap enforced by the validator.
 
-## Release procedure
+## Explicit packaging procedure
 
-For a release candidate or final release:
+Only for an explicitly requested packaged ZIP, release candidate, GitHub/package release or archive handoff, after the available verification tier is green:
 
 1. In a constrained hosted environment, run Quick + distributable-view validation. On an unrestricted/local machine run Full, preferably through Diagnostics so environment evidence and validation travel together.
 2. Full includes the large-month/performance gate; rerun focused benchmark work separately when report/cache/source-selection hot paths need diagnosis.
@@ -103,12 +105,14 @@ For a release candidate or final release:
 
 ## AI/session handoff contract
 
-Root `AGENTS.md` is the entry point for a fresh coding model. A model working on an extracted package should infer the workflow from the user's request, read the referenced maintainer/FR/architecture files, and edit the authoritative extracted tree directly rather than creating a shadow rewrite. Brainstorm/FR work remains non-implementing until the user explicitly transitions to implementation.
+Root `AGENTS.md` is the entry point for a fresh coding model. Infer the workflow from the user's request, read the referenced maintainer/FR/architecture files, and edit the authoritative tree directly rather than creating a shadow rewrite. Brainstorm/FR work remains non-implementing until explicitly authorized; implementation alone never authorizes packaging.
 
-Historical checkpoint files, prior release ZIPs and conversation artifacts supplied for context are **external references only**. They are never copied into a new release. Generated versioned ZIPs belong under the git-ignored `releases/` directory and that directory is excluded from package inventory. A final release uses `cost-guard-vMAJOR.MINOR.zip`; an explicitly requested release candidate may use `cost-guard-vMAJOR.MINOR-release-candidate-N.zip` while keeping the same unreleased product version.
+Historical checkpoint files, prior release ZIPs and conversation artifacts supplied for context are **external references only**. They are never copied into a new package. Explicitly generated ZIPs belong under git-ignored `releases/`, excluded from package inventory. A packaged release uses `cost-guard-vMAJOR.MINOR.zip`; a requested candidate may use `cost-guard-vMAJOR.MINOR-release-candidate-N.zip` without changing the product version. Ordinary development neither generates archives nor runs automatic cleanup; keep ZIPs only when explicitly built/requested.
+
+Published GitHub Releases are remote metadata, not locally generated files. Deletion/publication requires a separate explicitly authorized GitHub UI/API/CLI operation, never production code or normal cleanup scripts. Preserve the historical v80.0 tag unless the user explicitly requests its deletion.
 
 ## Public/open-source hygiene
 
 Cost Guard is distributed under the root `LICENSE` using SPDX license `0BSD`. Production/docs/tests must remain organization-neutral: do not add employer/customer-specific branding, internal URLs, credentials, paths or assumptions. In particular, avoid environment- or application-specific service URLs/endpoints for Ictx enrichment; if canonical/local data cannot separate such context robustly, keep it in the aggregate/Other context instead. Hygiene checks must themselves remain generic; never encode a named real organization as a banned token. Real-environment diagnostics must be privacy-conscious and omit prompt text, session titles, auth tokens, raw auth files and raw OpenCode payloads.
 
-All package-owned **directory names are lowercase**. This is a release-blocking validator invariant (`config/`, `development/`, `src/`, `windows/`, `macos/`, and runtime directories such as `cache/`/`diagnostics/`). File names may retain platform-friendly display casing, for example `windows/Cost Guard.cmd`.
+All package-owned **directory names are lowercase**. This is a working-tree and packaging validator invariant (`config/`, `development/`, `src/`, `windows/`, `macos/`, and runtime directories such as `cache/`/`diagnostics/`). File names may retain platform-friendly display casing, for example `windows/Cost Guard.cmd`.
