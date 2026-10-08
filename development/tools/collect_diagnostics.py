@@ -317,6 +317,41 @@ def _validation_test_suite(progress: StartupProgress, *, timeout: int = 900) -> 
         }
 
 
+def _macos_compatibility_checks() -> dict[str, Any]:
+    """Execute isolated cross-platform simulations, never invoking a real Mac CLI."""
+    command = _validation_command(
+        ROOT / "development/tools/macos_compatibility.py", timeout=30,
+    )
+    tail = command.pop("output_tail", "")
+    try:
+        result = json.loads(tail)
+        if not isinstance(result, dict) or not isinstance(result.get("cases"), list):
+            raise ValueError("invalid compatibility result")
+        allowed = {"mode", "native_macos_execution", "cases", "passed", "failed", "skipped", "ok"}
+        result = {key: value for key, value in result.items() if key in allowed}
+        clean_cases = []
+        for case in result["cases"]:
+            if isinstance(case, dict):
+                clean_cases.append({
+                    "id": str(case.get("id", ""))[:100],
+                    "status": str(case.get("status", "ERROR"))[:16],
+                    **({"error_type": str(case["error_type"])[:80]} if case.get("error_type") else {}),
+                })
+        result["cases"] = clean_cases
+        result["ok"] = bool(result.get("ok")) and bool(command["ok"])
+        return {**result, "elapsed_ms": command["elapsed_ms"]}
+    except (ValueError, TypeError, KeyError):
+        return {
+            "mode": "simulated-macos-behavior",
+            "native_macos_execution": False,
+            "ok": False,
+            "cases": [],
+            "error_type": "CompatibilityRunnerFailure",
+            "timed_out": bool(command.get("timed_out")),
+            "exit_code": command.get("exit_code"),
+        }
+
+
 def run_full_validation(progress: StartupProgress) -> dict[str, Any]:
     """Run the unrestricted/local validation tier without preventing diagnostics output."""
     progress.update("Running full deterministic test suite", 8)
@@ -336,6 +371,7 @@ def _text_summary(data: dict[str, Any]) -> str:
     validation = data.get("validation") or {}
     validation_ok = validation.get("ok")
     validation_text = "SKIPPED" if validation_ok is None else str(bool(validation_ok))
+    compatibility = data.get("macos_compatibility") or {}
     tests_ok = (validation.get("tests") or {}).get("ok")
     validator_ok = (validation.get("package_validator") or {}).get("ok")
     tests_text = "SKIPPED" if tests_ok is None else str(bool(tests_ok))
@@ -345,6 +381,10 @@ def _text_summary(data: dict[str, Any]) -> str:
         f"Generated: {data['generated_at_utc']}",
         f"Python: {data['environment']['python_version']}",
         f"Platform: {data['environment']['platform']}",
+        "",
+        f"macOS compatibility (simulated): {compatibility.get('ok', False)}",
+        f"  PASS={compatibility.get('passed', 0)} FAIL={compatibility.get('failed', 0)} SKIP={compatibility.get('skipped', 0)}",
+        "  This is not a native macOS execution.",
         "",
         f"Full validation: {validation_text}",
         f"  Tests: {tests_text}",
@@ -557,6 +597,8 @@ def main(argv: list[str] | None = None) -> int:
                     "error": "ERROR: Diagnostic collection unavailable",
                 },
             }
+        progress.update("Checking simulated macOS compatibility", 20)
+        data["macos_compatibility"] = _macos_compatibility_checks()
         if not args.skip_validation:
             try:
                 validation = run_full_validation(progress)

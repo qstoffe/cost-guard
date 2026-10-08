@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.11 — 2026-10-08
+
+- Run privacy-safe deterministic macOS-behavior simulations inside Diagnostics on Windows, macOS and Linux. Record per-check PASS/FAIL/SKIP and totals in diagnostics.json and summary.txt; no access to live credentials or OpenCode data, no native macOS guarantee.
+- Include bounded CLI discovery, XDG directories, V1 override, macOS app installation evidence, absent V2 service registration and Mac launcher contract checks; isolate execution with a 30-second subprocess timeout and sanitized results.
+
 ## v80.10 — 2026-10-07
 
 - Own unexpected Python failures before application/Diagnostics imports and at the final process boundary. Fatal faults show `COST GUARD FAILED`, return non-zero, and write a daily software-error log plus a standalone privacy-conscious crash report; intentional Ctrl+C/help/usage and expected operational conditions remain distinct.
