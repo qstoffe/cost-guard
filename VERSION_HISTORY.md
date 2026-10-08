@@ -1,5 +1,11 @@
 # Cost Guard version history
 
+## v80.13 — 2026-10-08
+
+- Guard V1 SQLite read errors including InterfaceError and OperationalError with sanitized source failures instead of unhandled SQLite exceptions.
+- Add simulated V1 SQLite schema, corrupt-file, WAL-concurrency and error-sanitization tests on all platforms; Diagnostics includes read-only SQLite triage without data rows, SQL text or paths.
+
+
 ## v80.12 — 2026-10-08
 
 - Normalize simulated XDG, V1 override and registration path comparisons across Windows filesystems to avoid false Mac compatibility failures.
@@ -21,12 +27,9 @@
 - Unify all three Windows launchers behind one persistent PowerShell session in the original console. The outer batch exits before Python runs; explicitly restored Ctrl+C handling stops Watch without a batch confirmation. Completion, failure and Ctrl+C leave an ordinary package-root prompt, without a Watch-only Enter-to-close path. Python 3.11+ detection and actionable errors live in the shared launcher boundary.
 - Treat only a typed session-disappearance/archive event as a non-fatal session Watch end. Unexpected ValueError and other terminal runtime/source failures reach bootstrap's non-zero result; Ctrl+C during Watch initialization also remains an intentional stop.
 
-## v80.8 — 2026-10-07
-
-- Make Watch session `Σ` the Decimal subtotal of exactly its displayed prompt/event rows, preserving unresolved `?`/`N/A` and native zero-cost compaction behavior. Attaching mid-prompt now includes that row's full known CCost in its session subtotal; row eviction changes the subtotal, not run accounting.
-- Keep `Watch total CCost` and `Token Mix %` run-scoped and deduplicated: completed pre-Watch requests remain excluded, so the run total may intentionally differ from session subtotals. Remove the unused per-session run partition and include row-subtotal amount/completeness in dashboard change detection.
-
 ## Earlier v80 history
+
+- v80.8 aligned Watch session subtotals with visible rows while preserving run-scoped CCost accounting.
 
 - v80.7 added shared Simple HTTP account providers and adapters for OpenRouter, DeepSeek and MiniMax, with sanitized diagnostics and no fabricated CCost.
 - v80.6 made Watch survive temporary source outages and retry V2 without a V1 fallback.

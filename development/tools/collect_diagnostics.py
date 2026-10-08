@@ -390,6 +390,7 @@ def _text_summary(data: dict[str, Any]) -> str:
         f"  Tests: {tests_text}",
         f"  Package validator: {validator_text}",
         "",
+        f"V1 SQLite triage: {(data.get('v1_sqlite_triage') or {}).get('status', 'unavailable')}",
         f"Configured source: {data.get('config', {}).get('open_code_source')}",
         f"Selected source: {(data.get('selection') or {}).get('selected')}",
     ]
@@ -453,6 +454,31 @@ def collect(*, network: bool, snapshots: int, test_service_start: bool = False) 
         "reference_valuation_unit": "CCost (Copilot AI-credit-equivalent; not billed money or deducted credits)",
     }
     data["sources"]["v1"] = _safe_source_stats(v1, snapshots=snapshots)
+    # Read-only V1 SQLite triage: no rows, SQL content or local paths included.
+    try:
+        import sqlite3
+        path = v1.database_path
+        if not path.is_file():
+            data["v1_sqlite_triage"] = {"phase": "discovery", "status": "missing"}
+        else:
+            try:
+                with v1._connection() as connection:
+                    connection.execute("SELECT 1").fetchone()
+                    schema = v1.inspect_schema()
+                data["v1_sqlite_triage"] = {
+                    "phase": "schema", "status": "healthy" if schema.supported else "unsupported_schema",
+                    "table_count": len(schema.tables),
+                }
+            except (sqlite3.Error, SourceError, OSError) as exc:
+                data["v1_sqlite_triage"] = {
+                    "phase": "open_or_read", "status": "error",
+                    "error_type": type(exc).__name__,
+                }
+    except (OSError, ValueError) as exc:
+        data["v1_sqlite_triage"] = {
+            "phase": "discovery", "status": "error", "error_type": type(exc).__name__,
+        }
+
     data["sources"]["v2"] = _safe_source_stats(v2, snapshots=snapshots)
     try:
         data["sources"]["v2"]["wire_observation"] = dict(v2.diagnostic_metadata())

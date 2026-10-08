@@ -290,8 +290,12 @@ class OpenCodeV1Source:
             connection.execute("PRAGMA query_only = ON")
             connection.execute("PRAGMA busy_timeout = 5000")
             yield connection
-        except sqlite3.DatabaseError as exc:
-            raise SourceDataError("OpenCode V1 database could not be read safely") from exc
+        except sqlite3.Error as exc:
+            # Includes OperationalError, InterfaceError and DatabaseError.
+            # Never leak SQLite's raw text (which may contain local paths).
+            raise SourceDataError(
+                f"OpenCode V1 SQLite {type(exc).__name__} during database read"
+            ) from exc
         finally:
             connection.close()
 

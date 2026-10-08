@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 import sys
 import tempfile
 import unittest
@@ -12,6 +13,8 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
+from src.sources.opencode_v1 import OpenCodeV1Source, REQUIRED_COLUMNS
+from src.sources.errors import SourceDataError
 from src.sources.discovery import (
     default_opencode_data_dir, default_opencode_state_dir,
     discover_v1_database_candidate, discover_v2_registration_candidate,
@@ -83,6 +86,67 @@ class MacCompatibilityChecks(unittest.TestCase):
             candidate = ServiceRegistrationCandidate(Path(tmp) / "state/service.json", "synthetic")
             with self.assertRaises((OSError, ValueError)):
                 read_v2_service_registration(candidate)
+
+    def test_v1_sqlite_readonly_valid_schema(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "opencode.db"
+            with sqlite3.connect(path) as connection:
+                for table, columns in REQUIRED_COLUMNS.items():
+                    connection.execute(
+                        f'CREATE TABLE "{table}" (' +
+                        ", ".join(f'"{name}" TEXT' for name in sorted(columns)) + ")"
+                    )
+            source = OpenCodeV1Source(path)
+            self.assertTrue(source.probe().healthy)
+            self.assertEqual((), tuple(source.list_sessions()))
+
+    def test_v1_sqlite_missing_schema_is_unhealthy(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "opencode.db"
+            with sqlite3.connect(path) as connection:
+                connection.execute("CREATE TABLE unrelated (id TEXT)")
+            self.assertFalse(OpenCodeV1Source(path).probe().healthy)
+
+    def test_v1_sqlite_invalid_database_is_unhealthy(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "opencode.db"
+            path.write_bytes(b"not a sqlite database")
+            source = OpenCodeV1Source(path)
+            self.assertFalse(source.probe().healthy)
+
+    def test_v1_sqlite_concurrent_wal_writer(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "opencode.db"
+            with sqlite3.connect(path) as writer:
+                writer.execute("PRAGMA journal_mode=WAL")
+                for table, columns in REQUIRED_COLUMNS.items():
+                    writer.execute(f'CREATE TABLE "{table}" (' +
+                                   ", ".join(f'"{name}" TEXT' for name in sorted(columns)) + ")")
+                writer.commit()
+                writer.execute("BEGIN IMMEDIATE")
+                writer.execute('INSERT INTO "session" ("id") VALUES (?)', ("synthetic",))
+                source = OpenCodeV1Source(path)
+                self.assertTrue(source.probe().healthy)
+                self.assertEqual((), tuple(source.list_sessions()))
+                writer.rollback()
+
+    def test_v1_sqlite_error_is_sanitized(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "opencode.db"
+            path.write_bytes(b"dummy")
+            source = OpenCodeV1Source(path)
+            # Opening succeeds in mock; SQL operation fails in the guarded read phase.
+            from contextlib import contextmanager
+            class FailingConnection:
+                def execute(self, *args, **kwargs):
+                    raise sqlite3.InterfaceError("private-path-or-secret")
+                def close(self):
+                    pass
+            with patch("src.sources.opencode_v1.sqlite3.connect", return_value=FailingConnection()):
+                with self.assertRaises(SourceDataError) as caught:
+                    source.inspect_schema()
+            self.assertIn("InterfaceError", str(caught.exception))
+            self.assertNotIn("private-path-or-secret", str(caught.exception))
 
     def test_mac_launcher_contracts(self):
         launchers = (
