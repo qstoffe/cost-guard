@@ -266,7 +266,7 @@ Session `Σ` sums its displayed prompt/event CCost before rounding, preserving `
 
 `Token Mix % · N prompts` shows run-scoped unique prompts, shares and CCost without volume/bar. Startup-running requests, between-poll completions, child work and compactions qualify; completed pre-Watch history does not. `Watch total CCost` sums qualifying usage (zero when none), unchanged by eviction/disappearance, resync or moves. It may differ from `Σ`: mid-prompt startup can show `Σ 78`, row `78`, run total `59`; eviction changes only row subtotals.
 
-Any account count uses compact rows when they fit, otherwise individual wrapped blocks. Resets use `Reset@...`; fixed quotas with Remaining omit duplicate compact reset text, retained in reports/narrow fallback:
+Any account count uses compact rows when they fit, then split rows, otherwise individual wrapped blocks. Resets use `Reset@...`; fixed quotas with Remaining omit duplicate compact reset text, retained in reports/narrow fallback:
 
 ```text
 GitHub Copilot Pro+   Month  ██████████ 100% · 7000/7000 · Remaining: 259/day · 350/workday
@@ -344,7 +344,7 @@ Bundles omit prompts, titles, raw payloads/auth, tokens and account labels/IDs; 
 
 ## Current version
 
-**v80.23** fixes fading of superseded xAI/Grok models. v80.0 is the Python 3.11+ public baseline. Claude quotas remain experimental; coverage/restart/sleep need separate live evidence.
+**v80.25** drops redundant BLOCKED text. v80.0 is the Python 3.11+ public baseline. Claude quotas remain experimental; coverage/restart/sleep need separate live evidence.
 
 Product versions identify code state; they do not imply a Git tag, release ZIP or GitHub Release. Packaged GitHub Releases are currently paused. Recommending them at a slower/stable cadence requires an explicit policy change; version numbers never trigger it automatically.
 

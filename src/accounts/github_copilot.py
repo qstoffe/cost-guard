@@ -231,6 +231,7 @@ def _quota_snapshot(
         used_fraction=1 - fraction if fraction is not None else None, remaining_fraction=fraction,
         native_used=used, native_limit=total if denominator_usable else None,
         native_unit="AI credits", unlimited=unlimited, reset_at_ms=reset_at_ms,
+        status=status,  # hasQuota belongs to this premium-interactions window
     )
     reason = "" if numeric_usable or unlimited else ("usage_unavailable" if denominator_usable else "denominator_unusable")
     return QuotaSnapshot(
@@ -308,6 +309,7 @@ def _combine_quota(entitlement: QuotaSnapshot, user: QuotaSnapshot) -> QuotaSnap
     status = entitlement.usage_status if entitlement.usage_status is not AccountUsageStatus.UNKNOWN else user.usage_status
     plan = entitlement.plan or user.plan
     return replace(data, plan=plan, usage_status=status,
+                   windows=tuple(replace(window, status=status) for window in data.windows),
                    billing_components=entitlement.billing_components or user.billing_components,
                    warnings=(("⚠  COPILOT PAUSED: GitHub reported hasQuota=false.",) if status is AccountUsageStatus.BLOCKED else ()),
                    observations={**data.observations, "plan": plan,

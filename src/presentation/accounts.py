@@ -10,7 +10,7 @@ import time
 from src.analysis.quota_pace import QuotaPace
 from src.analysis.timezones import resolve_timezone
 from src.analysis.valuation import ComparisonCost
-from src.domain import AccountUsageStatus, BillingComponent, QuotaComponent
+from src.domain import AccountSnapshot, AccountUsageStatus, BillingComponent, QuotaComponent
 from src.reports.models import AccountProjection
 from src.numbers import ccost_amount, consumed_capacity, remaining_capacity, exact_number
 from .terminal import AnsiStyler, StyledText
@@ -80,9 +80,11 @@ def _native_amount(value: Decimal, unit: str | None, *, kind: str = "exact") -> 
 
 def quota_parts(component: QuotaComponent, timezone_id: str, *, now_ms: int,
                 compact: bool = False, label_width: int = 4, watch: bool = False,
-                omit_reset: bool = False) -> tuple[StyledText, ...]:
+                omit_reset: bool = False, account_blocked: bool = False) -> tuple[StyledText, ...]:
+    """``account_blocked``: the account owns the restriction, so no per-window BLOCKED."""
     parts = []
     label = quota_label(component.label)
+    blocked = component.status is AccountUsageStatus.BLOCKED and not account_blocked
 
     def prefix(text: str) -> str:
         return text + " " if compact and not label_width else text.ljust(label_width) + "  "
@@ -93,9 +95,9 @@ def quota_parts(component: QuotaComponent, timezone_id: str, *, now_ms: int,
     elif fraction is not None:
         parts.append(StyledText(((prefix(label), None),) + format_quota_bar(fraction).parts))
     elif component.remaining is None and component.used is None and component.limit is None:
-        if component.status is not AccountUsageStatus.BLOCKED:
+        if not blocked:
             parts.append(StyledText(((prefix(label) + "N/A", None),)))
-    if component.status is AccountUsageStatus.BLOCKED:
+    if blocked:
         if parts:
             parts[-1] = StyledText(parts[-1].parts + ((" · BLOCKED", "copilotPausedWarning"),))
         else:
@@ -161,9 +163,26 @@ def pace_text(pace: QuotaPace, *, qualified: bool = False) -> str:
     return (quota_label(pace.label) + " " if qualified else "") + f"{remaining_capacity(pace.per_day)}/day · {workday}"
 
 
+def blocked_explained(snapshot: AccountSnapshot, *, now_ms: int) -> bool:
+    """A current account-scoped window known to be exactly exhausted explains BLOCKED.
+
+    Rounded display values, unknown fractions and expired/not-started windows never do.
+    """
+    def exhausted(item: QuotaComponent) -> bool:
+        if item.scope != "account" or item.unlimited or item.window_active is False:
+            return False
+        if item.reset_at_ms is not None and item.reset_at_ms <= now_ms:
+            return False
+        if item.remaining_fraction is not None:
+            return item.remaining_fraction == 0
+        return item.remaining == 0 and bool(item.limit)
+    return any(exhausted(item) for item in snapshot.quotas)
+
+
 def account_capacity_parts(account: AccountProjection, timezone_id: str, *, now_ms: int,
                            compact: bool = False, recovering: bool = False, watch: bool = False,
-                           primary_label_width: int = 0) -> tuple[StyledText, ...]:
+                           primary_label_width: int = 0, aligned: bool = False) -> tuple[StyledText, ...]:
+    """``aligned`` pads every compact quota label like the primary one (continuation lines)."""
     snapshot = account.account
     if snapshot.observations.get("parser_reason") == "software_failure":
         return (StyledText((("ERROR: Account refresh failed internally · retrying", "costQuotaWarning"),)),)
@@ -172,13 +191,14 @@ def account_capacity_parts(account: AccountProjection, timezone_id: str, *, now_
     label_width = max([4] + [len(label) for label in labels])
     if not watch and not compact:
         label_width = max(label_width, primary_label_width)
+    account_blocked = snapshot.status is AccountUsageStatus.BLOCKED
     merged_pace = set()
     for index, component in enumerate(snapshot.quotas):
         pace = next((item for item in account.pace if item.label == component.label), None)
         merge = watch and compact and pace is not None and sum(q.label == component.label for q in snapshot.quotas) == 1
-        components = quota_parts(component, timezone_id, now_ms=now_ms, compact=compact,
-                                 label_width=(primary_label_width or label_width) if index == 0 else (0 if compact else label_width),
-                                 watch=watch, omit_reset=merge)
+        width = (primary_label_width or label_width) if index == 0 or aligned else (0 if compact else label_width)
+        components = quota_parts(component, timezone_id, now_ms=now_ms, compact=compact, label_width=width,
+                                 watch=watch, omit_reset=merge, account_blocked=account_blocked)
         if merge and components:
             components = (*components[:-1], StyledText(components[-1].parts + ((" · Remaining: " + pace_text(pace), None),)))
             merged_pace.add(pace)
@@ -189,7 +209,7 @@ def account_capacity_parts(account: AccountProjection, timezone_id: str, *, now_
         prefix = "Remaining: " if compact else "Remaining".ljust(label_width) + "  "
         parts.append(StyledText(((prefix + pace_text(pace, qualified=len(account.pace) > 1), None),)))
     parts.extend(StyledText(((billing_text(item, watch=watch), None),)) for item in snapshot.billing if billing_visible(item))
-    if snapshot.status is AccountUsageStatus.BLOCKED:
+    if account_blocked and not blocked_explained(snapshot, now_ms=now_ms):
         parts.append(StyledText((("BLOCKED", "copilotPausedWarning"),)))
     if not snapshot.quotas and not snapshot.billing:
         state = "Quota temporarily unavailable" if recovering else "Quota " + snapshot.availability
@@ -232,21 +252,49 @@ def _wrapped(value: StyledText, styler: AnsiStyler, width: int) -> list[str]:
     return result
 
 
-def capacity_lines(account: AccountProjection, styler: AnsiStyler, timezone_id: str, *, width: int,
+def _split_compact(prefix: str, components: tuple[StyledText, ...], aligned: tuple[StyledText, ...],
+                   styler: AnsiStyler, width: int) -> list[str] | None:
+    """Pack whole compact components per line at ``|``; continuations start aligned
+    beneath the first component. None when even the first cannot sit beside the label."""
+    indent = " " * len(prefix)
+    if (not components or len(components) != len(aligned) or width - len(indent) < 20
+            or len(prefix) + len(str(components[0])) > width):
+        return None
+    lines, plain, styled = [], prefix + str(components[0]), prefix + _styled(components[0], styler)
+    for item, start in zip(components[1:], aligned[1:]):
+        if plain is not None and len(plain) + 3 + len(str(item)) <= width:
+            plain, styled = plain + " | " + str(item), styled + " | " + _styled(item, styler)
+            continue
+        lines.append(styled)
+        if len(indent) + len(str(start)) <= width:
+            plain, styled = indent + str(start), indent + _styled(start, styler)
+        else:
+            *wrapped, last = _wrapped(start, styler, width - len(indent)) or [""]
+            lines.extend(indent + line for line in wrapped)
+            plain, styled = None, indent + last  # a wrapped component never shares its line
+    return lines + [styled]
+
+
+def capacity_block(account: AccountProjection, styler: AnsiStyler, timezone_id: str, *, width: int,
                    force_vertical: bool = False, include_label: bool = True,
                    now_ms: int | None = None, account_label_width: int = 0,
                    recovering: bool = False, watch: bool = False,
-                   primary_label_width: int = 0) -> list[str]:
-    """One account per row/block; vertical fallback regenerates verbose components."""
+                   primary_label_width: int = 0) -> tuple[list[str], bool]:
+    """Lines plus whether the block is separated vertically (verbose or warned)."""
     now_ms = time.time_ns() // 1_000_000 if now_ms is None else now_ms
     prefix = account.label.ljust(account_label_width) + "   "
     lines = None
     if not force_vertical:
-        components = account_capacity_parts(account, timezone_id, now_ms=now_ms, compact=True, recovering=recovering,
-                                            watch=watch, primary_label_width=primary_label_width)
+        options = dict(now_ms=now_ms, compact=True, recovering=recovering, watch=watch,
+                       primary_label_width=primary_label_width)
+        components = account_capacity_parts(account, timezone_id, **options)
         plain = prefix + " | ".join(str(item) for item in components)
         if len(plain) <= width:
             lines = [prefix + " | ".join(_styled(item, styler) for item in components)]
+        else:
+            lines = _split_compact(prefix, components, account_capacity_parts(
+                account, timezone_id, aligned=True, **options), styler, width)
+    vertical = lines is None or bool(account.account.warnings)
     if lines is None:
         components = account_capacity_parts(account, timezone_id, now_ms=now_ms, recovering=recovering,
                                             watch=watch, primary_label_width=primary_label_width)
@@ -259,4 +307,17 @@ def capacity_lines(account: AccountProjection, styler: AnsiStyler, timezone_id: 
     for warning in account.account.warnings:
         lines.extend("  " + line for line in _wrapped(
             StyledText(((warning, "copilotPausedWarning"),)), styler, width - 2))
-    return lines
+    return lines, vertical
+
+
+def capacity_lines(account: AccountProjection, styler: AnsiStyler, timezone_id: str, **options) -> list[str]:
+    """One account per row/block; vertical fallback regenerates verbose components."""
+    return capacity_block(account, styler, timezone_id, **options)[0]
+
+
+def compact_label_fits(account: AccountProjection, timezone_id: str, *, width: int, now_ms: int,
+                       primary_label_width: int, recovering: bool = False) -> bool:
+    """Whether the account keeps its label beside compact quotas (single or split row)."""
+    components = account_capacity_parts(account, timezone_id, now_ms=now_ms, compact=True, watch=True,
+                                        primary_label_width=primary_label_width, recovering=recovering)
+    return bool(components) and len(account.label) + 3 + len(str(components[0])) <= width

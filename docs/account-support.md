@@ -10,6 +10,10 @@ Bars represent genuine provider-reported capacity: a real denominator or an expl
 
 Report/vertical Watch resets: <24h → `Reset in Nmin, HH:MM`; 24h–<7d → `Reset in Nh, Weekday HH:MM`; ≥7d → `Reset at YYYY-MM-DD HH:MM`. Elapsed-time tiers use whole units, configured timezone/English weekdays and no negative countdowns. Compact Watch uses `Reset@...` and the same underlying components.
 
+Watch keeps an account's label beside its compact quotas whenever possible. If the whole row is too wide, whole `|` components move to continuation lines indented beneath the first quota with aligned bars; only a component that still cannot fit wraps by itself. Genuinely narrow terminals keep the verbose block.
+
+Account-level `BLOCKED` belongs to the account, not to every window. When a current account-scoped window is known to be exactly 0% remaining, its bar and reset already explain the restriction, so no `BLOCKED` text appears. Otherwise, for example when the remaining quota is positive, merely rounds to 0%, is unknown, expired or not started, exactly one account-level `BLOCKED` remains. A window-specific block on an otherwise available account keeps its own indicator.
+
 ## GitHub Copilot
 
 Copilot preserves provider plan/status/usage when entitlement is zero, pooled or unusable. Business/Enterprise `hasQuota=false` survives degraded denominators; a known blocked state shows `⚠  COPILOT PAUSED`, while errors alone never imply blocked. Only explicit native unlimited state establishes unlimited capacity.

@@ -242,7 +242,8 @@ class LayoutTests(unittest.TestCase):
         text = watch_text(quotas(blocked, rolling()), width=240)
         primary = [line for line in text.splitlines() if re.search(r"[█░]{10}", line)]
         self.assertEqual(1, len({re.search(r"[█░]{10}", line).start() for line in primary}))
-        self.assertIn("BLOCKED", text)
+        self.assertNotIn("BLOCKED", text, "the exactly exhausted Month already explains the restriction")
+        self.assertIn("0% · 0/500", text)
         native = replace(rolling(), account=replace(rolling().account, quotas=(QuotaComponent("Balance", remaining=D(50), unit="widgets"),)))
         self.assertIn("50 widgets remaining", watch_text(quotas(native), width=160))
 
@@ -261,7 +262,7 @@ class LayoutTests(unittest.TestCase):
                         self.assertIn(row.label, text.splitlines())
                 self.assertTrue(all(len(line) <= width for line in text.splitlines()))
 
-    def test_three_accounts_compact_only_if_each_fits_and_fallback_is_verbose(self):
+    def test_three_accounts_compact_when_each_fits_and_split_before_verbose(self):
         copilot = replace(rolling("c", "Copilot Max"), account=replace(account("github-copilot", "c", plan="Max"), quotas=(
             QuotaComponent("Month", remaining_fraction=D("0.91")),)))
         rows = (rolling(), copilot, rolling("b", "Anthropic Pro"))
@@ -274,11 +275,15 @@ class LayoutTests(unittest.TestCase):
         self.assertIn("Reset@Saturday 22:00", wide)
         self.assertNotIn("Reset in", wide)
         mixed = watch_text(quotas(*rows), width=90)
-        self.assertIn("OpenAI Plus", mixed.splitlines())
-        self.assertIn("Anthropic Pro", mixed.splitlines())
-        self.assertTrue(any(line.startswith("Copilot Max") and "%" in line for line in mixed.splitlines()))
-        self.assertIn("Reset in 126min", mixed)
-        self.assertTrue(all(len(line) <= 90 for line in mixed.splitlines()))
+        lines = mixed.splitlines()
+        for row in rows:
+            self.assertEqual(1, sum(row.label in line for line in lines), "account name shown once")
+            self.assertTrue(any(line.startswith(row.label) and "%" in line for line in lines))
+        self.assertEqual(2, sum(line.startswith(" " * 16 + "Week ") for line in lines), "aligned continuation")
+        self.assertEqual(1, len({re.search(r"[█░]{10}", line).start() for line in lines if "█" in line}))
+        self.assertNotIn("Reset in", mixed)
+        self.assertNotIn("", lines[:-2], "no blank lines between split compact accounts")
+        self.assertTrue(all(len(line) <= 90 for line in lines))
 
     def test_report_and_narrow_watch_share_verbose_rolling_components(self):
         row = rolling()
@@ -287,7 +292,7 @@ class LayoutTests(unittest.TestCase):
         config["timezone"] = "UTC"
         ReportRenderer(config, stream=stream, color_enabled=False, terminal_width=160).render(
             ReportProjection(ReportKind.NORMAL, "Report", "V2", accounts_quotas=quotas(row)))
-        watch = watch_text(quotas(row), width=60)
+        watch = watch_text(quotas(row), width=40)
         for line in watch.splitlines():
             if "█" in line:
                 self.assertIn(line, stream.getvalue())

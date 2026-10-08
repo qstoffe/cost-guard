@@ -12,7 +12,7 @@ from src.watch.models import ToolObservation, WatchProjection, WatchRow, WatchSe
 
 from .terminal import AnsiStyler, Column, StyledText, fit, render_table
 from .terminal import terminal_content_width
-from .accounts import account_capacity_parts, capacity_lines, quota_label
+from .accounts import capacity_block, compact_label_fits, quota_label
 from .token_mix import prompt_scope, token_mix_line, token_mix_lines, watch_total_line
 from src.analysis.token_mix import TokenMix
 from src.analysis.context import PriceWarningSeverity
@@ -264,25 +264,19 @@ class WatchRenderer:
             return
         primary_width = max([4] + [len(quota_label(account.account.quotas[0].label))
                                   for account in quota.accounts if account.account.quotas])
-        # Only accounts that can fit at all participate in compact label padding;
-        # an oversized account keeps its own vertical fallback, not everyone else's.
-        compact_labels = []
-        for account in quota.accounts:
-            components = account_capacity_parts(
-                account, self.timezone_id, now_ms=projection.now_ms, compact=True, watch=True,
-                primary_label_width=primary_width,
-                recovering=account.account.key in projection.quota_recovering_accounts)
-            if len(account.label) + 3 + len(" | ".join(str(item) for item in components)) <= width:
-                compact_labels.append(len(account.label))
-        label_width = max(compact_labels, default=0)
+        # Only accounts whose label can sit beside compact quotas (one row or split at
+        # `|`) participate in label padding; an oversized account keeps its own
+        # vertical fallback, not everyone else's.
+        label_width = max((len(account.label) for account in quota.accounts if compact_label_fits(
+            account, self.timezone_id, width=width, now_ms=projection.now_ms, primary_label_width=primary_width,
+            recovering=account.account.key in projection.quota_recovering_accounts)), default=0)
         previous_vertical = False
         first = True
         for account in quota.accounts:
-            lines = capacity_lines(account, self.styler, self.timezone_id, width=width,
-                                    now_ms=projection.now_ms, watch=True,
-                                    account_label_width=label_width, primary_label_width=primary_width,
-                                    recovering=account.account.key in projection.quota_recovering_accounts)
-            is_vertical = len(lines) > 1
+            lines, is_vertical = capacity_block(
+                account, self.styler, self.timezone_id, width=width, now_ms=projection.now_ms, watch=True,
+                account_label_width=label_width, primary_label_width=primary_width,
+                recovering=account.account.key in projection.quota_recovering_accounts)
             if not first and (previous_vertical or is_vertical):
                 self._write()
             for line in lines:

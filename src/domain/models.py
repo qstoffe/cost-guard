@@ -306,6 +306,8 @@ class QuotaWindow:
     unlimited: bool = False
     model_id: str | None = None
     scope: str = "account"
+    # Window-specific native evidence only; account availability stays on the snapshot.
+    status: AccountUsageStatus = AccountUsageStatus.UNKNOWN
 
     def __post_init__(self) -> None:
         for name in ("used_fraction", "remaining_fraction"):

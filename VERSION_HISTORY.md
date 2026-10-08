@@ -1,5 +1,16 @@
 # Cost Guard version history
 
+## v80.25 — 2026-10-09
+
+- Account-level BLOCKED stays on the account instead of every quota window: OpenAI's weekly quota with capacity left is no longer marked blocked because the 5-hour limit is exhausted. Copilot's window-specific `hasQuota` evidence and `⚠  COPILOT PAUSED` remain.
+- When a current account-scoped quota is known to be exactly 0% remaining, its bar and reset explain the block and no BLOCKED text is shown. Positive, rounded-to-0%, unknown, expired or not-started windows keep exactly one account-level BLOCKED in Watch and report.
+- Watch keeps compact single-line accounts whenever they fit; wider rows split at `|` into aligned, indented continuation lines with the account name once and no blank lines, wrapping only an oversized component. Genuinely narrow terminals keep the verbose block.
+
+## v80.24 — 2026-10-08
+
+- Supersession fading recognizes any plain named GPT tier and Claude family, such as GPT-5.6 Luna under GPT-6 Luna and Claude Fable 5 under Fable 5.1. Hyphenated `GPT-5.3-Codex`, older `Claude 3.5 Sonnet` ordering, flexible spacing/dashes and publisher spelling also match.
+- Preview, experimental, fast-mode, dated and parenthesized names stay untouched; comparison remains numeric and restricted to the same manufacturer, family and variant shown in the table.
+
 ## v80.23 — 2026-10-08
 
 - Supersession highlighting now recognizes xAI's stable numeric Grok versions: Grok 4.5 and 4.6 fade when Grok 4.7 is displayed; the latest stays unchanged. Numeric ordering, table-local availability and conservative unknown/variant exclusions remain intact.
@@ -18,29 +29,9 @@
 - Up to four isolated provider jobs overlap normal-report analysis; the remaining report wait is bounded. Watch renders without waiting for quotas and publishes individual completions on its main thread, preserving recovery/identities while discovering account changes at its normal refresh cadence.
 - Timeouts, generation checks and nonblocking worker shutdown prevent stale replies or stuck providers from controlling the terminal; Diagnostics includes sanitized acquisition counts/timings. No new dependencies or required configuration.
 
-## v80.20 — 2026-10-08
-
-- Normal model comparison now has four columns, centered on Relative CCost; `--all-models` adds original, exact GitHub USD/M I/C/W/O rates with every published tier and boundary, including without observed token data.
-- Each context tier uses the same completed-prompt I/C/W/O mix and cheapest comparable base reference; dynamically aligned promotion markers, multipliers, arrows and exact > / ≥ K/M boundaries share one column.
-- Both modes share full-precision descending base/next-tier price ordering, earlier price-increase thresholds and alphabetical final ties; additional tiers extend both the chain and tie-breakers. Fallback mix, model selection, CCost, Watch and quotas are preserved.
-- Diagnostics removes the blank before the support address and ends success/failure with one blank before the shell prompt, preserving minimal colors and screen clearing.
-- Metadata state migrates non-destructively to cache/state/, retaining retry/history/date evidence and a legacy fallback; actual failures and recoveries have separate logs, and Diagnostics exports all categories without pruning live state.
-
-
-## v80.19 — 2026-10-08
-
-- Release-date metadata has its own health, separate from fresh pricing: a catalog with priced models but missing dates is refreshed at Watch start, after resume and on the first V2 list, retried after ~1/5/15 minutes then hourly (honoring HTTP 429) across restarts, without blocking Watch or changing CCost, and never erasing verified dates.
-- models.dev and the official Copilot changelog are independent, classified sources (DNS, connection, TLS, HTTP, timeout, parse, schema, missing fields, zero/partial matches, cache fallback, skipped, internal); dates record their source and never move to another model identity.
-- Watch ✦ New Models never shows a model whose verified release date is old; catalog-history models without a date still qualify for seven days.
-- Persistent metadata state and failure-period logs (start, change, bounded summaries, recovery) feed a new Diagnostics model-metadata section, so self-healed failures stay analyzable.
-- Diagnostics ends on a cleared screen with only the green result, ZIP path and support address, or a red short reason; test failures inside a verified ZIP still count as success.
-- Fatal and stopping errors end with the absolute OS-specific Diagnostics launcher path; Watch startup loading is white like other modes while Watch statuses keep their colors.
-- Working-tree package validation excludes root runtime logs just like the ZIP builder; extracted packages still reject them, with regression coverage preserving nested source files and original logs.
-
-
 ## Earlier v80 history
 
-- v80.15-v80.18 added hourly Copilot refresh with pinned CCost, 15-minute V2 checks, sleep/wake recovery and one-hour cache age; verified priced Watch/report ✦ New Models, sanitized metadata evidence, root logs/, safe Diagnostics archival/cleanup/staging, support instructions, runtime isolation, bounded history and metadata/refresh regression coverage.
+- v80.15-v80.20 introduced the four-column Relative CCost comparison with `--all-models` exact GitHub USD/M tiers, shared tier-aware price ordering and non-destructive metadata state under cache/state/. They gave release-date metadata independent health with classified sources, bounded non-blocking retries, failure logs and Diagnostics coverage, plus concise Diagnostics endings and launcher-path error hints. They also added hourly Copilot refresh with pinned CCost, 15-minute V2 checks, sleep/wake recovery and one-hour cache age; verified priced Watch/report ✦ New Models, sanitized metadata evidence, root logs/, safe Diagnostics archival/cleanup/staging, support instructions, runtime isolation, bounded history and metadata/refresh regression coverage.
 
 - v80.11-v80.14 added simulated macOS compatibility in Diagnostics, Windows path/release-check fixes, sanitized V1 SQLite read-error guards with read-only triage and Windows-safe synthetic SQLite cleanup.
 
