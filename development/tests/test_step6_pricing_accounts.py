@@ -84,6 +84,22 @@ class PricingProviderTests(unittest.TestCase):
             self.assertGreater(high, Decimal("0.20"))
             self.assertIsNotNone(provider)
 
+    def test_official_changelog_exact_model_release_date_fallback(self) -> None:
+        from src.pricing.github_copilot import _add_changelog_dates
+        from src.domain import ModelPricing, ModelRef
+        sample = (
+            ModelPricing(ModelRef("github-copilot", "claude-haiku-5-5", "Claude Haiku 5.5"), "USD"),
+            ModelPricing(ModelRef("github-copilot", "claude-sonnet-5-5", "Claude Sonnet 5.5"), "USD"),
+        )
+        feed = """<rss><channel><item><title>Claude Haiku 5.5 in GitHub Copilot</title>
+        <pubDate>Wed, 07 Oct 2026 11:00:00 +0000</pubDate></item>
+        <item><title>Unrelated AI news</title>
+        <pubDate>Wed, 07 Oct 2026 11:00:00 +0000</pubDate></item></channel></rss>"""
+        models = _add_changelog_dates(sample, feed)
+        self.assertEqual("2026-10-07", models[0].metadata.get("release_date"))
+        self.assertFalse(models[1].metadata.get("release_date"))
+        self.assertEqual(sample[0].per_million_input, models[0].per_million_input)
+
     def test_provider_caches_and_uses_last_success_on_refresh_failure(self) -> None:
         calls: list[str] = []
         def fetch(url: str, timeout: int) -> str:

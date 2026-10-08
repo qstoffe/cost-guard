@@ -6,7 +6,7 @@ change notifications only; they never replace analysis prices or quotas.
 from __future__ import annotations
 
 from src.pricing.catalog import PricingCatalog, canonical_model_name
-from src.reports.semantics import model_is_recent, recent_model_notice
+from src.reports.semantics import model_is_recent
 from src.sources.errors import SourceError
 from src.runtime_errors import recoverable, recovered
 
@@ -50,6 +50,25 @@ class WatchModelDiscovery:
             # The normal report's pinned catalog is the baseline, not a new release.
             self.catalog = self.service._load_catalog()
             self._catalog_keys = {_model_key(model) for model in self.catalog.models}
+            # Persist only catalog identities so a model discovered between Watch
+            # runs is still recognized. No private/session/account data is stored.
+            repo = getattr(self.service, "cache_repository", None)
+            if repo is not None:
+                try:
+                    old = repo.get("watch.model-discovery", "known-catalog-ids")
+                    prior = old.payload if old is not None else None
+                    if isinstance(prior, list):
+                        known = {v for v in prior if isinstance(v, str)}
+                        for model in self.catalog.models:
+                            key = _model_key(model)
+                            if key not in known and not model_is_recent(
+                                str(model.metadata.get("release_date") or ""), now_ms=now_ms
+                            ):
+                                self._first_seen[key] = (_model_name(model), now_ms)
+                    repo.put("watch.model-discovery", "known-catalog-ids",
+                             sorted(self._catalog_keys), algorithm_version="v1")
+                except (OSError, ValueError):
+                    pass
             self._last_price_check_ms = now_ms
         elif (resumed or self._last_price_check_ms is None
               or now_ms - self._last_price_check_ms >= PRICE_CHECK_MS):
@@ -71,6 +90,13 @@ class WatchModelDiscovery:
                         self._first_seen[key] = (_model_name(model), now_ms)
                 self._catalog_keys.update(_model_key(model) for model in latest.models)
                 self.catalog = latest
+                repo = getattr(self.service, "cache_repository", None)
+                if repo is not None:
+                    try:
+                        repo.put("watch.model-discovery", "known-catalog-ids",
+                                 sorted(self._catalog_keys), algorithm_version="v1")
+                    except (OSError, ValueError):
+                        pass
 
         # V2's current service is the read-only authority for *selectability*.
         # Do not use the CLI fallback (which may wake OpenCode after suspend).
@@ -110,39 +136,29 @@ class WatchModelDiscovery:
         }
 
     def notice(self, now_ms: int) -> str:
-        """Short Unicode notices; never claim GitHub enablement from pricing alone."""
+        """One normalized notice for release, catalog and availability evidence."""
         catalog = self.catalog or self.service._load_catalog()
-        dated = recent_model_notice(catalog, now_ms=now_ms)
-        segments: list[str] = []
-        if dated:
-            segments.append(dated.replace("* New Models:", "✦ New in Copilot catalog:", 1))
-
-        dated_keys = {
-            _model_key(model) for model in catalog.models
-            if model_is_recent(str(model.metadata.get("release_date") or ""), now_ms=now_ms)
-        }
-        undated = [name for key, (name, _seen) in self._first_seen.items() if key not in dated_keys]
-        if undated:
-            names = ", ".join(undated[:MAX_NOTICE_MODELS])
-            extra = f" (+{len(undated) - MAX_NOTICE_MODELS})" if len(undated) > MAX_NOTICE_MODELS else ""
-            segments.append(f"✧ New in Copilot catalog: {names}{extra} · release date unverified")
-
-        pending: list[str] = []
-        selectable: list[str] = []
-        for key in self._opencode_new:
-            model_id = next((name for name in self.available_ids or () if name.lower() == key), key)
-            if catalog.resolve_reference(model_id) is None:
-                pending.append(model_id)
-            else:
-                selectable.append(model_id)
-        if selectable:
-            names = ", ".join(selectable[:MAX_NOTICE_MODELS])
-            segments.append(f"✓ New selectable in OpenCode: {names}")
-        if pending:
-            names = ", ".join(pending[:MAX_NOTICE_MODELS])
-            extra = f" (+{len(pending) - MAX_NOTICE_MODELS})" if len(pending) > MAX_NOTICE_MODELS else ""
-            segments.append(f"✧ New in OpenCode: {names}{extra} · pricing pending")
-        return "  ·  ".join(segments)
+        names: dict[str, tuple[str, str]] = {}
+        for model in catalog.models:
+            date = str(model.metadata.get("release_date") or "")
+            if model_is_recent(date, now_ms=now_ms):
+                names[_model_key(model)] = (_model_name(model), date)
+        for key, (name, seen) in self._first_seen.items():
+            if 0 <= now_ms - seen < NEW_NOTICE_MS:
+                names.setdefault(key, (name, ""))
+        for key, seen in self._opencode_new.items():
+            if 0 <= now_ms - seen < NEW_NOTICE_MS:
+                identity = next((s for s in self.available_ids or () if s.lower() == key), key)
+                match = catalog.resolve_reference(identity)
+                display = _model_name(match) if match is not None else identity.split("/", 1)[-1]
+                canonical = _model_key(match) if match is not None else canonical_model_name(display)
+                names.setdefault(canonical, (display, ""))
+        if not names:
+            return ""
+        values = sorted(names.values(), key=lambda x: x[0].lower())
+        formatted = [f"{name} ({date})" if date else name for name, date in values[:MAX_NOTICE_MODELS]]
+        suffix = f" (+{len(values)-MAX_NOTICE_MODELS})" if len(values) > MAX_NOTICE_MODELS else ""
+        return "✦ New Models: " + ", ".join(formatted) + suffix
 
     def diagnostics(self, now_ms: int) -> dict[str, object]:
         return {

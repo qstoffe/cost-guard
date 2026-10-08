@@ -269,7 +269,7 @@ Full redraws clear screen/scrollback; countdowns replace only the status line. V
 
 ## Pricing, quota and network behavior
 
-Watch checks Copilot hourly and V2 every 15 minutes. ✦/✧ distinguish catalog from availability. CCost remains pinned. Expired promotions revert to verified standard rates or are withheld. Failed refresh can reuse a prior successful snapshot.
+Watch checks Copilot hourly and V2 every 15 minutes. ✦ New Models combines verified recent releases with newly discovered catalog/availability changes; in-run CCost stays pinned. Expired promotions revert to verified standard rates or are withheld. Failed refresh can reuse a prior successful snapshot.
 
 GitHub Copilot quota uses OpenCode's existing OAuth credential by default. `copilotQuota.authJsonPath` may override the path when a non-standard OpenCode setup requires it. Cost Guard reads credentials only for the request and never stores them in its own cache.
 
@@ -330,7 +330,7 @@ Bundles omit prompt text, titles, raw payloads/auth, tokens and account labels/I
 
 ## Release status
 
-**v80.15** adds live Watch model discovery and stronger V2 recovery. v80.0 is the Python 3.11+ public baseline. Claude quotas remain experimental; account coverage/restart/sleep need separate live evidence.
+**v80.16** adds live Watch model discovery and stronger V2 recovery. v80.0 is the Python 3.11+ public baseline. Claude quotas remain experimental; account coverage/restart/sleep need separate live evidence.
 
 ## Development
 

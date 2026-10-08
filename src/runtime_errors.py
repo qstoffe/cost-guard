@@ -118,7 +118,7 @@ class RuntimeErrors:
         episode = self._episodes.get(component)
         if episode is None:
             return
-        self._append(f"Timestamp: {datetime.now().astimezone().isoformat()}\nFingerprint: {episode['fingerprint']}\nComponent: {component}\n"
+        self._append(f"Timestamp: {datetime.now().astimezone().isoformat()}\nCost Guard: {self.version}\nFingerprint: {episode['fingerprint']}\nComponent: {component}\n"
                      f"Repeated {episode['repeats']} additional times over "
                      f"{time.monotonic() - episode['start']:.1f}s.\n{outcome}")
         del self._episodes[component]
@@ -192,7 +192,7 @@ class RuntimeErrors:
     def cleanup(self) -> None:
         """Bounded owned-file cleanup; never creates directories or logs."""
         cutoff = (datetime.now().astimezone() - timedelta(days=30)).timestamp()
-        for folder in ("errors", "crashes"):
+        for folder in ("errors", "crashes", "recovery"):
             try:
                 directory = self.root / "diagnostics" / folder
                 if directory.is_symlink() or directory.parent.is_symlink():
@@ -202,7 +202,7 @@ class RuntimeErrors:
                         if index >= 2048:
                             break
                         try:
-                            if (_OWNED.fullmatch(entry.name) and not entry.is_symlink()
+                            if ((_OWNED.fullmatch(entry.name) or (folder == "recovery" and entry.name == "watch-recovery.json")) and not entry.is_symlink()
                                     and entry.is_file(follow_symlinks=False) and entry.stat().st_mtime < cutoff):
                                 os.unlink(entry.path)
                         except OSError:

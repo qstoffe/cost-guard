@@ -1,5 +1,12 @@
 # Cost Guard version history
 
+## v80.16 — 2026-10-08
+
+- Normalize Watch notices to ✦ New Models, retain bounded model-identity history between starts and expose metadata-fetch failures for diagnosis.
+- Package owned errors, crashes and recovery records into a verified Diagnostics ZIP, safely prune unchanged quiet files, isolate synthetic tests and retain 30-day expiration.
+- Restore version history release validation and add regression coverage for model and log lifecycle behavior.
+
+
 ## v80.15 — 2026-10-08
 
 - Refresh Copilot catalog/notifications hourly in running Watch while keeping in-run CCost pricing stable; separately check V2 OpenCode selectability every 15 minutes and use ✦/✧ Unicode discovery notices without assuming account entitlement.
@@ -25,14 +32,7 @@
 - Restore README version consistency and bounded detailed history after new macOS Diagnostics checks.
 
 
-## v80.11 — 2026-10-08
-
-- Run privacy-safe deterministic macOS-behavior simulations inside Diagnostics on Windows, macOS and Linux. Record per-check PASS/FAIL/SKIP and totals in diagnostics.json and summary.txt; no access to live credentials or OpenCode data, no native macOS guarantee.
-- Include bounded CLI discovery, XDG directories, V1 override, macOS app installation evidence, absent V2 service registration and Mac launcher contract checks; isolate execution with a 30-second subprocess timeout and sanitized results.
-
 ## Earlier v80 history
-
-- v80.10 added guarded runtime failures, error-only logs and privacy-safe crash reports.
 
 - v80.9 unified the Windows launchers under a persistent PowerShell session and corrected Watch Ctrl+C and error handling.
 

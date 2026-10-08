@@ -8,9 +8,11 @@ from __future__ import annotations
 import json
 import time
 from pathlib import Path
+import os
+from src.version import DISPLAY_VERSION
 
 ROOT = Path(__file__).resolve().parents[2]
-FILE = ROOT / "diagnostics" / "watch-recovery.json"
+FILE = ROOT / "diagnostics" / "recovery" / "watch-recovery.json"
 _ALLOWED_EVENTS = frozenset({"retrying", "recovered", "failed"})
 _ALLOWED_SOURCES = frozenset({"v1", "v2"})
 _ALLOWED_KINDS = frozenset({"available", "unavailable", "unreadable", "unsupported"})
@@ -36,18 +38,21 @@ def recent_events(now_ms: int | None = None) -> list[dict[str, object]]:
             events.append({
                 "at_ms": at, "source": event["source"],
                 "event": event["event"], "kind": event["kind"],
+                "version": str(event.get("version") or "legacy"),
             })
     return events[-24:]
 
 
 def record(source: str, event: str, kind: str) -> None:
+    if os.environ.get("COST_GUARD_TEST_MODE") == "1":
+        return
     if source not in _ALLOWED_SOURCES or event not in _ALLOWED_EVENTS or kind not in _ALLOWED_KINDS:
         return
     now = int(time.time() * 1000)
     try:
         FILE.parent.mkdir(parents=True, exist_ok=True)
         entries = recent_events(now)
-        entries.append({"at_ms": now, "source": source, "event": event, "kind": kind})
+        entries.append({"at_ms": now, "source": source, "event": event, "kind": kind, "version": DISPLAY_VERSION})
         temp = FILE.with_suffix(".tmp")
         temp.write_text(json.dumps(entries[-24:], separators=(",", ":")), encoding="utf-8")
         temp.replace(FILE)

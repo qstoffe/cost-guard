@@ -66,6 +66,7 @@ QUICK_PATTERNS: tuple[str, ...] = (
     "test_compact_reports.py",
     "test_model_availability.py",
     "test_watch_model_discovery.py",
+    "test_diagnostic_logs.py",
     "test_pricing_identities.py",
     "test_claude_code_accounts.py",
     "test_claude_transport.py",
@@ -113,6 +114,7 @@ def suite_membership_errors(tests: Path = TESTS) -> list[str]:
 def _run_pattern(pattern: str, *, timeout: float, verbosity: int) -> tuple[str, int, float, str]:
     env = os.environ.copy()
     env["PYTHONDONTWRITEBYTECODE"] = "1"
+    env["COST_GUARD_TEST_MODE"] = "1"
     flag = "-v" if verbosity >= 2 else "-q"
     command = [
         sys.executable, "-m", "unittest", "discover",

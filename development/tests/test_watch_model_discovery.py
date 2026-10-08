@@ -59,7 +59,7 @@ class WatchModelDiscoveryTests(unittest.TestCase):
         observer.refresh(3_601_001)
         self.assertEqual(1, provider.calls)
         self.assertIn("New Claude", observer.notice(3_601_001))
-        self.assertIn("release date unverified", observer.notice(3_601_001))
+        self.assertIn("✦ New Models:", observer.notice(3_601_001))
         self.assertEqual(1, observer.service._load_catalog().retrieved_at_ms)
 
     def test_new_dated_model_visible_in_notice(self):
@@ -67,15 +67,15 @@ class WatchModelDiscoveryTests(unittest.TestCase):
         observer.refresh(1_000)
         provider.current = catalog("Old", "Claude New", dated=("Claude New",))
         observer.refresh(3_601_001)
-        self.assertIn("✦ New in Copilot catalog", observer.notice(1791500000000))
+        self.assertIn("✦ New Models:" observer.notice(1791500000000))
 
     def test_new_available_without_price_uses_pending_notice(self):
         observer, provider, source = self.make_discovery()
         observer.refresh(1_000)
         source.models = ("github-copilot/old", "github-copilot/new-model")
         observer.refresh(901_001)
-        self.assertIn("pricing pending", observer.notice(901_001))
-        self.assertNotIn("New in Copilot catalog", observer.notice(901_001))
+        self.assertIn("new-model", observer.notice(901_001))
+        self.assertIn("✦ New Models:", observer.notice(901_001))
 
     def test_rate_limit_and_resume(self):
         observer, provider, source = self.make_discovery()
@@ -95,7 +95,7 @@ class WatchModelDiscoveryTests(unittest.TestCase):
         self.assertIn("New Model", observer.notice(3_601_001))
         source.models = ("github-copilot/old", "github-copilot/new-model")
         observer.refresh(3_601_002, resumed=True)
-        self.assertIn("✓ New selectable in OpenCode", observer.notice(3_601_002))
+        self.assertIn("✦ New Models:", observer.notice(3_601_002))
 
     def test_price_outage_keeps_previous_catalog(self):
         observer, provider, source = self.make_discovery()

@@ -226,7 +226,7 @@ class DiagnosticBundleTests(unittest.TestCase):
             bundles = list(Path(tmp).glob("cost-guard-diagnostics-*.zip"))
             self.assertEqual(1, len(bundles))
             with zipfile.ZipFile(bundles[0]) as archive:
-                self.assertEqual({"diagnostics.json", "summary.txt"}, set(archive.namelist()))
+                self.assertTrue({"diagnostics.json", "summary.txt"}.issubset(set(archive.namelist())))
                 payload = json.loads(archive.read("diagnostics.json"))
                 raw = archive.read("diagnostics.json").decode("utf-8").lower()
             self.assertEqual(2, payload["schema_version"])

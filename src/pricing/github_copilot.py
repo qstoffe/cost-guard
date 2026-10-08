@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+from email.utils import parsedate_to_datetime
+from xml.etree import ElementTree
 import re
 import time
 import urllib.error
@@ -26,6 +28,7 @@ from .catalog import PricingCatalog, canonical_model_name
 PRICING_ARTICLE_PATH = "/en/copilot/reference/copilot-billing/models-and-pricing"
 DOCS_API_BODY = "https://docs.github.com/api/article/body?pathname="
 MODELS_DEV_URL = "https://models.dev/models.json"
+COPILOT_CHANGELOG_URL = "https://github.blog/changelog/feed/"
 CACHE_NAMESPACE = "pricing.github-copilot"
 CACHE_KEY = "catalog"
 CACHE_FORMAT_VERSION = 1
@@ -506,6 +509,8 @@ class GitHubCopilotPricingProvider:
         self.fetch_text = fetch_text
         self.now_ms = now_ms or (lambda: int(time.time() * 1000))
         self._catalog: PricingCatalog | None = None
+        self.release_metadata_status = "not_checked"
+        self.release_metadata_matches = 0
 
     def probe(self) -> IntegrationHealth:
         try:
@@ -565,11 +570,28 @@ class GitHubCopilotPricingProvider:
         # Release dates are enrichment only.  A failed optional fetch must never invalidate fresh pricing.
         try:
             raw_metadata = json.loads(self.fetch_text(MODELS_DEV_URL, 15))
-        except (OSError, ValueError):
+        except (OSError, ValueError) as exc:
+            self.release_metadata_status = "fetch_or_parse_" + type(exc).__name__
             models = list(_preserve_cached_release_dates(models, previous.models if previous else ()))
         else:
             if isinstance(raw_metadata, dict):
                 models = list(_add_release_dates(models, raw_metadata, previous.models if previous else ()))
+                self.release_metadata_matches = sum(bool(item.metadata.get("release_date")) for item in models)
+                self.release_metadata_status = "matched" if self.release_metadata_matches else "no_matching_dates"
+            else:
+                self.release_metadata_status = "unexpected_shape"
+                models = list(_preserve_cached_release_dates(models, previous.models if previous else ()))
+        # Official GitHub announcements are a second, independently fetched
+        # metadata source. Exact title matching avoids inventing release dates.
+        if any(not model.metadata.get("release_date") for model in models):
+            try:
+                feed = self.fetch_text(COPILOT_CHANGELOG_URL, 8)
+                models = list(_add_changelog_dates(models, feed))
+            except (OSError, ValueError, ElementTree.ParseError):
+                pass
+        self.release_metadata_matches = sum(bool(item.metadata.get("release_date")) for item in models)
+        if self.release_metadata_matches and self.release_metadata_status != "matched":
+            self.release_metadata_status += "+changelog_matched"
         now = self.now_ms()
         revision = hashlib.sha256(pricing.encode("utf-8")).hexdigest()
         expiries = [
@@ -587,6 +609,37 @@ class GitHubCopilotPricingProvider:
             ),
             now,
         )
+
+
+def _add_changelog_dates(models: Iterable[ModelPricing], feed: str) -> tuple[ModelPricing, ...]:
+    """Strict official GitHub Copilot title/date evidence, never fuzzy name guesses."""
+    tree = ElementTree.fromstring(feed)
+    dates: dict[str, set[str]] = {}
+    for entry in tree.findall(".//item")[:80]:
+        title = str(entry.findtext("title") or "").strip()
+        match = re.fullmatch(r"(.+?) in GitHub Copilot", title, re.I)
+        date_text = entry.findtext("pubDate")
+        if not match or not date_text:
+            continue
+        try:
+            date = parsedate_to_datetime(date_text).astimezone(timezone.utc).date().isoformat()
+        except (TypeError, ValueError, OverflowError):
+            continue
+        key = canonical_model_name(match.group(1))
+        dates.setdefault(key, set()).add(date)
+    result = []
+    for model in models:
+        metadata = dict(model.metadata)
+        key = canonical_model_name(model.model.display_name or model.model.model)
+        if not metadata.get("release_date") and len(dates.get(key, ())) == 1:
+            metadata["release_date"] = next(iter(dates[key]))
+        result.append(ModelPricing(
+            model=model.model, currency=model.currency,
+            per_million_input=model.per_million_input, per_million_cache_read=model.per_million_cache_read,
+            per_million_cache_write=model.per_million_cache_write, per_million_output=model.per_million_output,
+            tiers=model.tiers, metadata=metadata,
+        ))
+    return tuple(result)
 
 
 def _add_release_dates(

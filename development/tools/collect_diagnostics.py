@@ -66,6 +66,7 @@ from src.version import DISPLAY_VERSION, PRODUCT_NAME, RELEASE_DATE, mode_headin
 from src.runtime_errors import recoverable, recovered  # noqa: E402
 from src.sources.errors import SourceError  # noqa: E402
 from src.watch.recovery_events import recent_events  # noqa: E402
+from development.tools.diagnostic_logs import create_bundle  # noqa: E402
 from src.pricing.github_copilot import CACHE_NAMESPACE, CACHE_KEY, _catalog_from_payload  # noqa: E402
 from src.config import ConfigError  # noqa: E402
 
@@ -474,6 +475,8 @@ def collect(*, network: bool, snapshots: int, test_service_start: bool = False) 
                 "configured_price_interval_minutes": int(float(cfg.get("pricingMaxAgeHours", 1)) * 60),
                 "watch_availability_interval_minutes": 15,
                 "watch_price_interval_minutes": 60,
+                "release_metadata_status": "cache_only",
+                "undated_model_count": sum(not bool(m.metadata.get("release_date")) for m in catalog.models),
                 "note": "Watch availability is independent from Copilot pricing and may lag desktop availability",
             }
         else:
@@ -582,6 +585,32 @@ def collect(*, network: bool, snapshots: int, test_service_start: bool = False) 
         data["report"] = None
         data["report_timing"] = {"ok": False, "error": "source selection failed"}
 
+    # Independent metadata diagnostic: never includes raw remote JSON or URLs
+    # with credentials, and does not affect report/cache acceptance.
+    if network:
+        try:
+            from src.pricing.github_copilot import MODELS_DEV_URL, _default_fetch_text, _add_release_dates
+            payload = json.loads(_default_fetch_text(MODELS_DEV_URL, 6))
+            cached_catalog = catalog if "catalog" in locals() else None
+            if isinstance(payload, dict):
+                source_count = len(payload)
+                compared = _add_release_dates(cached_catalog.models, payload) if cached_catalog else ()
+                matched = sum(bool(x.metadata.get("release_date")) for x in compared)
+                data["release_metadata_probe"] = {
+                    "status": "matched" if matched else "no_match",
+                    "source_model_count": source_count,
+                    "matched_model_count": matched,
+                    "catalog_model_count": len(compared),
+                }
+            else:
+                data["release_metadata_probe"] = {"status": "unexpected_shape"}
+        except (OSError, ValueError, TypeError) as exc:
+            data["release_metadata_probe"] = {
+                "status": "fetch_or_parse_failed", "error_type": type(exc).__name__
+            }
+    else:
+        data["release_metadata_probe"] = {"status": "skipped_no_network"}
+
     quota_cfg = cfg.get("copilotQuota") if isinstance(cfg.get("copilotQuota"), dict) else {}
     try:
         account = GitHubCopilotAccountProvider(
@@ -672,9 +701,8 @@ def main(argv: list[str] | None = None) -> int:
         progress.stop()
     json_bytes = json.dumps(data, indent=2, ensure_ascii=False, sort_keys=True).encode("utf-8")
     text_bytes = _text_summary(data).encode("utf-8") if "cost_guard" in data else (json.dumps(data, indent=2) + "\n").encode("utf-8")
-    with zipfile.ZipFile(bundle, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
-        archive.writestr("diagnostics.json", json_bytes)
-        archive.writestr("summary.txt", text_bytes)
+    archive_report = create_bundle(bundle, root=ROOT, json_bytes=json_bytes, text_bytes=text_bytes, include_logs=os.environ.get("COST_GUARD_TEST_MODE") != "1")
+    print("Archived logs: {}; removed quiet unchanged logs: {}".format(archive_report["archived_logs"], archive_report["removed_logs"]))
     progress.stop()
     print(f"Diagnostic bundle created: {bundle}")
     print("Prompt text, session titles, auth tokens and raw OpenCode payloads are not included.")
