@@ -73,6 +73,7 @@ def create_bundle(path: Path, *, root: Path, json_bytes: bytes, text_bytes: byte
     records = []
     included = skipped = total = 0
     try:
+        path.parent.mkdir(parents=True, exist_ok=True)
         with ZipFile(staging, "w", compression=ZIP_DEFLATED, compresslevel=9) as archive:
             archive.writestr("diagnostics.json", json_bytes)
             archive.writestr("summary.txt", text_bytes)

@@ -195,6 +195,7 @@ class PricingProviderTests(unittest.TestCase):
             calls = {"pricing": 0}
             def fetch(url: str, timeout: int) -> str:
                 if "models.json" in url: return "{}"
+                if "changelog" in url: raise OSError("optional release-date feed offline")
                 calls["pricing"] += 1
                 return pricing_markdown()
             sep30 = 1_759_276_740_000  # 2025-09-30 23:59 UTC; exact year is irrelevant to month-boundary logic.

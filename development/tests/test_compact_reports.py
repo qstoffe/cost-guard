@@ -251,10 +251,10 @@ class CompactReportTests(unittest.TestCase):
         report = replace(report, accounts_quotas=quotas(account, rolling("openai", "OpenAI Plus")))
         text = rendered(report, width=140)
         lines = text.splitlines()
-        new = next(i for i, line in enumerate(lines) if line.startswith("* New Models:"))
+        new = next(i for i, line in enumerate(lines) if line.startswith("✦ New Models:"))
         self.assertEqual(["", "Accounts Overview"], lines[new + 1:new + 3])
         self.assertEqual("GitHub Copilot Max", lines[new + 4])
-        self.assertLess(text.index("Price Promotion:"), text.index("* New Models:"))
+        self.assertLess(text.index("Price Promotion:"), text.index("✦ New Models:"))
         self.assertLess(text.index("Source-wide warning"), text.index("Pricing/cache metadata"))
         warning = next(line for line in lines if "COPILOT PAUSED" in line)
         self.assertTrue(warning.startswith("  ⚠"))
@@ -265,7 +265,7 @@ class CompactReportTests(unittest.TestCase):
             colors = service.config["colorSchemes"][theme]
             self.assertNotEqual(colors["modelComparisonNew"], colors["modelComparisonPromotion"])
         colored = rendered(report, service.config, color=True)
-        self.assertIn("\x1b[38;5;118m* New Models:\x1b[0m", colored)
+        self.assertIn("\x1b[38;5;118m✦ New Models:\x1b[0m", colored)
         self.assertIn("\x1b[38;5;214m*1 Price Promotion:", colored)
 
 

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import unittest
+from decimal import Decimal
 from types import SimpleNamespace
 
 from src.domain import ModelPricing, ModelRef
@@ -13,7 +14,7 @@ def catalog(*names, retrieved=1, dated=()):
     models = tuple(ModelPricing(
         model=ModelRef(provider="github-copilot", model=name.lower().replace(" ", "-"),
                        display_name=name),
-        currency="USD",
+        currency="USD", per_million_input=Decimal(1), per_million_output=Decimal(5),
         metadata={"release_date": "2026-10-08"} if name in dated else {},
     ) for name in names)
     return PricingCatalog(models=models, retrieved_at_ms=retrieved)
@@ -105,7 +106,9 @@ class WatchModelDiscoveryTests(unittest.TestCase):
         self.assertIn("New Model", observer.notice(3_601_001))
         source.models = ("github-copilot/old", "github-copilot/new-model")
         observer.refresh(3_601_002, resumed=True)
-        self.assertEqual(2, provider.calls)
+        # Resume reads the (possibly cached) catalog; the novel V2 ID then forces a bypass.
+        self.assertEqual(3, provider.calls)
+        self.assertIn("New Model", observer.notice(3_601_002))
 
     def test_price_outage_keeps_previous_catalog(self):
         observer, provider, source = self.make_discovery()

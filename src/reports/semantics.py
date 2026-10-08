@@ -78,8 +78,8 @@ def recent_model_notice(catalog: PricingCatalog, *, now_ms: int) -> str:
     recent.sort(key=lambda item: (item[1], item[0].lower()))
     dates = sorted({released for _, released in recent})
     if len(dates) == 1:
-        return f"* New Models: {', '.join(name for name, _ in recent)} · released {dates[0]}"
-    return "* New Models: " + ", ".join(f"{name} ({released})" for name, released in recent)
+        return f"✦ New Models: {', '.join(name for name, _ in recent)} · released {dates[0]}"
+    return "✦ New Models: " + ", ".join(f"{name} ({released})" for name, released in recent)
 
 
 def active_promotion_notes(

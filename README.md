@@ -180,7 +180,7 @@ Availability uses V2's settled `/api/model` selectable IDs (V1: `opencode models
 | `Copilot CCost/M tokens I/C/W/O` | Reference CCost per million input/cache-read/cache-write/output tokens; exact rates, `→` separates tiers. |
 | `Release date` | Public model release date when confidently available. Recently released models are highlighted/notified. |
 
-New Models lasts seven UTC days after release; report promotion markers/highlights last through validity. Watch promotion notices require a proven start within seven days and never survive expiry; unknown starts are not guessed from release/first fetch. Only notice labels are colored.
+✦ New Models lasts seven UTC days after release; report promotion markers/highlights last through validity. Watch promotion notices require a proven start within seven days and never survive expiry; unknown starts are not guessed from release/first fetch. Only notice labels are colored.
 
 ## Token Mix % by model: `--token-mix`
 
@@ -330,7 +330,7 @@ Bundles omit prompt text, titles, raw payloads/auth, tokens and account labels/I
 
 ## Release status
 
-**v80.17** adds live Watch model discovery and stronger V2 recovery. v80.0 is the Python 3.11+ public baseline. Claude quotas remain experimental; account coverage/restart/sleep need separate live evidence.
+**v80.18** adds live Watch model discovery and stronger V2 recovery. v80.0 is the Python 3.11+ public baseline. Claude quotas remain experimental; account coverage/restart/sleep need separate live evidence.
 
 ## Development
 

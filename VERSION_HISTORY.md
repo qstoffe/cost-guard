@@ -1,5 +1,11 @@
 # Cost Guard version history
 
+## v80.18 — 2026-10-08
+
+- Reports mark new models with the same ✦ New Models notice as Watch, keeping the hanging indent when the notice wraps.
+- Diagnostics creates its bundle folder before staging the ZIP and never creates a runtime cache merely to report model freshness; Full-suite tests now match priced-only Watch notices, the resume-plus-forced V2 refresh and the optional changelog release-date fetch.
+
+
 ## v80.17 — 2026-10-08
 
 - Treat newly observed V2 selectable Copilot IDs only as triggers for immediate forced pricing refresh; Watch notifies only verified priced catalog models, preserving the hourly catalog cadence and 15-minute V2 checks.
@@ -27,17 +33,11 @@
 - Keep the SQLite runtime read-only, preserve sanitized failure reporting and restore all-platform diagnostic regression coverage.
 
 
-## v80.13 — 2026-10-08
-
-- Guard V1 SQLite read errors including InterfaceError and OperationalError with sanitized source failures instead of unhandled SQLite exceptions.
-- Add simulated V1 SQLite schema, corrupt-file, WAL-concurrency and error-sanitization tests on all platforms; Diagnostics includes read-only SQLite triage without data rows, SQL text or paths.
-
-
 ## Earlier v80 history
 
-- v80.9 unified the Windows launchers under a persistent PowerShell session and corrected Watch Ctrl+C and error handling.
+- v80.11-v80.13 added simulated macOS compatibility in Diagnostics, Windows path/release-check fixes and sanitized V1 SQLite read-error guards with read-only SQLite triage.
 
-- v80.8 aligned Watch session subtotals with visible rows while preserving run-scoped CCost accounting.
+- v80.8-v80.9 aligned Watch session subtotals with visible rows (run-scoped CCost preserved) and unified the Windows launchers under a persistent PowerShell session with corrected Ctrl+C and error handling.
 
 - v80.7 added shared Simple HTTP account providers and adapters for OpenRouter, DeepSeek and MiniMax, with sanitized diagnostics and no fabricated CCost.
 - v80.6 made Watch survive temporary source outages and retry V2 without a V1 fallback.

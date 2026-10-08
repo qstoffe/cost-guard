@@ -100,7 +100,7 @@ class Step9ParityTests(unittest.TestCase):
         ))
         service, _ = self._service(pricing=provider, now_ms=NOW_MS)
         report = service.build(ReportRequest())
-        self.assertIn("* New Models: GPT Test", report.recent_model_notice)
+        self.assertIn("✦ New Models: GPT Test", report.recent_model_notice)
         self.assertTrue(next(row for row in report.model_comparison if row.model == "GPT Test").recent)
 
     def test_native_quota_does_not_manufacture_usage_or_local_budget(self):
@@ -162,12 +162,12 @@ class Step9ParityTests(unittest.TestCase):
             title="Cost Guard Watch", source_label="V2",
             rows=(WatchRow("root", "Root session", prompt, marker="▶"),),
             now_ms=1_500, session_warnings={"root": "price threshold approaching"},
-            recent_model_notice="* New Models: GPT-5.6 · released 2026-09-25",
+            recent_model_notice="✦ New Models: GPT-5.6 · released 2026-09-25",
         )
         out = io.StringIO()
         WatchRenderer(config, stream=out, interactive=False).render(projection)
         text = out.getvalue()
-        self.assertIn("* New Models: GPT-5.6", text)
+        self.assertIn("✦ New Models: GPT-5.6", text)
         self.assertIn("*1 Root session", text)
         self.assertIn("*1 Next Ictx: price threshold approaching", text)
         self.assertIn("GPT-5.6 (Medium)", text)

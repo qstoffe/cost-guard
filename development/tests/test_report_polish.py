@@ -93,7 +93,7 @@ class RecentModelTests(unittest.TestCase):
         for name, released, promo in cases:
             rows.append(ModelComparisonProjection("OpenAI", name, Decimal("2"), "1/1/1/1", released,
                                                   promotional=promo, recent=model_is_recent(released, now_ms=NOW)))
-        notice = "* New Models: Recent (2026-09-29), Recent promo (2026-09-29)"
+        notice = "✦ New Models: Recent (2026-09-29), Recent promo (2026-09-29)"
         text = render(replace(sample_report(), model_comparison=tuple(rows), recent_model_notice=notice),
                       color=True, width=160)
         for item in rows:
@@ -105,7 +105,7 @@ class RecentModelTests(unittest.TestCase):
             for index in (2, 3):
                 self.assertEqual(item.promotional, "\x1b[38;5;214m" in cells[index], item.model)
         self.assertIn(notice, re.sub(r"\x1b\[[0-9;]*m", "", text))
-        self.assertIn("\x1b[38;5;118m* New Models:\x1b[0m Recent", text)
+        self.assertIn("\x1b[38;5;118m✦ New Models:\x1b[0m Recent", text)
 
 
 class NoteWrappingTests(unittest.TestCase):

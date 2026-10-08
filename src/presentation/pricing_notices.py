@@ -7,7 +7,7 @@ from .terminal import AnsiStyler, wrap_prose
 def pricing_notice_lines(text: str, width: int, styler: AnsiStyler, role: str) -> list[str]:
     label, colon, _body = text.partition(":")
     emphasized = len(label + colon) if colon else 0
-    indent = len(text.partition(" ")[0]) + 1 if text.startswith("*") else 0
+    indent = len(text.partition(" ")[0]) + 1 if text.startswith(("*", "✦")) else 0
     lines = wrap_prose(text, width, continuation_prefix=" " * indent)
     result = []
     offset = 0

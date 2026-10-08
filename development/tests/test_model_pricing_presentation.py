@@ -93,7 +93,7 @@ class PricingPresentationTests(unittest.TestCase):
                     self.assertNotIn("Price I/C/W/O is", text)
 
     def test_notice_labels_only_are_colored_in_both_outputs_and_wrapped(self):
-        new = "* New Models: Model A, Model B, Model C"
+        new = "✦ New Models: Model A, Model B, Model C"
         promo = "*1 Price Promotion: Model A — temporary promotional pricing through 2026-11-01."
         for width in (40, 120):
             stream = io.StringIO()
@@ -105,7 +105,7 @@ class PricingPresentationTests(unittest.TestCase):
                 WatchProjection("Cost Guard Watch", "V2", (), recent_model_notice=new,
                                 recent_promotion_notices=(promo.replace("*1", "*"),)))
             for text, marker in ((stream.getvalue(), "*1"), (watch_stream.getvalue(), "*")):
-                self.assertIn("\x1b[38;5;118m* New Models:\x1b[0m Model", text)
+                self.assertIn("\x1b[38;5;118m✦ New Models:\x1b[0m Model", text)
                 self.assertIn(f"\x1b[38;5;214m{marker} Price Promotion:\x1b[0m Model", text)
                 for line in text.splitlines():
                     if "\x1b[38;5;118m" in line or "\x1b[38;5;214m" in line:
@@ -137,6 +137,21 @@ class MetadataWindowTests(unittest.TestCase):
             prices = catalog()
             prices = replace(prices, models=(replace(prices.models[0], metadata={"release_date": released}),))
             self.assertEqual(expected, bool(recent_model_notice(prices, now_ms=NOW)))
+
+    def test_report_new_model_notice_uses_watch_marker(self):
+        from src.watch.model_discovery import WatchModelDiscovery
+        prices = catalog()
+        report_notice = recent_model_notice(prices, now_ms=NOW)
+        observer = WatchModelDiscovery(SimpleNamespace(_load_catalog=lambda: prices))
+        watch_notice = observer.notice(NOW)
+        self.assertTrue(report_notice.startswith("✦ New Models: "), report_notice)
+        self.assertEqual(report_notice.partition(":")[0], watch_notice.partition(":")[0])
+        lines = [ANSI.sub("", line) for line in compact.rendered(
+            ReportProjection(ReportKind.ALL_MODELS, "Test", "V2",
+                             recent_model_notice="✦ New Models: " + ", ".join(["Model Name"] * 12)),
+            CONFIG, width=60, color=False).splitlines()]
+        start = next(i for i, line in enumerate(lines) if line.startswith("✦ New Models:"))
+        self.assertRegex(lines[start + 1], r"^  \S", lines[start + 1])
 
     def test_provider_extracts_explicit_start_without_first_seen_or_release_guesses(self):
         models = parse_pricing_markdown(pricing_markdown())

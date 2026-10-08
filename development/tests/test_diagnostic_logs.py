@@ -20,7 +20,7 @@ class DiagnosticLogsTests(unittest.TestCase):
             folder = root / "logs" / "errors"
             folder.mkdir(parents=True)
             old = folder / "cost-guard-errors-2026-10-08.log"
-            old.write_text("Cost Guard: v80.16\n", encoding="utf-8")
+            old.write_bytes(b"Cost Guard: v80.16\n")
             import os
             os.utime(old, (time.time() - 120, time.time() - 120))
             unowned = folder / "unrelated.log"
@@ -57,7 +57,7 @@ class DiagnosticLogsTests(unittest.TestCase):
             os.utime(file, (time.time() - 120, time.time() - 120))
             # Destination is a directory; atomic publish must fail.
             destination = root / "diagnostics" / "bundle.zip"
-            destination.mkdir()
+            destination.mkdir(parents=True)
             with self.assertRaises(OSError):
                 create_bundle(destination, root=root, json_bytes=b"{}", text_bytes=b"ok")
             self.assertTrue(file.exists())

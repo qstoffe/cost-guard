@@ -462,8 +462,12 @@ def collect(*, network: bool, snapshots: int, test_service_start: bool = False) 
     data["watch_source_recovery_events"] = recent_events()
     try:
         database = CacheDatabase(ROOT)
-        database.initialize()
-        entry = CacheRepository(database).get(CACHE_NAMESPACE, CACHE_KEY)
+        # Inspect only an existing cache; Diagnostics must not create runtime state.
+        if database.paths.database.is_file():
+            database.initialize()
+            entry = CacheRepository(database).get(CACHE_NAMESPACE, CACHE_KEY)
+        else:
+            entry = None
         catalog = _catalog_from_payload(entry.payload) if entry else None
         if catalog is not None:
             now_ms = int(time.time() * 1000)

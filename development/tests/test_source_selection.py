@@ -238,9 +238,13 @@ class MigrationGapScopeTests(unittest.TestCase):
         with mock.patch.object(diag, "OpenCodeV1Source", return_value=source), \
              mock.patch.object(diag, "OpenCodeV2Source", return_value=source), \
              mock.patch.object(diag, "_safe_source_stats", return_value={"probe": {"healthy": True}}), \
-             mock.patch.object(diag, "SourceSelector") as selector:
+             mock.patch.object(diag, "SourceSelector") as selector, \
+             tempfile.TemporaryDirectory() as root, \
+             mock.patch.object(diag, "CacheDatabase", lambda _root: CacheDatabase(Path(root))):
             selector.return_value.select.return_value = selected
             result = diag.collect(network=False, snapshots=0)
+            self.assertFalse((Path(root) / "cache").exists())  # read-only freshness probe
+        self.assertEqual({"cache_present": False, "status": "no_cached_catalog"}, result["model_freshness"])
         self.assertEqual({"inspected": True, "missing_in_v2": 2, "newer_in_v1": 1, "detail": "complete"},
                          result["selection"]["migration_gap"])
 
