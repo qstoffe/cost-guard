@@ -8,10 +8,11 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping
+from typing import Callable, Mapping
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,6 +49,42 @@ def _expanded_path(value: str, home: Path) -> Path:
     if not path.is_absolute():
         path = Path.cwd() / path
     return path.resolve(strict=False)
+
+
+def find_opencode_executable(
+    *, environment: Mapping[str, str] | None = None, home: Path | None = None,
+    which: Callable[[str], str | None] | None = None,
+) -> str | None:
+    """Locate an executable without starting OpenCode or exposing local paths."""
+    env = os.environ if environment is None else environment
+    user_home = Path.home() if home is None else home
+    lookup = shutil.which if which is None else which
+    found = lookup("opencode")
+    if found:
+        return found
+    directories = [
+        user_home / ".opencode" / "bin",
+        user_home / ".local" / "bin",
+        user_home / "bin",
+        Path("/opt/homebrew/bin"),
+        Path("/usr/local/bin"),
+    ]
+    for key in ("OPENCODE_INSTALL_DIR", "XDG_BIN_DIR"):
+        configured = env.get(key, "").strip()
+        if configured:
+            try:
+                directory = _expanded_path(configured, user_home)
+                directories.extend((directory, directory / "bin"))
+            except (OSError, ValueError, RuntimeError):
+                continue
+    for directory in directories:
+        executable = directory / "opencode"
+        try:
+            if executable.is_file() and os.access(executable, os.X_OK):
+                return str(executable)
+        except (OSError, ValueError):
+            continue
+    return None
 
 
 def default_opencode_data_dir(

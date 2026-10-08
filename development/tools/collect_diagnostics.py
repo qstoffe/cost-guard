@@ -232,6 +232,12 @@ def _report_summary(selection: Any, config: dict[str, Any], *, network: bool) ->
 
 
 
+def _safe_process_text(value: str | bytes | None) -> str:
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return value or ""
+
+
 def _validation_command(script: Path, *args: str, timeout: int) -> dict[str, Any]:
     env = os.environ.copy()
     env["PYTHONDONTWRITEBYTECODE"] = "1"
@@ -249,7 +255,7 @@ def _validation_command(script: Path, *args: str, timeout: int) -> dict[str, Any
             "output_tail": output[-8000:],
         }
     except subprocess.TimeoutExpired as exc:
-        output = ((exc.stdout or "") + "\n" + (exc.stderr or "")).strip()
+        output = ((_safe_process_text(exc.stdout)) + "\n" + _safe_process_text(exc.stderr)).strip()
         return {
             "ok": False, "timed_out": True,
             "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
@@ -420,9 +426,20 @@ def collect(*, network: bool, snapshots: int, test_service_start: bool = False) 
     data["selection_timing"] = selection_timing
     # Inventory even when no network/account is available, without raw records,
     # labels, locators or secret material. Normalized request evidence is in report.
-    data["account_provider_inventory"] = [provider.diagnostic_inventory()
-        for provider in _account_providers(cfg, selection.selected if selection else "v1")
-        if callable(getattr(provider, "diagnostic_inventory", None))]
+    data["account_provider_inventory"] = []
+    for provider in _account_providers(cfg, selection.selected if selection else "v1"):
+        inventory = getattr(provider, "diagnostic_inventory", None)
+        if not callable(inventory):
+            continue
+        value, status = _timed(inventory)
+        if status.get("ok") and value is not None:
+            data["account_provider_inventory"].append(value)
+        else:
+            data["account_provider_inventory"].append({
+                "provider_type": type(provider).__name__,
+                "error_type": status.get("error_type"),
+                "error": "ERROR: Provider inventory unavailable",
+            })
     if test_service_start:
         before = bool((data["sources"]["v2"].get("probe") or {}).get("healthy"))
         if selection is None:
@@ -476,7 +493,7 @@ def collect(*, network: bool, snapshots: int, test_service_start: bool = False) 
         account = GitHubCopilotAccountProvider(
             enabled=bool(quota_cfg.get("enabled", True)),
             auth_json_path=quota_cfg.get("authJsonPath"),
-            credential_db_path=(default_opencode_data_dir() / "opencode.db") if data.get("selection", {}).get("selected") == "v2" else None,
+            credential_db_path=(default_opencode_data_dir() / "opencode.db") if (data.get("selection") or {}).get("selected") == "v2" else None,
         )
         health, timing = _timed(account.probe)
         data["github_copilot_account"] = {"probe": _health(health) if health is not None else None, "probe_timing": timing}
@@ -520,10 +537,36 @@ def main(argv: list[str] | None = None) -> int:
     progress = StartupProgress(mode="normal")
     validation: dict[str, Any] | None = None
     try:
+        progress.update("Inspecting local OpenCode sources", 12)
+        try:
+            data = collect(network=not args.no_network, snapshots=max(0, min(args.snapshots, 10)), test_service_start=args.test_service_start)
+        except Exception as exc:
+            recoverable(exc, "diagnostics-collection")
+            data = {
+                "schema_version": 2,
+                "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+                "cost_guard": {"version": DISPLAY_VERSION},
+                "environment": {
+                    "python_version": platform.python_version(),
+                    "platform": platform.platform(),
+                    "machine": platform.machine(),
+                    "system": platform.system(),
+                },
+                "collection_error": {
+                    "error_type": type(exc).__name__,
+                    "error": "ERROR: Diagnostic collection unavailable",
+                },
+            }
         if not args.skip_validation:
-            validation = run_full_validation(progress)
-        progress.update("Inspecting local OpenCode sources", 72)
-        data = collect(network=not args.no_network, snapshots=max(0, min(args.snapshots, 10)), test_service_start=args.test_service_start)
+            try:
+                validation = run_full_validation(progress)
+            except Exception as exc:
+                recoverable(exc, "diagnostics-validation")
+                validation = {
+                    "tier": "full-local", "ok": False,
+                    "error_type": type(exc).__name__,
+                    "error": "ERROR: Local validation unavailable",
+                }
         if validation is not None:
             data["validation"] = validation
         else:

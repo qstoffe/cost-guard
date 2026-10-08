@@ -23,7 +23,7 @@ from .pricing.github_copilot import GitHubCopilotPricingProvider
 from .pricing.github_copilot import PricingUnavailableError
 from .reports import ReportKind, ReportRequest, ReportService
 from .sources.errors import SourceError, SourceUnavailableError
-from .sources.discovery import default_opencode_data_dir, has_opencode_installation_evidence
+from .sources.discovery import default_opencode_data_dir, find_opencode_executable, has_opencode_installation_evidence
 from .sources.model_availability import FallbackModelAvailabilitySource, OpenCodeModelAvailabilitySource
 from .sources.selection import SourceSelector
 from .version import DISPLAY_VERSION, PRODUCT_NAME, mode_heading
@@ -107,7 +107,7 @@ def _select_source(requested: str):
     except SourceUnavailableError:
         if requested not in {"auto", "v2"}:
             raise
-        executable = shutil.which("opencode")
+        executable = find_opencode_executable(which=shutil.which)
         if executable is None:
             raise
         command = [executable, "api", "get", "/api/info"]

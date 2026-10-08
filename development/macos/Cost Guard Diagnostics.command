@@ -3,7 +3,7 @@ set -u
 CG_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 
 find_python() {
-  for candidate in python3 python; do
+  for candidate in python3 python /opt/homebrew/bin/python3 /usr/local/bin/python3 /Library/Frameworks/Python.framework/Versions/Current/bin/python3; do
     if command -v "$candidate" >/dev/null 2>&1 && "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3,11) else 1)' >/dev/null 2>&1; then
       printf '%s' "$candidate"
       return 0
