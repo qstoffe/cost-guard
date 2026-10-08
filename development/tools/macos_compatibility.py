@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import json
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
 
 from src.sources.discovery import (
     default_opencode_data_dir, default_opencode_state_dir,
@@ -15,7 +19,6 @@ from src.sources.discovery import (
     read_v2_service_registration, ServiceRegistrationCandidate,
 )
 
-ROOT = Path(__file__).resolve().parents[2]
 
 
 class MacCompatibilityChecks(unittest.TestCase):
