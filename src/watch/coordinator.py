@@ -13,6 +13,8 @@ from src.sources.errors import SourceError, SourceSchemaError, SourceUnavailable
 from src.sources.selection import SourceSelection
 from src.runtime_errors import check_pending
 
+from .recovery_events import record as record_source_recovery
+from .model_discovery import WatchModelDiscovery
 from .models import WatchProjection, WatchRow, WatchSessionSubtotal
 from .observers import CatalogObservation, LiveEventPump, observe_catalog
 from .tracker import WatchRowTracker
@@ -129,6 +131,8 @@ class WatchCoordinator:
         self.source_recoveries = 0
         self.last_source_recovery_kind = ""
         self._observer_error = ""
+        self.model_discovery = WatchModelDiscovery(report_service)
+        self._resume_pending = False
 
     def _record_refresh_duration(self, seconds: float) -> None:
         value = max(0.001, float(seconds))
@@ -154,6 +158,8 @@ class WatchCoordinator:
         self._quota_recovery_until = self._monotonic() + QUOTA_RECOVERY_SECONDS
         self._quota_retry_at = self._monotonic()
         self._quota_retry_index = 0
+        self._resume_pending = True
+        self._resume_recovery_deadline_ms = now_ms + 180_000
         return True
 
     def _end_quota_recovery(self) -> None:
@@ -368,7 +374,7 @@ class WatchCoordinator:
             status_active=status_active,
             now_ms=now_ms,
             session_warnings=session_warnings,
-            recent_model_notice=self.report_service.recent_model_notice_text(),
+            recent_model_notice=self.model_discovery.notice(now_ms),
             recent_promotion_notices=self.report_service.recent_promotion_notice_texts(),
             token_mix=self.token_mix.project(self._token_valuation()),
             session_subtotals=session_subtotals,
@@ -380,6 +386,7 @@ class WatchCoordinator:
         refresh_started = time.monotonic()
         now_ms = int(self.clock_ms())
         observation = observe_catalog(self.source, session_id=self.session_id)
+        self.model_discovery.refresh(now_ms)
         roots = self._selected_roots(observation)
         # Initial global hydration is deliberately bounded.  Every root revision
         # is already known, so later changes still enter immediately; we hydrate
@@ -414,6 +421,8 @@ class WatchCoordinator:
         refresh_started = time.monotonic()
         now_ms = int(self.clock_ms())
         self._detect_quota_resume(now_ms)
+        self.model_discovery.refresh(now_ms, resumed=self._resume_pending)
+        self._resume_pending = False
         old = self.observation
         observation = observe_catalog(self.source, session_id=self.session_id)
         roots = self._selected_roots(observation)
@@ -588,10 +597,12 @@ class WatchCoordinator:
         while True:
             kind = source_failure_kind(error)
             unreadable = unreadable + 1 if kind == "unreadable" else 0
-            if kind is None or unreadable > SOURCE_UNREADABLE_RETRIES:
+            if kind is None or unreadable > (SOURCE_UNREADABLE_RETRIES * 2 if self.live and int(self.clock_ms()) <= self._resume_recovery_deadline_ms else SOURCE_UNREADABLE_RETRIES):
+                record_source_recovery(self.selection.selected, "failed", kind or "unsupported")
                 raise error
             if not attempts:
                 self.source_recoveries += 1
+                record_source_recovery(self.selection.selected, "retrying", kind)
             attempts += 1
             self.last_source_recovery_kind = kind
             status = f"OpenCode {self.selection.selected.upper()} source {kind} · retrying every {SOURCE_RETRY_SECONDS:g}s"
@@ -608,6 +619,7 @@ class WatchCoordinator:
                 continue
             if self.live:
                 self._start_event_pump()
+            record_source_recovery(self.selection.selected, "recovered", kind)
             return replace(cycle, recovered=True)
 
     def run_forever(self, renderer, *, initial_cycle: WatchCycle | None = None) -> None:

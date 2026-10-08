@@ -227,7 +227,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         pricing = GitHubCopilotPricingProvider(
             cache=repository,
-            max_age_hours=float(config.get("pricingMaxAgeHours", 6)),
+            max_age_hours=float(config.get("pricingMaxAgeHours", 1)),
         )
         needs_accounts = command.watch or command.kind is CommandKind.NORMAL
         accounts = _account_providers(config, selection.selected) if needs_accounts else ()

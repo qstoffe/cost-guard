@@ -62,7 +62,7 @@
   // Maximum age in hours of locally fetched GitHub pricing/model metadata before
   // Cost Guard tries to refresh it. Decimals are supported. If refresh fails after
   // at least one successful fetch, Cost Guard falls back to that local cache.
-  "pricingMaxAgeHours": 6,
+  "pricingMaxAgeHours": 1,
 
   // Legacy compatibility only: same-prompt comparison tables were removed from
   // the v78 terminal product. This setting is still accepted so an older

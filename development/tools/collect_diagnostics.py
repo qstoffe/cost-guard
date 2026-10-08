@@ -65,6 +65,8 @@ from src.sources.selection import SourceSelector  # noqa: E402
 from src.version import DISPLAY_VERSION, PRODUCT_NAME, RELEASE_DATE, mode_heading  # noqa: E402
 from src.runtime_errors import recoverable, recovered  # noqa: E402
 from src.sources.errors import SourceError  # noqa: E402
+from src.watch.recovery_events import recent_events  # noqa: E402
+from src.pricing.github_copilot import CACHE_NAMESPACE, CACHE_KEY, _catalog_from_payload  # noqa: E402
 from src.config import ConfigError  # noqa: E402
 
 
@@ -212,7 +214,7 @@ def _report_summary(selection: Any, config: dict[str, Any], *, network: bool) ->
     repository = CacheRepository(database)
     pricing = GitHubCopilotPricingProvider(
         cache=repository,
-        max_age_hours=float(config.get("pricingMaxAgeHours", 6)),
+        max_age_hours=float(config.get("pricingMaxAgeHours", 1)),
     )
     providers = _account_providers(config, selection.selected) if network else ()
     service = ReportService(
@@ -391,6 +393,8 @@ def _text_summary(data: dict[str, Any]) -> str:
         f"  Package validator: {validator_text}",
         "",
         f"V1 SQLite triage: {(data.get('v1_sqlite_triage') or {}).get('status', 'unavailable')}",
+        f"Model cache: {(data.get('model_freshness') or {}).get('model_count', 'N/A')} priced models, age {(data.get('model_freshness') or {}).get('cache_age_minutes', 'N/A')} min",
+        f"Watch source recovery transitions (30 days, max 24): {len(data.get('watch_source_recovery_events') or ())}",
         f"Configured source: {data.get('config', {}).get('open_code_source')}",
         f"Selected source: {(data.get('selection') or {}).get('selected')}",
     ]
@@ -453,6 +457,30 @@ def collect(*, network: bool, snapshots: int, test_service_start: bool = False) 
         "network_enabled": network,
         "reference_valuation_unit": "CCost (Copilot AI-credit-equivalent; not billed money or deducted credits)",
     }
+
+    data["watch_source_recovery_events"] = recent_events()
+    try:
+        database = CacheDatabase(ROOT)
+        database.initialize()
+        entry = CacheRepository(database).get(CACHE_NAMESPACE, CACHE_KEY)
+        catalog = _catalog_from_payload(entry.payload) if entry else None
+        if catalog is not None:
+            now_ms = int(time.time() * 1000)
+            data["model_freshness"] = {
+                "cache_present": True,
+                "cache_age_minutes": max(0, (now_ms - catalog.retrieved_at_ms) // 60_000),
+                "model_count": len(catalog.models),
+                "release_dates_known": sum(bool(m.metadata.get("release_date")) for m in catalog.models),
+                "configured_price_interval_minutes": int(float(cfg.get("pricingMaxAgeHours", 1)) * 60),
+                "watch_availability_interval_minutes": 15,
+                "watch_price_interval_minutes": 60,
+                "note": "Watch availability is independent from Copilot pricing and may lag desktop availability",
+            }
+        else:
+            data["model_freshness"] = {"cache_present": False, "status": "no_cached_catalog"}
+    except (OSError, ValueError, TypeError) as exc:
+        data["model_freshness"] = {"status": "unavailable", "error_type": type(exc).__name__}
+
     data["sources"]["v1"] = _safe_source_stats(v1, snapshots=snapshots)
     # Read-only V1 SQLite triage: no rows, SQL content or local paths included.
     try:

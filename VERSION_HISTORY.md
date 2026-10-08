@@ -1,5 +1,12 @@
 # Cost Guard version history
 
+## v80.15 — 2026-10-08
+
+- Refresh Copilot catalog/notifications hourly in running Watch while keeping in-run CCost pricing stable; separately check V2 OpenCode selectability every 15 minutes and use ✦/✧ Unicode discovery notices without assuming account entitlement.
+- Bound extra V2 recovery time after detected sleep/wake. Record sanitized recovery transitions and cached model-freshness metrics in Diagnostics without sessions, IDs or credentials.
+- Default pricing cache age to one hour; add isolated cross-platform regression tests.
+
+
 ## v80.14 — 2026-10-08
 
 - Close synthetic SQLite connections before Windows temporary-directory cleanup, fix the missing V1 SourceError import and accept string-backed database paths in read-only Diagnostics triage.
@@ -23,12 +30,9 @@
 - Run privacy-safe deterministic macOS-behavior simulations inside Diagnostics on Windows, macOS and Linux. Record per-check PASS/FAIL/SKIP and totals in diagnostics.json and summary.txt; no access to live credentials or OpenCode data, no native macOS guarantee.
 - Include bounded CLI discovery, XDG directories, V1 override, macOS app installation evidence, absent V2 service registration and Mac launcher contract checks; isolate execution with a 30-second subprocess timeout and sanitized results.
 
-## v80.10 — 2026-10-07
-
-- Own unexpected Python failures before application/Diagnostics imports and at the final process boundary. Fatal faults show `COST GUARD FAILED`, return non-zero, and write a daily software-error log plus a standalone privacy-conscious crash report; intentional Ctrl+C/help/usage and expected operational conditions remain distinct.
-- Add explicit isolated worker/provider ERROR states, authoritative Watch observer resync, defensive thread/unraisable hooks, in-process repetition summaries, emergency stderr reporting and best-effort 30-day retention. Healthy runs create no software-error log; no third-party dependency or full Diagnostics invocation is added to the crash path.
-
 ## Earlier v80 history
+
+- v80.10 added guarded runtime failures, error-only logs and privacy-safe crash reports.
 
 - v80.9 unified the Windows launchers under a persistent PowerShell session and corrected Watch Ctrl+C and error handling.
 
