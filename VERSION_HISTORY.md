@@ -1,5 +1,12 @@
 # Cost Guard version history
 
+## v80.17 — 2026-10-08
+
+- Treat newly observed V2 selectable Copilot IDs only as triggers for immediate forced pricing refresh; Watch notifies only verified priced catalog models, preserving the hourly catalog cadence and 15-minute V2 checks.
+- Move runtime logs to root logs/, publish one verified diagnostics ZIP, safely archive legacy/current logs, clean old date-stamped ZIPs and print precise support instructions with configurable qstoffe@hotmail.com.
+- Isolate runtime artifacts from releases, improve diagnostics error handling and extend regression tests.
+
+
 ## v80.16 — 2026-10-08
 
 - Normalize Watch notices to ✦ New Models, retain bounded model-identity history between starts and expose metadata-fetch failures for diagnosis.
@@ -24,12 +31,6 @@
 
 - Guard V1 SQLite read errors including InterfaceError and OperationalError with sanitized source failures instead of unhandled SQLite exceptions.
 - Add simulated V1 SQLite schema, corrupt-file, WAL-concurrency and error-sanitization tests on all platforms; Diagnostics includes read-only SQLite triage without data rows, SQL text or paths.
-
-
-## v80.12 — 2026-10-08
-
-- Normalize simulated XDG, V1 override and registration path comparisons across Windows filesystems to avoid false Mac compatibility failures.
-- Restore README version consistency and bounded detailed history after new macOS Diagnostics checks.
 
 
 ## Earlier v80 history

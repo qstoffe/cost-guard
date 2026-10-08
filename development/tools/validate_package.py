@@ -85,7 +85,7 @@ PUBLIC_LAUNCHERS = {
     "macos": {"Cost Guard.command", "Cost Guard Watch.command"},
 }
 
-FORBIDDEN_TOP_LEVEL = {"cache", "diagnostics", ".git", "data"}
+FORBIDDEN_TOP_LEVEL = {"cache", "diagnostics", "logs", ".git", "data"}
 FORBIDDEN_NAMES = {"auth.json", ".env", "credentials.json"}
 TEXT_SUFFIXES = {".md", ".txt", ".json", ".jsonc", ".py", ".cmd", ".command", ".ps1", ".sh", ".toml", ".yaml", ".yml"}
 
@@ -191,7 +191,7 @@ def check_required_layout(root: Path, results: Results) -> None:
     gitignore = root / ".gitignore"
     if gitignore.is_file():
         text = gitignore.read_text(encoding="utf-8")
-        for required in ("/cache/", "/diagnostics/", "/releases/", "/config/user-config.jsonc"):
+        for required in ("/cache/", "/diagnostics/", "/logs/", "/releases/", "/config/user-config.jsonc"):
             if required not in text:
                 results.fail("gitignore contract", f".gitignore must include {required}")
     results.ok("required layout/runtime-artifact rules checked")

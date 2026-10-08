@@ -1,4 +1,7 @@
 {
+  // Public contact printed after Diagnostics; override in user-config.jsonc if needed.
+  "diagnostics": {"supportEmail": "qstoffe@hotmail.com"},
+
   // IANA timezone used for timestamps, "today", and workday calculations.
   "timezone": "Europe/Stockholm",
 

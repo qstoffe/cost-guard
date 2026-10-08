@@ -17,7 +17,7 @@ class DiagnosticLogsTests(unittest.TestCase):
     def test_archive_and_prune_only_quiet_unchanged_owned_logs(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            folder = root / "diagnostics" / "errors"
+            folder = root / "logs" / "errors"
             folder.mkdir(parents=True)
             old = folder / "cost-guard-errors-2026-10-08.log"
             old.write_text("Cost Guard: v80.16\n", encoding="utf-8")
@@ -38,7 +38,7 @@ class DiagnosticLogsTests(unittest.TestCase):
     def test_recent_recovery_log_remains_after_archiving(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            file = root / "diagnostics" / "recovery" / "watch-recovery.json"
+            file = root / "logs" / "recovery" / "watch-recovery.json"
             file.parent.mkdir(parents=True)
             file.write_text("[]", encoding="utf-8")
             bundle = root / "diagnostics" / "bundle.zip"
@@ -50,7 +50,7 @@ class DiagnosticLogsTests(unittest.TestCase):
     def test_failed_zip_publishing_keeps_log(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            file = root / "diagnostics" / "errors" / "cost-guard-errors-2026-10-08.log"
+            file = root / "logs" / "errors" / "cost-guard-errors-2026-10-08.log"
             file.parent.mkdir(parents=True)
             file.write_text("important", encoding="utf-8")
             import os
@@ -61,6 +61,20 @@ class DiagnosticLogsTests(unittest.TestCase):
             with self.assertRaises(OSError):
                 create_bundle(destination, root=root, json_bytes=b"{}", text_bytes=b"ok")
             self.assertTrue(file.exists())
+
+    def test_single_latest_zip_replaces_old_packages(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            destination = root / "diagnostics" / "cost-guard-diagnostics.zip"
+            destination.parent.mkdir()
+            previous = destination.parent / "cost-guard-diagnostics-20261008-150806.zip"
+            previous.write_bytes(b"previous")
+            create_bundle(destination, root=root, json_bytes=b"{}", text_bytes=b"first")
+            self.assertFalse(previous.exists())
+            create_bundle(destination, root=root, json_bytes=b"{}", text_bytes=b"second")
+            self.assertEqual([destination], list(destination.parent.glob("*.zip")))
+            with ZipFile(destination) as archive:
+                self.assertEqual(b"second", archive.read("summary.txt"))
 
     def test_test_mode_never_persists_recovery_events(self):
         with tempfile.TemporaryDirectory() as tmp, patch.object(recovery_events, "FILE", Path(tmp) / "record.json"), patch.dict("os.environ", {"COST_GUARD_TEST_MODE":"1"}):

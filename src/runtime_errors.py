@@ -94,7 +94,7 @@ class RuntimeErrors:
         return digest, frame
 
     def _log_path(self) -> Path:
-        return self.root / "diagnostics/errors" / f"cost-guard-errors-{datetime.now().astimezone():%Y-%m-%d}.log"
+        return self.root / "logs/errors" / f"cost-guard-errors-{datetime.now().astimezone():%Y-%m-%d}.log"
 
     def _append(self, text: str) -> Path:
         path = self._log_path()
@@ -159,7 +159,7 @@ class RuntimeErrors:
     def fatal(self, exc: BaseException, component: str = "application", thread: str | None = None) -> int:
         try:
             with self._lock:
-                directory = self.root / "diagnostics/crashes"
+                directory = self.root / "logs/crashes"
                 directory.mkdir(parents=True, exist_ok=True)
                 stem = f"cost-guard-crash-{datetime.now():%Y%m%d-%H%M%S}-{os.getpid()}"
                 # Exclusive creation is safe across processes and same-second crashes.
@@ -194,7 +194,7 @@ class RuntimeErrors:
         cutoff = (datetime.now().astimezone() - timedelta(days=30)).timestamp()
         for folder in ("errors", "crashes", "recovery"):
             try:
-                directory = self.root / "diagnostics" / folder
+                directory = self.root / "logs" / folder
                 if directory.is_symlink() or directory.parent.is_symlink():
                     continue
                 with os.scandir(directory) as entries:

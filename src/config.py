@@ -10,6 +10,7 @@ from __future__ import annotations
 import copy
 import json
 import math
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
@@ -227,6 +228,12 @@ def validate_configuration(config: dict[str, Any], defaults: dict[str, Any], ove
     }
     for name, (minimum, maximum, whole) in numeric.items():
         _assert_number(config.get(name), name, _setting_source(name, overrides), minimum, maximum, whole)
+
+    support = config.get("diagnostics")
+    _assert_object(support, "diagnostics", {"supportEmail"}, _setting_source("diagnostics", overrides))
+    email = support.get("supportEmail")
+    if not isinstance(email, str) or not re.fullmatch(r"[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}", email) or len(email) > 254:
+        raise _invalid(_setting_source("diagnostics.supportEmail", overrides), "diagnostics.supportEmail", email, "a lowercase email address")
 
     watch_interval = config.get("sessionWatchIntervalSeconds")
     if isinstance(watch_interval, str):

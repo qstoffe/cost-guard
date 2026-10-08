@@ -24,7 +24,7 @@ class FakeProvider:
         self.current = catalog_value
         self.calls = 0
 
-    def get_catalog(self):
+    def get_catalog(self, *, force=False):
         self.calls += 1
         return self.current
 
@@ -67,15 +67,25 @@ class WatchModelDiscoveryTests(unittest.TestCase):
         observer.refresh(1_000)
         provider.current = catalog("Old", "Claude New", dated=("Claude New",))
         observer.refresh(3_601_001)
-        self.assertIn("✦ New Models:" observer.notice(1791500000000))
+        self.assertIn("✦ New Models:", observer.notice(1791500000000))
 
     def test_new_available_without_price_uses_pending_notice(self):
         observer, provider, source = self.make_discovery()
         observer.refresh(1_000)
         source.models = ("github-copilot/old", "github-copilot/new-model")
         observer.refresh(901_001)
-        self.assertIn("new-model", observer.notice(901_001))
-        self.assertIn("✦ New Models:", observer.notice(901_001))
+        self.assertEqual("", observer.notice(901_001))
+        self.assertEqual(1, provider.calls)
+
+    def test_v2_hint_forces_catalog_even_with_fresh_hourly_cache(self):
+        observer, provider, source = self.make_discovery()
+        observer.refresh(1_000)
+        provider.current = catalog("Old", "New Model")
+        source.models = ("github-copilot/old", "github-copilot/new-model")
+        observer.refresh(901_001)
+        self.assertEqual(1, provider.calls)
+        self.assertIn("New Model", observer.notice(901_001))
+        self.assertEqual(1, observer.diagnostics(901_001)["v2_price_refresh_triggers"])
 
     def test_rate_limit_and_resume(self):
         observer, provider, source = self.make_discovery()
@@ -95,12 +105,12 @@ class WatchModelDiscoveryTests(unittest.TestCase):
         self.assertIn("New Model", observer.notice(3_601_001))
         source.models = ("github-copilot/old", "github-copilot/new-model")
         observer.refresh(3_601_002, resumed=True)
-        self.assertIn("✦ New Models:", observer.notice(3_601_002))
+        self.assertEqual(2, provider.calls)
 
     def test_price_outage_keeps_previous_catalog(self):
         observer, provider, source = self.make_discovery()
         observer.refresh(1_000)
-        provider.get_catalog = lambda: (_ for _ in ()).throw(OSError("synthetic"))
+        provider.get_catalog = lambda **kwargs: (_ for _ in ()).throw(OSError("synthetic"))
         observer.refresh(3_601_001)
         self.assertEqual("unavailable", observer.diagnostics(3_601_001)["pricing_status"])
         self.assertEqual(("Old",), tuple(m.model.display_name for m in observer.catalog.models))

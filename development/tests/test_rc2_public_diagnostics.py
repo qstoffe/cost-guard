@@ -223,7 +223,7 @@ class DiagnosticBundleTests(unittest.TestCase):
                 proc.stdout.startswith(f"Cost Guard {DISPLAY_VERSION} ({RELEASE_DATE}) — Diagnostics\n"),
                 proc.stdout,
             )
-            bundles = list(Path(tmp).glob("cost-guard-diagnostics-*.zip"))
+            bundles = list(Path(tmp).glob("cost-guard-diagnostics.zip"))
             self.assertEqual(1, len(bundles))
             with zipfile.ZipFile(bundles[0]) as archive:
                 self.assertTrue({"diagnostics.json", "summary.txt"}.issubset(set(archive.namelist())))

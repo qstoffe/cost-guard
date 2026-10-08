@@ -654,8 +654,7 @@ def main(argv: list[str] | None = None) -> int:
         return int(usage.code or 0)  # Only argparse's deliberate help/usage exit.
     output_dir = args.output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    bundle = output_dir / f"cost-guard-diagnostics-{stamp}.zip"
+    bundle = output_dir / "cost-guard-diagnostics.zip"
     print(_diagnostic_header())
     progress = StartupProgress(mode="normal")
     validation: dict[str, Any] | None = None
@@ -701,9 +700,26 @@ def main(argv: list[str] | None = None) -> int:
         progress.stop()
     json_bytes = json.dumps(data, indent=2, ensure_ascii=False, sort_keys=True).encode("utf-8")
     text_bytes = _text_summary(data).encode("utf-8") if "cost_guard" in data else (json.dumps(data, indent=2) + "\n").encode("utf-8")
-    archive_report = create_bundle(bundle, root=ROOT, json_bytes=json_bytes, text_bytes=text_bytes, include_logs=os.environ.get("COST_GUARD_TEST_MODE") != "1")
-    print("Archived logs: {}; removed quiet unchanged logs: {}".format(archive_report["archived_logs"], archive_report["removed_logs"]))
-    progress.stop()
-    print(f"Diagnostic bundle created: {bundle}")
-    print("Prompt text, session titles, auth tokens and raw OpenCode payloads are not included.")
+    try:
+        archive_report = create_bundle(
+            bundle, root=ROOT, json_bytes=json_bytes, text_bytes=text_bytes,
+            include_logs=os.environ.get("COST_GUARD_TEST_MODE") != "1",
+            cleanup_old=os.environ.get("COST_GUARD_TEST_MODE") != "1",
+        )
+    except (OSError, ValueError, zipfile.BadZipFile) as exc:
+        print("\nERROR: Diagnostic file could not be created.")
+        print("Reason: " + type(exc).__name__)
+        print("The previous diagnostic ZIP, if any, was preserved.")
+        print("Please close programs using the ZIP, check disk space and retry.")
+        return 1
+    print("\n")
+    print("SUCCESS: Diagnostic file created successfully!")
+    print("Diagnostic file: " + str(bundle.resolve()))
+    print("\nNext step: Attach this ZIP to an email and send it to:")
+    print("  " + str(load_configuration(ROOT).values["diagnostics"]["supportEmail"]))
+    print("No email is sent automatically. Review the ZIP before sharing.")
+    if not data.get("validation", {}).get("ok") and data.get("validation", {}).get("ok") is not None:
+        print("NOTE: Tests completed with errors. Please still send the diagnostic ZIP.")
+    print("Archived {} logs; removed {} inactive logs.".format(
+        archive_report["archived_logs"], archive_report["removed_logs"]))
     return 0

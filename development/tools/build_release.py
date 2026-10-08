@@ -25,6 +25,7 @@ def should_include(path: Path) -> bool:
     if (
         rp == "cache" or rp.startswith("cache/")
         or rp == "diagnostics" or rp.startswith("diagnostics/")
+        or rp == "logs" or rp.startswith("logs/")
         or rp == "releases" or rp.startswith("releases/")
     ):
         return False

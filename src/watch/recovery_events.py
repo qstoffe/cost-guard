@@ -12,7 +12,7 @@ import os
 from src.version import DISPLAY_VERSION
 
 ROOT = Path(__file__).resolve().parents[2]
-FILE = ROOT / "diagnostics" / "recovery" / "watch-recovery.json"
+FILE = ROOT / "logs" / "recovery" / "watch-recovery.json"
 _ALLOWED_EVENTS = frozenset({"retrying", "recovered", "failed"})
 _ALLOWED_SOURCES = frozenset({"v1", "v2"})
 _ALLOWED_KINDS = frozenset({"available", "unavailable", "unreadable", "unsupported"})

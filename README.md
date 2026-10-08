@@ -269,7 +269,7 @@ Full redraws clear screen/scrollback; countdowns replace only the status line. V
 
 ## Pricing, quota and network behavior
 
-Watch checks Copilot hourly and V2 every 15 minutes. ✦ New Models combines verified recent releases with newly discovered catalog/availability changes; in-run CCost stays pinned. Expired promotions revert to verified standard rates or are withheld. Failed refresh can reuse a prior successful snapshot.
+Watch checks Copilot hourly. V2 checks every 15 minutes only trigger an immediate forced Copilot refresh for newly observed model IDs. ✦ New Models shows only confirmed priced catalog models; CCost stays pinned. Expired promotions revert to verified standard rates or are withheld. Failed refresh can reuse a prior successful snapshot.
 
 GitHub Copilot quota uses OpenCode's existing OAuth credential by default. `copilotQuota.authJsonPath` may override the path when a non-standard OpenCode setup requires it. Cost Guard reads credentials only for the request and never stores them in its own cache.
 
@@ -320,7 +320,7 @@ For troubleshooting, use `Cost Guard Diagnostics` under `development/windows/` o
 python development/tools/collect_diagnostics.py
 ```
 
-Creates `diagnostics/cost-guard-diagnostics-YYYYMMDD-HHMMSS.zip`: **Full/local** tests, package validation (including failures), environment/version, source/wire statistics, timings and provider health. `--no-network` skips pricing/quotas; `--skip-validation` is emergency/recursive-only.
+Creates `diagnostics/cost-guard-diagnostics.zip`: **Full/local** tests, package validation (including failures), environment/version, source/wire statistics, timings and provider health. `--no-network` skips pricing/quotas; `--skip-validation` is emergency/recursive-only.
 
 Bundles omit prompt text, titles, raw payloads/auth, tokens and account labels/IDs; session/account-source IDs are hashed. Account evidence includes plan/status, numeric quota shape, credential discovery/category (never values), request/HTTP/schema classification, normalized component categories, malformed/ignored counts and MiniMax window/form recognition. Provider inventory is available even without live accounts.
 
@@ -330,7 +330,7 @@ Bundles omit prompt text, titles, raw payloads/auth, tokens and account labels/I
 
 ## Release status
 
-**v80.16** adds live Watch model discovery and stronger V2 recovery. v80.0 is the Python 3.11+ public baseline. Claude quotas remain experimental; account coverage/restart/sleep need separate live evidence.
+**v80.17** adds live Watch model discovery and stronger V2 recovery. v80.0 is the Python 3.11+ public baseline. Claude quotas remain experimental; account coverage/restart/sleep need separate live evidence.
 
 ## Development
 

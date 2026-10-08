@@ -4,6 +4,7 @@
 # Disposable runtime state. These directories may be removed while Cost Guard is stopped.
 /cache/
 /diagnostics/
+/logs/
 
 # Generated release artifacts; never source and never nested into a release ZIP.
 /releases/

@@ -45,10 +45,10 @@ class RuntimeErrorTests(unittest.TestCase):
         self.temp.cleanup()
 
     def logs(self):
-        return list((self.root / "diagnostics/errors").glob("*.log"))
+        return list((self.root / "logs/errors").glob("*.log"))
 
     def crashes(self):
-        return list((self.root / "diagnostics/crashes").glob("*.txt"))
+        return list((self.root / "logs/crashes").glob("*.txt"))
 
     def logged(self):
         return "\n".join(path.read_text(encoding="utf-8") for path in self.logs())
@@ -385,7 +385,7 @@ class RuntimeErrorTests(unittest.TestCase):
         self.assertEqual(sorted(["src/accounts/claude_transport.py", "src/presentation/progress.py", "src/watch/observers.py"]), sorted(roots))
 
     def test_retention_30_days_only_owned_files_and_no_log_on_cleanup_failure(self):
-        directory = self.root / "diagnostics/errors"
+        directory = self.root / "logs/errors"
         directory.mkdir(parents=True)
         old = directory / "cost-guard-errors-2000-01-01.log"
         recent = directory / f"cost-guard-errors-{datetime.now():%Y-%m-%d}.log"
