@@ -330,7 +330,7 @@ Bundles omit prompt text, titles, raw payloads/auth, tokens and account labels/I
 
 ## Release status
 
-**v80.10** adds process/worker failure containment and error-only diagnostics, preserving PowerShell/Watch stops. v80.0 is the Python 3.11+ public baseline. Claude quotas remain experimental; account coverage/restart/sleep need separate live evidence.
+**v80.12** adds cross-platform macOS compatibility checks to Diagnostics and fixes Windows path-comparison and release-validation regressions; v80.10 introduced process/worker failure containment and error-only diagnostics. v80.0 is the Python 3.11+ public baseline. Claude quotas remain experimental; account coverage/restart/sleep need separate live evidence.
 
 ## Development
 

@@ -21,26 +21,32 @@ from src.sources.discovery import (
 
 
 
+def equivalent_path(path: Path) -> str:
+    """Compare filesystem meaning rather than Windows display casing."""
+    import os
+    return os.path.normcase(os.path.realpath(os.fspath(path)))
+
+
 class MacCompatibilityChecks(unittest.TestCase):
     def test_default_xdg_paths(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
-            self.assertEqual(home / ".local/share/opencode", default_opencode_data_dir(environment={}, home=home))
-            self.assertEqual(home / ".local/state/opencode", default_opencode_state_dir(environment={}, home=home))
+            self.assertEqual(equivalent_path(home / ".local/share/opencode"), equivalent_path(default_opencode_data_dir(environment={}, home=home)))
+            self.assertEqual(equivalent_path(home / ".local/state/opencode"), equivalent_path(default_opencode_state_dir(environment={}, home=home)))
 
     def test_custom_xdg_paths(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
             env = {"XDG_DATA_HOME": str(home / "custom-data"), "XDG_STATE_HOME": str(home / "custom-state")}
-            self.assertEqual(home / "custom-data/opencode", default_opencode_data_dir(environment=env, home=home))
-            self.assertEqual(home / "custom-state/opencode/service.json",
-                             discover_v2_registration_candidate(environment=env, home=home).path)
+            self.assertEqual(equivalent_path(home / "custom-data/opencode"), equivalent_path(default_opencode_data_dir(environment=env, home=home)))
+            self.assertEqual(equivalent_path(home / "custom-state/opencode/service.json"),
+                             equivalent_path(discover_v2_registration_candidate(environment=env, home=home).path))
 
     def test_v1_database_override(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
             result = discover_v1_database_candidate(environment={"OPENCODE_DB": "~/custom/db.sqlite"}, home=home)
-            self.assertEqual(home / "custom/db.sqlite", result.path)
+            self.assertEqual(equivalent_path(home / "custom/db.sqlite"), equivalent_path(result.path))
             self.assertEqual("OPENCODE_DB", result.origin)
 
     def test_cli_on_path_takes_priority(self):

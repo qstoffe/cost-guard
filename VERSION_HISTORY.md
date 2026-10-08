@@ -1,5 +1,11 @@
 # Cost Guard version history
 
+## v80.12 — 2026-10-08
+
+- Normalize simulated XDG, V1 override and registration path comparisons across Windows filesystems to avoid false Mac compatibility failures.
+- Restore README version consistency and bounded detailed history after new macOS Diagnostics checks.
+
+
 ## v80.11 — 2026-10-08
 
 - Run privacy-safe deterministic macOS-behavior simulations inside Diagnostics on Windows, macOS and Linux. Record per-check PASS/FAIL/SKIP and totals in diagnostics.json and summary.txt; no access to live credentials or OpenCode data, no native macOS guarantee.
@@ -20,17 +26,10 @@
 - Make Watch session `Σ` the Decimal subtotal of exactly its displayed prompt/event rows, preserving unresolved `?`/`N/A` and native zero-cost compaction behavior. Attaching mid-prompt now includes that row's full known CCost in its session subtotal; row eviction changes the subtotal, not run accounting.
 - Keep `Watch total CCost` and `Token Mix %` run-scoped and deduplicated: completed pre-Watch requests remain excluded, so the run total may intentionally differ from session subtotals. Remove the unused per-session run partition and include row-subtotal amount/completeness in dashboard change detection.
 
-## v80.7 — 2026-10-07
-
-- Add maintained Simple HTTP Account Providers behind the existing account abstraction: bounded read-only Bearer HTTPS GET, declarative JSON mappings, per-credential identities, isolated fail-soft observations and sanitized diagnostics, without custom HTTP configuration or new runtime dependencies.
-- Add OpenRouter authenticated-key spend and genuine key-limit capacity, DeepSeek separate native total/granted/topped-up balances without fabricated percentages, and a first-class MiniMax Token Plan adapter for supported native windows/count/percentage/reset variants. Report/Watch keep the shared account renderer and lifecycle; account observations never establish historical attribution or CCost.
-
-## v80.6 — 2026-10-07
-
-- Keep a running Watch alive when its selected OpenCode source is temporarily unavailable: the last dashboard stays visible with `OpenCode V2 source unavailable · retrying every 5s`, the same source is retried without V1 fallback, CLI starts or extra account requests, and V2 resumes only after a fresh snapshot and a restarted event stream. A restarted V2 service on a new port is picked up from its rewritten registration. Unsupported schemas still end Watch; data that stays unreadable for about a minute does too.
-- Introduce Windows Watch error visibility on non-zero exits; superseded by the common persistent PowerShell launcher in v80.9.
-
 ## Earlier v80 history
+
+- v80.7 added shared Simple HTTP account providers and adapters for OpenRouter, DeepSeek and MiniMax, with sanitized diagnostics and no fabricated CCost.
+- v80.6 made Watch survive temporary source outages and retry V2 without a V1 fallback.
 
 - v80.0 established the clean 0BSD public-repository baseline with a fresh root history, retaining the Python functionality and cross-platform launchers, explicit bounded test-suite membership and public product identifiers.
 - v80.1 introduced Cost Guard as an OpenCode AI usage, cost and quota tool in the README, with static Watch/report/Token Mix images, an early quick start and the detailed contracts linked in `docs/usage-and-cost.md`.
