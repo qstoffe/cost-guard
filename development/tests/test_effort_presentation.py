@@ -195,6 +195,42 @@ class EffortSourceTests(unittest.TestCase):
             _, block = project(snapshot)
             self.assertEqual("gpt-5.6 (Medium)", block.rows[0].model_effort)
 
+
+    def test_current_v2_model_switch_preserves_historical_rows(self):
+        with source_with_current_service() as (source, server, _registration):
+            server.messages["ses_current"][1]["model"]["variant"] = "xhigh"
+            server.messages["ses_current"].extend((
+                {"id": "msg_sol_user", "type": "user", "text": "continue", "time": {"created": 5000}},
+                {"id": "msg_sol_assistant", "type": "assistant", "agent": "build",
+                 "model": {"providerID": "openai", "id": "gpt-6.1-sol", "variant": "medium"},
+                 "content": [{"type": "text", "id": "sol_answer", "text": "done"}],
+                 "finish": "stop", "tokens": {"input": 150, "cache": {"read": 400, "write": 0}, "output": 30},
+                 "cost": 0.1, "time": {"created": 5100, "completed": 5500}},
+            ))
+            server.sessions[0]["model"] = {"providerID": "openai", "id": "gpt-6.1-sol", "variant": "default"}
+            snapshot = source.load_session_snapshot("ses_current")
+            self.assertTrue(all(m.model is None for m in snapshot.messages if m.role.value == "user"))
+            _, block = project(snapshot)
+            self.assertEqual(["gpt-5.6 (XHigh)", "gpt-6.1-sol (Medium)"],
+                             [row.model_effort for row in block.rows if not row.is_compaction])
+            server.sessions[0]["model"] = {"providerID": "openai", "id": "other", "variant": "low"}
+            _, updated = project(source.load_session_snapshot("ses_current"))
+            self.assertEqual([(x.model_effort, x.ccost, x.calls) for x in block.rows],
+                             [(x.model_effort, x.ccost, x.calls) for x in updated.rows])
+            self.assertEqual([x.model_effort for x in updated.rows],
+                             [x.watch_model_effort for x in updated.rows])
+
+    def test_current_v2_unanswered_prompt_does_not_inherit_session_model(self):
+        with source_with_current_service() as (source, server, _registration):
+            server.messages["ses_current"].append(
+                {"id": "msg_waiting_user", "type": "user", "text": "waiting", "time": {"created": 5200}})
+            server.sessions[0]["model"] = {"providerID": "openai", "id": "gpt-6.1-sol", "variant": "high"}
+            snapshot = source.load_session_snapshot("ses_current")
+            waiting = next(m for m in snapshot.messages if m.message_id == "msg_waiting_user")
+            self.assertIsNone(waiting.model)
+            self.assertNotIn("model_id", next(e for e in snapshot.events
+                                               if e.event_id == "msg_waiting_user").metadata)
+
     def test_interim_v2_does_not_copy_session_variant_to_assistant(self):
         item = {"id": "a", "role": "assistant", "parts": [],
                 "metadata": {"assistant": {"providerID": "openai", "modelID": "gpt"}}}

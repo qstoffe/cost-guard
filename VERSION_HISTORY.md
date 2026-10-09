@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.28 — 2026-10-09
+
+- OpenCode V2 no longer copies mutable session model selection into historical user prompts. Actual assistant requests supply model and effort, so past Luna prompts remain Luna after a switch to Sol.
+- Unanswered prompts have no invented model attribution; Watch/report and request-based CCost/Next Ictx remain unchanged. Synthetic V2 regressions cover model switches and stable historical attribution.
+
 ## v80.27 — 2026-10-09
 
 - Watch Δctx now uses the preceding root-event Next Ictx as its baseline within a continuous context epoch. This fixes misleading transitions such as 24k → 220k displaying +59k instead of ~+196k.
@@ -24,12 +29,9 @@
 - Supersession fading recognizes any plain named GPT tier and Claude family, such as GPT-5.6 Luna under GPT-6 Luna and Claude Fable 5 under Fable 5.1. Hyphenated `GPT-5.3-Codex`, older `Claude 3.5 Sonnet` ordering, flexible spacing/dashes and publisher spelling also match.
 - Preview, experimental, fast-mode, dated and parenthesized names stay untouched; comparison remains numeric and restricted to the same manufacturer, family and variant shown in the table.
 
-## v80.23 — 2026-10-08
-
-- Supersession highlighting now recognizes xAI's stable numeric Grok versions: Grok 4.5 and 4.6 fade when Grok 4.7 is displayed; the latest stays unchanged. Numeric ordering, table-local availability and conservative unknown/variant exclusions remain intact.
-- Regression coverage reproduces the three Grok rows in normal/full-catalog reports, dark/light themes and multiple widths, preserving all cells, prices, ordering and no-color output.
-
 ## Earlier v80 history
+
+- v80.23 improved Grok version-supersession fading, with regression coverage across report variants and themes.
 
 - v80.22 recommended current main as the supported distribution during rapid development, with source-ZIP/Git and Windows/macOS installation guidance. Packaged GitHub Releases remain paused unless policy explicitly changes.
 

@@ -327,14 +327,9 @@ def current_union_message_to_legacy_bundle(
             info["modelID"] = model_id
         if variant:
             info["variant"] = variant
-    elif message_type == "user":
-        # User messages no longer own model selection in the current V2 schema.
-        # Session selection is still useful event metadata for prompt attribution.
-        selected = session.get("model")
-        sp, sm, sv = _model_fields(selected)
-        if sp and sm:
-            # The mutable session selection is not historical request effort.
-            info["model"] = {"providerID": sp, "modelID": sm}
+    # Current V2 user messages do not own a request-bound model.
+    # Never borrow the mutable session selection for historical prompt events.
+    # Actual assistant requests retain their own model and effort above.
 
     parts: list[dict[str, Any]] = []
 
