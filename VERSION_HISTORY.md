@@ -1,5 +1,11 @@
 # Cost Guard version history
 
+## v80.29 — 2026-10-09
+
+- An unexplained drop in Watch Next Ictx no longer renders a negative ordinary-prompt Δctx; the cell shows N/A and the following prompt uses the newly observed context as baseline. Explicit /compact shrink remains visible; Next Ictx, CCost, pricing warnings and normal report values are unchanged.
+- Embedded line breaks, terminal control sequences and Markdown heading prefixes in session titles can no longer split Watch table rows. Checkpoint failure titles stay separate from their real model requests, whose CCost remains visible.
+- Added deterministic regression scenarios for shrink/reanchoring, zero growth, compaction, multiline checkpoint titles and preserved prompt costs.
+
 ## v80.28 — 2026-10-09
 
 - OpenCode V2 no longer copies mutable session model selection into historical user prompts. Actual assistant requests supply model and effort, so past Luna prompts remain Luna after a switch to Sol.
@@ -24,12 +30,9 @@
 - When a current account-scoped quota is known to be exactly 0% remaining, its bar and reset explain the block and no BLOCKED text is shown. Positive, rounded-to-0%, unknown, expired or not-started windows keep exactly one account-level BLOCKED in Watch and report.
 - Watch keeps compact single-line accounts whenever they fit; wider rows split at `|` into aligned, indented continuation lines with the account name once and no blank lines, wrapping only an oversized component. Genuinely narrow terminals keep the verbose block.
 
-## v80.24 — 2026-10-08
-
-- Supersession fading recognizes any plain named GPT tier and Claude family, such as GPT-5.6 Luna under GPT-6 Luna and Claude Fable 5 under Fable 5.1. Hyphenated `GPT-5.3-Codex`, older `Claude 3.5 Sonnet` ordering, flexible spacing/dashes and publisher spelling also match.
-- Preview, experimental, fast-mode, dated and parenthesized names stay untouched; comparison remains numeric and restricted to the same manufacturer, family and variant shown in the table.
-
 ## Earlier v80 history
+
+- v80.24 extended conservative model supersession for plain GPT/Claude names, retaining exclusions for ambiguous, preview and variant models.
 
 - v80.23 improved Grok version-supersession fading, with regression coverage across report variants and themes.
 

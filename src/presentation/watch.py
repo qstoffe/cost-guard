@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from decimal import Decimal, ROUND_HALF_UP
 import os
+import re
 import sys
 from typing import Mapping, TextIO
 
@@ -89,6 +90,20 @@ def _empty_row(text: str) -> tuple[str, ...]:
 def _session_subtotal_text(subtotal: WatchSessionSubtotal | None) -> str:
     """Format the projected row subtotal, including unresolved provenance."""
     return "Σ " + ("N/A" if subtotal is None else ccost_amount(subtotal.ccost, unresolved=subtotal.unresolved_cost))
+
+
+def _watch_session_title(value: str) -> str:
+    """Keep external session titles in one cell, never arbitrary terminal lines.
+
+    Checkpoint failures can leave Markdown/CRLF in OpenCode session titles.
+    Remove terminal escapes, fold whitespace and drop heading markup without
+    hiding the session's genuine model request or cost.
+    """
+    without_ansi = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", value)
+    one_line = " ".join("".join(
+        char if char.isprintable() else " " for char in without_ansi
+    ).split())
+    return re.sub(r"^#{1,6}\s+", "", one_line) or "Untitled session"
 
 
 class WatchRenderer:
@@ -178,13 +193,14 @@ class WatchRenderer:
         warning_numbers = {session_id: index + 1 for index, session_id in enumerate(warnings)}
         for row in projection.rows:
             if row.session_id != previous_session:
+                safe_title = _watch_session_title(row.session_title)
                 if row.session_id in warning_numbers:
                     number = warning_numbers[row.session_id]
                     marker = f"*{number}"
-                    name = fit(row.session_title, _WATCH_COLUMNS[0].fixed_width - len(marker) - 1).rstrip()
+                    name = fit(safe_title, _WATCH_COLUMNS[0].fixed_width - len(marker) - 1).rstrip()
                     title = StyledText(((marker, WARNING_ROLE), (" " + name, "watchSessionHeader")))
                 else:
-                    title = row.session_title
+                    title = safe_title
                 subtotal = _session_subtotal_text(projection.session_subtotals.get(row.session_id))
                 rows.append((title, "", subtotal, "", "", ""))
                 styles.append(("watchSessionHeader", None, None, None, None, None))

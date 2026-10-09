@@ -112,8 +112,10 @@ def _coherent_watch_deltas(rows: list[PromptProjection], *, epochs: ContextEpoch
     this report), but use consecutive displayed context anchors thereafter.
 
     An unknown checkpoint or location move breaks comparability: show N/A,
-    not an invented gain. Subtasks lack root-context anchors and do not reset
-    the main session timeline. This changes only Watch delta presentation;
+    not an invented gain. An ordinary prompt's unexplained context decrease
+    is also N/A rather than a claimed negative delta; the new observed value
+    becomes the next baseline. Subtasks never reset root-context state.
+    This changes only Watch delta presentation;
     request accounting, context sizes and price warnings remain untouched.
     """
     previous: PromptProjection | None = None
@@ -130,11 +132,13 @@ def _coherent_watch_deltas(rows: list[PromptProjection], *, epochs: ContextEpoch
             if seen_root_event:
                 if (previous is not None and next_tokens is not None
                         and not epochs.crossed(session_id, previous.at_ms, row.at_ms + 1)):
-                    row = replace(
-                        row, watch_delta_context_tokens=next_tokens - previous.watch_next_context_tokens
-                    )
+                    delta = next_tokens - previous.watch_next_context_tokens
+                    row = replace(row, watch_delta_context_tokens=delta if delta >= 0 else None)
                 else:
                     row = replace(row, watch_delta_context_tokens=None)
+            elif row.watch_delta_context_tokens is not None and row.watch_delta_context_tokens < 0:
+                # No visible pre-prompt anchor or explicit compaction explains a shrink.
+                row = replace(row, watch_delta_context_tokens=None)
             result.append(row)
         seen_root_event = True
         previous = row if next_tokens is not None and next_tokens > 0 else None

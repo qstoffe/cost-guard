@@ -9,7 +9,7 @@ import unittest
 from src.domain import AccountRef, AccountSnapshot, QuotaComponent
 from src.presentation import WatchRenderer
 from src.reports.models import AccountProjection, AccountsQuotasProjection, PromptProjection
-from src.watch.models import ToolObservation, WatchProjection, WatchRow
+from src.watch.models import ToolObservation, WatchProjection, WatchRow, WatchSessionSubtotal
 
 CLEAR = "\x1b[2J\x1b[3J\x1b[H"
 ERASE_TAIL = "\x1b[0J"
@@ -56,6 +56,39 @@ class WatchRenderingTests(unittest.TestCase):
             WatchProjection("Watch", "V2", (), now_ms=2000))
         self.assertIn("No prompts since Watch started", stream.getvalue())
 
+
+    def test_checkpoint_failure_multiline_title_cannot_inject_terminal_rows(self):
+        base = tall_projection()
+        prompt = replace(base.rows[0].prompt, in_progress=True,
+                         preview="Load shared-checkpoint", calls=1, ccost=Decimal("2"))
+        row = replace(base.rows[0], session_title="\r\n## ❌ Checkpoint resume failed\n\x1b[31m",
+                      prompt=prompt)
+        projection = WatchProjection(
+            "Watch", "V2", (row,), now_ms=2000,
+            session_subtotals={"A": WatchSessionSubtotal(ccost=Decimal("2"))},
+        )
+        stream = io.StringIO()
+        WatchRenderer({"colors": {}}, stream=stream, interactive=False).render(projection)
+        rendered = stream.getvalue()
+        table = [line for line in rendered.splitlines() if line.startswith("|")]
+        self.assertEqual(6, len(table), "one session header and one real model prompt")
+        self.assertIn("Checkpoint resume failed", table[3])
+        self.assertNotIn("##", table[3])
+        self.assertIn("Σ 2", table[3])
+        self.assertIn("Load shared-checkpoint", table[4])
+        self.assertIn("Watch total CCost:", rendered)
+        self.assertNotIn("\r", rendered)
+        self.assertNotIn("\x1b", rendered)
+        self.assertNotIn("[31m", rendered)
+
+    def test_regular_multiline_title_is_single_cell(self):
+        base = tall_projection()
+        row = replace(base.rows[0], session_title="First line\nSecond\tline")
+        projection = replace(base, rows=(row,), quota=None, source_warnings=())
+        stream = io.StringIO()
+        WatchRenderer({"colors": {}}, stream=stream, interactive=False).render(projection)
+        self.assertIn("First line Second line", stream.getvalue())
+        self.assertNotIn("First line\nSecond", stream.getvalue())
 
     def assert_full_frame(self, frame):
         self.assertTrue(frame.startswith(CLEAR))
@@ -161,7 +194,7 @@ class WatchRenderingTests(unittest.TestCase):
     def test_empty_table_has_placeholder_row_and_unobserved_mix_is_explicit(self):
         rule = "|" + "|".join("-" * 10 for _ in range(2))  # prefix only
         for render, placeholder in (
-            (lambda r: r.render(WatchProjection("Watch", "V2", (), status=STATUS)), "No prompts yet"),
+            (lambda r: r.render(WatchProjection("Watch", "V2", (), status=STATUS)), "No prompts since Watch started"),
         ):
             stream = io.StringIO()
             render(WatchRenderer({"colors": {}}, stream=stream, interactive=True))

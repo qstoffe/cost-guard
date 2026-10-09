@@ -120,6 +120,36 @@ class WatchContextDeltaRegressionTests(unittest.TestCase):
                          "ordinary-report context fields must not change")
         self.assertEqual([Decimal("3")] * 3, [row.ccost for row in fixed])
 
+    def test_unexplained_shrink_is_unknown_and_next_prompt_reanchors(self):
+        rows = (self.row(7, 1000, 52_000, 1_000),
+                self.row(8, 2000, 36_000, -16_000),
+                self.row(9, 3000, 45_000, 9_000))
+        fixed = self.aligned(rows)
+        self.assertEqual([1_000, None, 9_000],
+                         [item.watch_delta_context_tokens for item in fixed])
+        self.assertEqual([52_000, 36_000, 45_000],
+                         [item.watch_next_context_tokens for item in fixed])
+        self.assertEqual(-16_000, fixed[1].delta_context_tokens,
+                         "historical report delta must remain unchanged")
+        self.assertEqual([Decimal("3")] * 3, [item.ccost for item in fixed])
+
+    def test_first_event_unexplained_negative_is_unknown(self):
+        fixed = self.aligned((
+            self.row(8, 2000, 36_000, -16_000),
+            self.row(9, 3000, 45_000, 9_000),
+        ))
+        self.assertEqual([None, 9_000],
+                         [item.watch_delta_context_tokens for item in fixed])
+
+    def test_zero_and_positive_deltas_remain(self):
+        fixed = self.aligned((
+            self.row(1, 1000, 52_000, 1_000),
+            self.row(2, 2000, 52_000, 0),
+            self.row(3, 3000, 54_000, 2_000),
+        ))
+        self.assertEqual([1_000, 0, 2_000],
+                         [item.watch_delta_context_tokens for item in fixed])
+
     def test_compaction_checkpoint_becomes_the_next_comparable_baseline(self):
         rows = (self.row(1, 1000, 220_000, 100_000),
                 self.row(2, 1500, 12_000, -208_000, compact=True),
