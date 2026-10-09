@@ -15,6 +15,8 @@ from src.analysis.context import (
 from src.analysis.core import analyze_snapshot
 from src.domain import MessageRole, ModelPricing, ModelRef, PricingTier, TokenUsage
 from src.pricing.catalog import PricingCatalog
+from src.reports.models import PromptProjection
+from src.reports.prompts import _coherent_watch_deltas
 
 
 def catalog() -> PricingCatalog:
@@ -75,6 +77,80 @@ class ContextEngineTests(unittest.TestCase):
         self.assertEqual(4, compact.next_tokens)
         self.assertNotEqual(compact.incoming_tokens, compact.next_tokens)
         self.assertLess(compact.delta_tokens, 0)
+
+
+
+class WatchContextDeltaRegressionTests(unittest.TestCase):
+    """The displayed delta must reconcile with adjacent Next Ictx anchors."""
+
+    @staticmethod
+    def row(number: int, at: int, next_tokens: int | None, delta: int | None = None,
+            *, compact: bool = False, event_id: str | None = None) -> PromptProjection:
+        return PromptProjection(
+            at_ms=at, prompt_number=number, event_id=event_id or f"event-{number}",
+            label="/compact" if compact else "prompt", preview="", model_effort="GPT-6 Luna",
+            ccost=Decimal("3"), cost_estimated=False, unresolved_cost=False, calls=2,
+            incoming_context_tokens=None, incoming_context_ccost=None, extra_ccost=None,
+            token_mix_percent=None, is_compaction=compact,
+            delta_context_tokens=delta, next_context_tokens=next_tokens,
+            watch_delta_context_tokens=delta, watch_next_context_tokens=next_tokens,
+        )
+
+    @staticmethod
+    def aligned(rows, *, crossed=(), subtasks=frozenset()):
+        class Epochs:
+            def crossed(self, session_id, start, end):
+                assert session_id == "root"
+                return any(start <= boundary < end for boundary in crossed)
+        return _coherent_watch_deltas(
+            list(rows), epochs=Epochs(), session_id="root", subtask_ids=subtasks,
+        )
+
+    def test_24k_to_220k_is_plus_196k_not_internal_59k(self):
+        rows = (self.row(1, 1000, 24_000, 16_000),
+                self.row(2, 2000, 220_000, 59_000),
+                self.row(3, 3000, 231_000, 11_000))
+        fixed = self.aligned(rows)
+        self.assertEqual([16_000, 196_000, 11_000],
+                         [row.watch_delta_context_tokens for row in fixed])
+        self.assertEqual([24_000, 220_000, 231_000],
+                         [row.watch_next_context_tokens for row in fixed])
+        self.assertEqual([16_000, 59_000, 11_000],
+                         [row.delta_context_tokens for row in fixed],
+                         "ordinary-report context fields must not change")
+        self.assertEqual([Decimal("3")] * 3, [row.ccost for row in fixed])
+
+    def test_compaction_checkpoint_becomes_the_next_comparable_baseline(self):
+        rows = (self.row(1, 1000, 220_000, 100_000),
+                self.row(2, 1500, 12_000, -208_000, compact=True),
+                self.row(3, 2000, 17_000, 1_000))
+        fixed = self.aligned(rows)
+        self.assertEqual([100_000, -208_000, 5_000],
+                         [row.watch_delta_context_tokens for row in fixed])
+
+    def test_missing_compaction_result_suppresses_unprovable_delta(self):
+        rows = (self.row(1, 1000, 220_000, 100_000),
+                self.row(2, 1500, None, None, compact=True),
+                self.row(3, 2000, 17_000, 1_000))
+        self.assertIsNone(self.aligned(rows)[-1].watch_delta_context_tokens)
+
+    def test_location_move_suppresses_cross_epoch_delta_and_restarts_chain(self):
+        rows = (self.row(1, 1000, 24_000, 16_000),
+                self.row(2, 2000, 220_000, 59_000),
+                self.row(3, 3000, 231_000, 11_000))
+        fixed = self.aligned(rows, crossed=(1600,))
+        self.assertEqual([16_000, None, 11_000],
+                         [row.watch_delta_context_tokens for row in fixed])
+
+    def test_unknown_root_anchor_suppresses_delta_but_subtasks_do_not_reset(self):
+        rows = (self.row(1, 1000, 24_000, 16_000),
+                self.row(2, 1500, None, None, event_id="subtask"),
+                self.row(3, 2000, 220_000, 59_000),
+                self.row(4, 2500, None, 2_000),
+                self.row(5, 3000, 231_000, 11_000))
+        fixed = self.aligned(rows, subtasks=frozenset({"subtask"}))
+        self.assertEqual([16_000, None, 196_000, None, None],
+                         [row.watch_delta_context_tokens for row in fixed])
 
 
 class ComparisonTests(unittest.TestCase):

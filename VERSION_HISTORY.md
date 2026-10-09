@@ -1,5 +1,11 @@
 # Cost Guard version history
 
+## v80.27 — 2026-10-09
+
+- Watch Δctx now uses the preceding root-event Next Ictx as its baseline within a continuous context epoch. This fixes misleading transitions such as 24k → 220k displaying +59k instead of ~+196k.
+- Unknown compaction context and session-location boundaries suppress unprovable deltas (N/A); completed compaction checkpoints establish new comparable baselines. Subtasks do not reset root context. No CCost, token, Next Ictx or price-warning calculations change.
+- Synthetic regressions cover the large discontinuity, ordinary following deltas, compaction, missing checkpoint values, location moves and subtask continuity.
+
 ## v80.26 — 2026-10-09
 
 - Watch's empty table clarifies it only displays prompts observed since startup, not all historical sessions.
@@ -23,12 +29,9 @@
 - Supersession highlighting now recognizes xAI's stable numeric Grok versions: Grok 4.5 and 4.6 fade when Grok 4.7 is displayed; the latest stays unchanged. Numeric ordering, table-local availability and conservative unknown/variant exclusions remain intact.
 - Regression coverage reproduces the three Grok rows in normal/full-catalog reports, dark/light themes and multiple widths, preserving all cells, prices, ordering and no-color output.
 
-## v80.22 — 2026-10-08
-
-- Current `main` is the recommended/latest supported distribution during rapid development, with source-ZIP/Git instructions, Windows trust guidance and a macOS executable-bit remedy. Packaged GitHub Releases are paused until an explicit policy change.
-- Product versioning remains independent of tags, GitHub Releases and ZIPs. Ordinary implementation verifies the working tree; packaging requires an explicit request, retaining builder safety and clean-extraction coverage. Local stale generated ZIPs were cleaned; remote releases/tags were not changed.
-
 ## Earlier v80 history
+
+- v80.22 recommended current main as the supported distribution during rapid development, with source-ZIP/Git and Windows/macOS installation guidance. Packaged GitHub Releases remain paused unless policy explicitly changes.
 
 - v80.21 improved model-supersession fading, parallel quota acquisition, shared credential discovery and bounded nonblocking account refresh with diagnostics; these behaviors remain in newer versions.
 

@@ -344,7 +344,7 @@ Bundles omit prompts, titles, raw payloads/auth, tokens and account labels/IDs; 
 
 ## Current version
 
-**v80.26** adds privacy-safe Watch discovery/failure observations to Diagnostics and clarifies empty Watch output; v80.25 drops redundant BLOCKED text. v80.0 is the Python 3.11+ public baseline. Claude quotas remain experimental; coverage/restart/sleep need separate live evidence.
+**v80.27** aligns Watch Δctx with consecutive Next Ictx anchors, showing N/A across unknown context boundaries; v80.26 adds Watch Diagnostics. v80.0 is the Python 3.11+ public baseline. Claude quotas remain experimental; coverage/restart/sleep need separate live evidence.
 
 Product versions identify code state; they do not imply a Git tag, release ZIP or GitHub Release. Packaged GitHub Releases are currently paused. Recommending them at a slower/stable cadence requires an explicit policy change; version numbers never trigger it automatically.
 

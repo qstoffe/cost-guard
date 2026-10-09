@@ -1,6 +1,7 @@
 """Prompt/session report projection from canonical analysis state."""
 from __future__ import annotations
 
+from dataclasses import replace
 from decimal import Decimal
 from typing import Mapping
 
@@ -97,6 +98,47 @@ def _compaction_projection(record: CompactionRecord, catalog: PricingCatalog, ti
         watch_delta_context_tokens=state.delta_tokens if state else None,
         watch_next_context_tokens=state.next_tokens if state else None,
     )
+
+
+
+def _coherent_watch_deltas(rows: list[PromptProjection], *, epochs: ContextEpochs,
+                           session_id: str, subtask_ids: frozenset[str]) -> list[PromptProjection]:
+    """Compare successive root-event Next Ictx anchors within one context epoch.
+
+    The per-prompt estimator can choose that prompt's first input request as
+    its baseline even when the preceding visible root event has a different
+    Next Ictx. That makes adjacent Watch cells contradict each other. Retain
+    the original estimate for the first event (whose predecessor may be outside
+    this report), but use consecutive displayed context anchors thereafter.
+
+    An unknown checkpoint or location move breaks comparability: show N/A,
+    not an invented gain. Subtasks lack root-context anchors and do not reset
+    the main session timeline. This changes only Watch delta presentation;
+    request accounting, context sizes and price warnings remain untouched.
+    """
+    previous: PromptProjection | None = None
+    seen_root_event = False
+    result: list[PromptProjection] = []
+    for row in rows:
+        if row.event_id in subtask_ids:
+            result.append(row)
+            continue
+        next_tokens = row.watch_next_context_tokens
+        if row.is_compaction:
+            result.append(row)  # compaction has its own shrink/timeline semantics
+        else:
+            if seen_root_event:
+                if (previous is not None and next_tokens is not None
+                        and not epochs.crossed(session_id, previous.at_ms, row.at_ms + 1)):
+                    row = replace(
+                        row, watch_delta_context_tokens=next_tokens - previous.watch_next_context_tokens
+                    )
+                else:
+                    row = replace(row, watch_delta_context_tokens=None)
+            result.append(row)
+        seen_root_event = True
+        previous = row if next_tokens is not None and next_tokens > 0 else None
+    return result
 
 
 def build_prompt_block(
@@ -228,6 +270,10 @@ def build_prompt_block(
                 total_mix_values[index] += value
             diagnostic_cost_parts.append((projection.incoming_context_ccost, projection.extra_ccost))
     rows.sort(key=lambda row: (row.at_ms, 0 if row.is_compaction else 1, row.prompt_number))
+    rows = _coherent_watch_deltas(
+        rows, epochs=epochs, session_id=session_id,
+        subtask_ids=frozenset(record.prompt_id for record in bundle.prompts if record.prompt_kind == "subtask"),
+    )
 
     total_ccost = sum((row.ccost for row in rows), Decimal(0))
     total_calls = sum(row.calls for row in rows)
