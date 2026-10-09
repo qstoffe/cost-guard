@@ -175,6 +175,7 @@ class OpenCodeV2Source:
             "session_contract": None, "session_pages": 0, "raw_sessions": 0,
             "message_contracts": {}, "message_shapes": {}, "message_items": {}, "message_pages": {},
             "message_types": {}, "message_route_rejections": {}, "message_lifecycle_ignored": {},
+            "last_snapshot_stage": "unknown", "snapshot_revision_rechecks": 0,
         }
 
     @property
@@ -579,6 +580,7 @@ class OpenCodeV2Source:
 
     def load_session_snapshot(self, session_id: str) -> SessionSnapshot:
         for attempt in range(2):
+            self._diagnostics["last_snapshot_stage"] = "catalog_before"
             before_all = self._list_native_sessions(refresh=True)
             before_tree = self._tree(before_all, session_id)
             before_revision = self._revision(before_tree)
@@ -587,6 +589,7 @@ class OpenCodeV2Source:
             boundaries: list[ContextBoundary] = []
             background: list[BackgroundActivity] = []
             notices: set[str] = set()
+            self._diagnostics["last_snapshot_stage"] = "messages"
             for native in before_tree:
                 native_messages, native_parts, native_boundaries, native_background, native_notices = self._load_messages(native)
                 messages.extend(native_messages)
@@ -594,10 +597,13 @@ class OpenCodeV2Source:
                 boundaries.extend(native_boundaries)
                 background.extend(native_background)
                 notices.update(native_notices)
+            self._diagnostics["last_snapshot_stage"] = "catalog_after"
             after_all = self._list_native_sessions(refresh=True)
             after_tree = self._tree(after_all, session_id)
             after_revision = self._revision(after_tree)
+            self._diagnostics["last_snapshot_stage"] = "revision_check"
             if before_revision == after_revision:
+                self._diagnostics["last_snapshot_stage"] = "complete"
                 sessions = tuple(self._normalize_session(item) for item in before_tree)
                 events = tuple(
                     event for message in messages
@@ -622,8 +628,10 @@ class OpenCodeV2Source:
                     context_boundaries=tuple(boundaries),
                     background=tuple(background),
                 )
+            self._diagnostics["snapshot_revision_rechecks"] += 1
             if attempt == 1:
                 break
+        self._diagnostics["last_snapshot_stage"] = "revision_changed"
         raise SourceDataError("OpenCode V2 session changed repeatedly while it was being read")
 
     @staticmethod

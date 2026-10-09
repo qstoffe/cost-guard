@@ -14,6 +14,7 @@ from src.sources.selection import SourceSelection
 from src.runtime_errors import check_pending
 
 from .recovery_events import record as record_source_recovery
+from .observation_diagnostics import record_scan, record_source_error
 from .model_discovery import WatchModelDiscovery
 from .models import WatchProjection, WatchRow, WatchSessionSubtotal
 from .observers import CatalogObservation, LiveEventPump, observe_catalog
@@ -387,6 +388,9 @@ class WatchCoordinator:
             session_subtotals=session_subtotals,
         )
         self._last_projection = projection
+        if self.observation is not None:
+            record_scan(self.selection.selected, self.observation, self.blocks,
+                        rows, self.started_at_ms, now_ms)
         return projection
 
     def initialize(self) -> WatchCycle:
@@ -606,6 +610,7 @@ class WatchCoordinator:
         if self._event_pump is not None:
             self._event_pump.stop()
             self._event_pump = None
+        record_source_error(self.selection.selected, source_failure_kind(error) or "unsupported", self.source)
         attempts = unreadable = 0
         while True:
             kind = source_failure_kind(error)

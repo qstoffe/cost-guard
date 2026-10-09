@@ -50,6 +50,13 @@ def tall_projection():
 
 
 class WatchRenderingTests(unittest.TestCase):
+    def test_empty_watch_explains_observation_window(self):
+        stream = io.StringIO()
+        WatchRenderer({"colors": {}}, stream=stream, interactive=False).render(
+            WatchProjection("Watch", "V2", (), now_ms=2000))
+        self.assertIn("No prompts since Watch started", stream.getvalue())
+
+
     def assert_full_frame(self, frame):
         self.assertTrue(frame.startswith(CLEAR))
         self.assertEqual(1, frame.count(CLEAR), "full redraw still clears scrollback")

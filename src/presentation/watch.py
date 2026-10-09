@@ -226,7 +226,7 @@ class WatchRenderer:
     def _render_table(self, projection: WatchProjection) -> None:
         rows, styles, activities = self._table_rows(projection)
         if not rows:
-            rows, styles = [_empty_row("No prompts yet")], [("watchToolActivity",) + (None,) * 5]
+            rows, styles = [_empty_row("No prompts since Watch started")], [("watchToolActivity",) + (None,) * 5]
         lines = render_table(_WATCH_COLUMNS, rows, styles=styles, styler=self.styler)
         if lines and activities:
             span_width = max(1, len(lines[0]) - 4)

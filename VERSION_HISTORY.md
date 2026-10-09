@@ -1,5 +1,12 @@
 # Cost Guard version history
 
+## v80.26 — 2026-10-09
+
+- Watch's empty table clarifies it only displays prompts observed since startup, not all historical sessions.
+- Bounded privacy-safe Watch observations retain discovery/filter counts and normalized source-error stages for later Diagnostics, with V2 snapshot revision-retry evidence. No session IDs, prompt text or native payloads are persisted.
+- Diagnostics includes Watch observation history in its JSON, summary and verified ZIP without modifying OpenCode sessions or the V2 loading algorithm.
+
+
 ## v80.25 — 2026-10-09
 
 - Account-level BLOCKED stays on the account instead of every quota window: OpenAI's weekly quota with capacity left is no longer marked blocked because the 5-hour limit is exhausted. Copilot's window-specific `hasQuota` evidence and `⚠  COPILOT PAUSED` remain.
@@ -21,15 +28,9 @@
 - Current `main` is the recommended/latest supported distribution during rapid development, with source-ZIP/Git instructions, Windows trust guidance and a macOS executable-bit remedy. Packaged GitHub Releases are paused until an explicit policy change.
 - Product versioning remains independent of tags, GitHub Releases and ZIPs. Ordinary implementation verifies the working tree; packaging requires an explicit request, retaining builder safety and clean-extraction coverage. Local stale generated ZIPs were cleaned; remote releases/tags were not changed.
 
-## v80.21 — 2026-10-08
-
-- Model comparison fades older recognized GPT/Claude/Gemini versions only when a newer same-manufacturer/family/variant model is displayed. Numeric matching is conservative; it does not imply official deprecation and changes no selection, ordering, promotions, prices or CCost.
-- Whole-row content receives theme-aware attenuation of its own semantic colors, retaining gold promotions and green new-model accents; borders, geometry and no-color output are unchanged.
-- Shared read-only credential inventory preserves V2 priority, legacy fallback, explicit paths and multiple accounts, without repeated parsing or checks for absent providers. Claude CLI discovery retains its own contract.
-- Up to four isolated provider jobs overlap normal-report analysis; the remaining report wait is bounded. Watch renders without waiting for quotas and publishes individual completions on its main thread, preserving recovery/identities while discovering account changes at its normal refresh cadence.
-- Timeouts, generation checks and nonblocking worker shutdown prevent stale replies or stuck providers from controlling the terminal; Diagnostics includes sanitized acquisition counts/timings. No new dependencies or required configuration.
-
 ## Earlier v80 history
+
+- v80.21 improved model-supersession fading, parallel quota acquisition, shared credential discovery and bounded nonblocking account refresh with diagnostics; these behaviors remain in newer versions.
 
 - v80.15-v80.20 introduced the four-column Relative CCost comparison with `--all-models` exact GitHub USD/M tiers, shared tier-aware price ordering and non-destructive metadata state under cache/state/. They gave release-date metadata independent health with classified sources, bounded non-blocking retries, failure logs and Diagnostics coverage, plus concise Diagnostics endings and launcher-path error hints. They also added hourly Copilot refresh with pinned CCost, 15-minute V2 checks, sleep/wake recovery and one-hour cache age; verified priced Watch/report ✦ New Models, sanitized metadata evidence, root logs/, safe Diagnostics archival/cleanup/staging, support instructions, runtime isolation, bounded history and metadata/refresh regression coverage.
 

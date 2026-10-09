@@ -24,6 +24,8 @@ def summarize_v2_diagnostics(state: Mapping[str, Any]) -> dict[str, Any]:
         "session_contract": state.get("session_contract"),
         "session_pages": state.get("session_pages", 0),
         "raw_sessions": state.get("raw_sessions", 0),
+        "last_snapshot_stage": state.get("last_snapshot_stage", "unknown"),
+        "snapshot_revision_rechecks": state.get("snapshot_revision_rechecks", 0),
         "message_contract_counts": counts(contracts),
         "message_shape_counts": counts(shapes),
         "message_sessions_sampled": len(item_counts) if isinstance(item_counts, Mapping) else 0,

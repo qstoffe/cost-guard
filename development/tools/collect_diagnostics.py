@@ -65,7 +65,8 @@ from src.sources.selection import SourceSelector  # noqa: E402
 from src.version import DISPLAY_VERSION, PRODUCT_NAME, RELEASE_DATE, mode_heading  # noqa: E402
 from src.runtime_errors import recoverable, recovered  # noqa: E402
 from src.sources.errors import SourceError  # noqa: E402
-from src.watch.recovery_events import recent_events  # noqa: E402
+from src.watch.recovery_events import recent_events
+from src.watch.observation_diagnostics import recent_events as watch_observations  # noqa: E402
 from development.tools.diagnostic_logs import create_bundle  # noqa: E402
 from development.tools.diagnostic_metadata import model_metadata_section  # noqa: E402
 from development.tools.diagnostic_screen import render_result  # noqa: E402
@@ -403,6 +404,7 @@ def _text_summary(data: dict[str, Any]) -> str:
         f"Release metadata: {summary.get('health', 'unknown')}; failing sources: {', '.join(summary.get('failing_sources') or ()) or 'none'}; "
         f"recovered sources: {', '.join(summary.get('recovered_sources') or ()) or 'none'}",
         f"Watch source recovery transitions (30 days, max 24): {len(data.get('watch_source_recovery_events') or ())}",
+        f"Watch observations (30 days, max 24): {len(data.get('watch_observation_events') or ())}",
         f"Configured source: {data.get('config', {}).get('open_code_source')}",
         f"Selected source: {(data.get('selection') or {}).get('selected')}",
     ]
@@ -467,6 +469,7 @@ def collect(*, network: bool, snapshots: int, test_service_start: bool = False) 
     }
 
     data["watch_source_recovery_events"] = recent_events()
+    data["watch_observation_events"] = watch_observations()
     # Includes failures that happened (and possibly self-healed) during earlier Watch runs.
     metadata, metadata_timing = _timed(lambda: model_metadata_section(
         ROOT, cfg, network=network, database_factory=CacheDatabase))
