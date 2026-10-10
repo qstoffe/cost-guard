@@ -41,15 +41,18 @@ class TerminalOutcome(str, Enum):
 
 @dataclass(frozen=True, slots=True)
 class TerminalEvidence:
-    """Durable end of a logical attempt, independent of inference completion.
+    """Persisted end of a logical attempt, independent of inference completion.
 
     Sources bind this to the attempt's final assistant message, not to an entire
-    session. Native completion/usage timestamps remain untouched.
+    session. Native completion/usage timestamps remain untouched. An optional
+    live actor may supplement this evidence, but its analysis is not persisted.
     """
 
     completed_at_ms: int
     outcome: TerminalOutcome
     abort_reason: str = ""
+    # A live actor supplements a persisted terminal; never persist its analysis.
+    observed_live: bool = False
 
 
 class CostKind(str, Enum):

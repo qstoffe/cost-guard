@@ -17,6 +17,7 @@ from urllib.parse import quote
 from src.domain import ContextBoundary, MessageRole, NormalizedMessage, TerminalEvidence, TerminalOutcome
 
 from .errors import SourceDataError, SourceUnavailableError
+from .opencode_v2_interruptions import LiveInterruptionReasons
 
 
 # Some OpenCode 2 compatibility surfaces can expose session lifecycle/status
@@ -529,7 +530,8 @@ def location_boundaries(items: Sequence[Mapping[str, Any]], *, session_id: str) 
     return tuple(sorted(result, key=lambda value: (value.at_ms, value.boundary_id)))
 
 
-def _terminal_evidence(item: Mapping[str, Any], message: NormalizedMessage, at: int) -> TerminalEvidence:
+def _terminal_evidence(item: Mapping[str, Any], message: NormalizedMessage, at: int,
+                       live_reason: str = "") -> TerminalEvidence:
     """Success wins; a failed/interrupted run may carry an explicit limit cause."""
     from .opencode_errors import normalize_abort_reason, normalize_error_name
 
@@ -542,11 +544,15 @@ def _terminal_evidence(item: Mapping[str, Any], message: NormalizedMessage, at: 
         error_name = normalize_error_name(error) if error is not None else message.error_name
         if reason or error_name == "AbortedError":
             outcome = TerminalOutcome.CANCELLATION
-    return TerminalEvidence(at, outcome, reason)
+    observed_live = outcome is TerminalOutcome.CANCELLATION and bool(live_reason) and reason != live_reason
+    if observed_live:
+        reason = live_reason
+    return TerminalEvidence(at, outcome, reason, observed_live=observed_live)
 
 
 def normalize_terminal_lifecycle(
-    items: Sequence[Mapping[str, Any]], messages: Sequence[NormalizedMessage], *, session_id: str
+    items: Sequence[Mapping[str, Any]], messages: Sequence[NormalizedMessage], *, session_id: str,
+    interruptions: LiveInterruptionReasons | None = None,
 ) -> tuple[NormalizedMessage, ...]:
     """Bind persisted idle outcomes to the preceding assistant attempt only.
 
@@ -592,5 +598,6 @@ def normalize_terminal_lifecycle(
                                 if isinstance(value := part_times.get(key), (int, float)))
         if max(activity) > at or (message.termination and message.termination.completed_at_ms >= at):
             continue
-        result[index] = replace(message, termination=_terminal_evidence(item, message, int(at)))
+        live_reason = interruptions.reason(item, session_id) if interruptions is not None else ""
+        result[index] = replace(message, termination=_terminal_evidence(item, message, int(at), live_reason))
     return tuple(result)

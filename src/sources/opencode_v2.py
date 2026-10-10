@@ -44,6 +44,7 @@ from .opencode_v2_normalization import (
 from .opencode_v2_background import background_activities, running_jobs
 from .opencode_v2_diagnostics import summarize_v2_diagnostics
 from .opencode_v2_events import normalize_event
+from .opencode_v2_interruptions import LiveInterruptionReasons
 from .opencode_v2_transport import V2Endpoint, V2HttpClient, normalize_local_service_url
 from .opencode_v2_wire import (
     fetch_global_sessions,
@@ -109,6 +110,7 @@ class OpenCodeV2Source:
         self._catalog_listed_at = 0.0
         self._http: V2HttpClient | None = None
         self._instance_cache: tuple[str, str] | None = None
+        self._interruptions = LiveInterruptionReasons()
         self._diagnostics: dict[str, Any] = {
             "session_contract": None, "session_pages": 0, "raw_sessions": 0,
             "message_contracts": {}, "message_shapes": {}, "message_items": {}, "message_pages": {},
@@ -311,8 +313,7 @@ class OpenCodeV2Source:
             queue.extend(sorted(children.get(current, ())))
         return result
 
-    @staticmethod
-    def _revision(tree: Sequence[_NativeSession]) -> str:
+    def _revision(self, tree: Sequence[_NativeSession]) -> str:
         digest = hashlib.sha256()
         for item in sorted(tree, key=lambda value: str(value.data["id"])):
             data = item.data
@@ -327,6 +328,9 @@ class OpenCodeV2Source:
                 "tokens": data.get("tokens"),
                 "active": item.active,
             }
+            live_reasons = self._interruptions.signature(str(data["id"]))
+            if live_reasons:
+                stable["live_interruptions"] = live_reasons
             digest.update(json.dumps(stable, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8"))
             digest.update(b"\n")
         return "v2-api:" + digest.hexdigest()
@@ -390,7 +394,8 @@ class OpenCodeV2Source:
                 relinked.append(replace(message, parent_message_id=latest_user))
             else:
                 relinked.append(message)
-        messages = normalize_terminal_lifecycle(items, relinked, session_id=session_id)
+        messages = normalize_terminal_lifecycle(items, relinked, session_id=session_id,
+                                               interruptions=self._interruptions)
         terminal_count = sum(message.termination is not None for message in messages)
         self._diagnostics.setdefault("message_terminal_evidence", {})[session_id] = terminal_count
         self._diagnostics["message_lifecycle_ignored"][session_id] = sum(
@@ -483,6 +488,8 @@ class OpenCodeV2Source:
     def _event_session_id(value: Mapping[str, Any]) -> str | None:
         payload = value.get("payload") if isinstance(value.get("payload"), Mapping) else value
         properties = payload.get("properties") if isinstance(payload, Mapping) and isinstance(payload.get("properties"), Mapping) else {}
+        if isinstance(payload.get("data"), Mapping):
+            properties = payload["data"]
         for key in ("sessionID", "sessionId"):
             raw = properties.get(key)
             if isinstance(raw, str) and raw:
@@ -500,6 +507,7 @@ class OpenCodeV2Source:
         for value in self._client().sse("/api/event"):
             self._catalog_cache = None
             payload = value.get("payload") if isinstance(value.get("payload"), Mapping) else value
+            self._interruptions.observe(payload)
             event_type = str(payload.get("type", "unknown")) if isinstance(payload, Mapping) else "unknown"
             yield SourceChange(
                 source_id=self.source_id,

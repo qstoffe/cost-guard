@@ -40,7 +40,7 @@ Configuration must be validated before any OpenCode/provider/network/runtime-cac
 
 A Session Source normalizes agent history into provenance-bearing domain records. V1 is read-only SQLite; V2 is registered loopback HTTP with non-durable Watch hints. `openCode.source=auto|v1|v2` selects one healthy generation, preferring V2; histories are never unioned. Only bootstrap may wake the shared service once through the installed CLI's read-only API info command before reselecting; no Desktop/TUI or recurring Watch subprocess.
 
-`sources/opencode_errors.py` maps explicit V1/V2 cancellation/limit IDs and bounded messages/JSON errors to `AbortedError` plus optional stop cause, never payload/stack guesses. V2 idle errors carry `TerminalEvidence`; later success wins. Terminal-attempt errors survive missing/zero usage. Watch labels outlast emphasis; successful tool-call ends get a neutral label.
+`sources/opencode_errors.py` maps explicit cancellation/limit IDs and bounded messages/JSON errors to `AbortedError` plus optional cause, never stack guesses. V2 idle errors carry `TerminalEvidence`; later success wins. `opencode_v2_interruptions.py` keeps bounded live user actors, matched to persisted idle session/ID/time only. Its revision signature invalidates pre-event cache; `observed_live` prevents persistence. Events never manufacture ends/usage. Labels outlast emphasis; tool-call success stays neutral.
 
 ### OpenCode V1 boundary
 
@@ -60,7 +60,7 @@ The adapter caches the latest complete V2 session catalog in-process, avoiding `
 
 `opencode_v2_wire.py` binds qualified persisted `idle` outcomes to the preceding assistant as neutral `TerminalEvidence`. Intervening boundaries, ambiguous timestamps or later tool work block attribution. Status/inactivity/transport failure alone proves no end. Native completion/usage/billing stays unchanged; Diagnostics counts terminal evidence separately. Path-free `location-switched` items become `SessionSnapshot.context_boundaries`: never usage; they retire a Next-Ictx anchor not yet followed by a request. `opencode_v2_background.py` maps background jobs/completion notices to neutral `BackgroundActivity`/`BACKGROUND_COMPLETION`; a job without notice runs until its location's shell registry drops it.
 
-`/api/event` is a non-replaying live hint; stream end, disconnect or failure requires an authoritative snapshot before live state is trusted again.
+`/api/event` decodes current JSON-string and legacy object events. Hints invalidate snapshots; explicit live actors supplement only a matching persisted cancellation. End/disconnect/failure requires authoritative resync; older history and a fresh source never invent actors.
 
 ### Source selection and migration-gap diagnostics
 

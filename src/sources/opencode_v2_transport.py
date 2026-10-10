@@ -65,6 +65,17 @@ def _close_idle(idle: list[http.client.HTTPConnection], lock: threading.Lock) ->
         connection.close()
 
 
+def _decode_event_data(text: str) -> Mapping[str, Any] | None:
+    """Current V2 encodes event JSON as a string; older SSE sends the object."""
+    try:
+        value = json.loads(text)
+        if isinstance(value, str):
+            value = json.loads(value)
+    except (ValueError, RecursionError) as exc:
+        raise SourceDataError("OpenCode V2 event stream returned malformed JSON") from exc
+    return value if isinstance(value, Mapping) else None
+
+
 class V2HttpClient:
     """Plain loopback HTTP; never routed through ambient proxies (http.client has none)."""
 
@@ -174,11 +185,8 @@ class V2HttpClient:
                     if data_lines:
                         text = "\n".join(data_lines)
                         data_lines.clear()
-                        try:
-                            value = json.loads(text)
-                        except json.JSONDecodeError as exc:
-                            raise SourceDataError("OpenCode V2 event stream returned malformed JSON") from exc
-                        if isinstance(value, Mapping):
+                        value = _decode_event_data(text)
+                        if value is not None:
                             yield value
                     continue
                 if line.startswith(":"):
@@ -186,11 +194,8 @@ class V2HttpClient:
                 if line.startswith("data:"):
                     data_lines.append(line[5:].lstrip())
             if data_lines:
-                try:
-                    value = json.loads("\n".join(data_lines))
-                except json.JSONDecodeError as exc:
-                    raise SourceDataError("OpenCode V2 event stream returned malformed JSON") from exc
-                if isinstance(value, Mapping):
+                value = _decode_event_data("\n".join(data_lines))
+                if value is not None:
                     yield value
         except (UnicodeError, OSError, http.client.HTTPException) as exc:
             raise SourceResyncRequiredError(

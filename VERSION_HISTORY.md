@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.36 — 2026-10-10
+
+- Watch recognizes V2 live `session.execution.interrupted` events with explicit `reason: user`, including JSON-encoded event strings and current `data.sessionID` routing. `[ABORTED by user]` requires the same session, terminal identity and timestamp in authoritative interrupted history; an event alone never ends work.
+- Live actor evidence survives refresh/resync in a bounded in-memory source-instance store, never in persisted analysis. A new process/source and older history without actor evidence still show `[ABORTED]`; inactivity/shutdown, other attempts and later success never inherit `by user`.
+
 ## v80.35 — 2026-10-10
 
 - Watch shows `[ABORTED by user]`, `[ABORTED by quota limit]`, `[ABORTED by tool call limit]`, `[ABORTED by step limit]` or `[ABORTED by rate limit]` only for explicit native causes, including V2 idle errors and bounded structured API error responses. Unspecified cancellations remain `[ABORTED]`; later success clears an earlier abort.
@@ -31,14 +36,9 @@
 - Shared canonical snapshots, prices and fake runtime boundaries move from test modules into responsibility-specific fixtures, removing 46 direct test-to-test import edges without deleting assertions.
 - Added a task-to-code/test map, repeatable read-only AST inventory, structural regressions and guards for relative/nested layer imports, all V2 adapter siblings, runtime/development and fixture/test dependency direction.
 
-## v80.31 — 2026-10-10
-
-- Next-Ictx price-threshold warnings in Watch and session/date reports replace `(Next Ictx CCost x–y)` with `(1.9x more expensive)`: the model table's Relative CCost after the threshold divided by the level before it, with at most one decimal (`2x` for 2x → 4x). Unpriced thresholds keep the CCost range.
-- The ratio uses the normal report's Relative CCost sample and token mix (its hidden sorting mix without samples), loaded only when a warning is shown and refreshed every 15 minutes.
-- Regression coverage reproduces a reported v80.26 Watch whose prompt showed Next Ictx 24k before a +59k → 220k successor. Context grown after a subagent notice now belongs to that prompt (v80.30), so the successor's +59k is consistent rather than v80.27's inflated +196k.
-
 ## Earlier v80 history
 
+- v80.31 expresses priced Next-Ictx thresholds as one-decimal cost multipliers from the report's sample/token mix (hidden mix without samples), refreshed every 15 minutes; unpriced thresholds retain their CCost range. Regression coverage protects v80.30's synthetic-notice/Δctx attribution fix.
 - v80.29–v80.30 attributed synthetic/background continuations and in-flight models to their actual prompt, restored move/unanchored Watch Δctx, kept unexplained shrinks N/A, sanitized terminal titles/previews, deduplicated source-scan observations and made test/Diagnostics output UTF-8.
 - v80.25-v80.28 kept BLOCKED on accounts, split wide Watch quotas, added privacy-safe observations, made Watch Δctx compare consecutive Next-Ictx anchors, and removed mutable session-model attribution; v80.30 corrected move/unanchored-baseline regressions.
 
@@ -53,8 +53,7 @@
 - v80.7 added shared Simple HTTP account providers and adapters for OpenRouter, DeepSeek and MiniMax, with sanitized diagnostics and no fabricated CCost.
 - v80.6 made Watch survive temporary source outages and retry V2 without a V1 fallback; v80.5 scoped read-only V1→V2 migration-gap notices to report windows, never merging histories or showing them in Watch.
 
-- v80.0 established the clean 0BSD public-repository baseline with a fresh root history, retaining the Python functionality and cross-platform launchers, explicit bounded test-suite membership and public product identifiers.
-- v80.1-v80.4 introduced the README with static Watch/report/Token Mix images and linked contracts, the OpenAI token-expiry explanation (Cost Guard never refreshes or writes credentials), provider sign-in remedies, prompts kept active during verified V2 background jobs, and Diagnostics launchers under `development/windows|macos/`.
+- v80.0 established the clean 0BSD public baseline, cross-platform launchers and bounded test membership. v80.1-v80.4 added the illustrated README/contracts, OpenAI token-expiry explanation (no credential writes), sign-in remedies, verified V2 background liveness and `development/windows|macos/` Diagnostics launchers.
 
 ## Earlier versions (v1-v78)
 
