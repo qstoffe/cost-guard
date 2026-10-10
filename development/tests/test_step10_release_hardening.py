@@ -81,6 +81,24 @@ class DistributionDocumentationTests(unittest.TestCase):
         development_commands = readme.split("## Development", 1)[1].split("```text", 1)[1].split("```", 1)[0]
         self.assertNotIn("build_release.py", development_commands)
 
+    def test_git_delivery_policy_is_generic_and_consistent(self) -> None:
+        """Explicitly authorized Git delivery is tool-neutral; isolated clones skip the ZIP unless packaging is requested."""
+        for name in ("AGENTS.md", "development/MAINTAINER.md", "development/README.md"):
+            with self.subTest(path=name):
+                text = (ROOT / name).read_text(encoding="utf-8")
+                self.assertNotRegex(text, re.compile(r"/repo-|repo-command|toolkit", re.IGNORECASE))
+                self.assertIn("authorized Git delivery", text)
+                self.assertIn("isolated", text)
+                self.assertRegex(text, r"current task or a development workflow (they|the user) started")
+        maintainer = (ROOT / "development/MAINTAINER.md").read_text(encoding="utf-8")
+        section = maintainer.split("## Authorized Git delivery", 1)[1].split("\n## ", 1)[0]
+        self.assertIn("need no further confirmation", section)
+        self.assertIn("ordinary working tree is neither edited", section)
+        self.assertIn("no local release ZIP unless packaging is explicitly requested", section)
+        self.assertIn("keeps the ZIP requirement", section)
+        self.assertIn("Never force-merge, bypass branch protection", section)
+        self.assertIn("protection of this file", section)
+
     def test_version_history_marks_public_baseline_and_bounds_older_generations(self) -> None:
         text = (ROOT / "VERSION_HISTORY.md").read_text(encoding="utf-8")
         first = next(line for line in text.splitlines() if line.startswith("## v"))
