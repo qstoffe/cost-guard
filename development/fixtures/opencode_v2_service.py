@@ -194,6 +194,7 @@ class CurrentV2Service:
             },
         ]
         self.active = {}
+        self.events = []  # current event stream: objects or JSON-encoded event strings
         self.shells = None  # running-job registry; None answers 404 (unobservable)
         self.messages = {
             "ses_current": [
@@ -250,6 +251,14 @@ class CurrentV2Service:
                 query = parse_qs(parsed.query)
                 if parsed.path == "/api/info":
                     self._json({"version": "2.1.0"})
+                    return
+                if parsed.path == "/api/event":
+                    payload = "".join(f"data: {json.dumps(item)}\n\n" for item in owner.events).encode("utf-8")
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/event-stream")
+                    self.send_header("Content-Length", str(len(payload)))
+                    self.end_headers()
+                    self.wfile.write(payload)
                     return
                 if parsed.path == "/api/session/active":
                     self._json({"data": owner.active})

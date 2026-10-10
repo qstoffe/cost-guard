@@ -275,7 +275,7 @@ OpenAI Plus          5h     ████████░░  82% · Reset@22:49 |
 
 `Watch:` stays last. Interactive startup uses `Cost Guard vX.Y (YYYY-MM-DD) — <Mode>` with progress immediately below, no blank row. Transient UI disappears before final reports/Watch dashboards; redirected output remains plain, without animation.
 
-`[ABORTED by …]` names proven user/quota/tool-call/step/rate-limit causes; unknown stays `[ABORTED]`. `[ENDED after tool calls]` never guesses a limit. Labels outlast red emphasis. Quota values survive errors for five minutes; wake/startup recovery: 60s, 5/10/20s retries; auth rejection stays visible.
+`[ABORTED by …]` names proven user/quota/tool-call/step/rate-limit causes; unknown stays `[ABORTED]`. V2 live `reason: user` is matched to the same persisted interruption and retained only in bounded process memory, not reconstructed from older history or after restart. `[ENDED after tool calls]` never guesses a limit. Labels outlast red emphasis. Quota values survive errors for five minutes; wake/startup recovery: 60s, 5/10/20s retries; auth rejection stays visible.
 
 Full redraws clear screen/scrollback; countdowns replace only the status line. V1 Watch uses process-free SQLite gating; V2 events are hints with a five-second cooldown and authoritative resync. `"auto"` refresh adapts within 5–30 seconds; quota refresh is independently rate-limited.
 
@@ -344,7 +344,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.35:** clearer Watch stops; credit-first accounts. v80.0 is the Python 3.11+ public baseline. Claude quotas remain experimental; restart/sleep need separate live evidence.
+**v80.36:** live user-stop attribution; credit-first accounts. v80.0 is the Python 3.11+ public baseline. Claude quotas remain experimental; restart/sleep need separate live evidence.
 
 Product versions identify code state; they do not imply a Git tag, release ZIP or GitHub Release. Packaged GitHub Releases are currently paused. Recommending them at a slower/stable cadence requires an explicit policy change; version numbers never trigger it automatically.
 
