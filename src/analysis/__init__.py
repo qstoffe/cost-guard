@@ -15,6 +15,7 @@ from .cache import (
     CachedAnalysisResult,
     DerivedAnalysisCache,
     analyze_with_cache,
+    cached_analysis,
     dependency_signature,
 )
 from .causal import build_prompt_record, build_prompt_records, prompt_references, trace_entries

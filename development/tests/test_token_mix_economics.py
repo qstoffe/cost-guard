@@ -10,11 +10,12 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from development.tests.test_analysis_core import make_snapshot
+from development.fixtures.session_snapshots import make_snapshot
+from src.reports.sampling import latest_token_prompts
 from development.tests import test_compact_reports as compact_fixtures
 from development.tests.test_compact_reports import Availability, rendered
-from development.tests.test_step6_context_comparisons import catalog
-from development.tests.test_step8_watch import MutableSource, make_service
+from development.fixtures.pricing_catalog import catalog
+from development.fixtures.watch_runtime import MutableSource, make_service
 from development.tests.test_token_mix import observe
 from src.accounts.base import normalize_quota
 from src.accounts.github_copilot import (GitHubCopilotAccountProvider, JsonResponse,
@@ -146,7 +147,7 @@ class CategoryCostTests(unittest.TestCase):
     def test_normal_report_mix_shows_volume_and_reconciling_costs(self):
         service = compact_fixtures.CompactReportTests.service(self, MutableSource(make_snapshot()))
         report = service.build(ReportRequest())
-        prompts = service._latest_token_prompts(tuple(service._analyzed.values()))
+        prompts = latest_token_prompts(tuple(service._analyzed.values()))
         entries = unique_usage(e for p in prompts for e in p.entries)
         reference = service._load_comparison_catalog()
         self.assertEqual(comparison_cost(entries, reference.reference_valuation).known_ccost, sum(report.token_mix.costs))

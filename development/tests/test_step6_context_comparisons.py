@@ -4,7 +4,8 @@ import unittest
 from dataclasses import replace
 from decimal import Decimal
 
-from development.tests.test_analysis_core import make_snapshot, message, part
+from development.fixtures.session_snapshots import make_snapshot, message, part
+from development.fixtures.pricing_catalog import catalog
 from src.analysis.comparisons import (
     model_comparison_rows, model_timeline_name,
 )
@@ -17,13 +18,6 @@ from src.domain import MessageRole, ModelPricing, ModelRef, PricingTier, TokenUs
 from src.pricing.catalog import PricingCatalog
 from src.reports.models import PromptProjection
 from src.reports.prompts import _coherent_watch_deltas
-
-
-def catalog() -> PricingCatalog:
-    def model(name: str, display: str, i: str, c: str, o: str) -> ModelPricing:
-        tier = PricingTier(per_million_input=Decimal(i), per_million_cache_read=Decimal(c), per_million_output=Decimal(o))
-        return ModelPricing(ModelRef("github-copilot", name, display), "USD", Decimal(i), Decimal(c), None, Decimal(o), (tier,), {"publisher":"Test"})
-    return PricingCatalog((model("gpt-test", "GPT Test", "1", "0.1", "4"), model("claude-test", "Claude Test", "2", "0.2", "6")))
 
 
 class ContextEngineTests(unittest.TestCase):
@@ -164,23 +158,28 @@ class WatchContextDeltaRegressionTests(unittest.TestCase):
                 self.row(3, 2000, 17_000, 1_000))
         self.assertIsNone(self.aligned(rows)[-1].watch_delta_context_tokens)
 
-    def test_location_move_suppresses_cross_epoch_delta_and_restarts_chain(self):
+    def test_location_move_never_compares_across_epochs_and_keeps_new_epoch_estimate(self):
         rows = (self.row(1, 1000, 24_000, 16_000),
                 self.row(2, 2000, 220_000, 59_000),
                 self.row(3, 3000, 231_000, 11_000))
         fixed = self.aligned(rows, crossed=(1600,))
-        self.assertEqual([16_000, None, 11_000],
-                         [row.watch_delta_context_tokens for row in fixed])
+        self.assertEqual([16_000, 59_000, 11_000],
+                         [row.watch_delta_context_tokens for row in fixed],
+                         "the epoch-aware estimate starts at the new epoch's first request")
+        shrink = self.aligned((self.row(1, 1000, 224_000, 16_000),
+                               self.row(2, 2000, 20_000, -4_000)), crossed=(1600,))
+        self.assertIsNone(shrink[1].watch_delta_context_tokens)
 
-    def test_unknown_root_anchor_suppresses_delta_but_subtasks_do_not_reset(self):
+    def test_unknown_root_anchor_keeps_own_estimate_and_subtasks_do_not_reset(self):
         rows = (self.row(1, 1000, 24_000, 16_000),
                 self.row(2, 1500, None, None, event_id="subtask"),
                 self.row(3, 2000, 220_000, 59_000),
                 self.row(4, 2500, None, 2_000),
                 self.row(5, 3000, 231_000, 11_000))
         fixed = self.aligned(rows, subtasks=frozenset({"subtask"}))
-        self.assertEqual([16_000, None, 196_000, None, None],
-                         [row.watch_delta_context_tokens for row in fixed])
+        self.assertEqual([16_000, None, 196_000, None, 11_000],
+                         [row.watch_delta_context_tokens for row in fixed],
+                         "a failed/unanchored prompt must not erase its successor's own delta")
 
 
 class ComparisonTests(unittest.TestCase):

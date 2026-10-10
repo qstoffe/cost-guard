@@ -9,8 +9,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
-from development.tests.test_analysis_core import make_snapshot
-from development.tests.test_step8_watch import MutableSource, make_service
+from development.fixtures.session_snapshots import make_snapshot
+from development.fixtures.watch_runtime import MutableSource, make_service
 from development.tests.test_v783_regressions import _Pricing, _Source
 from src.cache import CacheDatabase, CacheRepository
 from src.config import load_configuration

@@ -4,40 +4,64 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from decimal import Decimal
+from functools import lru_cache
 from typing import Iterable
 
 from src.domain import ModelPricing, ModelRef, PricingTier, TokenUsage
 from src.domain.ccost import CCostPricing, ccost_pricing
 from .identities import reference_identity
 
+_COPILOT_PREFIX = re.compile(r"^github-copilot/")
+_NON_ALNUM = re.compile(r"[^a-z0-9]+")
+_UNRESOLVED = object()
 
+
+@lru_cache(maxsize=8192)
 def canonical_model_name(value: str) -> str:
     value = (value or "").strip().lower()
-    value = re.sub(r"^github-copilot/", "", value)
-    value = re.sub(r"[^a-z0-9]+", "", value)
-    return value
+    return _NON_ALNUM.sub("", _COPILOT_PREFIX.sub("", value))
 
 
 @dataclass(frozen=True, slots=True)
 class PricingCatalog:
+    """Immutable catalog; identity lookups are memoized per instance.
+
+    Every request/row resolves its model repeatedly, so name matching is
+    computed once per distinct model string rather than per lookup.
+    """
+
     models: tuple[ModelPricing, ...]
     retrieved_at_ms: int = 0
     source_revision: str = ""
     refresh_not_after_ms: int | None = None
     ccost_models: tuple[CCostPricing, ...] = field(init=False, repr=False, compare=False)
+    _ccost_by_model: dict[int, CCostPricing] = field(init=False, repr=False, compare=False)
+    _reference_memo: dict[str, ModelPricing | None] = field(init=False, repr=False, compare=False)
+    _resolve_memo: dict[str, ModelPricing | None] = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "ccost_models", tuple(ccost_pricing(model) for model in self.models))
+        ccost_models = tuple(ccost_pricing(model) for model in self.models)
+        object.__setattr__(self, "ccost_models", ccost_models)
+        object.__setattr__(self, "_ccost_by_model", {id(m): c for m, c in zip(self.models, ccost_models)})
+        object.__setattr__(self, "_reference_memo", {})
+        object.__setattr__(self, "_resolve_memo", {})
 
     def reference_prices(self, name: str, *, exact: bool = True) -> CCostPricing | None:
         native = self.resolve_reference(name) if exact else self.resolve(name)
         if native is None:
             return None
-        return self.ccost_models[self.models.index(native)]
+        return self._ccost_by_model[id(native)]
 
     def resolve_reference(self, model_id_or_name: str) -> ModelPricing | None:
         """Exact/verified reference identity; ambiguous prices remain unknown."""
-        exact = canonical_model_name((model_id_or_name or "").split("/", 1)[-1])
+        key = model_id_or_name or ""
+        cached = self._reference_memo.get(key, _UNRESOLVED)
+        if cached is _UNRESOLVED:
+            cached = self._reference_memo[key] = self._match_reference(key)
+        return cached  # type: ignore[return-value]
+
+    def _match_reference(self, model_id_or_name: str) -> ModelPricing | None:
+        exact = canonical_model_name(model_id_or_name.split("/", 1)[-1])
         target = reference_identity(model_id_or_name)
         # An explicitly priced variant takes precedence over a base alias. Never
         # collapse two catalog rate sets merely because context capacity aliases.
@@ -51,6 +75,13 @@ class PricingCatalog:
         return None
 
     def resolve(self, model_id_or_name: str) -> ModelPricing | None:
+        key = model_id_or_name or ""
+        cached = self._resolve_memo.get(key, _UNRESOLVED)
+        if cached is _UNRESOLVED:
+            cached = self._resolve_memo[key] = self._match_closest(key)
+        return cached  # type: ignore[return-value]
+
+    def _match_closest(self, model_id_or_name: str) -> ModelPricing | None:
         exact = self.resolve_reference(model_id_or_name)
         if exact is not None or reference_identity(model_id_or_name).startswith("claude"):
             return exact

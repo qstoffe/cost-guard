@@ -1,7 +1,8 @@
 """Shared V1/V2 OpenCode token-counter normalization and field availability."""
 from __future__ import annotations
 
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from src.domain import TokenUsage
 from .errors import SourceDataError

@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from unittest.mock import patch
@@ -46,6 +47,13 @@ class ClaudeTransportTests(unittest.TestCase):
                 return [sys.executable, str(script), mode, str(log)]
             with patch('src.accounts.claude_transport._command', side_effect=command):
                 result = read_claude_auth() if mode == 'auth' else read_claude_usage(timeout_seconds=timeout)
+            self.answered_at = time.monotonic()
+            # The helper is stopped off the caller's critical path; wait for that
+            # bounded cleanup so directory removal still proves closed handles.
+            for thread in threading.enumerate():
+                if thread.name == 'claude-metadata-cleanup':
+                    thread.join(timeout=10)
+                    self.assertFalse(thread.is_alive())
             requests = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
             return result, commands, requests
 
@@ -69,6 +77,7 @@ class ClaudeTransportTests(unittest.TestCase):
         start = time.monotonic()
         result, _, _ = self.run_fake('timeout', timeout=.2)
         self.assertEqual('timeout', result.reason)
+        self.assertLess(self.answered_at - start, 1.5, "a stuck helper never delays the answer")
         self.assertLess(time.monotonic() - start, 8)
         # TemporaryDirectory removal above also proves closed handles on Windows.
 

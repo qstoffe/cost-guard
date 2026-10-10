@@ -7,6 +7,7 @@ import time
 from typing import Callable, Mapping, Sequence
 
 from src.domain import NormalizedSession, SessionSnapshot
+from src.domain.session_tree import root_activity
 from src.reports import ReportService, SessionPromptBlock
 from src.sources.base import LiveSessionSource
 from src.sources.errors import SourceError, SourceSchemaError, SourceUnavailableError
@@ -20,14 +21,11 @@ from .models import WatchProjection, WatchRow, WatchSessionSubtotal
 from .observers import CatalogObservation, LiveEventPump, observe_catalog
 from .tracker import WatchRowTracker
 from .token_mix import WatchTokenMix
-from .accounts import durable_quota_failure, reconcile_accounts, recovery_account_keys
+from .account_refresh import WatchAccountRefresh
 
 ClockMs = Callable[[], int]
 Sleep = Callable[[float], None]
-QUOTA_REFRESH_MS = 60_000
 RESUME_GAP_MS = 90_000
-QUOTA_RECOVERY_SECONDS = 60.0
-QUOTA_RETRY_SECONDS = (5.0, 10.0, 20.0)
 INITIAL_ROOT_SAMPLE = 20
 SOURCE_RETRY_SECONDS = 5.0
 # Unreadable (not merely unreachable) data gets about a minute to settle before
@@ -48,15 +46,6 @@ def source_failure_kind(error: SourceError) -> str | None:
     if isinstance(error, SourceSchemaError):
         return None
     return "unavailable" if isinstance(error, SourceUnavailableError) else "unreadable"
-
-
-def _root_activity(sessions: Sequence[NormalizedSession], root_by_session: Mapping[str, str]) -> dict[str, int]:
-    activity: dict[str, int] = {}
-    for item in sessions:
-        root = root_by_session.get(item.session_id, item.session_id)
-        observed = max(item.created_at_ms, item.updated_at_ms, item.archived_at_ms or 0)
-        activity[root] = max(activity.get(root, 0), observed)
-    return activity
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,8 +75,11 @@ class WatchCoordinator:
         clock_ms: ClockMs = _clock_ms,
         sleep: Sleep = time.sleep,
         monotonic: Callable[[], float] | None = None,
+        record_observations: bool = True,
     ) -> None:
         self.selection = selection
+        # Diagnostics' headless smoke must not appear as a user Watch observation.
+        self.record_observations = record_observations
         self.source = selection.source
         self.report_service = report_service
         self.config = config
@@ -114,19 +106,9 @@ class WatchCoordinator:
         self.blocks: dict[str, SessionPromptBlock] = {}
         self.snapshots: dict[str, SessionSnapshot] = {}
         self.quota = None
-        self._account_quotas = ()
-        self._account_quota_seen_ms = {}
-        self._quota_stale = False
-        self._last_account_fresh = ()
-        self._quota_recovery_until: float | None = None
-        self._quota_retry_at: float | None = None
-        self._quota_retry_index = 0
-        self._quota_recovering_accounts = ()
-        self._quota_first_retried: set[tuple[str, str, str]] = set()
+        self.accounts = WatchAccountRefresh(report_service, clock_ms=clock_ms, monotonic=self._monotonic)
         self._last_cycle_end_ms: int | None = None
         self._event_pump: LiveEventPump | None = None
-        self._last_account_refresh_ms = 0
-        self._last_account_started_ms: int | None = None
         self._last_quota_refresh_ms = 0
         self._last_projection: WatchProjection | None = None
         # Ephemeral lifecycle evidence for this process only; never persisted.
@@ -137,6 +119,7 @@ class WatchCoordinator:
         self._resume_pending = False
         self._resume_recovery_deadline_ms = 0
         self._closed = False
+        self.startup_quiet_roots = 0
 
     def _record_refresh_duration(self, seconds: float) -> None:
         value = max(0.001, float(seconds))
@@ -159,23 +142,13 @@ class WatchCoordinator:
         if now_ms - self._last_cycle_end_ms <= threshold:
             return False
         self._last_cycle_end_ms = now_ms  # the next poll must not re-arm this gap
-        self._quota_recovery_until = self._monotonic() + QUOTA_RECOVERY_SECONDS
-        self._quota_retry_at = self._monotonic()
-        self._quota_retry_index = 0
+        self.accounts.resume()
         self._resume_pending = True
         self._resume_recovery_deadline_ms = now_ms + 180_000
         return True
 
-    def _end_quota_recovery(self) -> None:
-        self._quota_recovery_until = self._quota_retry_at = None
-        self._quota_recovering_accounts = ()
-
     def _wait_delay_seconds(self, active_count: int) -> float:
-        delay = float(self._delay_seconds(active_count))
-        for target in (self._quota_retry_at, self._quota_recovery_until):
-            if target is not None:
-                delay = min(delay, max(0.0, target - self._monotonic()))
-        return delay
+        return self.accounts.wait_delay(float(self._delay_seconds(active_count)))
 
     def _delay_seconds(self, active_count: int) -> int:
         if not self.auto_interval:
@@ -192,7 +165,7 @@ class WatchCoordinator:
             if not observation.roots:
                 raise WatchedSessionEnded(f"OpenCode session '{self.session_id}' was not found or is archived.")
             return observation.roots
-        activity = _root_activity(observation.sessions, observation.root_by_session)
+        activity = root_activity(observation.sessions, observation.root_by_session)
         return tuple(sorted(
             observation.roots,
             key=lambda item: (activity.get(item.session_id, item.updated_at_ms), item.session_id),
@@ -216,68 +189,10 @@ class WatchCoordinator:
             hydrated.append(root.session_id)
         return tuple(hydrated)
 
-    def _refresh_account_quota(self, *, now_ms: int, force: bool = False) -> bool:
-        """Publish individual completions; source changes never amplify requests."""
-        if self._closed:
-            return False
-        expired = self._quota_recovery_until is not None and self._monotonic() >= self._quota_recovery_until
-        if expired:
-            self._end_quota_recovery()
-            self._account_quotas, self._account_quota_seen_ms, self._quota_stale = reconcile_accounts(
-                self._account_quotas, self._last_account_fresh, self._account_quota_seen_ms, now_ms=now_ms,
-                update_seen=False,  # deadline expiry is not a new provider observation
-            )
-        retry_due = self._quota_retry_at is not None and self._monotonic() >= self._quota_retry_at
-        self.report_service.set_now_ms(now_ms)
-        due = self._last_account_started_ms is None or now_ms - self._last_account_started_ms >= QUOTA_REFRESH_MS
-        if force or retry_due or due:
-            self.report_service.begin_account_refresh()
-            self._last_account_started_ms = now_ms
-            if retry_due:
-                self._quota_retry_at = None
-        update = self.report_service.poll_account_refresh()
-        if update is None:
-            return expired
-        fresh = update.snapshots
-        completed_ms = int(self.clock_ms())
-        recovering = self._quota_recovery_until is not None and self._monotonic() < self._quota_recovery_until
-        previous = self._account_quotas
-        # Pending providers remain untouched; failures use bounded retention.
-        self._account_quotas, self._account_quota_seen_ms, self._quota_stale = reconcile_accounts(
-            previous, fresh, self._account_quota_seen_ms, now_ms=completed_ms, recovering=recovering,
-            observed_keys=update.observed_keys,
-        )
-        self._last_account_fresh = fresh
-        self._last_account_refresh_ms = completed_ms
-        if not self.report_service.accounts_pending:
-            self._last_account_started_ms = completed_ms
-        # One bounded first-error retry window per identity.
-        unseen = {item.key for item in fresh if item.availability == "error" and not durable_quota_failure(item)
-                  and item.key not in self._account_quota_seen_ms and item.key not in self._quota_first_retried}
-        if unseen and not recovering:
-            self._quota_first_retried |= unseen
-            self._quota_recovery_until = self._monotonic() + QUOTA_RECOVERY_SECONDS
-            self._quota_retry_index = 0
-            recovering = True
-        if recovering:
-            self._quota_recovering_accounts = recovery_account_keys(previous, fresh, self._account_quotas)
-            if self._quota_recovering_accounts:
-                observed_failure = any(key in update.observed_keys for key in self._quota_recovering_accounts)
-                if observed_failure or (self._quota_retry_at is None and not self.report_service.accounts_pending):
-                    if self._quota_retry_index < len(QUOTA_RETRY_SECONDS):
-                        self._quota_retry_at = self._monotonic() + QUOTA_RETRY_SECONDS[self._quota_retry_index]
-                        self._quota_retry_index += 1
-            elif not self.report_service.accounts_pending:
-                self._end_quota_recovery()
-        else:
-            self._end_quota_recovery()
-        return True
-
     def _refresh_quota(self, observation: CatalogObservation, *, now_ms: int, force: bool = False) -> None:
-        # Local usage refreshes on meaningful source changes (or at most every
-        # five minutes while unchanged).  Account quota has its own one-minute
-        # cadence and is reused here instead of being fetched for every change.
-        account_changed = self._refresh_account_quota(now_ms=now_ms)
+        # Local usage refreshes on source changes (or every five minutes); account
+        # quota keeps its own one-minute cadence instead of per-change fetches.
+        account_changed = self.accounts.refresh(now_ms=now_ms)
         if (
             not force
             and not account_changed
@@ -287,7 +202,7 @@ class WatchCoordinator:
             return
         self.report_service.set_now_ms(now_ms)
         self.quota = self.report_service.build_watch_quota(
-            observation.sessions, quota_snapshots=self._account_quotas, query_account=False
+            observation.sessions, quota_snapshots=self.accounts.snapshots, query_account=False
         )
         self._last_quota_refresh_ms = now_ms
 
@@ -350,7 +265,8 @@ class WatchCoordinator:
     def _token_valuation(self):
         return self.report_service.token_category_valuation()
 
-    def _projection(self, *, now_ms: int, status: str = "", status_active: bool = False) -> WatchProjection:
+    def _projection(self, *, now_ms: int, status: str = "", status_active: bool = False,
+                    scanned: bool = False) -> WatchProjection:
         check_pending()
         rows = self.tracker.project(self.blocks, self.snapshots, now_ms=now_ms)
         active = sum(1 for row in rows if row.prompt.in_progress)
@@ -375,8 +291,8 @@ class WatchCoordinator:
             rows=rows,
             source_warnings=tuple(self.selection.warnings),
             quota=self.quota,
-            quota_stale=self._quota_stale,
-            quota_recovering_accounts=self._quota_recovering_accounts,
+            quota_stale=self.accounts.stale,
+            quota_recovering_accounts=self.accounts.recovering_keys,
             active_count=active,
             status=self._observer_error or status,
             status_active=status_active,
@@ -388,26 +304,29 @@ class WatchCoordinator:
             session_subtotals=session_subtotals,
         )
         self._last_projection = projection
-        if self.observation is not None:
-            record_scan(self.selection.selected, self.observation, self.blocks,
-                        rows, self.started_at_ms, now_ms)
+        if scanned and self.observation is not None and self.record_observations:
+            record_scan(self.selection.selected, self.observation, self.blocks, rows, self.started_at_ms,
+                        startup_quiet_roots=self.startup_quiet_roots)
         return projection
 
     def initialize(self) -> WatchCycle:
         refresh_started = time.monotonic()
         now_ms = int(self.clock_ms())
         self.report_service.set_now_ms(now_ms)
-        self.report_service.begin_account_refresh()
-        self._last_account_started_ms = now_ms
+        self.accounts.begin(now_ms)
         observation = observe_catalog(self.source, session_id=self.session_id)
         self.model_discovery.refresh(now_ms)
         roots = self._selected_roots(observation)
-        # Initial global hydration is deliberately bounded.  Every root revision
-        # is already known, so later changes still enter immediately; we hydrate
-        # only the newest roots likely to contain active/recent work.
-        # Preserve the historical default discovery scope independently of the
-        # display cap, so row configuration cannot change Watch-run mix inputs.
+        # Bounded initial hydration: all root revisions are known, so later changes
+        # still enter; the discovery scope is independent of the display cap.
+        # A global Watch also skips roots whose stable cached analysis proves
+        # they have no row yet; a session Watch always shows its latest prompt.
         initial_roots = roots if self.session_id is not None else roots[:INITIAL_ROOT_SAMPLE]
+        if self.session_id is None:
+            quiet = {root.session_id for root in initial_roots
+                     if self.report_service.watch_root_is_quiet(root, self.started_at_ms)}
+            initial_roots = tuple(root for root in initial_roots if root.session_id not in quiet)
+            self.startup_quiet_roots = len(quiet)
         hydrated = self._hydrate(initial_roots, now_ms=now_ms)
         self.observation = observation
         self._record_refresh_duration(time.monotonic() - refresh_started)
@@ -417,7 +336,7 @@ class WatchCoordinator:
         completed_ms = int(self.clock_ms())
         self._last_cycle_end_ms = completed_ms
         return WatchCycle(
-            self._projection(now_ms=completed_ms),
+            self._projection(now_ms=completed_ms, scanned=True),
             tuple(root.session_id for root in roots),
             hydrated,
             resynced=True,
@@ -431,6 +350,26 @@ class WatchCoordinator:
         self._event_pump = LiveEventPump(self.source)  # type: ignore[arg-type]
         self._event_pump.start()
 
+    def _changed_roots(self, old: CatalogObservation | None, observation: CatalogObservation, *,
+                       force_resync: bool, hinted_session_ids: Sequence[str]) -> set[str]:
+        """Roots to re-read: changed/removed revisions, hinted roots and, on resync, hydrated roots.
+
+        A resync distrusts lost hints, so every already-hydrated root is re-read
+        authoritatively. Never-hydrated roots stay gated by their fresh catalog
+        revision exactly as at startup instead of hydrating the whole history.
+        """
+        old_revisions = {} if old is None else old.revisions
+        changed = {root_id for root_id, revision in observation.revisions.items()
+                   if old_revisions.get(root_id) != revision}
+        changed.update(root_id for root_id in old_revisions if root_id not in observation.revisions)
+        if force_resync:
+            changed.update(root_id for root_id in self.blocks if root_id in observation.revisions)
+        for session_id in hinted_session_ids:
+            root_id = observation.root_by_session.get(session_id)
+            if root_id:
+                changed.add(root_id)
+        return changed
+
     def poll_once(self, *, force_resync: bool = False, hinted_session_ids: Sequence[str] = ()) -> WatchCycle:
         refresh_started = time.monotonic()
         now_ms = int(self.clock_ms())
@@ -440,18 +379,7 @@ class WatchCoordinator:
         old = self.observation
         observation = observe_catalog(self.source, session_id=self.session_id)
         roots = self._selected_roots(observation)
-        old_revisions = {} if old is None else old.revisions
-        changed = {
-            root_id for root_id, revision in observation.revisions.items()
-            if force_resync or old_revisions.get(root_id) != revision
-        }
-        if old is not None:
-            changed.update(root_id for root_id in old.revisions if root_id not in observation.revisions)
-        for session_id in hinted_session_ids:
-            root_id = observation.root_by_session.get(session_id)
-            if root_id:
-                changed.add(root_id)
-
+        changed = self._changed_roots(old, observation, force_resync=force_resync, hinted_session_ids=hinted_session_ids)
         current_roots = {item.session_id: item for item in roots}
         active_roots = {
             root_id for root_id, block in self.blocks.items()
@@ -477,7 +405,7 @@ class WatchCoordinator:
         completed_ms = int(self.clock_ms())
         self._last_cycle_end_ms = completed_ms
         return WatchCycle(
-            self._projection(now_ms=completed_ms),
+            self._projection(now_ms=completed_ms, scanned=True),
             tuple(sorted(changed)),
             hydrated,
             resynced=force_resync,
@@ -664,6 +592,6 @@ class WatchCoordinator:
 
     def close(self) -> None:
         self._closed = True
-        self.report_service.close_accounts()
+        self.accounts.close()
         if self._event_pump is not None:
             self._event_pump.stop()

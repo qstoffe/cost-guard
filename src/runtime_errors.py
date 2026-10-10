@@ -124,7 +124,8 @@ class RuntimeErrors:
         # Unknown future roots may name threads after private account/session
         # data. Keep known product names; identify everything else by hash.
         if thread not in {"MainThread", "cost-guard-v2-events", "cost-guard-startup-progress", "claude-metadata",
-                          "cost-guard-model-metadata"}:
+                          "claude-metadata-cleanup", "cost-guard-model-discovery", "cost-guard-model-availability",
+                          "cost-guard-account-quota"}:
             thread = "thread#" + hashlib.sha256(thread.encode()).hexdigest()[:12]
         return (f"Timestamp: {datetime.now().astimezone().isoformat()}\nCost Guard: {self.version}\n"
                 f"Mode: {self.mode}\nPhase: {self.phase}\nSeverity: {severity}\nComponent: {component}\n"

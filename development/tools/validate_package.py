@@ -12,8 +12,17 @@ import shutil
 import tempfile
 import sys
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
 from typing import Iterable
+
+# Direct CLI execution puts tools/ on sys.path; package imports use the absolute route.
+if __package__:
+    from development.tools.code_inventory import import_targets, module_name
+    from development.tools.structure_guard import structural_errors
+else:
+    from code_inventory import import_targets, module_name
+    from structure_guard import structural_errors
 
 REQUIRED_FILES = {
     ".gitignore",
@@ -66,9 +75,14 @@ REQUIRED_FILES = {
     "development/README.md",
     "development/MAINTAINER.md",
     "development/ARCHITECTURE.md",
+    "development/CODE_MAP.md",
+    "development/REFACTORING_REVIEW.md",
     "development/FR_GUIDE.md",
     "development/file-budgets.json",
+    "development/structure-policy.json",
     "development/tools/run_tests.py",
+    "development/tools/code_inventory.py",
+    "development/tools/structure_guard.py",
     "development/tools/collect_diagnostics.py",
     "development/tools/validate_package.py",
     "development/tools/build_release.py",
@@ -266,8 +280,8 @@ def compile_python(root: Path, results: Results) -> None:
             source = path.read_text(encoding="utf-8")
             # feature_version constrains syntax to the documented minimum runtime
             # even when release validation itself runs on a newer interpreter.
-            ast.parse(source, filename=str(path), feature_version=(3, 11))
-            compile(source, str(path), "exec")
+            # Compiling that tree adds the symbol-table checks without a reparse.
+            compile(ast.parse(source, filename=str(path), feature_version=(3, 11)), str(path), "exec")
         except SyntaxError as exc:
             syntax_311_ok = False
             results.fail("Python 3.11 syntax", f"{rel(root, path)}: {exc}")
@@ -332,20 +346,18 @@ def check_version_consistency(root: Path, results: Results) -> None:
     results.ok(f"version consistency checked for {display}")
 
 
-def imported_modules(path: Path) -> set[str]:
+@lru_cache(maxsize=None)
+def imported_modules(path: Path, root: Path) -> frozenset[str]:
+    """Several architecture rules inspect the same files; parse each only once per run."""
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-    modules: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            modules.update(alias.name for alias in node.names)
-        elif isinstance(node, ast.ImportFrom):
-            module = node.module or ""
-            if node.level:
-                # Relative imports are kept symbolic; cross-boundary checks focus on absolute src.* imports.
-                modules.add("." * node.level + module)
-            else:
-                modules.add(module)
-    return modules
+    name = module_name(path, root)
+    package = path.name == "__init__.py"
+    modules = import_targets(tree, module=name, package=package, include_members=False)
+    for target in import_targets(tree, module=name, package=package) - modules:
+        candidate = root.joinpath(*target.split("."))
+        if candidate.with_suffix(".py").is_file() or candidate.is_dir():
+            modules.add(target)  # from .. import presentation, not arbitrary imported classes
+    return frozenset(modules)
 
 
 def check_entrypoint(root: Path, results: Results) -> None:
@@ -358,7 +370,7 @@ def check_entrypoint(root: Path, results: Results) -> None:
     definitions = [node for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))]
     if any(not isinstance(node, ast.FunctionDef) or node.name not in {"run", "start"} for node in definitions):
         results.fail("entry-point architecture", "cost-guard.py may define only run/start failure-boundary functions")
-    imports = imported_modules(path)
+    imports = imported_modules(path, root)
     disallowed = sorted(m for m in imports if m not in {"src.bootstrap", "src.runtime_errors", "pathlib", "sys"})
     if disallowed:
         results.fail("entry-point architecture", f"cost-guard.py may import only the minimal process boundary/bootstrap, found {disallowed}")
@@ -366,7 +378,7 @@ def check_entrypoint(root: Path, results: Results) -> None:
         results.fail("entry-point architecture", "bootstrap import must occur inside the guarded application callback")
     runtime = root / "src/runtime_errors.py"
     if runtime.exists():
-        disallowed = sorted(m for m in imported_modules(runtime) if m.startswith("src.") or m.startswith(".") and m != ".version")
+        disallowed = sorted(m for m in imported_modules(runtime, root) if m.startswith("src.") and m != "src.version")
         if disallowed:
             results.fail("runtime-error architecture", f"minimal reporter imports application layers: {disallowed}")
     results.ok("thin entry-point architecture checked")
@@ -388,7 +400,7 @@ def check_architecture_imports(root: Path, results: Results) -> None:
             continue
         for path in base.rglob("*.py"):
             try:
-                imports = imported_modules(path)
+                imports = imported_modules(path, root)
             except Exception:
                 continue
             for module in sorted(imports):
@@ -396,8 +408,8 @@ def check_architecture_imports(root: Path, results: Results) -> None:
                     results.fail("architecture import", f"{rel(root, path)} imports forbidden concrete layer {module}")
 
     reports_root = root / "src" / "reports"
-    for path in reports_root.glob("*.py") if reports_root.exists() else ():
-        for module in imported_modules(path):
+    for path in reports_root.rglob("*.py") if reports_root.exists() else ():
+        for module in imported_modules(path, root):
             forbidden = (
                 module.startswith("src.sources.opencode_"),
                 module.startswith("src.accounts.github_"),
@@ -409,8 +421,8 @@ def check_architecture_imports(root: Path, results: Results) -> None:
                 results.fail("report architecture", f"{rel(root, path)} imports concrete/runtime presentation layer {module}")
 
     watch_root = root / "src" / "watch"
-    for path in watch_root.glob("*.py") if watch_root.exists() else ():
-        for module in imported_modules(path):
+    for path in watch_root.rglob("*.py") if watch_root.exists() else ():
+        for module in imported_modules(path, root):
             forbidden = (
                 module.startswith("src.sources.opencode_"),
                 module.startswith("src.accounts.github_"),
@@ -422,18 +434,16 @@ def check_architecture_imports(root: Path, results: Results) -> None:
     v1 = root / "src/sources/opencode_v1.py"
     if v1.is_file():
         try:
-            imports = imported_modules(v1)
+            imports = imported_modules(v1, root)
         except Exception:
             imports = set()
         if any(module == "subprocess" or module.startswith("subprocess.") for module in imports):
             results.fail("V1 source architecture", "OpenCode V1 adapter may not start subprocesses")
 
-    for relative in ("src/sources/opencode_v2.py", "src/sources/opencode_v2_transport.py"):
-        path = root / relative
-        if not path.is_file():
-            continue
+    for path in sorted((root / "src/sources").glob("opencode_v2*.py")):
+        relative = rel(root, path)
         try:
-            imports = imported_modules(path)
+            imports = imported_modules(path, root)
         except Exception:
             imports = set()
         forbidden = sorted(
@@ -446,12 +456,20 @@ def check_architecture_imports(root: Path, results: Results) -> None:
     # Analysis may consume provider-neutral pricing contracts/catalog helpers, but
     # it must never import a concrete pricing provider implementation.
     analysis_root = root / "src" / "analysis"
-    for path in analysis_root.glob("*.py") if analysis_root.exists() else ():
-        for module in imported_modules(path):
+    for path in analysis_root.rglob("*.py") if analysis_root.exists() else ():
+        for module in imported_modules(path, root):
             if module.startswith("src.pricing.github_"):
                 results.fail("architecture import", f"{rel(root, path)} imports concrete pricing provider {module}")
 
-    results.ok("initial architecture import boundaries checked")
+    for path in (root / "src").rglob("*.py"):
+        for module in imported_modules(path, root):
+            if module == "development" or module.startswith("development."):
+                results.fail("runtime architecture", f"{rel(root, path)} imports development-only code {module}")
+    for path in (root / "development/fixtures").rglob("*.py"):
+        for module in imported_modules(path, root):
+            if module == "development.tests" or module.startswith("development.tests."):
+                results.fail("fixture architecture", f"{rel(root, path)} imports test code {module}")
+    results.ok("absolute/relative/nested architecture import boundaries checked")
 
 
 def check_history_bounds(root: Path, results: Results) -> None:
@@ -524,6 +542,11 @@ def validate(root: Path) -> Results:
     check_version_consistency(root, results)
     check_entrypoint(root, results)
     check_architecture_imports(root, results)
+    growth = structural_errors(root)
+    for error in growth:
+        results.fail("structural growth", error)
+    if not growth:
+        results.ok("routine-growth and test-coupling ratchets checked")
     check_history_bounds(root, results)
     return results
 

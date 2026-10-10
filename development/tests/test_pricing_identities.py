@@ -15,7 +15,7 @@ def price(identity, *, tiers=()):
 
 class ReferenceIdentityTests(unittest.TestCase):
     def test_alias_reference_value_never_changes_provider_reported_billing(self):
-        from development.tests.test_analysis_core import make_snapshot
+        from development.fixtures.session_snapshots import make_snapshot
         from src.analysis.causal import trace_entries
         from src.analysis.billing import actual_entry_cost
         from src.analysis.valuation import billed_spend, comparison_cost

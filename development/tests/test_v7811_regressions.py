@@ -5,9 +5,9 @@ import io
 import unittest
 from dataclasses import replace
 
-from development.tests.test_analysis_core import make_snapshot, message, part
-from development.tests.test_step6_context_comparisons import catalog
-from development.tests.test_opencode_v2 import source_with_current_service
+from development.fixtures.session_snapshots import make_snapshot, message, part
+from development.fixtures.pricing_catalog import catalog
+from development.fixtures.opencode_v2_service import source_with_current_service
 from src.analysis import analyze_snapshot
 from src.analysis.causal import prompt_references
 from src.domain import EventKind, MessageRole, NormalizedEvent

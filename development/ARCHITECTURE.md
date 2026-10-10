@@ -2,7 +2,7 @@
 
 ## Goals
 
-Cost Guard v80 retains v78 Python/v77 behavior contracts; integrations are additions, not rewrites.
+Retain v78 Python/v77 behavior contracts; integrations add, not rewrite.
 
 Core product principles:
 
@@ -38,31 +38,31 @@ Configuration must be validated before any OpenCode/provider/network/runtime-cac
 
 ## Session Sources
 
-A Session Source normalizes agent history into provenance-bearing domain records. V1 is read-only SQLite; V2 is registered loopback HTTP with non-durable Watch hints. `openCode.source=auto|v1|v2` selects one healthy generation, preferring V2; histories are never unioned. Only bootstrap may wake the shared service once through the installed CLI's read-only API info command before reselecting; no Desktop/TUI or recurring Watch subprocess. Selection/recovery contracts follow below.
+A Session Source normalizes agent history into provenance-bearing domain records. V1 is read-only SQLite; V2 is registered loopback HTTP with non-durable Watch hints. `openCode.source=auto|v1|v2` selects one healthy generation, preferring V2; histories are never unioned. Only bootstrap may wake the shared service once through the installed CLI's read-only API info command before reselecting; no Desktop/TUI or recurring Watch subprocess.
 
 `src/sources/opencode_errors.py` is the shared V1/V2 native error boundary. Known cancellation identifiers and bounded message forms in top-level/data error fields normalize to canonical `AbortedError`; arbitrary payload/stack substring matches are not cancellation evidence. Analysis uses the terminal logical attempt, never lets zero usage override an explicit generic error, and retains terminal errors with missing usage. Watch's persistent aborted label and transient emphasis remain separate presentation/lifecycle concerns.
 
-### OpenCode V1 boundary (implemented)
+### OpenCode V1 boundary
 
-`src/sources/opencode_v1.py` owns all knowledge of the legacy V1 SQLite projection. Discovery is process-free: `OPENCODE_DB` overrides the standard XDG-style OpenCode data location. The adapter validates the required legacy `session`, `message` and `part` columns before use, opens SQLite with `mode=ro` plus `PRAGMA query_only=ON`, and never starts the OpenCode CLI.
+`src/sources/opencode_v1.py` alone knows the legacy V1 SQLite projection. Process-free discovery honors `OPENCODE_DB`, else the standard XDG data location. It validates the required `session`/`message`/`part` columns, opens SQLite `mode=ro` plus `PRAGMA query_only=ON`, and never starts the OpenCode CLI.
 
-Hydration reads one root plus its recursive descendant tree inside one pinned SQLite read transaction, then normalizes native rows into canonical sessions, messages, parts, events and model invocations. If `step-finish` parts exist, their per-step tokens/cost are the invocation source instead of cumulative assistant-message values. Source-specific message/part structure is preserved only through canonical types needed by later compaction/tool/context analysis.
+Hydration reads a root and its recursive descendants in one pinned read transaction, normalizing them into canonical sessions, messages, parts, events and invocations. `step-finish` parts, when present, replace cumulative assistant-message tokens/cost. Native message/part structure survives only through canonical types that compaction/tool/context analysis needs.
 
 `get_session_tree_revision()` hashes tree membership plus compact session/message/part counts, timestamps and IDs without parsing JSON. Unchanged `session.time_updated` cannot hide descendant/message changes; this cheap cache/change gate is never business truth.
 
-### OpenCode V2 boundary (implemented)
+### OpenCode V2 boundary
 
-`opencode_v2_transport.py` owns stdlib HTTP/SSE; `opencode_v2*.py` interpret/normalize V2. Discovery reads the standard service registration, validates loopback, ignores ambient proxies and probes `/api/info`. Registration auth is never logged. No V2 SQLite or CLI/subprocess is used.
+`opencode_v2_transport.py` owns stdlib HTTP/SSE (pooled keep-alive JSON GETs, one retry on a service-closed idle socket, privacy-safe counters), `opencode_v2_wire.py` wire compatibility, `opencode_v2_normalization.py` pure message/part/request mapping with injected provenance, and `opencode_v2.py` acquisition/revision/snapshot assembly. Discovery reads standard registration, validates loopback, ignores proxies and probes `/api/info`. No auth logging, V2 SQLite or CLI/subprocess.
 
 Global discovery uses cursor-paginated sessions, falling back to project enumeration/de-duplication. Current and transitional message APIs share canonical V1/V2 session/message/part/event/invocation contracts; synthetic histories verify semantic parity.
 
-The adapter caches the latest complete V2 session catalog in-process, avoiding `N roots × all projects` listing. Discovery/resync replaces it; live events invalidate it. This is change-gating input, never durable truth. Hydration rechecks a fresh tree revision and retries once on metadata change; repeated instability fails rather than persisting mixed generations.
+The adapter caches the latest complete V2 session catalog in-process, avoiding `N roots × all projects` listing. Discovery/resync replaces it; live events invalidate it. This is change-gating input, never durable truth. A snapshot's tree revision must match before and after its message reads; a complete catalog at most 2s old may be the before bracket (a mismatch then gets two fresh attempts); repeated instability fails rather than persisting mixed generations.
 
 `opencode_v2_wire.py` binds qualified persisted `idle` outcomes to the preceding assistant as neutral `TerminalEvidence`. Intervening boundaries, ambiguous timestamps or later tool work block attribution. Status/inactivity/transport failure alone proves no end. Native completion/usage/billing stays unchanged; Diagnostics counts terminal evidence separately. Path-free `location-switched` items become `SessionSnapshot.context_boundaries`: never usage; they retire a Next-Ictx anchor not yet followed by a request. `opencode_v2_background.py` maps background jobs/completion notices to neutral `BackgroundActivity`/`BACKGROUND_COMPLETION`; a job without notice runs until its location's shell registry drops it.
 
-`/api/event` is a non-replaying live hint. Stream end, disconnect or failure requires resync: Watch must obtain an authoritative snapshot before trusting subsequent live state.
+`/api/event` is a non-replaying live hint; stream end, disconnect or failure requires an authoritative snapshot before live state is trusted again.
 
-### Source selection and migration-gap diagnostics (implemented)
+### Source selection and migration-gap diagnostics
 
 `src/sources/selection.py` selects process-free `auto|v1|v2`: healthy V2 first, otherwise healthy V1. Forced generations never silently fall back. Unhealthy V2 fallback warns; normal V1-only installations do not. Only `src/bootstrap.py` owns one-time CLI service wake after selection failure.
 After failed selection/wake, Watch retries process-free selection every five seconds, constructing reports/coordinator only once healthy. Reports fail promptly: installation wording requires no PATH CLI and no standard filesystem evidence; otherwise retain source errors. Healthy V1 auto-selection never switches later.
@@ -78,15 +78,15 @@ These are intentionally separate roles.
 
 `accounts/credentials.py` reads only the selected installation: V2 wins per integration, legacy applies without V2 rows, explicit overrides are file-only, read errors fail closed and secrets stay memory-only. Proven account IDs/source locators distinguish accounts, never provider alone; inactive quota visibility changes neither inference nor history.
 
-`accounts/discovery.py` shares source/WAL views; other identities keep their probe. Neutral `accounts/acquisition.py` owns four daemon workers, sequences/45s deadlines and nonblocking close. Only callers apply results; expired generations are discarded, stuck slots never multiply. Workers cannot render/mutate analysis/persistence. Normal reports overlap analysis (15s final wait); Watch publishes individual results without startup HTTPS. Only observed accounts advance timestamps; all exits close workers. [Account contracts](simple-http-accounts.md) own details.
+`accounts/discovery.py` shares source/WAL views; other identities retain probes. `accounts/acquisition.py` owns four daemon workers, sequences/45s deadlines and nonblocking close. Callers alone apply results; expired generations are discarded, stuck slots never multiply. Workers cannot render or mutate analysis/persistence. Reports overlap analysis (15s final wait); Watch publishes individually without startup HTTPS. Only observations advance timestamps; all exits close workers. [Account contracts](simple-http-accounts.md) own details.
 
 Providers return independent native account/quota/billing components. Copilot preserves degraded evidence; unlimited/blocked requires explicit native state. OpenAI owns rolling/model windows/credits. Anthropic API and Claude Code logins stay separate; [Claude contracts](claude-code.md) own SDK, identity and privacy boundaries.
 
-First-class adapters (including MiniMax) own complex auth/semantics; Simple HTTP definitions handle DeepSeek/OpenRouter. `http_account.py` owns per-record acquisition, `http_transport.py` network/JSON safety, and `simple_http_mapping.py`/`simple_http.py` bounded normalization/definitions. [HTTP contracts](simple-http-accounts.md) own security/semantics/diagnostics: no custom HTTP/scripts, inferred capacity/CCost, attribution, renderer branches or second polling/cache layer; future local estimates must be visibly distinct.
+First-class adapters (including MiniMax) own complex auth; Simple HTTP handles DeepSeek/OpenRouter. `http_account.py` owns per-record acquisition, `http_transport.py` network/JSON safety, `simple_http_mapping.py`/`simple_http.py` mapping/definitions. [HTTP contracts](simple-http-accounts.md) prohibit custom HTTP/scripts, inferred capacity/CCost, attribution, renderer branches and duplicate polling/cache; local estimates must be visibly distinct.
 
 `pricing/github_copilot.py` normalizes GitHub Docs tiered I/C/W/O rates, release dates and explicit promotion dates into reconstructible metadata. Refresh uses age, UTC month and expiry; expired rates revert to verified standard rates or are withheld. `pricing/promotions.py` owns structured validity/recency; unknown starts never imply recent offers. Reports retain active promotions for their full lifetime; Watch notices require a start within seven days. Presentation owns markers/alignment and label-only notice color, not validity.
 
-`pricing/release_metadata.py` owns date sources/merging; `pricing/metadata_health.py` owns health/backoff/events. `cache/metadata_state.py` persists cache/state/, copying legacy logs/recovery/model-metadata.json without deletion/overwrite; Diagnostics never migrates. Failures log to logs/errors/, recoveries to logs/recovery/. Dates keep prices; Watch uses one worker.
+`pricing/release_metadata.py` owns date sources/merging; `pricing/metadata_health.py` owns health/backoff/events. `cache/metadata_state.py` persists cache/state/, copying legacy logs/recovery/model-metadata.json without deletion/overwrite; Diagnostics never migrates. Failures log to logs/errors/, recoveries to logs/recovery/. Dates keep prices. `PricingCatalog` memoizes identity resolution per immutable instance. Watch discovery runs metadata and network checks (price/V2 model list) on one bounded worker each; the main thread applies results.
 
 ## Canonical domain
 
@@ -96,65 +96,69 @@ The domain separates:
 2. CCost/Billed — independent reference token valuation and actual provider-reported/included billing evidence. Legacy estimated billing fallback is never surfaced as actual spend.
 3. Quota/limits — native account units, used/limit/remaining, percentages/windows, reset time and availability state. Provider-native budgets remain supported; the deprecated local monthly CCost budget has no runtime semantics.
 
-Equal numbers are not interchangeable. Analysis consumes capabilities/domain semantics, not concrete version names.
+Equal numbers are not interchangeable. Analysis consumes capabilities/domain semantics, not version names.
 
-`TokenUsage.known_fields` separates I/C/W/O telemetry from zero-default valuation. `sources/opencode_tokens.py` marks absent/null/malformed fields unknown; caches retain availability. `analysis/token_mix.py` sums volume, folds reasoning into O and apportions shares to 100; unknown denominators hide shares. Request-priced category CCost through `PricingCatalog.reference_category_valuation` reconciles with `comparison_cost`; model rows group by reference identity with unique prompts/all calls. `analysis/quota_pace.py` uses only fixed-period quota remaining/reset plus workday calendar, never session state.
+`TokenUsage.known_fields` preserves telemetry availability through normalization/cache; absent/null/malformed fields stay unknown. `analysis/token_mix.py` sums volume, folds reasoning into O, apportions 100% and hides shares for unknown denominators. Category CCost reconciles with `comparison_cost`; model rows use reference identity, unique prompts/all calls. `analysis/quota_pace.py` uses fixed-period remaining/reset and workdays, never session state.
 
 `src/domain/accounts.py` owns source-aware `AccountRef`, flexible `QuotaComponent`, `BillingComponent` and `AccountSnapshot`. A request may carry an optional proven account reference. Current-login identity never fills historical request gaps. `src/domain/` must not import concrete source/account/pricing/cache/watch/presentation implementations.
 
+`domain/session_tree.py` shares catalog ancestry/tree activity, never acquisition/attribution. Missing ancestors/cycles terminate without invented records; missing ancestry cannot resolve detail targets. Reports retain archived history; Watch excludes archived roots.
+
 `domain/ccost.py` owns reference conversion (100 CCost/USD), `CCostPricing` and valuation contracts. Catalog `models` remain native monetary metadata; immutable `ccost_models` are converted once before reference usage/category/context/comparison analysis, never billing fallback. Unknown currencies are unpriceable, not guessed FX. CCost is Copilot AI-credit-equivalent reference value, not deduction/billing; projections use explicit CCost fields.
 
-`numbers.py` shares standard-library display semantics: adaptive upward CCost/consumption, downward Remaining, exact rates/limits, no grouping; analysis never calls it. `version.mode_heading` owns adjacent startup grammar, CLI selects modes, progress clears transient rows. Reports align all quota labels; Watch only primary labels.
+`numbers.py` owns display rounding: upward CCost/consumption, downward Remaining, exact rates/limits, no grouping; analysis never calls it. `version.mode_heading` owns startup grammar, CLI modes, progress transient rows. Reports align all quota labels; Watch only primary labels.
 
 ## Analysis
 
-`src/analysis/` owns causal attribution, prompt boundaries, child/subagent work, synthetic continuations, compactions, fork-clone billing de-duplication, context calculations and model comparisons. It consumes canonical domain values and provider-neutral abstractions only.
+`src/analysis/` owns attribution, prompt/child/synthetic/compaction semantics, clone billing de-duplication, context and comparisons over canonical domain/provider-neutral abstractions only.
 
 Usage/billing consumes all canonical providers: V2 `openai` requests must not disappear because pricing/quota integrations are Copilot-backed. Positive provider-reported cost stays authoritative; fallback and quota are separate capabilities. Provider filters are explicit lower-level/testing scopes only, never default report truth.
 
-The causal core uses `TraceEntry`, `PromptRecord`, `CompactionRecord` and `RootAnalysisBundle`. Legacy billing analysis preserves reported/included/fallback provenance; `analysis/valuation.py` independently derives `ComparisonCost` from an injected reference estimator and actual `billed_spend` without substituting fallback prices. CCost includes subscription tokens and exposes priced/observed coverage rather than silently returning billed dollars for unsupported models. `ReportService` can inject a separate comparison pricing provider; the default reuses the current catalog, but replacement needs no account/renderer redesign. Exact reference-catalog identities avoid unsafe fuzzy CCost matches. Clone de-duplication retains source-instance provenance. Root-first prompt provenance reconciles main/subagent CCost before rounding.
+The causal core uses `TraceEntry`, `PromptRecord`, `CompactionRecord` and `RootAnalysisBundle`. Billing retains reported/included/fallback provenance. `analysis/valuation.py` independently derives `ComparisonCost` via reference estimation and actual `billed_spend`, never substituting fallback prices. Subscription CCost exposes priced/observed coverage, never billed dollars for unsupported models. `ReportService` may take a separate comparison catalog provider. Exact catalog identities prevent fuzzy CCost matches; clone de-duplication retains source-instance provenance. Root-first provenance reconciles main/subagent CCost before rounding.
 
 Context/comparison consumes canonical messages/parts/invocations. Compaction summary/tail is resulting context; exact V2 usage wins. Prompt/compaction shares one chronological Delta baseline. Next-Ictx never predicts cache hits; structured severity reaches both projections with live expiry. Comparison prices each published tier under the same 100-completed-prompt mix and cheapest base reference. One full-Decimal sorter orders base/next-tier prices descending, earlier increase boundaries, then name, recursively for later tiers. Without samples, hidden 2/96/1/1 sorts while Relative CCost stays blank. Diagnostics never feed billing.
 
 Derived analysis is cacheable only for stable complete snapshots. Cache reuse requires exact source revision, analysis algorithm version, config signature and pricing signature. Malformed/incompatible cache state is a miss; running or incomplete roots are never persisted. Source revisions remain conservative gates, not semantic truth.
 
-Date boundaries use `zoneinfo` where available. Because clean Windows Python may lack IANA data, Cost Guard carries a dependency-free current-rule fallback for its shipped `Europe/Stockholm` default plus UTC. Other custom IANA zones fail actionably when host zoneinfo is unavailable; the application never silently substitutes local time.
+Dates use `zoneinfo`; clean Windows Python may lack IANA data, so dependency-free current rules cover shipped `Europe/Stockholm` and UTC. Other IANA zones fail actionably without host data; never substitute local time.
 
-Source differences normalize before analysis. `analysis/effort.py` distinguishes explicit, request-resolved/unresolved Default and unattributable effort. Only matching root-request variants resolve Default, never model/pricing maps or mutable session selection. Both renderers share one label, no `Default -> X`; compaction uses its own explicit variant. V2 never stamps session effort onto history.
+`analysis/effort.py` distinguishes explicit, request-proven/unresolved Default and unattributable effort. Only matching root requests resolve Default, never model/pricing maps or mutable session selection; V2 never stamps session effort onto history. Renderers share one label (no `Default -> X`); compaction uses its own explicit variant.
 
 The latest assistant's `termination` ends running/duration and distinguishes success/failure/cancellation, even without usage. Actual root/child or newer tool activity stays live; stale tool flags do not. Reports/Watch/resync share this truth. Running background work keeps the newest prompt active without usage; resumes stay on it. Incomplete inference stays uncached; older algorithm keys are invalidated.
 
 ## Reports
 
-`src/reports/` owns use cases/neutral projections over abstract sources/providers, analysis and cache; never concrete integrations, Watch or presentation. Bootstrap wires implementations.
+`src/reports/` owns use cases/neutral projections over abstract sources/providers, analysis and cache; never concrete integrations, Watch or presentation.
 
-Candidate root selection uses activity across the whole known causal session tree, not only the root session timestamp, so newly updated child work is not skipped. Hydrated snapshots/analysis remain the semantic authority; session metadata activity is only a bounded discovery gate. Session dominant model is selected by whole-session attributed CCost; listing order is recent tree activity, never cost.
+Candidate roots are ordered by whole-tree activity, so newly updated child work is not skipped. Hydrated snapshots/analysis remain the semantic authority; session metadata activity is only a bounded discovery gate. Session dominant model is selected by whole-session attributed CCost; listing order is recent tree activity, never cost.
 
-Immutable projections cover dashboard/catalog, lists and detail/date modes. Dashboard/catalog sample 100 eligible prompts by newest tree activity, stopping only below the cutoff (ties qualify); hydration is authoritative. Quotas use provider observations, not history; other modes fetch none. Lists analyze requested roots; detail/date project prompts. No graph/monthly usage projection remains.
+Immutable projections cover dashboard/catalog, lists and detail/date modes. Dashboard/catalog sample 100 eligible prompts by newest tree activity, stopping only below the cutoff (ties qualify); hydration is authoritative. Quotas use provider observations, not history; other modes fetch none. Lists analyze requested roots; detail/date project prompts.
+
+`reports/sampling.py` owns comparison/token eligibility and cutoffs. `ReportService` keeps acquisition/cache/account work with focused `_build_*` mode methods; dashboards overlap account and availability I/O with analysis. `prompt_rows.py` projects prompt/compaction rows using one shared timeline/epoch scope; `prompts.py` owns range/order, coherent Watch deltas and block totals. No second analysis or worker implementation.
 
 Dashboard mix includes running/interrupted usage; Relative CCost keeps completed eligibility/count. Scans respect both cutoffs. `reports/token_mix_history.py` scans without a ledger, with fail-open filtering and shown-request totals. `presentation/definitions.py` owns definitions; `presentation/model_comparison.py` aligns fields before color. Normal tables have four columns; full-catalog tables add exact USD tiers/boundaries even under fallback. Presentation never recomputes valuation.
 
 `presentation/model_supersession.py`/`AnsiStyler` own conservative displayed-row classification/hue fading, never pricing, sorting, selection, notices or geometry.
 
-V2 availability uses the service's global `/api/model` enabled selectable `id` (not `modelID`), only once settled: lazy location boot returns valid empty/partial lists. `sources/model_availability.py` rejects controls/malformed shapes and owns CLI compatibility, independent of quotas. Pricing owns exact reference identities and `pricing/identities.py`'s bounded verified dated/context aliases; explicit variant rates win, ambiguity stays unknown, input-token tiers remain intact; no fuzzy Claude suffix inference. Failed lookups visibly fail open to a pricing catalog; settled empty lists stay empty. Highlights follow selection; `--all-models` bypasses availability.
+V2 availability uses settled global `/api/model` selectable `id`, not `modelID`; empty/partial location boot is not settled. `sources/model_availability.py` rejects controls/malformed shapes and owns CLI compatibility, independently of quotas. Pricing identities are exact or bounded verified dated/context aliases: explicit variant rates/input tiers win, ambiguity stays unknown; no fuzzy Claude suffixes. Failed lookups visibly fail open to the catalog; settled empty stays empty. Highlights follow selection; `--all-models` bypasses availability.
 
 `reports/accounts.py` separates attributed CCost/billing from native dashboard capacity/status/balances: visibility never attributes history, inclusion never proves billing, percentages never imply money. `presentation/accounts.py` shares bars/alignment, native values, resets and warnings; Watch uses compact/split/vertical fallback, reports retain units/money/verbose resets. Remaining is unchanged Pace; only paced compact rows omit duplicate resets. Watch omits AI-credit conversion; Copilot overage is a separate limit, not balance/Remaining. No provider renderer branches or gross daily billing. [Account presentation](../docs/account-support.md) owns details; pricing diagnostics stay sample-scoped.
 
 ## Cache
 
-Disposable `cache/` uses generation-named SQLite files, WAL, short transactions, a 5-second busy timeout and explicit close after commit/rollback. Schema changes start new files without migrating/deleting prior in-use generations. The JSON repository carries source/algorithm revisions for derived-analysis reuse and bounded coordination, never sole ownership of history/credentials. Delete only while Cost Guard is stopped.
+Disposable `cache/` uses generation-named SQLite, WAL, short transactions, 5s busy timeout and explicit close after commit/rollback. Schema changes never migrate/delete in-use generations. JSON carries source/algorithm revisions and bounded coordination, never sole history/credential ownership. Delete only while Cost Guard is stopped.
 
 ## Watch
 
-The coordinator owns lifecycle, cadence/rendering and provider refreshes over abstract source/report contracts; lower layers never import Watch. V1 polls cheap in-process SQLite probes; V2 non-replaying event hints require authoritative resync after disconnect/end/uncertainty. Watch shares `ReportService` analysis/cache/context, never a second billing implementation or recurring subprocess.
+The coordinator owns lifecycle, cadence/rendering and provider refreshes over abstract source/report contracts; lower layers never import Watch. Watch shares `ReportService` analysis/cache/context, never a second billing implementation or recurring subprocess.
 
-`watch/token_mix.py` owns run-scoped `Watch total CCost`/`Token Mix %`, keyed by source/session/message/step. Completed pre-Watch requests are excluded. Discovery: 20 roots, independent of row cap (default 14). Updates replace usage; steps replace message fallback. Eviction/completion/removal/countdown/resync retain observations until exit; new coordinators start empty. No account queries or persisted ledger.
+`watch/token_mix.py` owns run-scoped `Watch total CCost`/`Token Mix %`, keyed by source/session/message/step. Completed pre-Watch requests are excluded. Updates replace usage; steps replace message fallback. Eviction/completion/removal/countdown/resync retain observations until exit; new coordinators start empty. No account queries or persisted ledger.
 
 `WatchSessionSubtotal` sums selected rows' `PromptProjection.ccost` as Decimals, propagating unresolved provenance. Presentation formats `Σ`; native non-billable compactions contribute known zero. Amount/completeness enter change detection. Row subtotals need not partition run totals; no per-session run aggregate exists.
 
-`watch/accounts.py` reconciles by full account key. Normal stale TTL is five minutes. Unobserved waits (>90s plus configured cadence) or a new account's first error permit 60s recovery and 5/10/20s retries; processing time is excluded. Grace/retries use an injectable monotonic clock. Retention never refreshes successful-seen timestamps; normalized auth/unavailability bypasses it. Per-account projection flags own reconnecting UX. Success/expiry ends recovery. Prompt success cannot regress to aborted; labels persist while red emphasis decays.
+`watch/accounts.py` reconciles full account keys; `watch/account_refresh.py` owns publication/cadence/retry state over `AccountRefreshWork`, not hydration/rendering. Stale TTL is five minutes. Unobserved waits (>90s plus cadence) or first errors allow 60s grace and 5/10/20s retries; processing is excluded. Monotonic deadlines bound recovery; retention/expiry never advance successful-seen timestamps, and auth/unavailability bypasses it. Success/expiry clears recovery. Prompt success cannot regress to aborted; labels persist while red emphasis decays.
 
-V1 batches root revisions in one recursive SQLite query without payload parsing. V2 hints use a five-second cooldown; disconnect forces resync, with bounded adaptive safety resync otherwise. Native active-session/tool state proves liveness. Quota refresh is independent of source activity: normally once per minute, with bounded resume retries. Local quota projection may refresh without another provider request.
+V1 batches root revisions in one recursive SQLite query without payload parsing. V2 hints use a five-second cooldown; disconnect forces resync, which re-reads every hydrated root plus changed revisions. Native active-session/tool state proves liveness. Startup discovery covers 20 roots independent of the row cap (default 14), skipping roots whose stable cached analysis (never running work) has nothing since Watch start; a session Watch always hydrates its root. Quota refresh is independent of source activity: normally once per minute, with bounded resume retries. Local quota projection may refresh without another provider request.
 
 Source recovery retains the last projection and retries only the selected source every 5s (no reselection, subprocess or account refresh); V2 resumes with a fresh snapshot/event pump and rereads rewritten registration. Schema errors are terminal; unreadable data is bounded. Only `WatchedSessionEnded` intentionally ends an existing scoped Watch; unexpected errors reach bootstrap non-zero. Ctrl+C is intentional, including initialization.
 
@@ -165,8 +169,6 @@ Presentation renders projections/progress, never integration queries or analysis
 CLI retains v77 report/Watch argument shapes. Public `windows/|macos/` hold everyday launchers; Diagnostics lives under `development/windows|macos/`. Windows `.cmd` files hand off with `start /b` then exit; `src/windows_launcher.ps1` restores inherited Ctrl+C handling, detects Python 3.11+ and runs the relative entry point. `-NoExit` leaves one usable shell after completion/failure/Ctrl+C, never an Enter-to-close or batch confirmation.
 
 ## Dependency direction
-
-Allowed high-level direction:
 
 ```text
 bootstrap
@@ -183,13 +185,12 @@ domain
   -> Python standard library only
 ```
 
-The release validator enforces the most important forbidden import directions. Architecture changes that require new directions must update this document and validator together, not bypass the check.
-
+The validator resolves absolute/relative/nested layer imports, rejects runtime→development/fixture→tests edges and V2 process/SQLite use. `code_inventory.py` owns AST resolution/metrics; `structure_guard.py` gates `structure-policy.json`: bounded routines, explained legacy debt, no new test coupling/stale exemptions, explicit module responsibilities. Never auto-rebaseline/grow limits for a feature. [CODE_MAP.md](CODE_MAP.md) owns navigation, not runtime logic; new directions/limits require architectural decisions and matching tests.
 
 ## Software-failure boundaries
 
-`cost-guard.py` and Diagnostics guard application imports with stdlib-only `src/runtime_errors.py` (no application layers except version metadata). It owns error-only logs/crash reports, deduplication, 30-day retention, hooks, emergency stderr and the Diagnostics-launcher hint. Unexpected faults default fatal; only isolated worker/provider owners may log and expose ERROR while continuing. [Failure policy, root inventory and exception audit](runtime-failures.md) is the detailed boundary contract; future roots require explicit ownership and regression tests.
+`cost-guard.py` and Diagnostics guard imports with stdlib-only `src/runtime_errors.py` (only version metadata may cross in). It owns logs/crashes, deduplication/30-day retention, hooks, emergency stderr and the Diagnostics hint. Faults default fatal; isolated owners may expose ERROR and continue. [Failure policy/root audit](runtime-failures.md) owns details; new roots need explicit ownership/tests.
 
 ## Diagnostics boundary
 
-`development/tools/collect_diagnostics.py` composes public runtime boundaries for metadata/statistics-only troubleshooting. Locally it runs Full + package validation with progress; failures never suppress the ZIP. Quick is separate. IDs are hashed; prompts/titles/raw payloads/auth are excluded. Sibling `diagnostic_*` modules own logs/ZIP, metadata and the result screen; `diagnostics/` is runtime output.
+`development/tools/collect_diagnostics.py` composes public runtime boundaries for metadata/statistics-only troubleshooting. Locally it runs Full + package validation with progress; failures never suppress the ZIP. IDs are hashed; prompts/titles/raw payloads/auth are excluded. Siblings own logs/ZIP, metadata, the result screen and `diagnostic_watch.py` (numbers-only headless Watch timings/hydration/render geometry, terminal facts); `diagnostics/` is runtime output.

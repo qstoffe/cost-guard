@@ -4,8 +4,8 @@ import io
 import unittest
 from dataclasses import replace
 
-from development.tests.test_analysis_core import make_snapshot
-from development.tests.test_step6_context_comparisons import catalog as sample_catalog
+from development.fixtures.session_snapshots import make_snapshot
+from development.fixtures.pricing_catalog import catalog as sample_catalog
 from src.analysis import analyze_snapshot
 from src.presentation import WatchRenderer
 from src.reports.prompts import build_prompt_block

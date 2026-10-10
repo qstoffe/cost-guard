@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import sys
 import textwrap
@@ -22,6 +23,20 @@ _CONSOLE_BG = {name: code + 10 if code < 90 else code + 10 for name, code in _CO
 for _name, _fg in list(_CONSOLE_FG.items()):
     if 90 <= _fg <= 97:
         _CONSOLE_BG[_name] = _fg + 10
+
+
+_ESCAPES = re.compile(r"(?:\x1b\[|\x9b)[0-?]*[ -/]*[@-~]|\x1b[\]P^_X][^\x07\x1b]*(?:\x07|\x1b\\)?|\x1b[@-Z\\-_]")
+
+
+def single_line(value: object, fallback: str = "") -> str:
+    """Keep external text (titles, prompt previews) in one cell, never arbitrary terminal lines.
+
+    Remove CSI/OSC/DCS terminal escapes, fold line breaks and other control
+    characters into single spaces and drop a leading Markdown heading marker.
+    """
+    without_escapes = _ESCAPES.sub("", str(value if value is not None else ""))
+    one_line = " ".join("".join(char if char.isprintable() else " " for char in without_escapes).split())
+    return re.sub(r"^#{1,6}(?:\s+|$)", "", one_line) or fallback
 
 
 def visible_len(value: str) -> int:

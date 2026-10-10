@@ -9,11 +9,11 @@ from dataclasses import replace
 from decimal import Decimal
 from urllib.parse import parse_qs, urlsplit
 
-from development.tests.test_analysis_core import MODEL, make_snapshot, message, part, prov
+from development.fixtures.session_snapshots import MODEL, make_snapshot, message, part, prov
 from development.tests.test_context_warning_presentation import prompt, report_projection, watch_projection
-from development.tests.test_opencode_v2 import source_with_current_service
-from development.tests.test_step6_context_comparisons import catalog as sample_catalog
-from development.tests.test_step8_watch import MutableSource, make_service
+from development.fixtures.opencode_v2_service import source_with_current_service
+from development.fixtures.pricing_catalog import catalog as sample_catalog
+from development.fixtures.watch_runtime import MutableSource, make_service
 from development.tests.test_v786_regressions import _threshold_catalog
 from src.analysis import analyze_snapshot
 from src.analysis.context import PriceWarningSeverity, watch_context_state
@@ -260,7 +260,7 @@ class NextIctxLabelTests(unittest.TestCase):
                        watch_next_context_cached_ccost=Decimal("0.3"), watch_next_context_fresh_ccost=Decimal("3"))
         stream = io.StringIO()
         WatchRenderer({"timezone": "UTC"}, stream=stream, interactive=False).render(watch_projection(item))
-        self.assertIn("*1 Next Ictx: Approaching price threshold >272.0K (Next Ictx CCost 0.3–3)", stream.getvalue())
+        self.assertIn("*1 Context: Approaching price threshold >272.0K (Next Ictx CCost 0.3–3)", stream.getvalue())
         projection = report_projection(item)
         block = replace(projection.prompt_blocks[0], next_context_cached_ccost=Decimal("0.3"),
                         next_context_fresh_ccost=Decimal("3"))

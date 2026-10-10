@@ -13,13 +13,14 @@ from types import SimpleNamespace
 from development.fixtures.synthetic_month import SyntheticMonthSource, make_root_snapshot
 from development.tests import test_compact_reports as compact
 from development.tests.test_step6_pricing_accounts import pricing_markdown
-from development.tests.test_step8_watch import MutableSource, make_service
+from development.fixtures.watch_runtime import MutableSource, make_service
 from src.analysis.comparisons import model_comparison_rows
 from src.config import load_configuration
 from src.presentation import ReportRenderer, WatchRenderer
 from src.pricing.catalog import PricingCatalog
 from src.pricing.github_copilot import _annotate_promotions, _preserve_known_promotions, parse_pricing_markdown
 from src.pricing.promotions import model_promotion, WEEK_MS
+from src.reports.sampling import latest_prompts, latest_token_prompts
 from src.reports import ReportKind, ReportProjection, ReportRequest
 from src.reports.models import ModelComparisonProjection
 from src.reports.semantics import active_promotion_notes, model_is_recent, recent_model_notice
@@ -67,8 +68,8 @@ class PricingPresentationTests(unittest.TestCase):
             replace(record, prompt_id="aborted", aborted=True)))
         rows, sample, *_ = service._model_comparison((root,), all_models=True)
         self.assertEqual(1, sample)
-        self.assertEqual(4, len(service._latest_token_prompts((root,))))
-        expected = model_comparison_rows(service._latest_prompts((root,)), service._load_catalog())
+        self.assertEqual(4, len(latest_token_prompts((root,))))
+        expected = model_comparison_rows(latest_prompts((root,)), service._load_catalog())
         self.assertEqual([r.relative_to_lowest for r in expected], [r.relative_cost for r in rows])
 
     def test_marker_regions_and_numeric_alignment_do_not_pollute_prices(self):

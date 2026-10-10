@@ -8,10 +8,10 @@ from types import SimpleNamespace
 from unittest import mock
 
 from development.fixtures.synthetic_month import SyntheticMonthSource
-from development.tests.test_analysis_core import make_snapshot
+from development.fixtures.session_snapshots import make_snapshot
 from development.tests.test_compact_reports import NOW, START, Availability, rendered
-from development.tests.test_step7_reports_cli import FakePricingProvider
-from development.tests.test_step8_watch import MutableSource, make_service as make_watch_service
+from development.fixtures.report_runtime import FakePricingProvider
+from development.fixtures.watch_runtime import MutableSource, make_service as make_watch_service
 from src.cache import CacheDatabase, CacheRepository
 from src.config import load_configuration
 from src.domain import IntegrationHealth, NormalizedSession, Provenance, SessionCapabilities

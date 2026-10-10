@@ -8,11 +8,12 @@ import unittest
 from unittest.mock import patch
 
 from development.fixtures.synthetic_month import SyntheticMonthSource
-from development.tests.test_analysis_core import make_snapshot
+from development.fixtures.session_snapshots import make_snapshot
+from src.reports.sampling import latest_token_prompts
 from development.tests import test_compact_reports as compact_fixtures
 from development.tests.test_compact_reports import START, rendered
 from development.tests.test_quota_presentation import quotas, rolling
-from development.tests.test_step8_watch import MutableSource, make_service
+from development.fixtures.watch_runtime import MutableSource, make_service
 from src.analysis import analyze_snapshot
 from src.analysis.cache import AnalysisDependencies, _bundle_from_dict, _bundle_to_dict
 from src.analysis.token_mix import token_mix
@@ -24,7 +25,7 @@ from src.presentation.terminal import AnsiStyler
 from src.presentation.token_mix import token_mix_line
 from src.reports import ReportKind, ReportProjection, ReportRequest, ReportService
 from src.sources.opencode_v1 import _token_usage as v1_usage
-from src.sources.opencode_v2 import _token_usage as v2_usage
+from src.sources.opencode_v2_normalization import normalize_token_usage as v2_usage
 from src.watch import WatchCoordinator
 from src.watch.models import WatchProjection
 from src.watch.token_mix import WatchTokenMix
@@ -218,7 +219,7 @@ class ReportTokenMixTests(unittest.TestCase):
         source = SyntheticMonthSource(12, 20, month_start_ms=START)
         service = self.service(source)
         report = service.build(ReportRequest())
-        prompts = service._latest_token_prompts(tuple(service._analyzed.values()))
+        prompts = latest_token_prompts(tuple(service._analyzed.values()))
         self.assertEqual(100, report.token_mix.sample_size)
         self.assertEqual({f"root-{n:04d}" for n in range(7, 12)}, {p.session_id for p in prompts})
         self.assertEqual(5, source.load_count)
@@ -238,7 +239,7 @@ class ReportTokenMixTests(unittest.TestCase):
             replace(record, prompt_id="zero", entries=(replace(record.entries[0], tokens=TokenUsage()),)),
             replace(record, prompt_id="partial", entries=(replace(record.entries[0], tokens=TokenUsage(input=10, known_fields=("input",))),)),
         ))
-        selected = ReportService._latest_token_prompts((root,))
+        selected = latest_token_prompts((root,))
         self.assertEqual({"running", "aborted", "zero", "partial"}, {p.prompt_id for p in selected})
 
     def test_touched_old_root_does_not_hide_newer_usage_and_ignores_wall_clock(self):
@@ -248,7 +249,7 @@ class ReportTokenMixTests(unittest.TestCase):
         source.snapshots[root.session_id] = replace(old, root=root, sessions=(root,))
         service = self.service(source)
         before = service.build(ReportRequest()).token_mix
-        prompts = service._latest_token_prompts(tuple(service._analyzed.values()))
+        prompts = latest_token_prompts(tuple(service._analyzed.values()))
         self.assertEqual({f"root-{n:04d}" for n in range(7, 12)}, {p.session_id for p in prompts})
         self.assertEqual(6, source.load_count)
         service.set_now_ms(START + 365 * 86_400_000)

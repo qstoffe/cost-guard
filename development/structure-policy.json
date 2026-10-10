@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "limits": {"functionStatements": 55, "functionBranches": 15},
+  "routineExceptions": {
+    "src/accounts/minimax.py::_window": {"statements": 60, "branches": 18, "reason": "Native window/reset/unit normalization; preserve provider evidence before splitting."},
+    "src/analysis/causal.py::build_prompt_record": {"statements": 80, "branches": 13, "reason": "Terminal/synthetic/child attribution and billing share one attempt; differential fixtures required."},
+    "src/analysis/compaction.py::completed_compactions": {"statements": 63, "branches": 11, "reason": "Native/transitional compaction completion, context and billing must stay aligned."},
+    "src/bootstrap.py::main": {"statements": 102, "branches": 22, "reason": "Guarded startup, source wake, report/Watch exits and worker cleanup share process ownership."},
+    "src/cli.py::parse_command": {"statements": 38, "branches": 16, "reason": "Protected legacy argument-shape matrix; isolate mode parsing only with parity tests."},
+    "src/config.py::validate_configuration": {"statements": 102, "branches": 32, "reason": "Null overrides and secret-safe validation must precede every integration/cache operation."},
+    "src/presentation/accounts.py::quota_parts": {"statements": 50, "branches": 20, "reason": "Provider-neutral capacity/bar/reset layout across compact and verbose renderers."},
+    "src/presentation/report.py::ReportRenderer._render_prompt_block": {"statements": 90, "branches": 19, "reason": "Prompt timeline, main/subagent rows, totals, warning colors and table geometry are contractual."},
+    "src/pricing/github_copilot.py::parse_pricing_markdown": {"statements": 60, "branches": 11, "reason": "Published rate/tier/promotion provenance and malformed-row handling need parser fixtures."},
+    "src/sources/opencode_v2_wire.py::current_union_message_to_legacy_bundle": {"statements": 70, "branches": 29, "reason": "Current-service union variants must normalize without changing persisted lifecycle evidence."},
+    "src/watch/accounts.py::reconcile_accounts": {"statements": 52, "branches": 17, "reason": "Partial/pending provider retention and successful-seen timestamps are distinct evidence."}
+  },
+  "legacyTestImports": {
+    "test_account_status_layout.py": {"reason": "Quota rendering/calendar fixtures remain in quota-presentation tests.", "targets": ["test_quota_presentation.py"]},
+    "test_claude_code_accounts.py": {"reason": "Normalized account/provider fixture remains in account tests.", "targets": ["test_accounts_ccost.py"]},
+    "test_compact_reports.py": {"reason": "Quota rendering/calendar fixtures remain in quota-presentation tests.", "targets": ["test_quota_presentation.py"]},
+    "test_context_warning_presentation.py": {"reason": "Tier-threshold catalog fixture remains in historical regression tests.", "targets": ["test_v786_regressions.py"]},
+    "test_model_comparison_tiers.py": {"reason": "Compact-report service factory and availability/rendering fixtures remain in report tests.", "targets": ["test_compact_reports.py"]},
+    "test_model_pricing_presentation.py": {"reason": "Compact-report and pricing response fixtures await separate owners.", "targets": ["test_compact_reports.py", "test_step6_pricing_accounts.py"]},
+    "test_quota_presentation.py": {"reason": "Normalized account and minimal config-package builders await fixture owners.", "targets": ["test_accounts_ccost.py", "test_config.py"]},
+    "test_report_definitions.py": {"reason": "Compact-report and quota rendering fixtures await separate owners.", "targets": ["test_compact_reports.py", "test_quota_presentation.py"]},
+    "test_report_polish.py": {"reason": "Quota rendering/calendar fixtures remain in quota-presentation tests.", "targets": ["test_quota_presentation.py"]},
+    "test_runtime_errors.py": {"reason": "Synthetic lifecycle/recovery source subclasses remain in their regression modules.", "targets": ["test_watch_lifecycle.py", "test_watch_source_recovery.py"]},
+    "test_session_move.py": {"reason": "Warning/tier fixture owners remain to be extracted.", "targets": ["test_context_warning_presentation.py", "test_v786_regressions.py"]},
+    "test_source_selection.py": {"reason": "Compact-report service factory and availability/rendering fixtures remain in report tests.", "targets": ["test_compact_reports.py"]},
+    "test_threshold_multiplier.py": {"reason": "Moved-context and tier-threshold fixtures remain in historical tests.", "targets": ["test_session_move.py", "test_v786_regressions.py"]},
+    "test_token_mix.py": {"reason": "Compact-report and quota rendering fixtures await separate owners.", "targets": ["test_compact_reports.py", "test_quota_presentation.py"]},
+    "test_token_mix_economics.py": {"reason": "Compact-report and single-request observation fixtures await separate owners.", "targets": ["test_compact_reports.py", "test_token_mix.py"]},
+    "test_v2_synthetic_attribution.py": {"reason": "Request-effort fixture remains in effort-presentation tests.", "targets": ["test_effort_presentation.py"]},
+    "test_v784_regressions.py": {"reason": "Historical provider/source regression subclasses retain their behavioral fixture owner.", "targets": ["test_v783_regressions.py"]},
+    "test_watch_lifecycle.py": {"reason": "Flaky synthetic source fixture remains in source-recovery tests.", "targets": ["test_watch_source_recovery.py"]},
+    "test_watch_observation_diagnostics.py": {"reason": "Moved-context fixture remains in session-move tests.", "targets": ["test_session_move.py"]},
+    "test_watch_rendering.py": {"reason": "Prompt/warning projection fixtures remain in warning tests.", "targets": ["test_context_warning_presentation.py"]},
+    "test_watch_subtotals.py": {"reason": "Moved-context, single-request and grouped-row fixtures await separate owners.", "targets": ["test_session_move.py", "test_token_mix.py", "test_watch_grouping.py"]},
+    "test_watch_tool_activity.py": {"reason": "Tall dashboard rendering fixture remains in Watch rendering tests.", "targets": ["test_watch_rendering.py"]},
+    "test_zero_data_robustness.py": {"reason": "Compact-report service factory and availability/rendering fixtures remain in report tests.", "targets": ["test_compact_reports.py"]}
+  }
+}

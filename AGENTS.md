@@ -4,8 +4,8 @@ This repository tree is designed to be maintainable by a fresh AI coding session
 
 ## Choose the workflow from the user's request
 
-- **Implement, fix, refactor or explicitly package:** read `development/MAINTAINER.md` first. Read `development/ARCHITECTURE.md` when boundaries are affected, then the relevant code/tests. Make the change directly in this authoritative tree.
-- **Brainstorm, design or create a Feature Request:** read `development/FR_GUIDE.md`. Do not modify production code unless the user explicitly transitions to implementation; packaging requires its own explicit request.
+- **Implement, fix, refactor or package:** read `development/MAINTAINER.md` first. Read `development/ARCHITECTURE.md` when boundaries are affected; use `development/CODE_MAP.md` to locate the relevant owners/tests. Make the change directly in this authoritative tree. Verification and packaging depend on where you run (below).
+- **Brainstorm, design or create a Feature Request:** read `development/FR_GUIDE.md`. Do not modify production code unless the user explicitly transitions to implementation; brainstorming never builds a ZIP.
 - **Understand the package:** start with `README.md`, then `development/README.md` and `development/ARCHITECTURE.md` as needed.
 
 ## Non-negotiable maintenance rules
@@ -13,39 +13,40 @@ This repository tree is designed to be maintainable by a fresh AI coding session
 - Preserve existing behavior outside the requested change; v77 semantics remain the historical behavioral reference where v78 has not intentionally changed them.
 - Keep responsibilities inside the architecture boundaries. Do not create generic `helpers.py`/`utils.py` dumping grounds or meaningless split files.
 - Respect `development/file-budgets.json`; do not raise hard caps just to make validation pass. Prefer deletion, consolidation or a responsibility-based split over append-only growth.
+- Feature placement and focused tests are in `development/CODE_MAP.md`. `development/structure-policy.json` gates routine growth and test coupling: do not auto-rebaseline, grow legacy exceptions or introduce test-to-test fixtures to make a feature pass. Refactor the owner; retire resolved debt entries.
 - Add or strengthen deterministic regression tests for bug fixes and important behavior changes.
 - Never package secrets, credentials, `config/user-config.jsonc`, runtime `cache/`, runtime `diagnostics/`, `.git/`, Python bytecode, historical checkpoint artifacts or generated release debris.
 - Do not commit or push automatically.
 - Current `main` is the recommended/latest supported distribution during rapid development. Packaged GitHub Releases are currently paused; changing that policy requires an explicit decision, never a version-number trigger.
-- Product versions continue independently of Git tags, GitHub Releases and ZIPs. Do not build a release ZIP merely because the Cost Guard product version changed.
+- Product versions continue independently of Git tags and GitHub Releases. A local ZIP follows the environment rule below, never a version number alone.
 
-## Normal verification
+## Verification and packaging by environment
 
-Use the verification tier that matches the execution environment. In hosted/constrained AI sandboxes, keep the gate bounded:
+Decide first where you run. If you cannot establish that you run on the user's own workstation, treat the environment as hosted.
+
+**Hosted/web AI** (for example ChatGPT or Claude Code on the web, or any cloud sandbox that only has the GitHub repository): run only the light, fast gate and never build a ZIP, even when the product version changes:
 
 ```text
 python development/tools/run_tests.py --suite quick
 python development/tools/validate_package.py --working-tree
 ```
 
-Quick runs each test file in an isolated process with a hard timeout and concurrent workers. Do not compensate for a constrained harness by running an unbounded monolithic suite. On an unrestricted local machine (human or local coding agent), run `python development/tools/run_tests.py --suite full` or preferably the normal Diagnostics launcher; Diagnostics runs the full tier plus package validation and records the result in its bundle. A final release-candidate graduation requires a successful full/local validation, even when an RC ZIP was built in a constrained environment.
+Quick runs each test file in an isolated process with a hard timeout and concurrent workers. Do not start Full, Diagnostics or the release builder there, and do not compensate for a constrained harness with an unbounded monolithic suite.
 
-When the coding agent runs on the user's workstation, it must run the relevant live integration/Diagnostics checks itself, not ask the user to run them or assume it is a hosted sandbox. Deterministic fixtures alone do not prove a workstation-specific fix. Keep live checks read-only/privacy-safe and never stop the shared OpenCode service serving the session.
-
-Normal implementation/version handoff verifies the authoritative working tree with tests and `--working-tree` validation; leave packaging untouched. Release-builder regression tests may create disposable fixtures only in isolated test directories, not a checkout deliverable.
-
-## Explicit packaging only
-
-Run `development/tools/build_release.py` only when the user explicitly requests a packaged ZIP, release candidate, GitHub/package release or package handoff requiring a distributable archive:
+**Local workstation agent or human** (for example OpenCode on the user's computer): always run every test and investigate failures, then run the relevant read-only live checks yourself (Diagnostics or headless report/Watch probes against the real installation); never ask the user to run them and never stop the shared OpenCode service serving the session. Deterministic fixtures alone do not prove a workstation-specific fix. Every completed local feature, fix or version then builds a new ZIP:
 
 ```text
-python development/tools/build_release.py
+python development/tools/run_tests.py --suite full
+python development/tools/validate_package.py --working-tree
+python development/tools/build_release.py --full-verification
 ```
 
-For explicitly requested packaging in a command-time-limited harness, run Quick first and build with `--quick-already-run`; use that flag only before any further source edit. The builder still runs Quick from the clean extraction.
+Local work also owns the deeper upkeep hosted models cannot do: performance, robustness, Diagnostics relevance, structure ratchets and tidy, AI-maintainable code. Both environments hand off the verified authoritative working tree; brainstorm/FR sessions build nothing.
 
-The default artifact is `releases/cost-guard-vMAJOR.MINOR.zip`. The `releases/` directory is local/generated, git-ignored and excluded from the archive itself. If the user explicitly asks for a release candidate, use `--output releases/cost-guard-vMAJOR.MINOR-release-candidate-N.zip` without changing the product version merely for the RC number.
+## Packaging details
 
-A package handoff should report the artifact path, SHA-256 and verification that actually ran. Historical/checkpoint ZIPs supplied for context are external reference material only and must never be nested into a new release.
+The builder gates its own source tests and validation, then repeats them from a clean extraction. The default artifact is `releases/cost-guard-vMAJOR.MINOR.zip`; a rebuild of the same product version replaces it. The `releases/` directory is local/generated, git-ignored and excluded from the archive itself. If the user explicitly asks for a release candidate, use `--output releases/cost-guard-vMAJOR.MINOR-release-candidate-N.zip` without changing the product version merely for the RC number. When local commands are time-limited, run the builder as a background command rather than weakening its tier.
 
-Keep generated ZIPs only when explicitly built/requested; do not add automatic cleanup machinery. Remote GitHub Release deletion/publication is a separate explicitly authorized operation, never local cleanup. Preserve the historical v80.0 tag unless its deletion is explicitly requested.
+A package handoff reports the artifact path, SHA-256 and verification that actually ran. Release-builder regression tests create disposable archives only in isolated test directories, never a checkout deliverable. Historical/checkpoint ZIPs supplied for context are external reference material only and must never be nested into a new release.
+
+Do not add automatic cleanup machinery for generated ZIPs. Remote GitHub Release deletion/publication is a separate explicitly authorized operation, never local cleanup. Preserve the historical v80.0 tag unless its deletion is explicitly requested.

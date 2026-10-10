@@ -13,7 +13,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from development.tests.test_analysis_core import make_snapshot
+from development.fixtures.session_snapshots import make_snapshot
 from src import bootstrap
 from src.analysis import analyze_snapshot
 from src.analysis.cache import AnalysisDependencies, DerivedAnalysisCache

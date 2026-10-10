@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-from development.tests.test_step8_watch import MutableSource, make_service
+from development.fixtures.watch_runtime import MutableSource, make_service
 from development.tests.test_watch_source_recovery import Recorder
 from src import bootstrap
 from src.sources.errors import SourceDataError, SourceSchemaError

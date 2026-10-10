@@ -208,6 +208,22 @@ class DerivedAnalysisCache:
         )
 
 
+def cached_analysis(
+    source: AnalysisSessionSource,
+    root_session: NormalizedSession,
+    cache: DerivedAnalysisCache,
+    dependencies: AnalysisDependencies,
+) -> tuple[str, RootAnalysisBundle | None]:
+    """Current tree revision plus its stable cached analysis, never hydrating."""
+    revision = source.get_session_tree_revision(root_session.session_id)
+    return revision, cache.load(
+        provenance=root_session.provenance,
+        root_session_id=root_session.session_id,
+        source_revision=revision,
+        dependencies=dependencies,
+    )
+
+
 def analyze_with_cache(
     source: AnalysisSessionSource,
     root_session: NormalizedSession,
@@ -222,13 +238,7 @@ def analyze_with_cache(
     become durable cache hits.
     """
     root_session_id = root_session.session_id
-    revision = source.get_session_tree_revision(root_session_id)
-    cached = cache.load(
-        provenance=root_session.provenance,
-        root_session_id=root_session_id,
-        source_revision=revision,
-        dependencies=dependencies,
-    )
+    revision, cached = cached_analysis(source, root_session, cache, dependencies)
     if cached is not None:
         return CachedAnalysisResult(cached, True, None)
 

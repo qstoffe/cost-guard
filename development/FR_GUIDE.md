@@ -29,7 +29,7 @@ A non-trivial implementation-ready FR should state:
 6. bounded implementation guidance by responsibility (ordering only when essential to correctness);
 7. focused verification expectations;
 8. final acceptance criteria;
-9. documentation/product-version impact, and packaging impact only if explicitly requested, without assigning an upcoming product version.
+9. documentation/product-version impact, without assigning an upcoming product version (packaging follows the implementing environment's rule).
 
 Prefer deletion/generalization and ownership correction over another special case. File-budget increases are architectural decisions, not ordinary feature work.
 
@@ -39,4 +39,4 @@ FRs belong to a backlog: never assume one will be implemented next, assign it an
 
 Make each FR self-contained enough that a fresh implementation session needs no brainstorming conversation. State behavior, invariants, ownership, evidence, protected behavior and acceptance criteria. Point to existing authorities instead of duplicating them. Concrete modules may clarify ownership, but the implementation session must inspect the then-current package and decide exact edits. Avoid exact line numbers, brittle file-by-file rewrites and detailed step-by-step plans unless ordering is essential to correctness.
 
-Brainstorming remains non-implementing: do not modify production code unless the user explicitly transitions to implementation. Packaging requires a separate explicit request, never merely a product-version change. Present the finished copy-pasteable FR in one code block containing only the FR; explanatory comments belong outside it.
+Brainstorming remains non-implementing: do not modify production code unless the user explicitly transitions to implementation. Brainstorming never builds a ZIP; packaging belongs to the implementing session's environment rule in `MAINTAINER.md`. Present the finished copy-pasteable FR in one code block containing only the FR; explanatory comments belong outside it.

@@ -8,9 +8,9 @@ import io
 import tempfile
 import unittest
 
-from development.tests.test_analysis_core import MODEL, make_snapshot, message, prov
+from development.fixtures.session_snapshots import MODEL, make_snapshot, message, prov
 from development.tests.test_session_move import moved
-from development.tests.test_step8_watch import MutableSource, make_service
+from development.fixtures.watch_runtime import MutableSource, make_service
 from development.tests.test_token_mix import one_request
 from development.tests.test_watch_grouping import inputs, prompt
 from src.domain import MessageRole, ModelPricing, ModelRef, TokenUsage

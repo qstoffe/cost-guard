@@ -8,10 +8,10 @@ from decimal import Decimal
 from pathlib import Path
 
 from development.fixtures.synthetic_month import SyntheticMonthSource
-from development.tests.test_analysis_core import make_snapshot
-from development.tests.test_step6_context_comparisons import catalog as sample_catalog
-from development.tests.test_step7_reports_cli import FakePricingProvider, FakeSource
-from development.tests.test_step8_watch import MutableSource, make_service
+from development.fixtures.session_snapshots import make_snapshot
+from development.fixtures.pricing_catalog import catalog as sample_catalog
+from development.fixtures.report_runtime import FakePricingProvider, FakeSource
+from development.fixtures.watch_runtime import MutableSource, make_service
 from src.analysis.comparisons import compaction_model_timeline_name, watch_model_timeline_name
 from src.analysis.models import LocalUsageSummary
 from src.cache import CacheDatabase, CacheRepository
@@ -146,7 +146,7 @@ class Step9ParityTests(unittest.TestCase):
         header = next(line for line in text.splitlines() if "| *1 " in line)
         self.assertIn("*1", header)
         self.assertNotIn("Price threshold", header)
-        self.assertIn("*1 Price threshold >100k exceeded", text)
+        self.assertIn("*1 Context: Price threshold >100k exceeded", text)
 
     def test_watch_renders_recent_notice_warning_marker_and_resolved_effort(self):
         _, config = self._service()
@@ -169,7 +169,7 @@ class Step9ParityTests(unittest.TestCase):
         text = out.getvalue()
         self.assertIn("✦ New Models: GPT-5.6", text)
         self.assertIn("*1 Root session", text)
-        self.assertIn("*1 Next Ictx: price threshold approaching", text)
+        self.assertIn("*1 Context: price threshold approaching", text)
         self.assertIn("GPT-5.6 (Medium)", text)
         self.assertNotIn("Default -> Medium", text)
 

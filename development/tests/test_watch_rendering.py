@@ -7,7 +7,10 @@ import io
 import unittest
 
 from src.domain import AccountRef, AccountSnapshot, QuotaComponent
-from src.presentation import WatchRenderer
+from development.tests.test_context_warning_presentation import prompt, report_projection
+from src.analysis.context import PriceWarningSeverity
+from src.presentation import ReportRenderer, WatchRenderer
+from src.presentation.terminal import single_line
 from src.reports.models import AccountProjection, AccountsQuotasProjection, PromptProjection
 from src.watch.models import ToolObservation, WatchProjection, WatchRow, WatchSessionSubtotal
 
@@ -62,7 +65,7 @@ class WatchRenderingTests(unittest.TestCase):
         prompt = replace(base.rows[0].prompt, in_progress=True,
                          preview="Load shared-checkpoint", calls=1, ccost=Decimal("2"))
         row = replace(base.rows[0], session_title="\r\n## ❌ Checkpoint resume failed\n\x1b[31m",
-                      prompt=prompt)
+                      prompt=prompt, tool=None)
         projection = WatchProjection(
             "Watch", "V2", (row,), now_ms=2000,
             session_subtotals={"A": WatchSessionSubtotal(ccost=Decimal("2"))},
@@ -89,6 +92,25 @@ class WatchRenderingTests(unittest.TestCase):
         WatchRenderer({"colors": {}}, stream=stream, interactive=False).render(projection)
         self.assertIn("First line Second line", stream.getvalue())
         self.assertNotIn("First line\nSecond", stream.getvalue())
+
+    def test_single_line_strips_csi_osc_and_controls(self):
+        self.assertEqual("Title link done", single_line("\x1b]0;evil\x07Title\x1b]8;;http://x\x1b\\ link\x9b2J\n\x07done"))
+        self.assertEqual("fallback", single_line("#\r\n\x1b[31m", "fallback"))
+        self.assertEqual("#Tag kept", single_line("#Tag kept"))
+
+    def test_report_titles_and_previews_cannot_inject_terminal_rows(self):
+        item = replace(prompt(PriceWarningSeverity.NONE), preview="paste\x1b[2J\r\nnext line")
+        report = report_projection(item)
+        block = replace(report.prompt_blocks[0], title="## ❌ Checkpoint\r\nfailed\x1b]0;x\x07")
+        stream = io.StringIO()
+        ReportRenderer({"colors": {}}, stream=stream, color_enabled=False, terminal_width=160).render(
+            replace(report, prompt_blocks=(block,)))
+        rendered = stream.getvalue()
+        self.assertNotIn("\x1b", rendered)
+        self.assertNotIn("\r", rendered)
+        self.assertIn("| *1 ❌ Checkpoint failed ", rendered)
+        self.assertIn("| 01:00 #1 paste next line |", rendered)
+        self.assertFalse([line for line in rendered.splitlines() if line.startswith(("next line", "failed"))])
 
     def assert_full_frame(self, frame):
         self.assertTrue(frame.startswith(CLEAR))

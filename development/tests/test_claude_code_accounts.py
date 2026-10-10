@@ -32,8 +32,8 @@ def provider(result=None, login=None):
 class ClaudeAccountTests(unittest.TestCase):
     def test_report_watch_account_visibility_and_minute_cadence_with_other_providers(self):
         from development.tests.test_accounts_ccost import NormalizedProvider, account
-        from development.tests.test_analysis_core import make_snapshot
-        from development.tests.test_step8_watch import MutableSource, make_service
+        from development.fixtures.session_snapshots import make_snapshot
+        from development.fixtures.watch_runtime import MutableSource, make_service
         from src.presentation import ReportRenderer, WatchRenderer
         from src.reports import ReportRequest
         from src.watch import WatchCoordinator

@@ -214,9 +214,10 @@ class DiagnosticBundleTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             env = os.environ.copy()
             env["PYTHONDONTWRITEBYTECODE"] = "1"
+            env["PYTHONIOENCODING"] = "utf-8"  # independent of the outer console code page
             proc = subprocess.run(
                 [sys.executable, str(DIAG), "--no-network", "--snapshots", "0", "--skip-validation", "--output-dir", tmp],
-                cwd=ROOT, env=env, capture_output=True, text=True, timeout=30,
+                cwd=ROOT, env=env, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
             )
             self.assertEqual(0, proc.returncode, proc.stdout + proc.stderr)
             self.assertTrue(

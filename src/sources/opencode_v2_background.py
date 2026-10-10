@@ -11,7 +11,8 @@ from __future__ import annotations
 import hashlib
 import math
 import re
-from typing import Any, Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from typing import Any
 
 from src.domain import BackgroundActivity, TerminalOutcome
 

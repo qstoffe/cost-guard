@@ -276,7 +276,7 @@ class RuntimeErrorTests(unittest.TestCase):
         self.assertFalse(self.crashes())
 
     def test_optional_provider_unknown_failure_is_visible_not_missing(self):
-        from development.tests.test_step8_watch import MutableSource, make_service
+        from development.fixtures.watch_runtime import MutableSource, make_service
         _, _, service, _ = make_service(str(self.root), MutableSource())
         provider = Mock(provider_id="synthetic-provider")
         provider.probe.side_effect = TypeError("SECRET")
@@ -291,7 +291,7 @@ class RuntimeErrorTests(unittest.TestCase):
         self.assertIn("account-provider", self.logged())
 
     def test_provider_expected_timeout_auth_and_unavailability_do_not_log(self):
-        from development.tests.test_step8_watch import MutableSource, make_service
+        from development.fixtures.watch_runtime import MutableSource, make_service
         from src.domain import AccountRef, AccountSnapshot
         _, _, service, _ = make_service(str(self.root), MutableSource())
         provider = Mock(provider_id="synthetic-provider")
@@ -382,8 +382,11 @@ class RuntimeErrorTests(unittest.TestCase):
                 if isinstance(node, ast.Call) and ((isinstance(node.func, ast.Attribute) and node.func.attr == "Thread")
                         or (isinstance(node.func, ast.Name) and node.func.id == "Thread")):
                     roots.append(path.relative_to(ROOT).as_posix())
-        self.assertEqual(sorted(["src/accounts/acquisition.py", "src/accounts/claude_transport.py", "src/presentation/progress.py",
-                                 "src/watch/model_discovery.py", "src/watch/observers.py"]), sorted(roots))
+        # Reviewed in development/runtime-failures.md; claude_transport owns reader + bounded cleanup.
+        self.assertEqual(sorted(["src/accounts/acquisition.py", "src/accounts/claude_transport.py",
+                                 "src/accounts/claude_transport.py", "src/presentation/progress.py",
+                                 "src/reports/model_comparison.py", "src/watch/model_discovery.py",
+                                 "src/watch/observers.py"]), sorted(roots))
 
     def test_retention_30_days_only_owned_files_and_no_log_on_cleanup_failure(self):
         directory = self.root / "logs/errors"

@@ -6,7 +6,7 @@ import io
 import re
 import unittest
 
-from development.tests.test_analysis_core import make_snapshot, part
+from development.fixtures.session_snapshots import make_snapshot, part
 from development.tests.test_watch_rendering import tall_projection
 from src.presentation import WatchRenderer
 from src.presentation.watch_activity import FAILED_ROLE, status_segments, tool_summary_segments

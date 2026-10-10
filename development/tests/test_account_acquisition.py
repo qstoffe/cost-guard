@@ -14,7 +14,7 @@ import time
 import unittest
 from unittest.mock import patch
 
-from development.tests.test_step8_watch import MutableSource, make_service
+from development.fixtures.watch_runtime import MutableSource, make_service
 from src.accounts.acquisition import AccountAcquisition
 from src.accounts.discovery import AccountDiscovery
 from src.accounts.simple_http import SIMPLE_HTTP_PROVIDERS, SimpleHttpAccountProvider
@@ -383,21 +383,21 @@ class AcquisitionTests(unittest.TestCase):
             watch = WatchCoordinator(selection=selection, report_service=service, config=config,
                                      clock_ms=lambda: wall[0], monotonic=lambda: monotonic[0])
             watch.initialize()
-            good = watch._account_quotas[0]
+            good = watch.accounts.snapshots[0]
             bad = replace(good, availability="error", quotas=(), observations={"parser_reason": "network_failure"})
             other = Provider("other").get_account_snapshots()[0]
             service.poll_account_refresh = lambda: AccountUpdate((bad,), (bad.key,))
-            watch._quota_recovery_until = 60
-            watch._refresh_account_quota(now_ms=wall[0])
-            first_retry, index = watch._quota_retry_at, watch._quota_retry_index
+            watch.accounts.recovery_until = 60
+            watch.accounts.refresh(now_ms=wall[0])
+            first_retry, index = watch.accounts.retry_at, watch.accounts.retry_index
             wall[0] += 1000
             monotonic[0] += 1
             service.poll_account_refresh = lambda: AccountUpdate((bad, other), (other.key,))
             with patch.object(type(service), "accounts_pending", new_callable=PropertyMock, return_value=True):
-                watch._refresh_account_quota(now_ms=wall[0])
-            self.assertEqual(first_retry, watch._quota_retry_at)
-            self.assertEqual(index, watch._quota_retry_index)
-            self.assertEqual("stale", watch._account_quotas[0].availability)
+                watch.accounts.refresh(now_ms=wall[0])
+            self.assertEqual(first_retry, watch.accounts.retry_at)
+            self.assertEqual(index, watch.accounts.retry_index)
+            self.assertEqual("stale", watch.accounts.snapshots[0].availability)
             watch.close()
 
     def test_watch_close_after_first_render_and_no_refresh_after_exit(self):

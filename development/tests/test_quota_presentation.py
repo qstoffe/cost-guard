@@ -12,10 +12,10 @@ import tempfile
 import unittest
 
 from development.tests.test_accounts_ccost import account
-from development.tests.test_analysis_core import make_snapshot
+from development.fixtures.session_snapshots import make_snapshot
 from development.tests.test_config import make_package
-from development.tests.test_step7_reports_cli import FakePricingProvider
-from development.tests.test_step8_watch import MutableSource, make_service
+from development.fixtures.report_runtime import FakePricingProvider
+from development.fixtures.watch_runtime import MutableSource, make_service
 from development.tools.collect_diagnostics import _projection_summary
 from src.analysis.causal import trace_entries
 from src.analysis.models import LocalUsageSummary

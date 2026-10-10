@@ -11,8 +11,8 @@ import sys
 import tempfile
 import unittest
 
-from development.tests.test_opencode_v2 import source_with_current_service
-from development.tests.test_step8_watch import make_service
+from development.fixtures.opencode_v2_service import source_with_current_service
+from development.fixtures.watch_runtime import make_service
 from src.analysis.causal import build_prompt_records
 from src.analysis.core import analyze_snapshot
 from src.domain import EventKind, MessageRole, TerminalOutcome

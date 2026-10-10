@@ -10,9 +10,9 @@ from dataclasses import replace
 from pathlib import Path
 from unittest import mock
 
-from development.tests.test_analysis_core import make_snapshot
-from development.tests.test_opencode_v2 import FakeV2Service, fixture, source_with_service
-from development.tests.test_step8_watch import CountingAccountProvider, FakeLiveSource, MutableSource, make_service
+from development.fixtures.session_snapshots import make_snapshot
+from development.fixtures.opencode_v2_service import FakeV2Service, fixture, source_with_service
+from development.fixtures.watch_runtime import CountingAccountProvider, FakeLiveSource, MutableSource, make_service
 from src.presentation import WatchRenderer
 from src.sources.errors import SourceDataError, SourceError, SourceSchemaError, SourceUnavailableError
 from src.sources.selection import MigrationGapDiagnostic, MigrationGapSession
@@ -118,7 +118,7 @@ class WatchSourceRecoveryTests(unittest.TestCase):
             self.assertEqual([SOURCE_RETRY_SECONDS] * 3, sleeps, "bounded cadence, no busy loop")
             self.assertEqual([account_calls] * 3, calls_during, "source retries never query account providers")
             self.assertEqual(account_calls + 1, account.calls, "only the normal minute cadence refreshes after recovery")
-            self.assertIsNone(watch._quota_recovery_until, "an observed outage is not a suspend/resume gap")
+            self.assertIsNone(watch.accounts.recovery_until, "an observed outage is not a suspend/resume gap")
             self.assertTrue(cycle.recovered and cycle.resynced)
             self.assertEqual([1], pumps, "the event pump restarts after the authoritative snapshot")
             self.assertGreater(source.load_count, loads)

@@ -7,7 +7,7 @@ from dataclasses import replace
 from decimal import Decimal
 from pathlib import Path
 
-from development.tests.test_analysis_core import make_snapshot
+from development.fixtures.session_snapshots import make_snapshot
 from development.tests.test_v786_regressions import _threshold_catalog
 from src.analysis.context import PriceWarningSeverity, next_context_warning_state
 from src.analysis.core import analyze_snapshot
@@ -89,7 +89,7 @@ class ContextWarningPresentationTests(unittest.TestCase):
         styler = self.styles()
         for severity in (PriceWarningSeverity.APPROACHING, PriceWarningSeverity.EXCEEDED):
             text = self.watch(watch_projection(prompt(severity)))
-            line = next(line for line in text.splitlines() if "*1" in line and "Next Ictx:" in line)
+            line = next(line for line in text.splitlines() if "*1" in line and "Context:" in line)
             plain = ANSI.sub("", line)
             expected = (styler.apply(plain, "nextIctxWarning") if severity == PriceWarningSeverity.EXCEEDED
                         else styler.apply("*1", "nextIctxWarning") + plain[2:])
@@ -116,6 +116,17 @@ class ContextWarningPresentationTests(unittest.TestCase):
         self.assertNotIn("Next Ictx:", text)
         self.assertNotIn("Localized economic warning", text)
 
+    def test_price_warning_uses_context_label_but_next_input_indicator_is_unchanged(self):
+        item = prompt(PriceWarningSeverity.EXCEEDED, "[Price threshold >200.0K exceeded]")
+
+        watch = self.watch(watch_projection(item), colored=False)
+        report = self.report(report_projection(item), colored=False)
+
+        self.assertIn("Context: Price threshold >200.0K exceeded", watch)
+        self.assertIn("Context: Price threshold >200.0K exceeded", report)
+        self.assertNotIn("Next Ictx: Price threshold", watch + report)
+        self.assertIn("Next Ictx: ~", report)
+
     def test_report_marker_only_vs_full_explanation_including_wrapping(self):
         styler = self.styles()
         for severity in (PriceWarningSeverity.APPROACHING, PriceWarningSeverity.EXCEEDED):
@@ -123,7 +134,7 @@ class ContextWarningPresentationTests(unittest.TestCase):
             text = self.report(report_projection(prompt(severity, message)), width=80)
             lines = text.splitlines()
             index = next(i for i, line in enumerate(lines) if "*1" in line and "Localized" in line)
-            wrapped = warning_explanation_lines("*1", message, severity, styler, width=80)
+            wrapped = warning_explanation_lines("*1", f"Context: {message}", severity, styler, width=80)
             self.assertEqual(wrapped, lines[index:index + len(wrapped)])
             self.assertGreater(len(wrapped), 1)
             if severity == PriceWarningSeverity.APPROACHING:

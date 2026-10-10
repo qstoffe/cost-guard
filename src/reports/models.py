@@ -76,6 +76,9 @@ class PromptProjection:
     completed_successfully: bool = False
     next_context_warning_severity: PriceWarningSeverity = PriceWarningSeverity.NONE
     watch_next_context_warning_severity: PriceWarningSeverity = PriceWarningSeverity.NONE
+    # Relative CCost after/before the warned price threshold (model-table ratio).
+    next_context_cost_multiplier: Decimal | None = None
+    watch_next_context_cost_multiplier: Decimal | None = None
     # Outstanding background work of a running prompt; never usage or cost.
     background_kinds: tuple[str, ...] = ()
     background_started_ms: int = 0
@@ -110,6 +113,7 @@ class SessionPromptBlock:
     comparison_cost_complete: bool = True
     billed_cost: Decimal | None = None
     next_context_warning_severity: PriceWarningSeverity = PriceWarningSeverity.NONE
+    next_context_cost_multiplier: Decimal | None = None
 
 
 @dataclass(frozen=True, slots=True)

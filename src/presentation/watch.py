@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from decimal import Decimal, ROUND_HALF_UP
 import os
-import re
 import sys
 from typing import Mapping, TextIO
 
@@ -11,13 +10,13 @@ from src.version import mode_heading
 from src.numbers import ccost_amount
 from src.watch.models import ToolObservation, WatchProjection, WatchRow, WatchSessionSubtotal
 
-from .terminal import AnsiStyler, Column, StyledText, fit, render_table
+from .terminal import AnsiStyler, Column, StyledText, fit, render_table, single_line
 from .terminal import terminal_content_width
 from .accounts import capacity_block, compact_label_fits, quota_label
 from .token_mix import prompt_scope, token_mix_line, token_mix_lines, watch_total_line
 from src.analysis.token_mix import TokenMix
 from src.analysis.context import PriceWarningSeverity
-from .context_warnings import WARNING_ROLE, next_ictx_ccost, warning_explanation_lines
+from .context_warnings import WARNING_ROLE, context_warning_text, warning_cost_suffix, warning_explanation_lines
 from .pricing_notices import pricing_notice_lines
 from .watch_activity import BASE_ROLE, status_segments, tool_summary_segments
 
@@ -92,20 +91,6 @@ def _session_subtotal_text(subtotal: WatchSessionSubtotal | None) -> str:
     return "Σ " + ("N/A" if subtotal is None else ccost_amount(subtotal.ccost, unresolved=subtotal.unresolved_cost))
 
 
-def _watch_session_title(value: str) -> str:
-    """Keep external session titles in one cell, never arbitrary terminal lines.
-
-    Checkpoint failures can leave Markdown/CRLF in OpenCode session titles.
-    Remove terminal escapes, fold whitespace and drop heading markup without
-    hiding the session's genuine model request or cost.
-    """
-    without_ansi = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", value)
-    one_line = " ".join("".join(
-        char if char.isprintable() else " " for char in without_ansi
-    ).split())
-    return re.sub(r"^#{1,6}\s+", "", one_line) or "Untitled session"
-
-
 class WatchRenderer:
     def __init__(self, config: Mapping[str, object], *, stream: TextIO | None = None, interactive: bool | None = None,
                  terminal_width: int | None = None) -> None:
@@ -164,7 +149,7 @@ class WatchRenderer:
         if prompt.is_compaction:
             return f"  {marker}#{prompt.prompt_number} /compact"
         prefix = "[ABORTED] " if prompt.aborted else ""
-        return f"  {marker}#{prompt.prompt_number} {prefix}{prompt.preview}"
+        return f"  {marker}#{prompt.prompt_number} {prefix}{single_line(prompt.preview)}"
 
     def _row_style(self, row: WatchRow) -> str | None:
         if row.prompt.aborted:
@@ -193,7 +178,8 @@ class WatchRenderer:
         warning_numbers = {session_id: index + 1 for index, session_id in enumerate(warnings)}
         for row in projection.rows:
             if row.session_id != previous_session:
-                safe_title = _watch_session_title(row.session_title)
+                # Checkpoint failures can leave Markdown/CRLF in OpenCode session titles.
+                safe_title = single_line(row.session_title, "Untitled session")
                 if row.session_id in warning_numbers:
                     number = warning_numbers[row.session_id]
                     marker = f"*{number}"
@@ -252,7 +238,6 @@ class WatchRenderer:
             self._write(line)
         warnings = projection.session_warnings or {}
         for number, (session_id, warning) in enumerate(warnings.items(), start=1):
-            clean = warning[1:-1] if warning.startswith("[") and warning.endswith("]") else warning
             warning_row = next((item for item in reversed(projection.rows) if item.session_id == session_id and item.next_context_warning), None)
             severity = warning_row.next_context_warning_severity if warning_row else PriceWarningSeverity.NONE
             suffix = ""
@@ -260,11 +245,13 @@ class WatchRenderer:
                 prompt = warning_row.prompt
                 low = prompt.watch_next_context_cached_ccost
                 high = prompt.watch_next_context_fresh_ccost
+                multiplier = prompt.watch_next_context_cost_multiplier
                 if low is None and high is None:
                     low, high = prompt.next_context_cached_ccost, prompt.next_context_fresh_ccost
-                if low is not None and high is not None:
-                    suffix = " " + next_ictx_ccost(low, high)
-            for line in warning_explanation_lines(f"*{number}", f"Next Ictx: {clean}{suffix}", severity, self.styler):
+                if multiplier is None and not prompt.watch_next_context_warning:
+                    multiplier = prompt.next_context_cost_multiplier
+                suffix = (" " + text) if (text := warning_cost_suffix(multiplier, low, high)) else ""
+            for line in warning_explanation_lines(f"*{number}", context_warning_text(warning) + suffix, severity, self.styler):
                 self._write(line)
 
     def _render_quota(self, projection: WatchProjection) -> None:

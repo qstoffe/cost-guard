@@ -4,7 +4,7 @@ import io
 import unittest
 from decimal import Decimal
 
-from development.tests.test_analysis_core import make_snapshot
+from development.fixtures.session_snapshots import make_snapshot
 from src.presentation import WatchRenderer
 from src.reports.models import PromptProjection, SessionPromptBlock
 from src.watch.models import WatchProjection, WatchRow

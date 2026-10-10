@@ -11,9 +11,9 @@ import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
 
-from development.tests.test_analysis_core import make_snapshot
-from development.tests.test_step7_reports_cli import FakePricingProvider
-from development.tests.test_step8_watch import MutableSource, make_service
+from development.fixtures.session_snapshots import make_snapshot
+from development.fixtures.report_runtime import FakePricingProvider
+from development.fixtures.watch_runtime import MutableSource, make_service
 from src.accounts.credentials import CredentialRecord
 from src.accounts.diagnostics import sanitized_account_observation
 from src.accounts.http_transport import AccountHttpResponse

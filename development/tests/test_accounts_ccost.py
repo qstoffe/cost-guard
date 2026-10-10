@@ -11,9 +11,9 @@ import sqlite3
 import tempfile
 import unittest
 
-from development.tests.test_analysis_core import make_snapshot, message, MODEL
-from development.tests.test_step7_reports_cli import FakePricingProvider, FakeSource
-from development.tests.test_step8_watch import MutableSource, make_service
+from development.fixtures.session_snapshots import make_snapshot, message, MODEL
+from development.fixtures.report_runtime import FakePricingProvider, FakeSource
+from development.fixtures.watch_runtime import MutableSource, make_service
 from src.accounts.anthropic import AnthropicAccountProvider, normalize_anthropic_usage
 from src.accounts.credentials import configured_credentials
 from src.accounts.diagnostics import sanitized_account_observation

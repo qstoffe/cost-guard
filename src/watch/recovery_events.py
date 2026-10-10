@@ -31,7 +31,9 @@ def recent_events(now_ms: int | None = None) -> list[dict[str, object]]:
         if not isinstance(event, dict):
             continue
         at = event.get("at_ms")
+        labels = (event.get("source"), event.get("event"), event.get("kind"))
         if (type(at) is int and 0 <= now - at <= 30 * 86_400_000
+            and all(isinstance(label, str) for label in labels)  # unhashable values are ignored
             and event.get("source") in _ALLOWED_SOURCES
             and event.get("event") in _ALLOWED_EVENTS
             and event.get("kind") in _ALLOWED_KINDS):
@@ -53,8 +55,11 @@ def record(source: str, event: str, kind: str) -> None:
         FILE.parent.mkdir(parents=True, exist_ok=True)
         entries = recent_events(now)
         entries.append({"at_ms": now, "source": source, "event": event, "kind": kind, "version": DISPLAY_VERSION})
-        temp = FILE.with_suffix(".tmp")
-        temp.write_text(json.dumps(entries[-24:], separators=(",", ":")), encoding="utf-8")
-        temp.replace(FILE)
+        temp = FILE.with_name(f"{FILE.name}.{os.getpid()}.{time.time_ns()}.tmp")  # concurrent Watches
+        try:
+            temp.write_text(json.dumps(entries[-24:], separators=(",", ":")), encoding="utf-8")
+            temp.replace(FILE)
+        finally:
+            temp.unlink(missing_ok=True)
     except OSError:
         return

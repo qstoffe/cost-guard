@@ -9,8 +9,8 @@ import unittest
 from dataclasses import replace
 from pathlib import Path
 
-from development.tests.test_opencode_v2 import source_with_current_service
-from development.tests.test_step8_watch import make_service
+from development.fixtures.opencode_v2_service import source_with_current_service
+from development.fixtures.watch_runtime import make_service
 from src.analysis.causal import build_prompt_records
 from src.presentation import WatchRenderer
 from src.sources.opencode_v2 import OpenCodeV2Source

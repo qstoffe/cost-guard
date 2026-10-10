@@ -6,7 +6,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) prompts/sessions, relative 
 
 ![Cost Guard Watch: OpenCode sessions and quotas](docs/images/cost-guard-watch.png)
 
-Live OpenCode prompts/sessions: model/effort, CCost, calls, context development and account quotas.
+Live OpenCode prompts: model/effort, CCost, calls, context and quotas.
 
 ## At a glance
 
@@ -63,7 +63,7 @@ chmod +x macos/*.command development/macos/*.command
 
 Use Finder's **Open** for quarantine prompts.
 
-For Python CLI commands, see [setup and usage](#setup-and-usage). Use `python3` on macOS or `py -3` on Windows if needed.
+See [CLI usage](#setup-and-usage); use `python3` on macOS or `py -3` on Windows if needed.
 
 ## Core concepts
 
@@ -98,13 +98,13 @@ Details: [normal report](#normal-report), [model comparison](#model-comparison),
 
 ![Cost Guard Token Mix: model/category usage and CCost](docs/images/cost-guard-token-mix.png)
 
-See [Token Mix reference](#token-mix--by-model---token-mix). Screenshots are illustrative and may show an earlier Cost Guard product version.
+See [Token Mix reference](#token-mix--by-model---token-mix). Screenshots are illustrative and may show an earlier version.
 
 ## Requirements
 
 - Python **3.11 or newer**.
 - A supported OpenCode installation/history:
-  - **V1:** Cost Guard reads the local legacy OpenCode SQLite database directly in read-only/query-only mode.
+  - **V1:** The local legacy OpenCode SQLite database, read-only/query-only.
   - **V2:** Read-only registered-service loopback HTTP. If unavailable, `auto`/`v2` may call `opencode api get /api/info` once (no Desktop/TUI); Watch retries process-free every five seconds. Diagnostics `--test-service-start` tests cold startup without stopping a shared service.
 - Internet access for GitHub Copilot pricing/model metadata fetches.
 - Optional Copilot quota reuses OpenCode OAuth in memory, without login, credential writes or GitHub CLI.
@@ -133,7 +133,7 @@ python cost-guard.py --version
 python cost-guard.py --help
 ```
 
-See [Quick start](#quick-start) for launchers. Diagnostics ZIPs go under `diagnostics/`.
+See [Quick start](#quick-start) for launchers.
 
 Cost Guard uses `config/default-config.jsonc`. Create optional `config/user-config.jsonc` beside it only for overrides.
 
@@ -205,7 +205,7 @@ Interactive progress is transient; redirected output uses stage lines.
 
 ## Available sessions: `--sessions N|all`
 
-Shows only a session table and its legend, newest causal-tree activity first, not cost order. `N` is a positive maximum; an oversized limit or `all` shows all available root sessions, including available archived sessions. Descendants belong to their root rather than appearing as duplicate detail targets. No aggregate Total row is shown.
+Shows only a session table and legend, newest causal-tree activity first (not cost). `N` is a positive maximum; an oversized limit or `all` shows all available root sessions, including available archived sessions. Descendants belong to their root rather than appearing as duplicate detail targets. No aggregate Total row is shown.
 
 | Column | Meaning |
 | --- | --- |
@@ -229,9 +229,9 @@ Passing a session ID shows only that session/root's prompt analysis and explanat
 | `~Extra CCost` | Additional causal usage reference valuation beyond incoming context, not billing. |
 | `I/C/W/O %` | Token-category mix, or running-state text while a prompt is still active. |
 
-Known causal splits show **Main / Subagents / Total**; running prompts may show `running - consider ABORT`. `(Next Ictx CCost 0.3–3)` is the next input context's cached–fresh CCost range, not a cache-hit prediction. Threshold markers/indicators share amber `nextIctxWarning`: approaching highlights the marker; exceeded the full explanation.
+Known causal splits show **Main / Subagents / Total**; running prompts may show `running - consider ABORT`. `(Next Ictx CCost 0.3–3)` is the next input's cached–fresh CCost range; price-threshold warnings show `(1.9x more expensive)`, the model table's Relative CCost ratio across that threshold. Amber `nextIctxWarning`: approaching highlights the marker; exceeded the full explanation.
 
-Moving a session (e.g. to a worktree) keeps its ID and never re-counts history; V2 reads messages by session ID. The non-billable move starts a new context epoch: Next Ictx is N/A until the first request after it sets the new baseline.
+Moving a session (e.g. to a worktree) keeps its ID and never re-counts history. The non-billable move starts a new context epoch: Next Ictx is N/A until the first request after it.
 
 A one-shot session report automatically follows an already-running latest prompt until that prompt completes or aborts.
 
@@ -279,7 +279,7 @@ Aborted labels persist after red emphasis expires. Quota errors retain values fo
 
 Full redraws clear screen/scrollback; countdowns replace only the status line. V1 Watch uses process-free SQLite gating; V2 events are hints with a five-second cooldown and authoritative resync. `"auto"` refresh adapts within 5–30 seconds; quota refresh is independently rate-limited.
 
-**Watch troubleshooting.** OpenCode outages keep the last dashboard with `Watch: OpenCode V2 source unavailable · retrying every 5s`; retries use the same source, no V1 fallback/CLI start, then resume from a fresh snapshot. Unsupported schemas or data unreadable for about a minute end Watch with an error. Runtime failures exit non-zero; missing/archived session targets stop normally. Windows returns to PowerShell. Closing/killing the terminal still ends Watch.
+**Watch troubleshooting.** OpenCode outages keep the last dashboard with `Watch: OpenCode V2 source unavailable · retrying every 5s`; retries use the same source, no V1 fallback/CLI start, then resume from a fresh snapshot. Unsupported schemas or data unreadable for ~1 minute end Watch with an error. Runtime failures exit non-zero; missing/archived session targets stop normally. Windows returns to PowerShell. Closing/killing the terminal still ends Watch.
 
 ## Pricing, quota and network behavior
 
@@ -334,23 +334,25 @@ For troubleshooting, use `Cost Guard Diagnostics` under `development/windows/` o
 python development/tools/collect_diagnostics.py
 ```
 
-Creates `diagnostics/cost-guard-diagnostics.zip`: **Full/local** tests, package validation (including failures), environment, source statistics, timings, provider/metadata health and classified errors. The final screen shows result/path/support address. `--no-network` skips pricing/quotas; `--skip-validation` is emergency/recursive-only.
+Creates `diagnostics/cost-guard-diagnostics.zip`: **Full/local** tests, validation/failures, environment/terminal/source statistics, report and headless Watch timings/geometry, and provider/metadata errors. `--no-network` skips pricing/quotas; `--skip-validation` is emergency/recursive-only.
 
-Bundles omit prompts, titles, raw payloads/auth, tokens and account labels/IDs; source IDs are hashed. Sanitized account evidence covers discovery/category, plan/status, numeric shape, HTTP/schema outcomes, component/malformed counts and acquisition timings. Inventory is available without live accounts.
+Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; source IDs are hashed. Sanitized evidence covers discovery, plan/status, numeric/HTTP/schema outcomes, malformed counts and acquisition timing; inventory needs no live accounts.
 
 ### Internal software faults
 
-**`COST GUARD FAILED`** means an unexpected software fault: non-zero exit, an error log under `logs/errors/` and a report under `logs/crashes/`. It and other stopping errors end with the Diagnostics launcher path to run; nothing starts automatically. Isolated faults show ERROR while safe results continue. [Error diagnostics](docs/runtime-errors.md) explains privacy, 30-day retention and reporting fallback.
+**`COST GUARD FAILED`** means an unexpected software fault: non-zero exit, an error log under `logs/errors/` and a report under `logs/crashes/`. Stopping errors end with the Diagnostics launcher path; nothing starts automatically. Isolated faults show ERROR while safe results continue. [Error diagnostics](docs/runtime-errors.md) explains privacy, 30-day retention and reporting fallback.
 
 ## Current version
 
-**v80.29** suppresses unproven negative Watch Δctx and fixes multiline session titles; v80.28 preserves historical model attribution. v80.0 is the Python 3.11+ public baseline. Claude quotas remain experimental; coverage/restart/sleep need separate live evidence.
+**v80.34** makes reports 2–3× and Watch startup ~9× faster with identical output, and adds Watch evidence to Diagnostics. v80.0 is the Python 3.11+ public baseline. Claude quotas remain experimental; restart/sleep need separate live evidence.
 
 Product versions identify code state; they do not imply a Git tag, release ZIP or GitHub Release. Packaged GitHub Releases are currently paused. Recommending them at a slower/stable cadence requires an explicit policy change; version numbers never trigger it automatically.
 
 ## Development
 
 `AGENTS.md` routes maintainers to `development/`. Verify the working tree, not ZIPs. Never commit or push automatically.
+
+[Code/test map and inventory review](development/CODE_MAP.md); refresh with `python development/tools/code_inventory.py --json`.
 
 ```text
 python development/tools/run_tests.py --suite quick
@@ -359,4 +361,4 @@ python development/tools/run_tests.py --suite full
 python development/tools/collect_diagnostics.py
 ```
 
-`development/tools/build_release.py` is for [explicitly requested packaging only](development/MAINTAINER.md#explicit-packaging-procedure); ZIPs go to git-ignored `releases/`.
+Hosted/web AI runs only Quick + validation and never builds a ZIP. Local sessions run Full + live checks, then `build_release.py --full-verification` per completed version ([procedure](development/MAINTAINER.md#packaging-procedure)) into git-ignored `releases/`.

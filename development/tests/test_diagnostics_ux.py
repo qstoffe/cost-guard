@@ -203,5 +203,45 @@ class WatchStartupColorTests(unittest.TestCase):
         self.assertIn("\x1b[93mWatch: Waiting for OpenCode source\x1b[0m", stream.getvalue())
 
 
+class WatchEvidenceTests(unittest.TestCase):
+    def test_headless_watch_smoke_reports_geometry_and_counts_without_private_text(self) -> None:
+        from development.fixtures.report_runtime import FakePricingProvider
+        from development.fixtures.session_snapshots import make_snapshot
+        from development.fixtures.watch_runtime import MutableSource, make_service, openai_account
+        from development.tools.diagnostic_watch import watch_evidence
+
+        with tempfile.TemporaryDirectory() as tmp:
+            source = MutableSource(make_snapshot(running=True))
+            config, selection, service, db = make_service(tmp, source)
+            quota = service.build_watch_quota(quota_snapshots=(openai_account().account,), query_account=False)
+            with mock.patch("src.watch.observation_diagnostics.record_scan") as record:
+                result = watch_evidence(selection, config, service.cache_repository, quota=quota,
+                                        pricing_provider=FakePricingProvider())
+            record.assert_not_called()
+        self.assertEqual(1, result["running_rows"])
+        self.assertEqual(1, result["rendered_accounts"])
+        self.assertEqual({"80", "120", "160"}, set(result["renders"]))
+        for width, render in result["renders"].items():
+            self.assertEqual(0, render["flowing_overflow_lines"], width)
+            self.assertLessEqual(render["max_flowing_width"], int(width))
+        def leaves(value):
+            if isinstance(value, dict):
+                for item in value.values():
+                    yield from leaves(item)
+            else:
+                yield value
+
+        # Numbers/flags only: no title, prompt, model, session or path text can leak.
+        self.assertTrue(all(value is None or isinstance(value, (bool, int, float)) for value in leaves(result)))
+
+    def test_terminal_facts_are_booleans_and_sizes_only(self) -> None:
+        from development.tools.diagnostic_watch import terminal_facts
+
+        with mock.patch.dict(os.environ, {"WT_SESSION": "private-guid", "COLORTERM": "truecolor"}):
+            facts = terminal_facts()
+        self.assertIs(True, facts["windows_terminal"])
+        self.assertNotIn("private-guid", repr(facts))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -108,7 +108,8 @@ def prompt_references(snapshot: SessionSnapshot, *, since_ms: int = 0) -> tuple[
             key=lambda item: (item.created_at_ms, item.event_id),
         ))
     }
-    for event in _visible_prompt_events(snapshot):
+    visible_events = _visible_prompt_events(snapshot)
+    for event in visible_events:
         if event.created_at_ms < since_ms:
             continue
         message = messages.get(event.event_id)
@@ -118,12 +119,14 @@ def prompt_references(snapshot: SessionSnapshot, *, since_ms: int = 0) -> tuple[
             and item.role is MessageRole.ASSISTANT
             and item.parent_message_id == event.event_id
         ]
-        latest_visible = event is _visible_prompt_events(snapshot)[-1]
+        latest_visible = event is visible_events[-1]
+        window = prompt_parent_ids(snapshot, event.event_id, event.created_at_ms,
+                                   subtask=event.kind is EventKind.SUBTASK)
         has_error_or_live = (
             any(item.termination or item.error_name or item.completed_at_ms is None for item in assistant_messages)
             or bool(snapshot.root.active is True and latest_visible)
         )
-        if event.event_id not in parent_ids and not has_error_or_live:
+        if not window & parent_ids and not has_error_or_live:
             continue
         refs.append(PromptReference(
             session_id=snapshot.root.session_id,
@@ -142,11 +145,14 @@ def prompt_references(snapshot: SessionSnapshot, *, since_ms: int = 0) -> tuple[
 def prompt_parent_ids(snapshot: SessionSnapshot, prompt_id: str, prompt_time_ms: int, *, subtask: bool) -> set[str]:
     """Events whose assistant work continues one logical root prompt.
 
-    Background-completion notices resume the prompt current at that time, so
-    work after them stays on that prompt's row; subtasks also own synthetic
-    task-summary continuations. Each event falls in exactly one prompt window.
+    Background-completion notices and other invisible synthetic user messages
+    (for example subagent-completion notices injected while work continues)
+    resume the prompt current at that time, so work after them stays on that
+    prompt's row; subtasks also own synthetic task-summary continuations.
+    Each event falls in exactly one prompt window.
     """
-    kinds = {EventKind.BACKGROUND_COMPLETION} | ({EventKind.SYNTHETIC_CONTINUATION} if subtask else set())
+    kinds = {EventKind.BACKGROUND_COMPLETION, EventKind.OTHER} | (
+        {EventKind.SYNTHETIC_CONTINUATION} if subtask else set())
     next_visible = min(
         (event.created_at_ms for event in _visible_prompt_events(snapshot) if event.created_at_ms > prompt_time_ms),
         default=2**63 - 1,
@@ -525,8 +531,11 @@ def build_prompt_record(
     if not root_entries:
         if not aborted and not in_progress and not watch_error and not evidence:
             return None
-        main_model = ref.model_id
-        main_provider = ref.provider_id
+        # Before its first completed request a running prompt may already have a
+        # request-bound in-flight assistant; never borrow mutable session selection.
+        bound = next((m.model for m in reversed(assistant_messages) if m.model is not None and not m.summary), None)
+        main_model = ref.model_id or (bound.model if bound else "")
+        main_provider = ref.provider_id or (bound.provider if bound else "")
         return PromptRecord(
             session_id=ref.session_id, prompt_id=ref.prompt_id, prompt_time_ms=ref.prompt_time_ms,
             prompt_number=ref.prompt_number, prompt_kind=ref.prompt_kind, prompt_text=ref.prompt_text,

@@ -11,9 +11,10 @@ import unittest
 from unittest.mock import patch
 
 from development.fixtures.synthetic_month import SyntheticMonthSource
-from development.tests.test_analysis_core import make_snapshot
+from development.fixtures.session_snapshots import make_snapshot
 from development.tests.test_quota_presentation import quotas, rolling
-from development.tests.test_step7_reports_cli import FakePricingProvider, FakeSource
+from development.fixtures.report_runtime import FakePricingProvider, FakeSource
+from src.reports.sampling import latest_prompts
 from src.bootstrap import _report_request
 from src.cache import CacheDatabase, CacheRepository
 from src.cli import CliUsageError, CommandKind, parse_command
@@ -134,7 +135,7 @@ class CompactReportTests(unittest.TestCase):
         service = self.service(source)
         report = service.build(ReportRequest())
         self.assertEqual(5, source.load_count)
-        sample = service._latest_prompts(tuple(service._analyzed.values()))
+        sample = latest_prompts(tuple(service._analyzed.values()))
         self.assertEqual(100, len(sample))
         self.assertLess(sample[-1].prompt_time_ms, START + 10 * 60_000)  # September
         self.assertGreaterEqual(sample[0].prompt_time_ms, START + 10 * 60_000)  # October
@@ -156,7 +157,7 @@ class CompactReportTests(unittest.TestCase):
         source.snapshots[root.session_id] = replace(old, root=root, sessions=(root,))
         service = self.service(source)
         service.build(ReportRequest())
-        sample = service._latest_prompts(tuple(service._analyzed.values()))
+        sample = latest_prompts(tuple(service._analyzed.values()))
         self.assertEqual({f"root-{n:04d}" for n in range(7, 12)}, {p.session_id for p in sample})
         self.assertEqual(6, source.load_count)
 
@@ -165,7 +166,7 @@ class CompactReportTests(unittest.TestCase):
         service.build(ReportRequest())
         roots = tuple(service._analyzed.values())
         expected = tuple(p for item in roots for p in item.bundle.prompts if not p.aborted and not p.in_progress)
-        self.assertEqual(set(p.prompt_id for p in expected), set(p.prompt_id for p in service._latest_prompts(roots)))
+        self.assertEqual(set(p.prompt_id for p in expected), set(p.prompt_id for p in latest_prompts(roots)))
         self.assertLess(len(expected), 100)
         self.assertTrue(any(p.in_progress for item in roots for p in item.bundle.prompts))
         record = expected[0]
@@ -174,7 +175,7 @@ class CompactReportTests(unittest.TestCase):
             replace(record, prompt_id="running", in_progress=True),
             replace(record, prompt_id="completed", completed_successfully=True),
         ))
-        self.assertEqual(["completed"], [p.prompt_id for p in service._latest_prompts(roots)])
+        self.assertEqual(["completed"], [p.prompt_id for p in latest_prompts(roots)])
 
     def test_empty_history_has_catalog_without_relcost(self):
         source = SyntheticMonthSource(0, 0, month_start_ms=START)

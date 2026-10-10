@@ -12,7 +12,7 @@ Usage includes all canonical provider IDs. **CCost** values observed tokens usin
 
 Successful reference/current-price fallback is Diagnostics-only. Missing reference pricing still warns of incomplete CCost, even when actual billing is known.
 
-Date totals de-duplicate exact fork-cloned requests; session views retain available history. Child/subagent work and eligible synthetic continuations belong to their initiating prompt. Model work that OpenCode resumes after a background job (for example a backgrounded shell) ends stays on the prompt that was running; waiting adds Duration only, never Calls or CCost, and native job IDs are never shown. Only explicit completion/failure/cancellation notices or the service no longer listing the job end that wait. Completed `/compact` remains separate, including native V2 checkpoints without billable summaries.
+Date totals de-duplicate exact fork-cloned requests; session views retain available history. Child/subagent work and eligible synthetic continuations belong to their initiating prompt. Model work that OpenCode resumes after a background job (for example a backgrounded shell) ends, or after another invisible synthetic notice such as a subagent completion, stays on the prompt that was running; waiting adds Duration only, never Calls or CCost, and native job IDs are never shown. Only explicit completion/failure/cancellation notices or the service no longer listing the job end that wait. Completed `/compact` remains separate, including native V2 checkpoints without billable summaries.
 
 Deleted OpenCode sessions leave reports and Relative CCost samples; caches keep no ledger.
 
@@ -59,3 +59,4 @@ Reports retain Copilot's native $0.01/AI-credit conversion; Watch omits that con
 - A trailing `*` on a model means linked child/subagent work used an additional model.
 - Numbered `*1`, `*2`, ... markers on a session header point to matching context-warning footnotes.
 - `Δctx -> Next Ictx` describes change in the session's effective next-input context state, not a billed-token total.
+- A Next-Ictx price-threshold warning shows `(Nx more expensive)`: the model's Relative CCost level after that threshold divided by the level before it, from the same sample/mix as the model table and rounded to one decimal. Without a priced tier ratio it keeps the `(Next Ictx CCost low–high)` range.

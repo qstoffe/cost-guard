@@ -5,9 +5,9 @@ import io
 import unittest
 from dataclasses import replace
 
-from development.tests.test_analysis_core import make_snapshot
-from development.tests.test_step6_context_comparisons import catalog
-from development.tests.test_opencode_v2 import source_with_current_service
+from development.fixtures.session_snapshots import make_snapshot
+from development.fixtures.pricing_catalog import catalog
+from development.fixtures.opencode_v2_service import source_with_current_service
 from src.analysis.core import analyze_snapshot
 from src.analysis.effort import EffortKind, interpret_effort, prompt_effort
 from src.analysis.comparisons import model_timeline_name, watch_model_timeline_name
@@ -230,6 +230,23 @@ class EffortSourceTests(unittest.TestCase):
             self.assertIsNone(waiting.model)
             self.assertNotIn("model_id", next(e for e in snapshot.events
                                                if e.event_id == "msg_waiting_user").metadata)
+
+    def test_current_v2_running_prompt_uses_in_flight_request_model(self):
+        with source_with_current_service() as (source, server, _registration):
+            server.active = {"ses_current": {"type": "running"}}
+            server.messages["ses_current"].extend((
+                {"id": "msg_run_user", "type": "user", "text": "run", "time": {"created": 5000}},
+                {"id": "msg_run_assistant", "type": "assistant", "agent": "build",
+                 "model": {"providerID": "openai", "id": "gpt-6.1-sol", "variant": "high"},
+                 "content": [{"type": "text", "id": "run_text", "text": "working"}],
+                 "time": {"created": 5100}},
+            ))
+            server.sessions[0]["model"] = {"providerID": "openai", "id": "other", "variant": "low"}
+            _, block = project(source.load_session_snapshot("ses_current"))
+            running = next(row for row in block.rows if row.event_id == "msg_run_user")
+            self.assertTrue(running.in_progress)
+            self.assertEqual(0, running.calls)
+            self.assertEqual("gpt-6.1-sol (High)", running.model_effort)
 
     def test_interim_v2_does_not_copy_session_variant_to_assistant(self):
         item = {"id": "a", "role": "assistant", "parts": [],

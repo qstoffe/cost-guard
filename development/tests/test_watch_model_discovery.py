@@ -1,6 +1,8 @@
 """Cross-platform regression checks for live Watch model discovery."""
 from __future__ import annotations
 
+import threading
+import time
 import unittest
 from decimal import Decimal
 from types import SimpleNamespace
@@ -50,7 +52,7 @@ class WatchModelDiscoveryTests(unittest.TestCase):
             selection=SimpleNamespace(source=source),
             _load_catalog=lambda: initial,
         )
-        return WatchModelDiscovery(service), provider, source
+        return WatchModelDiscovery(service, run_async=lambda work: work()), provider, source
 
     def test_catalog_updates_after_hour_without_touching_baseline(self):
         observer, provider, source = self.make_discovery()
@@ -125,6 +127,38 @@ class WatchModelDiscoveryTests(unittest.TestCase):
         observer.refresh(901_001)
         self.assertEqual(("github-copilot/old",), observer.available_ids)
         self.assertEqual("unavailable", observer.diagnostics(901_001)["availability_status"])
+
+class AsyncDiscoveryTests(unittest.TestCase):
+    def test_slow_reads_never_block_refresh_and_results_apply_on_a_later_poll(self):
+        release = threading.Event()
+        initial = catalog("Old", retrieved=1)
+        provider = FakeProvider(catalog("Old", "New Model", retrieved=2))
+        source = AvailableSource()
+        blocked_reads = []
+
+        def slow_read():
+            blocked_reads.append(1)
+            release.wait(5)
+            return ("github-copilot/old", "github-copilot/new-model")
+
+        source.available_model_ids = slow_read
+        service = SimpleNamespace(pricing_provider=provider, selection=SimpleNamespace(source=source),
+                                  _load_catalog=lambda: initial)
+        observer = WatchModelDiscovery(service)
+        started = time.monotonic()
+        observer.refresh(1_000)
+        observer.refresh(901_001)  # due again while the first read is still running
+        self.assertLess(time.monotonic() - started, 1.0)
+        self.assertEqual(1, len(blocked_reads), "one worker; overlapping requests merge")
+        self.assertTrue(observer.diagnostics(901_001)["discovery_check_active"])
+        release.set()
+        deadline = time.monotonic() + 5
+        while (observer.available_ids is None or len(blocked_reads) < 2) and time.monotonic() < deadline:
+            observer.refresh(901_002)
+            time.sleep(0.01)
+        self.assertEqual(2, len(observer.available_ids))
+        self.assertEqual(2, len(blocked_reads), "the merged request ran after the first completed")
+
 
 if __name__ == "__main__":
     unittest.main()

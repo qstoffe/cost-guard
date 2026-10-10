@@ -1,18 +1,33 @@
-"""Small stdlib HTTP/SSE transport for the registered local OpenCode V2 service."""
+"""Small stdlib HTTP/SSE transport for the registered local OpenCode V2 service.
+
+JSON GETs reuse pooled keep-alive loopback connections: reports and Watch
+issue hundreds of small requests, and opening a connection per request used to
+dominate hydration time. A reused connection that the service has already
+closed is retried once on a fresh connection; every request is an idempotent
+GET. The event stream always owns its own connection.
+"""
 from __future__ import annotations
 
 import base64
+import http.client
 import json
+import threading
+import time
+import weakref
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterator, Mapping
-from urllib.error import HTTPError, URLError
+from collections.abc import Iterator, Mapping
+from typing import Any
 from urllib.parse import urlencode, urlsplit, urlunsplit
-from urllib.request import ProxyHandler, Request, build_opener
 
 from .errors import SourceDataError, SourceResyncRequiredError, SourceUnavailableError
 
 _LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1", "0.0.0.0", "::"}
+# Errors that mean "the idle keep-alive connection was already closed".
+_STALE_CONNECTION_ERRORS = (
+    http.client.RemoteDisconnected, ConnectionResetError, ConnectionAbortedError, BrokenPipeError,
+)
+_MAX_IDLE_CONNECTIONS = 4
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,55 +57,115 @@ def normalize_local_service_url(url: str) -> str:
     return urlunsplit(("http", netloc, "", "", "")).rstrip("/")
 
 
+def _close_idle(idle: list[http.client.HTTPConnection], lock: threading.Lock) -> None:
+    with lock:
+        values = tuple(idle)
+        idle.clear()
+    for connection in values:
+        connection.close()
+
+
 class V2HttpClient:
-    def __init__(self, endpoint: V2Endpoint, *, timeout_seconds: float = 10.0):
+    """Plain loopback HTTP; never routed through ambient proxies (http.client has none)."""
+
+    def __init__(self, endpoint: V2Endpoint, *, timeout_seconds: float = 10.0,
+                 stats: dict[str, float] | None = None):
         self.endpoint = endpoint
         self.timeout_seconds = timeout_seconds
-        # A registered local service must never be sent through ambient proxies.
-        self._opener = build_opener(ProxyHandler({}))
+        parsed = urlsplit(endpoint.url)
+        self._host = parsed.hostname or "127.0.0.1"
+        self._port = parsed.port
+        # A request checks out an idle connection (any thread) and returns it
+        # afterwards, so short-lived workers never accumulate sockets. Idle
+        # sockets close when the client is replaced/collected or at exit.
+        self._idle: list[http.client.HTTPConnection] = []
+        self._lock = threading.Lock()
+        weakref.finalize(self, _close_idle, self._idle, self._lock)
+        # Privacy-safe counters only (no paths, queries or payloads).
+        self.stats = stats if stats is not None else {}
+        for key in ("requests", "connections_opened", "stale_retries", "request_ms"):
+            self.stats.setdefault(key, 0)
+
+    def _count(self, key: str, amount: float = 1) -> None:
+        with self._lock:
+            self.stats[key] += amount
 
     def _headers(self, *, accept: str = "application/json") -> dict[str, str]:
-        headers = {"Accept": accept, "User-Agent": "cost-guard/78.9"}
+        headers = {"Accept": accept, "User-Agent": "cost-guard"}
         if self.endpoint.password:
             raw = f"{self.endpoint.username}:{self.endpoint.password}".encode("utf-8")
             headers["Authorization"] = "Basic " + base64.b64encode(raw).decode("ascii")
         return headers
 
-    def _url(self, path: str, query: Mapping[str, Any] | None = None) -> str:
-        suffix = path if path.startswith("/") else "/" + path
-        url = self.endpoint.url + suffix
+    @staticmethod
+    def _target(path: str, query: Mapping[str, Any] | None = None) -> str:
+        target = path if path.startswith("/") else "/" + path
         if query:
             clean = {key: value for key, value in query.items() if value is not None}
             if clean:
-                url += "?" + urlencode(clean)
-        return url
+                target += "?" + urlencode(clean)
+        return target
+
+    def _new_connection(self, timeout: float) -> http.client.HTTPConnection:
+        return http.client.HTTPConnection(self._host, self._port, timeout=timeout)
+
+    def close(self) -> None:
+        """Close idle keep-alive connections; later requests reconnect."""
+        _close_idle(self._idle, self._lock)
+
+    def _get(self, target: str, *, allow_reuse: bool = True) -> tuple[int, bytes]:
+        with self._lock:
+            connection = self._idle.pop() if allow_reuse and self._idle else None
+        reused = connection is not None
+        if connection is None:
+            connection = self._new_connection(self.timeout_seconds)
+            self._count("connections_opened")
+        started = time.perf_counter()
+        try:
+            connection.request("GET", target, headers=self._headers())
+            response = connection.getresponse()
+            result = response.status, response.read()
+        except _STALE_CONNECTION_ERRORS:
+            connection.close()
+            if not reused:
+                raise
+            self._count("stale_retries")
+            return self._get(target, allow_reuse=False)  # the service closed an idle socket
+        except BaseException:
+            connection.close()
+            raise
+        with self._lock:
+            self.stats["requests"] += 1
+            self.stats["request_ms"] += round((time.perf_counter() - started) * 1000, 3)
+            if len(self._idle) < _MAX_IDLE_CONNECTIONS:
+                self._idle.append(connection)
+                return result
+        connection.close()
+        return result
 
     def json(self, path: str, *, query: Mapping[str, Any] | None = None) -> Any:
-        request = Request(self._url(path, query), headers=self._headers(), method="GET")
         try:
-            with self._opener.open(request, timeout=self.timeout_seconds) as response:
-                body = response.read()
-        except HTTPError as exc:
-            code = exc.code
-            exc.close()
-            raise SourceUnavailableError(f"OpenCode V2 API returned HTTP {code}") from exc
-        except (URLError, OSError, TimeoutError) as exc:
+            status, body = self._get(self._target(path, query))
+        except (OSError, http.client.HTTPException) as exc:
             raise SourceUnavailableError("OpenCode V2 service could not be reached") from exc
+        if status >= 300:
+            raise SourceUnavailableError(f"OpenCode V2 API returned HTTP {status}")
         try:
             return json.loads(body.decode("utf-8"))
         except (UnicodeError, json.JSONDecodeError) as exc:
             raise SourceDataError("OpenCode V2 API returned malformed JSON") from exc
 
     def sse(self, path: str) -> Iterator[Mapping[str, Any]]:
-        request = Request(self._url(path), headers=self._headers(accept="text/event-stream"), method="GET")
+        connection = self._new_connection(max(self.timeout_seconds, 120.0))
         try:
-            response = self._opener.open(request, timeout=max(self.timeout_seconds, 120.0))
-        except HTTPError as exc:
-            code = exc.code
-            exc.close()
-            raise SourceUnavailableError(f"OpenCode V2 event API returned HTTP {code}") from exc
-        except (URLError, OSError, TimeoutError) as exc:
+            connection.request("GET", self._target(path), headers=self._headers(accept="text/event-stream"))
+            response = connection.getresponse()
+        except (OSError, http.client.HTTPException) as exc:
+            connection.close()
             raise SourceUnavailableError("OpenCode V2 event stream could not be reached") from exc
+        if response.status >= 300:
+            connection.close()
+            raise SourceUnavailableError(f"OpenCode V2 event API returned HTTP {response.status}")
         data_lines: list[str] = []
         try:
             for raw in response:
@@ -117,12 +192,12 @@ class V2HttpClient:
                     raise SourceDataError("OpenCode V2 event stream returned malformed JSON") from exc
                 if isinstance(value, Mapping):
                     yield value
-        except (UnicodeError, OSError, TimeoutError) as exc:
+        except (UnicodeError, OSError, http.client.HTTPException) as exc:
             raise SourceResyncRequiredError(
                 "OpenCode V2 event stream failed; a fresh snapshot is required"
             ) from exc
         finally:
-            response.close()
+            connection.close()
         raise SourceResyncRequiredError(
             "OpenCode V2 event stream ended; a fresh snapshot is required"
         )

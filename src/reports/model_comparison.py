@@ -1,12 +1,43 @@
 """Strict availability intersection and model-comparison price text."""
 from __future__ import annotations
 
+import threading
+
 from src.pricing.catalog import PricingCatalog
 from src.numbers import reference_rate
 from src.sources.model_availability import ModelAvailabilitySource
 from src.sources.errors import SourceError
 from src.runtime_errors import recoverable, recovered
 from src.pricing.tiers import lower_bound, ordered_tiers
+
+
+class AvailabilityPrefetch:
+    """Start the advisory availability lookup now; consume it later.
+
+    The lookup is I/O (V2 settle polling or the CLI fallback), so it overlaps
+    report analysis. Its result or exception is returned/re-raised unchanged
+    on the consuming thread, preserving ``selectable_catalog``'s fail-open and
+    ERROR semantics.
+    """
+
+    def __init__(self, source: ModelAvailabilitySource) -> None:
+        self._result: tuple[str, ...] | None = None
+        self._error: Exception | None = None
+        self._thread = threading.Thread(target=self._run, args=(source,),
+                                        name="cost-guard-model-availability", daemon=True)
+        self._thread.start()
+
+    def _run(self, source: ModelAvailabilitySource) -> None:
+        try:
+            self._result = source.available_model_ids()
+        except Exception as exc:  # delivered to the consumer's boundary below
+            self._error = exc
+
+    def available_model_ids(self) -> tuple[str, ...] | None:
+        self._thread.join()
+        if self._error is not None:
+            raise self._error
+        return self._result
 
 
 def selectable_catalog(

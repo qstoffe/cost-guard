@@ -1,12 +1,14 @@
 """Watch-only model discovery; V2 is an early pricing-refresh hint, not release evidence.
 
 CCost always uses the report service's pinned catalog. These later catalog
-observations change only the Watch new-model notice. Release-date metadata
-recovers on its own bounded worker so a slow or failing metadata source never
-blocks Watch polling.
+observations change only the Watch new-model notice. Network reads (catalog
+price checks, V2 model lists) and release-date metadata each run on one bounded
+worker, so a slow or failing service never blocks Watch polling; the main
+thread alone applies their results.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
 import threading
 from typing import Callable
 
@@ -43,7 +45,29 @@ def _released(model) -> str:
 
 
 def _thread_runner(work: Callable[[], None]) -> None:
-    threading.Thread(target=work, name="cost-guard-model-metadata", daemon=True).start()
+    threading.Thread(target=work, name="cost-guard-model-discovery", daemon=True).start()
+
+
+@dataclass(frozen=True, slots=True)
+class _CheckRequest:
+    price: bool = False
+    force_price: bool = False
+    availability: bool = False
+
+    def merge(self, other: "_CheckRequest") -> "_CheckRequest":
+        return _CheckRequest(self.price or other.price, self.force_price or other.force_price,
+                             self.availability or other.availability)
+
+
+@dataclass(frozen=True, slots=True)
+class _CheckResult:
+    """Raw worker observations; applying them is main-thread work."""
+
+    request: _CheckRequest
+    catalog: PricingCatalog | None = None
+    price_error: str = ""
+    available_ids: tuple[str, ...] | None = None
+    availability_error: str = ""
 
 
 class WatchModelDiscovery:
@@ -69,6 +93,10 @@ class WatchModelDiscovery:
         self._metadata_runs = 0
         self._metadata_reason = ""
         self.last_metadata_error = ""
+        self._check_lock = threading.Lock()
+        self._check_active = False
+        self._check_pending = _CheckRequest()
+        self._check_results: list[_CheckResult] = []
 
     def _repository(self):
         return getattr(self.service, "cache_repository", None)
@@ -124,20 +152,80 @@ class WatchModelDiscovery:
         self.catalog = latest
         self._persist_known()
 
-    def _refresh_catalog(self, now_ms: int, *, force: bool = False) -> None:
-        self._last_price_check_ms = now_ms  # bounded even when upstream is down
+    def _availability_reader(self):
+        return getattr(getattr(getattr(self.service, "selection", None), "source", None), "available_model_ids", None)
+
+    def _read_catalog(self, force: bool) -> tuple[PricingCatalog | None, str]:
         try:
             latest = self.service.pricing_provider.get_catalog(force=force)
         except (SourceError, OSError, ValueError):
-            self.last_price_error = "unavailable"
-            return
+            return None, "unavailable"
         except Exception as exc:
             recoverable(exc, "watch-model-discovery-pricing")
-            self.last_price_error = type(exc).__name__
-            return
+            return None, type(exc).__name__
         recovered("watch-model-discovery-pricing")
-        self.last_price_error = ""
-        self._observe(latest, now_ms)
+        return latest, ""
+
+    def _read_availability(self) -> tuple[tuple[str, ...] | None, str]:
+        try:
+            result = self._availability_reader()()
+        except (SourceError, OSError, ValueError):
+            return None, "unavailable"
+        except Exception as exc:
+            recoverable(exc, "watch-model-discovery-availability")
+            return None, type(exc).__name__
+        recovered("watch-model-discovery-availability")
+        return (None, "unverified") if result is None else (tuple(result), "")
+
+    def _check(self, request: _CheckRequest) -> None:
+        """Worker: network reads only, never discovery state."""
+        catalog = ids = None
+        price_error = availability_error = ""
+        try:
+            if request.price:
+                catalog, price_error = self._read_catalog(request.force_price)
+            if request.availability:
+                ids, availability_error = self._read_availability()
+        finally:
+            with self._check_lock:
+                self._check_results.append(_CheckResult(request, catalog, price_error, ids, availability_error))
+                self._check_active = False
+
+    def _request_check(self, request: _CheckRequest) -> None:
+        """One check worker at a time; requests made meanwhile are merged, never lost."""
+        if not (request.price or request.availability):
+            return
+        with self._check_lock:
+            if self._check_active:
+                self._check_pending = self._check_pending.merge(request)
+                return
+            self._check_active = True
+        self._run_async(lambda: self._check(request))
+
+    def _adopt_checks(self, now_ms: int) -> None:
+        while True:
+            with self._check_lock:
+                results, self._check_results = self._check_results, []
+                pending = None
+                if not self._check_active and (self._check_pending.price or self._check_pending.availability):
+                    pending, self._check_pending = self._check_pending, _CheckRequest()
+            for result in results:
+                self._apply_check(result, now_ms)
+            if pending is not None:
+                self._request_check(pending)
+            elif not results:
+                return
+
+    def _apply_check(self, result: _CheckResult, now_ms: int) -> None:
+        if result.request.price:
+            self.last_price_error = result.price_error
+            if result.catalog is not None:
+                self._observe(result.catalog, now_ms)
+        if result.request.availability:
+            if result.available_ids is None:
+                self.last_availability_error = result.availability_error
+            else:
+                self._observe_availability(result.available_ids, now_ms)
 
     def _adopt_metadata(self, now_ms: int) -> None:
         with self._metadata_lock:
@@ -181,34 +269,26 @@ class WatchModelDiscovery:
 
     def refresh(self, now_ms: int, *, resumed: bool = False) -> None:
         now_ms = int(now_ms)
+        self._adopt_checks(now_ms)
         if self.catalog is None:
             self._initialize(now_ms)
         elif (resumed or self._last_price_check_ms is None
               or now_ms - self._last_price_check_ms >= PRICE_CHECK_MS):
-            self._refresh_catalog(now_ms)
+            self._last_price_check_ms = now_ms  # bounded even when upstream is down
+            self._request_check(_CheckRequest(price=True))
+            self._adopt_checks(now_ms)
         self._adopt_metadata(now_ms)
         # Startup, resume and every poll: due only by health/backoff state.
         self._maybe_refresh_metadata(now_ms)
 
         # Read only the selected V2 service. No CLI fallback, process startup,
         # quota queries or provider entitlements are inferred.
-        read = getattr(self.service.selection.source, "available_model_ids", None)
-        if callable(read) and (self._last_availability_check_ms is None or resumed
-                              or now_ms - self._last_availability_check_ms >= AVAILABILITY_CHECK_MS):
+        if callable(self._availability_reader()) and (
+                self._last_availability_check_ms is None or resumed
+                or now_ms - self._last_availability_check_ms >= AVAILABILITY_CHECK_MS):
             self._last_availability_check_ms = now_ms
-            try:
-                result = read()
-            except (SourceError, OSError, ValueError):
-                self.last_availability_error = "unavailable"
-            except Exception as exc:
-                recoverable(exc, "watch-model-discovery-availability")
-                self.last_availability_error = type(exc).__name__
-            else:
-                recovered("watch-model-discovery-availability")
-                if result is None:
-                    self.last_availability_error = "unverified"
-                else:
-                    self._observe_availability(result, now_ms)
+            self._request_check(_CheckRequest(availability=True))
+            self._adopt_checks(now_ms)
 
         self._first_seen = {
             key: item for key, item in self._first_seen.items()
@@ -229,7 +309,8 @@ class WatchModelDiscovery:
             # models NEVER appear in the user-facing notice.
             self._v2_price_triggers += 1
             self._last_v2_price_trigger_ms = now_ms
-            self._refresh_catalog(now_ms, force=True)
+            self._last_price_check_ms = now_ms
+            self._request_check(_CheckRequest(price=True, force_price=True))
         elif first_read and self.catalog is not None:
             # The initial list proves nothing new, but a selectable model
             # still lacking a verified date is a reason to recheck metadata.
@@ -264,7 +345,10 @@ class WatchModelDiscovery:
         provider_metadata = getattr(self.service.pricing_provider, "metadata_diagnostics", None)
         with self._metadata_lock:
             active, error = self._metadata_active, self.last_metadata_error
+        with self._check_lock:
+            check_active = self._check_active
         return {
+            "discovery_check_active": check_active,
             "pricing_check_interval_minutes": PRICE_CHECK_MS // 60_000,
             "availability_check_interval_minutes": AVAILABILITY_CHECK_MS // 60_000,
             "catalog_models": len(self.catalog.models) if self.catalog else None,

@@ -62,6 +62,25 @@ def _stop(process: subprocess.Popen) -> None:
         process.wait(timeout=3)
 
 
+def _release(process: subprocess.Popen, reader: "_ControlReader | None") -> None:
+    try:
+        _stop(process)
+    except (OSError, subprocess.SubprocessError):
+        pass  # already gone or unkillable; no result depends on it any more
+    if reader is not None:
+        reader.thread.join(timeout=1)
+    if process.stdout:
+        process.stdout.close()
+
+
+def _release_later(process: subprocess.Popen, reader: "_ControlReader | None") -> None:
+    """The answer is complete; the helper's ~1s exit must not delay quotas.
+
+    Non-daemon: interpreter exit still waits for the bounded stop/kill.
+    """
+    threading.Thread(target=_release, args=(process, reader), name="claude-metadata-cleanup").start()
+
+
 def read_claude_auth() -> Mapping[str, object] | None:
     command = _command(["auth", "status", "--json"])
     if command is None:
@@ -191,8 +210,4 @@ def read_claude_usage(*, timeout_seconds: float = 20) -> ClaudeUsageResult:
         return ClaudeUsageResult(account, None, "error", "transport_failure")
     finally:
         if process is not None:
-            _stop(process)
-            if reader is not None:
-                reader.thread.join(timeout=1)
-            if process.stdout:
-                process.stdout.close()
+            _release_later(process, reader)

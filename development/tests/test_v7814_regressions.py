@@ -9,15 +9,15 @@ import tempfile
 import unittest
 from unittest import mock
 
-from development.tests.test_analysis_core import make_snapshot, message, MODEL
-from development.tests.test_step8_watch import MutableSource, make_service
+from development.fixtures.session_snapshots import make_snapshot, message, MODEL
+from development.fixtures.watch_runtime import MutableSource, make_service
 from src import bootstrap
 from src.config import load_configuration
 from src.domain import CostKind, CostObservation, MessageRole, TokenUsage
 from src.presentation import WatchRenderer
 from src.sources.errors import SourceUnavailableError
 from src.sources.opencode_v1 import _error_name as v1_error_name
-from src.sources.opencode_v2 import _error_name as v2_error_name
+from src.sources.opencode_errors import normalize_error_name as v2_error_name
 from src.watch import WatchCoordinator
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -223,7 +223,7 @@ class AbortAndWarningTests(unittest.TestCase):
             clock = [100_000]
             watch = WatchCoordinator(selection=selection, report_service=service, config=config, clock_ms=lambda: clock[0])
             initial = watch.initialize().projection
-            unavailable = replace(watch._account_quotas[0], availability="unavailable", quotas=())
+            unavailable = replace(watch.accounts.snapshots[0], availability="unavailable", quotas=())
             with mock.patch.object(service, "account_quota_snapshots", return_value=(unavailable,)):
                 clock[0] += 60_001
                 current = watch.poll_once().projection
@@ -267,7 +267,7 @@ class QuotaResumeRecoveryTests(unittest.TestCase):
                                       clock_ms=lambda: self.clock.wall, monotonic=lambda: self.clock.monotonic,
                                       sleep=self.clock.advance)
         self.initial = self.watch.initialize().projection
-        self.good = self.watch._account_quotas[0]
+        self.good = self.watch.accounts.snapshots[0]
         self.error = replace(self.good, availability="error", quotas=(), billing=(),
                              observations={"parser_reason": "network_failure"})
         patcher = mock.patch.object(self.service, "account_quota_snapshots", return_value=(self.error,))
@@ -283,7 +283,7 @@ class QuotaResumeRecoveryTests(unittest.TestCase):
         self.assertEqual(self.good.quotas, resumed.quota.accounts[0].account.quotas)
         self.assertTrue(resumed.quota_stale)
         self.assertEqual((self.good.key,), resumed.quota_recovering_accounts)
-        self.assertEqual(100_000, self.watch._account_quota_seen_ms[self.good.key])
+        self.assertEqual(100_000, self.watch.accounts.seen_ms[self.good.key])
         self.assertEqual(self.good.fetched_at_ms, resumed.quota.accounts[0].account.fetched_at_ms)
         stream = io.StringIO()
         WatchRenderer(self.config, stream=stream, interactive=False).render(resumed)
@@ -295,8 +295,8 @@ class QuotaResumeRecoveryTests(unittest.TestCase):
         recovered = self.watch.poll_once().projection
         self.assertFalse(recovered.quota_stale)
         self.assertFalse(recovered.quota_recovering_accounts)
-        self.assertIsNone(self.watch._quota_recovery_until)
-        self.assertEqual(705_000, self.watch._account_quota_seen_ms[self.good.key])
+        self.assertIsNone(self.watch.accounts.recovery_until)
+        self.assertEqual(705_000, self.watch.accounts.seen_ms[self.good.key])
         stream = io.StringIO()
         WatchRenderer(self.config, stream=stream, interactive=False).render(recovered)
         self.assertNotIn("recovering", stream.getvalue())
@@ -321,7 +321,7 @@ class QuotaResumeRecoveryTests(unittest.TestCase):
         self.assertFalse(expired.quota_recovering_accounts)
         self.assertFalse(expired.quota_stale)
         self.assertFalse(expired.quota.accounts[0].account.quotas)
-        self.assertEqual(100_000, self.watch._account_quota_seen_ms[self.good.key])
+        self.assertEqual(100_000, self.watch.accounts.seen_ms[self.good.key])
         self.clock.advance(34)
         self.watch.poll_once()
         self.assertEqual(4, self.fetch.call_count)
@@ -351,29 +351,29 @@ class QuotaResumeRecoveryTests(unittest.TestCase):
         self.clock.advance(60)
         completed = self.watch.poll_once().projection
         self.assertFalse(completed.quota_recovering_accounts)
-        self.assertIsNone(self.watch._quota_recovery_until)
+        self.assertIsNone(self.watch.accounts.recovery_until)
         self.fetch.side_effect = None
         self.fetch.return_value = (self.good,)
         self.clock.advance(30)
         self.watch.poll_once()
         self.assertEqual(1, self.fetch.call_count)
-        self.assertIsNone(self.watch._quota_recovery_until)
+        self.assertIsNone(self.watch.accounts.recovery_until)
         self.watch.interval_seconds = 120
         self.watch.idle_interval_seconds = 360
         self.clock.advance(360)
         self.watch.poll_once()
-        self.assertIsNone(self.watch._quota_recovery_until, "configured long waits are not scheduling gaps")
+        self.assertIsNone(self.watch.accounts.recovery_until, "configured long waits are not scheduling gaps")
 
     def test_wait_wakes_on_wall_gap_even_when_monotonic_excludes_os_sleep(self):
         def suspend(_seconds):
             self.clock.wall += 600_000
         self.watch.sleep = suspend
         self.watch._v1_wait(mock.Mock())
-        self.assertIsNotNone(self.watch._quota_recovery_until)
-        deadline = self.watch._quota_recovery_until
+        self.assertIsNotNone(self.watch.accounts.recovery_until)
+        deadline = self.watch.accounts.recovery_until
         resumed = self.watch.poll_once().projection
         self.assertTrue(resumed.quota_recovering_accounts)
-        self.assertEqual(deadline, self.watch._quota_recovery_until, "one gap must not re-arm grace")
+        self.assertEqual(deadline, self.watch.accounts.recovery_until, "one gap must not re-arm grace")
         self.watch.sleep = self.clock.advance
         start = self.clock.monotonic
         self.watch._v1_wait(mock.Mock())
@@ -415,7 +415,7 @@ class QuotaResumeRecoveryTests(unittest.TestCase):
         self.clock.advance(60)
         watch.poll_once()
         self.assertEqual(5, self.fetch.call_count)
-        self.assertIsNone(watch._quota_recovery_until, "one startup retry window per account")
+        self.assertIsNone(watch.accounts.recovery_until, "one startup retry window per account")
 
     def test_startup_retry_ends_on_success_and_skips_durable_failures(self):
         watch = self.new_watch()
@@ -424,7 +424,7 @@ class QuotaResumeRecoveryTests(unittest.TestCase):
         self.clock.advance(5)
         recovered = watch.poll_once().projection
         self.assertFalse(recovered.quota_recovering_accounts)
-        self.assertIsNone(watch._quota_retry_at)
+        self.assertIsNone(watch.accounts.retry_at)
         self.assertEqual("available", recovered.quota.accounts[0].account.availability)
         for observations in ({"parser_reason": "auth_failure"}, {"http_status": 401}):
             self.fetch.return_value = (replace(self.error, observations=observations),)
@@ -451,8 +451,8 @@ class QuotaResumeRecoveryTests(unittest.TestCase):
 
     def test_mixed_accounts_recover_independently_and_expiry_is_not_an_observation(self):
         other = replace(self.good, ref=replace(self.good.ref, account_id="other"))
-        self.watch._account_quotas = (self.good, other)
-        self.watch._account_quota_seen_ms[other.key] = 100_000
+        self.watch.accounts.snapshots = (self.good, other)
+        self.watch.accounts.seen_ms[other.key] = 100_000
         self.fetch.return_value = (self.good, replace(self.error, ref=other.ref))
         resumed = self.wake()
         self.assertEqual((other.key,), resumed.quota_recovering_accounts)
@@ -462,8 +462,8 @@ class QuotaResumeRecoveryTests(unittest.TestCase):
             self.clock.advance(delay)
             expired = self.watch.poll_once().projection
         self.assertFalse(expired.quota_recovering_accounts)
-        self.assertEqual(735_000, self.watch._account_quota_seen_ms[self.good.key])
-        self.assertEqual(100_000, self.watch._account_quota_seen_ms[other.key])
+        self.assertEqual(735_000, self.watch.accounts.seen_ms[self.good.key])
+        self.assertEqual(100_000, self.watch.accounts.seen_ms[other.key])
         self.assertFalse(expired.quota.accounts[1].account.quotas)
         self.assertEqual(4, self.fetch.call_count)
 
@@ -472,7 +472,7 @@ class QuotaResumeRecoveryTests(unittest.TestCase):
         resumed = self.wake()
         self.assertFalse(resumed.quota_recovering_accounts)
         self.assertFalse(resumed.quota_stale)
-        self.assertIsNone(self.watch._quota_retry_at)
+        self.assertIsNone(self.watch.accounts.retry_at)
         self.assertEqual(1, self.fetch.call_count)
 
     def test_grace_deadline_is_bounded_even_if_request_takes_longer_than_grace(self):
@@ -483,7 +483,7 @@ class QuotaResumeRecoveryTests(unittest.TestCase):
         resumed = self.wake()
         self.assertFalse(resumed.quota_recovering_accounts)
         self.assertFalse(resumed.quota.accounts[0].account.quotas)
-        self.assertIsNone(self.watch._quota_recovery_until)
+        self.assertIsNone(self.watch.accounts.recovery_until)
         self.assertEqual(1, self.fetch.call_count)
 
 

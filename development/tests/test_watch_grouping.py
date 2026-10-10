@@ -7,7 +7,7 @@ import io
 from itertools import groupby
 import unittest
 
-from development.tests.test_analysis_core import make_snapshot
+from development.fixtures.session_snapshots import make_snapshot
 from src.domain import EventKind, NormalizedEvent
 from src.presentation import WatchRenderer
 from src.reports.models import PromptProjection, SessionPromptBlock
@@ -125,7 +125,7 @@ class WatchGroupingTests(unittest.TestCase):
             self.assertEqual(2, sum(style[0] == "watchSessionHeader" for style in styles))
             renderer.render(projection)
             self.assertEqual(1, output.getvalue().count("Session A"))
-            self.assertEqual(1, output.getvalue().count("*1 Next Ictx:"))
+            self.assertEqual(1, output.getvalue().count("*1 Context:"))
 
     def test_max_rows_keeps_same_globally_newest_ordinary_and_all_protected_rows(self):
         blocks, snapshots = inputs(

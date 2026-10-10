@@ -5,8 +5,8 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
-from development.tests.test_opencode_v2 import fixture, source_with_service
-from development.tests.test_step7_reports_cli import FakePricingProvider
+from development.fixtures.opencode_v2_service import fixture, source_with_service
+from development.fixtures.report_runtime import FakePricingProvider
 from src.bootstrap import _model_availability_source
 from src.reports.model_comparison import selectable_catalog
 from src.sources.errors import SourceDataError, SourceUnavailableError

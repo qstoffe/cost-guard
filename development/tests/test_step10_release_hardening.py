@@ -54,21 +54,29 @@ class DistributionDocumentationTests(unittest.TestCase):
         self.assertIn("from the extracted repository root", text)
         self.assertIn("Get-ChildItem -Recurse | Unblock-File", text)
 
-    def test_all_maintainer_routes_make_packaging_explicit_only(self) -> None:
+    def test_all_maintainer_routes_package_by_environment(self) -> None:
+        """Hosted/web AI never builds a ZIP; every completed local version does, Full-verified."""
+        for name in ("AGENTS.md", "development/MAINTAINER.md", "development/README.md", "README.md"):
+            with self.subTest(path=name):
+                text = (ROOT / name).read_text(encoding="utf-8")
+                self.assertIn("Hosted/web AI", text)
+                self.assertRegex(text, r"never builds? (a|an|one|the) (ZIP|archive)|never builds one")
+                self.assertIn("build_release.py --full-verification", text)
         for name in ("AGENTS.md", "development/MAINTAINER.md", "development/README.md"):
             with self.subTest(path=name):
                 text = (ROOT / name).read_text(encoding="utf-8")
-                self.assertIn("Do not build a release ZIP merely because the Cost Guard product version changed", text)
-                self.assertIn("packaged ZIP, release candidate, GitHub/package release", text)
-                self.assertIn("explicit", text)
+                self.assertIn("every completed", text.lower())
                 self.assertIn("working tree", text)
                 self.assertIn("never commit/push automatically" if name.endswith("MAINTAINER.md") else "commit or push automatically", text)
                 self.assertIn("v80.0 tag", text)
         guide = (ROOT / "development/FR_GUIDE.md").read_text(encoding="utf-8")
-        self.assertIn("Packaging requires a separate explicit request", guide)
+        self.assertIn("Brainstorming never builds a ZIP", guide)
         agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
-        normal = agents.split("## Normal verification", 1)[1].split("## Explicit packaging only", 1)[0]
-        self.assertNotIn("build_release.py", normal)
+        hosted, local = agents.split("**Hosted/web AI**", 1)[1].split("**Local workstation", 1)
+        self.assertNotIn("build_release.py", hosted)
+        self.assertIn("--suite full", local)
+        self.assertIn("build_release.py --full-verification", local)
+        self.assertIn("treat the environment as hosted", agents)
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         development_commands = readme.split("## Development", 1)[1].split("```text", 1)[1].split("```", 1)[0]
         self.assertNotIn("build_release.py", development_commands)

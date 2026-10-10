@@ -10,7 +10,8 @@ from bisect import bisect_left
 from copy import deepcopy
 from dataclasses import replace
 import math
-from typing import Any, Mapping, Sequence
+from collections.abc import Mapping, Sequence
+from typing import Any
 from urllib.parse import quote
 
 from src.domain import ContextBoundary, MessageRole, NormalizedMessage, TerminalEvidence, TerminalOutcome
@@ -335,7 +336,9 @@ def current_union_message_to_legacy_bundle(
 
     def append_part(raw: Mapping[str, Any], *, fallback_type: str | None = None) -> None:
         index = len(parts)
-        part = deepcopy(dict(raw))
+        # Shallow: nested values are replaced/copied below, never mutated, and
+        # canonical normalization takes its own isolated deep copy.
+        part = dict(raw)
         part.setdefault("id", _synthetic_part_id(message_id, index))
         part.setdefault("messageID", message_id)
         part.setdefault("sessionID", session_id)
@@ -460,7 +463,7 @@ def interim_flat_message_to_legacy_bundle(
     for index, raw in enumerate(raw_parts):
         if not isinstance(raw, Mapping):
             raise SourceDataError("OpenCode V2 experimental message contains an invalid part")
-        part = deepcopy(dict(raw))
+        part = dict(raw)  # shallow: see append_part above
         part.setdefault("id", _synthetic_part_id(message_id, index))
         part.setdefault("messageID", message_id)
         part.setdefault("sessionID", session_id)

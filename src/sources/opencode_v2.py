@@ -7,28 +7,25 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
 from copy import deepcopy
 from dataclasses import dataclass, replace
-from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Any, Iterator, Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
+from typing import Any
 
 from src.domain import (
     BackgroundActivity,
     ContextBoundary,
-    CostKind,
-    CostObservation,
     IntegrationHealth,
     MessageRole,
     ModelInvocation,
-    ModelRef,
     NormalizedMessage,
     NormalizedPart,
     NormalizedSession,
     Provenance,
     SessionCapabilities,
     SessionSnapshot,
-    TokenUsage,
 )
 
 from .base import SourceChange
@@ -41,8 +38,9 @@ from .discovery import (
 )
 from .errors import SourceDataError, SourceUnavailableError
 from .model_availability import settled_v2_model_ids
-from .opencode_errors import normalize_error_name as _error_name
-from .opencode_tokens import token_usage
+from .opencode_v2_normalization import (
+    normalize_invocations, normalize_message_bundle, optional_positive_int, safe_int,
+)
 from .opencode_v2_background import background_activities, running_jobs
 from .opencode_v2_diagnostics import summarize_v2_diagnostics
 from .opencode_v2_events import normalize_event
@@ -70,6 +68,8 @@ V2_CAPABILITIES = SessionCapabilities(
     compaction_events=True,
     live_changes=True,
 )
+# A complete catalog this recent may serve as a snapshot's "before" bracket.
+_CATALOG_REUSE_SECONDS = 2.0
 
 
 
@@ -79,71 +79,6 @@ class _NativeSession:
     data: Mapping[str, Any]
     directory: str
     active: bool | None = None
-
-
-def _safe_int(value: Any, default: int = 0) -> int:
-    if isinstance(value, bool):
-        return int(value)
-    try:
-        return int(value)
-    except (TypeError, ValueError, OverflowError):
-        return default
-
-
-def _optional_positive_int(value: Any) -> int | None:
-    parsed = _safe_int(value, 0)
-    return parsed if parsed > 0 else None
-
-
-def _decimal(value: Any, *, context: str) -> Decimal:
-    try:
-        result = Decimal(str(0 if value is None else value))
-    except (InvalidOperation, ValueError, TypeError) as exc:
-        raise SourceDataError(f"OpenCode V2 {context} contains an invalid numeric value") from exc
-    if not result.is_finite() or result < 0:
-        raise SourceDataError(f"OpenCode V2 {context} contains an invalid numeric value")
-    return result
-
-
-def _token_usage(value: Any, *, context: str) -> TokenUsage | None:
-    return token_usage(value, context=context, source="OpenCode V2")
-
-
-def _model_ref(provider: Any, model: Any) -> ModelRef | None:
-    provider_text = "" if provider is None else str(provider).strip()
-    model_text = "" if model is None else str(model).strip()
-    if not provider_text and not model_text:
-        return None
-    return ModelRef(provider=provider_text, model=model_text)
-
-
-def _part_semantic_data(data: Mapping[str, Any]) -> dict[str, Any]:
-    result = deepcopy(dict(data))
-    for key in ("id", "messageID", "sessionID"):
-        result.pop(key, None)
-    return result
-
-
-def _cost(value: Any, *, context: str) -> CostObservation | None:
-    if value is None:
-        return None
-    return CostObservation(
-        amount=_decimal(value, context=context),
-        currency="USD",
-        kind=CostKind.PROVIDER_REPORTED,
-        estimated=False,
-    )
-
-
-def _part_times(data: Mapping[str, Any], message_created: int, message_completed: int | None) -> tuple[int, int]:
-    time_value = data.get("time")
-    time_map = time_value if isinstance(time_value, Mapping) else {}
-    start = _safe_int(time_map.get("start"), message_created)
-    end = _safe_int(time_map.get("end"), message_completed or start)
-    return start, end
-
-
-
 
 
 class OpenCodeV2Source:
@@ -171,11 +106,15 @@ class OpenCodeV2Source:
         self._endpoint: V2Endpoint | None = None
         self._endpoint_marker: tuple[int, int] | None = None
         self._catalog_cache: tuple[_NativeSession, ...] | None = None
+        self._catalog_listed_at = 0.0
+        self._http: V2HttpClient | None = None
+        self._instance_cache: tuple[str, str] | None = None
         self._diagnostics: dict[str, Any] = {
             "session_contract": None, "session_pages": 0, "raw_sessions": 0,
             "message_contracts": {}, "message_shapes": {}, "message_items": {}, "message_pages": {},
             "message_types": {}, "message_route_rejections": {}, "message_lifecycle_ignored": {},
             "last_snapshot_stage": "unknown", "snapshot_revision_rechecks": 0,
+            "snapshot_catalog_reuses": 0, "snapshot_catalog_reuse_misses": 0, "transport": {},
         }
 
     @property
@@ -214,7 +153,13 @@ class OpenCodeV2Source:
         return self._endpoint
 
     def _client(self) -> V2HttpClient:
-        return V2HttpClient(self._current_endpoint(), timeout_seconds=self._timeout_seconds)
+        """One client (and keep-alive connection per thread) per registered endpoint."""
+        endpoint = self._current_endpoint()
+        client = self._http
+        if client is None or client.endpoint is not endpoint:
+            client = self._http = V2HttpClient(endpoint, timeout_seconds=self._timeout_seconds,
+                                               stats=self._diagnostics["transport"])
+        return client
 
     @property
     def source_instance(self) -> str | None:
@@ -222,8 +167,11 @@ class OpenCodeV2Source:
             endpoint = self._endpoint or self._read_endpoint()
         except SourceUnavailableError:
             return None
-        digest = hashlib.sha256(str(endpoint.registration_path).encode("utf-8", errors="surrogatepass")).hexdigest()[:16]
-        return f"service:{digest}"
+        path = str(endpoint.registration_path)
+        if self._instance_cache is None or self._instance_cache[0] != path:
+            digest = hashlib.sha256(path.encode("utf-8", errors="surrogatepass")).hexdigest()[:16]
+            self._instance_cache = (path, f"service:{digest}")
+        return self._instance_cache[1]
 
     def probe(self) -> IntegrationHealth:
         if not self._candidate.path.is_file():
@@ -305,17 +253,18 @@ class OpenCodeV2Source:
         if since_ms is not None:
             values = [
                 item for item in values
-                if _safe_int((item.data.get("time") or {}).get("updated") if isinstance(item.data.get("time"), Mapping) else 0) >= int(since_ms)
+                if safe_int((item.data.get("time") or {}).get("updated") if isinstance(item.data.get("time"), Mapping) else 0) >= int(since_ms)
             ]
         result = sorted(
             values,
-            key=lambda item: (-_safe_int((item.data.get("time") or {}).get("updated") if isinstance(item.data.get("time"), Mapping) else 0), str(item.data["id"])),
+            key=lambda item: (-safe_int((item.data.get("time") or {}).get("updated") if isinstance(item.data.get("time"), Mapping) else 0), str(item.data["id"])),
         )
         self._diagnostics["session_contract"] = contract
         self._diagnostics["session_pages"] = pages
         self._diagnostics["raw_sessions"] = len(result)
         if since_ms is None:
             self._catalog_cache = tuple(result)
+            self._catalog_listed_at = time.monotonic()
         return result
 
     def _normalize_session(self, native: _NativeSession) -> NormalizedSession:
@@ -327,9 +276,9 @@ class OpenCodeV2Source:
         return NormalizedSession(
             session_id=session_id,
             title=str(data.get("title") or session_id),
-            created_at_ms=_safe_int(time_map.get("created")),
-            updated_at_ms=_safe_int(time_map.get("updated")),
-            archived_at_ms=_optional_positive_int(time_map.get("archived")),
+            created_at_ms=safe_int(time_map.get("created")),
+            updated_at_ms=safe_int(time_map.get("updated")),
+            archived_at_ms=optional_positive_int(time_map.get("archived")),
             parent_session_id=str(parent) if parent not in (None, "") else None,
             active=native.active,
             provenance=self._provenance(session_id),
@@ -337,6 +286,7 @@ class OpenCodeV2Source:
         )
 
     def list_sessions(self, since_ms: int | None = None) -> Sequence[NormalizedSession]:
+        self._diagnostics["last_snapshot_stage"] = "catalog"
         return tuple(self._normalize_session(value) for value in self._list_native_sessions(since_ms, refresh=True))
 
     @staticmethod
@@ -393,134 +343,9 @@ class OpenCodeV2Source:
         unique = tuple(dict.fromkeys(str(value) for value in session_ids if str(value)))
         if not unique:
             return {}
+        self._diagnostics["last_snapshot_stage"] = "catalog"
         catalog = self._list_native_sessions(refresh=self._catalog_cache is None)
         return {session_id: self._revision(self._tree(catalog, session_id)) for session_id in unique}
-
-    def _normalize_message_bundle(
-        self, bundle: Mapping[str, Any], native_session: _NativeSession
-    ) -> tuple[NormalizedMessage, tuple[NormalizedPart, ...]]:
-        info = bundle.get("info")
-        raw_parts = bundle.get("parts")
-        if not isinstance(info, Mapping) or not isinstance(raw_parts, list):
-            raise SourceDataError("OpenCode V2 message payload is invalid")
-        message_id = info.get("id")
-        session_id = info.get("sessionID")
-        if not isinstance(message_id, str) or not isinstance(session_id, str):
-            raise SourceDataError("OpenCode V2 message identity is invalid")
-        role_text = str(info.get("role", "")).lower()
-        role = {"user": MessageRole.USER, "assistant": MessageRole.ASSISTANT}.get(role_text, MessageRole.OTHER)
-        time_value = info.get("time")
-        time_map = time_value if isinstance(time_value, Mapping) else {}
-        created = _safe_int(time_map.get("created"))
-        completed = _optional_positive_int(time_map.get("completed"))
-
-        model: ModelRef | None = None
-        variant: str | None = None
-        if role is MessageRole.USER:
-            nested = info.get("model")
-            if isinstance(nested, Mapping):
-                model = _model_ref(nested.get("providerID"), nested.get("modelID", nested.get("id")))
-                raw_variant = nested.get("variant", info.get("variant"))
-                variant = str(raw_variant) if raw_variant not in (None, "") else None
-        elif role is MessageRole.ASSISTANT:
-            model = _model_ref(info.get("providerID"), info.get("modelID"))
-            raw_variant = info.get("variant")
-            variant = str(raw_variant) if raw_variant not in (None, "") else None
-
-        parts: list[NormalizedPart] = []
-        for raw in raw_parts:
-            if not isinstance(raw, Mapping):
-                raise SourceDataError("OpenCode V2 message contains an invalid part")
-            part_id = raw.get("id")
-            if not isinstance(part_id, str):
-                raise SourceDataError("OpenCode V2 part identity is invalid")
-            part_session = str(raw.get("sessionID") or session_id)
-            part_message = str(raw.get("messageID") or message_id)
-            part_created, part_updated = _part_times(raw, created, completed)
-            parts.append(NormalizedPart(
-                part_id=part_id,
-                message_id=part_message,
-                session_id=part_session,
-                kind=str(raw.get("type", "other") or "other"),
-                created_at_ms=part_created,
-                updated_at_ms=part_updated,
-                provenance=self._provenance(part_session, part_id),
-                data=_part_semantic_data(raw),
-            ))
-
-        metadata: dict[str, Any] = {}
-        for key in ("mode", "system", "structured"):
-            if key in info:
-                metadata[key] = deepcopy(info[key])
-        message = NormalizedMessage(
-            message_id=message_id,
-            session_id=session_id,
-            role=role,
-            created_at_ms=created,
-            completed_at_ms=completed,
-            parent_message_id=str(info.get("parentID")) if info.get("parentID") not in (None, "") else None,
-            model=model,
-            variant=variant,
-            agent=str(info.get("agent")) if info.get("agent") not in (None, "") else None,
-            summary=bool(info.get("summary", False)),
-            finish_reason=str(info.get("finish")) if info.get("finish") not in (None, "") else None,
-            error_name=_error_name(info.get("error")),
-            tokens=_token_usage(info.get("tokens"), context="message tokens"),
-            cost=_cost(info.get("cost"), context="message cost") if "cost" in info else None,
-            parts=tuple(parts),
-            provenance=self._provenance(session_id, message_id),
-            metadata=metadata,
-        )
-        return message, tuple(parts)
-
-    def _normalize_invocations(self, message: NormalizedMessage) -> list[ModelInvocation]:
-        if message.role is not MessageRole.ASSISTANT or message.model is None:
-            return []
-        steps = [part for part in message.parts if part.kind == "step-finish" and isinstance(part.data.get("tokens"), Mapping)]
-        if steps:
-            result: list[ModelInvocation] = []
-            for part in steps:
-                tokens = _token_usage(part.data.get("tokens"), context="step tokens")
-                if tokens is None:
-                    continue
-                result.append(ModelInvocation(
-                    invocation_id=f"{message.message_id}:{part.part_id}",
-                    session_id=message.session_id,
-                    created_at_ms=part.created_at_ms or message.created_at_ms,
-                    completed_at_ms=part.updated_at_ms or message.completed_at_ms,
-                    model=message.model,
-                    tokens=tokens,
-                    cost=_cost(part.data.get("cost"), context="step cost") if "cost" in part.data else None,
-                    provenance=self._provenance(message.session_id, part.part_id),
-                    initiating_event_id=message.parent_message_id,
-                    message_id=message.message_id,
-                    step_part_id=part.part_id,
-                    variant=message.variant,
-                    summary=message.summary,
-                    finish_reason=message.finish_reason,
-                    error_name=message.error_name,
-                ))
-            return result
-        if message.tokens is None:
-            return []
-        request_id = message.metadata.get("provider_request_id") if isinstance(message.metadata, Mapping) else None
-        return [ModelInvocation(
-            invocation_id=message.message_id,
-            session_id=message.session_id,
-            created_at_ms=message.created_at_ms,
-            completed_at_ms=message.completed_at_ms,
-            model=message.model,
-            tokens=message.tokens,
-            cost=message.cost,
-            provenance=message.provenance,
-            initiating_event_id=message.parent_message_id,
-            provider_request_id=str(request_id) if request_id else None,
-            message_id=message.message_id,
-            variant=message.variant,
-            summary=message.summary,
-            finish_reason=message.finish_reason,
-            error_name=message.error_name,
-        )]
 
     def _load_messages(self, native: _NativeSession) -> tuple[
         tuple[NormalizedMessage, ...], tuple[NormalizedPart, ...], tuple[ContextBoundary, ...],
@@ -550,7 +375,7 @@ class OpenCodeV2Source:
         messages: list[NormalizedMessage] = []
         parts: list[NormalizedPart] = []
         for bundle in bundles:
-            message, message_parts = self._normalize_message_bundle(bundle, native)
+            message, message_parts = normalize_message_bundle(bundle, self._provenance)
             messages.append(message)
             parts.extend(message_parts)
         messages.sort(key=lambda value: (value.created_at_ms, value.message_id))
@@ -578,10 +403,27 @@ class OpenCodeV2Source:
         self._diagnostics.setdefault("message_pages", {})[session_id] = pages
         return tuple(messages), tuple(parts), location_boundaries(items, session_id=session_id), background, notices
 
+    def _catalog_before_messages(self, session_id: str, *, allow_reuse: bool) -> tuple[list[_NativeSession], bool]:
+        """Catalog that brackets a snapshot's message reads from before.
+
+        Consistency needs equal tree revisions in a catalog read before and one
+        read after the messages. A complete listing from the last couple of
+        seconds still precedes the reads, so batches of snapshots reuse the
+        previous after-catalog; a mismatch then retries with fresh catalogs.
+        """
+        cached, listed_at = self._catalog_cache, self._catalog_listed_at
+        if (allow_reuse and cached is not None and time.monotonic() - listed_at <= _CATALOG_REUSE_SECONDS
+                and any(str(item.data["id"]) == session_id for item in cached)):
+            self._diagnostics["snapshot_catalog_reuses"] += 1
+            return list(cached), True
+        return self._list_native_sessions(refresh=True), False
+
     def load_session_snapshot(self, session_id: str) -> SessionSnapshot:
-        for attempt in range(2):
+        reuse = True
+        attempt = 0
+        while attempt < 2:
             self._diagnostics["last_snapshot_stage"] = "catalog_before"
-            before_all = self._list_native_sessions(refresh=True)
+            before_all, reused = self._catalog_before_messages(session_id, allow_reuse=reuse)
             before_tree = self._tree(before_all, session_id)
             before_revision = self._revision(before_tree)
             messages: list[NormalizedMessage] = []
@@ -601,9 +443,8 @@ class OpenCodeV2Source:
             after_all = self._list_native_sessions(refresh=True)
             after_tree = self._tree(after_all, session_id)
             after_revision = self._revision(after_tree)
-            self._diagnostics["last_snapshot_stage"] = "revision_check"
             if before_revision == after_revision:
-                self._diagnostics["last_snapshot_stage"] = "complete"
+                self._diagnostics["last_snapshot_stage"] = "normalize"
                 sessions = tuple(self._normalize_session(item) for item in before_tree)
                 events = tuple(
                     event for message in messages
@@ -611,12 +452,13 @@ class OpenCodeV2Source:
                 )
                 invocations: list[ModelInvocation] = []
                 for message in messages:
-                    invocations.extend(self._normalize_invocations(message))
+                    invocations.extend(normalize_invocations(message, self._provenance))
                 invocations.sort(key=lambda value: (
                     value.completed_at_ms if value.completed_at_ms is not None else value.created_at_ms,
                     value.invocation_id,
                 ))
                 root = next(value for value in sessions if value.session_id == session_id)
+                self._diagnostics["last_snapshot_stage"] = "complete"
                 return SessionSnapshot(
                     root=root,
                     sessions=sessions,
@@ -628,9 +470,12 @@ class OpenCodeV2Source:
                     context_boundaries=tuple(boundaries),
                     background=tuple(background),
                 )
+            if reused:
+                reuse = False  # the reused catalog was stale; not a fresh attempt
+                self._diagnostics["snapshot_catalog_reuse_misses"] += 1
+                continue
             self._diagnostics["snapshot_revision_rechecks"] += 1
-            if attempt == 1:
-                break
+            attempt += 1
         self._diagnostics["last_snapshot_stage"] = "revision_changed"
         raise SourceDataError("OpenCode V2 session changed repeatedly while it was being read")
 

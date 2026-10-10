@@ -7,6 +7,7 @@ from threading import Event, Thread
 from typing import Mapping, Sequence
 
 from src.domain import NormalizedSession
+from src.domain.session_tree import root_by_session
 from src.sources.base import LiveSessionSource, SessionSource, SourceChange
 from src.sources.errors import SourceError, SourceResyncRequiredError
 from src.runtime_errors import recoverable, recovered
@@ -21,29 +22,7 @@ class CatalogObservation:
 
 
 def _root_map(sessions: Sequence[NormalizedSession]) -> tuple[tuple[NormalizedSession, ...], dict[str, str]]:
-    by_id = {item.session_id: item for item in sessions}
-    memo: dict[str, str] = {}
-
-    def root_id(item: NormalizedSession) -> str:
-        if item.session_id in memo:
-            return memo[item.session_id]
-        current = item
-        trail = []
-        seen = set()
-        while current.parent_session_id and current.session_id not in seen:
-            seen.add(current.session_id)
-            trail.append(current.session_id)
-            parent = by_id.get(current.parent_session_id)
-            if parent is None:
-                break
-            current = parent
-        result = current.session_id
-        memo[result] = result
-        for value in trail:
-            memo[value] = result
-        return result
-
-    mapping = {item.session_id: root_id(item) for item in sessions}
+    mapping = root_by_session(sessions)
     roots = tuple(
         sorted(
             (item for item in sessions if item.parent_session_id is None and item.archived_at_ms is None),

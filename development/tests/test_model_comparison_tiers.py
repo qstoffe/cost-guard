@@ -9,7 +9,7 @@ import unittest
 
 from development.tests import test_compact_reports as compact
 from development.tests.test_compact_reports import Availability, rendered
-from development.tests.test_step8_watch import MutableSource
+from development.fixtures.watch_runtime import MutableSource
 from src.analysis.comparisons import model_comparison_rows
 from src.domain import ModelPricing, ModelRef, PricingTier, TokenUsage
 from src.pricing.catalog import PricingCatalog

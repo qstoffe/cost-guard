@@ -19,6 +19,7 @@ _OWNED = {
 }
 # Live retry/health state is archived but never pruned: deleting it would
 # reset the metadata backoff and erase the evidence of an ongoing failure.
+# Bounded Watch observations likewise keep source-error history across bundles.
 _LIVE_STATE = frozenset({"model-metadata.json", "watch-observations.json"})
 
 

@@ -459,7 +459,7 @@ class NoticeTests(unittest.TestCase):
         provider.get_catalog = lambda force=False: provider.current
         service = SimpleNamespace(pricing_provider=provider, selection=SimpleNamespace(source=None),
                                   _load_catalog=lambda: catalog, cache_repository=repository)
-        return WatchModelDiscovery(service), provider
+        return WatchModelDiscovery(service, run_async=lambda work: work()), provider
 
     def test_old_verified_date_hides_a_newly_discovered_model(self) -> None:
         watch, provider = self.watch(PricingCatalog(models=(model("Old"),), retrieved_at_ms=1))

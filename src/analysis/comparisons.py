@@ -90,6 +90,27 @@ def model_comparison_rows(records: Iterable[PromptRecord], catalog: PricingCatal
         return (*key, rows[index].model_name.casefold(), rows[index].model_name)
     return tuple(projected[index] for index in sorted(range(len(rows)), key=sort_key))
 
+def threshold_cost_multiplier(
+    catalog: PricingCatalog, model_id: str, threshold: int,
+    mix: tuple[Decimal, Decimal, Decimal, Decimal, int],
+) -> Decimal | None:
+    """Relative CCost after/before one price threshold, exactly as the model table.
+
+    Both Relative CCost levels share the report's comparison mix and lowest
+    reference, so their ratio is the tier-price ratio under that mix. Without
+    an observed sample the table's hidden sorting mix is used. Only a real
+    increase is returned; ``threshold`` is the warning's ``>N`` boundary.
+    """
+    model = catalog.reference_prices(model_id, exact=False) if model_id and threshold > 0 else None
+    if model is None:
+        return None
+    tiers = ordered_tiers(model)
+    shared = mix if mix[4] > 0 else _DEFAULT_SORT_MIX
+    for previous, tier in zip(tiers, tiers[1:]):
+        if (tier.min_input_tokens or 0) - 1 == threshold:
+            before, after = token_mix_tier_price(shared, previous), token_mix_tier_price(shared, tier)
+            return after / before if before and after and after > before else None
+    return None
 
 
 def _effort_label(variant: str) -> str:

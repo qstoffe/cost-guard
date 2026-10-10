@@ -106,10 +106,9 @@ def main(argv: list[str] | None = None) -> int:
     test_runner = ROOT / "development/tools/run_tests.py"
     validator = ROOT / "development/tools/validate_package.py"
 
-    # Hosted/constrained AI environments default to the bounded quick tier.
-    # Full local verification is intentionally available as an explicit gate and
-    # is also run by Diagnostics on unrestricted real machines. Nested builder
-    # regression tests skip the outer behavior gate to avoid recursive execution.
+    # Local packaging always passes --full-verification (hosted/web AI never builds).
+    # The Quick default serves builder regression fixtures and emergencies. Nested
+    # builder regression tests skip the outer behavior gate to avoid recursion.
     suite = "full" if args.full_verification else "quick"
     if args.full_verification and args.quick_already_run:
         parser.error("--quick-already-run cannot be combined with --full-verification")

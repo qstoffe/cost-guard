@@ -50,7 +50,6 @@ from typing import Any, Callable
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from src.accounts.github_copilot import GitHubCopilotAccountProvider  # noqa: E402
 from src.accounts.diagnostics import sanitized_account_observation  # noqa: E402
 from src.bootstrap import _account_providers, _model_availability_source, _select_source  # noqa: E402
 from src.cache import CacheDatabase, CacheRepository  # noqa: E402
@@ -59,17 +58,17 @@ from src.pricing.github_copilot import GitHubCopilotPricingProvider  # noqa: E40
 from src.presentation import StartupProgress  # noqa: E402
 from src.reports import ReportKind, ReportRequest, ReportService  # noqa: E402
 from src.sources.opencode_v1 import OpenCodeV1Source  # noqa: E402
-from src.sources.discovery import default_opencode_data_dir  # noqa: E402
 from src.sources.opencode_v2 import OpenCodeV2Source  # noqa: E402
 from src.sources.selection import SourceSelector  # noqa: E402
 from src.version import DISPLAY_VERSION, PRODUCT_NAME, RELEASE_DATE, mode_heading  # noqa: E402
 from src.runtime_errors import recoverable, recovered  # noqa: E402
 from src.sources.errors import SourceError  # noqa: E402
-from src.watch.recovery_events import recent_events
+from src.watch.recovery_events import recent_events  # noqa: E402
 from src.watch.observation_diagnostics import recent_events as watch_observations  # noqa: E402
 from development.tools.diagnostic_logs import create_bundle  # noqa: E402
 from development.tools.diagnostic_metadata import model_metadata_section  # noqa: E402
 from development.tools.diagnostic_screen import render_result  # noqa: E402
+from development.tools.diagnostic_watch import terminal_facts, watch_evidence  # noqa: E402
 from src.config import ConfigError, read_jsonc  # noqa: E402
 
 
@@ -211,10 +210,14 @@ def _safe_source_stats(source: Any, *, snapshots: int) -> dict[str, Any]:
     return {"collection_error": timing}
 
 
-def _report_summary(selection: Any, config: dict[str, Any], *, network: bool) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+def _repository() -> CacheRepository:
     database = CacheDatabase(ROOT)
     database.initialize()
-    repository = CacheRepository(database)
+    return CacheRepository(database)
+
+
+def _report_summary(selection: Any, config: dict[str, Any], *, network: bool) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+    repository = _repository()
     pricing = GitHubCopilotPricingProvider(
         cache=repository,
         max_age_hours=float(config.get("pricingMaxAgeHours", 1)),
@@ -235,7 +238,7 @@ def _report_summary(selection: Any, config: dict[str, Any], *, network: bool) ->
         return None, timing
     summary = _projection_summary(projection)
     summary["account_acquisition"] = dict(service.account_diagnostics)
-    return summary, timing
+    return summary, {**timing, "accounts_quotas": projection.accounts_quotas}
 
 
 
@@ -248,13 +251,14 @@ def _safe_process_text(value: str | bytes | None) -> str:
 def _validation_command(script: Path, *args: str, timeout: int) -> dict[str, Any]:
     env = os.environ.copy()
     env["PYTHONDONTWRITEBYTECODE"] = "1"
+    env["PYTHONIOENCODING"] = "utf-8"
     started = time.perf_counter()
     try:
         proc = subprocess.run(
             [sys.executable, str(script), *args], cwd=ROOT, env=env,
-            capture_output=True, text=True, timeout=timeout,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout,
         )
-        output = (proc.stdout + "\n" + proc.stderr).strip()
+        output = ((proc.stdout or "") + "\n" + (proc.stderr or "")).strip()
         return {
             "ok": proc.returncode == 0,
             "exit_code": proc.returncode,
@@ -274,11 +278,12 @@ def _validation_test_suite(progress: StartupProgress, *, timeout: int = 900) -> 
     """Stream full-suite file completion so diagnostics progress reflects real work."""
     env = os.environ.copy()
     env["PYTHONDONTWRITEBYTECODE"] = "1"
+    env["PYTHONIOENCODING"] = "utf-8"
     started = time.perf_counter()
     proc = subprocess.Popen(
         [sys.executable, str(ROOT / "development/tools/run_tests.py"), "--suite", "full"],
         cwd=ROOT, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-        text=True, bufsize=1,
+        text=True, encoding="utf-8", errors="replace", bufsize=1,
     )
     lines: list[str] = []
     total = 16
@@ -419,12 +424,19 @@ def _text_summary(data: dict[str, Any]) -> str:
             f"sessions={item.get('session_count', 'N/A')} roots={item.get('root_count', 'N/A')} detail={probe.get('detail', '')}"
         )
     report = data.get("report") or {}
+    watch = data.get("watch") or {}
+    wide = (watch.get("renders") or {}).get("120") or {}
     lines.extend([
         "",
-        f"Report diagnostic ok: {data.get('report_timing', {}).get('ok')}",
+        f"Report diagnostic ok: {data.get('report_timing', {}).get('ok')} "
+        f"({data.get('report_timing', {}).get('elapsed_ms', 'N/A')} ms)",
         f"Session rows: {report.get('session_usage_rows', 'N/A')}",
         f"Prompt rows: {report.get('prompt_rows', 'N/A')}",
         f"Model comparison rows: {report.get('model_comparison_rows', 'N/A')}",
+        f"Watch smoke: init {watch.get('initialize_ms', 'N/A')} ms, poll {watch.get('poll_ms', 'N/A')} ms, "
+        f"rows {watch.get('rows', 'N/A')} (running {watch.get('running_rows', 'N/A')}), "
+        f"hydrated {watch.get('hydrated_roots', 'N/A')} / quiet {watch.get('startup_quiet_roots', 'N/A')}, "
+        f"render@120 {wide.get('render_ms', 'N/A')} ms, overflow lines {wide.get('flowing_overflow_lines', 'N/A')}",
         "",
         "Privacy: prompt text, session titles, auth tokens, raw auth files and raw OpenCode payloads are intentionally excluded.",
     ])
@@ -446,6 +458,7 @@ def collect(*, network: bool, snapshots: int, test_service_start: bool = False) 
             "platform": platform.platform(),
             "machine": platform.machine(),
             "system": platform.system(),
+            "terminal": terminal_facts(),
         },
         "config": {
             "default_config": "config/default-config.jsonc",
@@ -456,7 +469,12 @@ def collect(*, network: bool, snapshots: int, test_service_start: bool = False) 
             "workday_calendar": cfg.get("workdayCalendar"),
             "pricing_max_age_hours": cfg.get("pricingMaxAgeHours"),
             "running_prompt_warning_ccost": cfg.get("runningPromptWarningCCost"),
-            "copilot_quota_enabled": bool((cfg.get("copilotQuota") or {}).get("enabled", True)) if isinstance(cfg.get("copilotQuota"), dict) else True,
+            "account_integrations_enabled": {
+                key: bool(value.get("enabled", True)) for key, value in sorted(cfg.items())
+                if key.endswith("Quota") and isinstance(value, dict)
+            },
+            "watch_dashboard_max_rows": cfg.get("watchDashboardMaxRows"),
+            "session_watch_interval_seconds": cfg.get("sessionWatchIntervalSeconds"),
         },
         "paths": {
             "v1_database": _home_redacted(v1.database_path),
@@ -560,14 +578,20 @@ def collect(*, network: bool, snapshots: int, test_service_start: bool = False) 
             },
         }
         if network:
+            quotas = None
             report_result, outer_timing = _timed(lambda: _report_summary(selection, cfg, network=True))
             if report_result is None:
                 data["report"] = None
                 data["report_timing"] = outer_timing
             else:
                 report, report_timing = report_result
+                quotas = report_timing.pop("accounts_quotas", None)
                 data["report"] = report
                 data["report_timing"] = {**report_timing, "section_elapsed_ms": outer_timing.get("elapsed_ms")}
+            # Real-data Watch startup/render evidence: no new account requests (the
+            # report's observations exercise quota layout), no observation logging.
+            watch, watch_timing = _timed(lambda: watch_evidence(selection, cfg, _repository(), quota=quotas))
+            data["watch"] = watch if watch is not None else {"collection_error": watch_timing}
         else:
             data["report"] = None
             data["report_timing"] = {"ok": False, "skipped": "--no-network disables report build because pricing may require network"}
@@ -575,28 +599,8 @@ def collect(*, network: bool, snapshots: int, test_service_start: bool = False) 
         data["selection"] = None
         data["report"] = None
         data["report_timing"] = {"ok": False, "error": "source selection failed"}
-
-    quota_cfg = cfg.get("copilotQuota") if isinstance(cfg.get("copilotQuota"), dict) else {}
-    try:
-        account = GitHubCopilotAccountProvider(
-            enabled=bool(quota_cfg.get("enabled", True)),
-            auth_json_path=quota_cfg.get("authJsonPath"),
-            credential_db_path=(default_opencode_data_dir() / "opencode.db") if (data.get("selection") or {}).get("selected") == "v2" else None,
-        )
-        health, timing = _timed(account.probe)
-        data["github_copilot_account"] = {"probe": _health(health) if health is not None else None, "probe_timing": timing}
-        if network and health is not None and getattr(health, "healthy", False):
-            quotas, quota_timing = _timed(account.get_account_snapshots)
-            data["github_copilot_account"]["quota_timing"] = quota_timing
-            if quotas is not None:
-                data["github_copilot_account"]["accounts"] = [sanitized_account_observation(item) for item in quotas]
-    except Exception as exc:
-        if not isinstance(exc, (OSError, ValueError)):
-            recoverable(exc, "diagnostics-account-observation")
-        data["github_copilot_account"] = {
-            "probe": None,
-            "probe_timing": {"ok": False, "error_type": type(exc).__name__, "error": "ERROR: Account observation unavailable"},
-        }
+    # Every account's sanitized observation lives in report.accounts_quotas;
+    # inventory above covers accounts even when the report cannot run.
     return data
 
 

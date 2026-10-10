@@ -8,10 +8,11 @@ import unittest
 
 from development.fixtures.synthetic_month import SyntheticMonthSource
 from development.tests import test_compact_reports as compact
-from development.tests.test_analysis_core import make_snapshot
+from development.fixtures.session_snapshots import make_snapshot
+from src.reports.sampling import latest_prompts, latest_token_prompts
 from development.tests.test_compact_reports import Availability, rendered
 from development.tests.test_quota_presentation import quotas, rolling
-from development.tests.test_step8_watch import MutableSource
+from development.fixtures.watch_runtime import MutableSource
 from src.analysis.token_mix import TokenMix, priced_token_mix, token_mix
 from src.analysis.valuation import comparison_cost, unique_usage
 from src.cli import CommandKind, help_text, parse_command
@@ -162,8 +163,8 @@ class ReportDefinitionTests(unittest.TestCase):
         service = compact.CompactReportTests.service(self, SyntheticMonthSource(2, 60, month_start_ms=compact.START))
         built = service.build(ReportRequest())
         roots = tuple(service._analyzed.values())
-        self.assertEqual(len(service._latest_token_prompts(roots)), built.token_mix.sample_size)
-        self.assertEqual(normalized_average_token_mix(service._latest_prompts(roots))[4],
+        self.assertEqual(len(latest_token_prompts(roots)), built.token_mix.sample_size)
+        self.assertEqual(normalized_average_token_mix(latest_prompts(roots))[4],
                          built.model_comparison_sample_size)
         self.assertEqual((100, 100), (built.token_mix.sample_size, built.model_comparison_sample_size))
         text = rendered(built)
@@ -174,7 +175,7 @@ class ReportDefinitionTests(unittest.TestCase):
         record = root.bundle.prompts[0]
         root.bundle = replace(root.bundle, prompts=(record, replace(record, prompt_id="running", in_progress=True),
                                                     replace(record, prompt_id="aborted", aborted=True)))
-        self.assertEqual(3, len(service._latest_token_prompts((root,))))
+        self.assertEqual(3, len(latest_token_prompts((root,))))
         self.assertEqual(1, service._model_comparison((root,), all_models=True)[1])
 
 

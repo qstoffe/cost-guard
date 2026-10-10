@@ -6,9 +6,9 @@ import unittest
 from dataclasses import replace
 from decimal import Decimal
 
-from development.tests.test_analysis_core import make_snapshot
-from development.tests.test_step6_context_comparisons import catalog as sample_catalog
-from development.tests.test_step8_watch import MutableSource, make_service
+from development.fixtures.session_snapshots import make_snapshot
+from development.fixtures.pricing_catalog import catalog as sample_catalog
+from development.fixtures.watch_runtime import MutableSource, make_service
 from src.analysis import analyze_snapshot
 from src.analysis.context import watch_context_state
 from src.domain import ModelInvocation, ModelPricing, ModelRef, PricingTier, TokenUsage
@@ -98,9 +98,9 @@ class V786RegressionTests(unittest.TestCase):
         WatchRenderer({"timezone": "UTC", "colors": {}, "thresholds": {}}, stream=stream, interactive=False).render(projection)
         text = stream.getvalue()
         self.assertIn("*1 DFP-10524", text)
-        self.assertIn("*1 Next Ictx: Approaching price threshold", text)
+        self.assertIn("*1 Context: Approaching price threshold", text)
         self.assertNotIn("$", text)
-        self.assertIn("Next Ictx:", text)
+        self.assertIn("Context:", text)
         prompt_line = next(line for line in text.splitlines() if "#2 " in line)
         self.assertNotIn("N/A", prompt_line)
 

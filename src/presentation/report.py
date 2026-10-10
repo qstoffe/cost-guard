@@ -11,11 +11,11 @@ from src.reports.models import PromptProjection, ReportKind, ReportProjection, S
 from src.version import DISPLAY_VERSION, PRODUCT_NAME, RELEASE_DATE
 from src.numbers import ccost_amount
 
-from .terminal import AnsiStyler, Column, StyledText, fit, render_table, terminal_content_width, wrap_prose
+from .terminal import AnsiStyler, Column, StyledText, fit, render_table, single_line, terminal_content_width, wrap_prose
 from .accounts import capacity_lines, money, quota_label
 from .token_mix import MIX_TERM, aligned_mix_cells, compact_tokens, mix_cells, packed_cells, total_cost_text
 from .definitions import concept_lines
-from .context_warnings import WARNING_ROLE, next_ictx_ccost, warning_explanation_lines
+from .context_warnings import WARNING_ROLE, context_warning_text, next_ictx_ccost, threshold_multiplier_text, warning_explanation_lines
 from .pricing_notices import pricing_notice_lines
 from .model_comparison import aligned_price_summaries as _aligned_price_summaries, aligned_relative_costs
 from .model_supersession import superseded_rows
@@ -183,7 +183,7 @@ class ReportRenderer:
 
     def _render_sessions(self, report: ReportProjection) -> None:
         rows = [(
-            item.session_id, item.title, item.model + (" *" if item.multiple_models else ""),
+            item.session_id, single_line(item.title, item.session_id), item.model + (" *" if item.multiple_models else ""),
             ccost_amount(item.ccost, unresolved=not item.complete), item.prompt_count,
         ) for item in report.session_usage]
         for line in render_table(
@@ -246,7 +246,7 @@ class ReportRenderer:
                     styles.append((None,) * 7)
                     last_model = current_model
                     table_has_additional = table_has_additional or item.has_additional_model
-                prompt = f"{clock} #{item.prompt_number} {item.preview}" + (" [RUNNING]" if item.in_progress else "")
+                prompt = f"{clock} #{item.prompt_number} {single_line(item.preview)}" + (" [RUNNING]" if item.in_progress else "")
 
             native_compaction_without_billing = item.is_compaction and item.calls == 0
             if item.in_progress:
@@ -308,7 +308,7 @@ class ReportRenderer:
         content_width = max(0, rendered_width - 4)
         self._write("|" + "-" * max(0, rendered_width - 2) + "|")
         self._write(f"| {fit('Session: ' + block.session_id, content_width)} |")
-        title = (f"*{warning_number} " if warning_number else "") + block.title
+        title = (f"*{warning_number} " if warning_number else "") + single_line(block.title, block.session_id)
         title_cell = fit(title, content_width)
         if warning_number:
             marker = f"*{warning_number}"
@@ -320,13 +320,15 @@ class ReportRenderer:
             self._prose("Additional model(s) were used by linked subagent/child requests; displayed model is the root request model.", prefix="* ")
         warning_role = WARNING_ROLE if block.next_context_warning_severity != PriceWarningSeverity.NONE else None
         if block.next_context_tokens is not None:
-            next_line = (f"Next Ictx: ~{_context_k(block.next_context_tokens)} "
-                         + next_ictx_ccost(block.next_context_cached_ccost, block.next_context_fresh_ccost))
+            next_line = f"Next Ictx: ~{_context_k(block.next_context_tokens)} " + (
+                threshold_multiplier_text(block.next_context_cost_multiplier)
+                if warning_role and block.next_context_cost_multiplier is not None
+                else next_ictx_ccost(block.next_context_cached_ccost, block.next_context_fresh_ccost))
         else:
             next_line = "Next Ictx: N/A"
         self._prose(next_line, prefix="* ", role=warning_role)
         if warning_number and block.next_context_warning:
-            for line in warning_explanation_lines(f"*{warning_number}", block.next_context_warning,
+            for line in warning_explanation_lines(f"*{warning_number}", context_warning_text(block.next_context_warning),
                                                   block.next_context_warning_severity, self.styler, width=self.table_width):
                 self._write(line)
 
