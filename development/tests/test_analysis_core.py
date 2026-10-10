@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest import mock
 from zoneinfo import ZoneInfoNotFoundError
 
+from src.analysis import causal
 from src.analysis.billing import actual_entry_cost, aggregate_trace_usage, billing_request_fingerprint
 from src.analysis.cache import AnalysisDependencies, DerivedAnalysisCache, analyze_with_cache
 from src.analysis.causal import build_prompt_records
@@ -25,6 +26,7 @@ from src.domain import (
 from development.fixtures.session_snapshots import (
     CAP, MODEL, part, make_snapshot, make_native_v2_compaction_snapshot,
 )
+from development.fixtures.synthetic_month import make_root_snapshot
 
 
 class BillingTests(unittest.TestCase):
@@ -65,6 +67,15 @@ class CausalAnalysisTests(unittest.TestCase):
         self.assertTrue(sub.has_cost_breakdown)
         self.assertEqual(["a_sub", "a_syn", "ca"], [entry.message_id for entry in sub.entries])
         self.assertEqual(20, sub.input_context_tokens, "subtask should use first meaningful causal request")
+
+    def test_snapshot_wide_inputs_are_derived_once_per_analysis_pass(self) -> None:
+        snapshot = make_root_snapshot(0, 40, month_start_ms=1_788_220_800_000)
+        with mock.patch.object(causal, "trace_entries", wraps=causal.trace_entries) as entries, \
+                mock.patch.object(causal, "_visible_prompt_events", wraps=causal._visible_prompt_events) as visible:
+            records = build_prompt_records(snapshot, now_ms=1_790_000_000_000)
+        self.assertEqual(40, len(records))
+        # Re-deriving these per prompt made long sessions quadratic in Watch/report analysis.
+        self.assertEqual((1, 1), (entries.call_count, visible.call_count))
 
     def test_completed_compaction_is_separate_billed_event(self) -> None:
         events = completed_compactions(make_snapshot())

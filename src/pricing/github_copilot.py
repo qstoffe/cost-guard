@@ -348,12 +348,7 @@ def _annotate_promotions(models: Iterable[ModelPricing], markdown: str) -> tuple
             standard = _scaled_standard_tiers(model.tiers, discount)
             if standard:
                 meta["promotion_standard_tiers"] = json.dumps([_tier_to_dict(tier) for tier in standard], separators=(",", ":"))
-        result.append(ModelPricing(
-            model=model.model, currency=model.currency,
-            per_million_input=model.per_million_input, per_million_cache_read=model.per_million_cache_read,
-            per_million_cache_write=model.per_million_cache_write, per_million_output=model.per_million_output,
-            tiers=model.tiers, metadata=meta,
-        ))
+        result.append(replace(model, metadata=meta))
     return tuple(result)
 
 
@@ -371,12 +366,7 @@ def _apply_expired_promotions(catalog: PricingCatalog, now_ms: int) -> PricingCa
         meta = dict(model.metadata)
         if not expired:
             meta["promotion_active"] = "true"
-            models.append(ModelPricing(
-                model=model.model, currency=model.currency,
-                per_million_input=model.per_million_input, per_million_cache_read=model.per_million_cache_read,
-                per_million_cache_write=model.per_million_cache_write, per_million_output=model.per_million_output,
-                tiers=model.tiers, metadata=meta,
-            ))
+            models.append(replace(model, metadata=meta))
             continue
         raw_standard = meta.get("promotion_standard_tiers")
         if not raw_standard:
@@ -456,12 +446,8 @@ def _preserve_known_promotions(
                     and model.metadata.get("promotion_expires_ms") == known.metadata.get("promotion_expires_ms")
                     and not model.metadata.get("promotion_starts_ms")
                     and known.metadata.get("promotion_starts_ms")):
-                model = ModelPricing(
-                    model=model.model, currency=model.currency,
-                    per_million_input=model.per_million_input, per_million_cache_read=model.per_million_cache_read,
-                    per_million_cache_write=model.per_million_cache_write, per_million_output=model.per_million_output,
-                    tiers=model.tiers, metadata={**model.metadata, "promotion_starts_ms": known.metadata["promotion_starts_ms"]},
-                )
+                model = replace(model, metadata={**model.metadata,
+                                                 "promotion_starts_ms": known.metadata["promotion_starts_ms"]})
             result.append(model)
             continue
         if known is None or not _tier_sets_equal(model.tiers, known.tiers):
@@ -478,12 +464,7 @@ def _preserve_known_promotions(
         for key, value in known.metadata.items():
             if key.startswith("promotion_"):
                 meta[key] = value
-        result.append(ModelPricing(
-            model=model.model, currency=model.currency,
-            per_million_input=model.per_million_input, per_million_cache_read=model.per_million_cache_read,
-            per_million_cache_write=model.per_million_cache_write, per_million_output=model.per_million_output,
-            tiers=model.tiers, metadata=meta,
-        ))
+        result.append(replace(model, metadata=meta))
     return tuple(result)
 
 

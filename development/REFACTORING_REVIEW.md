@@ -18,6 +18,15 @@ The authoritative baseline was the locally delivered v80.33 filesystem, includin
 
 Parallel message hydration was measured and rejected: the local service serializes responses (20 roots: 736 ms sequential vs 597 ms with 8 threads), not worth the complexity.
 
+Post-v80.36 behavior-neutral cleanup (median of 5, captured live snapshots analyzed offline):
+
+| Hot spot | Owner and fix | Effect |
+| --- | --- | --- |
+| Trace entries, sorted prompt events and active compaction re-derived per prompt (quadratic per root) | `causal.py`: one `_RootTimeline` per `build_prompt_records` pass | 74 live roots 252 → 92 ms; largest root 60 → 12 ms; synthetic 500-prompt root 1.72 → 0.23 s |
+| Cache store deep-converted nested entries with `asdict` only to discard them | `analysis/cache.py`: flat field copies; nested values serialized once | 74 live bundles 90 → 31 ms; byte-identical JSON |
+
+Analysis records (2,528 across fixtures/live variants), cache JSON and Watch rows/markers over replayed live snapshots hashed identically before and after. Watch's per-second status path (≈2 ms for 20 hydrated 200-prompt roots) was measured and left unchanged.
+
 ## Behavioral evidence
 
 Baseline (v80.33 copy) and current trees rendered the same live data against one shared cache: Watch initial frame and token mix, and normal, all-models, sessions, session-detail and date reports were byte-identical. New regressions cover pooled transport reuse/retry/bounded idle sockets, overlapping discovery checks, the stuck Claude helper not delaying answers, Watch resync scope, and the numbers-only Diagnostics Watch smoke.
@@ -28,7 +37,7 @@ Full runs concurrently with its slowest files first (151 s → 32 s). Validator-
 
 ## Remaining bounded opportunities
 
-Server-side message serialization now dominates hydration. `collect_diagnostics.collect` (159 lines) and the release builder's double clean-extract Full run are the next tool costs. Causal attribution and prompt rendering remain behavior-sensitive legacy routines; characterize before splitting. Keep this review current in place.
+Server-side message serialization now dominates hydration. `collect_diagnostics.collect` (159 lines) and the release builder's double clean-extract Full run are the next tool costs. Causal attribution still scans messages/events linearly per prompt inside the legacy `build_prompt_record`; with snapshot-wide inputs shared it is no longer dominant. It and prompt rendering remain behavior-sensitive legacy routines; characterize before splitting. Keep this review current in place.
 
 ## Live-proof limits
 

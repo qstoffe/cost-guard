@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass, fields
 from decimal import Decimal, InvalidOperation
 from typing import Any, Callable, Mapping, Protocol
 
@@ -35,6 +35,11 @@ def dependency_signature(value: Any) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
+def _flat_fields(value: Any, nested: frozenset[str] = frozenset()) -> dict[str, Any]:
+    """Top-level dataclass fields; unlike ``asdict`` never deep-converts, so callers serialize nested values."""
+    return {item.name: getattr(value, item.name) for item in fields(value) if item.name not in nested}
+
+
 def _trace_to_dict(entry: TraceEntry) -> dict[str, Any]:
     return {
         "session_id": entry.session_id,
@@ -45,14 +50,14 @@ def _trace_to_dict(entry: TraceEntry) -> dict[str, Any]:
         "sort_order": entry.sort_order,
         "model": {"provider": entry.model.provider, "model": entry.model.model, "display_name": entry.model.display_name},
         "variant": entry.variant,
-        "tokens": asdict(entry.tokens),
+        "tokens": _flat_fields(entry.tokens),
         "reported_cost": str(entry.reported_cost),
         "summary": entry.summary,
         "finish_reason": entry.finish_reason,
         "error_name": entry.error_name,
         "cost_disposition": entry.cost_disposition.value,
         "source_instance": entry.source_instance,
-        "account_ref": asdict(entry.account_ref) if entry.account_ref else None,
+        "account_ref": _flat_fields(entry.account_ref) if entry.account_ref else None,
     }
 
 
@@ -79,11 +84,11 @@ def _trace_from_dict(data: Mapping[str, Any]) -> TraceEntry:
     )
 
 
+_PROMPT_NESTED = frozenset({"entries", "model_costs", "previous_entry", "pre_prompt_entry", "last_root_entry"})
+
+
 def _prompt_to_dict(record: PromptRecord) -> dict[str, Any]:
-    scalar = {
-        key: value for key, value in asdict(record).items()
-        if key not in {"entries", "model_costs", "previous_entry", "pre_prompt_entry", "last_root_entry"}
-    }
+    scalar = _flat_fields(record, _PROMPT_NESTED)
     for key in ("cost", "main_cost", "subagent_cost"):
         scalar[key] = str(getattr(record, key))
     scalar["entries"] = [_trace_to_dict(entry) for entry in record.entries]
@@ -108,7 +113,7 @@ def _prompt_from_dict(data: Mapping[str, Any]) -> PromptRecord:
 
 
 def _compaction_to_dict(record: CompactionRecord) -> dict[str, Any]:
-    values = {key: value for key, value in asdict(record).items() if key != "entries"}
+    values = _flat_fields(record, frozenset({"entries"}))
     values["cost"] = str(record.cost)
     values["entries"] = [_trace_to_dict(entry) for entry in record.entries]
     return values
