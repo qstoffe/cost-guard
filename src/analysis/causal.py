@@ -5,10 +5,11 @@ import math
 import re
 import time
 from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass
 
 from src.domain import (
-    BackgroundActivity, CostDisposition, EventKind, MessageRole, NormalizedMessage, NormalizedPart, SessionSnapshot,
-    TerminalOutcome,
+    BackgroundActivity, CostDisposition, EventKind, MessageRole, NormalizedEvent, NormalizedMessage, NormalizedPart,
+    SessionSnapshot, TerminalOutcome,
 )
 
 from .billing import CostEstimator, ProviderScope, measure_prompt_billing, provider_matches
@@ -93,10 +94,36 @@ def active_compaction_event(snapshot: SessionSnapshot):
     return event
 
 
-def prompt_references(snapshot: SessionSnapshot, *, since_ms: int = 0) -> tuple[PromptReference, ...]:
-    entries = trace_entries(snapshot)
-    parent_ids = {entry.parent_event_id for entry in entries if entry.parent_event_id}
-    messages = {message.message_id: message for message in snapshot.messages}
+@dataclass(frozen=True, slots=True)
+class _RootTimeline:
+    """Snapshot-wide inputs shared by every prompt of one analysis pass.
+
+    Deriving them once per prompt made attribution quadratic in long sessions.
+    """
+
+    entries: tuple[TraceEntry, ...]
+    visible_events: tuple[NormalizedEvent, ...]
+    compacting: NormalizedEvent | None
+    messages: Mapping[str, NormalizedMessage]
+
+
+def _root_timeline(
+    snapshot: SessionSnapshot, subscription_providers: frozenset[str] = frozenset()
+) -> _RootTimeline:
+    return _RootTimeline(
+        entries=trace_entries(snapshot, subscription_providers=subscription_providers),
+        visible_events=tuple(_visible_prompt_events(snapshot)),
+        compacting=active_compaction_event(snapshot),
+        messages={message.message_id: message for message in snapshot.messages},
+    )
+
+
+def prompt_references(
+    snapshot: SessionSnapshot, *, since_ms: int = 0, timeline: _RootTimeline | None = None,
+) -> tuple[PromptReference, ...]:
+    timeline = timeline or _root_timeline(snapshot)
+    parent_ids = {entry.parent_event_id for entry in timeline.entries if entry.parent_event_id}
+    messages = timeline.messages
     refs: list[PromptReference] = []
     order = {
         event.event_id: index + 1
@@ -106,7 +133,7 @@ def prompt_references(snapshot: SessionSnapshot, *, since_ms: int = 0) -> tuple[
             key=lambda item: (item.created_at_ms, item.event_id),
         ))
     }
-    visible_events = _visible_prompt_events(snapshot)
+    visible_events = timeline.visible_events
     for event in visible_events:
         if event.created_at_ms < since_ms:
             continue
@@ -119,7 +146,7 @@ def prompt_references(snapshot: SessionSnapshot, *, since_ms: int = 0) -> tuple[
         ]
         latest_visible = event is visible_events[-1]
         window = prompt_parent_ids(snapshot, event.event_id, event.created_at_ms,
-                                   subtask=event.kind is EventKind.SUBTASK)
+                                   subtask=event.kind is EventKind.SUBTASK, visible_events=visible_events)
         has_error_or_live = (
             any(item.termination or item.error_name or item.completed_at_ms is None for item in assistant_messages)
             or bool(snapshot.root.active is True and latest_visible)
@@ -140,7 +167,10 @@ def prompt_references(snapshot: SessionSnapshot, *, since_ms: int = 0) -> tuple[
     return tuple(refs)
 
 
-def prompt_parent_ids(snapshot: SessionSnapshot, prompt_id: str, prompt_time_ms: int, *, subtask: bool) -> set[str]:
+def prompt_parent_ids(
+    snapshot: SessionSnapshot, prompt_id: str, prompt_time_ms: int, *, subtask: bool,
+    visible_events: Sequence[NormalizedEvent] | None = None,
+) -> set[str]:
     """Events whose assistant work continues one logical root prompt.
 
     Background-completion notices and other invisible synthetic user messages
@@ -151,8 +181,9 @@ def prompt_parent_ids(snapshot: SessionSnapshot, prompt_id: str, prompt_time_ms:
     """
     kinds = {EventKind.BACKGROUND_COMPLETION, EventKind.OTHER} | (
         {EventKind.SYNTHETIC_CONTINUATION} if subtask else set())
+    visible = _visible_prompt_events(snapshot) if visible_events is None else visible_events
     next_visible = min(
-        (event.created_at_ms for event in _visible_prompt_events(snapshot) if event.created_at_ms > prompt_time_ms),
+        (event.created_at_ms for event in visible if event.created_at_ms > prompt_time_ms),
         default=2**63 - 1,
     )
     return {prompt_id} | {
@@ -162,8 +193,9 @@ def prompt_parent_ids(snapshot: SessionSnapshot, prompt_id: str, prompt_time_ms:
     }
 
 
-def _synthetic_parent_ids(snapshot: SessionSnapshot, ref: PromptReference) -> set[str]:
-    return prompt_parent_ids(snapshot, ref.prompt_id, ref.prompt_time_ms, subtask=ref.prompt_kind == "subtask")
+def _synthetic_parent_ids(snapshot: SessionSnapshot, ref: PromptReference, timeline: _RootTimeline) -> set[str]:
+    return prompt_parent_ids(snapshot, ref.prompt_id, ref.prompt_time_ms, subtask=ref.prompt_kind == "subtask",
+                             visible_events=timeline.visible_events)
 
 
 def _outstanding_background(
@@ -426,10 +458,9 @@ def _child_work(
     return entries, local
 
 
-def _is_completed_compaction_entry(snapshot: SessionSnapshot, entry: TraceEntry | None) -> bool:
+def _is_completed_compaction_entry(messages: Mapping[str, NormalizedMessage], entry: TraceEntry | None) -> bool:
     if entry is None or not entry.message_id:
         return False
-    messages = {message.message_id: message for message in snapshot.messages}
     message = messages.get(entry.message_id)
     if (
         message is None or message.role is not MessageRole.ASSISTANT or not message.summary
@@ -448,9 +479,12 @@ def build_prompt_record(
     estimator: CostEstimator | None = None,
     now_ms: int | None = None,
     subscription_providers: frozenset[str] = frozenset(),
+    timeline: _RootTimeline | None = None,
 ) -> PromptRecord | None:
+    """``timeline`` must derive from the same snapshot and subscription providers."""
     now_ms = int(time.time() * 1000) if now_ms is None else now_ms
-    parent_ids = _synthetic_parent_ids(snapshot, ref)
+    timeline = timeline or _root_timeline(snapshot, subscription_providers)
+    parent_ids = _synthetic_parent_ids(snapshot, ref, timeline)
     assistant_messages = [
         message for message in snapshot.messages
         if message.session_id == ref.session_id
@@ -463,8 +497,8 @@ def build_prompt_record(
     evidence = latest.termination if latest else None
     explicitly_aborted = bool(evidence.outcome is TerminalOutcome.CANCELLATION if evidence
                               else latest and _is_aborted_message(latest))
-    superseded = any(event.created_at_ms > ref.prompt_time_ms for event in _visible_prompt_events(snapshot))
-    compacting = active_compaction_event(snapshot)
+    superseded = any(event.created_at_ms > ref.prompt_time_ms for event in timeline.visible_events)
+    compacting = timeline.compacting
     superseded = superseded or bool(compacting and compacting.created_at_ms > ref.prompt_time_ms)
     foreground_work = _prompt_has_active_work(
         snapshot, assistant_messages, continuation_superseded=superseded
@@ -491,7 +525,7 @@ def build_prompt_record(
     )
 
     all_entries = [
-        entry for entry in trace_entries(snapshot, subscription_providers=subscription_providers)
+        entry for entry in timeline.entries
         if entry.session_id == ref.session_id and provider_matches(entry.model.provider, tracked_provider)
     ]
     root_entries = sorted(
@@ -550,7 +584,7 @@ def build_prompt_record(
             output_tokens=0, cache_read_tokens=0, cache_write_tokens=0, input_context_tokens=0,
             total_token_volume=0, model_costs={}, prompt_context_tokens_approx=prompt_context_approx,
             previous_entry=previous_before_prompt, pre_prompt_entry=previous_before_prompt,
-            previous_entry_is_compaction=_is_completed_compaction_entry(snapshot, previous_before_prompt),
+            previous_entry_is_compaction=_is_completed_compaction_entry(timeline.messages, previous_before_prompt),
             last_root_entry=None, aborted=aborted, watch_error=watch_error, abort_time_ms=abort_time,
             in_progress=in_progress,
             completed_successfully=successful_final,
@@ -576,10 +610,9 @@ def build_prompt_record(
     local_intervals = _local_intervals(assistant_messages, prompt_start, causal_end)
     entries = list(root_entries)
     visited: set[tuple[str, int, int]] = set()
-    all_tree_entries = trace_entries(snapshot, subscription_providers=subscription_providers)
     for child_id, start, end in _task_invocations(assistant_messages, prompt_start, causal_end, in_progress):
         child_entries, child_local = _child_work(
-            snapshot, all_tree_entries, child_id, start, end, visited, in_progress, tracked_provider
+            snapshot, timeline.entries, child_id, start, end, visited, in_progress, tracked_provider
         )
         entries.extend(child_entries)
         local_intervals.extend(child_local)
@@ -619,7 +652,7 @@ def build_prompt_record(
         local_duration_ms=local_ms, model_wait_ms=max(0, duration - local_ms),
         prompt_context_tokens_approx=prompt_context_approx, previous_entry=previous,
         pre_prompt_entry=previous_before_prompt,
-        previous_entry_is_compaction=_is_completed_compaction_entry(snapshot, previous),
+        previous_entry_is_compaction=_is_completed_compaction_entry(timeline.messages, previous),
         last_root_entry=last_root_for_next, aborted=aborted, watch_error=watch_error,
         abort_time_ms=abort_time, in_progress=in_progress,
         completed_successfully=successful_final,
@@ -636,12 +669,13 @@ def build_prompt_records(
     now_ms: int | None = None,
     subscription_providers: frozenset[str] = frozenset(),
 ) -> tuple[PromptRecord, ...]:
+    timeline = _root_timeline(snapshot, subscription_providers)
     records = [
         record
-        for ref in prompt_references(snapshot, since_ms=since_ms)
+        for ref in prompt_references(snapshot, since_ms=since_ms, timeline=timeline)
         if (record := build_prompt_record(
             snapshot, ref, tracked_provider=tracked_provider, estimator=estimator, now_ms=now_ms,
-            subscription_providers=subscription_providers,
+            subscription_providers=subscription_providers, timeline=timeline,
         )) is not None
     ]
     return tuple(sorted(records, key=lambda record: (record.prompt_time_ms, record.prompt_number)))

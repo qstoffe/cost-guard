@@ -11,6 +11,21 @@ from .models import ToolObservation, WatchRow
 from .tools import observe_tools
 
 
+def _event_key(prompt: PromptProjection) -> str:
+    """Stable row identity, including projections without a source event ID."""
+    return prompt.event_id or f"{prompt.at_ms}:{prompt.prompt_number}:{prompt.label}"
+
+
+def _marker(prompt: PromptProjection, *, recent_completion: bool, recent_running: bool) -> str:
+    if prompt.aborted:
+        return "!" if recent_completion else ""
+    if prompt.watch_error:
+        return "!"
+    if prompt.in_progress:
+        return "+" if recent_running else ""
+    return "✓" if recent_completion else ""
+
+
 def _activity(snapshot: SessionSnapshot, prompt: PromptProjection, event_id: str, now_ms: int) -> ToolObservation | None:
     """Tool/TODO status of a running row plus the background work it waits on."""
     if not prompt.in_progress:
@@ -63,8 +78,15 @@ class WatchRowTracker:
         events.sort(key=lambda item: (item[0], item[1], item[2]))
         return {event_id: index + 1 for index, (_at_ms, _source_index, event_id) in enumerate(events)}
 
+    def _recent_completion(self, observed: _Observed, now_ms: int) -> bool:
+        return (
+            observed.completion_seen_ms is not None
+            and self.recent_ms > 0
+            and 0 <= now_ms - observed.completion_seen_ms < self.recent_ms
+        )
+
     def _sort_key(self, row: WatchRow) -> tuple[int, int, int, str, str]:
-        event_id = row.prompt.event_id or f"{row.prompt.at_ms}:{row.prompt.prompt_number}:{row.prompt.label}"
+        event_id = _event_key(row.prompt)
         observed = self._observed.get((row.session_id, event_id))
         at_ms = observed.display_time_ms if observed and observed.display_time_ms else row.prompt.at_ms
         sequence = observed.event_sequence if observed else 0
@@ -108,7 +130,7 @@ class WatchRowTracker:
         *,
         sequence_by_event: Mapping[str, int],
     ) -> WatchRow | None:
-        event_id = prompt.event_id or f"{prompt.at_ms}:{prompt.prompt_number}:{prompt.label}"
+        event_id = _event_key(prompt)
         key = (block.session_id, event_id)
         observed = self._observed.get(key)
         if observed and observed.last_prompt and observed.last_prompt.completed_successfully and prompt.aborted:
@@ -155,26 +177,13 @@ class WatchRowTracker:
                 observed.event_sequence = compact_sequence
                 observed.after_compaction = True
 
-        recent_completion = (
-            observed.completion_seen_ms is not None
-            and self.recent_ms > 0
-            and 0 <= now_ms - observed.completion_seen_ms < self.recent_ms
-        )
         recent_running = (
             prompt.in_progress
             and self.recent_ms > 0
             and 0 <= now_ms - observed.first_seen_ms < self.recent_ms
         )
-        if prompt.aborted:
-            marker = "!" if recent_completion else ""
-        elif prompt.watch_error:
-            marker = "!"
-        elif prompt.in_progress:
-            marker = "+" if recent_running else ""
-        elif recent_completion:
-            marker = "✓"
-        else:
-            marker = ""
+        marker = _marker(prompt, recent_completion=self._recent_completion(observed, now_ms),
+                         recent_running=recent_running)
         return WatchRow(block.session_id, block.title, prompt, marker, _activity(snapshot, prompt, event_id, now_ms))
 
     def _retained_missing_rows(
@@ -206,19 +215,8 @@ class WatchRowTracker:
                 duration = max(prompt.duration_ms or 0, max(0, now_ms - prompt.at_ms))
                 prompt = replace(prompt, in_progress=False, duration_ms=duration)
                 observed.last_prompt = prompt
-            recent_completion = (
-                observed.completion_seen_ms is not None
-                and self.recent_ms > 0
-                and 0 <= now_ms - observed.completion_seen_ms < self.recent_ms
-            )
-            if prompt.aborted:
-                marker = "!" if recent_completion else ""
-            elif prompt.watch_error:
-                marker = "!"
-            elif recent_completion:
-                marker = "✓"
-            else:
-                marker = ""
+            # A retained prompt is never running: was_running tracks last_prompt.
+            marker = _marker(prompt, recent_completion=self._recent_completion(observed, now_ms), recent_running=False)
             retained.append(WatchRow(session_id, observed.session_title or block.title, prompt, marker, None))
         return retained
 
@@ -238,8 +236,7 @@ class WatchRowTracker:
             session_rows: list[WatchRow] = []
             present_event_ids: set[str] = set()
             for prompt in block.rows:
-                event_id = prompt.event_id or f"{prompt.at_ms}:{prompt.prompt_number}:{prompt.label}"
-                present_event_ids.add(event_id)
+                present_event_ids.add(_event_key(prompt))
                 row = self._row(
                     block, prompt, snapshot, now_ms,
                     sequence_by_event=sequence_by_event,
@@ -250,8 +247,7 @@ class WatchRowTracker:
 
             if self.session_scope and not session_rows and block.rows:
                 prompt = block.rows[-1]
-                event_id = prompt.event_id or f"{prompt.at_ms}:{prompt.prompt_number}:{prompt.label}"
-                tool = _activity(snapshot, prompt, event_id, now_ms)
+                tool = _activity(snapshot, prompt, _event_key(prompt), now_ms)
                 session_rows.append(WatchRow(
                     block.session_id, block.title, prompt,
                     "+" if prompt.in_progress and self.recent_ms > 0 else "", tool,
@@ -260,18 +256,11 @@ class WatchRowTracker:
 
             session_rows.sort(key=self._sort_key)
             if session_rows:
-                latest_key = (
-                    session_rows[-1].session_id,
-                    session_rows[-1].prompt.event_id
-                    or f"{session_rows[-1].prompt.at_ms}:{session_rows[-1].prompt.prompt_number}:{session_rows[-1].prompt.label}",
-                )
+                latest_key = (session_rows[-1].session_id, _event_key(session_rows[-1].prompt))
                 session_rows = [
                     WatchRow(
                         row.session_id, row.session_title, row.prompt, row.marker, row.tool,
-                        is_latest_session_event=(
-                            row.session_id,
-                            row.prompt.event_id or f"{row.prompt.at_ms}:{row.prompt.prompt_number}:{row.prompt.label}",
-                        ) == latest_key,
+                        is_latest_session_event=(row.session_id, _event_key(row.prompt)) == latest_key,
                     )
                     for row in session_rows
                 ]
