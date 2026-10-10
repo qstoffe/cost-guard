@@ -2,13 +2,11 @@ from __future__ import annotations
 
 import ast
 import json
-import os
 import sqlite3
 import tempfile
 import unittest
 from contextlib import closing
 from pathlib import Path
-from unittest import mock
 
 from src.domain import EventKind, MessageRole
 from src.sources.discovery import default_opencode_data_dir, discover_v1_database_candidate

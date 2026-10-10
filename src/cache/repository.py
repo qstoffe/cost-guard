@@ -58,8 +58,3 @@ class CacheRepository:
         except (json.JSONDecodeError, TypeError):
             return None
         return CacheEntry(namespace, key, payload, row[1], row[2])
-
-    def delete_namespace(self, namespace: str) -> int:
-        with self.database.connect() as connection:
-            cursor = connection.execute("DELETE FROM cache_entries WHERE namespace=?", (namespace,))
-            return cursor.rowcount

@@ -52,10 +52,6 @@ def _duration(ms: int | None) -> str:
     return f"{hours}h {minutes:02d}m"
 
 
-def _mix(value) -> str:
-    return "N/A" if value is None else "/".join(str(part) for part in value)
-
-
 def _percentile(values: list[Decimal], percentile: Decimal) -> Decimal:
     ordered = sorted(values)
     if not ordered:

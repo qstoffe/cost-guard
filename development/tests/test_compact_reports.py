@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import datetime, timezone
-from decimal import Decimal
 import io
 from pathlib import Path
 import tempfile
@@ -21,7 +20,7 @@ from src.cli import CliUsageError, CommandKind, parse_command
 from src.config import load_configuration
 from src.domain import ModelRef, AccountUsageStatus
 from src.presentation import ReportRenderer
-from src.reports import ReportKind, ReportProjection, ReportRequest, ReportService
+from src.reports import ReportKind, ReportRequest, ReportService
 from src.reports.model_comparison import selectable_catalog
 from src.sources.model_availability import OpenCodeModelAvailabilitySource
 from src.sources.selection import SourceSelection

@@ -15,7 +15,7 @@ from src.sources.discovery import (
     discover_v2_registration_candidate,
     read_v2_service_registration,
 )
-from src.sources.errors import SourceDataError, SourceResyncRequiredError, SourceUnavailableError
+from src.sources.errors import SourceDataError, SourceResyncRequiredError
 from src.sources.opencode_v1 import OpenCodeV1Source
 from src.sources.opencode_v2 import OpenCodeV2Source
 from src.sources.opencode_v2_transport import V2Endpoint, V2HttpClient

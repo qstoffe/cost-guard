@@ -39,7 +39,6 @@ import platform
 import re
 import subprocess
 import time
-import traceback
 import zipfile
 from collections import Counter
 from decimal import Decimal
@@ -60,7 +59,7 @@ from src.reports import ReportKind, ReportRequest, ReportService  # noqa: E402
 from src.sources.opencode_v1 import OpenCodeV1Source  # noqa: E402
 from src.sources.opencode_v2 import OpenCodeV2Source  # noqa: E402
 from src.sources.selection import SourceSelector  # noqa: E402
-from src.version import DISPLAY_VERSION, PRODUCT_NAME, RELEASE_DATE, mode_heading  # noqa: E402
+from src.version import DISPLAY_VERSION, mode_heading  # noqa: E402
 from src.runtime_errors import recoverable, recovered  # noqa: E402
 from src.sources.errors import SourceError  # noqa: E402
 from src.watch.recovery_events import recent_events  # noqa: E402

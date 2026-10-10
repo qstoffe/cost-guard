@@ -1,7 +1,6 @@
 """Table-local classification and semantic-color attenuation, without pricing changes."""
 from __future__ import annotations
 
-from dataclasses import replace
 from decimal import Decimal
 import io
 from pathlib import Path

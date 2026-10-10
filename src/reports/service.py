@@ -396,17 +396,9 @@ class ReportService:
         snapshot = item.snapshot or self.source.load_session_snapshot(root.session_id)
         return self._prompt_block(item, start_ms=start_ms), snapshot, item.bundle
 
-    def recent_model_notice_text(self) -> str:
-        """Return the startup-loaded recent-model notice used by reports and Watch."""
-        return recent_model_notice(self._load_catalog(), now_ms=self.now_ms)
-
     def recent_promotion_notice_texts(self) -> tuple[str, ...]:
         """Watch's seven-day change notices, independent of full report promotion lifetime."""
         return active_promotion_notes(self._load_catalog(), self.now_ms, recent_only=True)[1]
-
-    def account_quota_snapshot(self) -> AccountSnapshot | None:
-        """Read the account provider independently from local usage aggregation."""
-        return next(iter(self._quotas()), None)
 
     def account_quota_snapshots(self) -> tuple[AccountSnapshot, ...]:
         """Read all configured account providers independently."""

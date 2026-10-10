@@ -13,8 +13,7 @@ from src.watch.models import ToolObservation, WatchProjection, WatchRow, WatchSe
 from .terminal import AnsiStyler, Column, StyledText, fit, render_table, single_line
 from .terminal import terminal_content_width
 from .accounts import capacity_block, compact_label_fits, quota_label
-from .token_mix import prompt_scope, token_mix_line, token_mix_lines, watch_total_line
-from src.analysis.token_mix import TokenMix
+from .token_mix import prompt_scope, token_mix_lines, watch_total_line
 from src.analysis.context import PriceWarningSeverity
 from .context_warnings import WARNING_ROLE, context_warning_text, warning_cost_suffix, warning_explanation_lines
 from .pricing_notices import pricing_notice_lines

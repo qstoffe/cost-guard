@@ -4,7 +4,7 @@ import unittest
 from dataclasses import replace
 from decimal import Decimal
 
-from development.fixtures.session_snapshots import make_snapshot, message, part
+from development.fixtures.session_snapshots import make_snapshot, part
 from development.fixtures.pricing_catalog import catalog
 from src.analysis.comparisons import (
     model_comparison_rows, model_timeline_name,
@@ -14,7 +14,7 @@ from src.analysis.context import (
     input_context_above_price_threshold, next_context_warning_state,
 )
 from src.analysis.core import analyze_snapshot
-from src.domain import MessageRole, ModelPricing, ModelRef, PricingTier, TokenUsage
+from src.domain import ModelPricing, ModelRef, PricingTier
 from src.pricing.catalog import PricingCatalog
 from src.reports.models import PromptProjection
 from src.reports.prompts import _coherent_watch_deltas

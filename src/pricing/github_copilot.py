@@ -25,7 +25,7 @@ from src.version import DISPLAY_VERSION
 from .catalog import PricingCatalog, canonical_model_name
 from .metadata_health import COMPONENT as METADATA_COMPONENT, MetadataHealthStore, default_root
 from .release_metadata import (
-    COPILOT_CHANGELOG_URL, INTERNAL, MODELS_DEV_URL, MetadataAttempt, SourceResult,
+    INTERNAL, MetadataAttempt, SourceResult,
     enrich_release_dates, merge_release_dates, valid_date,
 )
 

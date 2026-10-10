@@ -32,7 +32,7 @@ from src.presentation import ReportRenderer, StartupProgress, WatchRenderer
 from src.presentation.accounts import capacity_lines
 from src.presentation.terminal import AnsiStyler
 from src.presentation.token_mix import compact_tokens, token_mix_lines
-from src.pricing.catalog import PricingCatalog, price_token_categories, price_token_usage
+from src.pricing.catalog import PricingCatalog, price_token_usage
 from src.reports.model_comparison import price_summary
 from src.reports.models import AccountProjection, AccountsQuotasProjection, ModelTokenMixProjection, ReportKind, ReportProjection
 from src.reports.prompts import build_prompt_block

@@ -14,7 +14,6 @@ from development.tests.test_compact_reports import Availability, rendered
 from development.tests.test_quota_presentation import quotas, rolling
 from development.fixtures.watch_runtime import MutableSource
 from src.analysis.token_mix import TokenMix, priced_token_mix, token_mix
-from src.analysis.valuation import comparison_cost, unique_usage
 from src.cli import CommandKind, help_text, parse_command
 from src.domain import ModelRef, TokenUsage
 from src.pricing.catalog import normalized_average_token_mix

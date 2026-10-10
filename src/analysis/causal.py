@@ -1,12 +1,10 @@
 """Prompt boundaries and causal attribution over canonical session snapshots."""
 from __future__ import annotations
 
-import json
 import math
 import re
 import time
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import replace
 
 from src.domain import (
     BackgroundActivity, CostDisposition, EventKind, MessageRole, NormalizedMessage, NormalizedPart, SessionSnapshot,

@@ -6,13 +6,10 @@ pricing metadata.
 """
 from __future__ import annotations
 
-import calendar
 from decimal import Decimal
 from datetime import date, datetime, timedelta, timezone
-from typing import Iterable
 
 from src.analysis.models import PromptRecord
-from src.analysis.timezones import resolve_timezone, swedish_public_holidays
 from src.pricing.catalog import PricingCatalog, canonical_model_name
 from src.pricing.promotions import model_promotion
 
@@ -120,33 +117,6 @@ def active_promotion_notes(
         ending = f" through {through}." if recent_only else f" through {through}; standard pricing resumes {resumes}."
         notes.append(f"{label} {', '.join(names)} — {description}{ending}")
     return markers, tuple(notes)
-
-
-def billing_month_days(
-    *,
-    now_ms: int,
-    timezone_id: str,
-    calendar_name: str,
-) -> tuple[tuple[str, bool, bool, bool], ...]:
-    """Return (ISO day, workday, future-local-day, today-local-day) for billing month.
-
-    v77 uses the current UTC billing month for the month axis while workday/today
-    semantics come from the configured local timezone.
-    """
-    utc_now = datetime.fromtimestamp(now_ms / 1000, tz=timezone.utc)
-    local_now = utc_now.astimezone(resolve_timezone(timezone_id))
-    year, month = utc_now.year, utc_now.month
-    holidays = swedish_public_holidays(year) if (calendar_name or "SE").upper() == "SE" else frozenset()
-    days = calendar.monthrange(year, month)[1]
-    result: list[tuple[str, bool, bool, bool]] = []
-    for day_number in range(1, days + 1):
-        current = date(year, month, day_number)
-        workday = current.weekday() < 5 and current not in holidays
-        same_local_month = local_now.year == year and local_now.month == month
-        future = bool(same_local_month and day_number > local_now.day)
-        today = bool(same_local_month and day_number == local_now.day)
-        result.append((current.isoformat(), workday, future, today))
-    return tuple(result)
 
 
 def aggregate_usage_notes(month, comparison) -> tuple[str, ...]:

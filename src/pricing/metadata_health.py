@@ -17,7 +17,7 @@ from pathlib import Path
 import threading
 
 from src.version import DISPLAY_VERSION
-from src.cache.metadata_state import STATE_FILE, migrate_state, persist_state, read_state
+from src.cache.metadata_state import migrate_state, persist_state, read_state
 
 from .release_metadata import MetadataAttempt, SourceResult
 
