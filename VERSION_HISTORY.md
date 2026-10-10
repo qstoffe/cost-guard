@@ -1,5 +1,11 @@
 # Cost Guard version history
 
+## v80.35 — 2026-10-10
+
+- Watch shows `[ABORTED by user]`, `[ABORTED by quota limit]`, `[ABORTED by tool call limit]`, `[ABORTED by step limit]` or `[ABORTED by rate limit]` only for explicit native causes, including V2 idle errors and bounded structured API error responses. Unspecified cancellations remain `[ABORTED]`; later success clears an earlier abort.
+- A source-reported successful end directly after tool calls shows neutral `[ENDED after tool calls]`, not a guessed limit failure. Full stop labels survive preview truncation; usage, billing and existing completion semantics are unchanged.
+- Shared report/Watch account order is stable: credit/balance/budget accounts first, usage-limit accounts second, then name and proven identity. Remaining capacity, percentages, refresh completion and transient errors do not reorder established accounts; provider failures retain account labels/plan/capacity class.
+
 ## v80.34 — 2026-10-10
 
 - Faster with identical output (byte-compared against v80.33 on live data): normal report ~2.1 s → 0.65 s, date range 7.5 s → 2.1 s, Watch startup ~6.2 s → 0.65 s, V2 resync 13 s → 1.4 s.
@@ -31,18 +37,9 @@
 - The ratio uses the normal report's Relative CCost sample and token mix (its hidden sorting mix without samples), loaded only when a warning is shown and refreshed every 15 minutes.
 - Regression coverage reproduces a reported v80.26 Watch whose prompt showed Next Ictx 24k before a +59k → 220k successor. Context grown after a subagent notice now belongs to that prompt (v80.30), so the successor's +59k is consistent rather than v80.27's inflated +196k.
 
-## v80.30 — 2026-10-10
-
-- Invisible synthetic V2 user messages, such as subagent-completion notices injected while work continues or right after a prompt typed during a running one, now continue the prompt current at that time. Their requests, CCost, duration and model stay on that row instead of showing 0 calls and `Model: N/A` while Watch total still counted them.
-- A running V2 prompt whose first request has not completed takes model/effort from its own request-bound in-flight assistant message, never from mutable session selection (v80.28 regression).
-- Watch Δctx after a session-location move or an unanchored/failed predecessor again shows the epoch-aware per-prompt estimate instead of N/A (v80.27 regression). Unknown compaction results and unexplained shrinks remain N/A.
-- Session titles and prompt previews in reports and Watch drop CSI/OSC/C1 escapes, line breaks and control characters.
-- Watch observations are recorded per source scan rather than per-second redraw, de-duplicated in memory, retain source errors separately from scans, ignore malformed files and name V2 catalog/normalize stages accurately. Recovery history uses per-process temporary files.
-- Test runner and Diagnostics decode child output as UTF-8 regardless of console code page. A stale Watch title test and over-long history summary that kept Quick/Full red were corrected.
-
 ## Earlier v80 history
 
-- v80.29 replaced unexplained Watch context shrinks with N/A and kept multiline checkpoint titles on one row.
+- v80.29–v80.30 attributed synthetic/background continuations and in-flight models to their actual prompt, restored move/unanchored Watch Δctx, kept unexplained shrinks N/A, sanitized terminal titles/previews, deduplicated source-scan observations and made test/Diagnostics output UTF-8.
 - v80.25-v80.28 kept BLOCKED on accounts, split wide Watch quotas, added privacy-safe observations, made Watch Δctx compare consecutive Next-Ictx anchors, and removed mutable session-model attribution; v80.30 corrected move/unanchored-baseline regressions.
 
 - v80.21-v80.24 added conservative table-local model-supersession fading (plain GPT tiers, Claude families, numeric Grok; preview/variant exclusions), parallel bounded quota acquisition with shared credential discovery and nonblocking Watch account refresh, and recommended current main as the supported distribution while packaged GitHub Releases are paused.

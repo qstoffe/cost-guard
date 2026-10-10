@@ -21,7 +21,11 @@ def account_projections(
     counts = Counter((item.ref.provider_id, item.plan) for item in accounts)
     labels: dict[str, int] = {}
     projections = []
-    for account in accounts:
+    # Stable capacity/name/identity ordering, never balance, percentage or timing.
+    for account in sorted(accounts, key=lambda item: (
+        item.capacity_kind != "credit", item.provider_label.casefold(),
+        (item.plan or "").casefold(), (item.ref.account_label or "").casefold(), item.key,
+    )):
         label = account.provider_label + (" " + account.plan if account.plan else "")
         multiple = counts[(account.ref.provider_id, account.plan)] > 1
         if multiple and account.ref.account_label:

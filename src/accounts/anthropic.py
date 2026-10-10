@@ -84,6 +84,7 @@ class AnthropicAccountProvider:
         for record in provider_credentials(self, self.integration_ids):
             account = AccountSnapshot(record.ref, int(time.time() * 1000), "Anthropic",
                                       plan="API pay as you go" if record.value.get("type") == "api" else None,
+                                      capacity_kind="credit" if record.value.get("type") == "api" else "usage_limit",
                                       availability="unavailable", reason="Supported quota/billing source unavailable")
             if self.quota_reader is not None:
                 try:

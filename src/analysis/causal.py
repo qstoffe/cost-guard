@@ -486,6 +486,10 @@ def build_prompt_record(
         background_kinds=tuple(item.kind for item in background) if in_progress else (),
         background_started_ms=min((item.started_at_ms for item in background), default=0) if in_progress else 0,
         background_only=background_only,
+        abort_reason=((evidence.abort_reason if evidence else "") or (latest.abort_reason if latest else ""))
+                     if explicitly_aborted and not in_progress else "",
+        ended_after_tool_calls=bool(not in_progress and evidence and evidence.outcome is TerminalOutcome.SUCCESS
+                                    and latest and latest.finish_reason == "tool-calls"),
     )
 
     all_entries = [

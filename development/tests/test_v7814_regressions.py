@@ -456,15 +456,17 @@ class QuotaResumeRecoveryTests(unittest.TestCase):
         self.fetch.return_value = (self.good, replace(self.error, ref=other.ref))
         resumed = self.wake()
         self.assertEqual((other.key,), resumed.quota_recovering_accounts)
-        self.assertEqual("available", resumed.quota.accounts[0].account.availability)
-        self.assertEqual("stale", resumed.quota.accounts[1].account.availability)
+        by_key = {row.account.key: row.account for row in resumed.quota.accounts}
+        self.assertEqual("available", by_key[self.good.key].availability)
+        self.assertEqual("stale", by_key[other.key].availability)
         for delay in (5, 10, 20, 25):
             self.clock.advance(delay)
             expired = self.watch.poll_once().projection
         self.assertFalse(expired.quota_recovering_accounts)
         self.assertEqual(735_000, self.watch.accounts.seen_ms[self.good.key])
         self.assertEqual(100_000, self.watch.accounts.seen_ms[other.key])
-        self.assertFalse(expired.quota.accounts[1].account.quotas)
+        expired_by_key = {row.account.key: row.account for row in expired.quota.accounts}
+        self.assertFalse(expired_by_key[other.key].quotas)
         self.assertEqual(4, self.fetch.call_count)
 
     def test_successful_first_wake_refresh_never_enters_visible_recovery(self):

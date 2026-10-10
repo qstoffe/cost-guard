@@ -109,6 +109,8 @@ class PromptRecord:
     background_kinds: tuple[str, ...] = ()
     background_started_ms: int = 0
     background_only: bool = False
+    abort_reason: str = ""
+    ended_after_tool_calls: bool = False
 
     @property
     def model_calls(self) -> int:

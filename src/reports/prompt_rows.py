@@ -121,6 +121,8 @@ class PromptRowProjector:
             token_mix_percent=mix,
             in_progress=record.in_progress,
             aborted=record.aborted,
+            abort_reason=record.abort_reason,
+            ended_after_tool_calls=record.ended_after_tool_calls,
             delta_context_tokens=state.delta_tokens if state else None,
             next_context_tokens=estimate.tokens,
             next_context_cached_ccost=estimate.cached_ccost,

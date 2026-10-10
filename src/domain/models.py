@@ -49,6 +49,7 @@ class TerminalEvidence:
 
     completed_at_ms: int
     outcome: TerminalOutcome
+    abort_reason: str = ""
 
 
 class CostKind(str, Enum):
@@ -188,6 +189,8 @@ class NormalizedMessage:
     cost: CostObservation | None = None
     metadata: Mapping[str, Any] = field(default_factory=dict)
     termination: TerminalEvidence | None = None
+    # Source-normalized cause only; never raw provider errors or response text.
+    abort_reason: str = ""
 
 
 @dataclass(frozen=True, slots=True)

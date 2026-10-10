@@ -148,8 +148,19 @@ class WatchRenderer:
         marker = (row.marker + " ") if row.marker else "  "
         if prompt.is_compaction:
             return f"  {marker}#{prompt.prompt_number} /compact"
-        prefix = "[ABORTED] " if prompt.aborted else ""
-        return f"  {marker}#{prompt.prompt_number} {prefix}{single_line(prompt.preview)}"
+        reason = {"user": "user", "quota_limit": "quota limit", "tool_call_limit": "tool call limit",
+                  "step_limit": "step limit", "rate_limit": "rate limit"}.get(prompt.abort_reason)
+        prefix = (f"[ABORTED by {reason}] " if reason else "[ABORTED] ") if prompt.aborted else (
+            "[ENDED after tool calls] " if prompt.ended_after_tool_calls else "")
+        lead = f"  {marker}#{prompt.prompt_number} "
+        if prefix:
+            # Reserve the full stop label before shortening the expendable preview.
+            width = _WATCH_COLUMNS[0].fixed_width
+            if len(lead + prefix.rstrip()) > width:
+                lead = f"{row.marker + ' ' if row.marker else ''}#{prompt.prompt_number} "
+            preview_width = max(0, width - len(lead + prefix))
+            return (lead + prefix + fit(single_line(prompt.preview), preview_width)).rstrip()
+        return lead + single_line(prompt.preview)
 
     def _row_style(self, row: WatchRow) -> str | None:
         if row.prompt.aborted:

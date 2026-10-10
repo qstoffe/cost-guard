@@ -31,6 +31,7 @@ SIMPLE_HTTP_PROVIDERS = (DEEPSEEK, OPENROUTER)
 
 
 class SimpleHttpAccountProvider(HttpAccountProvider):
+    capacity_kind = "credit"
     def __init__(self, definition: SimpleHttpDefinition, **kwargs):
         self.definition = definition
         self.provider_id = definition.provider_id

@@ -11,7 +11,7 @@ import threading
 import time
 from typing import Callable, Sequence
 
-from src.domain import AccountRef, AccountSnapshot
+from src.domain import AccountRef, AccountSnapshot, AccountUsageStatus
 from src.runtime_errors import recoverable, recovered
 from .base import normalize_quota
 from .discovery import AccountCandidate, AccountDiscovery
@@ -48,7 +48,12 @@ def _failure(candidate: AccountCandidate, previous: Sequence[AccountSnapshot], s
         refs = (AccountRef(source_id, provider_id, source_account=f"adapter:{candidate.slot}"),)
     reason = ("ERROR: Optional account provider refresh failed internally" if internal else
               "Account request timed out" if timeout else "Account request unavailable")
-    return tuple(AccountSnapshot(ref, now_ms, provider_id, availability="error", reason=reason,
+    prior = {item.key: item for item in previous}
+    return tuple(replace(prior.get(ref.key) or AccountSnapshot(
+                     ref, now_ms, getattr(candidate.provider, "display_name", provider_id),
+                     capacity_kind=getattr(candidate.provider, "capacity_kind", "usage_limit")),
+                 fetched_at_ms=now_ms, quotas=(), billing=(), availability="error", reason=reason,
+                 status=AccountUsageStatus.UNKNOWN, warnings=(), usage_attribution_complete=False,
                  observations={"parser_reason": "software_failure" if internal else "timeout" if timeout else "network_failure"})
                  for ref in refs)
 

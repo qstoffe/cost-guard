@@ -88,6 +88,8 @@ class AccountSnapshot:
     observations: Mapping[str, object] = field(default_factory=dict)
     # True only when a source can prove the complete usage scope for this account.
     usage_attribution_complete: bool = False
+    # Adapter-owned capacity class, independent of remaining/availability.
+    capacity_kind: str = "usage_limit"  # credit, usage_limit
 
     @property
     def key(self) -> tuple[str, str, str]:

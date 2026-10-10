@@ -322,6 +322,7 @@ def _combine_quota(entitlement: QuotaSnapshot, user: QuotaSnapshot) -> QuotaSnap
 
 
 class GitHubCopilotAccountProvider:
+    capacity_kind = "credit"
     provider_id = "github-copilot"
     integration_ids = ("github-copilot", "github-copilot-enterprise")
     included_usage = False
@@ -368,7 +369,7 @@ class GitHubCopilotAccountProvider:
             credential = credential_from_auth_object({record.ref.provider_id: record.value})
             snapshot = self._fetch(credential, self.now_ms(), f"copilot-account-refresh-{index}") if credential.available else _unavailable(credential.reason)
             ref = replace(record.ref, provider_id="github-copilot")
-            account = normalize_quota(snapshot, ref, "GitHub Copilot")
+            account = normalize_quota(snapshot, ref, "GitHub Copilot", capacity_kind=self.capacity_kind)
             quotas = tuple(replace(component,
                 remaining_money=component.remaining * Decimal("0.01") if component.remaining is not None else None,
                 limit_money=component.limit * Decimal("0.01") if component.limit is not None else None,

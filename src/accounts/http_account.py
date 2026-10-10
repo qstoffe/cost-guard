@@ -12,6 +12,7 @@ from src.runtime_errors import recoverable, recovered
 
 
 class HttpAccountProvider:
+    capacity_kind = "usage_limit"
     included_usage = False  # A current key never proves historical attribution.
     capabilities = ProviderCapabilities(account_quota=True, reset_windows=True)
 
@@ -52,7 +53,7 @@ class HttpAccountProvider:
                         "credential_discovered": True, "credential_active": record.active,
                         "credential_qualifying": key is not None and endpoint is not None,
                         "request_attempted": False}
-            account = AccountSnapshot(record.ref, now, self.display_label)
+            account = AccountSnapshot(record.ref, now, self.display_label, capacity_kind=self.capacity_kind)
             if key is None or endpoint is None:
                 accounts.append(replace(account, availability="unavailable", reason=self.unsupported_credential_reason(record),
                                         observations={**evidence, "parser_reason": "credential_unsupported", "parser_status": "unavailable"}))

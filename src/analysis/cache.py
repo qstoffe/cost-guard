@@ -12,7 +12,7 @@ from src.domain import AccountRef, CostDisposition, ModelRef, NormalizedSession,
 
 from .models import CompactionRecord, PromptRecord, RootAnalysisBundle, TraceEntry
 
-ANALYSIS_ALGORITHM_VERSION = "v78-analysis-10-background"
+ANALYSIS_ALGORITHM_VERSION = "v78-analysis-11-terminal-reasons"
 _CACHE_NAMESPACE = "derived-analysis"
 
 

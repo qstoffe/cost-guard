@@ -22,7 +22,7 @@ class AccountProvider(Protocol):
     def get_account_snapshots(self) -> tuple[AccountSnapshot, ...]: ...
 
 
-def normalize_quota(snapshot: QuotaSnapshot, ref: AccountRef, label: str) -> AccountSnapshot:
+def normalize_quota(snapshot: QuotaSnapshot, ref: AccountRef, label: str, *, capacity_kind: str = "usage_limit") -> AccountSnapshot:
     """Compatibility boundary for existing window-based provider integrations."""
     components = tuple(QuotaComponent(
         label="Monthly" if window.name == "monthly_ai_credits" else window.name,
@@ -47,4 +47,5 @@ def normalize_quota(snapshot: QuotaSnapshot, ref: AccountRef, label: str) -> Acc
             snapshot.availability if snapshot.availability != "available" else "unavailable"
         ),
         reason=snapshot.reason, observations=snapshot.observations, warnings=snapshot.warnings,
+        capacity_kind=capacity_kind,
     )

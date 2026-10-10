@@ -39,6 +39,7 @@ from src.domain import (
 from .discovery import DatabaseCandidate, discover_v1_database_candidate
 from .errors import SourceDataError, SourceError, SourceSchemaError, SourceUnavailableError
 from .opencode_errors import normalize_error_name as _error_name
+from .opencode_errors import normalize_abort_reason
 from .opencode_tokens import token_usage
 from .opencode_v1_revision import batch_revisions, revision_from_rows, revision_rows
 
@@ -491,6 +492,7 @@ class OpenCodeV1Source:
             summary=bool(data.get("summary", False)),
             finish_reason=str(data.get("finish")) if data.get("finish") not in (None, "") else None,
             error_name=_error_name(data.get("error")),
+            abort_reason=normalize_abort_reason(data.get("error")),
             tokens=_token_usage(data.get("tokens"), context="message tokens"),
             cost=_message_cost(data),
             parts=parts,

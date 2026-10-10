@@ -4,6 +4,8 @@ Cost Guard shows only detected/configured accounts. Same-provider accounts retai
 
 ## Shared presentation
 
+Reports and Watch sort credit/balance/budget accounts before usage-limit accounts, then by provider/plan/account name and stable source-aware identity. Adapters supply the capacity class even when quotas are unavailable; remaining capacity, percentages, status and refresh timing never decide the order.
+
 Aligned 10-cell remaining bars and matching native amounts share a row. Reports align every quota bar and Remaining using one report-wide label column; Watch globally aligns only primary bars, with individual narrow fallback. Variable 5h/Day/Week/Month/Limit labels use the same formatter. Native money/units remain in reports; warnings indent and zero/unknown balances hide unless significant.
 
 Bars represent genuine provider-reported capacity: a real denominator or an explicitly reported percentage, never a fabricated allocation. Balance/informational spend without capacity stays textual. Native currencies are not added or converted; balances/spend are not CCost or historical usage. A current credential never establishes historical request-account attribution. There are no provider-specific Report/Watch renderer branches.

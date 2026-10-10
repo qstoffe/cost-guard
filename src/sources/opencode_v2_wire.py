@@ -529,6 +529,22 @@ def location_boundaries(items: Sequence[Mapping[str, Any]], *, session_id: str) 
     return tuple(sorted(result, key=lambda value: (value.at_ms, value.boundary_id)))
 
 
+def _terminal_evidence(item: Mapping[str, Any], message: NormalizedMessage, at: int) -> TerminalEvidence:
+    """Success wins; a failed/interrupted run may carry an explicit limit cause."""
+    from .opencode_errors import normalize_abort_reason, normalize_error_name
+
+    outcome = {"succeeded": TerminalOutcome.SUCCESS, "failed": TerminalOutcome.FAILURE,
+               "interrupted": TerminalOutcome.CANCELLATION}[item["outcome"]]
+    reason = ""
+    if outcome is not TerminalOutcome.SUCCESS:
+        error = item.get("error")
+        reason = normalize_abort_reason(error) if error is not None else message.abort_reason
+        error_name = normalize_error_name(error) if error is not None else message.error_name
+        if reason or error_name == "AbortedError":
+            outcome = TerminalOutcome.CANCELLATION
+    return TerminalEvidence(at, outcome, reason)
+
+
 def normalize_terminal_lifecycle(
     items: Sequence[Mapping[str, Any]], messages: Sequence[NormalizedMessage], *, session_id: str
 ) -> tuple[NormalizedMessage, ...]:
@@ -576,5 +592,5 @@ def normalize_terminal_lifecycle(
                                 if isinstance(value := part_times.get(key), (int, float)))
         if max(activity) > at or (message.termination and message.termination.completed_at_ms >= at):
             continue
-        result[index] = replace(message, termination=TerminalEvidence(int(at), outcomes[outcome]))
+        result[index] = replace(message, termination=_terminal_evidence(item, message, int(at)))
     return tuple(result)

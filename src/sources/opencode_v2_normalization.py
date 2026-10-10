@@ -12,7 +12,7 @@ from src.domain import (
 )
 
 from .errors import SourceDataError
-from .opencode_errors import normalize_error_name
+from .opencode_errors import normalize_abort_reason, normalize_error_name
 from .opencode_tokens import token_usage
 
 ProvenanceFactory = Callable[[str, str | None], Provenance]
@@ -128,6 +128,7 @@ def normalize_message_bundle(
         summary=bool(info.get("summary", False)),
         finish_reason=str(info.get("finish")) if info.get("finish") not in (None, "") else None,
         error_name=normalize_error_name(info.get("error")),
+        abort_reason=normalize_abort_reason(info.get("error")),
         tokens=normalize_token_usage(info.get("tokens"), context="message tokens"),
         cost=_cost(info.get("cost"), context="message cost") if "cost" in info else None,
         parts=tuple(parts), provenance=provenance(session_id, message_id), metadata=metadata,

@@ -239,6 +239,7 @@ class WatchCoordinator:
             (
                 row.session_id, row.prompt.event_id, row.marker, row.prompt.in_progress,
                 row.prompt.aborted, row.prompt.duration_ms,
+                row.prompt.abort_reason, row.prompt.ended_after_tool_calls, row.prompt.watch_error,
                 row.prompt.watch_delta_context_tokens, row.prompt.watch_next_context_tokens,
                 row.is_latest_session_event, row.next_context_warning, row.next_context_warning_severity,
                 row.prompt.watch_next_context_cached_ccost, row.prompt.watch_next_context_fresh_ccost,
