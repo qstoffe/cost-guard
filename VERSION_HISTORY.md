@@ -1,5 +1,13 @@
 # Cost Guard version history
 
+## v80.37 — 2026-10-10
+
+- Summarizes all changes since v80.36 (PRs #2-#5): removed dead definitions, unused imports and redundant integration/report/Watch code, retaining existing behavior and protected contracts.
+- Causal analysis now derives trace entries, sorted prompt events and active compaction once per root/pass rather than per prompt. Recorded pre/post cleanup medians: 74 live roots 252 to 92 ms; a synthetic 500-prompt root 1.72 to 0.23 s. Analysis records remain identical.
+- Analysis-cache serialization copies flat fields and serializes nested values once instead of deep-converting then discarding them (recorded 74-bundle median 90 to 31 ms; identical JSON). Metadata-only pricing changes use dataclass replacement; Watch identity/marker handling is consolidated without changing rows or accounting.
+- Git delivery policy is tool-independent: explicit task/workflow authorization covers commits, push, PR and safe merge in an isolated clone without editing the ordinary working tree. Isolated Git delivery still builds no ZIP unless requested; existing quality gates and protection of maintainer rules remain.
+- Every PR merged to main now requires a sequential product-version bump with release date, bounded net-change history, README current version and affected current docs in the same PR, including documentation-only and behavior-neutral work. Recheck against the latest base before merge; tags, GitHub Releases and packaging policy are unchanged.
+
 ## v80.36 — 2026-10-10
 
 - Watch recognizes V2 live `session.execution.interrupted` events with explicit `reason: user`, including JSON-encoded event strings and current `data.sessionID` routing. `[ABORTED by user]` requires the same session, terminal identity and timestamp in authoritative interrupted history; an event alone never ends work.
@@ -29,16 +37,9 @@
 - Package validation now gates runtime function statements/branches, explicit bounded legacy exceptions, module responsibility descriptions and exact legacy test-import edges; new coupling, growth and stale exemptions fail validation. No file cap was raised.
 - Context-price warning explanations now use `Context:` in Watch and session/date reports; ordinary Next-Ictx estimates, threshold calculations and warning colors remain unchanged.
 
-## v80.32 — 2026-10-10
-
-- Reports and Watch share canonical catalog ancestry/tree-activity functions, retaining archived-history, orphan-detail and bounded-cycle behavior.
-- Bounded comparison/token sampling and V2 message/part/request normalization have separate testable owners; source acquisition, cache, attribution, billing and output behavior remain unchanged.
-- Shared canonical snapshots, prices and fake runtime boundaries move from test modules into responsibility-specific fixtures, removing 46 direct test-to-test import edges without deleting assertions.
-- Added a task-to-code/test map, repeatable read-only AST inventory, structural regressions and guards for relative/nested layer imports, all V2 adapter siblings, runtime/development and fixture/test dependency direction.
-
 ## Earlier v80 history
 
-- v80.31 expresses priced Next-Ictx thresholds as one-decimal cost multipliers from the report's sample/token mix (hidden mix without samples), refreshed every 15 minutes; unpriced thresholds retain their CCost range. Regression coverage protects v80.30's synthetic-notice/Δctx attribution fix.
+- v80.32 shared catalog ancestry/tree activity, separated bounded report sampling and V2 normalization, moved synthetic fixtures out of tests (46 fewer test-import edges), and added the code map, AST inventory and layer/dependency guards; source, cache, billing and output behavior stayed unchanged. v80.31 expresses priced Next-Ictx thresholds as one-decimal cost multipliers from the report's sample/token mix (hidden mix without samples), refreshed every 15 minutes; unpriced thresholds retain their CCost range. Regression coverage protects v80.30's synthetic-notice/Δctx attribution fix.
 - v80.29–v80.30 attributed synthetic/background continuations and in-flight models to their actual prompt, restored move/unanchored Watch Δctx, kept unexplained shrinks N/A, sanitized terminal titles/previews, deduplicated source-scan observations and made test/Diagnostics output UTF-8.
 - v80.25-v80.28 kept BLOCKED on accounts, split wide Watch quotas, added privacy-safe observations, made Watch Δctx compare consecutive Next-Ictx anchors, and removed mutable session-model attribution; v80.30 corrected move/unanchored-baseline regressions.
 

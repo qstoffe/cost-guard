@@ -61,7 +61,7 @@ For non-trivial changes:
 6. Gate meaningful stages with focused tests/static checks; do not defer all verification to the end.
 7. Review the complete change against the FR-start filesystem baseline and architecture boundaries.
 8. Run the verification tier of the environment: Quick + distributable-view validator for hosted/web AI; Full + validator + read-only live checks (Diagnostics or headless report/Watch probes) on the user's workstation.
-9. Update current docs/version history only for behavior that actually exists.
+9. Update current docs/version history only for behavior that actually exists; every PR to `main` also completes [versioning and history](#versioning-and-history), without exceptions for change type.
 10. Hand off the verified authoritative working tree. A local workstation session then builds the ZIP for every completed feature, fix or version (see [packaging procedure](#packaging-procedure)); hosted/web AI never builds one, not even when the product version changes. Never claim a Full/local gate that did not run and never commit/push automatically without [authorized Git delivery](#authorized-git-delivery).
 
 Unexpected findings do not silently expand scope. Close the current todo, record evidence, then add/replan follow-up work. Repeated patch failures or long-running unfocused todos are planning failures: reread current files and decompose instead of retrying by inertia.
@@ -71,7 +71,8 @@ Unexpected findings do not silently expand scope. Close the current todo, record
 Git commit, push, pull request and merge are performed only when the user has explicitly authorized them through the current task or a development workflow the user started. Such authorization covers exactly those actions for that run, and they then need no further confirmation:
 
 - Work may happen in an isolated repository clone on a new branch from the verified default-branch HEAD instead of the ordinary working tree. That clone is the authoritative tree for the run; the ordinary working tree is neither edited, switched nor required to receive the change.
-- Commit, push the branch, open a PR against the verified default branch and merge it only once required checks pass and no blocker remains. Never force-merge, bypass branch protection or rewrite published history.
+- Before opening the PR, complete [versioning and history](#versioning-and-history) in that same PR, even for documentation-only or behavior-neutral work.
+- Commit, push the branch, open a PR against the verified default branch and merge it only once required checks pass and no blocker remains. Immediately before merge, compare with the latest base HEAD: verify the next sequential version, matching release date/history/README and affected docs in the PR diff; if the base advanced, reconcile and rerun affected gates before merging. Missing or conflicting version metadata blocks merge. Never force-merge, bypass branch protection or rewrite published history.
 - A Git-delivered isolated-clone run builds no local release ZIP unless packaging is explicitly requested. Ordinary local package development in the working tree keeps the ZIP requirement.
 
 Everything else still applies inside the clone: architecture boundaries, file budgets, structure ratchets, regression tests, the environment's verification tier and the protection of this file (edit it only when the request explicitly asks for a maintainer-rule change).
@@ -95,7 +96,9 @@ Never package or log credentials, OpenCode auth files, personal session exports,
 
 ## Versioning and history
 
-Product versions are exactly `vMAJOR.MINOR`; no patch segment. Ordinary completed product work increments MINOR sequentially; a major requires explicit user decision. Versions identify runtime output, Diagnostics, screenshots, troubleshooting, bug reports and version history independently of Git tags and GitHub Releases; a ZIP exists exactly for versions completed locally. v78.0 remains the Python-rewrite baseline. An explicitly requested packaged release candidate must complete its required verification or receive explicit acceptance before removing the candidate label.
+Product versions are exactly `vMAJOR.MINOR`; no patch segment. Every PR merged to `main` increments MINOR sequentially from the latest base version, including features, fixes, cleanup, tests, tooling and documentation-only or behavior-neutral work. A major requires explicit user decision. The same PR must update `VERSION` and `RELEASE_DATE` in `src/version.py`, add the matching dated net-change entry in `VERSION_HISTORY.md`, update README current version and affected current docs, and pass version/history validation. Preserve bounded history by folding the oldest explicit entry into its summary. Describe policy/maintenance changes honestly, never invent runtime behavior.
+
+Versions identify code, runtime output, Diagnostics and troubleshooting independently of Git tags and GitHub Releases. A version bump does not change packaging policy: authorized isolated-clone Git delivery builds a ZIP only when explicitly requested; ordinary local package work follows the packaging procedure. v78.0 remains the Python-rewrite baseline. An explicitly requested release candidate must complete its required verification or receive explicit acceptance before removing the candidate label.
 
 Current `main` is the recommended/latest supported distribution during rapid development. Packaged GitHub Releases are currently paused. Recommending them again at a slower/stable cadence requires a deliberate policy change, never an automatic version-number trigger.
 

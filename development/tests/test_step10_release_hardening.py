@@ -81,6 +81,25 @@ class DistributionDocumentationTests(unittest.TestCase):
         development_commands = readme.split("## Development", 1)[1].split("```text", 1)[1].split("```", 1)[0]
         self.assertNotIn("build_release.py", development_commands)
 
+    def test_every_pr_requires_version_metadata_before_merge(self) -> None:
+        for name in ("AGENTS.md", "development/MAINTAINER.md", "development/README.md"):
+            with self.subTest(path=name):
+                text = (ROOT / name).read_text(encoding="utf-8")
+                self.assertIn("Every PR merged to `main`", text)
+                self.assertIn("documentation-only", text)
+                self.assertIn("behavior-neutral", text)
+                self.assertIn("latest base", text)
+        maintainer = (ROOT / "development/MAINTAINER.md").read_text(encoding="utf-8")
+        delivery = maintainer.split("## Authorized Git delivery", 1)[1].split("\n## ", 1)[0]
+        self.assertIn("Before opening the PR", delivery)
+        self.assertIn("Immediately before merge", delivery)
+        self.assertIn("Missing or conflicting version metadata blocks merge", delivery)
+        versioning = maintainer.split("## Versioning and history", 1)[1].split("\n## ", 1)[0]
+        for required in ("VERSION", "RELEASE_DATE", "src/version.py", "VERSION_HISTORY.md",
+                         "README", "affected current docs", "same PR", "increments MINOR sequentially"):
+            self.assertIn(required, versioning)
+        self.assertIn("A version bump does not change packaging policy", versioning)
+
     def test_git_delivery_policy_is_generic_and_consistent(self) -> None:
         """Explicitly authorized Git delivery is tool-neutral; isolated clones skip the ZIP unless packaging is requested."""
         for name in ("AGENTS.md", "development/MAINTAINER.md", "development/README.md"):

@@ -344,7 +344,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.36:** live user-stop attribution; credit-first accounts. v80.0 is the Python 3.11+ public baseline. Claude quotas remain experimental; restart/sleep need separate live evidence.
+**v80.37:** faster causal analysis/cache serialization; mandatory versioned PR delivery. Retains live user-stop attribution and credit-first accounts. v80.0 is the Python 3.11+ public baseline. Claude quotas remain experimental; restart/sleep need separate live evidence.
 
 Product versions identify code state; they do not imply a Git tag, release ZIP or GitHub Release. Packaged GitHub Releases are currently paused. Recommending them at a slower/stable cadence requires an explicit policy change; version numbers never trigger it automatically.
 

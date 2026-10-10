@@ -19,7 +19,7 @@ This repository tree is designed to be maintainable by a fresh AI coding session
 - Never package secrets, credentials, `config/user-config.jsonc`, runtime `cache/`, runtime `diagnostics/`, `.git/`, Python bytecode, historical checkpoint artifacts or generated release debris.
 - Do not commit or push automatically unless the user has explicitly authorized Git commit, push, PR or merge through the current task or a development workflow they started; those already-authorized actions need no further confirmation.
 - Current `main` is the recommended/latest supported distribution during rapid development. Packaged GitHub Releases are currently paused; changing that policy requires an explicit decision, never a version-number trigger.
-- Product versions continue independently of Git tags and GitHub Releases. A local ZIP follows the environment rule below, never a version number alone.
+- Every PR merged to `main` must increment the product version and update release date, `VERSION_HISTORY.md`, README current version and affected current docs in the same PR, including documentation-only and behavior-neutral changes; verify against the latest base before merge. See [versioning and history](development/MAINTAINER.md#versioning-and-history). Git tags, GitHub Releases and ZIP policy remain independent.
 
 ## Verification and packaging by environment
 
