@@ -62,19 +62,19 @@ For non-trivial changes:
 7. Review the complete change against the FR-start filesystem baseline and architecture boundaries.
 8. Run the verification tier of the environment: Quick + distributable-view validator for hosted/web AI; Full + validator + read-only live checks (Diagnostics or headless report/Watch probes) on the user's workstation.
 9. Update current docs/version history only for behavior that actually exists.
-10. Hand off the verified authoritative working tree. A local workstation session then builds the ZIP for every completed feature, fix or version (see [packaging procedure](#packaging-procedure)); hosted/web AI never builds one, not even when the product version changes. Never claim a Full/local gate that did not run and never commit/push automatically. The only exceptions are the [repo-command workflows](#repo-command-workflows).
+10. Hand off the verified authoritative working tree. A local workstation session then builds the ZIP for every completed feature, fix or version (see [packaging procedure](#packaging-procedure)); hosted/web AI never builds one, not even when the product version changes. Never claim a Full/local gate that did not run and never commit/push automatically without [authorized Git delivery](#authorized-git-delivery).
 
 Unexpected findings do not silently expand scope. Close the current todo, record evidence, then add/replan follow-up work. Repeated patch failures or long-running unfocused todos are planning failures: reread current files and decompose instead of retrying by inertia.
 
-## Repo-command workflows
+## Authorized Git delivery
 
-When the user personally starts `/repo-feature` or `/repo-cleanup` in the current session, that invocation explicitly authorizes, for that run only:
+Git commit, push, pull request and merge are performed only when the user has explicitly authorized them through the current task or a development workflow the user started. Such authorization covers exactly those actions for that run, and they then need no further confirmation:
 
-- Working in a fresh clone on a new branch from the verified default-branch HEAD inside the invoking session's own scratch directory, never in the ordinary checkout or another session's scratch. That clone is the authoritative tree for the run; the ordinary working tree is neither edited, switched nor required to receive the change.
-- Committing, pushing the branch, opening one PR against the verified default branch and squash-merging it once required checks pass and no blocker remains. Never force-merge, bypass branch protection or rewrite published history.
-- Skipping the local release ZIP; build one only when the user explicitly requests a package.
+- Work may happen in an isolated repository clone on a new branch from the verified default-branch HEAD instead of the ordinary working tree. That clone is the authoritative tree for the run; the ordinary working tree is neither edited, switched nor required to receive the change.
+- Commit, push the branch, open a PR against the verified default branch and merge it only once required checks pass and no blocker remains. Never force-merge, bypass branch protection or rewrite published history.
+- A Git-delivered isolated-clone run builds no local release ZIP unless packaging is explicitly requested. Ordinary local package development in the working tree keeps the ZIP requirement.
 
-Everything else still applies inside the clone: architecture boundaries, file budgets, structure ratchets, regression tests, the environment's verification tier and the protection of this file (a repo command edits it only when its request explicitly asks for a maintainer-rule change). Ordinary development and packaging outside these two commands keep every rule above and below.
+Everything else still applies inside the clone: architecture boundaries, file budgets, structure ratchets, regression tests, the environment's verification tier and the protection of this file (edit it only when the request explicitly asks for a maintainer-rule change).
 
 ## Testing policy
 
@@ -111,7 +111,7 @@ Locally, for every completed feature, fix or version, and for any explicitly req
 4. Record the produced ZIP SHA-256 and only report checks that actually ran.
 5. Never package runtime `cache/`, runtime `diagnostics/`, local `releases/`, `config/user-config.jsonc`, credentials, bytecode, `.git/`, historical checkpoint artifacts or local/generated debris.
 6. Before removing a release-candidate label, complete the release's identified real-environment checks that deterministic fixtures cannot establish.
-7. Never commit or push automatically outside the [repo-command workflows](#repo-command-workflows), which also skip this procedure unless a package is explicitly requested.
+7. Never commit/push automatically without [authorized Git delivery](#authorized-git-delivery); an authorized isolated-clone run skips this procedure unless packaging is explicitly requested.
 
 ## AI/session handoff contract
 
