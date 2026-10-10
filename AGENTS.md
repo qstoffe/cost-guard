@@ -5,6 +5,7 @@ This repository tree is designed to be maintainable by a fresh AI coding session
 ## Choose the workflow from the user's request
 
 - **Implement, fix, refactor or package:** read `development/MAINTAINER.md` first. Read `development/ARCHITECTURE.md` when boundaries are affected; use `development/CODE_MAP.md` to locate the relevant owners/tests. Make the change directly in this authoritative tree. Verification and packaging depend on where you run (below).
+- **`/repo-feature` or `/repo-cleanup` started by the user:** follow the repo-command workflows in `development/MAINTAINER.md`: work in a fresh clone inside the session's own scratch, then commit, push and squash-merge via one PR when checks pass. These two workflows do not change the ordinary working tree and build no local ZIP unless a package is explicitly requested; all quality gates still apply.
 - **Brainstorm, design or create a Feature Request:** read `development/FR_GUIDE.md`. Do not modify production code unless the user explicitly transitions to implementation; brainstorming never builds a ZIP.
 - **Understand the package:** start with `README.md`, then `development/README.md` and `development/ARCHITECTURE.md` as needed.
 
@@ -16,7 +17,7 @@ This repository tree is designed to be maintainable by a fresh AI coding session
 - Feature placement and focused tests are in `development/CODE_MAP.md`. `development/structure-policy.json` gates routine growth and test coupling: do not auto-rebaseline, grow legacy exceptions or introduce test-to-test fixtures to make a feature pass. Refactor the owner; retire resolved debt entries.
 - Add or strengthen deterministic regression tests for bug fixes and important behavior changes.
 - Never package secrets, credentials, `config/user-config.jsonc`, runtime `cache/`, runtime `diagnostics/`, `.git/`, Python bytecode, historical checkpoint artifacts or generated release debris.
-- Do not commit or push automatically.
+- Do not commit or push automatically, except in the user-started repo-command workflows above.
 - Current `main` is the recommended/latest supported distribution during rapid development. Packaged GitHub Releases are currently paused; changing that policy requires an explicit decision, never a version-number trigger.
 - Product versions continue independently of Git tags and GitHub Releases. A local ZIP follows the environment rule below, never a version number alone.
 
@@ -33,7 +34,7 @@ python development/tools/validate_package.py --working-tree
 
 Quick runs each test file in an isolated process with a hard timeout and concurrent workers. Do not start Full, Diagnostics or the release builder there, and do not compensate for a constrained harness with an unbounded monolithic suite.
 
-**Local workstation agent or human** (for example OpenCode on the user's computer): always run every test and investigate failures, then run the relevant read-only live checks yourself (Diagnostics or headless report/Watch probes against the real installation); never ask the user to run them and never stop the shared OpenCode service serving the session. Deterministic fixtures alone do not prove a workstation-specific fix. Every completed local feature, fix or version then builds a new ZIP:
+**Local workstation agent or human** (for example OpenCode on the user's computer): always run every test and investigate failures, then run the relevant read-only live checks yourself (Diagnostics or headless report/Watch probes against the real installation); never ask the user to run them and never stop the shared OpenCode service serving the session. Deterministic fixtures alone do not prove a workstation-specific fix. Every completed local feature, fix or version then builds a new ZIP (repo-command workflows excepted):
 
 ```text
 python development/tools/run_tests.py --suite full
