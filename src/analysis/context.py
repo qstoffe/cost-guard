@@ -10,9 +10,9 @@ from bisect import bisect_left, bisect_right
 from dataclasses import dataclass
 from decimal import Decimal
 from enum import Enum
-from typing import Iterable, Mapping
+from typing import Mapping
 
-from src.domain import MessageRole, ModelRef, NormalizedMessage, NormalizedPart, SessionSnapshot
+from src.domain import MessageRole, NormalizedMessage, NormalizedPart, SessionSnapshot
 from src.pricing.catalog import PricingCatalog
 
 from .models import CompactionRecord, PromptRecord, RootAnalysisBundle, TraceEntry

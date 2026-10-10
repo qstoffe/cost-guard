@@ -7,7 +7,6 @@ import shutil
 import sys
 import textwrap
 from dataclasses import dataclass
-from decimal import Decimal
 from typing import Mapping, Sequence, TextIO
 
 from .fade import faded_style
@@ -41,16 +40,6 @@ def single_line(value: object, fallback: str = "") -> str:
 
 def visible_len(value: str) -> int:
     return len(value)
-
-
-def format_percent(value: Decimal | None) -> str:
-    """Match the retained v77 `0.#%` display contract."""
-    if value is None:
-        return "N/A"
-    if value.is_infinite():
-        return "∞%" if value > 0 else "-∞%"
-    text = f"{value:.1f}".rstrip("0").rstrip(".")
-    return text + "%"
 
 
 def fit(value: object, width: int, *, right: bool = False) -> str:

@@ -11,7 +11,7 @@ import sqlite3
 import tempfile
 import unittest
 
-from development.fixtures.session_snapshots import make_snapshot, message, MODEL
+from development.fixtures.session_snapshots import make_snapshot
 from development.fixtures.report_runtime import FakePricingProvider, FakeSource
 from development.fixtures.watch_runtime import MutableSource, make_service
 from src.accounts.anthropic import AnthropicAccountProvider, normalize_anthropic_usage
@@ -22,7 +22,7 @@ from src.accounts.openai_subscription import convert_usage_payload, OpenAIAccoun
 from src.analysis.billing import actual_entry_cost
 from src.analysis.causal import build_prompt_records, trace_entries
 from src.analysis.valuation import billed_spend, comparison_cost, unique_usage
-from src.domain import AccountRef, AccountSnapshot, AccountUsageStatus, BillingComponent, CostDisposition, IntegrationHealth, MessageRole, QuotaComponent, TokenUsage
+from src.domain import AccountRef, AccountSnapshot, AccountUsageStatus, CostDisposition, IntegrationHealth, QuotaComponent, TokenUsage
 from src.presentation import ReportRenderer, WatchRenderer
 from src.presentation.accounts import capacity_lines
 from src.presentation.terminal import AnsiStyler

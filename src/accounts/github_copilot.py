@@ -18,7 +18,6 @@ from typing import Callable, Mapping
 
 from src.version import DISPLAY_VERSION
 from src.domain import (
-    AccountRef,
     AccountUsageStatus,
     BillingComponent,
     IntegrationHealth,

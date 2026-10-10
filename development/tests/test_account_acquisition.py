@@ -4,7 +4,6 @@ from __future__ import annotations
 from contextlib import closing
 from dataclasses import replace
 from decimal import Decimal
-import io
 import json
 from pathlib import Path
 import sqlite3

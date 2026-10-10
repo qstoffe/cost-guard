@@ -1,8 +1,6 @@
 """Composition of source-neutral prompt/billing/compaction analysis."""
 from __future__ import annotations
 
-from collections import defaultdict
-
 from src.domain import EventKind, MessageRole, SessionSnapshot
 
 from .billing import CostEstimator, ProviderScope

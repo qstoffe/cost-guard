@@ -12,7 +12,6 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from development.fixtures.session_snapshots import make_snapshot
-from development.fixtures.report_runtime import FakePricingProvider
 from development.fixtures.watch_runtime import MutableSource, make_service
 from src.accounts.credentials import CredentialRecord
 from src.accounts.diagnostics import sanitized_account_observation
@@ -21,7 +20,7 @@ from src.accounts.minimax import MiniMaxAccountProvider, GLOBAL_ENDPOINT, CN_END
 from src.accounts.simple_http import DEEPSEEK, OPENROUTER, SIMPLE_HTTP_PROVIDERS, SimpleHttpAccountProvider
 from src.accounts.simple_http_mapping import normalize_simple_account
 from src.bootstrap import _account_providers
-from src.config import ConfigError, load_configuration, read_jsonc, validate_configuration
+from src.config import ConfigError, read_jsonc, validate_configuration
 from src.domain import AccountRef, AccountSnapshot, AccountUsageStatus
 from src.presentation import ReportRenderer, WatchRenderer
 from src.presentation.accounts import capacity_lines

@@ -1,7 +1,6 @@
 """Deterministic mapping, transport, inventory and privacy contracts; no accounts/network."""
 from __future__ import annotations
 
-from dataclasses import replace
 from decimal import Decimal
 import json
 from pathlib import Path
@@ -10,7 +9,7 @@ import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
 
-from src.accounts.credentials import CredentialRecord, configured_credentials
+from src.accounts.credentials import configured_credentials
 from src.accounts.diagnostics import sanitized_account_observation
 from src.accounts.http_transport import (AccountHttpResponse, MaintainedEndpoint, MAX_BODY_BYTES,
     bearer_key, decode_json, finite_number, get_account_json)

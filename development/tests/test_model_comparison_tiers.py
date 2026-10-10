@@ -11,7 +11,7 @@ from development.tests import test_compact_reports as compact
 from development.tests.test_compact_reports import Availability, rendered
 from development.fixtures.watch_runtime import MutableSource
 from src.analysis.comparisons import model_comparison_rows
-from src.domain import ModelPricing, ModelRef, PricingTier, TokenUsage
+from src.domain import ModelPricing, ModelRef, PricingTier
 from src.pricing.catalog import PricingCatalog
 from src.pricing.github_copilot import (
     _annotate_promotions, _catalog_from_payload, _catalog_payload, _apply_expired_promotions,

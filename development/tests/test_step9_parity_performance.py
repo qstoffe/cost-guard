@@ -20,7 +20,7 @@ from src.domain import CostKind, CostObservation, ModelRef, ModelPricing, Pricin
 from src.presentation import ReportRenderer, WatchRenderer
 from src.reports import ReportKind, ReportRequest, ReportService
 from src.sources.selection import SourceSelection
-from src.reports.models import PromptProjection, ReportProjection, SessionPromptBlock
+from src.reports.models import PromptProjection
 from src.watch import WatchCoordinator
 from src.watch.models import WatchProjection, WatchRow
 

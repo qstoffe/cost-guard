@@ -23,7 +23,7 @@ from src.presentation import WatchRenderer
 from src.presentation.accounts import capacity_lines
 from src.presentation.terminal import AnsiStyler
 from src.presentation.token_mix import token_mix_line
-from src.reports import ReportKind, ReportProjection, ReportRequest, ReportService
+from src.reports import ReportKind, ReportProjection, ReportRequest
 from src.sources.opencode_v1 import _token_usage as v1_usage
 from src.sources.opencode_v2_normalization import normalize_token_usage as v2_usage
 from src.watch import WatchCoordinator

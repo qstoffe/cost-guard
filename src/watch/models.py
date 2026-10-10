@@ -24,10 +24,6 @@ class ToolObservation:
     background_ms: int = 0
 
     @property
-    def has_active_todo(self) -> bool:
-        return bool(self.active_todo)
-
-    @property
     def has_open_todo(self) -> bool:
         return self.todo_total > 0 and self.todo_completed < self.todo_total
 

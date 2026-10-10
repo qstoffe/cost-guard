@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfoNotFoundError
 
 from src.analysis.billing import actual_entry_cost, aggregate_trace_usage, billing_request_fingerprint
 from src.analysis.cache import AnalysisDependencies, DerivedAnalysisCache, analyze_with_cache
-from src.analysis.causal import build_prompt_records, trace_entries
+from src.analysis.causal import build_prompt_records
 from src.analysis.context import build_context_timeline
 from src.analysis.compaction import completed_compactions
 from src.analysis.core import analyze_snapshot, snapshot_is_stable

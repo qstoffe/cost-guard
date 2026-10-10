@@ -268,10 +268,6 @@ class OpenCodeV1Source:
         return self._path
 
     @property
-    def discovery_origin(self) -> str:
-        return self._candidate.origin
-
-    @property
     def source_instance(self) -> str:
         return self._instance_id
 

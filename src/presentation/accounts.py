@@ -9,10 +9,9 @@ import time
 
 from src.analysis.quota_pace import QuotaPace
 from src.analysis.timezones import resolve_timezone
-from src.analysis.valuation import ComparisonCost
 from src.domain import AccountSnapshot, AccountUsageStatus, BillingComponent, QuotaComponent
 from src.reports.models import AccountProjection
-from src.numbers import ccost_amount, consumed_capacity, remaining_capacity, exact_number
+from src.numbers import consumed_capacity, remaining_capacity, exact_number
 from .terminal import AnsiStyler, StyledText
 
 QUOTA_BAR_WIDTH = 10
@@ -55,12 +54,6 @@ def format_quota_bar(fraction: Decimal) -> StyledText:
 
 def quota_label(label: str) -> str:
     return {"5-hour": "5h", "weekly": "Week", "monthly": "Month", "Monthly": "Month"}.get(label, label)
-
-
-def ccost_text(value: ComparisonCost | None) -> str:
-    if value is None or (not value.complete and not value.priced_requests):
-        return "N/A"
-    return ccost_amount(value.known_ccost, unresolved=not value.complete)
 
 
 def money(value: Decimal | None) -> str:
