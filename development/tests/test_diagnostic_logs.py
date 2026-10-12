@@ -10,7 +10,7 @@ from unittest.mock import patch
 from zipfile import ZipFile
 
 from development.tools.diagnostic_logs import create_bundle
-from src.watch import recovery_events
+from src.sources import connectivity_events as recovery_events
 
 
 class DiagnosticLogsTests(unittest.TestCase):

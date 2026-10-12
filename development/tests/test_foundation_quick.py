@@ -94,7 +94,7 @@ class BootstrapQuickTests(unittest.TestCase):
     def test_watch_runtime_is_wired_to_single_startup_dashboard(self) -> None:
         bootstrap = (ROOT / "src/bootstrap.py").read_text(encoding="utf-8")
         self.assertIn("render_initializing", bootstrap)
-        self.assertIn("initial_cycle = coordinator.initialize()", bootstrap)
+        self.assertIn("initial_cycle = coordinator.initialize_with_recovery(watch_renderer)", bootstrap)
         self.assertIn("run_forever(watch_renderer, initial_cycle=initial_cycle)", bootstrap)
 
     def test_one_shot_header_is_rendered_once_with_selected_source(self) -> None:

@@ -11,3 +11,15 @@ If reporting itself fails, minimal stderr still identifies the original exceptio
 Release-date metadata failures are not software defects: classified failures (DNS, connection, TLS, HTTP status, timeout, parse/schema, matches) go to `logs/errors/cost-guard-metadata-YYYY-MM-DD.log` once per failure period (start, change, bounded summaries). Real recoveries go to the matching log in `logs/recovery/`. Live retry/health state lives in `cache/state/model-metadata.json`; a healthy state is not an error. Legacy `logs/recovery/model-metadata.json` is copied atomically without deletion; current state wins, with the valid legacy copy as read/write fallback when cache state is unavailable. Verified dates remain in the pricing catalog cache.
 
 Diagnostics bundles include owned errors/crashes/recovery under `logs/` and live metadata under `state/model-metadata.json`, plus relevant metadata summaries. Verified archives remove only unchanged logs idle at least 60 seconds; active files and both current/legacy state are retained. Recovery events include the version. Event logs follow 30-day retention; persistent state is excluded from log cleanup. Runtime state/logs never ship in product ZIPs.
+
+## Expected connectivity conditions
+
+**OpenCode unavailable** means the V2 background service is not reachable, not an
+unexpected crash or proof of an uninstalled application. Start Desktop V2 once
+after starting the computer, then retry the report; Watch waits/reconnects,
+including unfinished initialization. Unsupported schemas, authorization failures
+and invalid registration are distinct terminal conditions. Main guidance omits
+legacy table details. See [connectivity and safe environmental checks](connectivity.md).
+Source incidents retain bounded sanitized categories/phases and recovery timing
+in `logs/recovery/watch-recovery.json`; Diagnostics archives but does not prune
+that live history. Certificate-verification errors remain distinct from other TLS.

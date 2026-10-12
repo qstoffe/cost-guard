@@ -15,7 +15,7 @@ from development.fixtures.watch_runtime import MutableSource, make_service
 from src.watch import WatchCoordinator
 from src.watch import coordinator as watch_coordinator
 from src.watch import observation_diagnostics as observations
-from src.watch import recovery_events
+from src.sources import connectivity_events as recovery_events
 
 
 @contextmanager

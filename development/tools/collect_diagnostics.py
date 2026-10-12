@@ -62,7 +62,8 @@ from src.sources.selection import SourceSelector  # noqa: E402
 from src.version import DISPLAY_VERSION, mode_heading  # noqa: E402
 from src.runtime_errors import recoverable, recovered  # noqa: E402
 from src.sources.errors import SourceError  # noqa: E402
-from src.watch.recovery_events import recent_events  # noqa: E402
+from development.tools.diagnostic_connectivity import connectivity_summary
+from src.sources.connectivity_events import recent_events  # noqa: E402
 from src.watch.observation_diagnostics import recent_events as watch_observations  # noqa: E402
 from development.tools.diagnostic_logs import create_bundle  # noqa: E402
 from development.tools.diagnostic_metadata import model_metadata_section  # noqa: E402
@@ -103,6 +104,10 @@ def _health(value: Any) -> dict[str, Any]:
         "available": bool(getattr(value, "available", False)),
         "healthy": bool(getattr(value, "healthy", False)),
         "detail": str(getattr(value, "detail", "")),
+        "failure_code": str(getattr(value, "failure_code", "")),
+        "failure_phase": str(getattr(value, "failure_phase", "unknown")),
+        "exception_type": str(getattr(value, "exception_type", "")),
+        "http_status": getattr(value, "http_status", None),
     }
 
 
@@ -121,6 +126,7 @@ def _timed(call: Callable[[], Any]) -> tuple[Any | None, dict[str, Any]]:
             "ok": False,
             "elapsed_ms": round((time.perf_counter() - start) * 1000, 2),
             "error_type": type(exc).__name__,
+            "source_failure": exc.evidence() if isinstance(exc, SourceError) else None,
             "error": "Operational collection failure" if expected else "ERROR: Diagnostic section failed internally",
         }
 
@@ -412,6 +418,7 @@ def _text_summary(data: dict[str, Any]) -> str:
         f"Configured source: {data.get('config', {}).get('open_code_source')}",
         f"Selected source: {(data.get('selection') or {}).get('selected')}",
     ]
+    lines.extend(connectivity_summary(data))
     startup = data.get("service_start_test")
     if startup is not None:
         lines.append(f"V2 startup test: {startup['outcome']} (before: {startup['v2_healthy_before']}, after: {startup['v2_healthy_after']})")

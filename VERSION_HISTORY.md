@@ -1,5 +1,13 @@
 # Cost Guard version history
 
+## v80.38 — 2026-10-12
+
+- Missing/unreachable Desktop V2 service now has actionable startup guidance, not crash wording or legacy table details. Reports retry structured readiness failures within a short shared budget; healthy reads stay immediate and CLI wake remains one-time.
+- Watch recovers initial catalog/snapshot acquisition through its existing coordinator, discarding partial initialization before retry and deferring account work until source reads succeed. Established outages retain validated dashboards, source identity and quota cadence.
+- Source errors distinguish registration, transport, HTTP/auth, version/schema, invalid data and concurrent changes. Restarted registration invalidates old catalogs/pools; idempotent stale-socket retry stays bounded and retired SSE readers are cancelled.
+- Bounded source incident history retains sanitized phase/category/type/count/duration evidence for later Diagnostics, including after ZIP creation. External certificate-verification failures are distinct from other TLS failures; metadata cache fallback/backoff remains intact.
+- Startup/troubleshooting documentation separates local loopback HTTP from external HTTPS and treats VPN/security/proxy/certificate causes as hypotheses, without weakening protections. Diagnostics summaries separate connectivity, metadata degradation, validation and ZIP creation.
+
 ## v80.37 — 2026-10-10
 
 - Summarizes all changes since v80.36 (PRs #2-#5): removed dead definitions, unused imports and redundant integration/report/Watch code, retaining existing behavior and protected contracts.
@@ -29,17 +37,9 @@
 - Full tests run concurrently (151 s → 32 s); fake V2 services, the V1 database and package-copy builders moved to fixtures, retiring 10 test-to-test import edges.
 - Policy: hosted/web AI runs only Quick + validation and never builds a ZIP; local workstation sessions run Full + live checks and build a ZIP for every completed version.
 
-## v80.33 — 2026-10-10
-
-- Watch account publication, cadence and bounded recovery now have one explicit state owner over an injected account-work protocol; worker acquisition remains with ReportService.
-- Prompt/compaction rows have a dedicated projector; session assembly retains range filtering, context epochs, coherent Watch deltas and totals. Report modes now have focused build methods rather than one growing dispatch body.
-- Shared Watch sources, scheduling and service builders move to fixtures, reducing direct test-to-test imports from 67 to 43 without deleting assertions.
-- Package validation now gates runtime function statements/branches, explicit bounded legacy exceptions, module responsibility descriptions and exact legacy test-import edges; new coupling, growth and stale exemptions fail validation. No file cap was raised.
-- Context-price warning explanations now use `Context:` in Watch and session/date reports; ordinary Next-Ictx estimates, threshold calculations and warning colors remain unchanged.
-
 ## Earlier v80 history
 
-- v80.32 shared catalog ancestry/tree activity, separated bounded report sampling and V2 normalization, moved synthetic fixtures out of tests (46 fewer test-import edges), and added the code map, AST inventory and layer/dependency guards; source, cache, billing and output behavior stayed unchanged. v80.31 expresses priced Next-Ictx thresholds as one-decimal cost multipliers from the report's sample/token mix (hidden mix without samples), refreshed every 15 minutes; unpriced thresholds retain their CCost range. Regression coverage protects v80.30's synthetic-notice/Δctx attribution fix.
+- v80.33 separated Watch account refresh and prompt projection/report orchestration, moved shared fixtures (67 to 43 test-import edges), enforced bounded routine/coupling debt without raising file caps, and standardized `Context:` cost-warning explanations; ordinary estimates/accounting stayed unchanged. v80.32 shared catalog ancestry/tree activity, separated bounded report sampling and V2 normalization, moved synthetic fixtures out of tests (46 fewer test-import edges), and added the code map, AST inventory and layer/dependency guards; source, cache, billing and output behavior stayed unchanged. v80.31 expresses priced Next-Ictx thresholds as one-decimal cost multipliers from the report's sample/token mix (hidden mix without samples), refreshed every 15 minutes; unpriced thresholds retain their CCost range. Regression coverage protects v80.30's synthetic-notice/Δctx attribution fix.
 - v80.29–v80.30 attributed synthetic/background continuations and in-flight models to their actual prompt, restored move/unanchored Watch Δctx, kept unexplained shrinks N/A, sanitized terminal titles/previews, deduplicated source-scan observations and made test/Diagnostics output UTF-8.
 - v80.25-v80.28 kept BLOCKED on accounts, split wide Watch quotas, added privacy-safe observations, made Watch Δctx compare consecutive Next-Ictx anchors, and removed mutable session-model attribution; v80.30 corrected move/unanchored-baseline regressions.
 

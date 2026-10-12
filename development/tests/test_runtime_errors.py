@@ -360,8 +360,10 @@ class RuntimeErrorTests(unittest.TestCase):
         self.assertFalse(self.crashes())
 
     def test_retired_worker_unknown_failure_is_fatal_not_silently_dropped(self):
-        pump = LiveEventPump(SimpleNamespace(iter_changes=lambda: fail(TypeError)))
-        pump._stop.set()
+        def fail_after_retirement():
+            pump._stop.set()
+            fail(TypeError)
+        pump = LiveEventPump(SimpleNamespace(iter_changes=fail_after_retirement))
         self.assertEqual(1, self.reporter.run(lambda: (pump._run(), 0)[-1]))
         self.assertEqual(1, len(self.crashes()))
 

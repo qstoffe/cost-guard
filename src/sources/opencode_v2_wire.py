@@ -16,7 +16,8 @@ from urllib.parse import quote
 
 from src.domain import ContextBoundary, MessageRole, NormalizedMessage, TerminalEvidence, TerminalOutcome
 
-from .errors import SourceDataError, SourceUnavailableError
+from .errors import (SourceDataError, SourceSchemaError, SourceUnavailableError,
+                     compatibility_failure)
 from .opencode_v2_interruptions import LiveInterruptionReasons
 
 
@@ -58,7 +59,7 @@ def parse_page(value: Any, *, label: str) -> tuple[list[Mapping[str, Any]], str 
         next_cursor = str(raw_next) if raw_next not in (None, "") else None
         contract = "paged-data"
     else:
-        raise SourceDataError(f"OpenCode V2 {label} returned an unsupported response shape")
+        raise SourceSchemaError(f"OpenCode V2 {label} returned an unsupported response shape")
 
     result: list[Mapping[str, Any]] = []
     for item in items:
@@ -131,7 +132,7 @@ def fetch_project_sessions(
     """Read sessions from the transitional project-scoped V2 contract."""
     projects = client.json("/api/project")
     if not isinstance(projects, list):
-        raise SourceDataError("OpenCode V2 project list is not an array")
+        raise SourceSchemaError("OpenCode V2 project list is not an array")
     sessions: dict[str, tuple[Mapping[str, Any], str]] = {}
     last_contract = "legacy-array"
     for project in projects:
@@ -242,7 +243,9 @@ def fetch_messages(
                     rejected_routes.append(label + "-" + contract + ":lifecycle-only")
                     continue
             return items, label + "-" + contract, pages, tuple(rejected_routes)
-        except (SourceUnavailableError, SourceDataError) as exc:
+        except (SourceUnavailableError, SourceDataError, SourceSchemaError) as exc:
+            if not compatibility_failure(exc):
+                raise
             last_error = exc
     if last_error is not None:
         raise last_error
@@ -419,7 +422,7 @@ def current_union_message_to_legacy_bundle(
     elif message_type in {"agent-switched", "model-switched"}:
         append_part({"type": message_type, **{k: deepcopy(v) for k, v in value.items() if k not in {"id", "time", "metadata", "type"}}})
     else:
-        raise SourceDataError(f"OpenCode V2 current message type is unsupported: {message_type}")
+        raise SourceSchemaError("OpenCode V2 current message type is unsupported")
 
     return {
         "info": info,
@@ -508,7 +511,7 @@ def normalize_message_items(
             shapes.add("experimental-role-parts")
             bundles.append(interim_flat_message_to_legacy_bundle(item, session=session, ordinal=ordinal))
         else:
-            raise SourceDataError("OpenCode V2 message item has an unsupported wire shape")
+            raise SourceSchemaError("OpenCode V2 message item has an unsupported wire shape")
     return bundles, "+".join(sorted(shapes))
 
 
