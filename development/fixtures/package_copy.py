@@ -37,3 +37,14 @@ def copy_package(destination: Path) -> Path:
 
     shutil.copytree(ROOT, root, ignore=ignore)
     return root
+
+
+def make_package(tmp: str, fixture: str | None = None) -> Path:
+    """Config-only package: shipped defaults plus an optional `fixtures/config` user config."""
+    package = Path(tmp) / "package"
+    package.mkdir()
+    (package / "config").mkdir()
+    shutil.copy2(ROOT / "config/default-config.jsonc", package / "config/default-config.jsonc")
+    if fixture:
+        shutil.copy2(ROOT / "development/fixtures/config" / fixture, package / "config/user-config.jsonc")
+    return package

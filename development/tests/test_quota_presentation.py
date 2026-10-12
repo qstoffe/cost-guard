@@ -11,9 +11,10 @@ import re
 import tempfile
 import unittest
 
-from development.tests.test_accounts_ccost import account
+from development.fixtures.accounts import account
+from development.fixtures.package_copy import make_package
+from development.fixtures.quota_rendering import NOW, quotas, report_text, rolling, watch_text
 from development.fixtures.session_snapshots import make_snapshot
-from development.tests.test_config import make_package
 from development.fixtures.report_runtime import FakePricingProvider
 from development.fixtures.watch_runtime import MutableSource, make_service
 from development.tools.collect_diagnostics import _projection_summary
@@ -27,44 +28,13 @@ from src.presentation.accounts import capacity_lines, format_quota_bar, format_r
 from src.presentation.terminal import AnsiStyler
 from src.reports import ReportRequest
 from src.reports.accounts import account_projections
-from src.reports.models import AccountProjection, AccountsQuotasProjection, ReportKind, ReportProjection
+from src.reports.models import AccountProjection, ReportKind, ReportProjection
 from src.reports.semantics import aggregate_usage_notes
 from src.watch.models import WatchProjection
 
 ROOT = Path(__file__).resolve().parents[2]
 D = Decimal
-NOW = int(datetime(2026, 9, 30, 20, tzinfo=timezone.utc).timestamp() * 1000)
 STYLER = AnsiStyler({}, enabled=False)
-
-
-def rolling(identity="a", label="OpenAI Plus"):
-    snapshot = replace(account(identity=identity), fetched_at_ms=NOW, quotas=(
-        QuotaComponent("5-hour", remaining_fraction=D("0.64"), reset_at_ms=NOW + 126 * 60_000, duration_seconds=18_000),
-        QuotaComponent("weekly", remaining_fraction=D("0.48"), reset_at_ms=NOW + 74 * 3_600_000, duration_seconds=604_800),
-    ))
-    return AccountProjection(snapshot, label)
-
-
-def quotas(*accounts):
-    return AccountsQuotasProjection(ComparisonCost(D(999)), ComparisonCost(D(9999)), tuple(accounts),
-                                    billed_today=D(88), billed_month=D(888), now_ms=NOW)
-
-
-def report_text(quota, *, width=160):
-    stream = io.StringIO()
-    config = read_jsonc(ROOT / "config/default-config.jsonc")
-    ReportRenderer(config, stream=stream, color_enabled=False, terminal_width=width)._render_accounts_quotas(
-        ReportProjection(ReportKind.NORMAL, "Report", "V2", accounts_quotas=quota))
-    return stream.getvalue()
-
-
-def watch_text(quota, *, width):
-    stream = io.StringIO()
-    config = read_jsonc(ROOT / "config/default-config.jsonc")
-    config["timezone"] = "UTC"
-    WatchRenderer(config, stream=stream, interactive=False, terminal_width=width).render(
-        WatchProjection("Watch", "V2", (), quota=quota, now_ms=NOW, status="Next refresh: 00:04"))
-    return stream.getvalue().split("Token Mix % · 0 prompts · no token data yet", 1)[1].split("\n", 1)[1]
 
 
 class FormattingTests(unittest.TestCase):

@@ -9,7 +9,7 @@ from unittest import mock
 
 from development.fixtures.synthetic_month import SyntheticMonthSource
 from development.fixtures.session_snapshots import make_snapshot
-from development.tests.test_compact_reports import NOW, START, Availability, rendered
+from development.fixtures.compact_reports import NOW, START, Availability, rendered
 from development.fixtures.report_runtime import FakePricingProvider
 from development.fixtures.watch_runtime import MutableSource, make_service as make_watch_service
 from src.cache import CacheDatabase, CacheRepository

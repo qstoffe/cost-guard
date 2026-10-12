@@ -1,12 +1,10 @@
 """Unfinished Watch startup must wait without provider/accounting side effects."""
 from __future__ import annotations
 
-from dataclasses import replace
 import tempfile
 import unittest
 from unittest.mock import patch
 
-from development.fixtures.session_snapshots import make_snapshot
 from development.fixtures.watch_runtime import CountingAccountProvider, FakeLiveSource, make_service
 from src.sources.errors import FailureCode, SourceDataError, SourceSchemaError, SourceUnavailableError
 from src.watch import WatchCoordinator

@@ -11,7 +11,7 @@ import unittest
 from types import SimpleNamespace
 
 from development.fixtures.synthetic_month import SyntheticMonthSource, make_root_snapshot
-from development.tests import test_compact_reports as compact
+from development.fixtures import compact_reports as compact
 from development.tests.test_step6_pricing_accounts import pricing_markdown
 from development.fixtures.watch_runtime import MutableSource, make_service
 from src.analysis.comparisons import model_comparison_rows
@@ -45,7 +45,7 @@ def catalog(*, age=0, expiry=30, starts=True):
 
 class PricingPresentationTests(unittest.TestCase):
     def service(self, source):
-        return compact.CompactReportTests.service(self, source, now_ms=NOW)
+        return compact.report_service(self, source, now_ms=NOW)
 
     def test_comparison_uses_actual_repriced_count_and_keeps_other_mix_eligibility(self):
         for available, count in ((0, 0), (47, 47), (120, 100)):

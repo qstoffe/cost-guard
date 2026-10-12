@@ -7,11 +7,11 @@ import re
 import unittest
 
 from development.fixtures.synthetic_month import SyntheticMonthSource
-from development.tests import test_compact_reports as compact
+from development.fixtures import compact_reports as compact
 from development.fixtures.session_snapshots import make_snapshot
 from src.reports.sampling import latest_prompts, latest_token_prompts
-from development.tests.test_compact_reports import Availability, rendered
-from development.tests.test_quota_presentation import quotas, rolling
+from development.fixtures.compact_reports import Availability, rendered
+from development.fixtures.quota_rendering import quotas, rolling
 from development.fixtures.watch_runtime import MutableSource
 from src.analysis.token_mix import TokenMix, priced_token_mix, token_mix
 from src.cli import CommandKind, help_text, parse_command
@@ -159,7 +159,7 @@ class ReportDefinitionTests(unittest.TestCase):
         self.assertIn("Relative CCost stays blank", empty)
 
     def test_service_samples_keep_their_distinct_eligibility(self):
-        service = compact.CompactReportTests.service(self, SyntheticMonthSource(2, 60, month_start_ms=compact.START))
+        service = compact.report_service(self, SyntheticMonthSource(2, 60, month_start_ms=compact.START))
         built = service.build(ReportRequest())
         roots = tuple(service._analyzed.values())
         self.assertEqual(len(latest_token_prompts(roots)), built.token_mix.sample_size)
@@ -185,7 +185,7 @@ class TokenMixHistoryTotalTests(unittest.TestCase):
         snapshot = replace(snapshot, invocations=tuple(
             replace(item, model=claude, tokens=replace(item.tokens, cache_read=5_000)) if item.invocation_id == "i_child"
             else item for item in snapshot.invocations))
-        return compact.CompactReportTests.service(self, MutableSource(snapshot), availability=availability)
+        return compact.report_service(self, MutableSource(snapshot), availability=availability)
 
     def test_total_is_recomputed_from_shown_requests_and_rendered_before_table(self):
         service = self.service(Availability(None))

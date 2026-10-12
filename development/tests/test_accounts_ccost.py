@@ -11,6 +11,7 @@ import sqlite3
 import tempfile
 import unittest
 
+from development.fixtures.accounts import NormalizedProvider, account
 from development.fixtures.session_snapshots import make_snapshot
 from development.fixtures.report_runtime import FakePricingProvider, FakeSource
 from development.fixtures.watch_runtime import MutableSource, make_service
@@ -22,7 +23,7 @@ from src.accounts.openai_subscription import convert_usage_payload, OpenAIAccoun
 from src.analysis.billing import actual_entry_cost
 from src.analysis.causal import build_prompt_records, trace_entries
 from src.analysis.valuation import billed_spend, comparison_cost, unique_usage
-from src.domain import AccountRef, AccountSnapshot, AccountUsageStatus, CostDisposition, IntegrationHealth, QuotaComponent, TokenUsage
+from src.domain import AccountRef, AccountUsageStatus, CostDisposition, QuotaComponent, TokenUsage
 from src.presentation import ReportRenderer, WatchRenderer
 from src.presentation.accounts import capacity_lines
 from src.presentation.terminal import AnsiStyler
@@ -33,24 +34,6 @@ from src.watch import WatchCoordinator
 from src.watch.accounts import reconcile_accounts
 
 D = Decimal
-
-
-def account(provider="openai", identity="a", *, label=None, plan="Plus", source="source"):
-    return AccountSnapshot(AccountRef(source, provider, identity, account_label=label), 100_000,
-                           {"openai": "OpenAI", "github-copilot": "GitHub Copilot", "anthropic": "Anthropic"}[provider],
-                           plan, quotas=(QuotaComponent("5-hour", "rolling", remaining_fraction=D("0.75"),
-                                                          duration_seconds=18_000, reset_at_ms=7_201_000),))
-
-
-class NormalizedProvider:
-    included_usage = False
-    def __init__(self, snapshot):
-        self.snapshot = snapshot
-        self.provider_id = snapshot.ref.provider_id
-    def probe(self):
-        return IntegrationHealth(True, True)
-    def get_account_snapshots(self):
-        return (self.snapshot,)
 
 
 class ValuationTests(unittest.TestCase):

@@ -10,8 +10,8 @@ import re
 import unittest
 from unittest.mock import patch
 
-from development.fixtures.session_snapshots import make_snapshot, message, part, prov
-from src.domain import EventKind, MessageRole, NormalizedEvent
+from development.fixtures.session_snapshots import make_snapshot, part, prov
+from src.domain import EventKind, NormalizedEvent
 from src.presentation import WatchRenderer
 from src.presentation.watch_activity import BASE_ROLE, FAILED_ROLE, skill_summary_segments, tool_summary_segments
 from src.reports.models import PromptProjection, SessionPromptBlock

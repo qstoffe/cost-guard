@@ -52,10 +52,12 @@ All paths in this table are relative to the repository root. Test names live und
 - `development/fixtures/session_snapshots.py`: canonical root/child/task/continuation/compaction/running snapshots and message/part/provenance builders.
 - `development/fixtures/pricing_catalog.py`: the small deterministic two-model reference catalog.
 - `development/fixtures/report_runtime.py`: in-memory source/pricing/quota boundaries and a stale-root/recent-child scenario.
+- `development/fixtures/compact_reports.py`: cache-backed `report_service(test, ...)` factory, fixed model `Availability`, plain `rendered` reports and their `START`/`NOW` clock.
+- `development/fixtures/accounts.py` and `quota_rendering.py`: normalized account snapshots/fixed providers; fixed-time rolling quota projections with report/Watch account-section text.
 - `development/fixtures/watch_runtime.py`: mutable/live synthetic sources, deterministic account scheduler and Watch service composition. It preserves the existing report/account seam without depending on test modules.
 - `development/fixtures/opencode_v2_service.py`: fake loopback V2 services (transitional and current wire) that drop keep-alive sockets on stop like a real process.
 - `development/fixtures/opencode_v1_database.py`: the synthetic V1 SQLite history used for generation parity.
-- `development/fixtures/package_copy.py`: disposable distributable copies and tool subprocesses for validator/builder tests.
+- `development/fixtures/package_copy.py`: disposable distributable and config-only package copies and tool subprocesses for validator/builder/config tests.
 - `development/fixtures/synthetic_month.py`: scalable histories for bounded-sampling/cache/performance checks.
 - `development/fixtures/opencode_v1/` and `opencode_v2/`: non-secret native wire/schema fixtures.
 
@@ -86,7 +88,7 @@ Before adding a feature, identify its **one semantic owner** and a protected nei
 1. Read the relevant table row and focused tests; characterize the behavior before moving code. Preserve the exact working tree, not an older Git/package version.
 2. Use explicit typed inputs and named projection fields. Keep side-effect orchestration separate from normalized transformation; prefer cohesive functions/state owners, not mixins, dynamic forwarding or generic helpers.
 3. Run the focused profile/pattern and validator while editing. `structure-policy.json` permits at most **55 body statements / 15 explicit control-flow branches** for ordinary runtime routines. Nested functions are measured independently; docstrings/field-per-line formatting do not inflate this metric.
-4. Named legacy routine limits and the remaining 33 test-import edges are **bounded debt**, not a feature budget. Growth, new edges and stale declarations fail. Split the owner or extract a fixture and remove its resolved debt entry; never auto-generate/accept a replacement baseline to silence the gate. A genuine limit change requires an explicit architectural decision, not a passing-test justification.
+4. Named legacy routine limits and the remaining 18 test-import edges are **bounded debt**, not a feature budget. Growth, new edges and stale declarations fail. Split the owner or extract a fixture and remove its resolved debt entry; never auto-generate/accept a replacement baseline to silence the gate. A genuine limit change requires an explicit architectural decision, not a passing-test justification.
 5. Every runtime/fixture module describes its responsibility in a module docstring; local Markdown/table routes are regression-tested. Update this map and current contracts in place, not by accumulating version-specific copies. File caps remain unchanged.
 6. On a workstation, finish with Full/local validation, privacy-safe live evidence and the version ZIP (its builder also gates a clean extraction); hosted sessions stop at Quick + validation. UI, commits and remote publishing still require their own authorization.
 

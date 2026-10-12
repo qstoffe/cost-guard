@@ -9,7 +9,7 @@ from typing import Callable, Mapping, Sequence
 from src.domain import NormalizedSession, SessionSnapshot
 from src.domain.session_tree import root_activity
 from src.reports import ReportService, SessionPromptBlock
-from src.sources.errors import SourceError, SourceSchemaError, SourceUnavailableError
+from src.sources.errors import SourceError, SourceUnavailableError
 from src.sources.selection import SourceSelection
 from src.runtime_errors import check_pending
 

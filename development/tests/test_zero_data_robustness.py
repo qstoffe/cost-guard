@@ -11,7 +11,7 @@ import unittest
 from unittest.mock import patch, Mock
 
 from development.fixtures.synthetic_month import SyntheticMonthSource
-from development.tests import test_compact_reports as compact
+from development.fixtures import compact_reports as compact
 from src import bootstrap
 from src.analysis.comparisons import model_comparison_rows
 from src.domain import ModelPricing, ModelRef, PricingTier
@@ -66,7 +66,7 @@ class SyntheticSortingTests(unittest.TestCase):
 
     def test_fresh_report_and_all_models_show_catalog_but_no_synthetic_usage(self):
         for kind in (ReportKind.NORMAL, ReportKind.ALL_MODELS):
-            service = compact.CompactReportTests.service(self, SyntheticMonthSource(0, 0, month_start_ms=0),
+            service = compact.report_service(self, SyntheticMonthSource(0, 0, month_start_ms=0),
                                                          availability=compact.Availability(None))
             service.pricing_provider.catalog = catalog()
             report = service.build(ReportRequest(kind))

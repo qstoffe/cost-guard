@@ -12,8 +12,7 @@ import unittest
 
 from development.fixtures.session_snapshots import make_snapshot
 from src.reports.sampling import latest_token_prompts
-from development.tests import test_compact_reports as compact_fixtures
-from development.tests.test_compact_reports import Availability, rendered
+from development.fixtures.compact_reports import Availability, rendered, report_service
 from development.fixtures.pricing_catalog import catalog
 from development.fixtures.watch_runtime import MutableSource, make_service
 from development.tests.test_token_mix import observe
@@ -145,7 +144,7 @@ class CategoryCostTests(unittest.TestCase):
                              sum(projection.token_mix.costs))
 
     def test_normal_report_mix_shows_volume_and_reconciling_costs(self):
-        service = compact_fixtures.CompactReportTests.service(self, MutableSource(make_snapshot()))
+        service = report_service(self, MutableSource(make_snapshot()))
         report = service.build(ReportRequest())
         prompts = latest_token_prompts(tuple(service._analyzed.values()))
         entries = unique_usage(e for p in prompts for e in p.entries)
@@ -167,7 +166,7 @@ class ModelHistoryTests(unittest.TestCase):
         self.assertEqual((1, 1), (rows[b].prompts, rows[b].calls))
 
     def service(self, availability):
-        return compact_fixtures.CompactReportTests.service(self, MutableSource(make_snapshot()), availability=availability)
+        return report_service(self, MutableSource(make_snapshot()), availability=availability)
 
     def test_history_report_scans_all_roots_filters_and_renders_table(self):
         service = self.service(Availability(("github-copilot/gpt-test",)))

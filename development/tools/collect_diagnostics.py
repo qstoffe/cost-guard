@@ -60,7 +60,7 @@ from src.sources.opencode_v1 import OpenCodeV1Source  # noqa: E402
 from src.sources.opencode_v2 import OpenCodeV2Source  # noqa: E402
 from src.sources.selection import SourceSelector  # noqa: E402
 from src.version import DISPLAY_VERSION, mode_heading  # noqa: E402
-from src.runtime_errors import recoverable, recovered  # noqa: E402
+from src.runtime_errors import recoverable  # noqa: E402
 from src.sources.errors import SourceError  # noqa: E402
 from development.tools.diagnostic_connectivity import connectivity_summary
 from src.sources.connectivity_events import recent_events  # noqa: E402

@@ -10,9 +10,8 @@ from unittest.mock import patch
 from development.fixtures.synthetic_month import SyntheticMonthSource
 from development.fixtures.session_snapshots import make_snapshot
 from src.reports.sampling import latest_token_prompts
-from development.tests import test_compact_reports as compact_fixtures
-from development.tests.test_compact_reports import START, rendered
-from development.tests.test_quota_presentation import quotas, rolling
+from development.fixtures.compact_reports import START, rendered, report_service
+from development.fixtures.quota_rendering import quotas, rolling
 from development.fixtures.watch_runtime import MutableSource, make_service
 from src.analysis import analyze_snapshot
 from src.analysis.cache import AnalysisDependencies, _bundle_from_dict, _bundle_to_dict
@@ -213,7 +212,7 @@ class WatchTokenMixTests(unittest.TestCase):
 class ReportTokenMixTests(unittest.TestCase):
     def service(self, source):
         # Reuse the established test service factory without inheriting its tests.
-        return compact_fixtures.CompactReportTests.service(self, source)
+        return report_service(self, source)
 
     def test_latest100_window_across_roots_and_months_reuses_bounded_hydration(self):
         source = SyntheticMonthSource(12, 20, month_start_ms=START)

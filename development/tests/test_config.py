@@ -1,24 +1,11 @@
 from __future__ import annotations
 
-import shutil
 import tempfile
 import unittest
 from pathlib import Path
 
+from development.fixtures.package_copy import make_package
 from src.config import ConfigError, load_configuration, merge_config, read_jsonc, remove_json_comments
-
-ROOT = Path(__file__).resolve().parents[2]
-FIXTURES = ROOT / "development/fixtures/config"
-
-
-def make_package(tmp: str, fixture: str | None = None) -> Path:
-    package = Path(tmp) / "package"
-    package.mkdir()
-    (package / "config").mkdir()
-    shutil.copy2(ROOT / "config/default-config.jsonc", package / "config/default-config.jsonc")
-    if fixture:
-        shutil.copy2(FIXTURES / fixture, package / "config/user-config.jsonc")
-    return package
 
 
 class JsoncTests(unittest.TestCase):

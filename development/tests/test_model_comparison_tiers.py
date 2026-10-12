@@ -7,8 +7,7 @@ from types import SimpleNamespace
 import re
 import unittest
 
-from development.tests import test_compact_reports as compact
-from development.tests.test_compact_reports import Availability, rendered
+from development.fixtures.compact_reports import Availability, rendered, report_service
 from development.fixtures.watch_runtime import MutableSource
 from src.analysis.comparisons import model_comparison_rows
 from src.domain import ModelPricing, ModelRef, PricingTier
@@ -248,7 +247,7 @@ class TierPresentationTests(unittest.TestCase):
             self.assertEqual(expected, compact_threshold(value))
 
     def test_both_report_modes_share_order_and_normal_keeps_availability_selection(self):
-        service = compact.CompactReportTests.service(self, MutableSource(), availability=Availability(("github-copilot/gpt-test", "github-copilot/claude-test")))
+        service = report_service(self, MutableSource(), availability=Availability(("github-copilot/gpt-test", "github-copilot/claude-test")))
         prices = service.pricing_provider.catalog
         prices = replace(prices, models=tuple(replace(m, tiers=(tier("8"), tier("20" if i else "16", minimum=100001)))
                                              for i, m in enumerate(prices.models)))
