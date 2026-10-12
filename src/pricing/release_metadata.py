@@ -39,6 +39,8 @@ OK = "ok"
 DNS = "dns_failure"
 CONNECTION = "connection_failure"
 TLS = "tls_failure"
+TLS_CERTIFICATE = "tls_certificate_verification_failure"
+UNKNOWN_TRANSPORT = "unknown_transport_failure"
 HTTP = "http_error"
 TIMEOUT = "timeout"
 JSON_PARSE = "json_parse_error"
@@ -50,7 +52,7 @@ PARTIAL_MATCHES = "partial_matches"
 CACHE_FALLBACK = "cache_fallback"
 SKIPPED = "skipped_refresh"
 INTERNAL = "unexpected_internal_error"
-FAILURE_CODES = frozenset({DNS, CONNECTION, TLS, HTTP, TIMEOUT, JSON_PARSE, XML_PARSE,
+FAILURE_CODES = frozenset({DNS, CONNECTION, TLS, TLS_CERTIFICATE, UNKNOWN_TRANSPORT, HTTP, TIMEOUT, JSON_PARSE, XML_PARSE,
                            SCHEMA, MISSING_FIELDS, ZERO_MATCHES, INTERNAL})
 _DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 _PUBLISHER_PREFIXES = {
@@ -65,11 +67,13 @@ class MetadataSourceError(Exception):
     """A classified, message-free metadata failure."""
 
     def __init__(self, code: str, phase: str, *, http_status: int | None = None,
-                 timeout_seconds: int | None = None, retry_after_seconds: int | None = None) -> None:
+                 timeout_seconds: int | None = None, retry_after_seconds: int | None = None,
+                 exception_type: str = "") -> None:
         super().__init__(code)
         self.code, self.phase = code, phase
         self.http_status, self.timeout_seconds = http_status, timeout_seconds
         self.retry_after_seconds = retry_after_seconds
+        self.exception_type = exception_type
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,6 +87,7 @@ class SourceResult:
     timeout_seconds: int | None = None
     retry_after_seconds: int | None = None
     reason: str = ""
+    exception_type: str = ""
 
     def as_dict(self) -> dict[str, object]:
         return {key: value for key, value in asdict(self).items() if value not in (None, "")}
@@ -148,11 +153,15 @@ def classify_transport(exc: BaseException, timeout_seconds: int) -> MetadataSour
     reason = exc.reason if isinstance(exc, urllib.error.URLError) else exc
     if isinstance(reason, socket.gaierror):
         return MetadataSourceError(DNS, "dns")
-    if isinstance(reason, (ssl.SSLError, ssl.CertificateError)):
+    if isinstance(reason, ssl.SSLCertVerificationError):
+        return MetadataSourceError(TLS_CERTIFICATE, "tls")
+    if isinstance(reason, ssl.SSLError):
         return MetadataSourceError(TLS, "tls")
     if isinstance(reason, (TimeoutError, socket.timeout)):
         return MetadataSourceError(TIMEOUT, "fetch", timeout_seconds=timeout_seconds)
-    return MetadataSourceError(CONNECTION, "connect")
+    if isinstance(reason, (ConnectionError, OSError)):
+        return MetadataSourceError(CONNECTION, "connect")
+    return MetadataSourceError(UNKNOWN_TRANSPORT, "fetch")
 
 
 def _fetch(fetch_text: FetchText, source: str, url: str) -> str:
@@ -161,6 +170,8 @@ def _fetch(fetch_text: FetchText, source: str, url: str) -> str:
         return fetch_text(url, timeout)
     except (OSError, HTTPException) as exc:
         error = classify_transport(exc, timeout)
+        reason = exc.reason if isinstance(exc, urllib.error.URLError) else exc
+        error.exception_type = type(reason).__name__
         if isinstance(exc, urllib.error.HTTPError):
             exc.close()  # release the response body; it is never read
         raise error from None
@@ -235,7 +246,7 @@ def _run_source(source: str, url: str, parse, models, fetch_text: FetchText) -> 
     except MetadataSourceError as exc:
         return SourceResult(source, "failed", exc.code, exc.phase, http_status=exc.http_status,
                             timeout_seconds=exc.timeout_seconds,
-                            retry_after_seconds=exc.retry_after_seconds), {}
+                            retry_after_seconds=exc.retry_after_seconds, exception_type=exc.exception_type), {}
     if source == MODELS_DEV and not dates:
         return SourceResult(source, "failed", ZERO_MATCHES, "match"), {}
     # The changelog only covers recent announcements; zero matches is normal.

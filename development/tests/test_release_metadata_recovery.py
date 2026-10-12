@@ -173,7 +173,8 @@ class ClassificationTests(unittest.TestCase):
         cases = {
             "dns_failure": urllib.error.URLError(socket.gaierror(-2, "x")),
             "connection_failure": urllib.error.URLError(ConnectionRefusedError()),
-            "tls_failure": urllib.error.URLError(ssl.SSLCertVerificationError("x")),
+            "tls_certificate_verification_failure": urllib.error.URLError(ssl.SSLCertVerificationError("x")),
+            "tls_failure": urllib.error.URLError(ssl.SSLError("x")),
             "timeout": TimeoutError(),
         }
         for code, failure in cases.items():

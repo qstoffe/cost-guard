@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import json
 import time
+import threading
 from copy import deepcopy
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -36,7 +37,9 @@ from .discovery import (
     discover_v2_registration_candidate,
     read_v2_service_registration,
 )
-from .errors import SourceDataError, SourceUnavailableError
+from .errors import (FailureCode, SourceConcurrentChangeError, SourceDataError, SourceError,
+                     SourceSchemaError, SourceUnavailableError, compatibility_failure)
+from .connectivity import SourceConnectivity, observed
 from .model_availability import settled_v2_model_ids
 from .opencode_v2_normalization import (
     normalize_invocations, normalize_message_bundle, optional_positive_int, safe_int,
@@ -103,9 +106,12 @@ class OpenCodeV2Source:
                     Path(registration_path).expanduser().resolve(strict=False), "explicit"
                 )
         self._candidate = candidate
+        self._connectivity = SourceConnectivity("v2")
+        self.read_recovery = None
+        self._connection_lock = threading.RLock()
         self._timeout_seconds = timeout_seconds
         self._endpoint: V2Endpoint | None = None
-        self._endpoint_marker: tuple[int, int] | None = None
+        self._endpoint_marker: tuple[int, ...] | None = None
         self._catalog_cache: tuple[_NativeSession, ...] | None = None
         self._catalog_listed_at = 0.0
         self._http: V2HttpClient | None = None
@@ -127,9 +133,14 @@ class OpenCodeV2Source:
         try:
             registration: ServiceRegistration = read_v2_service_registration(self._candidate)
         except ServiceRegistrationError as exc:
-            raise SourceUnavailableError(str(exc)) from exc
+            self._connectivity.registration = exc.code.value
+            self.refresh_connection()
+            raise SourceUnavailableError(str(exc), code=exc.code, phase="registration",
+                exception_type=type(exc.__cause__).__name__ if exc.__cause__ else "", generation="v2") from exc
+        self._connectivity.registration = "valid"
         if registration.version and not registration.version.startswith("2."):
-            raise SourceUnavailableError("Registered OpenCode service is not a supported V2 service")
+            raise SourceSchemaError("Registered OpenCode service is not a supported V2 service",
+                                    code=FailureCode.VERSION, phase="probe", generation="v2")
         endpoint = V2Endpoint(
             url=normalize_local_service_url(registration.url),
             version=registration.version,
@@ -138,6 +149,14 @@ class OpenCodeV2Source:
             password=registration.password,
             registration_path=registration.path,
         )
+        if self._endpoint != endpoint:
+            if self._http is not None:
+                self._http.close()
+            self._http = None
+            self._catalog_cache = None
+            self._catalog_listed_at = 0.0
+        else:
+            endpoint = self._endpoint
         self._endpoint = endpoint
         return endpoint
 
@@ -145,7 +164,7 @@ class OpenCodeV2Source:
         """Reuse the registration until OpenCode rewrites it (a restarted service may move port/auth)."""
         try:
             stat = self._candidate.path.stat()
-            marker: tuple[int, int] | None = (stat.st_mtime_ns, stat.st_size)
+            marker = (stat.st_mtime_ns, stat.st_size, stat.st_ino, stat.st_ctime_ns)
         except OSError:
             marker = None
         if self._endpoint is None or marker != self._endpoint_marker:
@@ -156,12 +175,14 @@ class OpenCodeV2Source:
 
     def _client(self) -> V2HttpClient:
         """One client (and keep-alive connection per thread) per registered endpoint."""
-        endpoint = self._current_endpoint()
-        client = self._http
-        if client is None or client.endpoint is not endpoint:
-            client = self._http = V2HttpClient(endpoint, timeout_seconds=self._timeout_seconds,
-                                               stats=self._diagnostics["transport"])
-        return client
+        with self._connection_lock:
+            endpoint = self._current_endpoint()
+            client = self._http
+            if client is None or client.endpoint is not endpoint:
+                client = self._http = V2HttpClient(endpoint, timeout_seconds=self._timeout_seconds,
+                                                   stats=self._diagnostics["transport"])
+            client.request_timeout = self.read_recovery.request_timeout if self.read_recovery is not None else None
+            return client
 
     @property
     def source_instance(self) -> str | None:
@@ -175,20 +196,35 @@ class OpenCodeV2Source:
             self._instance_cache = (path, f"service:{digest}")
         return self._instance_cache[1]
 
+    def refresh_connection(self, *, timeout_seconds: float | None = None) -> None:
+        """Discard uncertain discovery/catalog/pool state without touching OpenCode."""
+        with self._connection_lock:
+            if self._http is not None:
+                self._http.close()
+            self._http = None
+            self._endpoint = None
+            self._endpoint_marker = None
+            self._catalog_cache = None
+            self._catalog_listed_at = 0.0
+            if timeout_seconds is not None:
+                self._timeout_seconds = timeout_seconds
+
     def probe(self) -> IntegrationHealth:
-        if not self._candidate.path.is_file():
-            return IntegrationHealth(False, False, "OpenCode V2 shared-service registration was not found")
         try:
-            endpoint = self._read_endpoint()
-            info = V2HttpClient(endpoint, timeout_seconds=self._timeout_seconds).json("/api/info")
-        except (SourceUnavailableError, SourceDataError) as exc:
-            return IntegrationHealth(True, False, str(exc))
-        if not isinstance(info, Mapping):
-            return IntegrationHealth(True, False, "OpenCode V2 /api/info returned an invalid response")
-        version = info.get("version")
-        if not isinstance(version, str) or not version.startswith("2."):
-            return IntegrationHealth(True, False, "OpenCode shared service is not a supported V2 version")
-        return IntegrationHealth(True, True, f"OpenCode V2 service {version} is reachable")
+            info = self._client().json("/api/info", phase="probe")
+            if not isinstance(info, Mapping):
+                raise SourceSchemaError("OpenCode V2 health response is unsupported", phase="probe", generation="v2")
+            version = info.get("version")
+            if not isinstance(version, str) or not version.startswith("2."):
+                raise SourceSchemaError("OpenCode shared service is not a supported V2 version",
+                                        code=FailureCode.VERSION, phase="probe", generation="v2")
+        except SourceError as exc:
+            self._connectivity.failed(exc, "probe")
+            return IntegrationHealth(exc.code != FailureCode.REGISTRATION_MISSING, False,
+                                     str(exc), exc.code.value, exc.phase, exc.exception_type, exc.http_status)
+        self._connectivity.version = version[:24] if all(c.isdigit() or c == "." for c in version) else "2.x"
+        self._connectivity.succeeded()
+        return IntegrationHealth(True, True, f"OpenCode V2 service {self._connectivity.version} is reachable")
 
     def _provenance(self, session_id: str, event_id: str | None = None) -> Provenance:
         return Provenance(
@@ -201,7 +237,8 @@ class OpenCodeV2Source:
 
     def diagnostic_metadata(self) -> Mapping[str, Any]:
         """Return non-secret observation metadata for the diagnostics bundle."""
-        return summarize_v2_diagnostics(self._diagnostics)
+        return {**summarize_v2_diagnostics(self._diagnostics),
+                "connectivity": self._connectivity.snapshot()}
 
     def available_model_ids(self) -> tuple[str, ...] | None:
         """Use the selected registered service's settled global model list."""
@@ -219,7 +256,9 @@ class OpenCodeV2Source:
         pages: int
         try:
             raw_values, contract, pages = fetch_global_sessions(client)
-        except (SourceUnavailableError, SourceDataError):
+        except (SourceUnavailableError, SourceDataError, SourceSchemaError) as exc:
+            if not compatibility_failure(exc):
+                raise
             raw_values, contract, pages = fetch_project_sessions(client, since_ms)
         else:
             # Older project-scoped services can accept /api/session globally but
@@ -228,8 +267,9 @@ class OpenCodeV2Source:
             if not raw_values:
                 try:
                     legacy_values, legacy_contract, legacy_pages = fetch_project_sessions(client, since_ms)
-                except (SourceUnavailableError, SourceDataError):
-                    pass
+                except (SourceUnavailableError, SourceDataError, SourceSchemaError) as exc:
+                    if not compatibility_failure(exc):
+                        raise
                 else:
                     if legacy_values:
                         raw_values, contract, pages = legacy_values, legacy_contract, legacy_pages
@@ -243,7 +283,9 @@ class OpenCodeV2Source:
                     str(session_id) for session_id, status in active_data.items()
                     if isinstance(status, Mapping) and str(status.get("type", "")).lower() == "running"
                 }
-        except (SourceUnavailableError, SourceDataError):
+        except (SourceUnavailableError, SourceDataError, SourceSchemaError) as exc:
+            if not compatibility_failure(exc):
+                raise
             active_ids = None
         values = [
             _NativeSession(
@@ -287,6 +329,7 @@ class OpenCodeV2Source:
             capabilities=self.capabilities,
         )
 
+    @observed("catalog")
     def list_sessions(self, since_ms: int | None = None) -> Sequence[NormalizedSession]:
         self._diagnostics["last_snapshot_stage"] = "catalog"
         return tuple(self._normalize_session(value) for value in self._list_native_sessions(since_ms, refresh=True))
@@ -423,6 +466,7 @@ class OpenCodeV2Source:
             return list(cached), True
         return self._list_native_sessions(refresh=True), False
 
+    @observed("snapshot")
     def load_session_snapshot(self, session_id: str) -> SessionSnapshot:
         reuse = True
         attempt = 0
@@ -446,7 +490,11 @@ class OpenCodeV2Source:
                 notices.update(native_notices)
             self._diagnostics["last_snapshot_stage"] = "catalog_after"
             after_all = self._list_native_sessions(refresh=True)
-            after_tree = self._tree(after_all, session_id)
+            try:
+                after_tree = self._tree(after_all, session_id)
+            except SourceDataError as exc:
+                raise SourceConcurrentChangeError("OpenCode V2 session changed while it was being read",
+                                                  phase="snapshot", generation="v2") from exc
             after_revision = self._revision(after_tree)
             if before_revision == after_revision:
                 self._diagnostics["last_snapshot_stage"] = "normalize"
@@ -482,7 +530,8 @@ class OpenCodeV2Source:
             self._diagnostics["snapshot_revision_rechecks"] += 1
             attempt += 1
         self._diagnostics["last_snapshot_stage"] = "revision_changed"
-        raise SourceDataError("OpenCode V2 session changed repeatedly while it was being read")
+        raise SourceConcurrentChangeError("OpenCode V2 session changed repeatedly while it was being read",
+                                          phase="snapshot", generation="v2")
 
     @staticmethod
     def _event_session_id(value: Mapping[str, Any]) -> str | None:
@@ -501,17 +550,32 @@ class OpenCodeV2Source:
                 return raw
         return None
 
-    def iter_changes(self) -> Iterator[SourceChange]:
+    def close_changes(self) -> None:
+        if self._http is not None:
+            self._http.close_events()
+
+    def iter_changes_until(self, stop_event: threading.Event) -> Iterator[SourceChange]:
+        """Register cancellation before the first stream connection can start."""
+        return self.iter_changes(stop_event=stop_event)
+
+    def iter_changes(self, *, stop_event: threading.Event | None = None) -> Iterator[SourceChange]:
         """Yield live hints. Normal end/failure requires a full source resync."""
 
-        for value in self._client().sse("/api/event"):
-            self._catalog_cache = None
-            payload = value.get("payload") if isinstance(value.get("payload"), Mapping) else value
-            self._interruptions.observe(payload)
-            event_type = str(payload.get("type", "unknown")) if isinstance(payload, Mapping) else "unknown"
-            yield SourceChange(
-                source_id=self.source_id,
-                event_type=event_type,
-                session_id=self._event_session_id(value),
-                payload=deepcopy(dict(value)),
-            )
+        if stop_event is not None and stop_event.is_set():
+            return
+        try:
+            for value in self._client().sse("/api/event", stop_event=stop_event):
+                self._catalog_cache = None
+                payload = value.get("payload") if isinstance(value.get("payload"), Mapping) else value
+                self._interruptions.observe(payload)
+                event_type = str(payload.get("type", "unknown")) if isinstance(payload, Mapping) else "unknown"
+                yield SourceChange(
+                    source_id=self.source_id,
+                    event_type=event_type,
+                    session_id=self._event_session_id(value),
+                    payload=deepcopy(dict(value)),
+                )
+        except SourceError as error:
+            if stop_event is None or not stop_event.is_set():
+                self._connectivity.failed(error, "event_stream")
+                raise

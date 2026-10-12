@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Mapping
 
+from .errors import FailureCode
+
 
 @dataclass(frozen=True, slots=True)
 class DatabaseCandidate:
@@ -38,7 +40,9 @@ class ServiceRegistration:
 
 
 class ServiceRegistrationError(ValueError):
-    pass
+    def __init__(self, message: str, code: FailureCode = FailureCode.REGISTRATION_INVALID):
+        super().__init__(message)
+        self.code = code
 
 
 def _expanded_path(value: str, home: Path) -> Path:
@@ -194,12 +198,16 @@ def read_v2_service_registration(candidate: ServiceRegistrationCandidate) -> Ser
     """
 
     path = candidate.path
-    if not path.is_file():
-        raise ServiceRegistrationError("OpenCode V2 service registration is missing")
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-        raise ServiceRegistrationError("OpenCode V2 service registration is unreadable") from exc
+    except FileNotFoundError as exc:
+        raise ServiceRegistrationError("OpenCode V2 service registration is missing",
+                                       FailureCode.REGISTRATION_MISSING) from exc
+    except OSError as exc:
+        raise ServiceRegistrationError("OpenCode V2 service registration is unreadable",
+                                       FailureCode.REGISTRATION_UNREADABLE) from exc
+    except (UnicodeError, json.JSONDecodeError) as exc:
+        raise ServiceRegistrationError("OpenCode V2 service registration is invalid") from exc
     if not isinstance(value, dict):
         raise ServiceRegistrationError("OpenCode V2 service registration is invalid")
     url = value.get("url")

@@ -359,6 +359,11 @@ class ReportService:
         """Advance wall-clock-dependent presentation semantics without rebuilding dependencies."""
         self.now_ms = int(now_ms)
 
+    def invalidate_source_observations(self) -> None:
+        """Discard unfinished startup's analysis gates, not providers/prices/quotas."""
+        self._analyzed.clear()
+        self._comparison_mix = None
+
     def invalidate_roots(self, root_ids: Sequence[str]) -> None:
         """Drop in-process analyzed snapshots for source roots known to have changed."""
         for root_id in root_ids:

@@ -82,8 +82,12 @@ class LiveEventPump:
         self._thread.start()
 
     def _run(self) -> None:
+        if self._stop.is_set():
+            return
         try:
-            for change in self.source.iter_changes():
+            cancellable = getattr(self.source, "iter_changes_until", None)
+            changes = cancellable(self._stop) if callable(cancellable) else self.source.iter_changes()
+            for change in changes:
                 if self._stop.is_set():
                     return
                 recovered("watch-event-observer")
@@ -111,3 +115,8 @@ class LiveEventPump:
 
     def stop(self) -> None:
         self._stop.set()
+        close = getattr(self.source, "close_changes", None)
+        if callable(close):
+            close()
+        if self._thread is not None:
+            self._thread.join(timeout=0.2)

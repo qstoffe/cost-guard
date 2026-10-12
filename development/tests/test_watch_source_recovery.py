@@ -198,7 +198,7 @@ class WatchSourceRecoveryTests(unittest.TestCase):
             def __init__(self, **_kwargs):
                 pass
 
-            def initialize(self):
+            def initialize_with_recovery(self, _renderer):
                 return None
 
             def run_forever(self, *_args, **_kwargs):
@@ -215,8 +215,8 @@ class WatchSourceRecoveryTests(unittest.TestCase):
              mock.patch("sys.stdout", stdout):
             code = bootstrap.main(["--watch"])
         self.assertEqual(1, code)
-        self.assertIn("Cost Guard - Runtime error", stdout.getvalue())
-        self.assertIn("schema is not supported", stdout.getvalue())
+        self.assertIn("Cost Guard - OpenCode incompatible", stdout.getvalue())
+        self.assertIn("format is not supported", stdout.getvalue())
 
     def test_source_warnings_and_migration_gap_never_drive_lifecycle(self):
         with tempfile.TemporaryDirectory() as td:

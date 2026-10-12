@@ -54,7 +54,7 @@ class WatchLifecycleTests(unittest.TestCase):
                         code, output = bootstrap_watch(watch)
                     self.assertEqual(1, code)
                     if isinstance(error, SourceSchemaError):
-                        self.assertIn("Cost Guard - Runtime error", output)
+                        self.assertIn("Cost Guard - OpenCode incompatible", output)
                     else:
                         self.assertIn("COST GUARD FAILED", output)
                         self.assertIn(type(error).__name__, output)

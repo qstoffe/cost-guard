@@ -105,7 +105,7 @@ See [Token Mix reference](#token-mix--by-model---token-mix). Screenshots are ill
 - Python **3.11 or newer**.
 - A supported OpenCode installation/history:
   - **V1:** The local legacy OpenCode SQLite database, read-only/query-only.
-  - **V2:** Read-only registered-service loopback HTTP. If unavailable, `auto`/`v2` may call `opencode api get /api/info` once (no Desktop/TUI); Watch retries process-free every five seconds. Diagnostics `--test-service-start` tests cold startup without stopping a shared service.
+  - **V2:** Read-only registered-service loopback HTTP. **Start OpenCode Desktop V2 once after starting your computer** to start its background service; it may continue after Desktop closes. Reports retry brief readiness failures within a short budget; Watch waits/reconnects every five seconds, including during initialization. One installed-CLI wake remains supported; no automatic Desktop launch. See [connectivity and safe troubleshooting](docs/connectivity.md).
 - Internet access for GitHub Copilot pricing/model metadata fetches.
 - Optional Copilot quota reuses OpenCode OAuth in memory, without login, credential writes or GitHub CLI.
 - Optional OpenAI subscription quota is fail-soft. Read-only V2 accounts take priority; legacy `auth.json` applies only without V2 rows. Credentials are never refreshed, rotated or written.
@@ -279,7 +279,7 @@ OpenAI Plus          5h     ████████░░  82% · Reset@22:49 |
 
 Full redraws clear screen/scrollback; countdowns replace only the status line. V1 Watch uses process-free SQLite gating; V2 events are hints with a five-second cooldown and authoritative resync. `"auto"` refresh adapts within 5–30 seconds; quota refresh is independently rate-limited.
 
-**Watch troubleshooting.** OpenCode outages keep the last dashboard with `Watch: OpenCode V2 source unavailable · retrying every 5s`; retries use the same source, no V1 fallback/CLI start, then resume from a fresh snapshot. Unsupported schemas or data unreadable for ~1 minute end Watch with an error. Runtime failures exit non-zero; missing/archived session targets stop normally. Windows returns to PowerShell. Closing/killing the terminal still ends Watch.
+**Watch troubleshooting.** Before connection, Watch suggests starting Desktop V2 if needed. Failures during first catalog/snapshot reads recover without partial rows or repeated quota requests. Later outages keep the last dashboard, retry the same source every five seconds and resync snapshots/events; no V1 fallback or recurring CLI start. Unsupported schemas or data unreadable for ~1 minute remain terminal. Ctrl+C stops Watch, not OpenCode. See [connectivity guidance](docs/connectivity.md).
 
 ## Pricing, quota and network behavior
 
@@ -344,7 +344,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.37:** faster causal analysis/cache serialization; mandatory versioned PR delivery. Retains live user-stop attribution and credit-first accounts. v80.0 is the Python 3.11+ public baseline. Claude quotas remain experimental; restart/sleep need separate live evidence.
+**v80.38:** actionable Desktop V2 startup guidance, bounded report recovery, recoverable Watch initialization, restart-safe transport and privacy-safe source/TLS incident evidence. Retains live user-stop attribution, accounting and credit-first accounts. v80.0 is the Python 3.11+ public baseline; Claude quotas remain experimental; restart/sleep need separate live evidence.
 
 Product versions identify code state; they do not imply a Git tag, release ZIP or GitHub Release. Packaged GitHub Releases are currently paused. Recommending them at a slower/stable cadence requires an explicit policy change; version numbers never trigger it automatically.
 

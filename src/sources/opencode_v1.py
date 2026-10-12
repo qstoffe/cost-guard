@@ -37,7 +37,7 @@ from src.domain import (
 )
 
 from .discovery import DatabaseCandidate, discover_v1_database_candidate
-from .errors import SourceDataError, SourceError, SourceSchemaError, SourceUnavailableError
+from .errors import FailureCode, SourceDataError, SourceError, SourceSchemaError, SourceUnavailableError
 from .opencode_errors import normalize_error_name as _error_name
 from .opencode_errors import normalize_abort_reason
 from .opencode_tokens import token_usage
@@ -274,14 +274,15 @@ class OpenCodeV1Source:
     @contextmanager
     def _connection(self) -> Iterator[sqlite3.Connection]:
         if not self._path.is_file():
-            raise SourceUnavailableError("OpenCode V1 database is not available")
+            raise SourceUnavailableError("OpenCode V1 database is not available", code=FailureCode.V1_MISSING, generation="v1")
         # as_uri() safely encodes spaces/non-ASCII.  mode=ro prevents creation and
         # writes while still allowing SQLite to observe an active WAL file.
         uri = self._path.resolve().as_uri() + "?mode=ro"
         try:
             connection = sqlite3.connect(uri, uri=True, timeout=5.0)
         except sqlite3.Error as exc:
-            raise SourceUnavailableError("OpenCode V1 database could not be opened read-only") from exc
+            raise SourceUnavailableError("OpenCode V1 database could not be opened read-only",
+                                         code=FailureCode.V1_UNREADABLE, generation="v1") from exc
         try:
             connection.row_factory = sqlite3.Row
             connection.execute("PRAGMA query_only = ON")
@@ -327,13 +328,13 @@ class OpenCodeV1Source:
                 if self._candidate.origin == "OPENCODE_DB"
                 else "OpenCode V1 database was not found at the standard data location"
             )
-            return IntegrationHealth(available=False, healthy=False, detail=detail)
+            return IntegrationHealth(False, False, detail, FailureCode.V1_MISSING.value, "probe")
         try:
             schema = self.inspect_schema()
         except SourceError as exc:
-            return IntegrationHealth(available=True, healthy=False, detail=str(exc))
+            return IntegrationHealth(True, False, str(exc), exc.code.value, "probe", type(exc).__name__)
         if not schema.supported:
-            return IntegrationHealth(available=True, healthy=False, detail=schema.detail)
+            return IntegrationHealth(True, False, schema.detail, FailureCode.SCHEMA.value, "probe")
         return IntegrationHealth(available=True, healthy=True, detail="OpenCode V1 SQLite history is readable")
 
     def _require_schema(self, connection: sqlite3.Connection) -> None:

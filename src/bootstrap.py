@@ -22,7 +22,10 @@ from .presentation import ReportRenderer, StartupProgress, WatchRenderer
 from .pricing.github_copilot import GitHubCopilotPricingProvider
 from .pricing.github_copilot import PricingUnavailableError
 from .reports import ReportKind, ReportRequest, ReportService
-from .sources.errors import SourceError, SourceUnavailableError
+from .sources.errors import FailureCode, SourceError, SourceUnavailableError
+from .sources.read_recovery import ReadRecovery
+from .sources.connectivity_events import record as record_source_event
+from .presentation.source_errors import source_error_message, source_wait_message
 from .sources.discovery import default_opencode_data_dir, find_opencode_executable, has_opencode_installation_evidence
 from .sources.model_availability import FallbackModelAvailabilitySource, OpenCodeModelAvailabilitySource
 from .sources.selection import SourceSelector
@@ -88,64 +91,91 @@ def _prepare_console_output() -> None:
     if not encoding:
         return
     try:
-        "→█░✓—⚠".encode(encoding)
+        "\u2192\u2588\u2591\u2713\u2014\u26a0".encode(encoding)
     except (UnicodeEncodeError, LookupError):
         reconfigure = getattr(sys.stdout, "reconfigure", None)
         if callable(reconfigure):
             reconfigure(errors="replace")
 
 
-def _select_source(requested: str):
-    """Wake the shared V2 service once when no requested source is usable.
-
-    The OpenCode API CLI discovers/starts its own background service. Never
-    launch a TUI or re-run this on Watch polls; forced V1 remains process-free.
-    """
-    selector = SourceSelector()
+def _wake_cli_service(executable: str) -> None:
+    """The single supported CLI wake, never a recurring discovery action."""
+    command = [executable, "api", "get", "/api/info"]
+    if executable.lower().endswith((".cmd", ".bat")):
+        command = [os.environ.get("COMSPEC") or "cmd.exe", "/d", "/s", "/c",
+                   subprocess.list2cmdline(command)]
     try:
-        return selector.select(requested)
-    except SourceUnavailableError:
-        if requested not in {"auto", "v2"}:
+        result = subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                timeout=20, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        raise SourceUnavailableError("OpenCode V2 background service could not be started",
+            code=FailureCode.ENDPOINT_UNRESPONSIVE, phase="selection", generation="v2") from None
+    if result.returncode != 0:
+        raise SourceUnavailableError("OpenCode V2 background service could not be started",
+            code=FailureCode.ENDPOINT_UNRESPONSIVE, phase="selection", generation="v2")
+
+
+def _select_source(requested: str):
+    """Wake once if appropriate; reports share a short discovery/read retry budget."""
+    selector = SourceSelector()
+    recovery = ReadRecovery()
+    try:
+        selection = selector.select(requested)
+    except SourceUnavailableError as error:
+        if requested not in {"auto", "v2"} or not error.readiness_retryable:
             raise
+        started = time.monotonic()
         executable = find_opencode_executable(which=shutil.which)
-        if executable is None:
-            raise
-        command = [executable, "api", "get", "/api/info"]
-        if executable.lower().endswith((".cmd", ".bat")):
-            command = [
-                os.environ.get("COMSPEC") or "cmd.exe", "/d", "/s", "/c",
-                subprocess.list2cmdline(command),
-            ]
-        try:
-            result = subprocess.run(
-                command,
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                timeout=20, check=False,
-            )
-        except (OSError, subprocess.TimeoutExpired):
-            raise SourceUnavailableError(
-                "OpenCode V2 background service could not be started. Start OpenCode or check its service status."
-            ) from None
-        if result.returncode != 0:
-            raise SourceUnavailableError(
-                "OpenCode V2 background service could not be started. Start OpenCode or check its service status."
-            )
-        return selector.select(requested)
+        if executable is not None:
+            _wake_cli_service(executable)
+        selection = recovery.run(lambda: selector.select(requested), initial_error=error)
+        record_source_event("v2", "recovered", "available", **error.evidence(),
+                            attempts=recovery.failures,
+                            duration_ms=int((time.monotonic() - started) * 1000))
+    if getattr(selection, "selected", None) == "v2":
+        selection.source.read_recovery = recovery
+    return selection
 
 
 def _wait_for_watch_source(requested: str, renderer: WatchRenderer, *, sleep=time.sleep):
     """Keep Watch open while OpenCode is offline; reconnect without CLI polling."""
     selector = SourceSelector()
-    message = "Watch: Waiting for OpenCode source · retrying every 5s (Ctrl+C to stop)"
+    message = source_wait_message(requested)
     if not renderer.interactive:
         renderer._write(message)
+    started = time.monotonic()
+    attempts = 0
     while True:
         renderer.render_startup_status(message, active=True)  # a waiting status, not loading
         try:
             sleep(5)
-            return selector.select(requested)
-        except SourceUnavailableError:
-            continue
+            attempts += 1
+            selection = selector.select(requested)
+            record_source_event(getattr(selection, "selected", "v2"), "recovered", "available",
+                                phase="selection", attempts=attempts,
+                                duration_ms=int((time.monotonic() - started) * 1000))
+            return selection
+        except SourceUnavailableError as error:
+            if error.terminal or (error.code != FailureCode.UNKNOWN and not error.watch_retryable):
+                raise
+
+
+def _select_or_wait(requested: str, progress, renderer):
+    try:
+        return _select_source(requested)
+    except SourceUnavailableError as error:
+        if error.terminal or (error.code != FailureCode.UNKNOWN and not error.watch_retryable):
+            raise
+        progress.stop()
+        if renderer is not None:
+            return _wait_for_watch_source(requested, renderer)
+        if shutil.which("opencode") is None and not has_opencode_installation_evidence():
+            _print_error("Cost Guard - OpenCode not found",
+                         "OpenCode does not appear to be installed.\n"
+                         "Install OpenCode and start it once, then restart Cost Guard.")
+            print(diagnostics_hint(PACKAGE_ROOT), end="")
+            return None
+        raise
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -199,23 +229,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         progress.update("Selecting OpenCode source")
         context(phase="source selection")
         requested_source = str(config["openCode"]["source"])
-        try:
-            selection = _select_source(requested_source)
-        except SourceUnavailableError:
-            if not command.watch or watch_renderer is None:
-                if shutil.which("opencode") is None and not has_opencode_installation_evidence():
-                    progress.stop()
-                    _print_error("Cost Guard - OpenCode not found",
-                                 "OpenCode does not appear to be installed.\n"
-                                 "Install OpenCode and start it once, then restart Cost Guard.")
-                    return 1
-                raise
-            progress.stop()
-            try:
-                selection = _wait_for_watch_source(requested_source, watch_renderer)
-            except KeyboardInterrupt:
-                watch_renderer.finish("Watch stopped.")
-                return 0
+        selection = _select_or_wait(requested_source, progress, watch_renderer)
+        if selection is None:
+            return 1
         if command.watch and watch_renderer is not None:
             # The transient two-line startup surface gives way to the full dashboard.
             watch_renderer.render_initializing(selection.selected.upper())
@@ -255,7 +271,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 config=config,
                 session_id=command.target if command.kind is CommandKind.SESSION else None,
             )
-            initial_cycle = coordinator.initialize()
+            # Watch uses coordinator recovery, never the short report retry policy.
+            if selection.selected == "v2":
+                selection.source.read_recovery = None
+            initial_cycle = coordinator.initialize_with_recovery(watch_renderer)
             progress.stop()
             assert watch_renderer is not None
             context(phase="Watch runtime")
@@ -292,7 +311,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     except (SourceError, WatchedSessionEnded, PricingUnavailableError) as exc:
         if progress is not None:
             progress.stop()
-        _print_error("Cost Guard - Runtime error", str(exc) or type(exc).__name__)
+        title, message = source_error_message(exc.code.value, exc.generation, exc.readiness_retryable, str(exc)) if isinstance(exc, SourceError) else (
+            "Cost Guard - Runtime error", str(exc) or type(exc).__name__)
+        _print_error(title, message)
         if not isinstance(exc, WatchedSessionEnded):
             # Stopping product errors only; recoverable outages never reach here.
             print(diagnostics_hint(PACKAGE_ROOT), end="")

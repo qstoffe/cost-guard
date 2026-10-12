@@ -30,7 +30,7 @@ _HISTORY = 24
 _EVENT_KEYS = ("timestamp", "version", "component", "event", "source", "phase", "error_code",
                "previous_error_code", "http_status", "timeout_seconds", "retry_after_seconds",
                "attempts", "priced_models", "dated_models", "cache_fallback", "fingerprint",
-               "duration_ms", "health", "reason")
+               "duration_ms", "health", "reason", "exception_type")
 
 
 def default_root() -> Path | None:
@@ -207,6 +207,7 @@ class MetadataHealthStore:
         line = {"timestamp": datetime.now().astimezone().isoformat(), "version": DISPLAY_VERSION,
                 "component": COMPONENT, "event": event, "source": result.source, "phase": result.phase,
                 "error_code": result.code, "http_status": result.http_status,
+                "exception_type": result.exception_type,
                 "timeout_seconds": result.timeout_seconds, "retry_after_seconds": result.retry_after_seconds,
                 **values}
         folder = "recovery" if event == "recovered" else "errors"

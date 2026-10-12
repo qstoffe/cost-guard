@@ -13,7 +13,7 @@ from src.sources.errors import SourceError, SourceSchemaError, SourceUnavailable
 from src.sources.selection import SourceSelection
 from src.runtime_errors import check_pending
 
-from .recovery_events import record as record_source_recovery
+from src.sources.connectivity_events import record as record_source_recovery
 from .observation_diagnostics import record_scan, record_source_error
 from .model_discovery import WatchModelDiscovery
 from .models import WatchProjection, WatchRow, WatchSessionSubtotal
@@ -42,9 +42,11 @@ def _clock_ms() -> int:
 
 def source_failure_kind(error: SourceError) -> str | None:
     """Normalized recovery category; None means the selected source contract is unsupported."""
-    if isinstance(error, SourceSchemaError):
+    if error.terminal:
         return None
-    return "unavailable" if isinstance(error, SourceUnavailableError) else "unreadable"
+    if isinstance(error, SourceUnavailableError):
+        return "unavailable" if error.watch_retryable or error.code.value == "unknown_source_failure" else None
+    return "unreadable"
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,6 +82,8 @@ class WatchCoordinator:
         # Diagnostics' headless smoke must not appear as a user Watch observation.
         self.record_observations = record_observations
         self.source = selection.source
+        if hasattr(self.source, "read_recovery"):
+            self.source.read_recovery = None
         self.report_service = report_service
         self.config = config
         self.session_id = session_id
@@ -174,7 +178,7 @@ class WatchCoordinator:
     def _hydrate(
         self, roots: Sequence[NormalizedSession], *, now_ms: int, force_fresh_ids: Sequence[str] = ()
     ) -> tuple[str, ...]:
-        hydrated: list[str] = []
+        pending = []
         force_fresh = set(force_fresh_ids)
         self.report_service.set_now_ms(now_ms)
         for root in roots:
@@ -182,11 +186,12 @@ class WatchCoordinator:
             block, snapshot, bundle = self.report_service.build_watch_root(
                 root, force_fresh=root.session_id in force_fresh
             )
-            self.blocks[root.session_id] = block
-            self.snapshots[root.session_id] = snapshot
+            pending.append((root.session_id, block, snapshot, bundle))
+        for root_id, block, snapshot, bundle in pending:
+            self.blocks[root_id] = block
+            self.snapshots[root_id] = snapshot
             self.token_mix.observe(snapshot, bundle)
-            hydrated.append(root.session_id)
-        return tuple(hydrated)
+        return tuple(root_id for root_id, *_ in pending)
 
     def _refresh_quota(self, observation: CatalogObservation, *, now_ms: int, force: bool = False) -> None:
         # Local usage refreshes on source changes (or every five minutes); account
@@ -313,9 +318,7 @@ class WatchCoordinator:
         refresh_started = time.monotonic()
         now_ms = int(self.clock_ms())
         self.report_service.set_now_ms(now_ms)
-        self.accounts.begin(now_ms)
         observation = observe_catalog(self.source, session_id=self.session_id)
-        self.model_discovery.refresh(now_ms)
         roots = self._selected_roots(observation)
         # Bounded initial hydration: all root revisions are known, so later changes
         # still enter; the discovery scope is independent of the display cap.
@@ -330,6 +333,10 @@ class WatchCoordinator:
         hydrated = self._hydrate(initial_roots, now_ms=now_ms)
         self.observation = observation
         self._record_refresh_duration(time.monotonic() - refresh_started)
+        self.quota = self.report_service.build_watch_quota(
+            observation.sessions, quota_snapshots=self.accounts.snapshots, query_account=False)
+        self.accounts.begin(now_ms)
+        self.model_discovery.refresh(now_ms)
         self._refresh_quota(observation, now_ms=now_ms, force=True)
         if self.live:
             self._start_event_pump()
@@ -341,6 +348,21 @@ class WatchCoordinator:
             hydrated,
             resynced=True,
         )
+
+    def initialize_with_recovery(self, renderer) -> WatchCycle:
+        """Recover unfinished startup with the same selected-source lifecycle."""
+        try:
+            return self.initialize()
+        except SourceError as error:
+            self._discard_initialization()
+            return self._recover_source(renderer, error, initializing=True)
+
+    def _discard_initialization(self) -> None:
+        self.observation = None
+        self.blocks.clear()
+        self.snapshots.clear()
+        self.token_mix = WatchTokenMix(self.started_at_ms)
+        self.report_service.invalidate_source_observations()
 
     def _start_event_pump(self) -> None:
         if not self.live:
@@ -386,16 +408,17 @@ class WatchCoordinator:
             if any(row.in_progress for row in block.rows)
         }
         removed = set(self.blocks) - set(current_roots)
-        for root_id in removed:
-            self.blocks.pop(root_id, None)
-            self.snapshots.pop(root_id, None)
-            self.report_service.invalidate_roots((root_id,))
 
         hydrate_ids = changed | active_roots
         hydrate = [current_roots[root_id] for root_id in hydrate_ids if root_id in current_roots]
         hydrated = self._hydrate(
             hydrate, now_ms=now_ms, force_fresh_ids=active_roots
         ) if hydrate else ()
+        for root_id in removed:
+            self.blocks.pop(root_id, None)
+            self.snapshots.pop(root_id, None)
+            self.report_service.invalidate_roots((root_id,))
+
         self.observation = observation
         self._record_refresh_duration(time.monotonic() - refresh_started)
         if changed:
@@ -494,7 +517,7 @@ class WatchCoordinator:
         initial one-shot projection contained running work before invoking it.
         """
         try:
-            cycle = self.initialize()
+            cycle = self.initialize_with_recovery(renderer)
             if cycle.projection.active_count <= 0:
                 return
             renderer.render(cycle.projection)
@@ -527,7 +550,7 @@ class WatchCoordinator:
             renderer.render_status(cycle.projection)
         return cycle
 
-    def _recover_source(self, renderer, error: SourceError) -> WatchCycle:
+    def _recover_source(self, renderer, error: SourceError, *, initializing: bool = False) -> WatchCycle:
         """Keep Watch alive across transient failures of the already-selected source.
 
         The last dashboard stays visible. Recovery retries only this selection
@@ -540,37 +563,52 @@ class WatchCoordinator:
             self._event_pump = None
         record_source_error(self.selection.selected, source_failure_kind(error) or "unsupported", self.source)
         attempts = unreadable = 0
+        degraded_at = self._monotonic()
         while True:
             kind = source_failure_kind(error)
             unreadable = unreadable + 1 if kind == "unreadable" else 0
             if kind is None or unreadable > (SOURCE_UNREADABLE_RETRIES * 2 if self.live and int(self.clock_ms()) <= self._resume_recovery_deadline_ms else SOURCE_UNREADABLE_RETRIES):
-                record_source_recovery(self.selection.selected, "failed", kind or "unsupported")
+                record_source_recovery(self.selection.selected, "failed", kind or "unsupported",
+                                       **error.evidence(), attempts=attempts,
+                                       duration_ms=int((self._monotonic() - degraded_at) * 1000))
                 raise error
             if not attempts:
                 self.source_recoveries += 1
-                record_source_recovery(self.selection.selected, "retrying", kind)
+                record_source_recovery(self.selection.selected, "retrying", kind, **error.evidence())
             attempts += 1
             self.last_source_recovery_kind = kind
             status = f"OpenCode {self.selection.selected.upper()} source {kind} · retrying every {SOURCE_RETRY_SECONDS:g}s"
-            projection = self.activity_projection(status)
-            (renderer.render if attempts == 1 else renderer.render_status)(projection)
+            if initializing:
+                renderer.render_startup_status(status, active=True)
+            else:
+                projection = self._last_projection or self.activity_projection(status)
+                projection = replace(projection, status=status, status_active=True)
+                (renderer.render if attempts == 1 else renderer.render_status)(projection)
             self.sleep(SOURCE_RETRY_SECONDS)
             # Outage waits are observed time, not a suspend gap that would arm
             # account-quota resume retries.
             self._last_cycle_end_ms = int(self.clock_ms())
             try:
-                cycle = self.poll_once(force_resync=self.live)
+                refresh = getattr(self.source, "refresh_connection", None)
+                if callable(refresh):
+                    refresh()
+                if initializing:
+                    self.report_service.invalidate_source_observations()
+                cycle = self.initialize() if initializing else self.poll_once(force_resync=self.live)
             except SourceError as exc:
+                if initializing:
+                    self._discard_initialization()
                 error = exc
                 continue
-            if self.live:
+            if self.live and not initializing:
                 self._start_event_pump()
-            record_source_recovery(self.selection.selected, "recovered", kind)
+            record_source_recovery(self.selection.selected, "recovered", kind, **error.evidence(),
+                                   attempts=attempts, duration_ms=int((self._monotonic() - degraded_at) * 1000))
             return replace(cycle, recovered=True)
 
     def run_forever(self, renderer, *, initial_cycle: WatchCycle | None = None) -> None:
         try:
-            cycle = initial_cycle or self.initialize()
+            cycle = initial_cycle or self.initialize_with_recovery(renderer)
             renderer.render(cycle.projection)
             while True:
                 cycle = self._advance(renderer, cycle)

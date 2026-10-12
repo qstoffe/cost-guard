@@ -7,7 +7,7 @@ from typing import Callable, Sequence
 from src.domain import IntegrationHealth, NormalizedSession
 
 from .base import SessionSource
-from .errors import SourceError, SourceUnavailableError
+from .errors import FailureCode, SourceError, SourceSchemaError, SourceUnavailableError
 from .opencode_v1 import OpenCodeV1Source
 from .opencode_v2 import OpenCodeV2Source
 
@@ -123,22 +123,28 @@ class SourceSelector:
         self,
         *,
         v1_factory: Callable[[], SessionSource] = OpenCodeV1Source,
-        v2_factory: Callable[[], SessionSource] = OpenCodeV2Source,
+        v2_factory: Callable[[], SessionSource] | None = None,
     ):
         self._v1_factory = v1_factory
-        self._v2_factory = v2_factory
+        self._v2_factory = v2_factory or (lambda: OpenCodeV2Source(timeout_seconds=1.0))
 
     @staticmethod
     def _probe(source: SessionSource) -> IntegrationHealth:
         try:
             return source.probe()
         except SourceError as exc:
-            return IntegrationHealth(available=True, healthy=False, detail=str(exc))
+            return IntegrationHealth(True, False, str(exc), exc.code.value, exc.phase,
+                                     exc.exception_type, exc.http_status)
 
     @staticmethod
-    def _failure(label: str, health: IntegrationHealth) -> SourceUnavailableError:
+    def _failure(label: str, health: IntegrationHealth) -> SourceError:
         detail = health.detail or "source is unavailable"
-        return SourceUnavailableError(f"OpenCode {label.upper()} was requested but is not usable: {detail}")
+        code = getattr(health, "failure_code", "") or FailureCode.UNKNOWN
+        error_type = SourceSchemaError if code in (FailureCode.SCHEMA, FailureCode.VERSION) else SourceUnavailableError
+        return error_type(f"OpenCode {label.upper()} was requested but is not usable: {detail}",
+            code=code, phase=getattr(health, "failure_phase", "unknown"),
+            exception_type=getattr(health, "exception_type", ""),
+            http_status=getattr(health, "http_status", None), generation=label)
 
     def _selection_for_v2(
         self,
@@ -199,4 +205,7 @@ class SourceSelector:
             f"V2: {v2_health.detail or 'unavailable'}; "
             f"V1: {v1_health.detail or 'unavailable'}"
         )
-        raise SourceUnavailableError("No supported healthy OpenCode source is available. " + detail)
+        error = self._failure("v2", v2_health)
+        # Only the main error message is simplified; health details remain Diagnostics evidence.
+        error.args = ("No supported healthy OpenCode source is available. " + detail,)
+        raise error

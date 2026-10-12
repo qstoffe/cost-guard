@@ -174,7 +174,7 @@ class StopHelpTests(unittest.TestCase):
                 def __init__(self, **_kwargs):
                     pass
 
-                def initialize(self):
+                def initialize_with_recovery(self, _renderer):
                     return None
 
                 def run_forever(self, *_args, **_kwargs):

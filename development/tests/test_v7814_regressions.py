@@ -15,7 +15,7 @@ from src import bootstrap
 from src.config import load_configuration
 from src.domain import CostKind, CostObservation, MessageRole, TokenUsage
 from src.presentation import WatchRenderer
-from src.sources.errors import SourceUnavailableError
+from src.sources.errors import FailureCode, SourceUnavailableError
 from src.sources.opencode_v1 import _error_name as v1_error_name
 from src.sources.opencode_errors import normalize_error_name as v2_error_name
 from src.watch import WatchCoordinator
@@ -27,7 +27,7 @@ class StartupTests(unittest.TestCase):
     def test_watch_waits_and_reselects_when_service_appears_without_cli_polling(self):
         selected = object()
         selector = mock.Mock()
-        selector.select.side_effect = [SourceUnavailableError("offline"), selected]
+        selector.select.side_effect = [SourceUnavailableError("offline", code=FailureCode.REFUSED), selected]
         renderer = mock.Mock(interactive=True)
         delays = []
         with mock.patch.object(bootstrap, "SourceSelector", return_value=selector), \
@@ -35,7 +35,7 @@ class StartupTests(unittest.TestCase):
             self.assertIs(bootstrap._wait_for_watch_source("v2", renderer, sleep=delays.append), selected)
         self.assertEqual([5, 5], delays)
         self.assertEqual([mock.call("v2"), mock.call("v2")], selector.select.call_args_list)
-        self.assertIn("Waiting for OpenCode source", renderer.render_startup_status.call_args.args[0])
+        self.assertIn("Waiting for OpenCode V2", renderer.render_startup_status.call_args.args[0])
         run.assert_not_called()
 
     def test_watch_wait_is_cancelable(self):
@@ -48,7 +48,7 @@ class StartupTests(unittest.TestCase):
     def test_watch_startup_uses_wait_path_but_normal_report_still_fails_fast(self):
         selection = mock.Mock(selected="v2")
         with mock.patch.object(bootstrap, "load_configuration", return_value=mock.Mock(values={"openCode": {"source": "auto"}})), \
-             mock.patch.object(bootstrap, "_select_source", side_effect=SourceUnavailableError("offline")), \
+             mock.patch.object(bootstrap, "_select_source", side_effect=SourceUnavailableError("offline", code=FailureCode.REFUSED)), \
              mock.patch.object(bootstrap, "_wait_for_watch_source", return_value=selection) as wait, \
              mock.patch.object(bootstrap, "WatchRenderer") as renderer, \
              mock.patch.object(bootstrap, "StartupProgress"), \
@@ -66,7 +66,7 @@ class StartupTests(unittest.TestCase):
     def test_offline_auto_wakes_shared_service_once_then_selects_v2(self):
         selected = object()
         selector = mock.Mock()
-        selector.select.side_effect = [SourceUnavailableError("no source"), selected]
+        selector.select.side_effect = [SourceUnavailableError("no source", code=FailureCode.REFUSED), selected]
         with mock.patch.object(bootstrap, "SourceSelector", return_value=selector), \
              mock.patch.object(bootstrap.shutil, "which", return_value="opencode"), \
              mock.patch.object(bootstrap.subprocess, "run", return_value=mock.Mock(returncode=0)) as run:
@@ -89,7 +89,7 @@ class StartupTests(unittest.TestCase):
 
     def test_windows_cmd_shim_uses_comspec_without_a_shell(self):
         selector = mock.Mock()
-        selector.select.side_effect = [SourceUnavailableError("offline"), object()]
+        selector.select.side_effect = [SourceUnavailableError("offline", code=FailureCode.REFUSED), object()]
         with mock.patch.object(bootstrap, "SourceSelector", return_value=selector), \
              mock.patch.object(bootstrap.shutil, "which", return_value=r"C:\tools\opencode.cmd"), \
              mock.patch.dict(bootstrap.os.environ, {"COMSPEC": r"C:\Windows\System32\cmd.exe"}), \
@@ -104,7 +104,7 @@ class StartupTests(unittest.TestCase):
         with mock.patch.object(bootstrap, "SourceSelector") as factory, \
              mock.patch.object(bootstrap.shutil, "which", return_value="opencode"), \
              mock.patch.object(bootstrap.subprocess, "run", return_value=mock.Mock(returncode=1)):
-            factory.return_value.select.side_effect = SourceUnavailableError("offline")
+            factory.return_value.select.side_effect = SourceUnavailableError("offline", code=FailureCode.REFUSED)
             with self.assertRaisesRegex(SourceUnavailableError, "background service could not be started"):
                 bootstrap._select_source("v2")
             factory.return_value.select.assert_called_once_with("v2")
