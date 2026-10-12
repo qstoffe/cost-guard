@@ -5,7 +5,7 @@ from src.watch.models import ToolObservation
 
 BASE_ROLE = "watchToolActivity"
 FAILED_ROLE = "costQuotaCritical"
-SKILL_ROLE = "watchSkillActivity"
+SKILL_ROLE = BASE_ROLE  # Compatibility alias; all normal activity uses the unified role.
 SEPARATOR = " · "
 _MIN_TODO_TEXT_SLOT = 7  # separator excluded: at least four characters plus "..."
 
@@ -91,16 +91,16 @@ def _skill_prefix_lengths(tool: ToolObservation, with_failures: bool) -> list[in
 
 
 def _skill_candidate(tool: ToolObservation, keep: int, with_failures: bool) -> list[Segment]:
-    segments = [(f"Skills ({len(tool.skills)}): ", SKILL_ROLE)]
+    segments = [(f"Skills ({len(tool.skills)}): ", BASE_ROLE)]
     for index, skill in enumerate(tool.skills[:keep]):
         if index:
-            segments.append((SEPARATOR, SKILL_ROLE))
-        segments.append((skill.skill_id, SKILL_ROLE))
+            segments.append((SEPARATOR, BASE_ROLE))
+        segments.append((skill.skill_id, BASE_ROLE))
         if with_failures and skill.failed_count:
             segments.append((_skill_failure_label(skill.failed_count), FAILED_ROLE))
     omitted = len(tool.skills) - keep
     if omitted:
-        segments.extend([(SEPARATOR if keep else "", SKILL_ROLE), (f"+{omitted} more", SKILL_ROLE)])
+        segments.extend([(SEPARATOR if keep else "", BASE_ROLE), (f"+{omitted} more", BASE_ROLE)])
     return segments
 
 
@@ -120,8 +120,8 @@ def skill_summary_segments(tool: ToolObservation, width: int) -> list[Segment]:
         return candidate
     for label in (f"Skills ({len(tool.skills)})", f"Skills {len(tool.skills)}", str(len(tool.skills))):
         if len(label) <= width:
-            return [(label, SKILL_ROLE)]
-    return [(str(len(tool.skills))[:max(0, width)], SKILL_ROLE)]
+            return [(label, BASE_ROLE)]
+    return [(str(len(tool.skills))[:max(0, width)], BASE_ROLE)]
 
 
 def background_label(kinds: tuple[str, ...]) -> str:

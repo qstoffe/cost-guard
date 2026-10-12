@@ -10,7 +10,7 @@ from development.fixtures.session_snapshots import make_snapshot, part
 from development.tests.test_watch_rendering import tall_projection
 from src.presentation import WatchRenderer
 from src.presentation.watch_activity import FAILED_ROLE, status_segments, tool_summary_segments
-from src.watch.models import ToolObservation, WatchRow
+from src.watch.models import SkillObservation, ToolObservation
 from src.watch.tools import observe_tools
 
 
@@ -182,13 +182,28 @@ class StatusRowTests(unittest.TestCase):
 class RenderingTests(unittest.TestCase):
     def render(self, tool, width_note=""):
         projection = tall_projection()
-        rows = (WatchRow("A", "Session A", projection.rows[0].prompt, tool=tool),) + projection.rows[1:]
+        active_prompt = replace(projection.rows[0].prompt, in_progress=True)
+        rows = (replace(projection.rows[0], prompt=active_prompt, tool=tool),) + projection.rows[1:]
         stream = io.StringIO()
         WatchRenderer({"colors": {}}, stream=stream, interactive=False).render(replace(projection, rows=rows))
         return stream.getvalue().splitlines()
 
     def activity_lines(self, lines):
         return [line for line in lines if line.startswith("|     ->")]
+
+    def test_terminal_prompt_ignores_attached_supplementary_activity(self):
+        projection = tall_projection()
+        terminal = replace(projection.rows[0].prompt, in_progress=False)
+        tool = ToolObservation(tool_count=1, tool_counts=counts(read=1),
+                               skills=(SkillObservation("custom-skill"),))
+        row = replace(projection.rows[0], prompt=terminal, tool=tool)
+        stream = io.StringIO()
+        WatchRenderer({"colors": {}}, stream=stream, interactive=False).render(
+            replace(projection, rows=(row,)))
+        output = stream.getvalue()
+        self.assertIn("#1 work", output)
+        self.assertNotIn("tool calls", output)
+        self.assertNotIn("Skills (", output)
 
     def test_both_status_arrows_align_with_prompt_hash_and_keep_colors(self):
         colors = {"watchToolActivity": {"ansi256": 94}, "costQuotaCritical": {"ansi256": 160}}
@@ -198,7 +213,8 @@ class RenderingTests(unittest.TestCase):
             for interactive in (False, True):
                 with self.subTest(marker=marker, interactive=interactive):
                     projection = tall_projection()
-                    row = replace(projection.rows[0], marker=marker, tool=tool)
+                    active_prompt = replace(projection.rows[0].prompt, in_progress=True)
+                    row = replace(projection.rows[0], prompt=active_prompt, marker=marker, tool=tool)
                     stream = io.StringIO()
                     WatchRenderer({"colors": colors}, stream=stream, interactive=interactive).render(
                         replace(projection, rows=(row,)))
@@ -230,7 +246,8 @@ class RenderingTests(unittest.TestCase):
     def test_failed_is_red_when_colors_enabled(self):
         projection = tall_projection()
         tool = ToolObservation(tool_count=4, tool_counts=counts(read=4), failed_count=1)
-        rows = (WatchRow("A", "Session A", projection.rows[0].prompt, tool=tool),) + projection.rows[1:]
+        active_prompt = replace(projection.rows[0].prompt, in_progress=True)
+        rows = (replace(projection.rows[0], prompt=active_prompt, tool=tool),) + projection.rows[1:]
         stream = io.StringIO()
         colors = {"costQuotaCritical": {"foreground": "Red", "background": None, "ansi256": 160},
                   "watchToolActivity": {"foreground": "DarkYellow", "background": None, "ansi256": 94}}

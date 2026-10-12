@@ -91,6 +91,72 @@ class OpenCodeV2SourceTests(unittest.TestCase):
             self.assertFalse(health.healthy)
             self.assertIn("not a local HTTP", health.detail)
 
+    def test_skill_registry_classifies_verified_paths_and_caches_per_location(self) -> None:
+        payload = fixture()
+        payload["skills"] = {"/repo": [
+            {"id": "opencode", "path": "/builtin/skills/opencode/SKILL.md"},
+            {"id": "report", "path": "/builtin/report/SKILL.md"},
+            {"id": "global-skill", "path": r"C:\Users\fixture\.config\opencode\skills\global-skill\SKILL.md"},
+            {"id": "project-skill", "path": "/repo/.opencode/skills/project-skill/SKILL.md"},
+            {"id": "compat-skill", "path": "/repo/.claude/skills/compat-skill/SKILL.md"},
+            {"id": "agents-skill", "path": "/repo/.agents/skills/agents-skill/SKILL.md"},
+            {"id": "shared-skill", "path": "/shared/team-skills/shared-skill/SKILL.md"},
+            {"id": "relative-skill", "path": "skills/relative/SKILL.md"},
+            {"id": "ambiguous", "path": "/builtin/ambiguous/SKILL.md"},
+            {"id": "ambiguous", "path": "/repo/.opencode/skills/ambiguous/SKILL.md"},
+        ]}
+        with source_with_service(payload) as (source, service, _):
+            expected = {
+                "opencode": "builtin", "report": "builtin", "global-skill": "custom",
+                "project-skill": "custom", "compat-skill": "custom", "agents-skill": "custom",
+                "shared-skill": "custom",
+            }
+            self.assertEqual(expected, source.skill_origins("/repo"))
+            self.assertEqual(expected, source.skill_origins("/repo"))
+            requests = [path for path, _auth in service.requests
+                        if urlsplit(path).path == "/api/skill"]
+            self.assertEqual(1, len(requests))
+            self.assertEqual("/repo", parse_qs(urlsplit(requests[0]).query)["location[directory]"][0])
+
+            source.refresh_connection()
+            self.assertEqual(expected, source.skill_origins("/repo"))
+            requests = [path for path, _auth in service.requests
+                        if urlsplit(path).path == "/api/skill"]
+            self.assertEqual(2, len(requests))
+
+    def test_unavailable_skill_registry_fails_open_and_is_cached(self) -> None:
+        with source_with_service() as (source, service, _):
+            self.assertEqual({}, source.skill_origins("/repo"))
+            self.assertEqual({}, source.skill_origins("/repo"))
+            self.assertEqual(1, sum(urlsplit(path).path == "/api/skill" for path, _auth in service.requests))
+            source.refresh_connection()
+            self.assertEqual({}, source.skill_origins("/repo"))
+            self.assertEqual(2, sum(urlsplit(path).path == "/api/skill" for path, _auth in service.requests))
+
+    def test_snapshot_defers_skill_registry_lookup_until_watch_requests_origins(self) -> None:
+        payload = fixture()
+        payload["skills"] = {"/repo": [
+            {"id": "verified-custom", "path": "/repo/.opencode/skills/verified-custom/SKILL.md"},
+            {"id": "built-in", "path": "/builtin/skills/built-in/SKILL.md"},
+        ]}
+        payload["messages"]["ses_root"].append({
+            "info": {"id": "msg_skill", "sessionID": "ses_root", "role": "assistant",
+                     "parentID": "msg_user", "time": {"created": 1600}},
+            "parts": [{"id": "part_custom", "messageID": "msg_skill", "sessionID": "ses_root",
+                       "type": "tool", "tool": "skill", "state": {"status": "completed",
+                       "input": {"id": "verified-custom"}}, "time": {"start": 1601, "end": 1602}}],
+        })
+        with source_with_service(payload) as (source, service, _):
+            snapshot = source.load_session_snapshot("ses_root")
+            self.assertTrue(any(part.part_id == "part_custom" for part in snapshot.parts))
+            self.assertEqual(0, sum(urlsplit(path).path == "/api/skill" for path, _auth in service.requests))
+
+            self.assertEqual({"verified-custom": "custom", "built-in": "builtin"},
+                             source.skill_origins_for_session("ses_root"))
+            requests = [path for path, _auth in service.requests if urlsplit(path).path == "/api/skill"]
+            self.assertEqual(1, len(requests))
+            self.assertEqual("/repo", parse_qs(urlsplit(requests[0]).query)["location[directory]"][0])
+
     def test_list_sessions_routes_each_project_and_supports_since_filter(self) -> None:
         with source_with_service() as (source, service, _):
             sessions = source.list_sessions()

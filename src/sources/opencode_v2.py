@@ -11,7 +11,7 @@ import time
 import threading
 from copy import deepcopy
 from dataclasses import dataclass, replace
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from collections.abc import Iterator, Mapping, Sequence
 from typing import Any
 
@@ -76,6 +76,38 @@ V2_CAPABILITIES = SessionCapabilities(
 _CATALOG_REUSE_SECONDS = 2.0
 
 
+def _skill_path_origin(path: Any) -> str:
+    if not isinstance(path, str) or not path:
+        return ""
+    normalized = path.replace(chr(92), "/").rstrip("/").casefold()
+    if normalized == "/builtin" or normalized.startswith("/builtin/"):
+        return "builtin"
+    if PurePosixPath(path).is_absolute() or PureWindowsPath(path).is_absolute():
+        return "custom"
+    return ""
+
+
+def _skill_origin_map(response: Any) -> dict[str, str]:
+    values = response.get("data") if isinstance(response, Mapping) else None
+    if not isinstance(values, list):
+        return {}
+    origins: dict[str, str] = {}
+    ambiguous: set[str] = set()
+    for value in values:
+        if not isinstance(value, Mapping):
+            continue
+        skill_id = value.get("id")
+        if not isinstance(skill_id, str) or not skill_id:
+            continue
+        origin = _skill_path_origin(value.get("path"))
+        if skill_id in origins:
+            if origins[skill_id] != origin:
+                ambiguous.add(skill_id)
+        elif origin:
+            origins[skill_id] = origin
+        else:
+            ambiguous.add(skill_id)
+    return {skill_id: origin for skill_id, origin in origins.items() if skill_id not in ambiguous}
 
 
 @dataclass(frozen=True, slots=True)
@@ -113,6 +145,7 @@ class OpenCodeV2Source:
         self._endpoint: V2Endpoint | None = None
         self._endpoint_marker: tuple[int, ...] | None = None
         self._catalog_cache: tuple[_NativeSession, ...] | None = None
+        self._skill_origin_cache: dict[str, dict[str, str]] = {}
         self._catalog_listed_at = 0.0
         self._http: V2HttpClient | None = None
         self._instance_cache: tuple[str, str] | None = None
@@ -155,6 +188,7 @@ class OpenCodeV2Source:
             self._http = None
             self._catalog_cache = None
             self._catalog_listed_at = 0.0
+            self._skill_origin_cache.clear()
         else:
             endpoint = self._endpoint
         self._endpoint = endpoint
@@ -206,6 +240,7 @@ class OpenCodeV2Source:
             self._endpoint_marker = None
             self._catalog_cache = None
             self._catalog_listed_at = 0.0
+            self._skill_origin_cache.clear()
             if timeout_seconds is not None:
                 self._timeout_seconds = timeout_seconds
 
@@ -244,6 +279,36 @@ class OpenCodeV2Source:
         """Use the selected registered service's settled global model list."""
         client = self._client()
         return settled_v2_model_ids(lambda: client.json("/api/model"))
+
+    def skill_origins_for_session(self, session_id: str) -> Mapping[str, str]:
+        """Resolve a session's registered location and read its skill origins."""
+        if not isinstance(session_id, str) or not session_id:
+            return {}
+        try:
+            sessions = self._list_native_sessions(refresh=False)
+        except SourceError:
+            return {}
+        native = next((item for item in sessions if str(item.data.get("id")) == session_id), None)
+        return self.skill_origins(native.directory) if native is not None else {}
+
+    def skill_origins(self, directory: str) -> Mapping[str, str]:
+        """Read verified skill source paths once per location and service generation."""
+        if not isinstance(directory, str) or not directory:
+            return {}
+        with self._connection_lock:
+            cached = self._skill_origin_cache.get(directory)
+            if cached is not None:
+                return dict(cached)
+            try:
+                response = self._client().json(
+                    "/api/skill", query={"location[directory]": directory}, phase="skill_registry"
+                )
+            except SourceError:
+                origins = {}
+            else:
+                origins = _skill_origin_map(response)
+            self._skill_origin_cache[directory] = origins
+            return dict(origins)
 
     def _list_native_sessions(
         self, since_ms: int | None = None, *, refresh: bool = True

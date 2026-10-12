@@ -48,14 +48,27 @@ def tool_input(data: Mapping) -> Mapping:
     return value if isinstance(value, Mapping) else {}
 
 
-def loaded_skill(data: Mapping) -> str:
-    """Native skill tools use name (V1) or id (V2); success confirms the load."""
-    name = str(data.get("tool") or data.get("name") or "").lower()
-    state = data.get("state")
-    if name not in {"skill", "functions.skill"} or not isinstance(state, Mapping) or state.get("status") != "completed":
+def is_skill_tool(data: Mapping) -> bool:
+    return str(data.get("tool") or data.get("name") or "").lower() in {"skill", "functions.skill"}
+
+
+def skill_tool_id(data: Mapping) -> str:
+    if not is_skill_tool(data):
         return ""
     inputs = tool_input(data)
     return _skill_id(inputs.get("id", inputs.get("name")))
+
+
+def verified_skill_origin(value: object) -> str:
+    return value if isinstance(value, str) and value in {"builtin", "custom"} else ""
+
+
+def loaded_skill(data: Mapping) -> str:
+    """Native skill tools use name (V1) or id (V2); success confirms the load."""
+    state = data.get("state")
+    if not is_skill_tool(data) or not isinstance(state, Mapping) or state.get("status") != "completed":
+        return ""
+    return skill_tool_id(data)
 
 
 def _command_tokens(command: str) -> list[str]:

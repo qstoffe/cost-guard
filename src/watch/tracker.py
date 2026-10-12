@@ -26,9 +26,13 @@ def _marker(prompt: PromptProjection, *, recent_completion: bool, recent_running
     return "✓" if recent_completion else ""
 
 
-def _activity(snapshot: SessionSnapshot, prompt: PromptProjection, event_id: str, now_ms: int) -> ToolObservation:
-    """Final counts remain observable; only live prompts may expose active work."""
-    tool = observe_tools(snapshot, event_id, is_compaction=prompt.is_compaction, now_ms=now_ms)
+def _activity(
+    snapshot: SessionSnapshot, prompt: PromptProjection, event_id: str, now_ms: int,
+    skill_origins_by_session: Mapping[str, Mapping[str, str]],
+) -> ToolObservation:
+    """Derive current tool activity from the hydrated canonical prompt scope."""
+    tool = observe_tools(snapshot, event_id, is_compaction=prompt.is_compaction, now_ms=now_ms,
+                         skill_origins_by_session=skill_origins_by_session)
     if not prompt.in_progress:
         return replace(tool, running_tool="", running_ms=0, todo_completed=0, todo_total=0, active_todo="")
     if not prompt.background_kinds:
@@ -58,7 +62,6 @@ class WatchRowTracker:
         self.max_rows = max(1, int(max_rows))
         self.session_scope = bool(session_scope)
         self._observed: dict[tuple[str, str], _Observed] = {}
-        self._final_activity: dict[str, tuple[SessionSnapshot, str, ToolObservation]] = {}
 
     @staticmethod
     def _event_sequences(snapshot: SessionSnapshot) -> dict[str, int]:
@@ -222,13 +225,13 @@ class WatchRowTracker:
             retained.append(WatchRow(session_id, observed.session_title or block.title, prompt, marker, None))
         return retained
 
-    def _tool_activity(self, row: WatchRow, snapshot: SessionSnapshot, now_ms: int) -> ToolObservation:
-        """Stable idle frames reuse projections, not a second history/causal cache."""
+    def _tool_activity(
+        self, row: WatchRow, snapshot: SessionSnapshot, now_ms: int,
+        skill_origins_by_session: Mapping[str, Mapping[str, str]],
+    ) -> ToolObservation:
+        """Reuse the last live observation when a refresh omits post-compaction parts."""
         event_id = _event_key(row.prompt)
-        cached = self._final_activity.get(row.session_id)
-        if not row.prompt.in_progress and cached and cached[0] is snapshot and cached[1] == event_id:
-            return cached[2]
-        tool = _activity(snapshot, row.prompt, event_id, now_ms)
+        tool = _activity(snapshot, row.prompt, event_id, now_ms, skill_origins_by_session)
         observed = self._observed.get((row.session_id, event_id))
         if observed is not None:
             if not tool.tool_count and observed.last_tool and not any(
@@ -237,16 +240,13 @@ class WatchRowTracker:
                 tool = replace(observed.last_tool, running_tool="", running_ms=0, todo_completed=0,
                                todo_total=0, active_todo="", background_kinds=(), background_ms=0)
             observed.last_tool = tool
-        if row.prompt.in_progress:
-            self._final_activity.pop(row.session_id, None)
-        else:
-            self._final_activity[row.session_id] = (snapshot, event_id, tool)
         return tool
 
     def _attach_activity(
         self, rows: list[WatchRow], snapshot: SessionSnapshot, now_ms: int, sequences: Mapping[str, int],
+        skill_origins_by_session: Mapping[str, Mapping[str, str]],
     ) -> list[WatchRow]:
-        """Attach final/live observations to the latest canonical prompt per session.
+        """Attach live observations only to the latest running prompt per session.
 
         New zero-usage prompts suppress the old activity even before projection;
         compaction does not transfer a logical prompt's diagnostic ownership.
@@ -261,8 +261,8 @@ class WatchRowTracker:
         for row in rows:
             event_id = _event_key(row.prompt)
             tool = None
-            if event_id == latest_prompt or (row.prompt.is_compaction and row.prompt.in_progress):
-                tool = self._tool_activity(row, snapshot, now_ms)
+            if row.prompt.in_progress and (event_id == latest_prompt or row.prompt.is_compaction):
+                tool = self._tool_activity(row, snapshot, now_ms, skill_origins_by_session)
             result.append(replace(row, tool=tool, is_latest_session_event=event_id == latest_key))
         return result
 
@@ -272,6 +272,7 @@ class WatchRowTracker:
         snapshots: Mapping[str, SessionSnapshot],
         *,
         now_ms: int,
+        skill_origins_by_root: Mapping[str, Mapping[str, Mapping[str, str]]] | None = None,
     ) -> tuple[WatchRow, ...]:
         rows: list[WatchRow] = []
         for session_id, block in blocks.items():
@@ -300,7 +301,8 @@ class WatchRowTracker:
                 ))
 
             session_rows.sort(key=self._sort_key)
-            session_rows = self._attach_activity(session_rows, snapshot, now_ms, sequence_by_event)
+            origins = (skill_origins_by_root or {}).get(session_id, {})
+            session_rows = self._attach_activity(session_rows, snapshot, now_ms, sequence_by_event, origins)
             rows.extend(session_rows)
 
         rows.sort(key=self._sort_key)

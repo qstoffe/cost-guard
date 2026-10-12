@@ -18,6 +18,7 @@ from .observation_diagnostics import record_scan, record_source_error
 from .model_discovery import WatchModelDiscovery
 from .models import WatchProjection, WatchRow, WatchSessionSubtotal
 from .observers import CatalogObservation, LiveEventPump, observe_catalog
+from .skill_registry import active_skill_origins
 from .tracker import WatchRowTracker
 from .token_mix import WatchTokenMix
 from .account_refresh import WatchAccountRefresh
@@ -108,6 +109,7 @@ class WatchCoordinator:
         self.observation: CatalogObservation | None = None
         self.blocks: dict[str, SessionPromptBlock] = {}
         self.snapshots: dict[str, SessionSnapshot] = {}
+        self._skill_origins_by_root: dict[str, dict[str, Mapping[str, str]]] = {}
         self.quota = None
         self.accounts = WatchAccountRefresh(report_service, clock_ms=clock_ms, monotonic=self._monotonic)
         self._last_cycle_end_ms: int | None = None
@@ -190,6 +192,7 @@ class WatchCoordinator:
         for root_id, block, snapshot, bundle in pending:
             self.blocks[root_id] = block
             self.snapshots[root_id] = snapshot
+            self._skill_origins_by_root[root_id] = active_skill_origins(self.source, snapshot, block)
             self.token_mix.observe(snapshot, bundle)
         return tuple(root_id for root_id, *_ in pending)
 
@@ -273,7 +276,9 @@ class WatchCoordinator:
     def _projection(self, *, now_ms: int, status: str = "", status_active: bool = False,
                     scanned: bool = False) -> WatchProjection:
         check_pending()
-        rows = self.tracker.project(self.blocks, self.snapshots, now_ms=now_ms)
+        rows = self.tracker.project(
+            self.blocks, self.snapshots, now_ms=now_ms, skill_origins_by_root=self._skill_origins_by_root
+        )
         active = sum(1 for row in rows if row.prompt.in_progress)
         session_warnings: dict[str, str] = {}
         session_subtotals: dict[str, WatchSessionSubtotal] = {}
@@ -361,6 +366,7 @@ class WatchCoordinator:
         self.observation = None
         self.blocks.clear()
         self.snapshots.clear()
+        self._skill_origins_by_root.clear()
         self.token_mix = WatchTokenMix(self.started_at_ms)
         self.report_service.invalidate_source_observations()
 
@@ -417,6 +423,7 @@ class WatchCoordinator:
         for root_id in removed:
             self.blocks.pop(root_id, None)
             self.snapshots.pop(root_id, None)
+            self._skill_origins_by_root.pop(root_id, None)
             self.report_service.invalidate_roots((root_id,))
 
         self.observation = observation
