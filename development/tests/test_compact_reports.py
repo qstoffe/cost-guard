@@ -2,42 +2,21 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import datetime, timezone
-import io
-from pathlib import Path
-import tempfile
 import unittest
 from unittest.mock import patch
 
+from development.fixtures.compact_reports import NOW, START, Availability, rendered, report_service
 from development.fixtures.synthetic_month import SyntheticMonthSource
 from development.fixtures.session_snapshots import make_snapshot
-from development.tests.test_quota_presentation import quotas, rolling
+from development.fixtures.quota_rendering import quotas, rolling
 from development.fixtures.report_runtime import FakePricingProvider, FakeSource
 from src.reports.sampling import latest_prompts
 from src.bootstrap import _report_request
-from src.cache import CacheDatabase, CacheRepository
 from src.cli import CliUsageError, CommandKind, parse_command
-from src.config import load_configuration
 from src.domain import ModelRef, AccountUsageStatus
-from src.presentation import ReportRenderer
-from src.reports import ReportKind, ReportRequest, ReportService
+from src.reports import ReportKind, ReportRequest
 from src.reports.model_comparison import selectable_catalog
 from src.sources.model_availability import OpenCodeModelAvailabilitySource
-from src.sources.selection import SourceSelection
-
-ROOT = Path(__file__).resolve().parents[2]
-START = int(datetime(2026, 9, 30, 23, 50, tzinfo=timezone.utc).timestamp() * 1000)
-NOW = START + 2 * 86_400_000
-
-
-class Availability:
-    def __init__(self, ids=("openai/gpt-test",)):
-        self.ids = ids
-        self.calls = 0
-
-    def available_model_ids(self):
-        self.calls += 1
-        return self.ids
 
 
 class ForbiddenAccount:
@@ -54,28 +33,9 @@ class ForbiddenAccount:
         raise AssertionError("This mode must not fetch quotas")
 
 
-def rendered(report, config=None, *, width=180, color=False):
-    stream = io.StringIO()
-    ReportRenderer(config or {"timezone": "UTC"}, stream=stream,
-                   terminal_width=width, color_enabled=color).render(report)
-    return stream.getvalue()
-
-
 class CompactReportTests(unittest.TestCase):
     def service(self, source=None, *, availability=None, accounts=(), now_ms=NOW):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        db = CacheDatabase(Path(tmp.name)); db.initialize()
-        source = source or FakeSource()
-        config = dict(load_configuration(ROOT).values)
-        config["timezone"] = "UTC"
-        return ReportService(
-            selection=SourceSelection(source, "v2", ("Source-wide warning",), source.probe()),
-            pricing_provider=FakePricingProvider(), account_provider=None,
-            account_providers=accounts, cache_repository=CacheRepository(db),
-            config=config, now_ms=now_ms,
-            model_availability_source=availability or Availability(),
-        )
+        return report_service(self, source, availability=availability, accounts=accounts, now_ms=now_ms)
 
     def test_cli_primary_shapes_and_request_mapping(self):
         for argv, kind, limit in (([], CommandKind.NORMAL, None),

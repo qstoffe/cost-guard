@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.41 — 2026-10-12
+
+- Behavior-neutral maintenance: shared report-service, availability/rendering, quota-rendering, account and config-package test setup now lives in responsibility-owned fixtures instead of being borrowed from other test modules, retiring 15 of 33 bounded test-import debt edges. Stale unused imports were removed.
+- Recorded audit evidence with no runtime change: 80 live roots analyze in 54 ms (worst root 9.7 ms) and Watch tool observation remains bounded to the latest running prompt. Per-prompt causal scans only become significant on synthetic roots far larger than observed live sessions.
+
 ## v80.40 — 2026-10-12
 
 - Watch shows tool-call, Skills and running-status rows only under currently running prompts; the first terminal update removes them while the regular prompt metrics remain unchanged, including after refresh or rehydration.
@@ -29,14 +34,9 @@
 - Git delivery policy is tool-independent: explicit task/workflow authorization covers commits, push, PR and safe merge in an isolated clone without editing the ordinary working tree. Isolated Git delivery still builds no ZIP unless requested; existing quality gates and protection of maintainer rules remain.
 - Every PR merged to main now requires a sequential product-version bump with release date, bounded net-change history, README current version and affected current docs in the same PR, including documentation-only and behavior-neutral work. Recheck against the latest base before merge; tags, GitHub Releases and packaging policy are unchanged.
 
-## v80.36 — 2026-10-10
-
-- Watch recognizes V2 live `session.execution.interrupted` events with explicit `reason: user`, including JSON-encoded event strings and current `data.sessionID` routing. `[ABORTED by user]` requires the same session, terminal identity and timestamp in authoritative interrupted history; an event alone never ends work.
-- Live actor evidence survives refresh/resync in a bounded in-memory source-instance store, never in persisted analysis. A new process/source and older history without actor evidence still show `[ABORTED]`; inactivity/shutdown, other attempts and later success never inherit `by user`.
-
 ## Earlier v80 history
 
-- v80.35 added explicit native abort-cause labels, neutral tool-call endings and stable credit-first account ordering.
+- v80.35–v80.36 added explicit native abort-cause labels, neutral tool-call endings and stable credit-first account ordering; Watch shows `[ABORTED by user]` only when a live V2 user interrupt matches authoritative interrupted history, keeping that actor evidence bounded and in memory.
 - v80.34 pooled V2 reads/fresh snapshot brackets, memoized model identity, overlapped report acquisition and bounded Watch discovery/startup/resync. Recorded live timings with v80.33-identical output: normal report ~2.1→0.65 s, date report 7.5→2.1 s, Watch startup ~6.2→0.65 s, resync 13→1.4 s. Diagnostics gained all-account evidence and privacy-safe Watch geometry; concurrent Full and shared fixtures retired 10 test-import edges. Verification/packaging policy remains in maintainer rules.
 - v80.32–v80.33 separated Watch account refresh, prompt projection/report orchestration and source normalization; shared catalog ancestry and bounded sampling; moved fixtures (67→43 test-import edges, 46 fewer test-import dependencies), enforced bounded routine/coupling debt without raising caps, standardized `Context:` warning explanations, and added code maps/inventory/layer guards. Source/cache/billing semantics stayed unchanged.
 - v80.29–v80.31 fixed synthetic/background continuation and running-model attribution, restored move/unanchored Watch Δctx and N/A for unexplained shrinks, sanitized terminal text and deduplicated source scans. Priced Next-Ictx tiers show one-decimal sample/mix cost multipliers refreshed every 15 minutes; unpriced thresholds keep CCost ranges.

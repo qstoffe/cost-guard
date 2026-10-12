@@ -35,6 +35,8 @@ Baseline (v80.33 copy) and current trees rendered the same live data against one
 
 Full runs concurrently with its slowest files first (151 s → 32 s). Validator-negative checks call their owning check on a package copy instead of the whole validator subprocess; builder regressions are their own module. The validator parses each file once per run. Fake V2 services, the V1 database and package copies are fixtures; test-to-test edges fell from 43 to 33. Fake services now drop keep-alive sockets on stop, matching a real process exit.
 
+Post-v80.40 cleanup: report-service, availability/rendering, quota-rendering, account and config-package setup moved into responsibility-owned fixtures, so tests no longer borrow `CompactReportTests.service` as an unbound method; test-to-test edges fell from 33 to 18. Measured, unchanged: 80 live roots (largest 34 prompt events/487 messages) analyze in 54 ms total, 9.7 ms worst root; Watch tool observation runs only for the latest running prompt (~0.3 ms average per call). Per-prompt causal scans are quadratic only on synthetic 500+-prompt roots (500: 0.22 s, 1,000: 0.88 s), far beyond observed live sizes.
+
 ## Remaining bounded opportunities
 
 Server-side message serialization now dominates hydration. `collect_diagnostics.collect` (159 lines) and the release builder's double clean-extract Full run are the next tool costs. Causal attribution still scans messages/events linearly per prompt inside the legacy `build_prompt_record`; with snapshot-wide inputs shared it is no longer dominant. It and prompt rendering remain behavior-sensitive legacy routines; characterize before splitting. Keep this review current in place.

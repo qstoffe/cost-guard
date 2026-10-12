@@ -25,11 +25,11 @@ from src.presentation.source_errors import source_error_message
 from src.pricing.release_metadata import classify_transport
 from src.sources import connectivity_events
 from src.sources.discovery import ServiceRegistrationCandidate, ServiceRegistrationError, read_v2_service_registration
-from src.sources.errors import (FailureCode, SourceConcurrentChangeError, SourceDataError,
+from src.sources.errors import (FailureCode, SourceConcurrentChangeError,
                                 SourceSchemaError, SourceUnavailableError, http_failure, transport_failure)
 from src.sources.opencode_v1 import OpenCodeV1Source
 from src.sources.opencode_v2 import OpenCodeV2Source
-from src.sources.opencode_v2_transport import V2Endpoint, V2HttpClient, normalize_local_service_url
+from src.sources.opencode_v2_transport import V2Endpoint, V2HttpClient
 from src.sources.opencode_v2_wire import fetch_messages
 from src.sources.read_recovery import ReadRecovery
 from src.sources.selection import SourceSelector

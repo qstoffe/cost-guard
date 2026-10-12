@@ -8,7 +8,7 @@ import io
 import re
 import unittest
 
-from development.tests.test_quota_presentation import quotas, rolling
+from development.fixtures.quota_rendering import quotas, rolling
 from src.presentation import ReportRenderer
 from src.reports.models import (
     ModelComparisonProjection, PromptProjection,

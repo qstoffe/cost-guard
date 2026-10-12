@@ -6,7 +6,7 @@ from decimal import Decimal
 import re
 import unittest
 
-from development.tests.test_quota_presentation import NOW, quotas, report_text, rolling, watch_text
+from development.fixtures.quota_rendering import NOW, quotas, report_text, rolling, watch_text
 from src.accounts.base import normalize_quota
 from src.accounts.github_copilot import convert_entitlement_payload
 from src.accounts.openai_subscription import convert_usage_payload
