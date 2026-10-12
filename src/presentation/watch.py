@@ -17,7 +17,7 @@ from .token_mix import prompt_scope, token_mix_lines, watch_total_line
 from src.analysis.context import PriceWarningSeverity
 from .context_warnings import WARNING_ROLE, context_warning_text, warning_cost_suffix, warning_explanation_lines
 from .pricing_notices import pricing_notice_lines
-from .watch_activity import BASE_ROLE, SKILL_ROLE, skill_summary_segments, status_segments, tool_summary_segments
+from .watch_activity import BASE_ROLE, skill_summary_segments, status_segments, tool_summary_segments
 
 _WATCH_COLUMNS = (
     Column("Session / prompt", fixed_width=35),
@@ -214,7 +214,7 @@ class WatchRenderer:
                 _context_cell(row, role),
             ))
             styles.append((role, role, role, role, role, None))
-            if row.tool is not None and (row.tool.tool_count or prompt.in_progress):
+            if prompt.in_progress and row.tool is not None:
                 arrow = "↳" if self._supports_arrow() and self.interactive else "->"
                 marker = " " * self._row_label(row).index("#") + arrow
                 kinds = ["tools"] + (["skills"] if row.tool.skills else [])
@@ -235,7 +235,7 @@ class WatchRenderer:
             segments = skill_summary_segments(tool, width)
         else:
             segments = status_segments(tool, width, _duration(tool.running_ms), _duration(tool.background_ms))
-        segments = [(prefix, SKILL_ROLE if kind == "skills" else BASE_ROLE)] + segments
+        segments = [(prefix, BASE_ROLE)] + segments
         padding = max(0, span_width - sum(len(text) for text, _role in segments))
         body = "".join(self.styler.apply(text, role) for text, role in segments)
         return "| " + body + " " * padding + " |"

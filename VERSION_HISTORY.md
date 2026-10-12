@@ -1,5 +1,11 @@
 # Cost Guard version history
 
+## v80.40 — 2026-10-12
+
+- Watch shows tool-call, Skills and running-status rows only under currently running prompts; the first terminal update removes them while the regular prompt metrics remain unchanged, including after refresh or rehydration.
+- Skill calls use physical-call counts and verified V2 registry paths for `builtin skill` versus `custom skill`; unknown origins remain `skill`. The Skills row lists only distinct successfully loaded custom skills, with existing verified failure attribution.
+- All normal activity text and prefixes use `watchToolActivity`; verified failures remain red. Width-adaptive totals, failure priority, accurate aggregation and accounting are preserved.
+
 ## v80.39 — 2026-10-12
 
 - Watch retains the latest prompt's tool/failure counts and confirmed distinct skill IDs after completion or abortion, replacing activity only when the same session begins a new prompt. Active tool/TODO/background indicators never survive completion; compaction, refresh and reconnect keep prompt ownership.
@@ -28,14 +34,9 @@
 - Watch recognizes V2 live `session.execution.interrupted` events with explicit `reason: user`, including JSON-encoded event strings and current `data.sessionID` routing. `[ABORTED by user]` requires the same session, terminal identity and timestamp in authoritative interrupted history; an event alone never ends work.
 - Live actor evidence survives refresh/resync in a bounded in-memory source-instance store, never in persisted analysis. A new process/source and older history without actor evidence still show `[ABORTED]`; inactivity/shutdown, other attempts and later success never inherit `by user`.
 
-## v80.35 — 2026-10-10
-
-- Watch shows `[ABORTED by user]`, `[ABORTED by quota limit]`, `[ABORTED by tool call limit]`, `[ABORTED by step limit]` or `[ABORTED by rate limit]` only for explicit native causes, including V2 idle errors and bounded structured API error responses. Unspecified cancellations remain `[ABORTED]`; later success clears an earlier abort.
-- A source-reported successful end directly after tool calls shows neutral `[ENDED after tool calls]`, not a guessed limit failure. Full stop labels survive preview truncation; usage, billing and existing completion semantics are unchanged.
-- Shared report/Watch account order is stable: credit/balance/budget accounts first, usage-limit accounts second, then name and proven identity. Remaining capacity, percentages, refresh completion and transient errors do not reorder established accounts; provider failures retain account labels/plan/capacity class.
-
 ## Earlier v80 history
 
+- v80.35 added explicit native abort-cause labels, neutral tool-call endings and stable credit-first account ordering.
 - v80.34 pooled V2 reads/fresh snapshot brackets, memoized model identity, overlapped report acquisition and bounded Watch discovery/startup/resync. Recorded live timings with v80.33-identical output: normal report ~2.1→0.65 s, date report 7.5→2.1 s, Watch startup ~6.2→0.65 s, resync 13→1.4 s. Diagnostics gained all-account evidence and privacy-safe Watch geometry; concurrent Full and shared fixtures retired 10 test-import edges. Verification/packaging policy remains in maintainer rules.
 - v80.32–v80.33 separated Watch account refresh, prompt projection/report orchestration and source normalization; shared catalog ancestry and bounded sampling; moved fixtures (67→43 test-import edges, 46 fewer test-import dependencies), enforced bounded routine/coupling debt without raising caps, standardized `Context:` warning explanations, and added code maps/inventory/layer guards. Source/cache/billing semantics stayed unchanged.
 - v80.29–v80.31 fixed synthetic/background continuation and running-model attribution, restored move/unanchored Watch Δctx and N/A for unexplained shrinks, sanitized terminal text and deduplicated source scans. Priced Next-Ictx tiers show one-decimal sample/mix cost multipliers refreshed every 15 minutes; unpriced thresholds keep CCost ranges.

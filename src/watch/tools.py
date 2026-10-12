@@ -7,7 +7,10 @@ from src.analysis.causal import prompt_parent_ids
 from src.domain import EventKind, MessageRole, NormalizedMessage, NormalizedPart, SessionSnapshot
 
 from .models import SkillObservation, ToolObservation
-from .tool_contracts import executed_skill_script, failure_skill, loaded_skill, structured_outcome
+from .tool_contracts import (
+    executed_skill_script, failure_skill, is_skill_tool, loaded_skill, skill_tool_id,
+    structured_outcome, verified_skill_origin,
+)
 
 
 def _parent_ids(snapshot: SessionSnapshot, event_id: str, *, is_compaction: bool) -> set[str]:
@@ -158,6 +161,7 @@ def _physical_tools(messages: list[NormalizedMessage]) -> tuple[NormalizedPart, 
 
 def observe_tools(
     snapshot: SessionSnapshot, event_id: str, *, is_compaction: bool = False, now_ms: int = 0,
+    skill_origins_by_session: Mapping[str, Mapping[str, str]] | None = None,
 ) -> ToolObservation:
     """Count tool calls by name, structured failures, the longest long-running tool and the newest reliable todo state."""
     parents = _parent_ids(snapshot, event_id, is_compaction=is_compaction)
@@ -170,17 +174,25 @@ def observe_tools(
     messages = _prompt_messages(snapshot, parents, is_compaction)
     skills: dict[str, tuple[int, int]] = {}
     skill_failures: dict[str, int] = {}
+    origins_by_session = skill_origins_by_session or {}
     for part in _physical_tools(messages):
         start = _part_start(part)
         if start <= 0:
             continue
         tool_count += 1
         name = _tool_name(part).strip() or "unknown"
+        skill_call = is_skill_tool(part.data)
+        skill_id = skill_tool_id(part.data) if skill_call else ""
+        origin = verified_skill_origin(
+            origins_by_session.get(part.session_id, {}).get(skill_id)
+        ) if skill_id else ""
+        if skill_call:
+            name = f"{origin} skill" if origin else "skill"
         counts[name] = counts.get(name, 0) + 1
         state = _tool_state(part)
         status = str(state.get("status") or "").lower()
         skill = loaded_skill(part.data)
-        if skill:
+        if skill and origin == "custom":
             skills[skill] = max(skills.get(skill, (0, 0)), (start, tool_count))
         script = executed_skill_script(part.data)
         outcome = structured_outcome(part.data, script) if not _is_cancellation(state) else "cancelled"
