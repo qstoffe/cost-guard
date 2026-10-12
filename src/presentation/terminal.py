@@ -54,18 +54,19 @@ def fit(value: object, width: int, *, right: bool = False) -> str:
     return text.rjust(width) if right else text.ljust(width)
 
 
-def terminal_content_width(stream: TextIO | None = None, *, fallback: int = 120) -> int:
+def terminal_content_width(stream: TextIO | None = None, *, fallback: int = 120, minimum: int = 40) -> int:
     """Return usable terminal width without making redirected output environment-dependent."""
     candidate = stream or sys.stdout
+    minimum = max(1, int(minimum))
     try:
         if bool(getattr(candidate, "isatty", lambda: False)()):
             fileno = getattr(candidate, "fileno", None)
             if callable(fileno):
-                return max(40, os.get_terminal_size(fileno()).columns - 1)
-            return max(40, shutil.get_terminal_size((fallback, 24)).columns - 1)
+                return max(minimum, os.get_terminal_size(fileno()).columns - 1)
+            return max(minimum, shutil.get_terminal_size((fallback, 24)).columns - 1)
     except (OSError, ValueError):
         pass
-    return max(40, int(fallback))
+    return max(minimum, int(fallback))
 
 
 def wrap_prose(

@@ -255,12 +255,14 @@ Watch's first view never waits for quotas. Accounts arrive individually on the m
 
 | Column | Meaning |
 | --- | --- |
-| `Session / prompt` | Session grouping plus prompt/event rows. Running prompts show tool counts (`8× read · 3× other · 2 failed`) and, for a ≥10 s tool, background job or open TODO, `running: bash 34s · background: shell 2m · TODO 2/4 done · text`. Arrows align with `#`; failures stay red. |
+| `Session / prompt` | Grouped prompt/event rows; the latest prompt retains tool/failure counts and loaded Skills until the next prompt. Only active work shows `running: bash 34s · background: shell 2m · TODO 2/4 done · text`. Arrows align with `#`; failures stay red. |
 | `Model / effort` | Same as report: explicit/request-proven effort, otherwise `(Default)` for a known normal request. No model-family default guesses or `Default -> X`. Compaction shows only its own explicit effort. |
 | `CCost` | Current observed prompt/event reference valuation, not billing. |
 | `Calls` | Completed causal model requests. |
 | `Duration` | Wall-clock duration; a prompt stays running (footer `background shell`) while its verified background job runs. |
 | `Δctx -> Next Ictx` | Context-state change and next context when available. |
+
+[Watch activity](docs/watch-activity.md): yellow `Skills (N)` lists confirmed exact IDs, newest first; red `[N tool call failures]` requires direct evidence, never load recency. Native errors and recognized Toolkit error contracts count once; cancellations and exit codes alone do not. Narrow rows preserve total/failures and whole skill IDs with `+N more`; the metric table keeps fixed geometry.
 
 Session `Σ` sums its displayed prompt/event CCost before rounding, preserving `?`/`N/A`. Native non-billable compactions contribute zero with blank row cost. Rounded row strings need not sum to the subtotal.
 
@@ -344,7 +346,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.38:** actionable Desktop V2 startup guidance, bounded report recovery, recoverable Watch initialization, restart-safe transport and privacy-safe source/TLS incident evidence. Retains live user-stop attribution, accounting and credit-first accounts. v80.0 is the Python 3.11+ public baseline; Claude quotas remain experimental; restart/sleep need separate live evidence.
+**v80.39:** persistent latest-prompt activity, confirmed loaded Skills, conservative per-skill tool failures and width-adaptive diagnostic rows. Retains v80.38 connectivity recovery, live user-stop attribution, accounting and credit-first accounts. v80.0 is the Python 3.11+ public baseline; Claude quotas remain experimental; restart/sleep need separate live evidence.
 
 Product versions identify code state; they do not imply a Git tag, release ZIP or GitHub Release. Packaged GitHub Releases are currently paused. Recommending them at a slower/stable cadence requires an explicit policy change; version numbers never trigger it automatically.
 

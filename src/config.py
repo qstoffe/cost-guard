@@ -200,6 +200,12 @@ def _assert_color_style(value: Any, path: str, source: str, allow_null: bool = T
 
 def normalize_legacy_settings(overrides: dict[str, Any]) -> dict[str, Any]:
     result = copy.deepcopy(overrides)
+    # A new optional Watch color must not invalidate complete pre-feature custom palettes.
+    schemes = result.get("colorSchemes")
+    if isinstance(schemes, dict):
+        for palette in schemes.values():
+            if isinstance(palette, dict) and "watchSkillActivity" not in palette and "watchRunningWarning" in palette:
+                palette["watchSkillActivity"] = copy.deepcopy(palette["watchRunningWarning"])
     # Removed local budget: accept old configs without retaining active semantics.
     result.pop("monthlyAiCredits", None)
     if "pricingMaxAgeDays" in result:

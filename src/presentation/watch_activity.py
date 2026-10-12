@@ -1,10 +1,11 @@
-"""Width-adaptive status rows shown beneath a running Watch prompt."""
+"""Width-adaptive status rows shown beneath the latest Watch prompt."""
 from __future__ import annotations
 
 from src.watch.models import ToolObservation
 
 BASE_ROLE = "watchToolActivity"
 FAILED_ROLE = "costQuotaCritical"
+SKILL_ROLE = "watchSkillActivity"
 SEPARATOR = " · "
 _MIN_TODO_TEXT_SLOT = 7  # separator excluded: at least four characters plus "..."
 
@@ -59,7 +60,68 @@ def tool_summary_segments(tool: ToolObservation, width: int) -> list[Segment]:
         candidate = _tool_candidate(tool, short, 0)
         if _length(candidate) <= width:
             return candidate
-    return _clip(_tool_candidate(tool, noun, 0), width)
+    # Retain both counts before spending scarce columns on words or tool groups.
+    if tool.failed_count:
+        compact = [(str(tool.tool_count), BASE_ROLE), (" · ", BASE_ROLE), (f"{tool.failed_count} failed", FAILED_ROLE)]
+        if _length(compact) <= width:
+            return compact
+        compact[-1] = (f"{tool.failed_count}!", FAILED_ROLE)
+        if _length(compact) <= width:
+            return compact
+        compact[1] = (" ", BASE_ROLE)
+        if _length(compact) <= width:
+            return compact
+    return [(str(tool.tool_count)[:max(0, width)], BASE_ROLE)]
+
+
+def _skill_failure_label(count: int) -> str:
+    noun = "tool call failure" if count == 1 else "tool call failures"
+    return f" [{count} {noun}]" if count else ""
+
+
+def _skill_prefix_lengths(tool: ToolObservation, with_failures: bool) -> list[int]:
+    """Size each whole-skill prefix once; width choice must not build N candidate rows."""
+    lengths = [len(f"Skills ({len(tool.skills)}): ")]
+    for index, skill in enumerate(tool.skills):
+        size = len(skill.skill_id) + (len(SEPARATOR) if index else 0)
+        if with_failures:
+            size += len(_skill_failure_label(skill.failed_count))
+        lengths.append(lengths[-1] + size)
+    return lengths
+
+
+def _skill_candidate(tool: ToolObservation, keep: int, with_failures: bool) -> list[Segment]:
+    segments = [(f"Skills ({len(tool.skills)}): ", SKILL_ROLE)]
+    for index, skill in enumerate(tool.skills[:keep]):
+        if index:
+            segments.append((SEPARATOR, SKILL_ROLE))
+        segments.append((skill.skill_id, SKILL_ROLE))
+        if with_failures and skill.failed_count:
+            segments.append((_skill_failure_label(skill.failed_count), FAILED_ROLE))
+    omitted = len(tool.skills) - keep
+    if omitted:
+        segments.extend([(SEPARATOR if keep else "", SKILL_ROLE), (f"+{omitted} more", SKILL_ROLE)])
+    return segments
+
+
+def skill_summary_segments(tool: ToolObservation, width: int) -> list[Segment]:
+    """Whole IDs/indicators only; omit older skills with an exact distinct count."""
+    if not tool.skills:
+        return []
+    for failures in (True, False):
+        lengths = _skill_prefix_lengths(tool, failures)
+        for keep in range(len(tool.skills), 0, -1):
+            omitted = len(tool.skills) - keep
+            suffix_size = len(SEPARATOR + f"+{omitted} more") if omitted else 0
+            if lengths[keep] + suffix_size <= width:
+                return _skill_candidate(tool, keep, failures)
+    candidate = _skill_candidate(tool, 0, False)
+    if _length(candidate) <= width:
+        return candidate
+    for label in (f"Skills ({len(tool.skills)})", f"Skills {len(tool.skills)}", str(len(tool.skills))):
+        if len(label) <= width:
+            return [(label, SKILL_ROLE)]
+    return [(str(len(tool.skills))[:max(0, width)], SKILL_ROLE)]
 
 
 def background_label(kinds: tuple[str, ...]) -> str:

@@ -1,5 +1,12 @@
 # Cost Guard version history
 
+## v80.39 — 2026-10-12
+
+- Watch retains the latest prompt's tool/failure counts and confirmed distinct skill IDs after completion or abortion, replacing activity only when the same session begins a new prompt. Active tool/TODO/background indicators never survive completion; compaction, refresh and reconnect keep prompt ownership.
+- A yellow Skills row shows exact persisted IDs, newest load first, with red per-skill tool call failure counts only for explicit metadata or direct skill-script execution. Generic reads, mentions and skill-load recency never imply attribution; unattributed failures remain in the total.
+- Known Toolkit script contracts supplement native tool errors with bounded, schema-verified structured failures. Physical-call deduplication and cancellation handling prevent inflated totals; arbitrary output and nonzero exits alone remain neutral.
+- Activity rows fit terminal width independently of the fixed metric table: total/failures outrank breakdowns, whole skill IDs/indicators precede an accurate +N more fallback. Stable completed frames reuse observations without new source reads or changes to usage, billing or token accounting.
+
 ## v80.38 — 2026-10-12
 
 - Missing/unreachable Desktop V2 service now has actionable startup guidance, not crash wording or legacy table details. Reports retry structured readiness failures within a short shared budget; healthy reads stay immediate and CLI wake remains one-time.
@@ -27,34 +34,16 @@
 - A source-reported successful end directly after tool calls shows neutral `[ENDED after tool calls]`, not a guessed limit failure. Full stop labels survive preview truncation; usage, billing and existing completion semantics are unchanged.
 - Shared report/Watch account order is stable: credit/balance/budget accounts first, usage-limit accounts second, then name and proven identity. Remaining capacity, percentages, refresh completion and transient errors do not reorder established accounts; provider failures retain account labels/plan/capacity class.
 
-## v80.34 — 2026-10-10
-
-- Faster with identical output (byte-compared against v80.33 on live data): normal report ~2.1 s → 0.65 s, date range 7.5 s → 2.1 s, Watch startup ~6.2 s → 0.65 s, V2 resync 13 s → 1.4 s.
-- V2 requests reuse pooled keep-alive loopback connections (one retry when the service closed an idle socket); snapshots reuse a fresh catalog as their before-bracket; wire parts are no longer deep-copied twice.
-- Pricing identity resolution is memoized per immutable catalog. Dashboards overlap model-availability and account I/O with analysis; the Claude helper is stopped after its answer instead of delaying quotas.
-- Watch startup skips roots whose stable cached analysis has nothing since Watch start (a session Watch always hydrates its root); resync re-reads hydrated and changed roots rather than all history. Watch model discovery reads prices/V2 models on a bounded worker.
-- Diagnostics drops the duplicated Copilot-only account section and reports all account integrations, terminal facts, V2 transport counters and a numbers-only headless Watch smoke (timings, hydration, render geometry at 80/120/160 columns with real accounts).
-- Full tests run concurrently (151 s → 32 s); fake V2 services, the V1 database and package-copy builders moved to fixtures, retiring 10 test-to-test import edges.
-- Policy: hosted/web AI runs only Quick + validation and never builds a ZIP; local workstation sessions run Full + live checks and build a ZIP for every completed version.
-
 ## Earlier v80 history
 
-- v80.33 separated Watch account refresh and prompt projection/report orchestration, moved shared fixtures (67 to 43 test-import edges), enforced bounded routine/coupling debt without raising file caps, and standardized `Context:` cost-warning explanations; ordinary estimates/accounting stayed unchanged. v80.32 shared catalog ancestry/tree activity, separated bounded report sampling and V2 normalization, moved synthetic fixtures out of tests (46 fewer test-import edges), and added the code map, AST inventory and layer/dependency guards; source, cache, billing and output behavior stayed unchanged. v80.31 expresses priced Next-Ictx thresholds as one-decimal cost multipliers from the report's sample/token mix (hidden mix without samples), refreshed every 15 minutes; unpriced thresholds retain their CCost range. Regression coverage protects v80.30's synthetic-notice/Δctx attribution fix.
-- v80.29–v80.30 attributed synthetic/background continuations and in-flight models to their actual prompt, restored move/unanchored Watch Δctx, kept unexplained shrinks N/A, sanitized terminal titles/previews, deduplicated source-scan observations and made test/Diagnostics output UTF-8.
-- v80.25-v80.28 kept BLOCKED on accounts, split wide Watch quotas, added privacy-safe observations, made Watch Δctx compare consecutive Next-Ictx anchors, and removed mutable session-model attribution; v80.30 corrected move/unanchored-baseline regressions.
-
-- v80.21-v80.24 added conservative table-local model-supersession fading (plain GPT tiers, Claude families, numeric Grok; preview/variant exclusions), parallel bounded quota acquisition with shared credential discovery and nonblocking Watch account refresh, and recommended current main as the supported distribution while packaged GitHub Releases are paused.
-
-- v80.15-v80.20 introduced the four-column Relative CCost comparison with `--all-models` exact GitHub USD/M tiers, shared tier-aware price ordering and non-destructive metadata state under cache/state/. They gave release-date metadata independent health with classified sources, bounded non-blocking retries, failure logs and Diagnostics coverage, plus concise Diagnostics endings and launcher-path error hints. They also added hourly Copilot refresh with pinned CCost, 15-minute V2 checks, sleep/wake recovery and one-hour cache age; verified priced Watch/report ✦ New Models, sanitized metadata evidence, root logs/, safe Diagnostics archival/cleanup/staging, support instructions, runtime isolation, bounded history and metadata/refresh regression coverage.
-
-- v80.11-v80.14 added simulated macOS compatibility in Diagnostics, Windows path/release-check fixes, sanitized V1 SQLite read-error guards with read-only triage and Windows-safe synthetic SQLite cleanup.
-
-- v80.8-v80.9 aligned Watch session subtotals with visible rows (run-scoped CCost preserved) and unified the Windows launchers under a persistent PowerShell session with corrected Ctrl+C and error handling.
-
-- v80.7 added shared Simple HTTP account providers and adapters for OpenRouter, DeepSeek and MiniMax, with sanitized diagnostics and no fabricated CCost.
-- v80.6 made Watch survive temporary source outages and retry V2 without a V1 fallback; v80.5 scoped read-only V1→V2 migration-gap notices to report windows, never merging histories or showing them in Watch.
-
-- v80.0 established the clean 0BSD public baseline, cross-platform launchers and bounded test membership. v80.1-v80.4 added the illustrated README/contracts, OpenAI token-expiry explanation (no credential writes), sign-in remedies, verified V2 background liveness and `development/windows|macos/` Diagnostics launchers.
+- v80.34 pooled V2 reads/fresh snapshot brackets, memoized model identity, overlapped report acquisition and bounded Watch discovery/startup/resync. Recorded live timings with v80.33-identical output: normal report ~2.1→0.65 s, date report 7.5→2.1 s, Watch startup ~6.2→0.65 s, resync 13→1.4 s. Diagnostics gained all-account evidence and privacy-safe Watch geometry; concurrent Full and shared fixtures retired 10 test-import edges. Verification/packaging policy remains in maintainer rules.
+- v80.32–v80.33 separated Watch account refresh, prompt projection/report orchestration and source normalization; shared catalog ancestry and bounded sampling; moved fixtures (67→43 test-import edges, 46 fewer test-import dependencies), enforced bounded routine/coupling debt without raising caps, standardized `Context:` warning explanations, and added code maps/inventory/layer guards. Source/cache/billing semantics stayed unchanged.
+- v80.29–v80.31 fixed synthetic/background continuation and running-model attribution, restored move/unanchored Watch Δctx and N/A for unexplained shrinks, sanitized terminal text and deduplicated source scans. Priced Next-Ictx tiers show one-decimal sample/mix cost multipliers refreshed every 15 minutes; unpriced thresholds keep CCost ranges.
+- v80.25–v80.28 kept BLOCKED on accounts, split wide Watch quotas, added privacy-safe observations, compared consecutive Next-Ictx anchors for Δctx and removed mutable session-model attribution; v80.30 corrected move/unanchored regressions.
+- v80.21–v80.24 added conservative table-local model fading (plain GPT tiers, Claude families, numeric Grok; preview/variant exclusions), parallel bounded quota acquisition, shared credential discovery and nonblocking Watch account refresh. Current main became recommended; packaged GitHub Releases remain paused.
+- v80.15–v80.20 introduced four-column Relative CCost comparison, `--all-models` exact USD/M tiers, shared tier-aware sorting and non-destructive metadata state under cache/state/. Release metadata acquired independent classified health/backoff/cache and Diagnostics evidence; hourly Copilot/15-minute V2 checks retained pinned CCost. Verified New Models/promotions, sleep/wake quota recovery, safe error/recovery logs and Diagnostics archival/cleanup gained regression coverage.
+- v80.8–v80.14 unified persistent Windows launchers with usable Ctrl+C/completion/error prompts, added session row subtotals without changing run CCost, simulated macOS diagnostics, hardened Windows release paths and sanitized read-only V1 SQLite errors/cleanup.
+- v80.0 established the 0BSD public Python baseline, cross-platform launchers and bounded test membership. v80.1–v80.7 added illustrated docs, token-expiry/sign-in guidance without credential writes, verified V2 background liveness, developer Diagnostics launchers, read-only scoped V1→V2 migration-gap notices, recoverable source outages without fallback, and Simple HTTP/OpenRouter/DeepSeek/MiniMax accounts without fabricated CCost.
 
 ## Earlier versions (v1-v78)
 
