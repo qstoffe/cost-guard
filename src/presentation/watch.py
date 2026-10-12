@@ -17,7 +17,7 @@ from .token_mix import prompt_scope, token_mix_lines, watch_total_line
 from src.analysis.context import PriceWarningSeverity
 from .context_warnings import WARNING_ROLE, context_warning_text, warning_cost_suffix, warning_explanation_lines
 from .pricing_notices import pricing_notice_lines
-from .watch_activity import BASE_ROLE, status_segments, tool_summary_segments
+from .watch_activity import BASE_ROLE, SKILL_ROLE, skill_summary_segments, status_segments, tool_summary_segments
 
 _WATCH_COLUMNS = (
     Column("Session / prompt", fixed_width=35),
@@ -214,23 +214,28 @@ class WatchRenderer:
                 _context_cell(row, role),
             ))
             styles.append((role, role, role, role, role, None))
-            if prompt.in_progress and row.tool is not None:
+            if row.tool is not None and (row.tool.tool_count or prompt.in_progress):
                 arrow = "↳" if self._supports_arrow() and self.interactive else "->"
                 marker = " " * self._row_label(row).index("#") + arrow
-                for kind in ("tools", "status") if row.tool.has_status_row else ("tools",):
+                kinds = ["tools"] + (["skills"] if row.tool.skills else [])
+                if prompt.in_progress and row.tool.has_status_row:
+                    kinds.append("status")
+                for kind in kinds:
                     activities[len(rows)] = (kind, marker, row.tool)
                     rows.append((marker, "", "", "", "", ""))
                     styles.append(("watchToolActivity", None, None, None, None, None))
         return rows, styles, activities
 
     def _activity_line(self, kind: str, marker: str, tool: ToolObservation, span_width: int) -> str:
-        prefix = f"{marker} "
-        width = max(1, span_width - len(prefix))
+        prefix = f"{marker} " if len(marker) + 1 < span_width else ""
+        width = max(0, span_width - len(prefix))
         if kind == "tools":
             segments = tool_summary_segments(tool, width)
+        elif kind == "skills":
+            segments = skill_summary_segments(tool, width)
         else:
             segments = status_segments(tool, width, _duration(tool.running_ms), _duration(tool.background_ms))
-        segments = [(prefix, BASE_ROLE)] + segments
+        segments = [(prefix, SKILL_ROLE if kind == "skills" else BASE_ROLE)] + segments
         padding = max(0, span_width - sum(len(text) for text, _role in segments))
         body = "".join(self.styler.apply(text, role) for text, role in segments)
         return "| " + body + " " * padding + " |"
@@ -241,9 +246,10 @@ class WatchRenderer:
             rows, styles = [_empty_row("No prompts since Watch started")], [("watchToolActivity",) + (None,) * 5]
         lines = render_table(_WATCH_COLUMNS, rows, styles=styles, styler=self.styler)
         if lines and activities:
-            span_width = max(1, len(lines[0]) - 4)
+            terminal_width = self.terminal_width if self.terminal_width is not None else terminal_content_width(self.stream, minimum=1)
+            span_width = max(0, min(len(lines[0]), terminal_width) - 4)
             for row_index, (kind, marker, tool) in activities.items():
-                lines[3 + row_index] = self._activity_line(kind, marker, tool, span_width)
+                lines[3 + row_index] = self._activity_line(kind, marker, tool, span_width) if terminal_width >= 4 else "|"[:max(0, terminal_width)]
         for line in lines:
             self._write(line)
         warnings = projection.session_warnings or {}

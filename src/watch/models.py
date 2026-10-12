@@ -11,6 +11,13 @@ from src.analysis.context import PriceWarningSeverity
 
 
 @dataclass(frozen=True, slots=True)
+class SkillObservation:
+    """A confirmed loaded skill and directly evidenced failed physical calls."""
+    skill_id: str
+    failed_count: int = 0
+
+
+@dataclass(frozen=True, slots=True)
 class ToolObservation:
     tool_count: int = 0
     todo_completed: int = 0
@@ -22,6 +29,7 @@ class ToolObservation:
     running_ms: int = 0
     background_kinds: tuple[str, ...] = ()
     background_ms: int = 0
+    skills: tuple[SkillObservation, ...] = ()
 
     @property
     def has_open_todo(self) -> bool:

@@ -4,9 +4,10 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 from src.analysis.causal import prompt_parent_ids
-from src.domain import EventKind, MessageRole, SessionSnapshot
+from src.domain import EventKind, MessageRole, NormalizedMessage, NormalizedPart, SessionSnapshot
 
-from .models import ToolObservation
+from .models import SkillObservation, ToolObservation
+from .tool_contracts import executed_skill_script, failure_skill, loaded_skill, structured_outcome
 
 
 def _parent_ids(snapshot: SessionSnapshot, event_id: str, *, is_compaction: bool) -> set[str]:
@@ -110,17 +111,8 @@ def _child_session_id(part) -> str:
     return ""
 
 
-def observe_tools(
-    snapshot: SessionSnapshot, event_id: str, *, is_compaction: bool = False, now_ms: int = 0,
-) -> ToolObservation:
-    """Count tool calls by name, structured failures, the longest long-running tool and the newest reliable todo state."""
-    parents = _parent_ids(snapshot, event_id, is_compaction=is_compaction)
-    candidates = []
-    tool_count = 0
-    counts: dict[str, int] = {}
-    failed = 0
-    running_tool, running_ms = "", 0
-    order = 0
+def _prompt_messages(snapshot: SessionSnapshot, parents: set[str], is_compaction: bool) -> list[NormalizedMessage]:
+    """Follow only task children attributed by the existing canonical prompt scope."""
     messages = [
         message for message in snapshot.messages
         if message.role is MessageRole.ASSISTANT
@@ -142,33 +134,74 @@ def observe_tools(
             ]
             messages.extend(child_messages)
             pending.extend(child_messages)
-    seen_parts: set[str] = set()
+    return messages
+
+
+def _physical_tools(messages: list[NormalizedMessage]) -> tuple[NormalizedPart, ...]:
+    """Call IDs coalesce native copies; otherwise canonical part identity is authoritative."""
+    calls: dict[tuple[str, str, str], NormalizedPart] = {}
     for message in messages:
         for part in message.parts:
-            if part.kind != "tool" or part.part_id in seen_parts:
+            if part.kind != "tool":
                 continue
-            seen_parts.add(part.part_id)
-            start = _part_start(part)
-            if start <= 0:
-                continue
-            tool_count += 1
-            name = _tool_name(part).strip() or "unknown"
-            counts[name] = counts.get(name, 0) + 1
-            state = _tool_state(part)
-            status = str(state.get("status") or "").lower()
-            if status == "error" and not _is_cancellation(state):
-                failed += 1
-            elif status == "running" and now_ms - start >= RUNNING_VISIBLE_AFTER_MS and now_ms - start > running_ms:
-                running_tool, running_ms = name, now_ms - start
-            if _is_todo_tool(part):
-                order += 1
-                candidates.append((start, order, _todo_state(part)))
+            call_id = part.data.get("callID")
+            key = (part.session_id, "call" if isinstance(call_id, str) and call_id else "part",
+                   call_id if isinstance(call_id, str) and call_id else part.part_id)
+            previous = calls.get(key)
+            rank = (part.updated_at_ms, str(_tool_state(part).get("status") or "").lower() in {"completed", "error"})
+            if previous is None or rank >= (
+                previous.updated_at_ms, str(_tool_state(previous).get("status") or "").lower() in {"completed", "error"}
+            ):
+                calls[key] = part
+    return tuple(calls.values())
+
+
+def observe_tools(
+    snapshot: SessionSnapshot, event_id: str, *, is_compaction: bool = False, now_ms: int = 0,
+) -> ToolObservation:
+    """Count tool calls by name, structured failures, the longest long-running tool and the newest reliable todo state."""
+    parents = _parent_ids(snapshot, event_id, is_compaction=is_compaction)
+    candidates = []
+    tool_count = 0
+    counts: dict[str, int] = {}
+    failed = 0
+    running_tool, running_ms = "", 0
+    order = 0
+    messages = _prompt_messages(snapshot, parents, is_compaction)
+    skills: dict[str, tuple[int, int]] = {}
+    skill_failures: dict[str, int] = {}
+    for part in _physical_tools(messages):
+        start = _part_start(part)
+        if start <= 0:
+            continue
+        tool_count += 1
+        name = _tool_name(part).strip() or "unknown"
+        counts[name] = counts.get(name, 0) + 1
+        state = _tool_state(part)
+        status = str(state.get("status") or "").lower()
+        skill = loaded_skill(part.data)
+        if skill:
+            skills[skill] = max(skills.get(skill, (0, 0)), (start, tool_count))
+        script = executed_skill_script(part.data)
+        outcome = structured_outcome(part.data, script) if not _is_cancellation(state) else "cancelled"
+        if outcome != "cancelled" and (status == "error" or outcome == "error"):
+            failed += 1
+            owner = failure_skill(part.data, script)
+            if owner:
+                skill_failures[owner] = skill_failures.get(owner, 0) + 1
+        elif status == "running" and now_ms - start >= RUNNING_VISIBLE_AFTER_MS and now_ms - start > running_ms:
+            running_tool, running_ms = name, now_ms - start
+        if _is_todo_tool(part):
+            order += 1
+            candidates.append((start, order, _todo_state(part)))
     todos = None
     if candidates:
         _, _, todos = max(candidates, key=lambda item: (item[0], item[1]))
     summary = dict(
         tool_counts=tuple(sorted(counts.items(), key=lambda item: (-item[1], item[0]))),
         failed_count=failed, running_tool=running_tool, running_ms=running_ms,
+        skills=tuple(SkillObservation(skill, skill_failures.get(skill, 0))
+                     for skill in sorted(skills, key=lambda item: skills[item], reverse=True)),
     )
     if todos is None:
         return ToolObservation(tool_count=tool_count, **summary)
