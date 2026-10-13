@@ -1,7 +1,7 @@
 """Pure V2 message/part/request normalization; no service or catalog acquisition."""
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from copy import deepcopy
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -119,6 +119,11 @@ def normalize_message_bundle(
             provenance=provenance(part_session, part_id), data=_part_semantic_data(raw),
         ))
     metadata = {key: deepcopy(info[key]) for key in ("mode", "system", "structured") if key in info}
+    streamed = optional_positive_int(time_map.get("streamed"))
+    if streamed is not None:
+        metadata["streamed_at_ms"] = streamed
+    if isinstance(info.get("providerRequestID"), str):
+        metadata["provider_request_id"] = info["providerRequestID"]
     message = NormalizedMessage(
         message_id=message_id, session_id=session_id, role=role,
         created_at_ms=created, completed_at_ms=completed,
@@ -171,3 +176,80 @@ def normalize_invocations(message: NormalizedMessage, provenance: ProvenanceFact
         variant=message.variant, summary=message.summary,
         finish_reason=message.finish_reason, error_name=message.error_name,
     )]
+
+
+# Current OpenCode V2 can persist one provider response that emits several tool
+# calls as a chain of assistant records: the first carries the response usage,
+# each further tool call becomes its own explicit-zero record. A shared provider
+# response id proves that; without ids, such a record starts streaming within
+# milliseconds of its creation while a real request first waits for the
+# provider, observed at more than a second.
+TOOL_CONTINUATION_MAX_STREAM_DELAY_MS = 500
+
+
+def _is_tool_continuation_candidate(message: NormalizedMessage) -> bool:
+    """Structural evidence that a record emitted no model output of its own."""
+    tokens = message.tokens
+    return bool(
+        message.role is MessageRole.ASSISTANT and message.model is not None and not message.summary
+        and tokens is not None and tokens.total == 0 and {"input", "output"} <= set(tokens.known_fields)
+        and (message.cost is None or message.cost.amount == 0)
+        and message.parts and all(part.kind == "tool" for part in message.parts)
+        and message.finish_reason == "tool-calls" and message.error_name is None and message.termination is None
+    )
+
+
+def _continues(message: NormalizedMessage, previous: NormalizedMessage) -> bool:
+    """Provider response identity is authoritative; otherwise require the absent model latency."""
+    if not (previous.model == message.model and previous.parent_message_id == message.parent_message_id
+            and previous.finish_reason == "tool-calls" and previous.error_name is None
+            and previous.completed_at_ms is not None and message.created_at_ms >= previous.created_at_ms):
+        return False
+    request, previous_request = message.metadata.get("provider_request_id"), previous.metadata.get("provider_request_id")
+    if request or previous_request:
+        return bool(request) and request == previous_request
+    streamed = message.metadata.get("streamed_at_ms")
+    return isinstance(streamed, int) and 0 <= streamed - message.created_at_ms <= TOOL_CONTINUATION_MAX_STREAM_DELAY_MS
+
+
+def tool_continuation_ids(
+    messages: Sequence[NormalizedMessage], usage: Mapping[str, int],
+) -> frozenset[str]:
+    """Zero-usage tool records that continue the preceding model response.
+
+    ``usage`` maps message ids to their observed token total. A candidate is a
+    continuation only when the immediately preceding assistant record of the
+    same session and prompt is a usage-bearing tool-calls response (or another
+    continuation chained to one). Anything ambiguous stays a separate request.
+    """
+    result: set[str] = set()
+    previous: dict[str, NormalizedMessage] = {}
+    anchored: dict[str, bool] = {}
+    for message in sorted(messages, key=lambda item: (item.created_at_ms, item.message_id)):
+        session = message.session_id
+        if message.role is MessageRole.USER:
+            previous.pop(session, None)
+        if message.role is not MessageRole.ASSISTANT:
+            continue
+        before = previous.get(session)
+        continuation = bool(before is not None and anchored.get(session) and _is_tool_continuation_candidate(message)
+                            and _continues(message, before))
+        if continuation:
+            result.add(message.message_id)
+        previous[session] = message
+        anchored[session] = continuation or usage.get(message.message_id, 0) > 0
+    return frozenset(result)
+
+
+def normalize_request_invocations(
+    messages: Sequence[NormalizedMessage], provenance: ProvenanceFactory,
+) -> list[ModelInvocation]:
+    """One invocation per independently evidenced model request.
+
+    Continuation records remain in the canonical message history for tool,
+    outcome and duration consumers; only their duplicate request is dropped.
+    """
+    per_message = [(message.message_id, normalize_invocations(message, provenance)) for message in messages]
+    usage = {key: sum(item.tokens.total for item in values) for key, values in per_message}
+    skipped = tool_continuation_ids(messages, usage)
+    return [item for key, values in per_message if key not in skipped for item in values]

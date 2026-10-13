@@ -20,7 +20,6 @@ from src.domain import (
     ContextBoundary,
     IntegrationHealth,
     MessageRole,
-    ModelInvocation,
     NormalizedMessage,
     NormalizedPart,
     NormalizedSession,
@@ -42,7 +41,7 @@ from .errors import (FailureCode, SourceConcurrentChangeError, SourceDataError, 
 from .connectivity import SourceConnectivity, observed
 from .model_availability import settled_v2_model_ids
 from .opencode_v2_normalization import (
-    normalize_invocations, normalize_message_bundle, optional_positive_int, safe_int,
+    normalize_message_bundle, normalize_request_invocations, optional_positive_int, safe_int,
 )
 from .opencode_v2_background import background_activities, running_jobs
 from .opencode_v2_diagnostics import summarize_v2_diagnostics
@@ -568,9 +567,7 @@ class OpenCodeV2Source:
                     event for message in messages
                     if (event := normalize_event(message, frozenset(notices))) is not None
                 )
-                invocations: list[ModelInvocation] = []
-                for message in messages:
-                    invocations.extend(normalize_invocations(message, self._provenance))
+                invocations = normalize_request_invocations(messages, self._provenance)
                 invocations.sort(key=lambda value: (
                     value.completed_at_ms if value.completed_at_ms is not None else value.created_at_ms,
                     value.invocation_id,

@@ -285,6 +285,28 @@ def _model_fields(model: Any) -> tuple[str | None, str | None, str | None]:
     )
 
 
+def _current_info_fields(value: Mapping[str, Any], *, assistant: bool) -> dict[str, Any]:
+    """Outcome/usage/agent fields plus an assistant's own request identity, model and effort.
+
+    Current V2 user messages do not own a request-bound model. Never borrow the
+    mutable session selection for historical prompt events.
+    """
+    info = {key: deepcopy(value[key]) for key in ("error", "finish", "cost", "tokens") if key in value}
+    if value.get("agent") not in (None, ""):
+        info["agent"] = str(value["agent"])
+    if not assistant:
+        return info
+    provider_state = value.get("providerState")
+    response_id = provider_state.get("responseId") if isinstance(provider_state, Mapping) else None
+    if isinstance(response_id, str) and response_id.strip():
+        info["providerRequestID"] = response_id.strip()
+    provider, model_id, variant = _model_fields(value.get("model"))
+    for key, field in (("providerID", provider), ("modelID", model_id), ("variant", variant)):
+        if field:
+            info[key] = field
+    return info
+
+
 def current_union_message_to_legacy_bundle(
     value: Mapping[str, Any], *, session: Mapping[str, Any], ordinal: int
 ) -> dict[str, Any]:
@@ -317,24 +339,8 @@ def current_union_message_to_legacy_bundle(
         "sessionID": session_id,
         "role": role,
         "time": time_map,
+        **_current_info_fields(value, assistant=message_type == "assistant"),
     }
-    for key in ("error", "finish", "cost", "tokens"):
-        if key in value:
-            info[key] = deepcopy(value[key])
-    if value.get("agent") not in (None, ""):
-        info["agent"] = str(value["agent"])
-
-    provider, model_id, variant = _model_fields(value.get("model"))
-    if message_type == "assistant":
-        if provider:
-            info["providerID"] = provider
-        if model_id:
-            info["modelID"] = model_id
-        if variant:
-            info["variant"] = variant
-    # Current V2 user messages do not own a request-bound model.
-    # Never borrow the mutable session selection for historical prompt events.
-    # Actual assistant requests retain their own model and effort above.
 
     parts: list[dict[str, Any]] = []
 

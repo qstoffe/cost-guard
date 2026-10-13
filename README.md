@@ -346,7 +346,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.41:** behavior-neutral test-fixture ownership cleanup; user-visible behavior is unchanged from v80.40 (live-only Watch activity, verified built-in/custom skill categories, custom-only Skills, unified activity color). v80.0 is the Python 3.11+ public baseline. Restart/sleep need separate live evidence; Claude quotas remain experimental.
+**v80.42:** `Calls` counts independently evidenced model requests; zero-usage OpenCode V2 tool-continuation records of one response no longer inflate it, while CCost, tokens, tools, outcomes and durations are unchanged. Otherwise as v80.40/v80.41 (live-only Watch activity, verified built-in/custom skill categories, custom-only Skills, unified activity color). v80.0 is the Python 3.11+ public baseline. Restart/sleep need separate live evidence; Claude quotas remain experimental.
 
 Product versions identify code state; they do not imply a Git tag, release ZIP or GitHub Release. Packaged GitHub Releases are currently paused. Recommending them at a slower/stable cadence requires an explicit policy change; version numbers never trigger it automatically.
 
