@@ -204,9 +204,12 @@ class WatchTokenMixTests(unittest.TestCase):
             projection = WatchCoordinator(selection=selection, report_service=service, config=config,
                                           clock_ms=lambda: 1000).initialize().projection
             self.assertEqual(1, len(projection.rows))
-            # Watch additionally prices each request; the volume mix is identical.
-            self.assertEqual(mix, replace(projection.token_mix, costs=None, priced_requests=0))
-            self.assertIsNotNone(projection.token_mix.costs)
+            # Watch additionally prices each request; the run-total volume is identical.
+            self.assertEqual(mix, replace(projection.run_total, costs=None, priced_requests=0))
+            self.assertIsNotNone(projection.run_total.costs)
+            # The displayed mix keeps only priceable requests (not the zero-usage one).
+            self.assertEqual(mix.totals, projection.token_mix.totals)
+            self.assertEqual((4, 4), (projection.token_mix.request_count, projection.token_mix.priced_requests))
 
 
 class ReportTokenMixTests(unittest.TestCase):
@@ -218,7 +221,7 @@ class ReportTokenMixTests(unittest.TestCase):
         source = SyntheticMonthSource(12, 20, month_start_ms=START)
         service = self.service(source)
         report = service.build(ReportRequest())
-        prompts = latest_token_prompts(tuple(service._analyzed.values()))
+        prompts = latest_token_prompts(tuple(service._analyzed.values()), service._priceable())
         self.assertEqual(100, report.token_mix.sample_size)
         self.assertEqual({f"root-{n:04d}" for n in range(7, 12)}, {p.session_id for p in prompts})
         self.assertEqual(5, source.load_count)
@@ -226,7 +229,7 @@ class ReportTokenMixTests(unittest.TestCase):
         self.assertEqual(expected.totals, report.token_mix.totals)
         self.assertEqual(expected.percentages, report.token_mix.percentages)
 
-    def test_usage_eligibility_keeps_running_aborted_known_zero_and_partial(self):
+    def test_usage_eligibility_keeps_running_aborted_but_skips_zero_and_partial(self):
         service = self.service(MutableSource(one_request(running=False)))
         service.build(ReportRequest())
         root = next(iter(service._analyzed.values()))
@@ -238,8 +241,9 @@ class ReportTokenMixTests(unittest.TestCase):
             replace(record, prompt_id="zero", entries=(replace(record.entries[0], tokens=TokenUsage()),)),
             replace(record, prompt_id="partial", entries=(replace(record.entries[0], tokens=TokenUsage(input=10, known_fields=("input",))),)),
         ))
-        selected = latest_token_prompts((root,))
-        self.assertEqual({"running", "aborted", "zero", "partial"}, {p.prompt_id for p in selected})
+        selected = latest_token_prompts((root,), service._priceable())
+        # Zero-token and incomplete telemetry are not priceable usage.
+        self.assertEqual({"running", "aborted"}, {p.prompt_id for p in selected})
 
     def test_touched_old_root_does_not_hide_newer_usage_and_ignores_wall_clock(self):
         source = SyntheticMonthSource(12, 20, month_start_ms=START)
@@ -248,7 +252,7 @@ class ReportTokenMixTests(unittest.TestCase):
         source.snapshots[root.session_id] = replace(old, root=root, sessions=(root,))
         service = self.service(source)
         before = service.build(ReportRequest()).token_mix
-        prompts = latest_token_prompts(tuple(service._analyzed.values()))
+        prompts = latest_token_prompts(tuple(service._analyzed.values()), service._priceable())
         self.assertEqual({f"root-{n:04d}" for n in range(7, 12)}, {p.session_id for p in prompts})
         self.assertEqual(6, source.load_count)
         service.set_now_ms(START + 365 * 86_400_000)
@@ -315,7 +319,7 @@ class TokenMixPresentationTests(unittest.TestCase):
         report = ReportProjection(ReportKind.NORMAL, "Report", "V2", accounts_quotas=quotas(rolling()), token_mix=mix)
         lines = rendered(report).splitlines()
         index = next(i for i, line in enumerate(lines) if line.startswith("Token Mix %"))
-        self.assertIn("latest 37 prompts with token data", lines[index + 1])
+        self.assertIn("latest 37 priced prompts", lines[index + 1])
         self.assertLess(index, next(i for i, line in enumerate(lines) if line.startswith("| Publisher")))
         accounts = lines.index("Accounts Overview")
         self.assertEqual("", lines[accounts - 1])

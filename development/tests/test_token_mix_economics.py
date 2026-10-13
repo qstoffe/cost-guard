@@ -121,16 +121,17 @@ class CategoryCostTests(unittest.TestCase):
         tracker = WatchTokenMix(1000)
         observe(tracker, snapshot)
         mix = tracker.project(PRICES.reference_category_valuation)
+        total = tracker.project_total(PRICES.reference_category_valuation)
         bundle = analyze_snapshot(snapshot, now_ms=4000)
         self.assertEqual(len({p.prompt_id for p in bundle.prompts if p.entries}), mix.sample_size)
-        self.assertEqual(comparison_cost(bundle.trace_entries, PRICES.reference_valuation).known_ccost, sum(mix.costs))
+        self.assertEqual(comparison_cost(bundle.trace_entries, PRICES.reference_valuation).known_ccost, sum(total.costs))
         stream = io.StringIO()
         WatchRenderer({"timezone": "UTC"}, stream=stream, interactive=False, terminal_width=200)._render_quota(
-            WatchProjection("Watch", "V2", (), token_mix=mix, now_ms=4000))
+            WatchProjection("Watch", "V2", (), token_mix=mix, run_total=total, now_ms=4000))
         first = stream.getvalue().splitlines()[0]
         self.assertTrue(first.startswith(f"Token Mix % · {mix.sample_size} prompts · Input: "))
         self.assertNotIn("tokens", first)
-        self.assertEqual(["Watch total CCost: " + ccost_amount(sum(mix.costs))], stream.getvalue().splitlines()[1:],
+        self.assertEqual(["Watch total CCost: " + ccost_amount(sum(total.costs))], stream.getvalue().splitlines()[1:],
                          "the mix line has no total; only the dedicated Watch total row follows")
 
     def test_coordinator_watch_mix_reconciles_with_report_ccost(self):
@@ -146,7 +147,7 @@ class CategoryCostTests(unittest.TestCase):
     def test_normal_report_mix_shows_volume_and_reconciling_costs(self):
         service = report_service(self, MutableSource(make_snapshot()))
         report = service.build(ReportRequest())
-        prompts = latest_token_prompts(tuple(service._analyzed.values()))
+        prompts = latest_token_prompts(tuple(service._analyzed.values()), service._priceable())
         entries = unique_usage(e for p in prompts for e in p.entries)
         reference = service._load_comparison_catalog()
         self.assertEqual(comparison_cost(entries, reference.reference_valuation).known_ccost, sum(report.token_mix.costs))

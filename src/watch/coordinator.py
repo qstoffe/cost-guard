@@ -257,7 +257,8 @@ class WatchCoordinator:
         warnings = tuple((projection.session_warnings or {}).items())
         return (rows, projection.quota, projection.quota_stale, projection.quota_recovering_accounts,
                 projection.source_warnings, warnings, projection.recent_model_notice,
-                projection.recent_promotion_notices, projection.token_mix, tuple(projection.session_subtotals.items()))
+                projection.recent_promotion_notices, projection.token_mix, projection.run_total,
+                tuple(projection.session_subtotals.items()))
 
     @staticmethod
     def _transient_signature(projection: WatchProjection) -> tuple[object, ...]:
@@ -310,7 +311,8 @@ class WatchCoordinator:
             session_warnings=session_warnings,
             recent_model_notice=self.model_discovery.notice(now_ms),
             recent_promotion_notices=self.report_service.recent_promotion_notice_texts(),
-            token_mix=self.token_mix.project(self._token_valuation()),
+            token_mix=self.token_mix.project(valuation := self._token_valuation()),
+            run_total=self.token_mix.project_total(valuation),
             session_subtotals=session_subtotals,
         )
         self._last_projection = projection

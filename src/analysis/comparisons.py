@@ -10,6 +10,7 @@ from src.pricing.catalog import PricingCatalog, normalized_average_token_mix, to
 from src.pricing.tiers import lower_bound, ordered_tiers
 
 from .models import PromptRecord
+from .token_mix import PricedUsage
 from .effort import EffortSelection, interpret_effort
 
 # Sorting only: never exposed as observed usage or a Relative CCost sample.
@@ -35,9 +36,13 @@ class ModelComparisonRow:
 
 
 
-def model_comparison_rows(records: Iterable[PromptRecord], catalog: PricingCatalog) -> tuple[ModelComparisonRow, ...]:
-    records = tuple(records)
-    mix = normalized_average_token_mix(records)
+def model_comparison_rows(records: Iterable[PromptRecord | PricedUsage], catalog: PricingCatalog) -> tuple[ModelComparisonRow, ...]:
+    """Every comparable model/tier under one shared observed I/C/W/O mix.
+
+    Reports pass each sampled prompt's priceable usage; the caller owns sample
+    eligibility, this applies the mix and the cheapest comparable base price.
+    """
+    mix = normalized_average_token_mix(tuple(records))
     sampled = mix[4] > 0
     sorting_mix = mix if sampled else _DEFAULT_SORT_MIX
     rows: list[ModelComparisonRow] = []
