@@ -100,6 +100,49 @@ def priced_token_mix(
     return replace(mix, costs=tuple(costs), priced_requests=priced)
 
 
+def priceable_request(model: ModelRef, tokens: TokenUsage, valuation: CategoryValuation) -> bool:
+    """Priced-sample eligibility of one physical request.
+
+    Requires real usage, complete I/C/W/O telemetry and resolvable reference
+    rates for the request's own model and tier. Missing prices or telemetry are
+    never treated as zero, and a zero-token request alone is not priced usage.
+    """
+    return (tokens.total > 0 and all(name in tokens.known_fields for name in MIX_FIELDS)
+            and valuation(model, tokens) is not None)
+
+
+def priced_sample_mix(
+    requests: Iterable[tuple[ModelRef, TokenUsage]], valuation: CategoryValuation, *, sample_size: int = 0,
+) -> TokenMix:
+    """Shares and category CCost over exactly the priceable requests.
+
+    Both derive from one request set, so the CCost is complete by construction.
+    Aggregate scopes that must represent all observed usage use priced_token_mix.
+    """
+    return priced_token_mix(((model, tokens) for model, tokens in requests
+                             if priceable_request(model, tokens, valuation)), valuation, sample_size=sample_size)
+
+
+@dataclass(frozen=True, slots=True)
+class PricedUsage:
+    """One prompt's priceable I/C/W/O volume for the Relative CCost comparison mix."""
+    input_tokens: int = 0
+    cache_read_tokens: int = 0
+    cache_write_tokens: int = 0
+    output_tokens: int = 0
+
+
+def priced_usage(entries: Iterable[TraceEntry], valuation: CategoryValuation) -> PricedUsage:
+    totals = [0, 0, 0, 0]
+    for entry in entries:
+        if priceable_request(entry.model, entry.tokens, valuation):
+            tokens = entry.tokens
+            for index, value in enumerate((tokens.input, tokens.cache_read, tokens.cache_write,
+                                           tokens.output + tokens.reasoning)):
+                totals[index] += value
+    return PricedUsage(*totals)
+
+
 def model_token_mixes(
     entries: Sequence[TraceEntry], prompt_of: Mapping[TraceEntry, Hashable],
     valuation: CategoryValuation, *, model_key: Callable[[ModelRef], str],

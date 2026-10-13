@@ -4,7 +4,9 @@ from __future__ import annotations
 from dataclasses import replace
 
 from src.analysis.models import RootAnalysisBundle
-from src.analysis.token_mix import MIX_FIELDS, CategoryValuation, TokenMix, priced_token_mix, token_mix
+from src.analysis.token_mix import (
+    MIX_FIELDS, CategoryValuation, TokenMix, priceable_request, priced_token_mix, token_mix,
+)
 from src.domain import ModelRef, SessionSnapshot, TokenUsage
 
 
@@ -17,7 +19,7 @@ class WatchTokenMix:
         self._stepped: set[tuple[str | None, str, str]] = set()
         # Initiating user prompt per observed request, for the prompt count.
         self._prompts: dict[tuple[tuple[str | None, str, str], str], tuple[str, str]] = {}
-        self._projection = TokenMix()
+        self._projection = self._total = TokenMix()
         self._valuation: CategoryValuation | None = None
         self._dirty = False
 
@@ -67,20 +69,33 @@ class WatchTokenMix:
                 self._dirty = True
 
     def project(self, valuation: CategoryValuation | None = None) -> TokenMix:
+        """Displayed Token Mix %: only this run's reference-priceable requests."""
         self._refresh(valuation)
         return self._projection
+
+    def project_total(self, valuation: CategoryValuation | None = None) -> TokenMix:
+        """Every observed run request, so Watch total CCost keeps its completeness."""
+        self._refresh(valuation)
+        return self._total
 
     def _refresh(self, valuation: CategoryValuation | None) -> None:
         # Countdown rendering must not rescan an ever-growing run's history.
         if not (self._dirty or valuation != self._valuation):
             return
 
-        items = tuple(item for requests in self._messages.values() for item in requests.values())
-        prompts = len({self._prompts[(key, request)] for key, requests in self._messages.items()
-                       for request in requests if (key, request) in self._prompts})
-        self._projection = (
-            priced_token_mix(((model, usage) for usage, model in items), valuation, sample_size=prompts)
-            if valuation is not None else token_mix((usage for usage, _model in items), sample_size=prompts)
-        )
+        observed = tuple((key, request, usage, model) for key, requests in self._messages.items()
+                         for request, (usage, model) in requests.items())
+        prompts = len({self._prompts[(key, request)] for key, request, _usage, _model in observed
+                       if (key, request) in self._prompts})
+        if valuation is None:
+            self._total = self._projection = token_mix((usage for *_ids, usage, _model in observed), sample_size=prompts)
+        else:
+            priced = tuple(item for item in observed if priceable_request(item[3], item[2], valuation))
+            priced_prompts = len({self._prompts[(key, request)] for key, request, _usage, _model in priced
+                                  if (key, request) in self._prompts})
+            self._total = priced_token_mix(((model, usage) for *_ids, usage, model in observed),
+                                           valuation, sample_size=prompts)
+            self._projection = priced_token_mix(((model, usage) for *_ids, usage, model in priced),
+                                                valuation, sample_size=priced_prompts)
         self._valuation = valuation
         self._dirty = False

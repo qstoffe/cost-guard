@@ -102,7 +102,7 @@ The domain separates:
 
 Equal numbers are not interchangeable. Analysis consumes capabilities/domain semantics, not version names.
 
-`TokenUsage.known_fields` preserves telemetry availability through normalization/cache; absent/null/malformed fields stay unknown. `analysis/token_mix.py` sums volume, folds reasoning into O, apportions 100% and hides shares for unknown denominators. Category CCost reconciles with `comparison_cost`; model rows use reference identity, unique prompts/all calls. `analysis/quota_pace.py` uses fixed-period remaining/reset and workdays, never session state.
+`TokenUsage.known_fields` preserves telemetry availability through normalization/cache; absent/null/malformed fields stay unknown. `analysis/token_mix.py` sums volume, folds reasoning into O, apportions 100% and hides shares for unknown denominators. Category CCost reconciles with `comparison_cost`; `priceable_request` is the one per-request sample rule (real usage, complete telemetry, resolvable reference tier rates) behind priced-only mixes and Relative CCost usage; model rows use reference identity, unique prompts/all calls. `analysis/quota_pace.py` uses fixed-period remaining/reset and workdays, never session state.
 
 `src/domain/accounts.py` owns source-aware `AccountRef`, flexible `QuotaComponent`, `BillingComponent` and `AccountSnapshot`. A request may carry an optional proven account reference. Current-login identity never fills historical request gaps. `src/domain/` must not import concrete source/account/pricing/cache/watch/presentation implementations.
 
@@ -140,7 +140,7 @@ Immutable projections cover dashboard/catalog, lists and detail/date modes. Dash
 
 `reports/sampling.py` owns comparison/token eligibility and cutoffs. `ReportService` keeps acquisition/cache/account work with focused `_build_*` mode methods; dashboards overlap account and availability I/O with analysis. `prompt_rows.py` projects prompt/compaction rows using one shared timeline/epoch scope; `prompts.py` owns range/order, coherent Watch deltas and block totals. No second analysis or worker implementation.
 
-Dashboard mix includes running/interrupted usage; Relative CCost keeps completed eligibility/count. Scans respect both cutoffs. `reports/token_mix_history.py` scans without a ledger, with fail-open filtering and shown-request totals. `presentation/definitions.py` owns definitions; `presentation/model_comparison.py` aligns fields before color. Normal tables have four columns; full-catalog tables add exact USD tiers/boundaries even under fallback. Presentation never recomputes valuation.
+Dashboard mix includes running/interrupted usage; Relative CCost keeps completed eligibility/count. Both samples admit only prompts with a priceable request (evaluated live against the current catalog, never cached) and use only those requests, so unpriceable history never fills a sample; scans respect both cutoffs. `reports/token_mix_history.py` scans without a ledger, with fail-open filtering and shown-request totals. `presentation/definitions.py` owns definitions; `presentation/model_comparison.py` aligns fields before color. Normal tables have four columns; full-catalog tables add exact USD tiers/boundaries even under fallback. Presentation never recomputes valuation.
 
 `presentation/model_supersession.py`/`AnsiStyler` own conservative displayed-row classification/hue fading, never pricing, sorting, selection, notices or geometry.
 
@@ -156,7 +156,7 @@ Disposable `cache/` uses generation-named SQLite, WAL, short transactions, 5s bu
 
 The coordinator owns lifecycle, cadence/rendering and provider refreshes over abstract source/report contracts; lower layers never import Watch. Watch shares `ReportService` analysis/cache/context, never a second billing implementation or recurring subprocess.
 
-`watch/token_mix.py` owns run-scoped `Watch total CCost`/`Token Mix %`, keyed by source/session/message/step. Completed pre-Watch requests are excluded. Updates replace usage; steps replace message fallback. Eviction/completion/removal/countdown/resync retain observations until exit; new coordinators start empty. No account queries or persisted ledger.
+`watch/token_mix.py` owns run-scoped `Watch total CCost` (all requests, partial-aware) and priced-only `Token Mix %`, keyed by source/session/message/step. Completed pre-Watch requests are excluded. Updates replace usage; steps replace message fallback. Eviction/completion/removal/countdown/resync retain observations until exit; new coordinators start empty. No account queries or persisted ledger.
 
 `WatchSessionSubtotal` sums selected rows' `PromptProjection.ccost` as Decimals, propagating unresolved provenance. Presentation formats `Σ`; native non-billable compactions contribute known zero. Amount/completeness enter change detection. Row subtotals need not partition run totals; no per-session run aggregate exists.
 

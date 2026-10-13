@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.43 — 2026-10-13
+
+- Normal-report Token Mix % and Relative CCost sample the latest 100 prompts with at least one reference-priceable request (real usage, complete I/C/W/O telemetry, resolvable rates for the request's own model and tier), skipping unpriceable prompts and backfilling from older history instead of filtering the latest 100. A prompt counts once; only its priceable requests feed shares, category CCost and the Relative CCost mix, so those CCost amounts no longer show `?`.
+- Watch Token Mix % shows only this run's priceable requests; `Watch total CCost`, prompt/session/date/account totals and `--token-mix` keep all usage and their partial-pricing `?`. Eligibility is evaluated against the current catalog, never cached; Relative CCost completed-prompt eligibility, ordering and threshold multipliers are otherwise unchanged.
+
 ## v80.42 — 2026-10-13
 
 - `Calls` tracks independently evidenced model requests. A zero-usage, tool-only OpenCode V2 record that directly continues a usage-bearing `tool-calls` response of the same prompt and model no longer counts as its own request when a shared provider response id, or without ids its absent model latency, proves it. The record stays in history, so tools, failures, outcomes and durations are unchanged.
@@ -23,17 +28,9 @@
 - Known Toolkit script contracts supplement native tool errors with bounded, schema-verified structured failures. Physical-call deduplication and cancellation handling prevent inflated totals; arbitrary output and nonzero exits alone remain neutral.
 - Activity rows fit terminal width independently of the fixed metric table: total/failures outrank breakdowns, whole skill IDs/indicators precede an accurate +N more fallback. Stable completed frames reuse observations without new source reads or changes to usage, billing or token accounting.
 
-## v80.38 — 2026-10-12
-
-- Missing/unreachable Desktop V2 service now has actionable startup guidance, not crash wording or legacy table details. Reports retry structured readiness failures within a short shared budget; healthy reads stay immediate and CLI wake remains one-time.
-- Watch recovers initial catalog/snapshot acquisition through its existing coordinator, discarding partial initialization before retry and deferring account work until source reads succeed. Established outages retain validated dashboards, source identity and quota cadence.
-- Source errors distinguish registration, transport, HTTP/auth, version/schema, invalid data and concurrent changes. Restarted registration invalidates old catalogs/pools; idempotent stale-socket retry stays bounded and retired SSE readers are cancelled.
-- Bounded source incident history retains sanitized phase/category/type/count/duration evidence for later Diagnostics, including after ZIP creation. External certificate-verification failures are distinct from other TLS failures; metadata cache fallback/backoff remains intact.
-- Startup/troubleshooting documentation separates local loopback HTTP from external HTTPS and treats VPN/security/proxy/certificate causes as hypotheses, without weakening protections. Diagnostics summaries separate connectivity, metadata degradation, validation and ZIP creation.
-
 ## Earlier v80 history
 
-- v80.37 removed dead/redundant code, derived causal trace inputs once per root pass (74 live roots 252→92 ms with identical records) and flattened analysis-cache serialization; Git delivery became tool-independent in isolated clones, and every PR to main now carries a sequential version bump with dated history and current docs.
+- v80.38 gave a missing/unreachable Desktop V2 service actionable startup guidance with bounded readiness retries, recovered Watch initialization through its coordinator, typed source errors (distinct certificate failures) and kept sanitized source incident history for Diagnostics. v80.37 removed dead/redundant code, derived causal trace inputs once per root pass (74 live roots 252→92 ms with identical records) and flattened analysis-cache serialization; Git delivery became tool-independent in isolated clones, and every PR to main now carries a sequential version bump with dated history and current docs.
 - v80.35–v80.36 added explicit native abort-cause labels, neutral tool-call endings and stable credit-first account ordering; Watch shows `[ABORTED by user]` only when a live V2 user interrupt matches authoritative interrupted history, keeping that actor evidence bounded and in memory.
 - v80.34 pooled V2 reads/fresh snapshot brackets, memoized model identity, overlapped report acquisition and bounded Watch discovery/startup/resync. Recorded live timings with v80.33-identical output: normal report ~2.1→0.65 s, date report 7.5→2.1 s, Watch startup ~6.2→0.65 s, resync 13→1.4 s. Diagnostics gained all-account evidence and privacy-safe Watch geometry; concurrent Full and shared fixtures retired 10 test-import edges. Verification/packaging policy remains in maintainer rules.
 - v80.32–v80.33 separated Watch account refresh, prompt projection/report orchestration and source normalization; shared catalog ancestry and bounded sampling; moved fixtures (67→43 test-import edges, 46 fewer test-import dependencies), enforced bounded routine/coupling debt without raising caps, standardized `Context:` warning explanations, and added code maps/inventory/layer guards. Source/cache/billing semantics stayed unchanged.

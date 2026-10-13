@@ -68,7 +68,7 @@ class ReportDefinitionTests(unittest.TestCase):
         ], groups[0])
         self.assertEqual([
             "Token Mix %: The I/C/W/O percentage split of your observed token usage.",
-            "             Your mix uses the latest 100 prompts with token data, totaling 137.1M tokens.",
+            "             Your mix uses the latest 100 priced prompts, totaling 137.1M tokens.",
             "             Input: 3% (123)   Cache: 82% (456)   Write: 1% (12)   Output: 14% (789)",
         ], groups[1])
         self.assertEqual([
@@ -102,7 +102,7 @@ class ReportDefinitionTests(unittest.TestCase):
         cells = "Input: 3% (123)   Cache: 82% (456)   Write: 1% (12)   Output: 14% (789)"
         self.assertEqual(["100", "137.1M", cells], re.findall(r"\x1b\[38;5;227m(.*?)\x1b\[0m", colored))
         self.assertIn(" " * 13 + f"\x1b[38;5;227m{cells}\x1b[0m\n", colored, "indent stays unstyled")
-        self.assertIn("the latest \x1b[38;5;227m100\x1b[0m prompts with token data, totaling "
+        self.assertIn("the latest \x1b[38;5;227m100\x1b[0m priced prompts, totaling "
                       "\x1b[38;5;227m137.1M\x1b[0m tokens.", colored)
         self.assertEqual(ANSI.sub("", colored), rendered(report()))
         # Wrapped narrow cells stay emphasized per line, never across the indent.
@@ -148,33 +148,34 @@ class ReportDefinitionTests(unittest.TestCase):
         one = replace(token_mix((TokenUsage(input=842_300),), sample_size=1), costs=(Decimal(1),) * 4,
                       priced_requests=1)
         text = rendered(report(one, sample=1))
-        self.assertIn("Your mix uses the latest 1 prompt with token data, totaling 842.3K tokens.", text)
+        self.assertIn("Your mix uses the latest 1 priced prompt, totaling 842.3K tokens.", text)
         self.assertIn("Applies Token Mix % from 1 completed prompt to each", text)
         twelve = replace(large_mix(37), totals=(700_000, 10_000_000, 0, 2_000_000))
-        self.assertIn("latest 37 prompts with token data, totaling 12.7M tokens.", rendered(report(twelve)))
+        self.assertIn("latest 37 priced prompts, totaling 12.7M tokens.", rendered(report(twelve)))
         empty = rendered(report(TokenMix(), sample=0))
         self.assertIn("Token Mix %: The I/C/W/O percentage split of your observed token usage.", empty)
-        self.assertIn("No prompts with token data are available yet.", empty)
-        self.assertIn("Relative CCost: No completed prompts with token data are available yet.", empty)
+        self.assertIn("No priced prompts are available yet.", empty)
+        self.assertIn("Relative CCost: No completed priced prompts are available yet.", empty)
         self.assertIn("Relative CCost stays blank", empty)
 
     def test_service_samples_keep_their_distinct_eligibility(self):
         service = compact.report_service(self, SyntheticMonthSource(2, 60, month_start_ms=compact.START))
         built = service.build(ReportRequest())
         roots = tuple(service._analyzed.values())
-        self.assertEqual(len(latest_token_prompts(roots)), built.token_mix.sample_size)
-        self.assertEqual(normalized_average_token_mix(latest_prompts(roots))[4],
+        priceable = service._priceable()
+        self.assertEqual(len(latest_token_prompts(roots, priceable)), built.token_mix.sample_size)
+        self.assertEqual(normalized_average_token_mix(service._relative_usage(latest_prompts(roots, priceable)))[4],
                          built.model_comparison_sample_size)
         self.assertEqual((100, 100), (built.token_mix.sample_size, built.model_comparison_sample_size))
         text = rendered(built)
-        self.assertIn("Your mix uses the latest 100 prompts with token data", text)
+        self.assertIn("Your mix uses the latest 100 priced prompts", text)
         self.assertIn("Relative CCost: Applies Token Mix % from 100 completed prompts", text)
         # Running/aborted prompts qualify only for the displayed mix, as before.
         root = roots[0]
         record = root.bundle.prompts[0]
         root.bundle = replace(root.bundle, prompts=(record, replace(record, prompt_id="running", in_progress=True),
                                                     replace(record, prompt_id="aborted", aborted=True)))
-        self.assertEqual(3, len(latest_token_prompts((root,))))
+        self.assertEqual(3, len(latest_token_prompts((root,), priceable)))
         self.assertEqual(1, service._model_comparison((root,), all_models=True)[1])
 
 

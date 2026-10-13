@@ -19,8 +19,8 @@ from src.analysis import (
     utc_month_start_ms,
 )
 from src.analysis.comparisons import model_comparison_rows, threshold_cost_multiplier
-from src.analysis.models import RootAnalysisBundle
-from src.analysis.token_mix import CategoryValuation, priced_token_mix
+from src.analysis.models import PromptRecord, RootAnalysisBundle, TraceEntry
+from src.analysis.token_mix import CategoryValuation, PricedUsage, priceable_request, priced_sample_mix, priced_usage
 from src.analysis.valuation import ComparisonCost, comparison_cost, unique_usage
 from src.cache import CacheRepository
 from src.numbers import ccost_amount
@@ -295,12 +295,23 @@ class ReportService:
             key=lambda item: (activity.get(item.session_id, item.updated_at_ms), item.session_id), reverse=True,
         )), activity
 
+    def _priceable(self) -> Callable[[TraceEntry], bool]:
+        """Shared per-request sample eligibility under the current reference catalog."""
+        valuation = self._load_comparison_catalog().reference_category_valuation
+        return lambda entry: priceable_request(entry.model, entry.tokens, valuation)
+
+    def _relative_usage(self, sample: Sequence[PromptRecord]) -> tuple[PricedUsage, ...]:
+        """Relative CCost usage per sampled prompt from its priceable requests only."""
+        valuation = self._load_comparison_catalog().reference_category_valuation
+        return tuple(priced_usage(unique_usage(prompt.entries), valuation) for prompt in sample)
+
     def _threshold_multiplier(self, model_id: str, threshold: int) -> Decimal | None:
         """Warning multiplier from the normal report's Relative CCost sample (refreshed every 15 min)."""
         if self._comparison_mix is None or self.now_ms - self._comparison_mix[1] >= 900_000:
             roots, activity = self._ordered_roots(tuple(self.source.list_sessions()))
-            sample = latest_prompts(recent_sample_roots(roots, activity, self._analyze))
-            self._comparison_mix = (normalized_average_token_mix(sample), self.now_ms)
+            priceable = self._priceable()
+            sample = latest_prompts(recent_sample_roots(roots, activity, self._analyze, priceable), priceable)
+            self._comparison_mix = (normalized_average_token_mix(self._relative_usage(sample)), self.now_ms)
         return threshold_cost_multiplier(self._load_comparison_catalog(), model_id, threshold, self._comparison_mix[0])
 
     def _model_comparison(
@@ -315,9 +326,9 @@ class ReportService:
                 catalog, availability_source=self._availability or self.model_availability_source,
             )
         promo_markers, promo_notes = active_promotion_notes(comparison_catalog, self.now_ms)
-        candidates = latest_prompts(roots)
+        usage = self._relative_usage(latest_prompts(roots, self._priceable()))
         rows: list[ModelComparisonProjection] = []
-        for row in model_comparison_rows(candidates, comparison_catalog):
+        for row in model_comparison_rows(usage, comparison_catalog):
             marker = promo_markers.get(row.model_name)
             price_text = price_summary(comparison_catalog, row.model_name)
             rows.append(ModelComparisonProjection(
@@ -325,7 +336,7 @@ class ReportService:
                 marker is not None, model_is_recent(row.release_date, now_ms=self.now_ms), marker,
                 row.relative_levels,
             ))
-        self._comparison_mix = (normalized_average_token_mix(candidates), self.now_ms)
+        self._comparison_mix = (normalized_average_token_mix(usage), self.now_ms)
         sample_size = self._comparison_mix[0][4]
         return tuple(rows), sample_size, promo_notes, recent_model_notice(comparison_catalog, now_ms=self.now_ms), warnings
 
@@ -512,7 +523,8 @@ class ReportService:
 
     def _build_dashboard(self, request: ReportRequest, catalog: PricingCatalog, roots: Sequence[NormalizedSession],
                          root_activity: Mapping[str, int]) -> ReportProjection:
-        analyzed = recent_sample_roots(roots, root_activity, self._analyze)
+        priceable = self._priceable()
+        analyzed = recent_sample_roots(roots, root_activity, self._analyze, priceable)
         self.progress("Comparing model prices")
         comparisons, sample, promo_notes, recent, availability_warnings = self._model_comparison(
             analyzed, all_models=request.kind is ReportKind.ALL_MODELS,
@@ -520,11 +532,11 @@ class ReportService:
         # Dashboard quotas use provider observations only. A bounded Relative CCost
         # sample cannot establish complete day/month spend or account attribution.
         quota_projection = self._accounts_quotas(self._quotas()) if request.kind is ReportKind.NORMAL else None
-        sample_prompts = latest_prompts(analyzed)
+        sample_prompts = latest_prompts(analyzed, priceable)
         entries = unique_usage(entry for prompt in sample_prompts for entry in prompt.entries)
         reference = self._load_comparison_catalog()
         coverage = comparison_cost(entries, reference.reference_valuation)
-        mix_prompts = latest_token_prompts(analyzed)
+        mix_prompts = latest_token_prompts(analyzed, priceable)
         # Full bounded samples cover activity since their oldest prompt; a short
         # sample already spans all available history.
         sample_cutoff = (min(sample_prompts[-1].prompt_time_ms, mix_prompts[-1].prompt_time_ms)
@@ -541,7 +553,7 @@ class ReportService:
             accounts_quotas=quota_projection,
             notes=migration_gap_notes(self.selection.migration_gap, start_ms=sample_cutoff),
             recent_model_notice=recent,
-            token_mix=priced_token_mix(((entry.model, entry.tokens) for entry in unique_usage(
+            token_mix=priced_sample_mix(((entry.model, entry.tokens) for entry in unique_usage(
                 entry for prompt in mix_prompts for entry in prompt.entries)),
                 reference.reference_category_valuation, sample_size=len(mix_prompts)),
             pricing_diagnostics={

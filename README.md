@@ -169,11 +169,11 @@ Reports show `OpenCode not found` only when selection fails and no PATH executab
 
 ## Normal report
 
-`python cost-guard.py` shows CCost/Token Mix %/Relative CCost definitions, models/notices and `Accounts Overview`. Token Mix covers up to 100 latest visible prompts with telemetry (including running/interrupted/child work): count, volume, shares and CCost. No monthly usage, prompt detail or graph is built.
+`python cost-guard.py` shows CCost/Token Mix %/Relative CCost definitions, models/notices and `Accounts Overview`. Token Mix covers the 100 latest visible priced prompts (including running/interrupted/child work), skipping unpriceable ones into older history: count, volume, shares and CCost from priced requests only, without `?`. No monthly usage, prompt detail or graph is built.
 
 ### Model comparison
 
-**Relative CCost** applies the latest-100 completed-prompt I/C/W/O mix to every tier against the cheapest comparable **base** (`1.0x`). Illustrative `8.0x → 16.0x (>200K)` means an increase above 200000 input tokens; `≥` is inclusive. Running/aborted prompts are excluded. Without samples, values stay blank; hidden 2/96/1/1 drives sorting only.
+**Relative CCost** applies the priced-request I/C/W/O mix of the latest 100 priced completed prompts to every tier against the cheapest comparable **base** (`1.0x`). Illustrative `8.0x → 16.0x (>200K)` means an increase above 200000 input tokens; `≥` is inclusive. Running/aborted prompts are excluded. Without samples, values stay blank; hidden 2/96/1/1 drives sorting only.
 
 Availability uses settled V2 `/api/model` IDs (V1: `opencode models`), exact/verified aliases and explicit variant rates. Ambiguous prices stay unknown; failed lookups warn/show the catalog. Unpriced models have no row.
 
@@ -266,7 +266,7 @@ Watch's first view never waits for quotas. Accounts arrive individually on the m
 
 Session `Σ` sums its displayed prompt/event CCost before rounding, preserving `?`/`N/A`. Native non-billable compactions contribute zero with blank row cost. Rounded row strings need not sum to the subtotal.
 
-`Token Mix % · N prompts` shows run-scoped unique prompts, shares and CCost without volume/bar. Startup-running requests, between-poll completions, child work and compactions qualify; completed pre-Watch history does not. `Watch total CCost` sums qualifying usage (zero when none), unchanged by eviction/disappearance, resync or moves. It may differ from `Σ`: mid-prompt startup can show `Σ 78`, row `78`, run total `59`; eviction changes only row subtotals.
+`Token Mix % · N prompts` shows run-scoped unique prompts, shares and CCost of priced requests only, without volume/bar. Startup-running requests, between-poll completions, child work and compactions qualify; completed pre-Watch history does not. `Watch total CCost` sums all qualifying usage (zero when none; `?` when partly unpriced), unchanged by eviction/disappearance, resync or moves. It may differ from `Σ`: mid-prompt startup can show `Σ 78`, row `78`, run total `59`; eviction changes only row subtotals.
 
 Any account count uses compact rows when they fit, then split rows, otherwise individual wrapped blocks. Resets use `Reset@...`; fixed quotas with Remaining omit duplicate compact reset text, retained in reports/narrow fallback:
 
@@ -346,7 +346,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.42:** `Calls` counts independently evidenced model requests; zero-usage OpenCode V2 tool-continuation records of one response no longer inflate it, while CCost, tokens, tools, outcomes and durations are unchanged. Otherwise as v80.40/v80.41 (live-only Watch activity, verified built-in/custom skill categories, custom-only Skills, unified activity color). v80.0 is the Python 3.11+ public baseline. Restart/sleep need separate live evidence; Claude quotas remain experimental.
+**v80.43:** normal-report Token Mix % and Relative CCost use the latest 100 priced prompts (backfilling past unpriceable history) and only their reference-priced requests, so sample CCost needs no `?`; Watch Token Mix % likewise, while aggregate totals and `--token-mix` keep full scope. v80.42 counts only independently evidenced `Calls`. Otherwise as v80.40/v80.41 (live-only Watch activity, verified built-in/custom skill categories, custom-only Skills, unified activity color). v80.0 is the Python 3.11+ public baseline. Restart/sleep need separate live evidence; Claude quotas remain experimental.
 
 Product versions identify code state; they do not imply a Git tag, release ZIP or GitHub Release. Packaged GitHub Releases are currently paused. Recommending them at a slower/stable cadence requires an explicit policy change; version numbers never trigger it automatically.
 

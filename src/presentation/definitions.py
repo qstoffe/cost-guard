@@ -62,9 +62,9 @@ def ccost_sentences() -> tuple[str, ...]:
 def token_mix_sentences(mix: TokenMix) -> tuple[Sentence, ...]:
     definition = "The I/C/W/O percentage split of your observed token usage."
     if not mix.request_count:
-        return definition, "No prompts with token data are available yet."
+        return definition, "No priced prompts are available yet."
     count = mix.sample_size
-    sample = f"Your mix uses the latest {count} {'prompt' if count == 1 else 'prompts'} with token data"
+    sample = f"Your mix uses the latest {count} priced {'prompt' if count == 1 else 'prompts'}"
     total = mix.total_tokens
     sample += f", totaling {compact_tokens(total)} tokens." if total is not None else "."
     return definition, ValueProse(sample), mix_cells(mix)
@@ -72,7 +72,7 @@ def token_mix_sentences(mix: TokenMix) -> tuple[Sentence, ...]:
 
 def rel_ccost_sentences(sample_size: int) -> tuple[str, ...]:
     if not sample_size:
-        return ("No completed prompts with token data are available yet.",
+        return ("No completed priced prompts are available yet.",
                  "Relative CCost stays blank; a hidden 2/96/1/1 mix orders published prices.")
     noun = "prompt" if sample_size == 1 else "prompts"
     return (f"Applies Token Mix % from {sample_size} completed {noun} to each model's CCost/M rates.",

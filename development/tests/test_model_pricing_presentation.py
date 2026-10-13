@@ -16,6 +16,7 @@ from development.tests.test_step6_pricing_accounts import pricing_markdown
 from development.fixtures.watch_runtime import MutableSource, make_service
 from src.analysis.comparisons import model_comparison_rows
 from src.config import load_configuration
+from src.domain import TokenUsage
 from src.presentation import ReportRenderer, WatchRenderer
 from src.pricing.catalog import PricingCatalog
 from src.pricing.github_copilot import _annotate_promotions, _preserve_known_promotions, parse_pricing_markdown
@@ -61,15 +62,17 @@ class PricingPresentationTests(unittest.TestCase):
             self.assertNotIn("~RelCost", compact.rendered(report))
         root = next(iter(service._analyzed.values()))
         record = root.bundle.prompts[0]
-        zero = replace(record, prompt_id="zero", input_tokens=0, cache_read_tokens=0,
-                       cache_write_tokens=0, output_tokens=0)
+        zero = replace(record, prompt_id="zero", input_tokens=0, cache_read_tokens=0, cache_write_tokens=0,
+                       output_tokens=0, entries=tuple(replace(e, tokens=TokenUsage()) for e in record.entries))
         root.bundle = replace(root.bundle, prompts=(record, zero,
             replace(record, prompt_id="running", in_progress=True),
             replace(record, prompt_id="aborted", aborted=True)))
         rows, sample, *_ = service._model_comparison((root,), all_models=True)
         self.assertEqual(1, sample)
-        self.assertEqual(4, len(latest_token_prompts((root,))))
-        expected = model_comparison_rows(latest_prompts((root,)), service._load_catalog())
+        priceable = service._priceable()
+        self.assertEqual(3, len(latest_token_prompts((root,), priceable)), "zero-token usage is not priced usage")
+        expected = model_comparison_rows(service._relative_usage(latest_prompts((root,), priceable)),
+                                         service._load_catalog())
         self.assertEqual([r.relative_to_lowest for r in expected], [r.relative_cost for r in rows])
 
     def test_marker_regions_and_numeric_alignment_do_not_pollute_prices(self):

@@ -96,6 +96,7 @@ class WatchProjection:
     session_warnings: Mapping[str, str] | None = None
     recent_model_notice: str = ""
     quota_recovering_accounts: tuple[tuple[str, str, str], ...] = ()
-    token_mix: TokenMix = field(default_factory=TokenMix)
+    token_mix: TokenMix = field(default_factory=TokenMix)  # priceable requests only
+    run_total: TokenMix = field(default_factory=TokenMix)  # every observed run request
     recent_promotion_notices: tuple[str, ...] = ()
     session_subtotals: Mapping[str, WatchSessionSubtotal] = field(default_factory=dict)

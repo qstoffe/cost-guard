@@ -94,7 +94,7 @@ class CompactReportTests(unittest.TestCase):
         service = self.service(source)
         report = service.build(ReportRequest())
         self.assertEqual(5, source.load_count)
-        sample = latest_prompts(tuple(service._analyzed.values()))
+        sample = latest_prompts(tuple(service._analyzed.values()), service._priceable())
         self.assertEqual(100, len(sample))
         self.assertLess(sample[-1].prompt_time_ms, START + 10 * 60_000)  # September
         self.assertGreaterEqual(sample[0].prompt_time_ms, START + 10 * 60_000)  # October
@@ -116,7 +116,7 @@ class CompactReportTests(unittest.TestCase):
         source.snapshots[root.session_id] = replace(old, root=root, sessions=(root,))
         service = self.service(source)
         service.build(ReportRequest())
-        sample = latest_prompts(tuple(service._analyzed.values()))
+        sample = latest_prompts(tuple(service._analyzed.values()), service._priceable())
         self.assertEqual({f"root-{n:04d}" for n in range(7, 12)}, {p.session_id for p in sample})
         self.assertEqual(6, source.load_count)
 
@@ -124,8 +124,9 @@ class CompactReportTests(unittest.TestCase):
         service = self.service(FakeSource(make_snapshot(running=True)), now_ms=2_200)
         service.build(ReportRequest())
         roots = tuple(service._analyzed.values())
+        priceable = service._priceable()
         expected = tuple(p for item in roots for p in item.bundle.prompts if not p.aborted and not p.in_progress)
-        self.assertEqual(set(p.prompt_id for p in expected), set(p.prompt_id for p in latest_prompts(roots)))
+        self.assertEqual(set(p.prompt_id for p in expected), set(p.prompt_id for p in latest_prompts(roots, priceable)))
         self.assertLess(len(expected), 100)
         self.assertTrue(any(p.in_progress for item in roots for p in item.bundle.prompts))
         record = expected[0]
@@ -134,7 +135,7 @@ class CompactReportTests(unittest.TestCase):
             replace(record, prompt_id="running", in_progress=True),
             replace(record, prompt_id="completed", completed_successfully=True),
         ))
-        self.assertEqual(["completed"], [p.prompt_id for p in latest_prompts(roots)])
+        self.assertEqual(["completed"], [p.prompt_id for p in latest_prompts(roots, priceable)])
 
     def test_empty_history_has_catalog_without_relcost(self):
         source = SyntheticMonthSource(0, 0, month_start_ms=START)
