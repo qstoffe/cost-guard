@@ -34,7 +34,7 @@ from src.sources.selection import SourceSelection
 from .semantics import (
     active_promotion_notes,
     model_is_recent,
-    recent_model_notice,
+    recent_model_notice_details,
 )
 
 from .model_comparison import AvailabilityPrefetch, price_summary, selectable_catalog
@@ -316,7 +316,7 @@ class ReportService:
 
     def _model_comparison(
         self, roots: Sequence[AnalyzedRoot], *, all_models: bool = False,
-    ) -> tuple[tuple[ModelComparisonProjection, ...], int, tuple[str, ...], str, tuple[str, ...]]:
+    ) -> tuple[tuple[ModelComparisonProjection, ...], int, tuple[str, ...], str, tuple[tuple[int, int], ...], tuple[str, ...]]:
         catalog = self._load_catalog()
         if all_models:
             comparison_catalog, warnings = catalog, ()
@@ -338,7 +338,10 @@ class ReportService:
             ))
         self._comparison_mix = (normalized_average_token_mix(usage), self.now_ms)
         sample_size = self._comparison_mix[0][4]
-        return tuple(rows), sample_size, promo_notes, recent_model_notice(comparison_catalog, now_ms=self.now_ms), warnings
+        notice, highlight_spans = recent_model_notice_details(
+            comparison_catalog, now_ms=self.now_ms, cache_repository=self.cache_repository,
+        )
+        return tuple(rows), sample_size, promo_notes, notice, highlight_spans, warnings
 
     def _accounts_quotas(
         self,
@@ -526,7 +529,7 @@ class ReportService:
         priceable = self._priceable()
         analyzed = recent_sample_roots(roots, root_activity, self._analyze, priceable)
         self.progress("Comparing model prices")
-        comparisons, sample, promo_notes, recent, availability_warnings = self._model_comparison(
+        comparisons, sample, promo_notes, recent, recent_highlight_spans, availability_warnings = self._model_comparison(
             analyzed, all_models=request.kind is ReportKind.ALL_MODELS,
         )
         # Dashboard quotas use provider observations only. A bounded Relative CCost
@@ -553,6 +556,7 @@ class ReportService:
             accounts_quotas=quota_projection,
             notes=migration_gap_notes(self.selection.migration_gap, start_ms=sample_cutoff),
             recent_model_notice=recent,
+            recent_model_notice_highlight_spans=recent_highlight_spans,
             token_mix=priced_sample_mix(((entry.model, entry.tokens) for entry in unique_usage(
                 entry for prompt in mix_prompts for entry in prompt.entries)),
                 reference.reference_category_valuation, sample_size=len(mix_prompts)),

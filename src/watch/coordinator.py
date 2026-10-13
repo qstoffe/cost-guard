@@ -236,12 +236,7 @@ class WatchCoordinator:
 
     @staticmethod
     def _visible_signature(projection: WatchProjection) -> tuple[object, ...]:
-        """Stable dashboard content excluding the overwrite-only status/countdown.
-
-        A Watch poll can change transient presentation state without a source
-        revision (notably the 30-second recent-completion marker and provider
-        quota refresh).  Those changes still require a full dashboard repaint.
-        """
+        """Dashboard content excluding status; expired markers, quotas and model highlights repaint live."""
         rows = tuple(
             (
                 row.session_id, row.prompt.event_id, row.marker, row.prompt.in_progress,
@@ -296,6 +291,7 @@ class WatchCoordinator:
         if not status:
             delay = int(math.ceil(self._wait_delay_seconds(active)))
             status = self._steady_status(active, delay, rows)
+        recent_model_notice, recent_model_highlight_spans = self.model_discovery.notice_details(now_ms)
         projection = WatchProjection(
             title=(f"Cost Guard Watch - {self.session_id}" if self.session_id else "Cost Guard Watch"),
             source_label=self.selection.selected.upper(),
@@ -309,7 +305,8 @@ class WatchCoordinator:
             status_active=status_active,
             now_ms=now_ms,
             session_warnings=session_warnings,
-            recent_model_notice=self.model_discovery.notice(now_ms),
+            recent_model_notice=recent_model_notice,
+            recent_model_notice_highlight_spans=recent_model_highlight_spans,
             recent_promotion_notices=self.report_service.recent_promotion_notice_texts(),
             token_mix=self.token_mix.project(valuation := self._token_valuation()),
             run_total=self.token_mix.project_total(valuation),

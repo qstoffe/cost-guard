@@ -328,7 +328,8 @@ class WatchRenderer:
             self._write(self.styler.apply("WARNING: " + warning, "costQuotaWarning"))
         width = self.terminal_width if self.terminal_width is not None else terminal_content_width(self.stream)
         if projection.recent_model_notice:
-            for line in pricing_notice_lines(projection.recent_model_notice, width, self.styler, "modelComparisonNew"):
+            for line in pricing_notice_lines(projection.recent_model_notice, width, self.styler, "modelComparisonNew",
+                                          highlight_spans=projection.recent_model_notice_highlight_spans):
                 self._write(line)
         for notice in projection.recent_promotion_notices:
             for line in pricing_notice_lines(notice, width, self.styler, "modelComparisonPromotion"):

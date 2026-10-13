@@ -100,7 +100,7 @@ class Step9ParityTests(unittest.TestCase):
         ))
         service, _ = self._service(pricing=provider, now_ms=NOW_MS)
         report = service.build(ReportRequest())
-        self.assertIn("✦ New Models: GPT Test", report.recent_model_notice)
+        self.assertIn("✦ New Models: ✦ GPT Test", report.recent_model_notice)
         self.assertTrue(next(row for row in report.model_comparison if row.model == "GPT Test").recent)
 
     def test_native_quota_does_not_manufacture_usage_or_local_budget(self):

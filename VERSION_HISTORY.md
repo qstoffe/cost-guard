@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.45 — 2026-10-13
+
+- Eligible New Models names receive a bold lime ✦ highlight for 12 hours from one atomic UTC first-sighting timestamp per provider-qualified model ID, shared by Watch and Report. Watch removes the emphasis on a live status wake; the existing seven-day visibility rules are unchanged.
+
 ## v80.44 — 2026-10-13
 
 - Watch tool-call and verified custom Skills rows remain attached to the latest prompt while it runs and through the same terminal marker used by Watch: they disappear with that marker or when a newer prompt supersedes them in the session. Other sessions remain independent.
@@ -19,12 +23,6 @@
 
 - Behavior-neutral maintenance: shared report-service, availability/rendering, quota-rendering, account and config-package test setup now lives in responsibility-owned fixtures instead of being borrowed from other test modules, retiring 15 of 33 bounded test-import debt edges. Stale unused imports were removed.
 - Recorded audit evidence with no runtime change: 80 live roots analyze in 54 ms (worst root 9.7 ms) and Watch tool observation remains bounded to the latest running prompt. Per-prompt causal scans only become significant on synthetic roots far larger than observed live sessions.
-
-## v80.40 — 2026-10-12
-
-- Watch shows tool-call, Skills and running-status rows only under currently running prompts; the first terminal update removes them while the regular prompt metrics remain unchanged, including after refresh or rehydration.
-- Skill calls use physical-call counts and verified V2 registry paths for `builtin skill` versus `custom skill`; unknown origins remain `skill`. The Skills row lists only distinct successfully loaded custom skills, with existing verified failure attribution.
-- All normal activity text and prefixes use `watchToolActivity`; verified failures remain red. Width-adaptive totals, failure priority, accurate aggregation and accounting are preserved.
 
 ## Earlier v80 history
 

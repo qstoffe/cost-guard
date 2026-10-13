@@ -1,14 +1,15 @@
-"""Small provider-neutral report semantics shared by projections and presentation.
+"""Provider-neutral report semantics shared by projections and presentation.
 
-Keep source/provider payload knowledge out of this module.  These helpers encode
-v77-visible report decisions that are derived only from canonical analysis and
-pricing metadata.
+Keep source/provider payload knowledge out; model notices combine catalog dates
+with the shared cache-backed first-sighting timestamp.
 """
 from __future__ import annotations
 
 from decimal import Decimal
 from datetime import date, datetime, timedelta, timezone
+import sqlite3
 
+from src.cache.repository import CacheRepository
 from src.analysis.models import PromptRecord
 from src.pricing.catalog import PricingCatalog, canonical_model_name
 from src.pricing.promotions import model_promotion
@@ -55,9 +56,57 @@ def model_is_recent(release_date: str | None, *, now_ms: int) -> bool:
     return 0 <= age < 7
 
 
-def recent_model_notice(catalog: PricingCatalog, *, now_ms: int) -> str:
+FIRST_SIGHTING_HIGHLIGHT_MS = 12 * 60 * 60 * 1000
+
+
+def provider_qualified_model_id(model) -> str:
+    """Return a stable lower-case provider/model key for shared persistence."""
+    provider = str(getattr(model.model, "provider", "") or "").strip().casefold().strip("/")
+    model_id = str(getattr(model.model, "model", "") or "").strip().casefold()
+    if not provider or not model_id:
+        return ""
+    return model_id if model_id.startswith(provider + "/") else f"{provider}/{model_id}"
+
+
+def _utc_timestamp(now_ms: int) -> str:
+    seconds, milliseconds = divmod(int(now_ms), 1000)
+    value = datetime.fromtimestamp(seconds, tz=timezone.utc).replace(microsecond=milliseconds * 1000)
+    return value.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+def _timestamp_ms(value: str) -> int | None:
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except (AttributeError, ValueError):
+        return None
+    if parsed.tzinfo is None:
+        return None
+    delta = parsed.astimezone(timezone.utc) - datetime(1970, 1, 1, tzinfo=timezone.utc)
+    return (delta.days * 86_400 + delta.seconds) * 1000 + delta.microseconds // 1000
+
+
+def model_first_sighting_ms(model, repository: CacheRepository | None, now_ms: int) -> int | None:
+    """Atomically create or reuse the model's shared UTC first-sighting timestamp."""
+    model_id = provider_qualified_model_id(model)
+    if repository is None or not model_id:
+        return None
+    try:
+        value = repository.get_or_create_model_first_seen_at(model_id, _utc_timestamp(now_ms))
+    except (OSError, ValueError, sqlite3.Error):
+        return None
+    return _timestamp_ms(value)
+
+
+def first_sighting_is_highlighted(first_seen_ms: int | None, now_ms: int) -> bool:
+    return first_seen_ms is not None and int(now_ms) < first_seen_ms + FIRST_SIGHTING_HIGHLIGHT_MS
+
+
+def recent_model_notice_details(
+    catalog: PricingCatalog, *, now_ms: int, cache_repository: CacheRepository | None = None,
+) -> tuple[str, tuple[tuple[int, int], ...]]:
+    """Format the existing seven-day notice and identify only first-sighting name spans."""
     seen: set[tuple[str, str]] = set()
-    recent: list[tuple[str, str]] = []
+    recent: list[tuple[str, str, bool]] = []
     for model in catalog.models:
         released = str(model.metadata.get("release_date") or "")
         if not model_is_recent(released, now_ms=now_ms):
@@ -65,18 +114,36 @@ def recent_model_notice(catalog: PricingCatalog, *, now_ms: int) -> str:
         name = (model.model.display_name or model.model.model or "").strip()
         if not name:
             continue
-        key = (name.lower(), released)
+        first_seen = model_first_sighting_ms(model, cache_repository, now_ms)
+        key = (name.casefold(), released)
         if key in seen:
             continue
         seen.add(key)
-        recent.append((name, released))
+        recent.append((name, released, first_sighting_is_highlighted(first_seen, now_ms)))
     if not recent:
-        return ""
+        return "", ()
     recent.sort(key=lambda item: (item[1], item[0].lower()))
-    dates = sorted({released for _, released in recent})
+    dates = sorted({released for _, released, _ in recent})
+    text = "\u2726 New Models: "
+    highlighted_spans: list[tuple[int, int]] = []
+    for index, (name, released, highlighted) in enumerate(recent):
+        if index:
+            text += ", "
+        start = len(text)
+        text += f"\u2726 {name}" if highlighted else name
+        if highlighted:
+            highlighted_spans.append((start, len(text)))
+        if len(dates) != 1:
+            text += f" ({released})"
     if len(dates) == 1:
-        return f"✦ New Models: {', '.join(name for name, _ in recent)} · released {dates[0]}"
-    return "✦ New Models: " + ", ".join(f"{name} ({released})" for name, released in recent)
+        text += f" \u00b7 released {dates[0]}"
+    return text, tuple(highlighted_spans)
+
+
+def recent_model_notice(
+    catalog: PricingCatalog, *, now_ms: int, cache_repository: CacheRepository | None = None,
+) -> str:
+    return recent_model_notice_details(catalog, now_ms=now_ms, cache_repository=cache_repository)[0]
 
 
 def active_promotion_notes(

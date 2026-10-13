@@ -192,3 +192,4 @@ class ReportProjection:
     pricing_diagnostics: Mapping[str, object] = field(default_factory=dict)
     token_mix: TokenMix = field(default_factory=TokenMix)
     model_token_mix: tuple[ModelTokenMixProjection, ...] = ()
+    recent_model_notice_highlight_spans: tuple[tuple[int, int], ...] = ()

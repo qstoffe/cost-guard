@@ -108,13 +108,13 @@ class AnsiStyler:
         self.enabled = bool(enabled)
 
     @staticmethod
-    def _sequence(style: object, *, faded: bool = False) -> str:
-        if not isinstance(style, Mapping):
+    def _sequence(style: object, *, faded: bool = False, bold: bool = False) -> str:
+        if not isinstance(style, Mapping) and not bold:
             return ""
-        fg = style.get("foreground")
-        bg = style.get("background")
-        ansi = style.get("ansi256")
-        codes: list[str] = []
+        fg = style.get("foreground") if isinstance(style, Mapping) else None
+        bg = style.get("background") if isinstance(style, Mapping) else None
+        ansi = style.get("ansi256") if isinstance(style, Mapping) else None
+        codes: list[str] = ["1"] if bold else []
         if isinstance(ansi, int) and (bg is None or faded):
             codes.append(f"38;5;{ansi}")
         elif isinstance(fg, str) and fg in _CONSOLE_FG:
@@ -123,11 +123,13 @@ class AnsiStyler:
             codes.append(str(_CONSOLE_BG[bg]))
         return f"\x1b[{';'.join(codes)}m" if codes else ""
 
-    def apply(self, text: str, role: str | None = None, *, faded: bool = False) -> str:
-        if not self.enabled or (not role and not faded):
+    def apply(self, text: str, role: str | None = None, *, faded: bool = False, bold: bool = False) -> str:
+        if not self.enabled or (not role and not faded and not bold):
             return text
         style = self.colors.get(role) if role else None
-        sequence = self._sequence(faded_style(style, light=self.light_theme) if faded else style, faded=faded)
+        sequence = self._sequence(
+            faded_style(style, light=self.light_theme) if faded else style, faded=faded, bold=bold,
+        )
         return f"{sequence}{text}\x1b[0m" if sequence else text
 
 

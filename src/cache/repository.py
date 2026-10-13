@@ -1,4 +1,4 @@
-"""Small reconstructible JSON repository atop the Cost Guard cache DB."""
+"""Reconstructible cache state and atomic model sightings atop Cost Guard SQLite."""
 from __future__ import annotations
 
 import json
@@ -58,3 +58,20 @@ class CacheRepository:
         except (json.JSONDecodeError, TypeError):
             return None
         return CacheEntry(namespace, key, payload, row[1], row[2])
+
+    def get_or_create_model_first_seen_at(self, model_id: str, first_seen_at: str) -> str:
+        """Atomically keep the first UTC sighting for one provider-qualified model ID."""
+        if not model_id:
+            raise ValueError("model_id must not be empty")
+        with self.database.connect() as connection:
+            connection.execute(
+                """INSERT OR IGNORE INTO model_first_sightings(model_id, first_seen_at)
+                   VALUES(?, ?)""",
+                (model_id, first_seen_at),
+            )
+            row = connection.execute(
+                "SELECT first_seen_at FROM model_first_sightings WHERE model_id=?", (model_id,)
+            ).fetchone()
+        if row is None:
+            raise RuntimeError("first-sighting insert was not readable")
+        return str(row[0])

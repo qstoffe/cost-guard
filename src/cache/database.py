@@ -51,6 +51,10 @@ class CacheDatabase:
                     updated_at_utc TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     PRIMARY KEY (namespace, cache_key)
                 );
+                CREATE TABLE IF NOT EXISTS model_first_sightings (
+                    model_id TEXT PRIMARY KEY,
+                    first_seen_at TEXT NOT NULL
+                );
                 """
             )
             connection.execute(

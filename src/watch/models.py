@@ -100,3 +100,4 @@ class WatchProjection:
     run_total: TokenMix = field(default_factory=TokenMix)  # every observed run request
     recent_promotion_notices: tuple[str, ...] = ()
     session_subtotals: Mapping[str, WatchSessionSubtotal] = field(default_factory=dict)
+    recent_model_notice_highlight_spans: tuple[tuple[int, int], ...] = ()

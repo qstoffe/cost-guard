@@ -26,11 +26,15 @@ For example, `8.0x → 16.0x (>200K)` (illustrative) means eight times the refer
 
 Both modes use one deterministic sorter: descending full-precision base price; for exact ties, descending next-tier price then ascending actual price-increase boundary, repeating for later tiers; alphabetical name last. A missing extra tier means unchanged price, an unknown rate stays unknown, and equal-price tiers introduce no artificial boundary ordering. Multipliers show exactly one decimal; only presentation rounds.
 
-Without eligible token data, Relative CCost stays blank and the existing hidden synthetic 2/96/1/1 mix drives the same sorter. It is never reported as observed Token Mix %. Completed-prompt eligibility, availability filtering in normal reports, full-catalog selection in `--all-models`, promotions, release dates and New Models notices remain unchanged.
+Without eligible token data, Relative CCost stays blank and the existing hidden synthetic 2/96/1/1 mix drives the same sorter. It is never reported as observed Token Mix %. Completed-prompt eligibility, availability filtering in normal reports, full-catalog selection in `--all-models`, promotions, release dates and New Models seven-day eligibility remain unchanged.
+
+### New Models first-sighting highlight
+
+An eligible model name receives bold lime text and a ✦ prefix while `now < first_seen_at + 12 hours`. Report and Watch share one atomic UTC timestamp keyed by the provider-qualified model ID in the Cost Guard SQLite cache; subsequent reports, catalog refreshes and restarts reuse it. Models already eligible when this is first enabled get their first record on their first eligible display. The highlight expires on Watch's live status wake without removing the model. Existing release-date eligibility (and Watch's existing undated-discovery visibility) still controls the seven-day list; expiry never changes release dates, metadata or ordering.
 
 Recognized stable GPT/Claude/Gemini/Grok versions are faded when a numerically newer version of the same manufacturer, family and meaningful variant appears in the current table. Named tiers/families are matched generically, so GPT-6 Luna fades GPT-5.6 Luna and Claude Fable 5.1 fades Claude Fable 5, while GPT-5.6 Terra stays normal without a newer Terra. For xAI's standard Grok names, showing Grok 4.7 fades Grok 4.5 and 4.6, not 4.7. This means only **superseded in this comparison**, not officially deprecated or better. Unknown, preview, experimental and fast-mode names remain untouched. Availability-filtered normal reports and full-catalog reports can intentionally classify the same model differently.
 
-The presentation modifier attenuates each cell's original color independently (including gold promotions and green recent-release segments), adapting to the built-in dark/light themes and resolved custom colors. Borders/headers are unchanged. No rows, rates, multipliers, token mix, ordering, promotion/New Models semantics or CCost are changed; plain output is byte-for-byte equivalent in information and geometry.
+The presentation modifier attenuates each cell's original color independently (including gold promotions and green recent-release segments), adapting to the built-in dark/light themes and resolved custom colors. Borders/headers are unchanged. No model-comparison table rows, rates, multipliers, token mix, ordering, promotion semantics or CCost are changed; New Models notice highlighting is separate. Plain output is byte-for-byte equivalent in information and geometry.
 
 ## Account acquisition
 
