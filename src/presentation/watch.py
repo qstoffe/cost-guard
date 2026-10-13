@@ -214,10 +214,11 @@ class WatchRenderer:
                 _context_cell(row, role),
             ))
             styles.append((role, role, role, role, role, None))
-            if prompt.in_progress and row.tool is not None:
+            if row.tool is not None:
                 arrow = "↳" if self._supports_arrow() and self.interactive else "->"
                 marker = " " * self._row_label(row).index("#") + arrow
                 kinds = ["tools"] + (["skills"] if row.tool.skills else [])
+                # Terminal rows keep final statistics only; live status never survives.
                 if prompt.in_progress and row.tool.has_status_row:
                     kinds.append("status")
                 for kind in kinds:

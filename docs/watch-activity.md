@@ -1,10 +1,12 @@
-# Watch activity — v80.40
+# Watch activity — v80.44
 
 Watch derives prompt activity from already-hydrated normalized snapshots and existing causal prompt scope, including attributed task children. It does not run tools, scan skill files, mutate OpenCode data, or change usage, billing, token accounting or quota refresh.
 
-## Active-prompt rows
+## Prompt activity rows
 
-Supplementary tool-call, Skills, running-tool, background-job and TODO rows are live status only. They appear only under a prompt that is currently running and disappear on the first authoritative update confirming success, cancellation/interruption, error or another terminal outcome. The ordinary prompt row and its final CCost, Calls, Duration and context metrics remain. A fresh tracker after refresh/reconnect/restart rehydrates only current activity, never terminal diagnostics.
+Tool-call summaries and verified custom Skills rows follow the owning prompt's existing status marker. They appear while the prompt runs and retain final counts, per-tool breakdowns, verified failures and distinct custom Skills while a terminal marker remains visible. They disappear on the same update that removes the green completion or red abort marker, and immediately when a newer prompt supersedes them in that session. Activity from other sessions is independent; persistent abort data alone cannot recreate an expired marker.
+
+Terminal updates clear running-tool durations, background-job indicators and active TODO progress while preserving final statistics. An unchanged `SessionSnapshot.source_revision` reuses the final observation; new authoritative revisions may update it. No separate activity timer or persistence is used. Rehydration through the active Watch tracker keeps the same marker lifecycle; a fresh tracker does not restore stale terminal activity. Existing terminal-error marker behavior is unchanged.
 
 ## Skill categories and custom Skills row
 

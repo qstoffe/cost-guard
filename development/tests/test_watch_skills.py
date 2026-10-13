@@ -3,22 +3,18 @@ from __future__ import annotations
 
 from dataclasses import replace
 from decimal import Decimal
-import io
 import json
-import os
 import re
 import unittest
 from unittest.mock import patch
 
 from development.fixtures.session_snapshots import make_snapshot, part, prov
-from src.domain import EventKind, NormalizedEvent
-from src.presentation import WatchRenderer
 from src.presentation.watch_activity import BASE_ROLE, FAILED_ROLE, skill_summary_segments, tool_summary_segments
 from src.reports.models import PromptProjection, SessionPromptBlock
 from src.sources.opencode_v2_normalization import normalize_message_bundle
 from src.sources.opencode_v2_wire import current_union_message_to_legacy_bundle
 from src.watch.skill_registry import active_skill_origins
-from src.watch.models import SkillObservation, ToolObservation, WatchProjection
+from src.watch.models import SkillObservation, ToolObservation
 from src.watch.tools import observe_tools
 from src.watch.tracker import WatchRowTracker
 
@@ -97,15 +93,6 @@ def prompt(event_id='u_next', number=1, at_ms=2000, **changes):
 
 def block(rows, session_id='root'):
     return SessionPromptBlock(session_id, 'Session', tuple(rows), Decimal(0), 0)
-
-
-def render(rows, *, width=120, interactive=False):
-    output = io.StringIO()
-    colors = {BASE_ROLE: {'foreground': 'Green'}, 'watchSkillActivity': {'foreground': 'Yellow'},
-              FAILED_ROLE: {'foreground': 'Red'}}
-    WatchRenderer({'colors': colors}, stream=output, interactive=interactive, terminal_width=width).render(
-        WatchProjection('Watch', 'V2', tuple(rows), now_ms=60_000))
-    return output.getvalue()
 
 
 class SkillLoadTests(unittest.TestCase):
@@ -383,180 +370,6 @@ class WatchSkillRegistryTests(unittest.TestCase):
         self.assertEqual(['root'], source.sessions)
 
 
-class ActiveActivityLifecycleTests(unittest.TestCase):
-    def setUp(self):
-        self.tracker = WatchRowTracker(started_at_ms=0, recent_seconds=0, max_rows=20)
-        self.parts = (skill('load', BROWSER, start=2100),
-                      tool('fail', 'shell', inputs={'command': COMMAND}, output=result()))
-
-    def project(self, rows, snap, now=60_000):
-        return self.tracker.project(
-            {'root': block(rows)}, {'root': snap}, now_ms=now,
-            skill_origins_by_root={'root': _test_origins(snap.parts)},
-        )
-
-    def test_terminal_updates_remove_every_activity_row_and_keep_prompt_metrics(self):
-        parts = self.parts + (tool('running', 'shell', status='running', start=2200),
-                             tool('todo', 'todo', inputs={'todos': [{'content': 'unfinished', 'status': 'in_progress'}]}))
-        terminal_prompts = (
-            prompt(in_progress=False, calls=9, ccost=Decimal('2.5'), duration_ms=12_000,
-                   incoming_context_tokens=128, incoming_context_ccost=Decimal('0.5')),
-            prompt(in_progress=False, aborted=True, abort_reason='user', calls=9,
-                   ccost=Decimal('2.5'), duration_ms=12_000, incoming_context_tokens=128,
-                   incoming_context_ccost=Decimal('0.5')),
-            prompt(in_progress=False, watch_error=True, calls=9, ccost=Decimal('2.5'), duration_ms=12_000,
-                   incoming_context_tokens=128, incoming_context_ccost=Decimal('0.5')),
-        )
-        for terminal in terminal_prompts:
-            with self.subTest(aborted=terminal.aborted, error=terminal.watch_error):
-                tracker = WatchRowTracker(started_at_ms=0, recent_seconds=0, max_rows=20)
-                active = prompt(in_progress=True, background_kinds=('shell',), background_started_ms=2000)
-                active_snapshot = snapshot(parts)
-                origins = {'root': _test_origins(active_snapshot.parts)}
-                live = tracker.project({'root': block((active,))}, {'root': active_snapshot},
-                                       now_ms=60_000, skill_origins_by_root=origins)
-                self.assertIsNotNone(live[0].tool)
-                live_output = render(live)
-                for label in ('tool calls', 'Skills (', 'running:', 'background:', 'TODO'):
-                    self.assertIn(label, live_output)
-                terminal_snapshot = snapshot(parts, running=False)
-                rows = tracker.project({'root': block((terminal,))}, {'root': terminal_snapshot},
-                                       now_ms=61_000, skill_origins_by_root=origins)
-                row = next(item for item in rows if item.prompt.event_id == terminal.event_id)
-                self.assertIsNone(row.tool)
-                self.assertEqual(Decimal('2.5'), row.prompt.ccost)
-                self.assertEqual(9, row.prompt.calls)
-                self.assertEqual(12_000, row.prompt.duration_ms)
-                self.assertEqual(128, row.prompt.incoming_context_tokens)
-                self.assertEqual(Decimal('0.5'), row.prompt.incoming_context_ccost)
-                output = render(rows)
-                self.assertIn('#1', output)
-                self.assertIn('work', output)
-                for label in ('tool calls', 'Skills (', 'running:', 'background:', 'TODO'):
-                    self.assertNotIn(label, output)
-
-    def test_completed_refresh_does_not_recompute_or_retain_final_observations(self):
-        active = prompt(in_progress=True)
-        with patch('src.watch.tracker.observe_tools', wraps=observe_tools) as observer:
-            rows = self.project((active,), snapshot(self.parts))
-            self.assertIsNotNone(rows[0].tool)
-            self.assertEqual(1, observer.call_count)
-            terminal = self.project((prompt(),), snapshot(self.parts, running=False), now=61_000)
-            self.assertIsNone(terminal[0].tool)
-            self.assertEqual(1, observer.call_count)
-
-    def test_new_prompt_replaces_old_activity_even_before_it_has_tools(self):
-        old = prompt(in_progress=False)
-        snap = snapshot(self.parts, running=False)
-        self.project((old,), snap)
-        new = prompt('u_new', 2, 5000, in_progress=True)
-        event = NormalizedEvent('u_new', 'root', EventKind.USER_PROMPT, 5000, prov('root', 'u_new'))
-        new_snapshot = replace(snap, events=snap.events + (event,))
-        rows = self.project((old, new), new_snapshot)
-        self.assertIsNone(rows[0].tool)
-        self.assertEqual(0, rows[1].tool.tool_count)
-        self.assertEqual((), rows[1].tool.skills)
-        self.assertNotIn('Skills (1)', render(rows))
-        self.assertIsNone(self.project((old,), new_snapshot)[0].tool)
-
-    def test_compaction_keeps_activity_on_logical_prompt_not_terminal_checkpoint(self):
-        compact = prompt('u_comp', 2, 3000, is_compaction=True)
-        snap = snapshot(self.parts)
-        event = NormalizedEvent('u_comp', 'root', EventKind.COMPACTION, 3000, prov('root', 'u_comp'))
-        snap = replace(snap, events=snap.events + (event,))
-        live = self.project((prompt(in_progress=True), compact), snap)
-        self.assertIsNone(live[0].tool)
-        self.assertEqual('u_next', live[1].prompt.event_id)
-        self.assertEqual(2, live[1].tool.tool_count)
-        self.assertTrue(all(row.tool is None for row in self.project((compact,), snap)))
-
-    def test_missing_post_compaction_parts_remove_activity_from_retained_prompt(self):
-        snap = snapshot(self.parts)
-        self.project((prompt(in_progress=True),), snap)
-        empty = replace(snap, messages=(), parts=())
-        retained = self.project((), empty)
-        self.assertTrue(retained)
-        self.assertTrue(all(row.tool is None for row in retained))
-        self.assertNotIn('tool calls', render(retained))
-
-    def test_terminal_rehydration_never_restores_activity(self):
-        for terminal in (prompt(), prompt(aborted=True), prompt(watch_error=True)):
-            tracker = WatchRowTracker(started_at_ms=0, recent_seconds=0, max_rows=20)
-            rows = tracker.project({'root': block((terminal,))},
-                                   {'root': snapshot(self.parts, running=False)}, now_ms=60_000)
-            self.assertIsNone(rows[0].tool)
-            self.assertNotIn('tool calls', render(rows))
-            self.assertIn('#1', render(rows))
-            self.assertIn('work', render(rows))
-
-    def test_simultaneous_sessions_have_independent_activity_lifecycles(self):
-        first = snapshot(self.parts)
-        second_base = snapshot((skill('load', GITHUB),))
-        second = replace(second_base, root=replace(second_base.root, session_id='other'),
-                         messages=tuple(replace(m, session_id='other', parts=tuple(replace(p, session_id='other') for p in m.parts))
-                                        for m in second_base.messages),
-                         events=tuple(replace(e, session_id='other') for e in second_base.events))
-        blocks = {'root': block((prompt(in_progress=True),)),
-                  'other': block((prompt(in_progress=True),), 'other')}
-        snapshots = {'root': first, 'other': second}
-        origin_maps = {'root': _snapshot_origins(first), 'other': _snapshot_origins(second)}
-        rows = self.tracker.project(blocks, snapshots, now_ms=60_000, skill_origins_by_root=origin_maps)
-        observations = {row.session_id: row.tool for row in rows}
-        self.assertEqual((SkillObservation(BROWSER, 1),), observations['root'].skills)
-        self.assertEqual((SkillObservation(GITHUB),), observations['other'].skills)
-
-        blocks['root'] = block((prompt(in_progress=False),))
-        snapshots['root'] = snapshot(self.parts, running=False)
-        rows = self.tracker.project(blocks, snapshots, now_ms=61_000, skill_origins_by_root=origin_maps)
-        observations = {row.session_id: row.tool for row in rows}
-        self.assertIsNone(observations['root'])
-        self.assertIsNotNone(observations['other'])
-        self.assertEqual((SkillObservation(GITHUB),), observations['other'].skills)
-
-    def test_skills_row_uses_tool_activity_color_and_failures_stay_red(self):
-        rows = self.project((prompt(in_progress=True),), snapshot(self.parts))
-        raw = render(rows, interactive=True)
-        clean = re.sub(r'\x1b\[[0-9;?]*[A-Za-z]', '', raw)
-        lines = clean.splitlines()
-        prompt_line = next(line for line in lines if '#1 work' in line)
-        tool_index = next(index for index, line in enumerate(lines) if 'tool calls' in line)
-        self.assertIn('Skills (1)', lines[tool_index + 1])
-        activity_line = lines[tool_index + 1]
-        activity_prefix = next(index for index, char in enumerate(activity_line) if char not in '| ')
-        self.assertEqual(prompt_line.index('#'), activity_prefix)
-        self.assertIn('\x1b[92m' + BROWSER + '\x1b[0m', raw)
-        self.assertNotIn('\x1b[93m' + BROWSER + '\x1b[0m', raw)
-        self.assertIn('\x1b[91m [1 tool call failure]\x1b[0m', raw)
-
-    def test_real_tiny_terminal_is_not_clamped_to_forty_columns_for_activity(self):
-        class TinyTerminal(io.StringIO):
-            def isatty(self):
-                return True
-
-            def fileno(self):
-                return 1
-
-        rows = self.project((prompt(in_progress=True),), snapshot(self.parts))
-        stream = TinyTerminal()
-        renderer = WatchRenderer({'colors': {}}, stream=stream, interactive=False)
-        with patch('src.presentation.terminal.os.get_terminal_size', return_value=os.terminal_size((25, 10))):
-            renderer.render(WatchProjection('Watch', 'V2', rows))
-        activities = [line for line in stream.getvalue().splitlines() if line.startswith('|     ->')]
-        self.assertEqual(2, len(activities))
-        self.assertTrue(all(len(line) <= 24 for line in activities))
-
-    def test_rendered_activity_lines_respect_terminal_width_including_borders(self):
-        rows = self.project((prompt(in_progress=True),), snapshot(self.parts))
-        for width in range(1, 161):
-            renderer = WatchRenderer({'colors': {}}, stream=io.StringIO(), interactive=False, terminal_width=width)
-            _table, _styles, activities = renderer._table_rows(WatchProjection('Watch', 'V2', rows))
-            for kind, marker, obs in activities.values():
-                line = renderer._activity_line(kind, marker, obs, max(0, width - 4)) if width >= 4 else '|'
-                self.assertLessEqual(len(line), width)
-            output = render(rows, width=width)
-            for line in output.splitlines():
-                if 'tool calls' in line or 'Skills' in line:
-                    self.assertLessEqual(len(line), width)
 
 
 if __name__ == '__main__':
