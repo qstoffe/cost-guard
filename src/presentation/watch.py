@@ -90,6 +90,35 @@ def _session_subtotal_text(subtotal: WatchSessionSubtotal | None) -> str:
     return "Σ " + ("N/A" if subtotal is None else ccost_amount(subtotal.ccost, unresolved=subtotal.unresolved_cost))
 
 
+def _warning_explanation(session_id: str, warning: str, rows: tuple[WatchRow, ...]) -> tuple[str, PriceWarningSeverity]:
+    """Displayed explanation (with multiplier or Next Ictx CCost range) and severity."""
+    warning_row = next((item for item in reversed(rows) if item.session_id == session_id and item.next_context_warning), None)
+    if warning_row is None:
+        return context_warning_text(warning), PriceWarningSeverity.NONE
+    prompt = warning_row.prompt
+    low = prompt.watch_next_context_cached_ccost
+    high = prompt.watch_next_context_fresh_ccost
+    multiplier = prompt.watch_next_context_cost_multiplier
+    if low is None and high is None:
+        low, high = prompt.next_context_cached_ccost, prompt.next_context_fresh_ccost
+    if multiplier is None and not prompt.watch_next_context_warning:
+        multiplier = prompt.next_context_cost_multiplier
+    suffix = (" " + text) if (text := warning_cost_suffix(multiplier, low, high)) else ""
+    return context_warning_text(warning) + suffix, warning_row.next_context_warning_severity
+
+
+def _warning_groups(projection: WatchProjection) -> list[tuple[list[int], str, PriceWarningSeverity]]:
+    """One explanation per identical displayed warning; session markers keep their numbers.
+
+    Identity is the complete displayed text (threshold, explanation and cost
+    detail) plus severity, so any meaningful difference stays separate.
+    """
+    groups: dict[tuple[str, PriceWarningSeverity], list[int]] = {}
+    for number, (session_id, warning) in enumerate((projection.session_warnings or {}).items(), start=1):
+        groups.setdefault(_warning_explanation(session_id, warning, projection.rows), []).append(number)
+    return [(numbers, text, severity) for (text, severity), numbers in groups.items()]
+
+
 class WatchRenderer:
     def __init__(self, config: Mapping[str, object], *, stream: TextIO | None = None, interactive: bool | None = None,
                  terminal_width: int | None = None) -> None:
@@ -253,22 +282,10 @@ class WatchRenderer:
                 lines[3 + row_index] = self._activity_line(kind, marker, tool, span_width) if terminal_width >= 4 else "|"[:max(0, terminal_width)]
         for line in lines:
             self._write(line)
-        warnings = projection.session_warnings or {}
-        for number, (session_id, warning) in enumerate(warnings.items(), start=1):
-            warning_row = next((item for item in reversed(projection.rows) if item.session_id == session_id and item.next_context_warning), None)
-            severity = warning_row.next_context_warning_severity if warning_row else PriceWarningSeverity.NONE
-            suffix = ""
-            if warning_row is not None:
-                prompt = warning_row.prompt
-                low = prompt.watch_next_context_cached_ccost
-                high = prompt.watch_next_context_fresh_ccost
-                multiplier = prompt.watch_next_context_cost_multiplier
-                if low is None and high is None:
-                    low, high = prompt.next_context_cached_ccost, prompt.next_context_fresh_ccost
-                if multiplier is None and not prompt.watch_next_context_warning:
-                    multiplier = prompt.next_context_cost_multiplier
-                suffix = (" " + text) if (text := warning_cost_suffix(multiplier, low, high)) else ""
-            for line in warning_explanation_lines(f"*{number}", context_warning_text(warning) + suffix, severity, self.styler):
+        width = self.terminal_width if self.terminal_width is not None else terminal_content_width(self.stream)
+        for numbers, text, severity in _warning_groups(projection):
+            marker = "*" + ",".join(str(number) for number in numbers)
+            for line in warning_explanation_lines(marker, text, severity, self.styler, width=width):
                 self._write(line)
 
     def _render_quota(self, projection: WatchProjection) -> None:

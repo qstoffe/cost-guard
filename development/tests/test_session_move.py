@@ -169,7 +169,10 @@ class WatchTotalAndMoveTests(unittest.TestCase):
             clock = [4000]
             watch = WatchCoordinator(selection=selection, report_service=service, config=config, clock_ms=lambda: clock[0])
             initial = watch.initialize().projection
-            self.assertEqual({}, dict(initial.session_subtotals), "no selected rows in global Watch yet")
+            # The most recent session stays visible at startup through its latest historical row.
+            self.assertEqual(1, len(initial.rows))
+            self.assertEqual({"root": initial.rows[0].prompt.ccost},
+                             {key: value.ccost for key, value in initial.session_subtotals.items()})
 
             usage = TokenUsage(input=50, output=5)
             source.snapshot = with_prompt(source.snapshot, "new", 4100, usage)

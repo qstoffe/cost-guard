@@ -1,4 +1,4 @@
-"""Observation-based Watch row lifecycle and cap policy."""
+"""Observation-based Watch row lifecycle, session visibility and cap policy."""
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
@@ -8,6 +8,7 @@ from src.domain import EventKind, SessionSnapshot
 from src.reports.models import PromptProjection, SessionPromptBlock
 
 from .models import ToolObservation, WatchRow
+from .session_retention import SessionActivity, session_visibility
 from .tools import observe_tools
 
 
@@ -289,6 +290,54 @@ class WatchRowTracker:
             result.append(replace(row, tool=tool, is_latest_session_event=event_id == latest_key))
         return result
 
+    def _session_rows(
+        self, block: SessionPromptBlock, snapshot: SessionSnapshot, now_ms: int, sequence_by_event: Mapping[str, int],
+    ) -> list[WatchRow]:
+        session_rows: list[WatchRow] = []
+        present_event_ids: set[str] = set()
+        for prompt in block.rows:
+            present_event_ids.add(_event_key(prompt))
+            row = self._row(block, prompt, snapshot, now_ms, sequence_by_event=sequence_by_event)
+            if row is not None:
+                session_rows.append(row)
+        session_rows.extend(self._retained_missing_rows(block, snapshot, present_event_ids, now_ms))
+        return session_rows
+
+    def _finished_ms(self, session_id: str, prompt: PromptProjection) -> int:
+        """Source prompt end time; observed completion only when the source has none."""
+        if prompt.duration_ms is not None:
+            return prompt.at_ms + max(0, prompt.duration_ms)
+        observed = self._observed.get((session_id, _event_key(prompt)))
+        completed = observed.completion_seen_ms if observed is not None else None
+        return max(prompt.at_ms, completed or 0)
+
+    def _session_activity(self, block: SessionPromptBlock, rows: list[WatchRow]) -> SessionActivity:
+        prompts = list(block.rows) + [row.prompt for row in rows]
+        return SessionActivity(
+            block.session_id,
+            any(prompt.in_progress for prompt in prompts),
+            max((self._finished_ms(block.session_id, prompt) for prompt in prompts), default=0),
+        )
+
+    def _select(self, rows: list[WatchRow], represented: frozenset[str]) -> list[WatchRow]:
+        """Apply the global cap; protected rows and one row per represented session survive it."""
+        rows.sort(key=self._sort_key)
+        protected_keys = {
+            (row.session_id, row.prompt.event_id) for row in rows
+            if row.prompt.in_progress or row.marker in {"+", "✓", "!"}
+        }
+        covered = {session_id for session_id, _event_id in protected_keys}
+        for row in reversed(rows):
+            if row.session_id in represented and row.session_id not in covered:
+                protected_keys.add((row.session_id, row.prompt.event_id))
+                covered.add(row.session_id)
+        protected = [row for row in rows if (row.session_id, row.prompt.event_id) in protected_keys]
+        ordinary = [row for row in rows if (row.session_id, row.prompt.event_id) not in protected_keys]
+        room = max(0, self.max_rows - len(protected))
+        selected = protected + (ordinary[-room:] if room else [])
+        selected.sort(key=self._sort_key)
+        return selected
+
     def project(
         self,
         blocks: Mapping[str, SessionPromptBlock],
@@ -297,49 +346,36 @@ class WatchRowTracker:
         now_ms: int,
         skill_origins_by_root: Mapping[str, Mapping[str, Mapping[str, str]]] | None = None,
     ) -> tuple[WatchRow, ...]:
-        rows: list[WatchRow] = []
+        candidates: list[tuple[SessionPromptBlock, SessionSnapshot, Mapping[str, int], list[WatchRow]]] = []
         for session_id, block in blocks.items():
             snapshot = snapshots.get(session_id)
             if snapshot is None:
                 continue
             sequence_by_event = self._event_sequences(snapshot)
-            session_rows: list[WatchRow] = []
-            present_event_ids: set[str] = set()
-            for prompt in block.rows:
-                present_event_ids.add(_event_key(prompt))
-                row = self._row(
-                    block, prompt, snapshot, now_ms,
-                    sequence_by_event=sequence_by_event,
-                )
-                if row is not None:
-                    session_rows.append(row)
-            session_rows.extend(self._retained_missing_rows(block, snapshot, present_event_ids, now_ms))
-
-            if self.session_scope and not session_rows and block.rows:
-                prompt = block.rows[-1]
+            candidates.append((block, snapshot, sequence_by_event,
+                               self._session_rows(block, snapshot, now_ms, sequence_by_event)))
+        # A session-scoped Watch follows its one session; global Watch hides idle sessions.
+        visibility = None if self.session_scope else session_visibility(
+            (self._session_activity(block, session_rows)
+             for block, _snapshot, _sequences, session_rows in candidates if block.rows or session_rows), now_ms)
+        rows: list[WatchRow] = []
+        for block, snapshot, sequence_by_event, session_rows in candidates:
+            if visibility is not None and block.session_id not in visibility.visible:
+                continue
+            if not session_rows and block.rows:
+                # Visible without a row observed by this process (session scope,
+                # or a protected/recent session at startup): show its latest event.
+                prompt = max(reversed(block.rows), key=lambda item: item.at_ms)
                 session_rows.append(WatchRow(
                     block.session_id, block.title, prompt,
                     "+" if prompt.in_progress and self.recent_ms > 0 else "",
                     is_latest_session_event=True,
                 ))
-
             session_rows.sort(key=self._sort_key)
-            origins = (skill_origins_by_root or {}).get(session_id, {})
-            session_rows = self._attach_activity(session_rows, snapshot, now_ms, sequence_by_event, origins)
-            rows.extend(session_rows)
+            origins = (skill_origins_by_root or {}).get(block.session_id, {})
+            rows.extend(self._attach_activity(session_rows, snapshot, now_ms, sequence_by_event, origins))
 
-        rows.sort(key=self._sort_key)
-        protected = [
-            row for row in rows
-            if row.prompt.in_progress
-            or row.marker in {"+", "✓", "!"}
-        ]
-        protected_keys = {(row.session_id, row.prompt.event_id) for row in protected}
-        ordinary = [row for row in rows if (row.session_id, row.prompt.event_id) not in protected_keys]
-        room = max(0, self.max_rows - len(protected))
-        kept = ordinary[-room:] if room else []
-        selected = protected + kept
-        selected.sort(key=self._sort_key)
+        selected = self._select(rows, visibility.represented if visibility is not None else frozenset())
         if self.session_scope:
             return tuple(selected)
 

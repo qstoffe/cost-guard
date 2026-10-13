@@ -18,6 +18,7 @@ from .observation_diagnostics import record_scan, record_source_error
 from .model_discovery import WatchModelDiscovery
 from .models import WatchProjection, WatchRow, WatchSessionSubtotal
 from .observers import CatalogObservation, LiveEventPump, observe_catalog
+from .session_retention import startup_visible_roots
 from .skill_registry import active_skill_origins
 from .tracker import WatchRowTracker
 from .token_mix import WatchTokenMix
@@ -324,14 +325,13 @@ class WatchCoordinator:
         self.report_service.set_now_ms(now_ms)
         observation = observe_catalog(self.source, session_id=self.session_id)
         roots = self._selected_roots(observation)
-        # Bounded initial hydration: all root revisions are known, so later changes
-        # still enter; the discovery scope is independent of the display cap.
-        # A global Watch also skips roots whose stable cached analysis proves
-        # they have no row yet; a session Watch always shows its latest prompt.
+        # Bounded hydration (all revisions known, so later changes enter). Global Watch
+        # skips quiet (cached, row-less) roots unless startup-visible.
         initial_roots = roots if self.session_id is not None else roots[:INITIAL_ROOT_SAMPLE]
         if self.session_id is None:
-            quiet = {root.session_id for root in initial_roots
-                     if self.report_service.watch_root_is_quiet(root, self.started_at_ms)}
+            keep = startup_visible_roots(initial_roots, root_activity(observation.sessions, observation.root_by_session), now_ms)
+            quiet = {root.session_id for root in initial_roots if root.session_id not in keep
+                     and self.report_service.watch_root_is_quiet(root, self.started_at_ms)}
             initial_roots = tuple(root for root in initial_roots if root.session_id not in quiet)
             self.startup_quiet_roots = len(quiet)
         hydrated = self._hydrate(initial_roots, now_ms=now_ms)

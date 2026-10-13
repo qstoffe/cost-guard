@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.46 — 2026-10-13
+
+- Global Watch removes a whole session block (rows, activity, `Σ`, context warning) once its last prompt finished 10 minutes ago. Running sessions and the two most recently prompt-active sessions always remain, each with at least its latest row under the row cap; startup shows them from recent metadata. Idle time uses source prompt end times (observed completion only as fallback), so polling, title changes, resyncs and restarts never extend it, and a session displaced from the recent pair disappears immediately. Presentation only; no timer state, extra hydration or OpenCode/history change.
+- Sessions with an identical displayed context warning (severity, threshold, explanation and multiplier or Next Ictx CCost range) share one explanation such as `*1,2,3,4 Context: …`, wrapped to terminal width; each header keeps its own marker and Next Ictx highlighting is unchanged.
+
 ## v80.45 — 2026-10-13
 
 - Eligible New Models names receive a bold lime ✦ highlight for 12 hours from one atomic UTC first-sighting timestamp per provider-qualified model ID, shared by Watch and Report. Watch removes the emphasis on a live status wake; the existing seven-day visibility rules are unchanged.
@@ -19,14 +24,9 @@
 - `Calls` tracks independently evidenced model requests. A zero-usage, tool-only OpenCode V2 record that directly continues a usage-bearing `tool-calls` response of the same prompt and model no longer counts as its own request when a shared provider response id, or without ids its absent model latency, proves it. The record stays in history, so tools, failures, outcomes and durations are unchanged.
 - Ambiguous zero-usage records (model latency, own output, absent counters, errors, model switches, differing or one-sided ids, prompt/compaction boundaries) keep counting; usage, CCost and fallback valuation are unchanged. Live reference prompts move from 21 to 12 and from 8 to 6 Calls; an OpenAI session with response ids is unchanged. Cached analyses are recomputed once.
 
-## v80.41 — 2026-10-12
-
-- Behavior-neutral maintenance: shared report-service, availability/rendering, quota-rendering, account and config-package test setup now lives in responsibility-owned fixtures instead of being borrowed from other test modules, retiring 15 of 33 bounded test-import debt edges. Stale unused imports were removed.
-- Recorded audit evidence with no runtime change: 80 live roots analyze in 54 ms (worst root 9.7 ms) and Watch tool observation remains bounded to the latest running prompt. Per-prompt causal scans only become significant on synthetic roots far larger than observed live sessions.
-
 ## Earlier v80 history
 
-- v80.38 added bounded Watch startup recovery, typed source errors and sanitized connectivity history. v80.37 refactored Watch/source boundaries and hot paths; Git delivery moved to isolated clones and every main PR versions docs. v80.39 added retained tool/skill stats, verified failures and width-adaptive rows; v80.40 made rows live-only before v80.44 tied them to existing markers.
+- v80.38 added bounded Watch startup recovery, typed source errors and sanitized connectivity history. v80.37 refactored Watch/source boundaries and hot paths; Git delivery moved to isolated clones and every main PR versions docs. v80.39 added retained tool/skill stats, verified failures and width-adaptive rows; v80.40 made rows live-only before v80.44 tied them to existing markers. v80.41 moved shared test setup into owned fixtures (15 of 33 test-import edges retired) with no runtime change.
 - v80.35–v80.36 added explicit native abort-cause labels, neutral tool-call endings and stable credit-first account ordering; Watch shows `[ABORTED by user]` only when a live V2 user interrupt matches authoritative interrupted history, keeping that actor evidence bounded and in memory.
 - v80.34 pooled V2 reads/fresh snapshot brackets, memoized model identity, overlapped report acquisition and bounded Watch discovery/startup/resync. Recorded live timings with v80.33-identical output: normal report ~2.1→0.65 s, date report 7.5→2.1 s, Watch startup ~6.2→0.65 s, resync 13→1.4 s. Diagnostics gained all-account evidence and privacy-safe Watch geometry; concurrent Full and shared fixtures retired 10 test-import edges. Verification/packaging policy remains in maintainer rules.
 - v80.32–v80.33 separated Watch account refresh, prompt projection/report orchestration and source normalization; shared catalog ancestry and bounded sampling; moved fixtures (67→43 test-import edges, 46 fewer test-import dependencies), enforced bounded routine/coupling debt without raising caps, standardized `Context:` warning explanations, and added code maps/inventory/layer guards. Source/cache/billing semantics stayed unchanged.

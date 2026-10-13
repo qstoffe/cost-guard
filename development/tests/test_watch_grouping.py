@@ -175,9 +175,9 @@ class WatchGroupingTests(unittest.TestCase):
         scoped = WatchRowTracker(started_at_ms=500, recent_seconds=0, max_rows=1, session_scope=True)
         rows = scoped.project(blocks, snapshots, now_ms=600)
         self.assertEqual([2], [row.prompt.prompt_number for row in rows])
-        self.assertEqual((), WatchRowTracker(started_at_ms=500, recent_seconds=0, max_rows=1).project(
-            blocks, snapshots, now_ms=600,
-        ))
+        # Global Watch keeps a most recent session visible through its latest historical row.
+        rows = WatchRowTracker(started_at_ms=500, recent_seconds=0, max_rows=1).project(blocks, snapshots, now_ms=600)
+        self.assertEqual([("A", 2, "")], [(row.session_id, row.prompt.prompt_number, row.marker) for row in rows])
 
 
 if __name__ == "__main__":
