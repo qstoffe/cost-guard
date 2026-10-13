@@ -8,8 +8,7 @@ import io
 import tempfile
 import unittest
 
-from development.fixtures.session_snapshots import MODEL, make_snapshot, message, prov
-from development.tests.test_session_move import moved
+from development.fixtures.session_snapshots import MODEL, make_snapshot, message, moved_location, prov
 from development.fixtures.watch_runtime import MutableSource, make_service
 from development.tests.test_token_mix import one_request
 from development.tests.test_watch_grouping import inputs, prompt
@@ -81,7 +80,7 @@ class WatchSessionSubtotalTests(unittest.TestCase):
             stream = io.StringIO()
             WatchRenderer({}, stream=stream, interactive=False).render(first)
             self.assertIn("Watch total CCost: 59", stream.getvalue())
-            source.snapshot = moved(source.snapshot, 2250)
+            source.snapshot = moved_location(source.snapshot, 2250)
             clock[0] = 2400
             for cycle in (watch.poll_once(), watch.poll_once(force_resync=True), watch.poll_once()):
                 self.assert_row_scope(cycle.projection)

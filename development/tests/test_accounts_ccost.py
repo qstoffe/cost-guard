@@ -59,6 +59,14 @@ class ValuationTests(unittest.TestCase):
         self.assertEqual(1, value.priced_requests)
         self.assertLess(value.known_ccost, D(99))
 
+    def test_ccost_by_day_splits_exactly_at_utc_midnight(self):
+        entry = trace_entries(make_snapshot())[0]
+        times = (1, 86_399_999, 86_400_000, 1_790_553_599_999, 1_790_553_600_000)
+        value = comparison_cost(tuple(replace(entry, completed_at_ms=ms) for ms in times),
+                                FakePricingProvider().catalog.reference_valuation)
+        self.assertEqual(["1970-01-01", "1970-01-02", "2026-09-27", "2026-09-28"], sorted(value.by_day_utc))
+        self.assertEqual(2 * value.by_day_utc["1970-01-02"], value.by_day_utc["1970-01-01"])
+
     def test_clones_deduplicate_within_source_but_not_across_sources(self):
         entry = trace_entries(make_snapshot())[0]
         clone = replace(entry, session_id="fork")

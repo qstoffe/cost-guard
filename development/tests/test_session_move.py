@@ -9,12 +9,13 @@ from dataclasses import replace
 from decimal import Decimal
 from urllib.parse import parse_qs, urlsplit
 
-from development.fixtures.session_snapshots import MODEL, make_snapshot, message, part, prov
-from development.tests.test_context_warning_presentation import prompt, report_projection, watch_projection
+from development.fixtures.session_snapshots import (
+    MODEL, make_uncompacted_snapshot, message, moved_location, part, prov,
+)
+from development.fixtures.warning_projections import warning_prompt, warning_report_projection, warning_watch_projection
 from development.fixtures.opencode_v2_service import source_with_current_service
-from development.fixtures.pricing_catalog import catalog as sample_catalog
+from development.fixtures.pricing_catalog import catalog as sample_catalog, threshold_catalog
 from development.fixtures.watch_runtime import MutableSource, make_service
-from development.tests.test_v786_regressions import _threshold_catalog
 from src.analysis import analyze_snapshot
 from src.analysis.context import PriceWarningSeverity, watch_context_state
 from src.domain import ContextBoundary, EventKind, MessageRole, ModelInvocation, NormalizedEvent, TokenUsage
@@ -23,20 +24,6 @@ from src.presentation import ReportRenderer, WatchRenderer
 from src.reports.prompts import build_prompt_block
 from src.watch import WatchCoordinator
 from src.watch.token_mix import WatchTokenMix
-
-
-def completed_history():
-    snapshot = make_snapshot(running=False)
-    messages = tuple(item for item in snapshot.messages if item.message_id not in {"u_comp", "a_comp"})
-    return replace(snapshot, messages=messages, parts=tuple(p for m in messages for p in m.parts),
-                   events=tuple(e for e in snapshot.events if e.event_id != "u_comp"),
-                   invocations=tuple(i for i in snapshot.invocations if i.invocation_id != "i_comp"))
-
-
-def moved(snapshot, at_ms, revision="moved"):
-    """Same session ID, new location: only a non-billable boundary is added."""
-    return replace(snapshot, source_revision=revision,
-                   context_boundaries=(*snapshot.context_boundaries, ContextBoundary("root", f"loc_{at_ms}", at_ms)))
 
 
 def with_prompt(snapshot, key, at_ms, usage=None, revision=None):
@@ -73,13 +60,13 @@ def row(block, event_id):
 
 class ContextEpochTests(unittest.TestCase):
     def test_move_invalidates_old_baseline_estimate_and_warning(self):
-        history = completed_history()
+        history = make_uncompacted_snapshot()
         large = replace(history, invocations=tuple(replace(i, tokens=TokenUsage(input=80_000, output=5))
                                                    if i.invocation_id == "i_next" else i for i in history.invocations))
-        before = block_for(large, _threshold_catalog())
+        before = block_for(large, threshold_catalog())
         self.assertEqual(80_005, before.next_context_tokens)
         self.assertEqual(PriceWarningSeverity.APPROACHING, before.next_context_warning_severity)
-        after = block_for(moved(large, 2500), _threshold_catalog())
+        after = block_for(moved_location(large, 2500), threshold_catalog())
         self.assertIsNone(after.next_context_tokens)
         self.assertEqual("", after.next_context_warning)
         stale = row(after, "u_next")
@@ -93,17 +80,17 @@ class ContextEpochTests(unittest.TestCase):
         self.assertEqual(before.total_calls, after.total_calls)
 
     def test_waits_for_first_real_request_then_new_baseline_resumes(self):
-        history = completed_history()
+        history = make_uncompacted_snapshot()
         waiting = with_prompt(history, "after", 3000)
         provisional = row(block_for(waiting), "u_after")
         self.assertIsNotNone(provisional.watch_next_context_tokens, "without a move the old baseline is reused")
-        waiting_moved = row(block_for(with_prompt(moved(history, 2500), "after", 3000)), "u_after")
+        waiting_moved = row(block_for(with_prompt(moved_location(history, 2500), "after", 3000)), "u_after")
         self.assertIsNone(waiting_moved.watch_next_context_tokens, "no estimate from the retired epoch")
 
         usage = TokenUsage(input=50, output=5)
         unmoved = row(block_for(with_prompt(history, "after", 3000, usage)), "u_after")
         self.assertEqual((55, 21), (unmoved.watch_next_context_tokens, unmoved.watch_delta_context_tokens))
-        snapshot = with_prompt(moved(history, 2500), "after", 3000, usage)
+        snapshot = with_prompt(moved_location(history, 2500), "after", 3000, usage)
         block = block_for(snapshot)
         resumed = row(block, "u_after")
         self.assertEqual(55, resumed.watch_next_context_tokens)
@@ -113,15 +100,15 @@ class ContextEpochTests(unittest.TestCase):
         self.assertIsNotNone(block.next_context_cached_ccost)
 
     def test_running_prompt_spanning_the_move_drops_mixed_epoch_delta(self):
-        history = completed_history()
+        history = make_uncompacted_snapshot()
         snapshot = with_prompt(history, "span", 2400, TokenUsage(input=50, output=5))
-        snapshot = moved(snapshot, 2600)  # its only request completed at 2700, after the move
+        snapshot = moved_location(snapshot, 2600)  # its only request completed at 2700, after the move
         bundle = analyze_snapshot(snapshot, now_ms=9000)
         record = next(item for item in bundle.prompts if item.prompt_id == "u_span")
         state = watch_context_state(snapshot, bundle, record, sample_catalog())
         self.assertEqual(55, state.next_tokens)
         self.assertEqual(5, state.delta_tokens)
-        stale = moved(with_prompt(history, "span", 2400, TokenUsage(input=50, output=5)), 2800)
+        stale = moved_location(with_prompt(history, "span", 2400, TokenUsage(input=50, output=5)), 2800)
         bundle = analyze_snapshot(stale, now_ms=9000)
         record = next(item for item in bundle.prompts if item.prompt_id == "u_span")
         self.assertIsNone(watch_context_state(stale, bundle, record, sample_catalog()).next_tokens)
@@ -130,7 +117,7 @@ class ContextEpochTests(unittest.TestCase):
 class WatchTotalAndMoveTests(unittest.TestCase):
     def test_watch_total_starts_at_zero_counts_new_ccost_once_across_rescans_and_moves(self):
         with tempfile.TemporaryDirectory() as td:
-            source = MutableSource(completed_history())
+            source = MutableSource(make_uncompacted_snapshot())
             config, selection, service, _ = make_service(td, source)
             clock = [4000]
             watch = WatchCoordinator(selection=selection, report_service=service, config=config, clock_ms=lambda: clock[0])
@@ -148,7 +135,7 @@ class WatchTotalAndMoveTests(unittest.TestCase):
             mix = next(index for index, line in enumerate(lines) if line.startswith("Token Mix %"))
             self.assertEqual(expected, lines[mix + 1], "dedicated row directly below Token Mix")
 
-            source.snapshot = moved(source.snapshot, 4600, "moved-to-worktree")
+            source.snapshot = moved_location(source.snapshot, 4600, "moved-to-worktree")
             clock[0] = 4700
             for cycle in (watch.poll_once(), watch.poll_once(force_resync=True), watch.poll_once()):
                 self.assertEqual(first.token_mix, cycle.projection.token_mix, "rehydration/move never re-adds usage")
@@ -164,7 +151,7 @@ class WatchTotalAndMoveTests(unittest.TestCase):
 
     def test_session_header_subtotal_follows_rows_without_double_count_across_moves(self):
         with tempfile.TemporaryDirectory() as td:
-            source = MutableSource(completed_history())
+            source = MutableSource(make_uncompacted_snapshot())
             config, selection, service, _ = make_service(td, source)
             clock = [4000]
             watch = WatchCoordinator(selection=selection, report_service=service, config=config, clock_ms=lambda: clock[0])
@@ -184,7 +171,7 @@ class WatchTotalAndMoveTests(unittest.TestCase):
             self.assertEqual(sum((row.prompt.ccost for row in first.rows), Decimal(0)),
                              first.session_subtotals["root"].ccost)
 
-            source.snapshot = moved(source.snapshot, 4600, "moved-to-worktree")
+            source.snapshot = moved_location(source.snapshot, 4600, "moved-to-worktree")
             clock[0] = 4700
             for cycle in (watch.poll_once(), watch.poll_once(force_resync=True), watch.poll_once()):
                 self.assertEqual(first.session_subtotals, cycle.projection.session_subtotals)
@@ -195,10 +182,10 @@ class WatchTotalAndMoveTests(unittest.TestCase):
     def test_run_total_counts_requests_once_across_roots_and_repeated_hydration(self):
         usages = {"a": TokenUsage(input=50, output=5), "b": TokenUsage(input=400, output=40), "c": TokenUsage(input=7, output=1)}
         with tempfile.TemporaryDirectory() as td:
-            _config, _selection, service, _ = make_service(td, MutableSource(completed_history()))
+            _config, _selection, service, _ = make_service(td, MutableSource(make_uncompacted_snapshot()))
             valuation = service.token_category_valuation()
         tracker = WatchTokenMix(4000)
-        base = completed_history()
+        base = make_uncompacted_snapshot()
         expected = Decimal(0)
         for root, key, at in (("alpha", "a", 4100), ("beta", "b", 4200), ("alpha", "c", 4300)):
             snapshot = with_prompt(base, key, at, usages[key])
@@ -259,12 +246,12 @@ class WatchTotalAndMoveTests(unittest.TestCase):
 
 class NextIctxLabelTests(unittest.TestCase):
     def test_watch_and_report_label_the_range_as_next_ictx_ccost(self):
-        item = replace(prompt(PriceWarningSeverity.APPROACHING, "[Approaching price threshold >272.0K]"),
+        item = replace(warning_prompt(PriceWarningSeverity.APPROACHING, "[Approaching price threshold >272.0K]"),
                        watch_next_context_cached_ccost=Decimal("0.3"), watch_next_context_fresh_ccost=Decimal("3"))
         stream = io.StringIO()
-        WatchRenderer({"timezone": "UTC"}, stream=stream, interactive=False).render(watch_projection(item))
+        WatchRenderer({"timezone": "UTC"}, stream=stream, interactive=False).render(warning_watch_projection(item))
         self.assertIn("*1 Context: Approaching price threshold >272.0K (Next Ictx CCost 0.3–3)", stream.getvalue())
-        projection = report_projection(item)
+        projection = warning_report_projection(item)
         block = replace(projection.prompt_blocks[0], next_context_cached_ccost=Decimal("0.3"),
                         next_context_fresh_ccost=Decimal("3"))
         stream = io.StringIO()

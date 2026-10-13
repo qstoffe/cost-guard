@@ -5,7 +5,7 @@ from dataclasses import replace
 from decimal import Decimal
 
 from src.domain import (
-    CostKind, CostObservation, EventKind, ModelInvocation, ModelRef, NormalizedEvent,
+    ContextBoundary, CostKind, CostObservation, EventKind, ModelInvocation, ModelRef, NormalizedEvent,
     NormalizedMessage, NormalizedPart, NormalizedSession, Provenance, SessionCapabilities,
     SessionSnapshot, TokenUsage, MessageRole,
 )
@@ -73,6 +73,21 @@ def make_snapshot(*, generation: str = "v1", running: bool = False) -> SessionSn
         ModelInvocation("i_comp", "root", 3100, MODEL, TokenUsage(input=40, cache_read=3, cache_write=2, output=4, reasoning=1), prov("root", "i_comp", generation), completed_at_ms=3300, cost=CostObservation(Decimal("0.40"), "USD", CostKind.PROVIDER_REPORTED), initiating_event_id="u_comp", message_id="a_comp", summary=True, finish_reason="stop"),
     )
     return SessionSnapshot(root, (root, child), msgs, tuple(p for m in msgs for p in m.parts), events, inv, f"{generation}-rev-1")
+
+
+def make_uncompacted_snapshot(*, running: bool = False) -> SessionSnapshot:
+    """``make_snapshot`` without its /compact trigger, summary and request."""
+    snapshot = make_snapshot(running=running)
+    messages = tuple(item for item in snapshot.messages if item.message_id not in {"u_comp", "a_comp"})
+    return replace(snapshot, messages=messages, parts=tuple(p for m in messages for p in m.parts),
+                   events=tuple(e for e in snapshot.events if e.event_id != "u_comp"),
+                   invocations=tuple(i for i in snapshot.invocations if i.invocation_id != "i_comp"))
+
+
+def moved_location(snapshot: SessionSnapshot, at_ms: int, revision: str = "moved") -> SessionSnapshot:
+    """Same session ID, new location: only a non-billable context boundary is added."""
+    return replace(snapshot, source_revision=revision,
+                   context_boundaries=(*snapshot.context_boundaries, ContextBoundary("root", f"loc_{at_ms}", at_ms)))
 
 
 def make_native_v2_compaction_snapshot() -> SessionSnapshot:

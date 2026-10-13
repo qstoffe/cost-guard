@@ -12,7 +12,7 @@ from dataclasses import replace
 from decimal import Decimal
 from pathlib import Path
 
-from development.fixtures.session_snapshots import make_snapshot, part
+from development.fixtures.session_snapshots import make_snapshot, make_uncompacted_snapshot, part
 from development.fixtures.watch_runtime import (
     MutableSource, FakeLiveSource, CountingAccountProvider, openai_account, make_service,
 )
@@ -51,16 +51,7 @@ class WatchGatingTests(unittest.TestCase):
 
     def test_running_root_rehydrates_each_refresh_even_when_cheap_revision_is_unchanged(self):
         with tempfile.TemporaryDirectory() as td:
-            snapshot = make_snapshot(running=True)
-            messages = tuple(item for item in snapshot.messages if item.message_id not in {"u_comp", "a_comp"})
-            snapshot = replace(
-                snapshot,
-                messages=messages,
-                parts=tuple(part for message in messages for part in message.parts),
-                events=tuple(item for item in snapshot.events if item.event_id != "u_comp"),
-                invocations=tuple(item for item in snapshot.invocations if item.invocation_id != "i_comp"),
-            )
-            source = MutableSource(snapshot)
+            source = MutableSource(make_uncompacted_snapshot(running=True))
             config, selection, service, _db = make_service(td, source)
             clock = [2200]
             watch = WatchCoordinator(

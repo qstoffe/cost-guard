@@ -16,7 +16,6 @@ from src.sources.opencode_v2_wire import current_union_message_to_legacy_bundle
 from src.watch.skill_registry import active_skill_origins
 from src.watch.models import SkillObservation, ToolObservation
 from src.watch.tools import observe_tools
-from src.watch.tracker import WatchRowTracker
 
 BROWSER = 'auto-agent-browser'
 GITHUB = 'auto-github-api'

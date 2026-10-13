@@ -27,6 +27,8 @@ Post-v80.36 behavior-neutral cleanup (median of 5, captured live snapshots analy
 
 Analysis records (2,528 across fixtures/live variants), cache JSON and Watch rows/markers over replayed live snapshots hashed identically before and after. Watch's per-second status path (≈2 ms for 20 hydrated 200-prompt roots) was measured and left unchanged.
 
+Post-v80.46 cleanup (captured live month, 6,279 requests, min of 40 runs, three alternating rounds): a changed Watch poll spent most of its ~65–90 ms rebuilding local month/today CCost. `billing_request_fingerprint` packs its six IEEE-754 values in one `struct` call (14–16 → 10–12 ms) and `comparison_cost` formats each UTC day once (37–39 → 22–25 ms); `accounts_quota_projection` 67–70 → 43–47 ms. Fingerprints, de-duplicated entries, comparison costs, the quota projection and epoch/midnight edge cases hashed identically before and after. Decimal valuation itself is unchanged.
+
 ## Behavioral evidence
 
 Baseline (v80.33 copy) and current trees rendered the same live data against one shared cache: Watch initial frame and token mix, and normal, all-models, sessions, session-detail and date reports were byte-identical. New regressions cover pooled transport reuse/retry/bounded idle sockets, overlapping discovery checks, the stuck Claude helper not delaying answers, Watch resync scope, and the numbers-only Diagnostics Watch smoke.
@@ -35,11 +37,11 @@ Baseline (v80.33 copy) and current trees rendered the same live data against one
 
 Full runs concurrently with its slowest files first (151 s → 32 s). Validator-negative checks call their owning check on a package copy instead of the whole validator subprocess; builder regressions are their own module. The validator parses each file once per run. Fake V2 services, the V1 database and package copies are fixtures; test-to-test edges fell from 43 to 33. Fake services now drop keep-alive sockets on stop, matching a real process exit.
 
-Post-v80.40 cleanup: report-service, availability/rendering, quota-rendering, account and config-package setup moved into responsibility-owned fixtures, so tests no longer borrow `CompactReportTests.service` as an unbound method; test-to-test edges fell from 33 to 18. Measured, unchanged: 80 live roots (largest 34 prompt events/487 messages) analyze in 54 ms total, 9.7 ms worst root; Watch tool observation runs only for the latest running prompt (~0.3 ms average per call). Per-prompt causal scans are quadratic only on synthetic 500+-prompt roots (500: 0.22 s, 1,000: 0.88 s), far beyond observed live sizes.
+Post-v80.40 cleanup: report-service, availability/rendering, quota-rendering, account and config-package setup moved into responsibility-owned fixtures, so tests no longer borrow `CompactReportTests.service` as an unbound method; test-to-test edges fell from 33 to 18, and post-v80.46 snapshot/threshold/warning fixtures to 10. Measured, unchanged: 80 live roots (largest 34 prompt events/487 messages) analyze in 54 ms total, 9.7 ms worst root; Watch tool observation runs only for the latest running prompt (~0.3 ms average per call). Per-prompt causal scans are quadratic only on synthetic 500+-prompt roots (500: 0.22 s, 1,000: 0.88 s), far beyond observed live sizes.
 
 ## Remaining bounded opportunities
 
-Server-side message serialization now dominates hydration. `collect_diagnostics.collect` (159 lines) and the release builder's double clean-extract Full run are the next tool costs. Causal attribution still scans messages/events linearly per prompt inside the legacy `build_prompt_record`; with snapshot-wide inputs shared it is no longer dominant. It and prompt rendering remain behavior-sensitive legacy routines; characterize before splitting. Keep this review current in place.
+Server-side message serialization now dominates hydration. `collect_diagnostics.collect` (159 lines) and the release builder's double clean-extract Full run are the next tool costs. Causal attribution still scans messages/events linearly per prompt inside the legacy `build_prompt_record`; with snapshot-wide inputs shared it is no longer dominant. It and prompt rendering remain behavior-sensitive legacy routines; characterize before splitting. Watch startup builds the local quota projection before starting account/model-discovery work and again in its forced refresh (~0.15 s live); removing the second build first needs proof that discovery cannot change the comparison catalog in between. Keep this review current in place.
 
 ## Live-proof limits
 

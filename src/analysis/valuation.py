@@ -11,6 +11,8 @@ from src.domain.ccost import ReferenceValuation
 from .billing import billing_request_fingerprint
 from .models import TraceEntry
 
+_DAY_MS = 86_400_000
+
 
 @dataclass(frozen=True, slots=True)
 class ComparisonCost:
@@ -49,6 +51,7 @@ def comparison_cost(entries: Iterable[TraceEntry], reference_valuation: Referenc
     priced = observed = 0
     by_model: dict[str, Decimal] = {}
     by_day: dict[str, Decimal] = {}
+    day_names: dict[int, str] = {}  # whole UTC days since the epoch -> "YYYY-MM-DD", formatted once
     for entry in entries:
         observed += 1
         value = reference_valuation(entry.model, entry.tokens) if entry.tokens.total else Decimal(0)
@@ -60,7 +63,10 @@ def comparison_cost(entries: Iterable[TraceEntry], reference_valuation: Referenc
         priced += 1
         total += value
         by_model[entry.model.model] = by_model.get(entry.model.model, Decimal(0)) + value
-        day = datetime.fromtimestamp(entry.completed_at_ms / 1000, timezone.utc).strftime("%Y-%m-%d")
+        day_index = entry.completed_at_ms // _DAY_MS
+        day = day_names.get(day_index)
+        if day is None:
+            day = day_names[day_index] = datetime.fromtimestamp(entry.completed_at_ms / 1000, timezone.utc).strftime("%Y-%m-%d")
         by_day[day] = by_day.get(day, Decimal(0)) + value
     return ComparisonCost(total, observed, priced, by_model, by_day)
 
