@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.44 — 2026-10-13
+
+- Watch tool-call and verified custom Skills rows remain attached to the latest prompt while it runs and through the same terminal marker used by Watch: they disappear with that marker or when a newer prompt supersedes them in the session. Other sessions remain independent.
+- Terminal activity retains final counts, tool breakdowns, confirmed custom Skills and verified failures while clearing running-tool, background and TODO indicators. Unchanged source revisions reuse the final observation; no separate expiry or persistence was added.
+
 ## v80.43 — 2026-10-13
 
 - Normal-report Token Mix % and Relative CCost sample the latest 100 prompts with at least one reference-priceable request (real usage, complete I/C/W/O telemetry, resolvable rates for the request's own model and tier), skipping unpriceable prompts and backfilling from older history instead of filtering the latest 100. A prompt counts once; only its priceable requests feed shares, category CCost and the Relative CCost mix, so those CCost amounts no longer show `?`.
@@ -21,16 +26,9 @@
 - Skill calls use physical-call counts and verified V2 registry paths for `builtin skill` versus `custom skill`; unknown origins remain `skill`. The Skills row lists only distinct successfully loaded custom skills, with existing verified failure attribution.
 - All normal activity text and prefixes use `watchToolActivity`; verified failures remain red. Width-adaptive totals, failure priority, accurate aggregation and accounting are preserved.
 
-## v80.39 — 2026-10-12
-
-- Watch retains the latest prompt's tool/failure counts and confirmed distinct skill IDs after completion or abortion, replacing activity only when the same session begins a new prompt. Active tool/TODO/background indicators never survive completion; compaction, refresh and reconnect keep prompt ownership.
-- A yellow Skills row shows exact persisted IDs, newest load first, with red per-skill tool call failure counts only for explicit metadata or direct skill-script execution. Generic reads, mentions and skill-load recency never imply attribution; unattributed failures remain in the total.
-- Known Toolkit script contracts supplement native tool errors with bounded, schema-verified structured failures. Physical-call deduplication and cancellation handling prevent inflated totals; arbitrary output and nonzero exits alone remain neutral.
-- Activity rows fit terminal width independently of the fixed metric table: total/failures outrank breakdowns, whole skill IDs/indicators precede an accurate +N more fallback. Stable completed frames reuse observations without new source reads or changes to usage, billing or token accounting.
-
 ## Earlier v80 history
 
-- v80.38 gave a missing/unreachable Desktop V2 service actionable startup guidance with bounded readiness retries, recovered Watch initialization through its coordinator, typed source errors (distinct certificate failures) and kept sanitized source incident history for Diagnostics. v80.37 removed dead/redundant code, derived causal trace inputs once per root pass (74 live roots 252→92 ms with identical records) and flattened analysis-cache serialization; Git delivery became tool-independent in isolated clones, and every PR to main now carries a sequential version bump with dated history and current docs.
+- v80.38 added bounded Watch startup recovery, typed source errors and sanitized connectivity history. v80.37 refactored Watch/source boundaries and hot paths; Git delivery moved to isolated clones and every main PR versions docs. v80.39 added retained tool/skill stats, verified failures and width-adaptive rows; v80.40 made rows live-only before v80.44 tied them to existing markers.
 - v80.35–v80.36 added explicit native abort-cause labels, neutral tool-call endings and stable credit-first account ordering; Watch shows `[ABORTED by user]` only when a live V2 user interrupt matches authoritative interrupted history, keeping that actor evidence bounded and in memory.
 - v80.34 pooled V2 reads/fresh snapshot brackets, memoized model identity, overlapped report acquisition and bounded Watch discovery/startup/resync. Recorded live timings with v80.33-identical output: normal report ~2.1→0.65 s, date report 7.5→2.1 s, Watch startup ~6.2→0.65 s, resync 13→1.4 s. Diagnostics gained all-account evidence and privacy-safe Watch geometry; concurrent Full and shared fixtures retired 10 test-import edges. Verification/packaging policy remains in maintainer rules.
 - v80.32–v80.33 separated Watch account refresh, prompt projection/report orchestration and source normalization; shared catalog ancestry and bounded sampling; moved fixtures (67→43 test-import edges, 46 fewer test-import dependencies), enforced bounded routine/coupling debt without raising caps, standardized `Context:` warning explanations, and added code maps/inventory/layer guards. Source/cache/billing semantics stayed unchanged.

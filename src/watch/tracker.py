@@ -26,6 +26,14 @@ def _marker(prompt: PromptProjection, *, recent_completion: bool, recent_running
     return "✓" if recent_completion else ""
 
 
+def _without_live_activity(tool: ToolObservation) -> ToolObservation:
+    """Keep final counts while removing every indicator of ongoing execution."""
+    return replace(
+        tool, running_tool="", running_ms=0, todo_completed=0, todo_total=0,
+        active_todo="", background_kinds=(), background_ms=0,
+    )
+
+
 def _activity(
     snapshot: SessionSnapshot, prompt: PromptProjection, event_id: str, now_ms: int,
     skill_origins_by_session: Mapping[str, Mapping[str, str]],
@@ -34,7 +42,7 @@ def _activity(
     tool = observe_tools(snapshot, event_id, is_compaction=prompt.is_compaction, now_ms=now_ms,
                          skill_origins_by_session=skill_origins_by_session)
     if not prompt.in_progress:
-        return replace(tool, running_tool="", running_ms=0, todo_completed=0, todo_total=0, active_todo="")
+        return _without_live_activity(tool)
     if not prompt.background_kinds:
         return tool
     return replace(tool, background_kinds=prompt.background_kinds,
@@ -53,6 +61,7 @@ class _Observed:
     event_sequence: int = 0
     after_compaction: bool = False
     last_tool: ToolObservation | None = None
+    last_tool_revision: str | None = None
 
 
 class WatchRowTracker:
@@ -229,27 +238,39 @@ class WatchRowTracker:
         self, row: WatchRow, snapshot: SessionSnapshot, now_ms: int,
         skill_origins_by_session: Mapping[str, Mapping[str, str]],
     ) -> ToolObservation:
-        """Reuse the last live observation when a refresh omits post-compaction parts."""
+        """Reuse terminal stats for one source revision and retain compaction fallbacks."""
         event_id = _event_key(row.prompt)
-        tool = _activity(snapshot, row.prompt, event_id, now_ms, skill_origins_by_session)
         observed = self._observed.get((row.session_id, event_id))
+        if (
+            not row.prompt.in_progress
+            and observed is not None
+            and observed.last_tool is not None
+            and observed.last_tool_revision == snapshot.source_revision
+        ):
+            tool = observed.last_tool
+        else:
+            tool = _activity(snapshot, row.prompt, event_id, now_ms, skill_origins_by_session)
         if observed is not None:
             if not tool.tool_count and observed.last_tool and not any(
                 message.parent_message_id == event_id for message in snapshot.messages
             ):
-                tool = replace(observed.last_tool, running_tool="", running_ms=0, todo_completed=0,
-                               todo_total=0, active_todo="", background_kinds=(), background_ms=0)
+                tool = observed.last_tool
+            if not row.prompt.in_progress:
+                tool = _without_live_activity(tool)
             observed.last_tool = tool
+            observed.last_tool_revision = snapshot.source_revision
+        elif not row.prompt.in_progress:
+            tool = _without_live_activity(tool)
         return tool
 
     def _attach_activity(
         self, rows: list[WatchRow], snapshot: SessionSnapshot, now_ms: int, sequences: Mapping[str, int],
         skill_origins_by_session: Mapping[str, Mapping[str, str]],
     ) -> list[WatchRow]:
-        """Attach live observations only to the latest running prompt per session.
+        """Attach activity while the owning prompt runs or retains its status marker.
 
-        New zero-usage prompts suppress the old activity even before projection;
-        compaction does not transfer a logical prompt's diagnostic ownership.
+        New prompt events suppress old activity before the new prompt accumulates
+        tools. Terminal visibility follows the existing marker, not a second timer.
         """
         if not rows:
             return rows
@@ -261,7 +282,9 @@ class WatchRowTracker:
         for row in rows:
             event_id = _event_key(row.prompt)
             tool = None
-            if row.prompt.in_progress and (event_id == latest_prompt or row.prompt.is_compaction):
+            terminal_highlight = not row.prompt.in_progress and bool(row.marker)
+            current_running = row.prompt.in_progress and (event_id == latest_prompt or row.prompt.is_compaction)
+            if current_running or (event_id == latest_prompt and terminal_highlight):
                 tool = self._tool_activity(row, snapshot, now_ms, skill_origins_by_session)
             result.append(replace(row, tool=tool, is_latest_session_event=event_id == latest_key))
         return result

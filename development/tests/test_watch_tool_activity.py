@@ -191,19 +191,25 @@ class RenderingTests(unittest.TestCase):
     def activity_lines(self, lines):
         return [line for line in lines if line.startswith("|     ->")]
 
-    def test_terminal_prompt_ignores_attached_supplementary_activity(self):
+    def test_terminal_prompt_renders_final_activity_but_never_live_status(self):
         projection = tall_projection()
         terminal = replace(projection.rows[0].prompt, in_progress=False)
-        tool = ToolObservation(tool_count=1, tool_counts=counts(read=1),
-                               skills=(SkillObservation("custom-skill"),))
+        tool = ToolObservation(
+            tool_count=1, tool_counts=counts(read=1), skills=(SkillObservation("custom-skill"),),
+            running_tool="bash", running_ms=34_000, background_kinds=("shell",), background_ms=12_000,
+            todo_completed=1, todo_total=2, active_todo="still working",
+        )
         row = replace(projection.rows[0], prompt=terminal, tool=tool)
         stream = io.StringIO()
         WatchRenderer({"colors": {}}, stream=stream, interactive=False).render(
             replace(projection, rows=(row,)))
         output = stream.getvalue()
-        self.assertIn("#1 work", output)
-        self.assertNotIn("tool calls", output)
-        self.assertNotIn("Skills (", output)
+        self.assertIn("1 tool call", output)
+        self.assertIn("Skills (1)", output)
+        self.assertNotIn("running:", output)
+        self.assertNotIn("background:", output)
+        self.assertNotIn("TODO", output)
+        self.assertNotIn("still working", output)
 
     def test_both_status_arrows_align_with_prompt_hash_and_keep_colors(self):
         colors = {"watchToolActivity": {"ansi256": 94}, "costQuotaCritical": {"ansi256": 160}}
