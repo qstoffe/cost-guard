@@ -174,7 +174,8 @@ class ReportRenderer:
             for line in pricing_notice_lines(note, self.table_width, self.styler, "modelComparisonPromotion"):
                 self._write(line)
         if report.recent_model_notice:
-            for line in pricing_notice_lines(report.recent_model_notice, self.table_width, self.styler, "modelComparisonNew"):
+            for line in pricing_notice_lines(report.recent_model_notice, self.table_width, self.styler, "modelComparisonNew",
+                                        highlight_spans=report.recent_model_notice_highlight_spans):
                 self._write(line)
 
     def _render_sessions(self, report: ReportProjection) -> None:

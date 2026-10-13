@@ -32,6 +32,7 @@ from src.pricing.metadata_health import MetadataHealthStore, read_state, recent_
 from src.pricing.release_metadata import (
     MetadataAttempt, SourceResult, enrich_release_dates, merge_release_dates, stage_flags,
 )
+from src.reports.semantics import provider_qualified_model_id
 from src.watch.model_discovery import NEW_NOTICE_MS, WatchModelDiscovery
 
 NOW = int(datetime(2026, 10, 8, 12, tzinfo=timezone.utc).timestamp() * 1000)
@@ -136,7 +137,7 @@ class FieldRegressionTests(unittest.TestCase):
             fx.network.failure = None  # external source works again: no user action, no restart
             fx.refresh(NOW + 361_000)
             fx.refresh(NOW + 361_001)
-            self.assertEqual("✦ New Models: Claude Haiku 5.5 (2026-10-07)", fx.watch.notice(NOW + 361_001))
+            self.assertEqual("✦ New Models: ✦ Claude Haiku 5.5 (2026-10-07)", fx.watch.notice(NOW + 361_001))
             state = read_state(root)
             self.assertEqual("healthy", state["health"])
             self.assertEqual(2, state["sources"]["models.dev"]["last_recovery"]["failed_attempts"])
@@ -475,10 +476,78 @@ class NoticeTests(unittest.TestCase):
         provider.current = PricingCatalog(models=(model("Old"), model("Fresh")), retrieved_at_ms=2)
         watch.refresh(NOW + 3_600_000)
         watch.refresh(NOW + 3_600_001, resumed=True)
-        self.assertEqual("✦ New Models: Fresh", watch.notice(NOW + 3_600_001))
+        self.assertEqual("✦ New Models: ✦ Fresh", watch.notice(NOW + 3_600_001))
         expired = NOW + 3_600_000 + NEW_NOTICE_MS
         watch.refresh(expired)
         self.assertEqual("", watch.notice(expired))
+
+    def test_discoveries_have_independent_twelve_hour_deadlines(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            database = CacheDatabase(Path(tmp))
+            database.initialize()
+            repository = CacheRepository(database)
+            first_catalog = PricingCatalog(models=(model("Model A", date="2026-10-08"),), retrieved_at_ms=1)
+            watch, provider = self.watch(first_catalog, repository)
+            watch.refresh(NOW)
+            self.assertIn("\u2726 Model A", watch.notice(NOW))
+
+            provider.current = PricingCatalog(models=(
+                model("Model A", date="2026-10-08"), model("Model B", date="2026-10-08"),
+            ), retrieved_at_ms=2)
+            second_seen = NOW + 10 * 60 * 60 * 1000
+            watch.refresh(second_seen)
+            both_highlighted = watch.notice(second_seen)
+            self.assertIn("\u2726 Model A", both_highlighted)
+            self.assertIn("\u2726 Model B", both_highlighted)
+
+            expired_first = NOW + 12 * 60 * 60 * 1000
+            watch.refresh(expired_first)
+            notice, spans = watch.notice_details(expired_first)
+            self.assertIn("Model A", notice)
+            self.assertIn("\u2726 Model B", notice)
+            self.assertNotIn("\u2726 Model A", notice)
+            self.assertEqual(1, len(spans))
+
+    def test_active_first_sighting_survives_watch_restart_without_extending_deadline(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            database = CacheDatabase(Path(tmp))
+            database.initialize()
+            repository = CacheRepository(database)
+            prices = PricingCatalog(models=(model("Fresh", date="2026-10-08"),), retrieved_at_ms=1)
+            first_watch, _provider = self.watch(prices, repository)
+            first_watch.refresh(NOW)
+            self.assertIn("\u2726 Fresh", first_watch.notice(NOW))
+
+            restarted, _provider = self.watch(prices, repository)
+            resumed_at = NOW + 11 * 60 * 60 * 1000
+            restarted.refresh(resumed_at)
+            self.assertIn("\u2726 Fresh", restarted.notice(resumed_at))
+            deadline = NOW + 12 * 60 * 60 * 1000
+            expired = restarted.notice(deadline)
+            self.assertIn("Fresh", expired)
+            self.assertNotIn("\u2726 Fresh", expired)
+            self.assertEqual("2026-10-08T12:00:00.000Z", repository.get_or_create_model_first_seen_at(
+                provider_qualified_model_id(prices.models[0]), "2026-10-09T00:00:00.000Z"))
+
+    def test_legacy_watch_eligibility_gets_new_highlight_without_extending_seven_days(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            database = CacheDatabase(Path(tmp))
+            database.initialize()
+            repository = CacheRepository(database)
+            legacy_seen = NOW - 2 * 60 * 60 * 1000
+            repository.put("watch.model-discovery", "known-catalog-ids", ["fresh"], algorithm_version="v1")
+            repository.put("watch.model-discovery", "recent-discoveries",
+                           {"fresh": ["Fresh", legacy_seen]}, algorithm_version="v1")
+            prices = PricingCatalog(models=(model("Fresh"),), retrieved_at_ms=1)
+            watch, _provider = self.watch(prices, repository)
+
+            watch.refresh(NOW)
+            self.assertIn("\u2726 Fresh", watch.notice(NOW))
+            self.assertEqual("2026-10-08T12:00:00.000Z", repository.get_or_create_model_first_seen_at(
+                provider_qualified_model_id(prices.models[0]), "2026-10-09T00:00:00.000Z"))
+            expires = legacy_seen + NEW_NOTICE_MS
+            watch.refresh(expires)
+            self.assertEqual("", watch.notice(expires))
 
     def test_model_added_while_watch_was_closed_is_new_after_restart(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -488,7 +557,7 @@ class NoticeTests(unittest.TestCase):
             self.watch(PricingCatalog(models=(model("Old"),), retrieved_at_ms=1), repository)[0].refresh(NOW)
             restarted = self.watch(PricingCatalog(models=(model("Old"), model("Fresh")), retrieved_at_ms=2), repository)[0]
             restarted.refresh(NOW + 86_400_000)
-            self.assertEqual("✦ New Models: Fresh", restarted.notice(NOW + 86_400_000))
+            self.assertEqual("✦ New Models: ✦ Fresh", restarted.notice(NOW + 86_400_000))
 
 
 if __name__ == "__main__":

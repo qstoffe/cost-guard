@@ -14,7 +14,9 @@ from typing import Callable
 
 from src.pricing.catalog import PricingCatalog, canonical_model_name
 from src.pricing.release_metadata import valid_date
-from src.reports.semantics import model_is_recent
+from src.reports.semantics import (
+    first_sighting_is_highlighted, model_first_sighting_ms, model_is_recent, provider_qualified_model_id,
+)
 from src.runtime_errors import recoverable, recovered
 from src.sources.errors import SourceError
 
@@ -78,6 +80,7 @@ class WatchModelDiscovery:
         self.catalog: PricingCatalog | None = None
         self._catalog_keys: set[str] = set()
         self._first_seen: dict[str, tuple[str, int]] = {}
+        self._sightings: dict[str, int] = {}
         self.available_ids: tuple[str, ...] | None = None
         self._availability_known = False
         self._last_price_check_ms: int | None = None
@@ -100,6 +103,16 @@ class WatchModelDiscovery:
 
     def _repository(self):
         return getattr(self.service, "cache_repository", None)
+
+    def _first_sighting_ms(self, model, now_ms: int) -> int | None:
+        model_id = provider_qualified_model_id(model)
+        if not model_id:
+            return None
+        if model_id not in self._sightings:
+            first_seen = model_first_sighting_ms(model, self._repository(), now_ms)
+            if first_seen is not None:
+                self._sightings[model_id] = first_seen
+        return self._sightings.get(model_id)
 
     def _persist_known(self) -> None:
         repository = self._repository()
@@ -136,7 +149,8 @@ class WatchModelDiscovery:
                     for model in self.catalog.models:
                         key = _key(model)
                         if key and key not in known_ids and _priced(model) and not _released(model):
-                            self._first_seen[key] = (_name(model), now_ms)
+                            first_seen = self._first_sighting_ms(model, now_ms)
+                            self._first_seen[key] = (_name(model), first_seen if first_seen is not None else now_ms)
             except (OSError, ValueError):
                 pass
         self._last_price_check_ms = now_ms
@@ -147,7 +161,8 @@ class WatchModelDiscovery:
         for model in latest.models:
             key = _key(model)
             if key and key not in self._catalog_keys and _priced(model) and not _released(model):
-                self._first_seen[key] = (_name(model), now_ms)
+                first_seen = self._first_sighting_ms(model, now_ms)
+                self._first_seen[key] = (_name(model), first_seen if first_seen is not None else now_ms)
         self._catalog_keys.update(_key(model) for model in latest.models)
         self.catalog = latest
         self._persist_known()
@@ -319,27 +334,47 @@ class WatchModelDiscovery:
                    for model in self.catalog.models):
                 self._maybe_refresh_metadata(now_ms, hint="v2_undated_model")
 
-    def notice(self, now_ms: int) -> str:
-        """One Unicode heading; only verified priced catalog models qualify."""
+    def notice_details(self, now_ms: int) -> tuple[str, tuple[tuple[int, int], ...]]:
+        """Return the unchanged seven-day list plus live first-sighting name spans."""
         catalog = self.catalog or self.service._load_catalog()
-        names: dict[str, tuple[str, str]] = {}
+        names: dict[str, tuple[str, str, int | None]] = {}
         for model in catalog.models:
             if not _priced(model):
                 continue
             key = _key(model)
             released = _released(model)
             if released:
-                # A verified old release date is never "new", whatever the history.
-                if model_is_recent(released, now_ms=now_ms):
-                    names[key] = (_name(model), released)
-            elif key in self._first_seen and 0 <= now_ms - self._first_seen[key][1] < NEW_NOTICE_MS:
-                names[key] = (_name(model), "")
+                if not model_is_recent(released, now_ms=now_ms):
+                    continue
+                first_seen = self._first_sighting_ms(model, now_ms)
+                names[key] = (_name(model), released, first_seen)
+            elif key in self._first_seen:
+                name, seen = self._first_seen[key]
+                if not 0 <= now_ms - seen < NEW_NOTICE_MS:
+                    continue
+                shared_seen = self._first_sighting_ms(model, now_ms)
+                names[key] = (name, "", shared_seen if shared_seen is not None else seen)
         if not names:
-            return ""
+            return "", ()
         values = sorted(names.values(), key=lambda item: item[0].lower())
-        labels = [f"{name} ({date})" if date else name for name, date in values[:MAX_NOTICE_MODELS]]
-        suffix = f" (+{len(values)-MAX_NOTICE_MODELS})" if len(values) > MAX_NOTICE_MODELS else ""
-        return "✦ New Models: " + ", ".join(labels) + suffix
+        text = "\u2726 New Models: "
+        highlighted_spans: list[tuple[int, int]] = []
+        for index, (name, released, first_seen) in enumerate(values[:MAX_NOTICE_MODELS]):
+            if index:
+                text += ", "
+            highlighted = first_sighting_is_highlighted(first_seen, now_ms)
+            start = len(text)
+            text += f"\u2726 {name}" if highlighted else name
+            if highlighted:
+                highlighted_spans.append((start, len(text)))
+            if released:
+                text += f" ({released})"
+        if len(values) > MAX_NOTICE_MODELS:
+            text += f" (+{len(values) - MAX_NOTICE_MODELS})"
+        return text, tuple(highlighted_spans)
+
+    def notice(self, now_ms: int) -> str:
+        return self.notice_details(now_ms)[0]
 
     def diagnostics(self, now_ms: int) -> dict[str, object]:
         provider_metadata = getattr(self.service.pricing_provider, "metadata_diagnostics", None)

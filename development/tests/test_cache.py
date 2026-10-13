@@ -47,6 +47,43 @@ class CacheFoundationTests(unittest.TestCase):
             self.assertEqual("wal", journal_mode.lower())
             self.assertGreaterEqual(busy_timeout, 5000)
 
+    def test_first_sighting_is_insert_only_and_provider_qualified(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            database = CacheDatabase(Path(tmp))
+            database.initialize()
+            repository = CacheRepository(database)
+            first = "2026-10-13T12:00:00.000Z"
+
+            self.assertEqual(first, repository.get_or_create_model_first_seen_at("provider-a/model", first))
+            self.assertEqual(first, repository.get_or_create_model_first_seen_at(
+                "provider-a/model", "2026-10-13T18:00:00.000Z"))
+            other_provider = "2026-10-13T18:00:00.000Z"
+            self.assertEqual(other_provider, repository.get_or_create_model_first_seen_at(
+                "provider-b/model", other_provider))
+
+    def test_concurrent_first_sighting_writes_keep_one_original_timestamp(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            CacheDatabase(root).initialize()
+            start = threading.Barrier(5)
+            values: list[str | None] = [None] * 5
+
+            def writer(index: int) -> None:
+                repository = CacheRepository(CacheDatabase(root))
+                start.wait(timeout=5)
+                values[index] = repository.get_or_create_model_first_seen_at(
+                    "provider/model", f"2026-10-13T12:00:0{index}.000Z")
+
+            threads = [threading.Thread(target=writer, args=(index,)) for index in range(5)]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join(timeout=10)
+
+            self.assertFalse(any(thread.is_alive() for thread in threads))
+            self.assertEqual(1, len(set(values)))
+            self.assertIn(values[0], [f"2026-10-13T12:00:0{index}.000Z" for index in range(5)])
+
     def test_concurrent_writers_and_reader_share_cache_without_corruption(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

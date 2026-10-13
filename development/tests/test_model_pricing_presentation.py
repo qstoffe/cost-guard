@@ -24,8 +24,11 @@ from src.pricing.promotions import model_promotion, WEEK_MS
 from src.reports.sampling import latest_prompts, latest_token_prompts
 from src.reports import ReportKind, ReportProjection, ReportRequest
 from src.reports.models import ModelComparisonProjection
-from src.reports.semantics import active_promotion_notes, model_is_recent, recent_model_notice
+from src.reports.semantics import (
+    active_promotion_notes, model_is_recent, provider_qualified_model_id, recent_model_notice,
+)
 from src.watch import WatchCoordinator
+from src.watch.model_discovery import WatchModelDiscovery
 from src.watch.models import WatchProjection
 
 NOW = int(datetime(2026, 10, 5, tzinfo=timezone.utc).timestamp() * 1000)
@@ -134,6 +137,26 @@ class MetadataWindowTests(unittest.TestCase):
         self.assertFalse(active_promotion_notes(replace(unknown_start, models=(replace(unknown_start.models[0],
             metadata={"promotion_active": "true", "promotion_expires_ms": "bad"}),)), NOW)[1])
 
+    def test_first_sighting_styles_only_prefixed_model_name_in_report_and_watch(self):
+        notice = "\u2726 New Models: \u2726 Model A (2026-10-05), Model B (2026-10-06)"
+        start = notice.index("\u2726 Model A")
+        spans = ((start, start + len("\u2726 Model A")),)
+        report = ReportProjection(ReportKind.ALL_MODELS, "Test", "V2", recent_model_notice=notice,
+                                  recent_model_notice_highlight_spans=spans)
+        watch_projection = WatchProjection("Cost Guard Watch", "V2", (), recent_model_notice=notice,
+                                           recent_model_notice_highlight_spans=spans)
+
+        report_text = compact.rendered(report, CONFIG, width=120, color=True)
+        watch_stream = io.StringIO()
+        WatchRenderer(CONFIG, stream=watch_stream, interactive=True, terminal_width=120).render(watch_projection)
+        for rendered in (report_text, watch_stream.getvalue()):
+            self.assertIn("\x1b[38;5;118m\u2726 New Models:\x1b[0m", rendered)
+            self.assertIn("\x1b[1;38;5;118m\u2726 Model A\x1b[0m", rendered)
+            plain = ANSI.sub("", rendered)
+            self.assertIn("\u2726 New Models: \u2726 Model A (2026-10-05), Model B (2026-10-06)", plain)
+            self.assertNotIn("\x1b[1;38;5;118mModel B", rendered)
+            self.assertNotIn("\x1b[38;5;118m(2026-10-05)", rendered)
+
     def test_new_model_uses_existing_seven_utc_day_window(self):
         for age, expected in ((-1, False), (0, True), (6, True), (7, False), (8, False)):
             released = datetime.fromtimestamp((NOW - age * DAY) / 1000, tz=timezone.utc).date().isoformat()
@@ -141,6 +164,38 @@ class MetadataWindowTests(unittest.TestCase):
             prices = catalog()
             prices = replace(prices, models=(replace(prices.models[0], metadata={"release_date": released}),))
             self.assertEqual(expected, bool(recent_model_notice(prices, now_ms=NOW)))
+
+    def test_report_and_watch_share_first_sighting_and_exact_twelve_hour_expiry(self):
+        service = compact.report_service(self, MutableSource(), now_ms=NOW)
+        service.pricing_provider.catalog = catalog()
+        model = service.pricing_provider.catalog.models[0]
+        model_name = model.model.display_name
+        model_id = provider_qualified_model_id(model)
+        other_provider = replace(model, model=replace(model.model, provider="other-provider"))
+        self.assertNotEqual(model_id, provider_qualified_model_id(other_provider))
+
+        first = service.build(ReportRequest(ReportKind.ALL_MODELS))
+        self.assertIn(f"\u2726 {model_name}", first.recent_model_notice)
+        original = service.cache_repository.get_or_create_model_first_seen_at(
+            model_id, "2026-10-05T12:00:00.000Z")
+        self.assertEqual("2026-10-05T00:00:00.000Z", original)
+
+        service.set_now_ms(NOW + 11 * 60 * 60 * 1000)
+        repeated = service.build(ReportRequest(ReportKind.ALL_MODELS))
+        self.assertIn(f"\u2726 {model_name}", repeated.recent_model_notice)
+        watch = WatchModelDiscovery(service, run_async=lambda work: work())
+        watch.refresh(NOW + 11 * 60 * 60 * 1000)
+        self.assertIn(f"\u2726 {model_name}", watch.notice(NOW + 11 * 60 * 60 * 1000))
+        self.assertEqual(original, service.cache_repository.get_or_create_model_first_seen_at(
+            model_id, "2026-10-05T11:00:00.000Z"))
+
+        service.set_now_ms(NOW + 12 * 60 * 60 * 1000)
+        expired = service.build(ReportRequest(ReportKind.ALL_MODELS))
+        self.assertIn(model_name, expired.recent_model_notice)
+        self.assertNotIn(f"\u2726 {model_name}", expired.recent_model_notice)
+        self.assertEqual((), expired.recent_model_notice_highlight_spans)
+        self.assertTrue(model_is_recent("2026-10-05", now_ms=NOW + 12 * 60 * 60 * 1000))
+        self.assertIn(model_name, watch.notice(NOW + 12 * 60 * 60 * 1000))
 
     def test_report_new_model_notice_uses_watch_marker(self):
         from src.watch.model_discovery import WatchModelDiscovery
@@ -201,7 +256,7 @@ class MetadataWindowTests(unittest.TestCase):
         for method in ("_v1_wait", "_v2_wait"):
             with self.subTest(method=method), tempfile.TemporaryDirectory() as td:
                 source = MutableSource(make_root_snapshot(0, 0, month_start_ms=NOW))
-                clock = [NOW + WEEK_MS - 1000]
+                clock = [NOW]
                 config, selection, service, _ = make_service(td, source, now_ms=clock[0])
                 service.pricing_provider.catalog = catalog()
                 monotonic = [0.0]
@@ -212,6 +267,8 @@ class MetadataWindowTests(unittest.TestCase):
                     clock_ms=lambda: clock[0], monotonic=lambda: monotonic[0], sleep=advance)
                 initial = watch.initialize().projection
                 self.assertTrue(initial.recent_model_notice)
+                clock[0] = NOW + 12 * 60 * 60 * 1000 - 1000
+                watch._last_cycle_end_ms = clock[0]
                 self.assertTrue(initial.recent_promotion_notices)
                 frames = []
                 renderer = SimpleNamespace(render=frames.append, render_status=lambda _p: None)
@@ -219,8 +276,9 @@ class MetadataWindowTests(unittest.TestCase):
                 hydration_count = source.load_count
                 getattr(watch, method)(renderer)
                 self.assertTrue(frames, "expiry must repaint, not only update the hidden projection")
-                self.assertFalse(frames[-1].recent_model_notice)
-                self.assertFalse(frames[-1].recent_promotion_notices)
+                self.assertTrue(frames[-1].recent_model_notice)
+                self.assertNotEqual(initial.recent_model_notice, frames[-1].recent_model_notice)
+                self.assertTrue(frames[-1].recent_promotion_notices)
                 self.assertEqual(hydration_count, source.load_count)
 
 
