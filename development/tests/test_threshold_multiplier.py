@@ -7,9 +7,8 @@ import unittest
 from dataclasses import replace
 from decimal import Decimal
 
-from development.tests.test_session_move import completed_history
+from development.fixtures.session_snapshots import make_uncompacted_snapshot
 from development.fixtures.watch_runtime import MutableSource, make_service
-from development.tests.test_v786_regressions import _running_without_future_compaction
 from src.analysis.comparisons import threshold_cost_multiplier
 from src.domain import ModelPricing, ModelRef, PricingTier, TokenUsage
 from src.presentation import ReportRenderer, WatchRenderer
@@ -37,7 +36,7 @@ def catalog() -> PricingCatalog:
 
 
 def threshold_snapshot(tokens: int):
-    snapshot = _running_without_future_compaction()
+    snapshot = make_uncompacted_snapshot(running=True)
     return replace(snapshot, invocations=tuple(
         replace(item, tokens=TokenUsage(input=tokens, output=5)) if item.invocation_id == "i_next" else item
         for item in snapshot.invocations))
@@ -86,7 +85,7 @@ class ThresholdMultiplierTests(unittest.TestCase):
             self.assertIn(f"*1 Context: Approaching price threshold >100.0K {expected}", watch_text)
             self.assertNotIn("Next Ictx CCost", watch_text)
 
-            history = completed_history()
+            history = make_uncompacted_snapshot()
             source.snapshot = replace(history, source_revision="exceeded", invocations=tuple(
                 replace(item, tokens=TokenUsage(input=120_000, output=5)) if item.invocation_id == "i_next" else item
                 for item in history.invocations))

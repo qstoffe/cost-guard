@@ -184,18 +184,3 @@ def active_promotion_notes(
         ending = f" through {through}." if recent_only else f" through {through}; standard pricing resumes {resumes}."
         notes.append(f"{label} {', '.join(names)} — {description}{ending}")
     return markers, tuple(notes)
-
-
-def aggregate_usage_notes(month, comparison) -> tuple[str, ...]:
-    notes: list[str] = []
-    if month.deduplicated_clone_requests:
-        notes.append(
-            f"Local calculated excluded {month.deduplicated_clone_requests} cloned provider request(s) "
-            f"copied by session forks (${month.deduplicated_clone_dollars:.2f})."
-        )
-    unpriced = comparison.observed_requests - comparison.priced_requests
-    if unpriced:
-        notes.append(
-            f"WARNING: {unpriced} request(s) could not be assigned CCost because reference pricing was unavailable; CCost totals are incomplete."
-        )
-    return tuple(notes)

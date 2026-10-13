@@ -9,13 +9,14 @@ from unittest import mock
 from zoneinfo import ZoneInfoNotFoundError
 
 from src.analysis import causal
-from src.analysis.billing import actual_entry_cost, aggregate_trace_usage, billing_request_fingerprint
+from src.analysis.billing import actual_entry_cost, billing_request_fingerprint
 from src.analysis.cache import AnalysisDependencies, DerivedAnalysisCache, analyze_with_cache
 from src.analysis.causal import build_prompt_records
 from src.analysis.context import build_context_timeline
 from src.analysis.compaction import completed_compactions
 from src.analysis.core import analyze_snapshot, snapshot_is_stable
 from src.analysis.models import TraceEntry
+from src.analysis.valuation import unique_usage
 from src.analysis.timezones import local_date_range, local_report_range, resolve_timezone, utc_month_start_ms, workday_stats, TimezoneUnavailableError
 from src.cache import CacheDatabase, CacheRepository
 from src.pricing.catalog import PricingCatalog
@@ -48,12 +49,13 @@ class BillingTests(unittest.TestCase):
         one = TraceEntry("a", "p1", "m1", "x", 1000, 0, MODEL, None, TokenUsage(input=10, output=2), Decimal("0.5"))
         clone = replace(one, session_id="b", parent_event_id="p2", message_id="m2", step_part_id="y", sort_order=4)
         self.assertEqual(billing_request_fingerprint(one), billing_request_fingerprint(clone))
-        usage = aggregate_trace_usage((one, clone), since_ms=0, tracked_provider="github-copilot")
-        self.assertEqual(1, usage.requests)
-        self.assertEqual(1, usage.deduplicated_clone_requests)
-        self.assertEqual(Decimal("0.5"), usage.dollars)
-        same_session = aggregate_trace_usage((one, replace(clone, session_id="a")), since_ms=0, tracked_provider="github-copilot")
-        self.assertEqual(2, same_session.requests)
+        self.assertEqual(
+            "1000|github-copilot|gpt-test|4602678819172646912|4621819117588971520|0|0|4611686018427387904|0",
+            billing_request_fingerprint(one), "exact IEEE-754 bits of cost and token counts",
+        )
+        self.assertEqual((one,), unique_usage((one, clone)))
+        self.assertEqual(2, len(unique_usage((one, replace(clone, session_id="a")))))
+        self.assertNotEqual(billing_request_fingerprint(one), billing_request_fingerprint(replace(clone, reported_cost=Decimal("0.25"))))
 
 
 class CausalAnalysisTests(unittest.TestCase):

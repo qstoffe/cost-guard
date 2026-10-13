@@ -13,7 +13,6 @@ from development.fixtures.pricing_catalog import catalog as sample_catalog
 from development.fixtures.report_runtime import FakePricingProvider, FakeSource
 from development.fixtures.watch_runtime import MutableSource, make_service
 from src.analysis.comparisons import compaction_model_timeline_name, watch_model_timeline_name
-from src.analysis.models import LocalUsageSummary
 from src.cache import CacheDatabase, CacheRepository
 from src.config import load_configuration
 from src.domain import CostKind, CostObservation, ModelRef, ModelPricing, PricingTier, TokenUsage
@@ -27,12 +26,6 @@ from src.watch.models import WatchProjection, WatchRow
 ROOT = Path(__file__).resolve().parents[2]
 NOW_MS = 1_790_510_400_000  # 2026-09-27T12:00:00Z
 MONTH_START_MS = 1_788_220_800_000
-
-
-def _usage(dollars: str, *, requests: int = 0, by_day=None) -> LocalUsageSummary:
-    return LocalUsageSummary(
-        Decimal(dollars), requests, 1 if requests else 0, 0, 0, 0, 0, Decimal(0), {}, by_day or {}
-    )
 
 
 class Step9ParityTests(unittest.TestCase):

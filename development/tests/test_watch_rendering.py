@@ -7,7 +7,7 @@ import io
 import unittest
 
 from src.domain import AccountRef, AccountSnapshot, QuotaComponent
-from development.tests.test_context_warning_presentation import prompt, report_projection
+from development.fixtures.warning_projections import warning_prompt, warning_report_projection
 from src.analysis.context import PriceWarningSeverity
 from src.presentation import ReportRenderer, WatchRenderer
 from src.presentation.terminal import single_line
@@ -99,8 +99,8 @@ class WatchRenderingTests(unittest.TestCase):
         self.assertEqual("#Tag kept", single_line("#Tag kept"))
 
     def test_report_titles_and_previews_cannot_inject_terminal_rows(self):
-        item = replace(prompt(PriceWarningSeverity.NONE), preview="paste\x1b[2J\r\nnext line")
-        report = report_projection(item)
+        item = replace(warning_prompt(PriceWarningSeverity.NONE), preview="paste\x1b[2J\r\nnext line")
+        report = warning_report_projection(item)
         block = replace(report.prompt_blocks[0], title="## ❌ Checkpoint\r\nfailed\x1b]0;x\x07")
         stream = io.StringIO()
         ReportRenderer({"colors": {}}, stream=stream, color_enabled=False, terminal_width=160).render(

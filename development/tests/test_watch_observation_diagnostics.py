@@ -10,7 +10,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from development.fixtures.opencode_v2_service import source_with_current_service
-from development.tests.test_session_move import completed_history
+from development.fixtures.session_snapshots import make_uncompacted_snapshot
 from development.fixtures.watch_runtime import MutableSource, make_service
 from src.watch import WatchCoordinator
 from src.watch import coordinator as watch_coordinator
@@ -77,7 +77,7 @@ class WatchObservationTests(unittest.TestCase):
 
     def test_only_source_scans_record_not_per_second_status_redraws(self):
         with tempfile.TemporaryDirectory() as td, patch.object(watch_coordinator, "record_scan") as recorded:
-            config, selection, service, _ = make_service(td, MutableSource(completed_history()))
+            config, selection, service, _ = make_service(td, MutableSource(make_uncompacted_snapshot()))
             watch = WatchCoordinator(selection=selection, report_service=service, config=config, clock_ms=lambda: 4000)
             watch.initialize()
             watch.poll_once()

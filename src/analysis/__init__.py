@@ -3,8 +3,6 @@ from .billing import (
     CostEstimator,
     ProviderScope,
     actual_entry_cost,
-    aggregate_local_usage,
-    aggregate_trace_usage,
     billing_request_fingerprint,
     measure_prompt_billing,
     provider_matches,
@@ -24,7 +22,6 @@ from .core import analyze_snapshot, snapshot_is_stable
 from .models import (
     CompactionRecord,
     CostEvaluation,
-    LocalUsageSummary,
     PromptRecord,
     PromptReference,
     RootAnalysisBundle,

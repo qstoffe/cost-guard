@@ -153,18 +153,3 @@ class RootAnalysisBundle:
     prompts: tuple[PromptRecord, ...]
     compactions: tuple[CompactionRecord, ...]
     cacheable: bool
-
-
-@dataclass(frozen=True, slots=True)
-class LocalUsageSummary:
-    dollars: Decimal
-    requests: int
-    sessions: int
-    fallback_requests: int
-    estimated_fallback_requests: int
-    unresolved_fallback_requests: int
-    deduplicated_clone_requests: int
-    deduplicated_clone_dollars: Decimal
-    by_model: Mapping[str, Decimal] = field(default_factory=dict)
-    by_day_utc: Mapping[str, Decimal] = field(default_factory=dict)
-    included_subscription_requests: int = 0

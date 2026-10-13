@@ -14,7 +14,6 @@ from src.domain import EventKind, NormalizedEvent
 from src.presentation import WatchRenderer
 from src.reports.models import PromptProjection, SessionPromptBlock
 from src.watch import WatchCoordinator
-from src.watch.models import WatchProjection
 from src.domain.session_tree import root_activity
 from src.watch.session_retention import SESSION_IDLE_EXPIRY_MS, startup_visible_roots
 from src.watch.tracker import WatchRowTracker

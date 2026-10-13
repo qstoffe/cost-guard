@@ -19,7 +19,6 @@ from development.fixtures.report_runtime import FakePricingProvider
 from development.fixtures.watch_runtime import MutableSource, make_service
 from development.tools.collect_diagnostics import _projection_summary
 from src.analysis.causal import trace_entries
-from src.analysis.models import LocalUsageSummary
 from src.analysis.valuation import ComparisonCost
 from src.config import load_configuration, read_jsonc
 from src.domain import BillingComponent, CostDisposition, QuotaComponent
@@ -29,7 +28,6 @@ from src.presentation.terminal import AnsiStyler
 from src.reports import ReportRequest
 from src.reports.accounts import account_projections
 from src.reports.models import AccountProjection, ReportKind, ReportProjection
-from src.reports.semantics import aggregate_usage_notes
 from src.watch.models import WatchProjection
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -276,13 +274,6 @@ class LayoutTests(unittest.TestCase):
 
 
 class CoverageTests(unittest.TestCase):
-    def test_successful_fallback_is_silent_and_unpriced_ccost_warns_independently_of_billing(self):
-        month = LocalUsageSummary(D(1), 1000, 1, 1037, 1000, 37, 0, D(0))
-        self.assertEqual((), aggregate_usage_notes(month, ComparisonCost(D(1), 1000, 1000)))
-        notes = aggregate_usage_notes(LocalUsageSummary(D(0), 0, 0, 0, 0, 0, 0, D(0)), ComparisonCost(D(1), 1000, 963))
-        self.assertEqual(1, len(notes))
-        self.assertIn("37 request(s) could not be assigned CCost", notes[0])
-
     def test_service_retains_fallback_diagnostics_and_warns_for_unpriced_reported_calls(self):
         with tempfile.TemporaryDirectory() as td:
             snapshot = make_snapshot()

@@ -4,12 +4,11 @@ from __future__ import annotations
 import struct
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from decimal import Decimal
 
 from src.domain import CostDisposition, ModelRef, TokenUsage
 
-from .models import CostEvaluation, LocalUsageSummary, PromptRecord, TraceEntry
+from .models import CostEvaluation, TraceEntry
 
 
 CostEstimator = Callable[[ModelRef, TokenUsage], Decimal | None]
@@ -69,8 +68,8 @@ def actual_entry_cost(entry: TraceEntry, estimator: CostEstimator | None = None)
     return CostEvaluation(value, fallback=True, estimated=True)
 
 
-def _double_bits_text(value: float) -> str:
-    return str(struct.unpack(">q", struct.pack(">d", float(value)))[0])
+_SIX_DOUBLES = struct.Struct(">6d")
+_SIX_INT64 = struct.Struct(">6q")
 
 
 def billing_request_fingerprint(entry: TraceEntry) -> str:
@@ -82,18 +81,12 @@ def billing_request_fingerprint(entry: TraceEntry) -> str:
     """
     if entry.completed_at_ms <= 0 or not entry.model.provider.strip() or not entry.model.model.strip():
         return ""
-    values = (
-        str(entry.completed_at_ms),
-        entry.model.provider,
-        entry.model.model,
-        _double_bits_text(float(entry.reported_cost)),
-        _double_bits_text(entry.tokens.input),
-        _double_bits_text(entry.tokens.cache_read),
-        _double_bits_text(entry.tokens.cache_write),
-        _double_bits_text(entry.tokens.output),
-        _double_bits_text(entry.tokens.reasoning),
-    )
-    return "|".join(values)
+    tokens = entry.tokens
+    # Exact IEEE-754 bit patterns of the stored cost and token counts, packed together.
+    bits = _SIX_INT64.unpack(_SIX_DOUBLES.pack(
+        float(entry.reported_cost), tokens.input, tokens.cache_read, tokens.cache_write, tokens.output, tokens.reasoning,
+    ))
+    return "|".join((str(entry.completed_at_ms), entry.model.provider, entry.model.model, *map(str, bits)))
 
 
 def measure_prompt_billing(
@@ -142,131 +135,4 @@ def measure_prompt_billing(
         cache_read_tokens=cache_read,
         cache_write_tokens=cache_write,
         model_costs=model_costs,
-    )
-
-
-def aggregate_local_usage(
-    prompt_records: Iterable[PromptRecord],
-    *,
-    since_ms: int,
-    tracked_provider: ProviderScope,
-    estimator: CostEstimator | None = None,
-    extra_entries: Iterable[TraceEntry] = (),
-) -> LocalUsageSummary:
-    """Aggregate provider work with v77-style cross-session fork deduplication.
-
-    Prompt records normally cover causal prompt work.  ``extra_entries`` exists
-    for separately billed completed compactions or future non-prompt work.
-    """
-    entries: list[TraceEntry] = []
-    for record in prompt_records:
-        entries.extend(record.entries)
-    entries.extend(extra_entries)
-    entries.sort(key=lambda e: (e.completed_at_ms, e.sort_order, e.session_id))
-
-    total = Decimal("0")
-    fallback = estimated = unresolved = requests = included = 0
-    dedup_requests = 0
-    dedup_dollars = Decimal("0")
-    fingerprint_session: dict[str, str] = {}
-    session_ids: set[str] = set()
-    by_model: dict[str, Decimal] = {}
-    by_day: dict[str, Decimal] = {}
-
-    for entry in entries:
-        if entry.completed_at_ms < since_ms or not provider_matches(entry.model.provider, tracked_provider):
-            continue
-        fingerprint = billing_request_fingerprint(entry)
-        if fingerprint:
-            first_session = fingerprint_session.get(fingerprint)
-            if first_session is not None and first_session != entry.session_id:
-                clone_cost = actual_entry_cost(entry, estimator)
-                dedup_requests += 1
-                dedup_dollars += clone_cost.dollars
-                continue
-            fingerprint_session.setdefault(fingerprint, entry.session_id)
-        cost = actual_entry_cost(entry, estimator)
-        requests += 1
-        included += int(entry.cost_disposition is CostDisposition.INCLUDED_SUBSCRIPTION)
-        session_ids.add(entry.session_id)
-        total += cost.dollars
-        fallback += int(cost.fallback)
-        estimated += int(cost.estimated)
-        unresolved += int(cost.unresolved)
-        by_model[entry.model.model] = by_model.get(entry.model.model, Decimal("0")) + cost.dollars
-        day = datetime.fromtimestamp(entry.completed_at_ms / 1000, tz=timezone.utc).strftime("%Y-%m-%d")
-        by_day[day] = by_day.get(day, Decimal("0")) + cost.dollars
-
-    return LocalUsageSummary(
-        dollars=total,
-        requests=requests,
-        sessions=len(session_ids),
-        fallback_requests=fallback,
-        estimated_fallback_requests=estimated,
-        unresolved_fallback_requests=unresolved,
-        deduplicated_clone_requests=dedup_requests,
-        deduplicated_clone_dollars=dedup_dollars,
-        included_subscription_requests=included,
-        by_model=by_model,
-        by_day_utc=by_day,
-    )
-
-
-def aggregate_trace_usage(
-    entries: Iterable[TraceEntry],
-    *,
-    since_ms: int,
-    tracked_provider: ProviderScope,
-    estimator: CostEstimator | None = None,
-) -> LocalUsageSummary:
-    """Aggregate authoritative trace entries directly, including compactions.
-
-    This is the source-neutral equivalent of v77 ``Calculate-LocalUsage`` and
-    should be preferred for month/day totals.  Prompt records are a presentation
-    attribution view and are not the authoritative inventory of provider calls.
-    """
-    ordered = sorted(entries, key=lambda e: (e.completed_at_ms, e.sort_order, e.session_id))
-    total = Decimal("0")
-    fallback = estimated = unresolved = requests = included = 0
-    dedup_requests = 0
-    dedup_dollars = Decimal("0")
-    fingerprint_session: dict[str, str] = {}
-    session_ids: set[str] = set()
-    by_model: dict[str, Decimal] = {}
-    by_day: dict[str, Decimal] = {}
-    for entry in ordered:
-        if entry.completed_at_ms < since_ms or not provider_matches(entry.model.provider, tracked_provider):
-            continue
-        fingerprint = billing_request_fingerprint(entry)
-        if fingerprint:
-            first_session = fingerprint_session.get(fingerprint)
-            if first_session is not None and first_session != entry.session_id:
-                clone_cost = actual_entry_cost(entry, estimator)
-                dedup_requests += 1
-                dedup_dollars += clone_cost.dollars
-                continue
-            fingerprint_session.setdefault(fingerprint, entry.session_id)
-        cost = actual_entry_cost(entry, estimator)
-        requests += 1
-        included += int(entry.cost_disposition is CostDisposition.INCLUDED_SUBSCRIPTION)
-        session_ids.add(entry.session_id)
-        total += cost.dollars
-        fallback += int(cost.fallback)
-        estimated += int(cost.estimated)
-        unresolved += int(cost.unresolved)
-        by_model[entry.model.model] = by_model.get(entry.model.model, Decimal("0")) + cost.dollars
-        day = datetime.fromtimestamp(entry.completed_at_ms / 1000, tz=timezone.utc).strftime("%Y-%m-%d")
-        by_day[day] = by_day.get(day, Decimal("0")) + cost.dollars
-    return LocalUsageSummary(
-        dollars=total,
-        requests=requests,
-        sessions=len(session_ids),
-        fallback_requests=fallback,
-        estimated_fallback_requests=estimated,
-        unresolved_fallback_requests=unresolved,
-        deduplicated_clone_requests=dedup_requests,
-        deduplicated_clone_dollars=dedup_dollars,
-        included_subscription_requests=included,
-        by_model=by_model,
-        by_day_utc=by_day,
     )
