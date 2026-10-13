@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.42 — 2026-10-13
+
+- `Calls` tracks independently evidenced model requests. A zero-usage, tool-only OpenCode V2 record that directly continues a usage-bearing `tool-calls` response of the same prompt and model no longer counts as its own request when a shared provider response id, or without ids its absent model latency, proves it. The record stays in history, so tools, failures, outcomes and durations are unchanged.
+- Ambiguous zero-usage records (model latency, own output, absent counters, errors, model switches, differing or one-sided ids, prompt/compaction boundaries) keep counting; usage, CCost and fallback valuation are unchanged. Live reference prompts move from 21 to 12 and from 8 to 6 Calls; an OpenAI session with response ids is unchanged. Cached analyses are recomputed once.
+
 ## v80.41 — 2026-10-12
 
 - Behavior-neutral maintenance: shared report-service, availability/rendering, quota-rendering, account and config-package test setup now lives in responsibility-owned fixtures instead of being borrowed from other test modules, retiring 15 of 33 bounded test-import debt edges. Stale unused imports were removed.
@@ -26,16 +31,9 @@
 - Bounded source incident history retains sanitized phase/category/type/count/duration evidence for later Diagnostics, including after ZIP creation. External certificate-verification failures are distinct from other TLS failures; metadata cache fallback/backoff remains intact.
 - Startup/troubleshooting documentation separates local loopback HTTP from external HTTPS and treats VPN/security/proxy/certificate causes as hypotheses, without weakening protections. Diagnostics summaries separate connectivity, metadata degradation, validation and ZIP creation.
 
-## v80.37 — 2026-10-10
-
-- Summarizes all changes since v80.36 (PRs #2-#5): removed dead definitions, unused imports and redundant integration/report/Watch code, retaining existing behavior and protected contracts.
-- Causal analysis now derives trace entries, sorted prompt events and active compaction once per root/pass rather than per prompt. Recorded pre/post cleanup medians: 74 live roots 252 to 92 ms; a synthetic 500-prompt root 1.72 to 0.23 s. Analysis records remain identical.
-- Analysis-cache serialization copies flat fields and serializes nested values once instead of deep-converting then discarding them (recorded 74-bundle median 90 to 31 ms; identical JSON). Metadata-only pricing changes use dataclass replacement; Watch identity/marker handling is consolidated without changing rows or accounting.
-- Git delivery policy is tool-independent: explicit task/workflow authorization covers commits, push, PR and safe merge in an isolated clone without editing the ordinary working tree. Isolated Git delivery still builds no ZIP unless requested; existing quality gates and protection of maintainer rules remain.
-- Every PR merged to main now requires a sequential product-version bump with release date, bounded net-change history, README current version and affected current docs in the same PR, including documentation-only and behavior-neutral work. Recheck against the latest base before merge; tags, GitHub Releases and packaging policy are unchanged.
-
 ## Earlier v80 history
 
+- v80.37 removed dead/redundant code, derived causal trace inputs once per root pass (74 live roots 252→92 ms with identical records) and flattened analysis-cache serialization; Git delivery became tool-independent in isolated clones, and every PR to main now carries a sequential version bump with dated history and current docs.
 - v80.35–v80.36 added explicit native abort-cause labels, neutral tool-call endings and stable credit-first account ordering; Watch shows `[ABORTED by user]` only when a live V2 user interrupt matches authoritative interrupted history, keeping that actor evidence bounded and in memory.
 - v80.34 pooled V2 reads/fresh snapshot brackets, memoized model identity, overlapped report acquisition and bounded Watch discovery/startup/resync. Recorded live timings with v80.33-identical output: normal report ~2.1→0.65 s, date report 7.5→2.1 s, Watch startup ~6.2→0.65 s, resync 13→1.4 s. Diagnostics gained all-account evidence and privacy-safe Watch geometry; concurrent Full and shared fixtures retired 10 test-import edges. Verification/packaging policy remains in maintainer rules.
 - v80.32–v80.33 separated Watch account refresh, prompt projection/report orchestration and source normalization; shared catalog ancestry and bounded sampling; moved fixtures (67→43 test-import edges, 46 fewer test-import dependencies), enforced bounded routine/coupling debt without raising caps, standardized `Context:` warning explanations, and added code maps/inventory/layer guards. Source/cache/billing semantics stayed unchanged.

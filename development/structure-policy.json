@@ -11,7 +11,7 @@
     "src/presentation/accounts.py::quota_parts": {"statements": 50, "branches": 20, "reason": "Provider-neutral capacity/bar/reset layout across compact and verbose renderers."},
     "src/presentation/report.py::ReportRenderer._render_prompt_block": {"statements": 90, "branches": 19, "reason": "Prompt timeline, main/subagent rows, totals, warning colors and table geometry are contractual."},
     "src/pricing/github_copilot.py::parse_pricing_markdown": {"statements": 60, "branches": 11, "reason": "Published rate/tier/promotion provenance and malformed-row handling need parser fixtures."},
-    "src/sources/opencode_v2_wire.py::current_union_message_to_legacy_bundle": {"statements": 70, "branches": 29, "reason": "Current-service union variants must normalize without changing persisted lifecycle evidence."},
+    "src/sources/opencode_v2_wire.py::current_union_message_to_legacy_bundle": {"statements": 57, "branches": 22, "reason": "Current-service union variants must normalize without changing persisted lifecycle evidence."},
     "src/watch/accounts.py::reconcile_accounts": {"statements": 52, "branches": 17, "reason": "Partial/pending provider retention and successful-seen timestamps are distinct evidence."}
   },
   "legacyTestImports": {
