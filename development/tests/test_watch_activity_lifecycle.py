@@ -158,6 +158,23 @@ class ActiveActivityLifecycleTests(unittest.TestCase):
         self.assertEqual((SkillObservation(BROWSER, 1),), row.tool.skills)
         self.assertFalse(row.tool.has_status_row)
 
+    def test_running_play_marker_outlives_recent_window_then_transitions_to_completion(self):
+        tracker = WatchRowTracker(started_at_ms=0, recent_seconds=1, max_rows=20)
+        active = prompt(in_progress=True)
+        active_snapshot = snapshot(self.parts)
+        first = self.project((active,), active_snapshot, now=60_000, tracker=tracker)
+        self.assertEqual("▶", first[0].marker)
+
+        later = self.project((active,), active_snapshot, now=600_000, tracker=tracker)
+        self.assertEqual("▶", later[0].marker)
+        self.assertIn("▶ #1 work", render(later))
+
+        completed = prompt(in_progress=False, completed_successfully=True)
+        terminal = self.project((completed,), snapshot(self.parts, running=False), now=600_001, tracker=tracker)
+        self.assertEqual("✓", terminal[0].marker)
+        self.assertNotIn("▶ #1", render(terminal))
+        self.assertIn("✓ #1 work", render(terminal))
+
     def test_recent_green_and_red_markers_expire_with_their_activity_rows(self):
         for terminal in (prompt(in_progress=False, completed_successfully=True),
                          prompt(in_progress=False, aborted=True)):

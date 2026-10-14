@@ -86,7 +86,7 @@ class WatchGatingTests(unittest.TestCase):
             watch = WatchCoordinator(selection=selection, report_service=service, config=config, clock_ms=lambda: clock[0])
             initial = watch.initialize()
             running = next(row for row in initial.projection.rows if row.prompt.event_id == "u_next")
-            self.assertEqual("+", running.marker)
+            self.assertEqual("▶", running.marker)
             source.snapshot = replace(make_snapshot(running=False), source_revision="v1-rev-2")
             clock[0] = 2400
             cycle = watch.poll_once()

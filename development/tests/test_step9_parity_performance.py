@@ -161,9 +161,11 @@ class Step9ParityTests(unittest.TestCase):
         WatchRenderer(config, stream=out, interactive=False).render(projection)
         text = out.getvalue()
         self.assertIn("✦ New Models: GPT-5.6", text)
-        self.assertIn("*1 Root session", text)
+        header = next(line for line in text.splitlines() if "Root session" in line)
+        self.assertNotIn("*1", header)
         self.assertIn("*1 Context: price threshold approaching", text)
-        self.assertIn("GPT-5.6 (Medium)", text)
+        prompt_line = next(line for line in text.splitlines() if "#1 hello" in line)
+        self.assertIn("GPT-5.6 (Medium)*1", prompt_line)
         self.assertNotIn("Default -> Medium", text)
 
 

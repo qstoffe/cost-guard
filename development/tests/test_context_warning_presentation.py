@@ -14,12 +14,13 @@ from src.analysis.core import analyze_snapshot
 from src.config import load_configuration
 from src.domain import TokenUsage
 from src.presentation import ReportRenderer, WatchRenderer
+from src.presentation.watch import _fit_model_effort
 from src.presentation.context_warnings import warning_explanation_lines
 from src.presentation.terminal import AnsiStyler
 from src.reports.models import ReportKind
 from src.reports.prompts import build_prompt_block
 from src.watch.coordinator import WatchCoordinator
-from src.watch.models import WatchRow
+from src.watch.models import WatchProjection, WatchRow
 
 
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
@@ -50,10 +51,12 @@ class ContextWarningPresentationTests(unittest.TestCase):
                 item = warning_prompt(severity)
                 text = self.watch(warning_watch_projection(item))
                 header = next(line for line in text.splitlines() if "Normal session" in line)
-                self.assertIn(styler.apply("*1", "nextIctxWarning"), header)
+                self.assertNotIn("*1", header)
                 row = next(line for line in text.splitlines() if "Normal prompt" in line)
+                self.assertIn(styler.apply("Test (Default)", "nextIctxWarning"), row)
+                self.assertIn(styler.apply("*1", "nextIctxWarning"), row)
                 self.assertIn(styler.apply(f"{'~' + str(item.watch_next_context_tokens // 1000) + 'k':>8}", "nextIctxWarning"), row)
-                self.assertEqual(1, row.count("\x1b[0m"), "only the Next Ictx segment should be styled")
+                self.assertEqual(3, row.count("\x1b[0m"), "Model, marker and Next Ictx are styled independently")
                 self.assertNotIn("\x1b[91m", row)
                 self.assertIn("+4k →", ANSI.sub("", row))
 
@@ -133,12 +136,78 @@ class ContextWarningPresentationTests(unittest.TestCase):
         item = replace(warning_prompt(PriceWarningSeverity.NONE, ""), watch_next_context_warning="")
         projection = replace(warning_watch_projection(item), session_warnings={})
         self.assertNotIn("\x1b[38;5;172m", self.watch(projection))
+        self.assertNotIn("*1", self.watch(projection))
         self.assertNotIn("*1", self.report(warning_report_projection(item)))
         item = warning_prompt(PriceWarningSeverity.EXCEEDED)
         title = "Long session title " * 8
-        self.assertIn(self.styles().apply("*1", "nextIctxWarning"), self.watch(warning_watch_projection(item, title)))
+        output = self.watch(warning_watch_projection(item, title))
+        self.assertNotIn("*1", next(line for line in output.splitlines() if title[:18] in line))
+        self.assertIn(self.styles().apply("Test (Default)", "nextIctxWarning"), output)
+        self.assertIn(self.styles().apply("*1", "nextIctxWarning"), output)
         self.assertNotIn("\x1b", self.watch(warning_watch_projection(item), colored=False))
         self.assertNotIn("\x1b", self.report(warning_report_projection(item), colored=False))
+
+    def test_warning_stays_on_its_prompt_and_fits_independently_truncated_model_effort(self):
+        base = warning_prompt(PriceWarningSeverity.APPROACHING)
+        long_label = "Claude Sonnet 5.5 (Extra High)"
+        for width in range(9):
+            self.assertLessEqual(len(_fit_model_effort(long_label, width)), width)
+        rows = tuple(
+            WatchRow(f"S{number}", f"Session {number}", replace(
+                base, preview=f"test prompt {number}", model_effort=long_label, watch_model_effort=long_label,
+            ))
+            for number in range(1, 13)
+        )
+        warnings = {row.session_id: base.watch_next_context_warning for row in rows}
+        text = self.watch(WatchProjection("Watch", "V2", rows, session_warnings=warnings))
+        line = next(line for line in text.splitlines() if "#1 test prompt 12" in line)
+        model_cell = ANSI.sub("", line).split("|")[2].strip()
+        self.assertEqual(25, len(model_cell))
+        self.assertTrue(model_cell.endswith("*12"))
+        fitted = model_cell[:-3]
+        model, effort = fitted.rsplit(" ", 1)
+        self.assertTrue(model.endswith("..."))
+        self.assertTrue(effort.startswith("(") and effort.endswith(")"))
+        self.assertIn("...", effort)
+        styler = self.styles()
+        self.assertIn(styler.apply(fitted, "nextIctxWarning"), line)
+        self.assertIn(styler.apply("*12", "nextIctxWarning"), line)
+
+        no_warning = replace(base, preview="plain prompt", model_effort=long_label, watch_model_effort=long_label,
+                             watch_next_context_warning="", watch_next_context_warning_severity=PriceWarningSeverity.NONE)
+        plain_projection = WatchProjection("Watch", "V2", (WatchRow("plain", "Plain", no_warning),),
+                                           session_warnings={})
+        plain_line = next(line for line in self.watch(plain_projection).splitlines() if "plain prompt" in line)
+        plain_cell = ANSI.sub("", plain_line).split("|")[2].strip()
+        self.assertEqual(25, len(plain_cell))
+        self.assertFalse(plain_cell.endswith("*"))
+        plain_model, plain_effort = plain_cell.rsplit(" ", 1)
+        self.assertTrue(plain_model.endswith("..."))
+        self.assertTrue(plain_effort.startswith("(") and plain_effort.endswith(")"))
+        self.assertIn("...", plain_effort)
+
+        unrelated = WatchRow("root", "Session root", replace(base, preview="older prompt",
+                              model_effort="Unrelated model", watch_model_effort="Unrelated model"),
+                             is_latest_session_event=False)
+        current = WatchRow("root", "Session root", replace(base, preview="current prompt",
+                           model_effort="Current model", watch_model_effort="Current model"))
+        scoped = self.watch(WatchProjection("Watch", "V2", (unrelated, current),
+                                            session_warnings={"root": base.watch_next_context_warning}))
+        old_line = next(line for line in scoped.splitlines() if "older prompt" in line)
+        current_line = next(line for line in scoped.splitlines() if "current prompt" in line)
+        self.assertIn("Unrelated model", old_line)
+        self.assertNotIn("*1", old_line)
+        self.assertIn(styler.apply("Current model", "nextIctxWarning"), current_line)
+        self.assertIn(styler.apply("*1", "nextIctxWarning"), current_line)
+
+    def test_compaction_warning_marker_follows_its_model_effort(self):
+        item = replace(warning_prompt(PriceWarningSeverity.EXCEEDED), is_compaction=True,
+                       model_effort="Claude (High)", watch_model_effort="Claude (High)")
+        output = self.watch(warning_watch_projection(item))
+        compaction_line = next(line for line in output.splitlines() if "/compact" in line)
+        plain = ANSI.sub("", compaction_line)
+        self.assertIn("Claude (High)*1", plain)
+        self.assertNotIn("*1", next(line for line in output.splitlines() if "Normal session" in line))
 
     def test_watch_expiry_live_none_and_report_fallback_share_state_selection(self):
         item = warning_prompt(PriceWarningSeverity.EXCEEDED)

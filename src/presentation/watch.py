@@ -1,6 +1,7 @@
 """Full-screen/redirect-safe rendering for Watch projections."""
 from __future__ import annotations
 
+from datetime import date, datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
 import os
 import sys
@@ -8,7 +9,7 @@ from typing import Mapping, TextIO
 
 from src.version import mode_heading
 from src.numbers import ccost_amount
-from src.analysis.timezones import format_local_timestamp
+from src.analysis.timezones import format_local_timestamp, resolve_timezone
 from src.watch.models import ToolObservation, WatchProjection, WatchRow, WatchSessionSubtotal
 
 from .terminal import AnsiStyler, Column, StyledText, fit, render_table, single_line
@@ -31,7 +32,72 @@ _WATCH_COLUMNS = (
 # Session headers span Session/prompt and Model/effort, including their divider.
 _HEADER_WIDTH = _WATCH_COLUMNS[0].fixed_width + 3 + _WATCH_COLUMNS[1].fixed_width
 EARLIER_LABEL = "[Earlier]"
-EARLIER_EXPLANATION = "Historical session activity; previous usage is excluded from Token Mix and Watch total CCost."
+EARLIER_EXPLANATION = "Session activity before Watch started; excluded from Token Mix and Watch total CCost."
+
+
+def _current_local_date(timezone_id: str) -> date:
+    """Read the render-time date in Watch's configured timezone."""
+    return datetime.now(timezone.utc).astimezone(resolve_timezone(timezone_id)).date()
+
+
+def _truncate_label(text: str, width: int) -> str:
+    if width <= 0:
+        return ""
+    if len(text) <= width:
+        return text
+    return text[:width] if width <= 3 else text[:width - 3] + "..."
+
+
+def _fit_effort(effort: str, width: int) -> str:
+    if len(effort) <= width:
+        return effort
+    if width == 5:
+        return "(...)"
+    if width > 5:
+        return "(" + effort[1:-1][:width - 5] + "...)"
+    return _truncate_label(effort, width)
+
+
+def _fit_model_effort(label: str, width: int) -> str:
+    """Fit model and trailing effort independently, preserving their identity cues."""
+    if len(label) <= width:
+        return label
+    opening = label.rfind(" (")
+    if opening <= 0 or not label.endswith(")"):
+        return _truncate_label(label, width)
+    model, effort = label[:opening], label[opening + 1:]
+    if "(" in effort[1:-1] or ")" in effort[1:-1] or width < 3:
+        return _truncate_label(label, width)
+
+    component_width = width - 1
+    minimum_model = min(len(model), 4)
+    minimum_effort = min(len(effort), 5)
+    if component_width >= minimum_model + minimum_effort:
+        model_width = min(len(model), max(minimum_model, component_width * 2 // 3))
+        effort_width = min(len(effort), component_width - model_width)
+        if effort_width < minimum_effort:
+            effort_width = minimum_effort
+            model_width = component_width - effort_width
+    else:
+        model_width = max(1, component_width * 2 // 3)
+        effort_width = component_width - model_width
+
+    model_width = min(len(model), model_width)
+    effort_width = min(len(effort), effort_width)
+    remaining = component_width - model_width - effort_width
+    model_extra = min(remaining, len(model) - model_width)
+    model_width += model_extra
+    effort_width += min(remaining - model_extra, len(effort) - effort_width)
+    return _truncate_label(model, model_width) + " " + _fit_effort(effort, effort_width)
+
+
+def _model_effort_cell(label: str, warning_number: int | None) -> str | StyledText:
+    marker = f"*{warning_number}" if warning_number is not None else ""
+    width = _WATCH_COLUMNS[1].fixed_width or 0
+    value = _fit_model_effort(label, max(0, width - len(marker)))
+    if not marker:
+        return value
+    return StyledText(((value, WARNING_ROLE), (marker, WARNING_ROLE)))
 
 
 def _tokens(value: int | None, *, signed: bool = False, approximate: bool = False) -> str:
@@ -211,15 +277,24 @@ class WatchRenderer:
             return max(row.prompt.duration_ms or 0, now_ms - row.prompt.at_ms)
         return row.prompt.duration_ms
 
-    def _session_header(self, row: WatchRow, warning_number: int | None) -> StyledText:
-        """Merged Session/Model header: [*N] [[Earlier]] time title; only the title truncates."""
-        segments: list[tuple[str, str | None]] = []
-        for label in ((f"*{warning_number}",) if warning_number is not None else ()) + ((EARLIER_LABEL,) if row.earlier else ()):
-            segments.extend(((label, WARNING_ROLE), (" ", "watchSessionHeader")))
+    def _session_header(self, row: WatchRow, *, running: bool, today: date | None) -> StyledText:
+        """Merged header with a fixed running prefix and timestamp-first Earlier label."""
+        segments: list[tuple[str, str | None]] = (
+            [("▶", "watchRunningWarning"), (" ", "watchSessionHeader")]
+            if running else [("  ", "watchSessionHeader")]
+        )
         if row.session_latest_ms > 0:
-            pattern = "%Y-%m-%d %H:%M" if row.earlier else "%H:%M"
+            pattern = "%H:%M"
+            if row.earlier and today is not None:
+                local = datetime.fromtimestamp(row.session_latest_ms / 1000, timezone.utc).astimezone(
+                    resolve_timezone(self.timezone_id)
+                )
+                if local.date() != today:
+                    pattern = "%Y-%m-%d %H:%M"
             segments.append((format_local_timestamp(row.session_latest_ms, self.timezone_id, pattern) + " ",
                              "watchSessionHeader"))
+        if row.earlier:
+            segments.extend(((EARLIER_LABEL, WARNING_ROLE), (" ", "watchSessionHeader")))
         # Checkpoint failures can leave Markdown/CRLF in OpenCode session titles.
         room = _HEADER_WIDTH - sum(len(text) for text, _role in segments)
         title = fit(single_line(row.session_title, "Untitled session"), room).rstrip()
@@ -235,20 +310,27 @@ class WatchRenderer:
         previous_session = None
         warnings = projection.session_warnings or {}
         warning_numbers = {session_id: index + 1 for index, session_id in enumerate(warnings)}
+        running_sessions = {row.session_id for row in projection.rows if row.prompt.in_progress and not row.earlier}
+        today = (_current_local_date(self.timezone_id)
+                 if any(row.earlier for row in projection.rows) else None)
         for row in projection.rows:
             if row.session_id != previous_session:
                 subtotal = _session_subtotal_text(projection.session_subtotals.get(row.session_id))
                 headers.append(len(rows))
-                rows.append((self._session_header(row, warning_numbers.get(row.session_id)), "", subtotal, "", "", ""))
+                rows.append((self._session_header(row, running=row.session_id in running_sessions, today=today),
+                             "", subtotal, "", "", ""))
                 styles.append(("watchSessionHeader", None, None, None, None, None))
                 previous_session = row.session_id
             prompt = row.prompt
             role = self._row_style(row)
             native_compaction_without_billing = prompt.is_compaction and prompt.calls == 0 and prompt.ccost == 0
             model_label = prompt.watch_model_effort or prompt.model_effort or "N/A"
+            warning_number = warning_numbers.get(row.session_id) if row.next_context_warning else None
+            model_cell = ("" if native_compaction_without_billing and model_label == "N/A" and warning_number is None
+                          else _model_effort_cell(model_label, warning_number))
             rows.append((
                 self._row_label(row),
-                "" if native_compaction_without_billing and model_label == "N/A" else model_label,
+                model_cell,
                 "" if native_compaction_without_billing else ccost_amount(prompt.ccost, unresolved=prompt.unresolved_cost),
                 "" if native_compaction_without_billing else prompt.calls,
                 "" if native_compaction_without_billing and not prompt.in_progress else _duration(self._duration_for(row, projection.now_ms)),

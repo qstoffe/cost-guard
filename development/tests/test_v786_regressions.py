@@ -61,11 +61,14 @@ class V786RegressionTests(unittest.TestCase):
         stream = io.StringIO()
         WatchRenderer({"timezone": "UTC", "colors": {}, "thresholds": {}}, stream=stream, interactive=False).render(projection)
         text = stream.getvalue()
-        self.assertIn("*1 DFP-10524", text)
+        header = next(line for line in text.splitlines() if "DFP-10524" in line)
+        self.assertNotIn("*1", header)
         self.assertIn("*1 Context: Approaching price threshold", text)
         self.assertNotIn("$", text)
         self.assertIn("Context:", text)
         prompt_line = next(line for line in text.splitlines() if "#2 " in line)
+        model_cell = prompt_line.split("|")[2]
+        self.assertIn("*1", model_cell)
         self.assertNotIn("N/A", prompt_line)
 
     def test_coordinator_projects_watch_specific_live_warning(self) -> None:
