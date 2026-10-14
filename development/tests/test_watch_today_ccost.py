@@ -16,8 +16,8 @@ from src.analysis.timezones import local_day_start_ms
 from src.analysis.valuation import ComparisonCost
 from src.domain import ModelRef, TokenUsage
 from src.presentation import WatchRenderer
-from src.presentation.token_mix import comparison_cost_text, watch_total_line
-from src.watch import WatchCoordinator
+from src.presentation.token_mix import comparison_cost_text, watch_total_lines
+from src.watch import WatchCoordinator, WatchCycle
 from src.watch.models import WatchProjection
 from src.watch.today_ccost import WatchTodayCCost
 from src.analysis.token_mix import TokenMix
@@ -134,10 +134,69 @@ class WatchTodayCCostTests(unittest.TestCase):
         self.assertEqual("0", comparison_cost_text(ComparisonCost()))
         self.assertEqual("N/A", comparison_cost_text(ComparisonCost(Decimal(0), 1, 0)))
         self.assertEqual("?2", comparison_cost_text(ComparisonCost(Decimal("1.1"), 2, 1)))
-        line = watch_total_line(TokenMix(), ComparisonCost(Decimal(2458), 1, 1))
+        lines = watch_total_lines(TokenMix(), ComparisonCost(Decimal(2458), 1, 1), width=120)
         self.assertEqual(
-            "Watch total CCost: 0 (Today: 2458; Deleted sessions before Watch start excluded)", line
+            ["CCost · Watch: 0 · Today: 2458 · Deleted sessions before Watch start are not included in Today"], lines
         )
+        night = watch_total_lines(TokenMix(), ComparisonCost(Decimal("1.1"), 2, 1), "2026-10-15")
+        self.assertEqual(
+            ["CCost · Watch: 0 · 2026-10-15: ?2 · Deleted sessions before Watch start are not included in Today"],
+            night,
+        )
+
+    def test_narrow_terminal_moves_only_the_explanation_to_a_continuation_line(self):
+        lines = watch_total_lines(TokenMix(), ComparisonCost(Decimal(2458), 1, 1), "2026-10-15", width=80)
+        self.assertEqual(["CCost · Watch: 0 · 2026-10-15: 2458",
+                          "  Deleted sessions before Watch start are not included in Today"], lines)
+
+    def test_today_label_shows_local_date_from_midnight_until_three(self):
+        tracker = WatchTodayCCost("Europe/Stockholm")
+        cases = (
+            (epoch_ms(2026, 10, 14, 21, 59) + 59_000, "Today"),  # 23:59:59 CEST
+            (epoch_ms(2026, 10, 14, 22), "2026-10-15"),  # 00:00:00 CEST
+            (epoch_ms(2026, 10, 15, 0, 59) + 59_000, "2026-10-15"),  # 02:59:59 CEST
+            (epoch_ms(2026, 10, 15, 1), "Today"),  # 03:00:00 CEST
+        )
+        for now_ms, expected in cases:
+            with self.subTest(now_ms=now_ms):
+                self.assertEqual(expected, tracker.label(now_ms))
+        self.assertEqual("2026-10-15", WatchTodayCCost("UTC").label(epoch_ms(2026, 10, 15, 2, 59)))
+        self.assertEqual("Today", WatchTodayCCost("UTC").label(epoch_ms(2026, 10, 14, 22)))
+
+    def test_today_label_follows_dst_wall_clock(self):
+        tracker = WatchTodayCCost("Europe/Stockholm")
+        # Spring: 01:59:59 CET is followed directly by 03:00 CEST.
+        self.assertEqual("2026-03-29", tracker.label(epoch_ms(2026, 3, 29, 0, 59) + 59_000))
+        self.assertEqual("Today", tracker.label(epoch_ms(2026, 3, 29, 1)))
+        # Autumn: both 02:xx hours keep the date; 03:00 CET returns to Today.
+        self.assertEqual("2026-10-25", tracker.label(epoch_ms(2026, 10, 25, 0, 30)))  # 02:30 CEST
+        self.assertEqual("2026-10-25", tracker.label(epoch_ms(2026, 10, 25, 1, 30)))  # 02:30 CET
+        self.assertEqual("Today", tracker.label(epoch_ms(2026, 10, 25, 2)))  # 03:00 CET
+
+    def test_idle_status_wakes_redraw_at_label_boundaries_without_source_scans(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source = MutableSource(single_invocation("i_syn"))
+            config, selection, service, _ = make_service(temp_dir, source)
+            service.account_provider = None
+            service.account_providers = ()
+            clock = [epoch_ms(1970, 1, 1, 23, 59) + 59_000]
+            watch = WatchCoordinator(selection=selection, report_service=service, config=config,
+                                     clock_ms=lambda: clock[0], record_observations=False)
+            drawn = watch.initialize().projection
+            self.assertEqual("Today", drawn.today_label)
+            watch._rendered_projection = drawn
+            for now_ms, label in ((epoch_ms(1970, 1, 2), "1970-01-02"), (epoch_ms(1970, 1, 2, 3), "Today")):
+                clock[0] = now_ms
+                with patch("src.watch.coordinator.observe_catalog", side_effect=AssertionError("source scan")):
+                    current = watch.status_projection(seconds_until_check=5)
+                self.assertEqual(label, current.today_label)
+                self.assertNotEqual(watch._transient_signature(drawn), watch._transient_signature(current))
+                self.assertNotEqual(watch._visible_signature(drawn), watch._visible_signature(current))
+                self.assertTrue(watch._needs_full_render(drawn, current, WatchCycle(current, (), ())))
+                output = io.StringIO()
+                WatchRenderer(config, stream=output, interactive=False).render(current)
+                self.assertIn(f"CCost · Watch: 0 · {label}: ", output.getvalue())
+                drawn = current
 
     def test_unchanged_status_projection_does_not_recalculate_retained_history(self):
         tracker = WatchTodayCCost("UTC")
@@ -169,13 +228,14 @@ class WatchTodayCCostTests(unittest.TestCase):
             output = io.StringIO()
             WatchRenderer(config, stream=output, interactive=False).render(after_delete)
             line = next(value for value in output.getvalue().splitlines()
-                        if value.startswith("Watch total CCost:"))
-            self.assertIn("(Today: ", line)
-            self.assertIn("; Deleted sessions before Watch start excluded)", line)
+                        if value.startswith("CCost · Watch:"))
+            self.assertIn(f" · {after_delete.today_label}: ", line)
+            self.assertTrue(line.endswith(" · Deleted sessions before Watch start are not included in Today"), line)
+            self.assertNotIn("(", line)
             lines = output.getvalue().splitlines()
             mix_index = next(index for index, value in enumerate(lines) if value.startswith("Token Mix %"))
             self.assertEqual(line, lines[mix_index + 1])
-            self.assertEqual(1, sum(value.startswith("Watch total CCost:") for value in lines))
+            self.assertEqual(1, sum(value.startswith("CCost · Watch:") for value in lines))
 
     def test_newly_observed_request_survives_deletion_and_keeps_run_total(self):
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -295,6 +295,7 @@ class WatchCoordinator:
             token_mix=self.token_mix.project(valuation := self._token_valuation()),
             run_total=self.token_mix.project_total(valuation),
             today_total=self.today_ccost.project_from_report(self.report_service, now_ms),
+            today_label=self.today_ccost.label(now_ms),
             session_subtotals=session_subtotals,
         )
         self._last_projection = projection
