@@ -14,7 +14,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 from urllib.parse import quote
 
-from src.domain import ContextBoundary, MessageRole, NormalizedMessage, TerminalEvidence, TerminalOutcome
+from src.domain import ActiveContext, ContextBoundary, MessageRole, NormalizedMessage, TerminalEvidence, TerminalOutcome
 
 from .errors import (SourceDataError, SourceSchemaError, SourceUnavailableError,
                      compatibility_failure)
@@ -250,6 +250,20 @@ def fetch_messages(
     if last_error is not None:
         raise last_error
     raise SourceDataError("OpenCode V2 message routes returned lifecycle/status data only")
+
+
+def fetch_active_context(client: Any, *, session_id: str) -> ActiveContext | None:
+    """Read the documented active-history view when this V2 server supports it."""
+    path = f"/api/session/{quote(session_id, safe='')}/context"
+    try:
+        raw = client.json(path, phase="active_context")
+        items, _cursor, _contract = parse_page(raw, label="active context")
+    except (SourceDataError, SourceSchemaError, SourceUnavailableError):
+        return None
+    message_ids = tuple(item.get("id") for item in items)
+    if any(not isinstance(message_id, str) or not message_id for message_id in message_ids):
+        return None
+    return ActiveContext(session_id, message_ids)
 
 def is_legacy_message_bundle(value: Mapping[str, Any]) -> bool:
     return isinstance(value.get("info"), Mapping) and isinstance(value.get("parts"), list)
@@ -536,6 +550,22 @@ def location_boundaries(items: Sequence[Mapping[str, Any]], *, session_id: str) 
         if isinstance(at, bool) or not isinstance(at, (int, float)) or not math.isfinite(at) or at <= 0:
             continue
         result.append(ContextBoundary(session_id, item["id"], int(at)))
+    return tuple(sorted(result, key=lambda value: (value.at_ms, value.boundary_id)))
+
+
+def selection_boundaries(items: Sequence[Mapping[str, Any]], *, session_id: str) -> tuple[ContextBoundary, ...]:
+    """Model/agent selection changes can replace persistent system/tool context."""
+    result: list[ContextBoundary] = []
+    for item in items:
+        if item.get("type") not in {"agent-switched", "model-switched"}:
+            continue
+        message_id = item.get("id")
+        raw_time = item.get("time")
+        at = raw_time.get("created") if isinstance(raw_time, Mapping) else None
+        if (not isinstance(message_id, str) or not message_id or isinstance(at, bool)
+                or not isinstance(at, (int, float)) or not math.isfinite(at) or at <= 0):
+            continue
+        result.append(ContextBoundary(session_id, message_id, int(at)))
     return tuple(sorted(result, key=lambda value: (value.at_ms, value.boundary_id)))
 
 

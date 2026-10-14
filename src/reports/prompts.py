@@ -22,15 +22,19 @@ def _coherent_watch_deltas(rows: list[PromptProjection], *, epochs: ContextEpoch
     exists; subtasks never reset root state. This changes only Watch delta display,
     not context sizes, warnings, accounting or request attribution.
     """
-    last_root: PromptProjection | None = None
+    last_root_by_session: dict[str, PromptProjection] = {}
     result: list[PromptProjection] = []
     for row in rows:
         if row.event_id in subtask_ids:
             result.append(row)
             continue
+        session_for_event = getattr(epochs, "session_for_event", None)
+        row_session = session_for_event(row.event_id) if callable(session_for_event) else None
+        row_session = row_session or session_id
+        last_root = last_root_by_session.get(row_session)
         if not row.is_compaction:
             delta = row.watch_delta_context_tokens
-            crossed = last_root is not None and epochs.crossed(session_id, last_root.at_ms, row.at_ms + 1)
+            crossed = last_root is not None and epochs.crossed(row_session, last_root.at_ms, row.at_ms + 1)
             anchor = None if last_root is None or crossed else last_root.watch_next_context_tokens
             if anchor:
                 next_tokens = row.watch_next_context_tokens
@@ -42,7 +46,7 @@ def _coherent_watch_deltas(rows: list[PromptProjection], *, epochs: ContextEpoch
             if delta != row.watch_delta_context_tokens:
                 row = replace(row, watch_delta_context_tokens=delta)
         result.append(row)
-        last_root = row
+        last_root_by_session[row_session] = row
     return result
 
 
@@ -69,8 +73,11 @@ def _session_block(*, session_id: str, title: str, rows: list[PromptProjection],
     breakdown_known = all(row.breakdown_known for row in prompt_rows) if prompt_rows else True
     ictx_text, extra_text = _diagnostic_cost_shares(diagnostic_parts)
     mix = mix_percent(mix_values)
-    latest = next((record for record in reversed(projector.bundle.prompts) if not record.in_progress and not record.aborted), None)
-    composition = context_composition(projector.snapshot, latest) if latest is not None else None
+    latest = next((record for record in reversed(projector.bundle.prompts)
+                   if record.session_id == session_id
+                   and not record.in_progress and not record.aborted
+                   and projector.epochs.active_prompt(record) is not False), None)
+    composition = context_composition(projector.snapshot, latest, projector.epochs) if latest is not None else None
     estimate = estimate_next_context(latest, projector.catalog, epochs=projector.epochs) if latest is not None else None
     model_id = latest.last_root_entry.model.model if latest is not None and latest.last_root_entry else ""
     warning = projector.warning(estimate.tokens if estimate else None, model_id)

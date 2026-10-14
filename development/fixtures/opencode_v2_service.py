@@ -227,6 +227,7 @@ class CurrentV2Service:
             ],
             "ses_current_child": [],
         }
+        self.context_messages: dict[str, list[dict]] = {}
 
     def __enter__(self):
         owner = self
@@ -282,6 +283,10 @@ class CurrentV2Service:
                         self._json({"data": [], "cursor": {}})
                     else:
                         self._json({"error": "bad cursor"}, 400)
+                    return
+                if parsed.path.startswith("/api/session/") and parsed.path.endswith("/context"):
+                    session_id = parsed.path.split("/")[3]
+                    self._json({"data": owner.context_messages.get(session_id, owner.messages.get(session_id, []))})
                     return
                 if parsed.path == "/api/message" and owner.message_path in {"/api/message", "idle-then-message"}:
                     cursor = query.get("cursor", [None])[0]

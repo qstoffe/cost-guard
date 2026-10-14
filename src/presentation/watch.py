@@ -27,8 +27,10 @@ _WATCH_COLUMNS = (
     Column("CCost", True, fixed_width=7),
     Column("Calls", True, fixed_width=5),
     Column("Duration", True, fixed_width=8),
-    Column("Δctx → Next Ictx", True, fixed_width=20),
+    Column("Δctx → Next Ictx    ", fixed_width=20),
 )
+_CONTEXT_DELTA_WIDTH = 5
+_CONTEXT_NEXT_WIDTH = 9
 # Session headers span Session/prompt and Model/effort, including their divider.
 _HEADER_WIDTH = _WATCH_COLUMNS[0].fixed_width + 3 + _WATCH_COLUMNS[1].fixed_width
 EARLIER_LABEL = "[Earlier]"
@@ -115,6 +117,38 @@ def _tokens(value: int | None, *, signed: bool = False, approximate: bool = Fals
     return ("~" if approximate and text != "N/A" else "") + text
 
 
+def _fit_context_tokens(value: int | None, width: int, *, signed: bool = False,
+                        approximate: bool = False) -> str:
+    """Bound context diagnostics without losing their sign or unit."""
+    text = _tokens(value, signed=signed, approximate=approximate)
+    if len(text) <= width or value is None:
+        return text
+    sign = "-" if value < 0 else "+" if signed else ""
+    prefix = "~" if approximate else ""
+    for scale, suffix in ((1_000_000, "M"), (1_000_000_000, "B"), (1_000_000_000_000, "T"),
+                          (1_000_000_000_000_000, "P")):
+        scaled = Decimal(abs(value)) / Decimal(scale)
+        places = 1 if scaled < 10 else 0
+        rounded = scaled.quantize(Decimal("0.1") if places else Decimal("1"), rounding=ROUND_HALF_UP)
+        number = format(rounded, ".1f" if places else ".0f")
+        candidate = f"{prefix}{sign}{number}{suffix}"
+        if len(candidate) <= width:
+            return candidate
+    magnitude = abs(value)
+    exponent = len(str(magnitude)) - 1
+    for places in (1, 0):
+        scaled = Decimal(magnitude) / (Decimal(10) ** exponent)
+        rounded = scaled.quantize(Decimal("0.1") if places else Decimal("1"), rounding=ROUND_HALF_UP)
+        if rounded >= 10:
+            exponent += 1
+            rounded /= 10
+        number = format(rounded, ".1f" if places else ".0f")
+        candidate = f"{prefix}{sign}{number}e{exponent}"
+        if len(candidate) <= width:
+            return candidate
+    return f"{sign}1e{exponent}"
+
+
 
 
 def _duration(ms: int | None) -> str:
@@ -140,13 +174,19 @@ def _context_cell(row: WatchRow, row_role: str | None, warning_number: int | Non
         warning_role = WARNING_ROLE
     delta = prompt.watch_delta_context_tokens
     next_tokens = prompt.watch_next_context_tokens
+    delta_text = _fit_context_tokens(delta, _CONTEXT_DELTA_WIDTH, signed=True)
+    next_text = _fit_context_tokens(next_tokens, _CONTEXT_NEXT_WIDTH, approximate=True)
     parts: list[tuple[str, str | None]] = [
-        (f"{_tokens(delta, signed=True):>7}", row_role),
-        (" → ", row_role),
-        (f"{_tokens(next_tokens, approximate=True):>8}", warning_role),
+        (delta_text.ljust(_CONTEXT_DELTA_WIDTH), row_role),
+        ("→ ", row_role),
+        (next_text.rjust(_CONTEXT_NEXT_WIDTH), warning_role),
     ]
     if warning_number is not None:
-        parts.append((f" *{warning_number}", WARNING_ROLE))
+        marker = f"*{warning_number}"
+        marker = f" {marker}" if len(marker) <= 3 else marker
+        if len(marker) > 4:
+            marker = "*99+"
+        parts.append((marker, WARNING_ROLE))
     return StyledText(tuple(parts))
 
 
@@ -199,10 +239,9 @@ def _active_warning_rows(projection: WatchProjection) -> tuple[tuple[int, str, s
                  sorted(latest.items(), key=lambda item: item[1][0]))
 
 
-def _columns_for_warning_count(count: int) -> tuple[Column, ...]:
-    marker_width = len(f"*{count}") if count else 0
-    context_width = (_WATCH_COLUMNS[-1].fixed_width or 0) + marker_width + (1 if marker_width else 0)
-    return _WATCH_COLUMNS[:-1] + (Column("Δctx → Next Ictx", True, fixed_width=context_width),)
+def _columns_for_warning_count(_count: int) -> tuple[Column, ...]:
+    """Warnings use a reserved subfield; the dashboard geometry never changes."""
+    return _WATCH_COLUMNS
 
 
 class WatchRenderer:

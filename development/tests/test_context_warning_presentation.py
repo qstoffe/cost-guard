@@ -56,10 +56,10 @@ class ContextWarningPresentationTests(unittest.TestCase):
                 self.assertIn("Test (Default)", row)
                 self.assertNotIn(styler.apply("Test (Default)", "nextIctxWarning"), row)
                 self.assertIn(styler.apply(" *1", "nextIctxWarning"), row)
-                self.assertIn(styler.apply(f"{'~' + str(item.watch_next_context_tokens // 1000) + 'k':>8}", "nextIctxWarning"), row)
+                self.assertIn(styler.apply(f"{'~' + str(item.watch_next_context_tokens // 1000) + 'k':>9}", "nextIctxWarning"), row)
                 self.assertEqual(2, row.count("\x1b[0m"), "marker and Next Ictx are styled independently")
                 self.assertNotIn("\x1b[91m", row)
-                self.assertIn("+4k →", ANSI.sub("", row))
+                self.assertIn("+4k  →", ANSI.sub("", row))
                 self.assertLess(ANSI.sub("", row).index("~"), ANSI.sub("", row).index("*1"))
 
     def test_watch_approaching_marker_only_exceeded_full_explanation(self):
@@ -178,7 +178,7 @@ class ContextWarningPresentationTests(unittest.TestCase):
         self.assertTrue(context_cell.endswith("*12"))
         self.assertIn(styler.apply(" *12", "nextIctxWarning"), line)
         separator = next(line for line in text.splitlines() if line.startswith("|---"))
-        self.assertEqual(26, len(separator.split("|")[6]), "context column reserves the two-digit marker")
+        self.assertEqual(22, len(separator.split("|")[6]), "marker space stays inside the fixed-width context column")
 
         no_warning = replace(base, preview="plain prompt", model_effort=long_label, watch_model_effort=long_label,
                              watch_next_context_warning="", watch_next_context_warning_severity=PriceWarningSeverity.NONE)
@@ -208,6 +208,73 @@ class ContextWarningPresentationTests(unittest.TestCase):
         self.assertNotIn(styler.apply("Current model", "nextIctxWarning"), current_line)
         self.assertIn(styler.apply(" *1", "nextIctxWarning"), current_line)
         self.assertLess(ANSI.sub("", current_line).index("~"), ANSI.sub("", current_line).index("*1"))
+
+    def test_context_column_fields_stay_aligned_and_fixed_through_99_warnings(self):
+        base = warning_prompt(PriceWarningSeverity.APPROACHING)
+        baseline = None
+        for warning_count in (0, 1, 9, 10, 12, 99):
+            rows = tuple(
+                WatchRow(
+                    f"session-{number}", f"Session {number}", replace(
+                        base, prompt_number=number, preview=f"Context row {number}",
+                        watch_delta_context_tokens=(4_000, -195_000, 0, None, 10**30)[(number - 1) % 5],
+                        watch_next_context_tokens=(80_000, 1_000_000, 123_456_789, None, 10**30)[(number - 1) % 5],
+                        watch_next_context_warning=(base.watch_next_context_warning if warning_count else ""),
+                        watch_next_context_warning_severity=(
+                            base.watch_next_context_warning_severity if warning_count else PriceWarningSeverity.NONE
+                        ),
+                    ),
+                )
+                for number in range(1, warning_count + 1)
+            ) or (WatchRow("plain", "Plain", replace(
+                base, preview="Context row 1", watch_next_context_warning="",
+                watch_next_context_warning_severity=PriceWarningSeverity.NONE,
+            )),)
+            projection = WatchProjection(
+                "Watch", "V2", rows,
+                session_warnings={row.session_id: row.prompt.watch_next_context_warning for row in rows},
+            )
+            text = self.watch(projection)
+            plain = ANSI.sub("", text)
+            lines = [line for line in plain.splitlines() if line.startswith("|")]
+            self.assertTrue(lines)
+            self.assertTrue(all(len(line) == 119 for line in lines))
+            header = next(line for line in lines if "Δctx" in line).split("|")[6][1:-1]
+            data = next(line for line in lines if "Context row 1" in line).split("|")[6][1:-1]
+            self.assertEqual(20, len(header))
+            self.assertEqual(20, len(data))
+            self.assertEqual("Δctx ", header[:5])
+            self.assertEqual("→", header[5])
+            self.assertEqual("Next Ictx", header[7:16])
+            self.assertEqual(header[5], data[5])
+            self.assertEqual("+4k  ", data[:5])
+            self.assertTrue(data[7:16].endswith("~80k"))
+            self.assertEqual(4, len(data[16:20]))
+            for number in range(1, warning_count + 1):
+                row = next(line for line in lines if f"Context row {number}" in line)
+                cell = row.split("|")[6][1:-1]
+                self.assertEqual(20, len(cell))
+                self.assertEqual("→", cell[5])
+                if number == 2:
+                    self.assertEqual("-195k", cell[:5])
+                    self.assertTrue(cell[7:16].endswith("~1000k"))
+                elif number == 3:
+                    self.assertEqual("0k   ", cell[:5])
+                    self.assertTrue(cell[7:16].endswith("~123457k"))
+                elif number == 4:
+                    self.assertEqual("N/A  ", cell[:5])
+                    self.assertTrue(cell[7:16].endswith("N/A"))
+                elif number == 5:
+                    self.assertEqual("+1e30", cell[:5])
+                    self.assertTrue(cell[7:16].endswith("~1.0e30"))
+            if warning_count:
+                last = next(line for line in lines if f"Context row {warning_count}" in line)
+                marker_cell = last.split("|")[6][1:-1]
+                self.assertTrue(marker_cell[16:20].strip().endswith(f"*{warning_count}"))
+            if baseline is None:
+                baseline = data[:16]
+            else:
+                self.assertEqual(baseline, data[:16], "warning digits never move context fields")
 
     def test_compaction_warning_marker_follows_its_model_effort(self):
         item = replace(warning_prompt(PriceWarningSeverity.EXCEEDED), is_compaction=True,

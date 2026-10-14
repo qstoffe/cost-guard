@@ -233,7 +233,7 @@ class ModelInvocation:
 
 @dataclass(frozen=True, slots=True)
 class ContextBoundary:
-    """Non-billable start of a new context epoch, e.g. a session location move.
+    """Non-billable start of a new context epoch, e.g. move or selection change.
 
     Carries no usage and no filesystem location; identity remains the session.
     """
@@ -241,6 +241,14 @@ class ContextBoundary:
     session_id: str
     boundary_id: str
     at_ms: int
+
+
+@dataclass(frozen=True, slots=True)
+class ActiveContext:
+    """Verified message identities currently present in a session's active context."""
+
+    session_id: str
+    message_ids: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -275,6 +283,7 @@ class SessionSnapshot:
     source_revision: str
     context_boundaries: tuple[ContextBoundary, ...] = ()
     background: tuple[BackgroundActivity, ...] = ()
+    active_contexts: tuple[ActiveContext, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
