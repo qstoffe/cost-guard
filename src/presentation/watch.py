@@ -310,7 +310,7 @@ class WatchRenderer:
         mix = projection.token_mix
         for line in token_mix_lines(prompt_scope(mix.sample_size), mix, width=width):
             self._write(line)
-        self._write(watch_total_line(projection.run_total))
+        self._write(watch_total_line(projection.run_total, projection.today_total))
         quota = projection.quota
         if quota is None:
             return

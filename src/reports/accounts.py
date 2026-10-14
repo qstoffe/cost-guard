@@ -80,10 +80,25 @@ def accounts_quota_projection(
     today_prompt_count: int = 0, today_session_count: int = 0,
     timezone_id: str = "UTC", workday_calendar: str = "",
 ) -> AccountsQuotasProjection:
+    return accounts_quota_projection_with_today_entries(
+        accounts, entries, catalog, now_ms=now_ms, today_start_ms=today_start_ms,
+        month_start_ms=month_start_ms, today_prompt_count=today_prompt_count,
+        today_session_count=today_session_count, timezone_id=timezone_id,
+        workday_calendar=workday_calendar,
+    )[0]
+
+
+def accounts_quota_projection_with_today_entries(
+    accounts: Sequence[AccountSnapshot], entries: Sequence[TraceEntry], catalog: PricingCatalog,
+    *, now_ms: int, today_start_ms: int, month_start_ms: int,
+    today_prompt_count: int = 0, today_session_count: int = 0,
+    timezone_id: str = "UTC", workday_calendar: str = "",
+) -> tuple[AccountsQuotasProjection, tuple[TraceEntry, ...]]:
+    """Project quota data and expose its exact deduplicated daily request scope."""
     entries = unique_usage(entries)
     today = tuple(e for e in entries if today_start_ms <= e.completed_at_ms <= now_ms)
     month = tuple(e for e in entries if month_start_ms <= e.completed_at_ms <= now_ms)
-    return AccountsQuotasProjection(
+    projection = AccountsQuotasProjection(
         comparison_today=comparison_cost(today, catalog.reference_valuation),
         comparison_month=comparison_cost(month, catalog.reference_valuation),
         accounts=account_projections(accounts, entries, catalog, now_ms=now_ms,
@@ -95,3 +110,4 @@ def accounts_quota_projection(
         included_subscription_requests=sum(e.cost_disposition is CostDisposition.INCLUDED_SUBSCRIPTION for e in month),
         now_ms=now_ms,
     )
+    return projection, today

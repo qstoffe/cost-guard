@@ -304,7 +304,9 @@ class TokenMixPresentationTests(unittest.TestCase):
         renderer._render_quota(projection)
         lines = stream.getvalue().splitlines()
         self.assertTrue(lines[0].startswith("Token Mix % · 0 prompts"))
-        self.assertEqual("Watch total CCost: 0", lines[1])
+        self.assertEqual(
+            "Watch total CCost: 0 (Today: 0; deleted sessions outside Watch excluded)", lines[1]
+        )
         expected = capacity_lines(account, AnsiStyler({}, enabled=False), "UTC", width=120,
                                   watch=True, now_ms=quota.now_ms, account_label_width=len(account.label),
                                   primary_label_width=4)

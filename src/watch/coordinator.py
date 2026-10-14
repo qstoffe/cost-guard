@@ -23,6 +23,7 @@ from .session_retention import select_earlier_sessions
 from .skill_registry import active_skill_origins
 from .tracker import WatchRowTracker
 from .token_mix import WatchTokenMix
+from .today_ccost import WatchTodayCCost
 from .account_refresh import WatchAccountRefresh
 
 ClockMs = Callable[[], int]
@@ -95,6 +96,7 @@ class WatchCoordinator:
         self._monotonic_clock = monotonic
         self.started_at_ms = int(clock_ms())
         self.token_mix = WatchTokenMix(self.started_at_ms)
+        self.today_ccost = WatchTodayCCost(report_service.timezone_id)
         raw_interval = config.get("sessionWatchIntervalSeconds", "auto")
         self.auto_interval = isinstance(raw_interval, str) and raw_interval.strip().lower() == "auto"
         self.interval_seconds = 5 if self.auto_interval else max(5, int(raw_interval))
@@ -199,22 +201,16 @@ class WatchCoordinator:
             self.snapshots[root_id] = snapshot
             self._skill_origins_by_root[root_id] = active_skill_origins(self.source, snapshot, block)
             self.token_mix.observe(snapshot, bundle)
+            self.today_ccost.observe(bundle.trace_entries, now_ms=now_ms)
         return tuple(root_id for root_id, *_ in pending)
 
     def _refresh_quota(self, observation: CatalogObservation, *, now_ms: int, force: bool = False) -> None:
-        # Local usage refreshes on source changes (or every five minutes); account
-        # quota keeps its own one-minute cadence instead of per-change fetches.
+        # Source changes/5m refresh local usage; account requests keep their cadence.
         account_changed = self.accounts.refresh(now_ms=now_ms)
-        if (
-            not force
-            and not account_changed
-            and self._last_quota_refresh_ms
-            and now_ms - self._last_quota_refresh_ms < 300_000
-        ):
+        if not self.today_ccost.refresh_due(now_ms, self._last_quota_refresh_ms, force or account_changed):
             return
-        self.report_service.set_now_ms(now_ms)
-        self.quota = self.report_service.build_watch_quota(
-            observation.sessions, quota_snapshots=self.accounts.snapshots, query_account=False
+        self.quota = self.today_ccost.refresh_available_history(
+            self.report_service, observation.sessions, self.accounts.snapshots, now_ms
         )
         self._last_quota_refresh_ms = now_ms
 
@@ -296,6 +292,7 @@ class WatchCoordinator:
             recent_promotion_notices=self.report_service.recent_promotion_notice_texts(),
             token_mix=self.token_mix.project(valuation := self._token_valuation()),
             run_total=self.token_mix.project_total(valuation),
+            today_total=self.today_ccost.project_from_report(self.report_service, now_ms),
             session_subtotals=session_subtotals,
         )
         self._last_projection = projection
@@ -314,8 +311,9 @@ class WatchCoordinator:
                     else self._hydrate_startup(roots, now_ms=now_ms))
         self.observation = observation
         self._record_refresh_duration(time.monotonic() - refresh_started)
-        self.quota = self.report_service.build_watch_quota(
-            observation.sessions, quota_snapshots=self.accounts.snapshots, query_account=False)
+        self.quota = self.today_ccost.refresh_available_history(
+            self.report_service, observation.sessions, self.accounts.snapshots, now_ms
+        )
         self.accounts.begin(now_ms)
         self.model_discovery.refresh(now_ms)
         self._refresh_quota(observation, now_ms=now_ms, force=True)
@@ -368,6 +366,7 @@ class WatchCoordinator:
         self.snapshots.clear()
         self._skill_origins_by_root.clear()
         self.token_mix = WatchTokenMix(self.started_at_ms)
+        self.today_ccost.reset()
         self.report_service.invalidate_source_observations()
 
     def _start_event_pump(self) -> None:

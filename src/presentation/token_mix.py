@@ -5,6 +5,7 @@ from decimal import Decimal
 from typing import Sequence
 
 from src.analysis.token_mix import TokenMix
+from src.analysis.valuation import ComparisonCost
 from src.numbers import balanced_share_percents, ccost_amount
 
 MIX_LABELS = ("Input", "Cache", "Write", "Output")
@@ -95,9 +96,19 @@ def token_mix_lines(scope: str, mix: TokenMix, *, width: int | None = None) -> l
     return [heading, body] if len(body) <= width else [heading, *("  " + cell for cell in cells)]
 
 
-def watch_total_line(mix: TokenMix) -> str:
-    """CCost added during this Watch run: the run mix's deduplicated requests."""
-    return "Watch total CCost: " + ("0" if not mix.request_count else total_cost_text(mix))
+def comparison_cost_text(cost: ComparisonCost) -> str:
+    if not cost.observed_requests:
+        return "0"
+    if not cost.priced_requests:
+        return "N/A"
+    return ("" if cost.complete else "?") + ccost_amount(cost.known_ccost)
+
+
+def watch_total_line(mix: TokenMix, today: ComparisonCost) -> str:
+    """Render the retained run total and deletion-resilient current-day CCost."""
+    run = "0" if not mix.request_count else total_cost_text(mix)
+    return (f"Watch total CCost: {run} (Today: {comparison_cost_text(today)}; "
+            "deleted sessions outside Watch excluded)")
 
 
 def token_mix_line(scope: str, mix: TokenMix) -> str:

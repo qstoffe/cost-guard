@@ -341,7 +341,7 @@ class RuntimeErrorTests(unittest.TestCase):
 
     def test_watch_valuation_and_quota_projection_bugs_are_fatal_not_stale(self):
         from development.tests.test_watch_lifecycle import watch_for
-        for method in ("token_category_valuation", "build_watch_quota"):
+        for method in ("token_category_valuation", "build_watch_quota_with_today_entries"):
             with self.subTest(method=method), watch_for() as (watch, _):
                 with patch.object(watch.report_service, method, side_effect=TypeError("SECRET")):
                     self.assertEqual(1, self.reporter.run(lambda: (watch.initialize(), 0)[-1]))

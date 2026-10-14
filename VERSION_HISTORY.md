@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.49 — 2026-10-14
+
+- Watch appends `Today` CCost to its existing run-total line. It combines available local-day history with deduplicated process observations retained through session deletion until local midnight; unavailable history deleted before observation remains excluded, and no ledger is persisted.
+
 ## v80.48 — 2026-10-14
 
 - Global Watch keeps one prompt budget across all sessions: `watchDashboardMaxRows` (default now 12) selects the newest prompt/`/compact` rows, while running rows and rows still showing their green/red marker stay protected above it; when markers expire the ordinary limit returns live. The 10-minute idle expiry and two-session protection are gone: a session block disappears only when its last selected prompt is evicted. Row selection never changes Token Mix, `Watch total CCost` or OpenCode history.
@@ -21,14 +25,9 @@
 
 - Eligible New Models names receive a bold lime ✦ highlight for 12 hours from one atomic UTC first-sighting timestamp per provider-qualified model ID, shared by Watch and Report. Watch removes the emphasis on a live status wake; the existing seven-day visibility rules are unchanged.
 
-## v80.44 — 2026-10-13
-
-- Watch tool-call and verified custom Skills rows remain attached to the latest prompt while it runs and through the same terminal marker used by Watch: they disappear with that marker or when a newer prompt supersedes them in the session. Other sessions remain independent.
-- Terminal activity retains final counts, tool breakdowns, confirmed custom Skills and verified failures while clearing running-tool, background and TODO indicators. Unchanged source revisions reuse the final observation; no separate expiry or persistence was added.
-
 ## Earlier v80 history
 
-- v80.43 sampled the latest 100 priceable prompts for Token Mix %/Relative CCost; Watch Token Mix % uses this run's priceable requests. v80.38 added bounded Watch startup recovery, typed source errors and sanitized connectivity history. v80.37 refactored Watch/source boundaries and hot paths; Git delivery moved to isolated clones and every main PR versions docs. v80.39 added retained tool/skill stats, verified failures and width-adaptive rows; v80.40 made rows live-only before v80.44 tied them to existing markers. v80.41 moved shared test setup into owned fixtures (15 of 33 test-import edges retired) with no runtime change. v80.42 stopped counting zero-usage V2 tool-continuation records proven to continue the same response as separate `Calls`.
+- v80.43 sampled the latest 100 priceable prompts for Token Mix %/Relative CCost; Watch Token Mix % uses this run's priceable requests. v80.38 added bounded Watch startup recovery, typed source errors and sanitized connectivity history. v80.37 refactored Watch/source boundaries and hot paths; Git delivery moved to isolated clones and every main PR versions docs. v80.39 added retained tool/skill stats, verified failures and width-adaptive rows; v80.40 made rows live-only before v80.44 tied final statistics to existing markers while clearing transient indicators. v80.41 moved shared test setup into owned fixtures (15 of 33 test-import edges retired) with no runtime change. v80.42 stopped counting zero-usage V2 tool-continuation records proven to continue the same response as separate `Calls`.
 - v80.35–v80.36 added explicit native abort-cause labels, neutral tool-call endings and stable credit-first account ordering; Watch shows `[ABORTED by user]` only when a live V2 user interrupt matches authoritative interrupted history, keeping that actor evidence bounded and in memory.
 - v80.34 pooled V2 reads, memoized model identity, overlapped report acquisition and bounded Watch discovery/startup/resync with identical output (report ~2.1→0.65 s, Watch startup ~6.2→0.65 s, resync 13→1.4 s); Diagnostics gained all-account evidence and Watch geometry.
 - v80.32–v80.33 separated Watch account refresh, prompt projection/report orchestration and source normalization; shared catalog ancestry and bounded sampling; moved fixtures (67→43 test-import edges, 46 fewer test-import dependencies), enforced bounded routine/coupling debt without raising caps, standardized `Context:` warning explanations, and added code maps/inventory/layer guards. Source/cache/billing semantics stayed unchanged.
