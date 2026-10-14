@@ -4,6 +4,7 @@ from .status import IntegrationHealth
 from .accounts import AccountRef, AccountSnapshot, BillingComponent, QuotaComponent
 from .models import (
     AccountUsageStatus,
+    ActiveContext,
     BackgroundActivity,
     ContextBoundary,
     CostDisposition,
@@ -31,7 +32,7 @@ from .models import (
 
 __all__ = [
     "AccountRef", "AccountSnapshot", "BillingComponent", "QuotaComponent",
-    "AccountUsageStatus", "BackgroundActivity", "ContextBoundary", "CostDisposition", "CostKind", "CostObservation", "EventKind", "IntegrationHealth", "MessageRole",
+    "AccountUsageStatus", "ActiveContext", "BackgroundActivity", "ContextBoundary", "CostDisposition", "CostKind", "CostObservation", "EventKind", "IntegrationHealth", "MessageRole",
     "ModelInvocation", "ModelPricing", "PricingTier", "ModelRef", "NormalizedEvent", "NormalizedMessage",
     "NormalizedPart", "NormalizedSession", "ProviderCapabilities", "Provenance", "QuotaSnapshot",
     "QuotaWindow", "QuotaWindowKind", "SessionCapabilities", "SessionSnapshot", "TerminalEvidence", "TerminalOutcome", "TokenUsage",

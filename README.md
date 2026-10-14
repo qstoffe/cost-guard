@@ -262,7 +262,7 @@ Watch's first view never waits for quotas. Accounts arrive individually and are 
 | `CCost` | Current observed prompt/event reference valuation, not billing. |
 | `Calls` | Completed causal model requests. |
 | `Duration` | Wall-clock duration; a prompt stays running (footer `background shell`) while its verified background job runs. |
-| `Δctx -> Next Ictx` | Context-state change and next context when available. |
+| `Δctx -> Next Ictx` | Continuing active-history context when available, in a fixed-width aligned cell. |
 
 [Watch activity](docs/watch-activity.md): yellow `Skills (N)` lists confirmed exact IDs, newest first; red `[N tool call failures]` requires direct evidence, never load recency. Native errors and recognized Toolkit error contracts count once; cancellations and exit codes alone do not. Narrow rows preserve total/failures and whole skill IDs with `+N more`; the metric table keeps fixed geometry.
 
@@ -348,7 +348,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.51:** Watch headings use one configured-local start timestamp; current context-warning markers follow `Next Ictx` on the latest relevant row, with live numbered footnotes. Today names sessions deleted before Watch start; routine local release-ZIP generation is removed. **v80.50:** Watch adds persistent `▶` markers, startup-only Earlier rows sharing the soft cap and timestamp-first session headers. **v80.49:** Adds deletion-resilient current-local-day CCost. **v80.48:** Adds the global prompt budget, Earlier startup rows, latest-start ordering and idle account redraw. **v80.47:** Behavior-neutral Watch CCost performance cleanup. **v80.46:** Identical context warnings share numbered footnotes. Older versions remain below; v80.0 is the Python 3.11+ public baseline. Restart/sleep need separate live evidence; Claude quotas remain experimental.
+**v80.52:** Continuing context follows active history independently of request accounting; Watch's 20-character context cell stays aligned through `*99`. **v80.51:** Watch headings use one configured-local start timestamp; context-warning markers follow `Next Ictx` on the latest relevant row, with live numbered footnotes. Today names sessions deleted before Watch start; routine local release-ZIP generation is removed. **v80.50:** Watch adds persistent `▶` markers, startup-only Earlier rows sharing the soft cap and timestamp-first session headers. **v80.49:** Adds deletion-resilient current-local-day CCost. **v80.48:** Adds the global prompt budget, Earlier startup rows, latest-start ordering and idle account redraw. **v80.47:** Behavior-neutral Watch CCost performance cleanup. **v80.46:** Identical context warnings share numbered footnotes. Older versions remain below; v80.0 is the Python 3.11+ public baseline. Restart/sleep need separate live evidence; Claude quotas remain experimental.
 
 Product versions identify code state; they do not imply a Git tag, release ZIP or GitHub Release. Packaged GitHub Releases are currently paused. Recommending them at a slower/stable cadence requires an explicit policy change; version numbers never trigger it automatically.
 

@@ -12,10 +12,11 @@ from decimal import Decimal
 from enum import Enum
 from typing import Mapping
 
-from src.domain import MessageRole, NormalizedMessage, NormalizedPart, SessionSnapshot
+from src.domain import ContextBoundary, MessageRole, NormalizedMessage, NormalizedPart, SessionSnapshot
 from src.pricing.catalog import PricingCatalog
 
 from .models import CompactionRecord, PromptRecord, RootAnalysisBundle, TraceEntry
+from .context_history import CompactionContext, ContextHistory
 
 
 @dataclass(frozen=True, slots=True)
@@ -163,6 +164,8 @@ def _message_tokens(message: NormalizedMessage) -> int:
 
 
 def _estimate_entry_next_context(entry: TraceEntry, catalog: PricingCatalog) -> NextContextEstimate:
+    if "output" not in entry.tokens.known_fields:
+        return NextContextEstimate(None)
     next_tokens = entry.tokens.total
     if next_tokens <= 0:
         return NextContextEstimate(None)
@@ -192,13 +195,25 @@ def _estimate_entry_next_context(entry: TraceEntry, catalog: PricingCatalog) -> 
     return NextContextEstimate(next_tokens, cached, fresh, cached is not None and fresh is not None)
 
 
-class ContextEpochs:
-    """Session location moves as non-billable context-epoch boundaries.
+def _estimate_context_size(tokens: int, entry: TraceEntry, catalog: PricingCatalog, *,
+                           cached_tokens: int, fresh_tokens: int) -> NextContextEstimate:
+    if tokens <= 0:
+        return NextContextEstimate(None)
+    if catalog.resolve(entry.model.model) is None:
+        return NextContextEstimate(tokens)
+    cached = catalog.reference_input_context(
+        entry.model, input_tokens=max(0, fresh_tokens), cache_read_tokens=max(0, cached_tokens),
+        cache_write_tokens=0, request_input_tokens=tokens,
+    )
+    fresh = catalog.reference_input_context(
+        entry.model, input_tokens=tokens, cache_read_tokens=0, cache_write_tokens=0,
+        request_input_tokens=tokens,
+    )
+    return NextContextEstimate(tokens, cached, fresh, cached is not None and fresh is not None)
 
-    A context anchor is retired when a move follows it before the session's next
-    real request; that first request after the move establishes the new baseline.
-    Earlier anchors that already fed a later same-epoch request stay historical.
-    """
+
+class ContextEpochs:
+    """Explicit context boundaries and verified active history scope anchors."""
 
     def __init__(self, snapshot: SessionSnapshot, bundle: RootAnalysisBundle) -> None:
         self._boundaries: dict[str, list[int]] = {}
@@ -210,19 +225,51 @@ class ContextEpochs:
                 self._requests.setdefault(entry.session_id, []).append(entry.completed_at_ms)
         for values in (*self._boundaries.values(), *self._requests.values()):
             values.sort()
+        compacted = tuple(
+            CompactionContext(item.session_id, item.user_message_id, item.completed_at_ms,
+                             _post_compaction_tokens(snapshot, item), item.provider_id, item.model_id, item.variant)
+            for item in bundle.compactions if not item.in_progress
+        )
+        self._history = ContextHistory(snapshot, bundle, compacted)
 
     def crossed(self, session_id: str, start_ms: int, end_ms: int | None) -> bool:
-        """Whether a move happened at/after ``start_ms`` and before ``end_ms`` (None: ever)."""
+        """Whether a boundary happened at/after ``start_ms`` and before ``end_ms``."""
         boundaries = self._boundaries.get(session_id, ())
         index = bisect_left(boundaries, start_ms)
         return index < len(boundaries) and (end_ms is None or boundaries[index] < end_ms)
 
     def retired(self, session_id: str, anchor_ms: int) -> bool:
+        """Whether an explicit boundary retires an anchor before the next request."""
         requests = self._requests.get(session_id, ())
         later = bisect_right(requests, anchor_ms)
         # A tie with the move cannot prove that the request followed it.
         return self.crossed(session_id, anchor_ms, requests[later] + 1 if later < len(requests) else None)
 
+    def active_entry(self, entry: TraceEntry) -> bool | None:
+        return self._history.active_entry(entry)
+
+    def active_message(self, session_id: str, message_id: str) -> bool | None:
+        return self._history.active_message(session_id, message_id)
+
+    def active_prompt(self, record: PromptRecord) -> bool | None:
+        return self._history.active_prompt(record)
+
+    def session_for_event(self, event_id: str) -> str | None:
+        return self._history.session_for_event(event_id)
+
+    def estimate(self, record: PromptRecord, catalog: PricingCatalog | None, *,
+                 candidate: TraceEntry | None = None) -> NextContextEstimate:
+        state = self._history.continuing(record, candidate)
+        if state.entry is None or state.tokens is None:
+            return NextContextEstimate(None)
+        if state.active is False:
+            if self.active_prompt(record) is False:
+                return _estimate_entry_next_context(state.entry, catalog) if catalog is not None else NextContextEstimate(state.tokens)
+            return NextContextEstimate(None)
+        if catalog is None:
+            return NextContextEstimate(state.tokens)
+        return _estimate_context_size(state.tokens, state.entry, catalog,
+                                      cached_tokens=state.cached_tokens, fresh_tokens=state.fresh_tokens)
 
 def estimate_next_context(record: PromptRecord, catalog: PricingCatalog, *,
                           epochs: ContextEpochs | None = None) -> NextContextEstimate:
@@ -230,6 +277,8 @@ def estimate_next_context(record: PromptRecord, catalog: PricingCatalog, *,
         return NextContextEstimate(None)
     if epochs is not None and epochs.retired(record.session_id, record.last_root_entry.completed_at_ms):
         return NextContextEstimate(None)
+    if epochs is not None:
+        return epochs.estimate(record, catalog)
     return _estimate_entry_next_context(record.last_root_entry, catalog)
 
 
@@ -259,10 +308,13 @@ def _latest_meaningful_watch_root(record: PromptRecord) -> TraceEntry | None:
     return max(candidates, key=lambda entry: (entry.completed_at_ms, entry.sort_order))
 
 
-def _latest_completed_compaction_before(snapshot: SessionSnapshot, before_ms: int) -> tuple[NormalizedMessage, NormalizedMessage] | None:
+def _latest_completed_compaction_before(snapshot: SessionSnapshot, before_ms: int,
+                                        epochs: ContextEpochs | None = None) -> tuple[NormalizedMessage, NormalizedMessage] | None:
     by_id = {message.message_id: message for message in snapshot.messages}
     candidates: list[tuple[int, NormalizedMessage, NormalizedMessage]] = []
     for message in snapshot.messages:
+        if epochs is not None and epochs.active_message(message.session_id, message.message_id) is False:
+            continue
         completed = message.completed_at_ms or message.created_at_ms
         if completed <= 0 or completed >= before_ms:
             continue
@@ -287,11 +339,14 @@ def _latest_completed_compaction_before(snapshot: SessionSnapshot, before_ms: in
     return parent, summary
 
 
-def _active_messages(snapshot: SessionSnapshot, target: TraceEntry) -> tuple[NormalizedMessage, ...]:
+def _active_messages(snapshot: SessionSnapshot, target: TraceEntry,
+                     epochs: ContextEpochs | None = None) -> tuple[NormalizedMessage, ...]:
     target_message = next((m for m in snapshot.messages if m.message_id == target.message_id), None)
     cutoff = target_message.created_at_ms if target_message is not None else target.completed_at_ms
-    compaction = _latest_completed_compaction_before(snapshot, cutoff)
-    ordered = sorted(snapshot.messages, key=lambda m: (m.created_at_ms, m.message_id))
+    compaction = _latest_completed_compaction_before(snapshot, cutoff, epochs)
+    ordered = sorted((message for message in snapshot.messages
+                      if epochs is None or epochs.active_message(message.session_id, message.message_id) is not False),
+                     key=lambda m: (m.created_at_ms, m.message_id))
     if compaction is None:
         return tuple(m for m in ordered if m.created_at_ms < cutoff and m.message_id != target.message_id)
     parent, summary = compaction
@@ -314,11 +369,12 @@ def _active_messages(snapshot: SessionSnapshot, target: TraceEntry) -> tuple[Nor
     return tuple(result)
 
 
-def context_composition(snapshot: SessionSnapshot, record: PromptRecord) -> ContextComposition:
+def context_composition(snapshot: SessionSnapshot, record: PromptRecord,
+                        epochs: ContextEpochs | None = None) -> ContextComposition:
     entry = record.last_root_entry
     if entry is None or entry.request_input_approx <= 0:
         return ContextComposition(None, (), {}, False)
-    messages = _active_messages(snapshot, entry)
+    messages = _active_messages(snapshot, entry, epochs)
     raw: list[ContextSource] = []
     for message in messages:
         if message.role is MessageRole.USER:
@@ -400,6 +456,8 @@ def watch_context_state(
 
     # Anchors from before a location move belong to a retired context epoch.
     epochs = epochs or ContextEpochs(snapshot, bundle)
+    if epochs.active_prompt(record) is False:
+        return WatchContextState(None, None)
     prior_entry = record.pre_prompt_entry
     prior_tokens: int | None = None
     prior_time = 0
@@ -408,6 +466,7 @@ def watch_context_state(
         and prior_entry.session_id == record.session_id
         and prior_entry.request_input_approx > 0
         and prior_entry.completed_at_ms < record.prompt_time_ms
+        and epochs.active_entry(prior_entry) is not False
         and not epochs.retired(record.session_id, prior_entry.completed_at_ms)
     ):
         value = prior_entry.tokens.total
@@ -419,6 +478,7 @@ def watch_context_state(
         (
             item for item in bundle.compactions
             if item.session_id == record.session_id
+            and epochs.active_message(record.session_id, item.user_message_id) is not False
             and not item.in_progress
             and item.completed_at_ms > 0
             and item.completed_at_ms < record.prompt_time_ms
@@ -443,8 +503,9 @@ def watch_context_state(
     current_entry = _latest_meaningful_watch_root(record)
     if current_entry is not None and epochs.retired(record.session_id, current_entry.completed_at_ms):
         current_entry = None  # wait for the first real request after the move
-    if current_entry is not None and current_entry.tokens.total > 0:
-        current_tokens = current_entry.tokens.total
+    estimate = epochs.estimate(record, catalog, candidate=current_entry) if current_entry is not None else None
+    if estimate is not None:
+        current_tokens = estimate.tokens
 
     # A running prompt may cross a compaction boundary.  Until a newer root
     # request exists after that rewrite, the old pre-compaction request is not a
@@ -454,6 +515,7 @@ def watch_context_state(
             (
                 item for item in bundle.compactions
                 if item.session_id == record.session_id
+                and epochs.active_message(record.session_id, item.user_message_id) is not False
                 and not item.in_progress
                 and item.completed_at_ms >= record.prompt_time_ms
             ),
@@ -483,7 +545,6 @@ def watch_context_state(
     delta = current_tokens - baseline if baseline is not None and baseline > 0 else None
     model_id = current_entry.model.model if current_entry is not None else record.main_model_id
     last_activity_ms = current_entry.completed_at_ms if current_entry is not None else record.prompt_time_ms
-    estimate = _estimate_entry_next_context(current_entry, catalog) if current_entry is not None and catalog is not None else None
     return WatchContextState(
         current_tokens, delta, model_id, last_activity_ms,
         estimate.cached_ccost if estimate is not None else None,
@@ -499,32 +560,53 @@ def build_context_timeline(
     events: list[tuple[int, str, object]] = []
     events.extend((record.prompt_time_ms, "prompt", record) for record in bundle.prompts)
     events.extend((record.created_at_ms, "compaction", record) for record in bundle.compactions)
-    events.extend((item.at_ms, "boundary", item) for item in snapshot.context_boundaries
-                  if item.session_id == bundle.root_session_id)
-    events.sort(key=lambda item: (item[0], 0 if item[1] == "prompt" else 1))
+    events.extend((item.at_ms, "boundary", item) for item in snapshot.context_boundaries)
+    events.sort(key=lambda item: (item[0], 0 if item[1] == "boundary" else 1 if item[1] == "prompt" else 2))
     epochs = ContextEpochs(snapshot, bundle)
     states: list[ContextTimelineState] = []
-    previous_next: int | None = None
+    previous_next: dict[str, int] = {}
     for at_ms, kind, record in events:
         if kind == "boundary":
-            previous_next = None  # a moved session's next request starts a new baseline
+            assert isinstance(record, ContextBoundary)
+            previous_next.pop(record.session_id, None)
             continue
         if kind == "prompt":
             assert isinstance(record, PromptRecord)
+            session_id = record.session_id
             incoming = record.input_context_tokens if record.input_context_tokens > 0 else None
+            if epochs.active_prompt(record) is False:
+                estimate = (_estimate_entry_next_context(record.last_root_entry, catalog)
+                            if record.last_root_entry else NextContextEstimate(None))
+                states.append(ContextTimelineState(kind, record.prompt_id, at_ms, incoming, estimate.tokens,
+                                                   None, estimate.tokens is not None))
+                completed_compaction_follows = any(
+                    item.session_id == record.session_id and not item.in_progress
+                    and item.created_at_ms > at_ms
+                    and epochs.active_message(record.session_id, item.user_message_id) is not False
+                    for item in bundle.compactions
+                )
+                if completed_compaction_follows:
+                    if estimate.tokens is None:
+                        previous_next.pop(session_id, None)
+                    else:
+                        previous_next[session_id] = estimate.tokens
+                else:
+                    previous_next.pop(session_id, None)
+                continue
             estimate = estimate_next_context(record, catalog, epochs=epochs)
             next_tokens = estimate.tokens
             event_id = record.prompt_id
         else:
             assert isinstance(record, CompactionRecord)
+            session_id = record.session_id
             incoming = record.input_context_tokens if record.input_context_tokens > 0 else None
             next_tokens = None if record.in_progress else _post_compaction_tokens(snapshot, record)
             event_id = record.user_message_id
-        baseline = previous_next if previous_next is not None else incoming
+        baseline = incoming if kind == "compaction" and incoming is not None else previous_next.get(session_id, incoming)
         delta = next_tokens - baseline if next_tokens is not None and baseline is not None else None
         states.append(ContextTimelineState(kind, event_id, at_ms, incoming, next_tokens, delta, next_tokens is not None))
         if next_tokens is not None:
-            previous_next = next_tokens
+            previous_next[session_id] = next_tokens
     return tuple(states)
 
 

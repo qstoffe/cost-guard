@@ -256,6 +256,49 @@ class OpenCodeV2SourceTests(unittest.TestCase):
             after = source.get_session_tree_revision("ses_root")
             self.assertNotEqual(before, after)
 
+    def test_active_context_view_and_revert_metadata_are_normalized_for_analysis(self) -> None:
+        with source_with_current_service() as (source, service, _):
+            source.list_sessions()
+            before = source.get_session_tree_revision("ses_current")
+            service.sessions[0]["revert"] = {"type": "before", "messageID": "msg_current_assistant"}
+            source.list_sessions()
+            after = source.get_session_tree_revision("ses_current")
+            self.assertNotEqual(before, after, "history-boundary metadata invalidates reused analysis")
+
+            service.context_messages["ses_current"] = [service.messages["ses_current"][0]]
+            snapshot = source.load_session_snapshot("ses_current")
+
+        active = next(item for item in snapshot.active_contexts if item.session_id == "ses_current")
+        self.assertEqual(("msg_current_user",), active.message_ids)
+
+    def test_invalid_optional_active_context_is_unknown_without_breaking_usage_hydration(self) -> None:
+        with source_with_current_service() as (source, service, _):
+            service.context_messages["ses_current"] = [{"type": "assistant"}]
+            snapshot = source.load_session_snapshot("ses_current")
+
+        self.assertEqual(1, len(snapshot.invocations))
+        self.assertFalse(any(item.session_id == "ses_current" for item in snapshot.active_contexts))
+
+    def test_agent_and_model_selection_messages_start_context_epochs_without_usage(self) -> None:
+        with source_with_current_service() as (source, service, _):
+            service.messages["ses_current"].insert(1, {
+                "id": "msg_agent_switch", "type": "agent-switched", "agent": "reviewer",
+                "time": {"created": 3500},
+            })
+            service.messages["ses_current"].insert(2, {
+                "id": "msg_model_switch", "type": "model-switched",
+                "model": {"providerID": "openai", "id": "gpt-5.6"},
+                "time": {"created": 3600},
+            })
+            snapshot = source.load_session_snapshot("ses_current")
+
+        self.assertEqual(1, len(snapshot.invocations))
+        self.assertEqual(
+            {"msg_agent_switch": 3500, "msg_model_switch": 3600},
+            {item.boundary_id: item.at_ms for item in snapshot.context_boundaries},
+        )
+        self.assertEqual(["msg_current_user"], [event.event_id for event in snapshot.events])
+
     def test_event_stream_yields_hint_then_requires_full_resync_on_end(self) -> None:
         with source_with_service() as (source, _service, _):
             iterator = source.iter_changes()
@@ -288,6 +331,9 @@ class OpenCodeV2SourceTests(unittest.TestCase):
             self.assertEqual({"current-v2-union": 1, "empty": 1}, metadata["message_shape_counts"])
             self.assertEqual({"user": 1, "assistant": 1}, metadata["message_type_counts"])
             self.assertGreaterEqual(metadata["message_pages_sampled"], 4)
+            context_requests = [urlsplit(path).path for path, _ in service.requests
+                                if urlsplit(path).path.endswith("/context")]
+            self.assertEqual(2, len(context_requests), "one active-history GET is acquired per session in the tree")
 
             session_continuations = [
                 urlsplit(path) for path, _ in service.requests

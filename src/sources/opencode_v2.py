@@ -17,6 +17,7 @@ from typing import Any
 
 from src.domain import (
     BackgroundActivity,
+    ActiveContext,
     ContextBoundary,
     IntegrationHealth,
     MessageRole,
@@ -50,12 +51,14 @@ from .opencode_v2_interruptions import LiveInterruptionReasons
 from .opencode_v2_transport import V2Endpoint, V2HttpClient, normalize_local_service_url
 from .opencode_v2_wire import (
     fetch_global_sessions,
+    fetch_active_context,
     fetch_messages,
     fetch_project_sessions,
     is_lifecycle_status_item,
     location_boundaries,
     normalize_message_items,
     normalize_terminal_lifecycle,
+    selection_boundaries,
     session_directory,
 )
 
@@ -433,6 +436,17 @@ class OpenCodeV2Source:
                 "time": {key: time_value.get(key) for key in ("created", "updated", "archived", "compacting")},
                 "cost": data.get("cost"),
                 "tokens": data.get("tokens"),
+                "revert": {
+                    key: data["revert"].get(key)
+                    for key in ("type", "messageID", "partID")
+                } if isinstance(data.get("revert"), Mapping) else None,
+                "fork": {
+                    "sessionID": data["fork"].get("sessionID"),
+                    "boundary": {
+                        key: data["fork"]["boundary"].get(key)
+                        for key in ("type", "messageID")
+                    } if isinstance(data["fork"].get("boundary"), Mapping) else None,
+                } if isinstance(data.get("fork"), Mapping) else None,
                 "active": item.active,
             }
             live_reasons = self._interruptions.signature(str(data["id"]))
@@ -460,9 +474,10 @@ class OpenCodeV2Source:
 
     def _load_messages(self, native: _NativeSession) -> tuple[
         tuple[NormalizedMessage, ...], tuple[NormalizedPart, ...], tuple[ContextBoundary, ...],
-        tuple[BackgroundActivity, ...], frozenset[str],
+        tuple[BackgroundActivity, ...], frozenset[str], ActiveContext | None,
     ]:
         session_id = str(native.data["id"])
+        active_context = fetch_active_context(self._client(), session_id=session_id)
         items, contract, pages, rejected_routes = fetch_messages(
             self._client(), session_id=session_id, directory=native.directory
         )
@@ -513,7 +528,10 @@ class OpenCodeV2Source:
         self._diagnostics["message_shapes"][session_id] = shape
         self._diagnostics["message_items"][session_id] = len(items)
         self._diagnostics.setdefault("message_pages", {})[session_id] = pages
-        return tuple(messages), tuple(parts), location_boundaries(items, session_id=session_id), background, notices
+        boundaries = (*location_boundaries(items, session_id=session_id),
+                      *selection_boundaries(items, session_id=session_id))
+        return (tuple(messages), tuple(parts), boundaries, background,
+                notices, active_context)
 
     def _catalog_before_messages(self, session_id: str, *, allow_reuse: bool) -> tuple[list[_NativeSession], bool]:
         """Catalog that brackets a snapshot's message reads from before.
@@ -543,15 +561,19 @@ class OpenCodeV2Source:
             parts: list[NormalizedPart] = []
             boundaries: list[ContextBoundary] = []
             background: list[BackgroundActivity] = []
+            active_contexts: list[ActiveContext] = []
             notices: set[str] = set()
             self._diagnostics["last_snapshot_stage"] = "messages"
             for native in before_tree:
-                native_messages, native_parts, native_boundaries, native_background, native_notices = self._load_messages(native)
+                (native_messages, native_parts, native_boundaries, native_background,
+                 native_notices, native_active_context) = self._load_messages(native)
                 messages.extend(native_messages)
                 parts.extend(native_parts)
                 boundaries.extend(native_boundaries)
                 background.extend(native_background)
                 notices.update(native_notices)
+                if native_active_context is not None:
+                    active_contexts.append(native_active_context)
             self._diagnostics["last_snapshot_stage"] = "catalog_after"
             after_all = self._list_native_sessions(refresh=True)
             try:
@@ -584,6 +606,7 @@ class OpenCodeV2Source:
                     source_revision=after_revision,
                     context_boundaries=tuple(boundaries),
                     background=tuple(background),
+                    active_contexts=tuple(active_contexts),
                 )
             if reused:
                 reuse = False  # the reused catalog was stale; not a fresh attempt
