@@ -15,7 +15,7 @@ from src.watch.models import ToolObservation, WatchProjection, WatchRow, WatchSe
 from .terminal import AnsiStyler, Column, StyledText, fit, render_table, single_line, wrap_prose
 from .terminal import terminal_content_width
 from .accounts import capacity_block, compact_label_fits, quota_label
-from .token_mix import prompt_scope, token_mix_lines, watch_total_line
+from .token_mix import prompt_scope, token_mix_lines, watch_total_lines
 from src.analysis.context import PriceWarningSeverity
 from .context_warnings import WARNING_ROLE, context_warning_text, warning_cost_suffix, warning_explanation_lines
 from .pricing_notices import pricing_notice_lines
@@ -458,7 +458,9 @@ class WatchRenderer:
         mix = projection.token_mix
         for line in token_mix_lines(prompt_scope(mix.sample_size), mix, width=width):
             self._write(line)
-        self._write(watch_total_line(projection.run_total, projection.today_total))
+        for line in watch_total_lines(projection.run_total, projection.today_total, projection.today_label,
+                                      width=width):
+            self._write(line)
         quota = projection.quota
         if quota is None:
             return

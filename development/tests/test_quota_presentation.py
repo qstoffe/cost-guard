@@ -229,8 +229,8 @@ class LayoutTests(unittest.TestCase):
                     for row in rows:
                         self.assertIn(row.label, text.splitlines())
                 self.assertTrue(all(len(line) <= width for line in text.splitlines()
-                                    if not line.startswith("Watch total CCost:")))
-                self.assertEqual(1, sum(line.startswith("Watch total CCost:") for line in text.splitlines()))
+                                    if not line.startswith(("CCost · Watch:", "  Deleted sessions"))))
+                self.assertEqual(1, sum(line.startswith("CCost · Watch:") for line in text.splitlines()))
 
     def test_three_accounts_compact_when_each_fits_and_split_before_verbose(self):
         copilot = replace(rolling("c", "Copilot Max"), account=replace(account("github-copilot", "c", plan="Max"), quotas=(

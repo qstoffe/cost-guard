@@ -124,7 +124,7 @@ class WatchTotalAndMoveTests(unittest.TestCase):
             watch = WatchCoordinator(selection=selection, report_service=service, config=config, clock_ms=lambda: clock[0])
             initial = watch.initialize().projection
             self.assertEqual(0, initial.token_mix.request_count, "pre-Watch history is excluded")
-            self.assertIn("Watch total CCost: 0", self.rendered(initial))
+            self.assertIn("CCost · Watch: 0 ·", self.rendered(initial))
 
             usage = TokenUsage(input=50, output=5)
             source.snapshot = with_prompt(source.snapshot, "new", 4100, usage)
@@ -133,8 +133,8 @@ class WatchTotalAndMoveTests(unittest.TestCase):
             run_amount = ccost_amount(service._load_comparison_catalog().reference_valuation(MODEL, usage))
             lines = self.rendered(first).splitlines()
             mix = next(index for index, line in enumerate(lines) if line.startswith("Token Mix %"))
-            expected = (f"Watch total CCost: {run_amount} (Today: {comparison_cost_text(first.today_total)}; "
-                        "Deleted sessions before Watch start excluded)")
+            expected = (f"CCost · Watch: {run_amount} · {first.today_label}: {comparison_cost_text(first.today_total)} · "
+                        "Deleted sessions before Watch start are not included in Today")
             self.assertEqual(expected, lines[mix + 1], "dedicated row directly below Token Mix")
 
             source.snapshot = moved_location(source.snapshot, 4600, "moved-to-worktree")
@@ -148,7 +148,7 @@ class WatchTotalAndMoveTests(unittest.TestCase):
             self.assertIn(expected, self.rendered(watch._last_projection))
 
             restarted = WatchCoordinator(selection=selection, report_service=service, config=config, clock_ms=lambda: 4800)
-            self.assertIn("Watch total CCost: 0", self.rendered(restarted.initialize().projection))
+            self.assertIn("CCost · Watch: 0 ·", self.rendered(restarted.initialize().projection))
 
     def header_cost(self, projection):
         return next(line for line in self.rendered(projection).splitlines() if "Σ" in line)
@@ -171,7 +171,7 @@ class WatchTotalAndMoveTests(unittest.TestCase):
             first = watch.poll_once().projection
             amount = ccost_amount(service._load_comparison_catalog().reference_valuation(MODEL, usage))
             self.assertRegex(self.header_cost(first), rf"\| +Σ {re.escape(amount)} \|")
-            self.assertIn("Watch total CCost: " + amount, self.rendered(first))
+            self.assertIn("CCost · Watch: " + amount + " ·", self.rendered(first))
             self.assertEqual(sum((row.prompt.ccost for row in first.rows), Decimal(0)),
                              first.session_subtotals["root"].ccost)
 

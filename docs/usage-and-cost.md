@@ -59,7 +59,7 @@ Reports retain Copilot's native $0.01/AI-credit conversion; Watch omits that con
 - Category CCost uses each request's model/tier; the four unrounded amounts reconcile with the same requests' CCost. Rounded cells need not sum exactly; `0.4% (24)` is a small but expensive share.
 - `~` marks approximate diagnostics (`~Ictx`, `~Ictx CCost`, `~Extra CCost`), never pricing provenance or Relative CCost.
 - `?` before a CCost cell means only the priced subset of an all-usage scope (prompt, session, date, account, `Watch total CCost`, `--token-mix`) is shown. Completely unpriced workloads show `N/A`.
-- Watch appends `(Today: <CCost>; Deleted sessions before Watch start excluded)` to its existing run-total line. Today uses the configured local date from 00:00; it resets at local midnight without resetting the run total. Existing CCost rounding and incomplete-pricing markers apply.
+- Watch shows `CCost · Watch: <run> · Today: <CCost> · Deleted sessions before Watch start are not included in Today`. Today uses the configured local date from 00:00; it resets at local midnight without resetting the run total. From 00:00 until 03:00 local time the `Today` label shows that date as `YYYY-MM-DD`. Existing CCost rounding and incomplete-pricing markers apply.
 - `N/A` means unavailable.
 - A trailing `*` on a model means linked child/subagent work used an additional model.
 - Watch's numbered `*1`, `*2`, ... context-warning markers follow `Next Ictx` on each displayed session's latest relevant row and point to the shared footnotes below the table. Markers and footnotes reflect only current visible warnings.

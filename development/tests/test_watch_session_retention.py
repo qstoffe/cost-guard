@@ -408,7 +408,7 @@ class OrderingAndHeaderTests(unittest.TestCase):
         first = rendered(WatchProjection("Watch", "V2", observed.project(blocks, snapshots, now_ms=NOW)), width=60)
         self.assertEqual(1, first.count("[Earlier] Session activity before Watch started;"))
         self.assertTrue(all(len(line) <= 60 for line in first.splitlines() if "Session activity" in line))
-        self.assertEqual(1, sum(line.startswith("Watch total CCost:") for line in first.splitlines()))
+        self.assertEqual(1, sum(line.startswith("CCost · Watch:") for line in first.splitlines()))
         for name in "AB":
             blocks[name] = replace(blocks[name], rows=blocks[name].rows + (prompt(2, NOW + 10),))
         rows = observed.project(blocks, snapshots, now_ms=NOW + 20)

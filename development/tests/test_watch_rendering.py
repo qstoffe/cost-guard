@@ -100,7 +100,7 @@ class WatchRenderingTests(unittest.TestCase):
         self.assertNotIn("##", table[3])
         self.assertIn("Σ 2", table[3])
         self.assertIn("Load shared-checkpoint", table[4])
-        self.assertIn("Watch total CCost:", rendered)
+        self.assertIn("CCost · Watch:", rendered)
         self.assertNotIn("\r", rendered)
         self.assertNotIn("\x1b", rendered)
         self.assertNotIn("[31m", rendered)

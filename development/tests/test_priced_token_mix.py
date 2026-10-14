@@ -160,7 +160,7 @@ class WatchPricedMixTests(unittest.TestCase):
             WatchProjection("Watch", "V2", (), token_mix=mix, run_total=total, now_ms=4000))
         mix_line, total_line = stream.getvalue().splitlines()[:2]
         self.assertNotIn("?", mix_line)
-        self.assertTrue(total_line.startswith("Watch total CCost: ?"), total_line)
+        self.assertTrue(total_line.startswith("CCost · Watch: ?"), total_line)
 
     def test_run_boundary_and_refresh_dedup_apply_to_priced_mix(self):
         snapshot = with_models(make_snapshot(), {"i_child": UNPRICED})

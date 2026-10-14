@@ -80,7 +80,7 @@ class WatchSessionSubtotalTests(unittest.TestCase):
             self.assertEqual((59, 0, 0, 0), first.token_mix.totals)
             stream = io.StringIO()
             WatchRenderer({}, stream=stream, interactive=False).render(first)
-            self.assertIn("Watch total CCost: 59", stream.getvalue())
+            self.assertIn("CCost · Watch: 59 ·", stream.getvalue())
             source.snapshot = moved_location(source.snapshot, 2250)
             clock[0] = 2400
             for cycle in (watch.poll_once(), watch.poll_once(force_resync=True), watch.poll_once()):
