@@ -1,27 +1,30 @@
-"""Watch session idle expiry, recent-session protection and consolidated context warnings."""
+"""Global Watch prompt retention, startup Earlier sessions, session order/headers and warnings."""
 from __future__ import annotations
 
 from dataclasses import replace
 from decimal import Decimal
 import io
+import re
 import tempfile
 import unittest
 
 from development.fixtures.session_snapshots import make_snapshot
-from development.fixtures.watch_runtime import MutableSource, make_service
+from development.fixtures.synthetic_month import SyntheticMonthSource
+from development.fixtures.watch_runtime import ROOT, MutableSource, make_service
 from src.analysis.context import PriceWarningSeverity
+from src.config import load_configuration
 from src.domain import EventKind, NormalizedEvent
 from src.presentation import WatchRenderer
 from src.reports.models import PromptProjection, SessionPromptBlock
 from src.watch import WatchCoordinator
-from src.domain.session_tree import root_activity
-from src.watch.session_retention import SESSION_IDLE_EXPIRY_MS, startup_visible_roots
+from src.watch.models import WatchProjection
 from src.watch.tracker import WatchRowTracker
 
 MINUTE = 60_000
 NOW = 1_000 * MINUTE
 EXCEEDED = "[Price threshold >200.0K exceeded]"
 APPROACHING = "[Approaching price threshold >272.0K]"
+EARLIER_NOTE = "[Earlier] Historical session activity; previous usage is excluded from Token Mix and Watch total CCost."
 
 
 def prompt(number, at_ms, *, duration_ms=1_000, **changes):
@@ -34,6 +37,14 @@ def prompt(number, at_ms, *, duration_ms=1_000, **changes):
     )
 
 
+def compaction(number, at_ms):
+    return replace(prompt(number, at_ms), is_compaction=True, calls=0, ccost=Decimal(0))
+
+
+def running(number, at_ms, **changes):
+    return prompt(number, at_ms, duration_ms=None, in_progress=True, **changes)
+
+
 def finished_at(number, end_ms, **changes):
     """A completed prompt whose source end time is ``end_ms``."""
     return prompt(number, end_ms - 1_000, **changes)
@@ -44,20 +55,29 @@ def inputs(**sessions):
     blocks, snapshots = {}, {}
     for session_id, rows in sessions.items():
         root = replace(base.root, session_id=session_id, title=f"Session {session_id}")
-        events = tuple(NormalizedEvent(row.event_id, session_id, EventKind.USER_PROMPT, row.at_ms,
-                                       base.events[0].provenance) for row in rows)
+        events = tuple(NormalizedEvent(row.event_id, session_id,
+                                       EventKind.COMPACTION if row.is_compaction else EventKind.USER_PROMPT,
+                                       row.at_ms, base.events[0].provenance) for row in rows)
         blocks[session_id] = SessionPromptBlock(session_id, root.title, tuple(rows), Decimal(0), 0)
         snapshots[session_id] = replace(base, root=root, sessions=(root,), events=events,
                                         messages=(), parts=(), invocations=())
     return blocks, snapshots
 
 
-def tracker(*, started_at_ms=0, max_rows=20):
-    return WatchRowTracker(started_at_ms=started_at_ms, recent_seconds=0, max_rows=max_rows)
+def tracker(*, started_at_ms=0, max_rows=12, recent_seconds=0):
+    return WatchRowTracker(started_at_ms=started_at_ms, recent_seconds=recent_seconds, max_rows=max_rows)
 
 
 def sessions(rows):
     return sorted({row.session_id for row in rows})
+
+
+def shown(rows):
+    return [(row.session_id, row.prompt.prompt_number) for row in rows]
+
+
+def block_order(rows):
+    return list(dict.fromkeys(row.session_id for row in rows))
 
 
 def warned(number, at_ms, warning=EXCEEDED, severity=PriceWarningSeverity.EXCEEDED, multiplier="1.9", **changes):
@@ -67,97 +87,219 @@ def warned(number, at_ms, warning=EXCEEDED, severity=PriceWarningSeverity.EXCEED
                        **changes)
 
 
-class SessionExpiryTests(unittest.TestCase):
-    def test_idle_session_expires_exactly_at_ten_minutes(self):
-        blocks, snapshots = inputs(A=(finished_at(1, NOW - MINUTE),), B=(finished_at(1, NOW - 2 * MINUTE),),
-                                   C=(finished_at(1, NOW - 5 * MINUTE),))
+def rendered(projection, *, width=200, config=None, interactive=False):
+    stream = io.StringIO()
+    WatchRenderer(config or {"colors": {}, "timezone": "UTC"}, stream=stream, interactive=interactive,
+                  terminal_width=width).render(projection)
+    return stream.getvalue()
+
+
+class GlobalRetentionTests(unittest.TestCase):
+    def test_one_session_keeps_ten_prompts_and_only_the_newest_twelve_of_twenty(self):
+        blocks, snapshots = inputs(A=tuple(prompt(number, number * 1_000) for number in range(1, 11)))
+        self.assertEqual(10, len(tracker().project(blocks, snapshots, now_ms=NOW)))
+        blocks, snapshots = inputs(A=tuple(prompt(number, number * 1_000) for number in range(1, 21)))
+        rows = tracker().project(blocks, snapshots, now_ms=NOW)
+        self.assertEqual(list(range(9, 21)), [row.prompt.prompt_number for row in rows])
+
+    def test_sessions_share_one_budget_and_disappear_only_after_their_last_prompt(self):
+        observed = tracker(max_rows=4)
+        older = tuple(prompt(number, number * 1_000) for number in range(1, 4))
+        for count in range(1, 5):
+            blocks, snapshots = inputs(A=older, B=tuple(prompt(n, 10_000 + n) for n in range(1, count + 1)))
+            rows = observed.project(blocks, snapshots, now_ms=NOW)
+            self.assertEqual(4, len(rows))
+            self.assertEqual(min(3, 4 - count), sum(row.session_id == "A" for row in rows))
+        self.assertEqual(["B"], sessions(rows), "A vanishes only once its final prompt is evicted")
+
+    def test_no_idle_expiry_and_new_session_evicts_nothing_while_capacity_remains(self):
+        blocks, snapshots = inputs(A=(finished_at(1, NOW - 60 * MINUTE),), B=(finished_at(1, NOW - 50 * MINUTE),))
         observed = tracker()
-        self.assertEqual(["A", "B", "C"], sessions(observed.project(blocks, snapshots, now_ms=NOW)))
-        boundary = NOW - 5 * MINUTE + SESSION_IDLE_EXPIRY_MS
-        self.assertEqual(["A", "B", "C"], sessions(observed.project(blocks, snapshots, now_ms=boundary - 1)))
-        self.assertEqual(["A", "B"], sessions(observed.project(blocks, snapshots, now_ms=boundary)))
-
-    def test_two_most_recent_sessions_stay_visible_regardless_of_age(self):
-        blocks, snapshots = inputs(A=(finished_at(1, NOW - 2 * MINUTE),), B=(finished_at(1, NOW - 7 * MINUTE),),
-                                   C=(finished_at(1, NOW - 15 * MINUTE),), D=(finished_at(1, NOW - 30 * MINUTE),))
-        self.assertEqual(["A", "B"], sessions(tracker().project(blocks, snapshots, now_ms=NOW)))
-        old, _ = inputs(A=(finished_at(1, NOW),), B=(finished_at(1, NOW - MINUTE),))
-        for days in (0, 1, 30):
-            rows = tracker().project(old, snapshots, now_ms=NOW + days * 24 * 60 * MINUTE)
-            self.assertEqual(["A", "B"], sessions(rows))
-
-    def test_running_sessions_are_protected_beyond_the_two_recent_slots(self):
-        hour_ago = NOW - 60 * MINUTE
-        blocks, snapshots = inputs(**{name: (prompt(1, hour_ago, duration_ms=None, in_progress=True),)
-                                      for name in "ABCD"}, E=(finished_at(1, NOW - MINUTE),))
-        observed = tracker()
-        self.assertEqual(list("ABCDE"), sessions(observed.project(blocks, snapshots, now_ms=NOW)))
-        # The long-running prompt finishes; its countdown starts at its source end time.
-        end = NOW + MINUTE
-        blocks["A"] = replace(blocks["A"], rows=(prompt(1, hour_ago, duration_ms=end - hour_ago),))
-        self.assertIn("A", sessions(observed.project(blocks, snapshots, now_ms=end + SESSION_IDLE_EXPIRY_MS - 1)))
-
-    def test_displaced_session_expires_immediately_and_returns_on_new_activity(self):
-        blocks, snapshots = inputs(A=(finished_at(1, NOW - 40 * MINUTE),), B=(finished_at(1, NOW - 50 * MINUTE),))
-        observed = tracker(started_at_ms=NOW)
-        self.assertEqual(["A", "B"], sessions(observed.project(blocks, snapshots, now_ms=NOW)))
-        more, more_snapshots = inputs(C=(prompt(1, NOW, duration_ms=None, in_progress=True),))
+        for day in (0, 1, 30):
+            self.assertEqual(["A", "B"], sessions(observed.project(blocks, snapshots, now_ms=NOW + day * 1_440 * MINUTE)))
+        more, more_snapshots = inputs(C=(running(1, NOW),))
         blocks.update(more)
         snapshots.update(more_snapshots)
-        self.assertEqual(["A", "C"], sessions(observed.project(blocks, snapshots, now_ms=NOW + 1)),
-                         "B loses protection with 50 idle minutes and gets no new grace period")
-        for _ in range(3):  # ordinary polling/resynchronization never resurrects it
-            self.assertNotIn("B", sessions(observed.project(blocks, snapshots, now_ms=NOW + 2)))
-        blocks["B"] = replace(blocks["B"], rows=blocks["B"].rows + (prompt(2, NOW + 3, duration_ms=None, in_progress=True),))
-        rows = observed.project(blocks, snapshots, now_ms=NOW + 4)
-        self.assertEqual(["B", "C"], sessions(rows), "two running sessions now hold both recent slots")
-        self.assertEqual([2], [row.prompt.prompt_number for row in rows if row.session_id == "B"])
+        self.assertEqual(["A", "B", "C"], sessions(observed.project(blocks, snapshots, now_ms=NOW + 1)))
 
-    def test_restart_keeps_remaining_idle_time_without_a_fresh_period(self):
-        blocks, snapshots = inputs(A=(finished_at(1, NOW - MINUTE),), B=(finished_at(1, NOW - 2 * MINUTE),),
-                                   C=(finished_at(1, NOW - 8 * MINUTE),), D=(finished_at(1, NOW - 30 * MINUTE),))
-        restarted = tracker(started_at_ms=NOW)
-        rows = restarted.project(blocks, snapshots, now_ms=NOW)
-        self.assertEqual(["A", "B", "C"], sessions(rows), "startup shows still-unexpired history only")
-        self.assertEqual(["", "", ""], [row.marker for row in rows])
-        self.assertEqual(["A", "B"], sessions(restarted.project(blocks, snapshots, now_ms=NOW + 2 * MINUTE)))
+    def test_running_and_highlighted_rows_form_a_soft_limit(self):
+        names = "ABCDE"
+        blocks, snapshots = inputs(**{name: tuple(running(n, NOW + index * 10 + n) for n in range(1, 4))
+                                      for index, name in enumerate(names)})
+        observed = tracker(started_at_ms=NOW, recent_seconds=30)
+        self.assertEqual(15, len(observed.project(blocks, snapshots, now_ms=NOW + 100)))
+        done = {name: replace(block, rows=tuple(replace(row, in_progress=False, duration_ms=5) for row in block.rows))
+                for name, block in blocks.items()}
+        rows = observed.project(done, snapshots, now_ms=NOW + 1_000)
+        self.assertEqual(15 * ["✓"], [row.marker for row in rows], "recent green rows stay protected")
+        rows = observed.project(done, snapshots, now_ms=NOW + 31_000)
+        self.assertEqual(12, len(rows), "marker expiry alone restores the ordinary limit")
+        self.assertNotIn("A", sessions(rows))
 
-    def test_observed_completion_is_the_fallback_without_source_duration(self):
-        blocks, snapshots = inputs(A=(finished_at(1, NOW + 5 * MINUTE),), B=(finished_at(1, NOW + 5 * MINUTE),),
-                                   C=(prompt(1, NOW - 60 * MINUTE, duration_ms=None, in_progress=True),))
+    def test_eight_running_prompts_fill_the_rest_with_newest_history(self):
+        history = tuple(prompt(number, NOW + number) for number in range(1, 21))
+        active = tuple(running(number, NOW + 100 + number) for number in range(21, 29))
+        blocks, snapshots = inputs(A=history + active)
+        rows = tracker(started_at_ms=NOW).project(blocks, snapshots, now_ms=NOW + 200)
+        self.assertEqual(list(range(17, 29)), [row.prompt.prompt_number for row in rows])
+        twelve, twelve_snapshots = inputs(A=history + tuple(running(n, NOW + 100 + n) for n in range(21, 33)))
+        rows = tracker(started_at_ms=NOW).project(twelve, twelve_snapshots, now_ms=NOW + 200)
+        self.assertTrue(all(row.prompt.in_progress for row in rows))
+        self.assertEqual(12, len(rows))
+
+    def test_compaction_is_an_ordinary_prompt_like_row(self):
+        blocks, snapshots = inputs(A=(prompt(1, 100), prompt(2, 300)), B=(compaction(1, 400),))
+        rows = tracker(max_rows=2).project(blocks, snapshots, now_ms=NOW)
+        self.assertEqual([("A", 2), ("B", 1)], shown(rows), "/compact takes a slot and orders its session")
+        self.assertIn("/compact", rendered(WatchProjection("Watch", "V2", rows, now_ms=NOW)))
+
+
+class EarlierSessionTests(unittest.TestCase):
+    def history(self):
+        return inputs(A=(prompt(1, 1_000), prompt(2, 2_000)), B=(prompt(1, 1_500), prompt(2, 3_000)),
+                      C=(prompt(1, 500),))
+
+    def test_earlier_sessions_show_only_their_latest_prompt_and_resume_into_current_run(self):
+        blocks, snapshots = self.history()
+        observed = tracker(started_at_ms=NOW)
+        observed.set_earlier_sessions(("B", "A"))
+        rows = observed.project(blocks, snapshots, now_ms=NOW)
+        self.assertEqual([("A", 2), ("B", 2)], shown(rows))
+        self.assertEqual([True, True], [row.earlier for row in rows])
+        self.assertEqual([2_000, 3_000], [row.session_latest_ms for row in rows])
+        blocks["A"] = replace(blocks["A"], rows=blocks["A"].rows + (running(3, NOW + 1_000),))
+        for now_ms in (NOW + 1_100, NOW + 2_000, NOW + 3_000):
+            rows = observed.project(blocks, snapshots, now_ms=now_ms)
+            self.assertEqual([("B", 2), ("A", 3)], shown(rows), "the placeholder is replaced and never reappears")
+            self.assertEqual([True, False], [row.earlier for row in rows])
+        blocks["A"] = replace(blocks["A"], rows=blocks["A"].rows[:2] + (prompt(3, NOW + 1_000), prompt(4, NOW + 5_000)))
+        rows = observed.project(blocks, snapshots, now_ms=NOW + 6_000)
+        self.assertEqual([("B", 2), ("A", 3), ("A", 4)], shown(rows))
+
+    def test_resumed_by_compaction_and_running_representative_is_not_earlier(self):
+        blocks, snapshots = self.history()
+        blocks["A"] = replace(blocks["A"], rows=blocks["A"].rows + (compaction(3, NOW + 10),))
+        blocks["B"] = replace(blocks["B"], rows=(prompt(1, 1_500), running(2, 3_000)))
+        observed = tracker(started_at_ms=NOW)
+        observed.set_earlier_sessions(("A", "B"))
+        rows = observed.project(blocks, snapshots, now_ms=NOW + 20)
+        self.assertEqual([("B", 2), ("A", 3)], shown(rows))
+        self.assertEqual([False, False], [row.earlier for row in rows])
+        self.assertTrue(rows[0].prompt.in_progress)
+
+    def test_evicted_representatives_are_not_resurrected(self):
+        blocks, snapshots = self.history()
+        observed = tracker(started_at_ms=NOW, max_rows=2)
+        observed.set_earlier_sessions(("B", "A"))
+        self.assertEqual(["A", "B"], sessions(observed.project(blocks, snapshots, now_ms=NOW)))
+        current, current_snapshots = inputs(D=(prompt(1, NOW + 1),))
+        observed.project({**blocks, **current}, {**snapshots, **current_snapshots}, now_ms=NOW + 2)
+        for _ in range(3):  # resync/idle polls after the newer session disappears
+            self.assertEqual(["B"], sessions(observed.project(blocks, snapshots, now_ms=NOW + 3)))
+
+    def coordinator(self, td, count, *, metadata_newest="root-0000"):
+        source = SyntheticMonthSource(6, 2, month_start_ms=NOW - 60 * MINUTE)
+        root = source.snapshots[metadata_newest].root
+        source.snapshots[metadata_newest] = replace(source.snapshots[metadata_newest],
+                                                    root=replace(root, updated_at_ms=NOW))
+        config, selection, service, _ = make_service(td, source, now_ms=NOW)
+        config.update(watchStartupEarlierSessions=count)
+        watch = WatchCoordinator(selection=selection, report_service=service, config=config, clock_ms=lambda: NOW)
+        self.addCleanup(watch.close)
+        return watch, source
+
+    def test_startup_selects_earlier_sessions_by_latest_prompt_start_not_metadata(self):
+        for count, expected in ((0, []), (1, ["root-0005"]), (2, ["root-0004", "root-0005"]),
+                                (5, ["root-0001", "root-0002", "root-0003", "root-0004", "root-0005"])):
+            with self.subTest(count=count), tempfile.TemporaryDirectory() as td:
+                watch, _source = self.coordinator(td, count)
+                projection = watch.initialize().projection
+                self.assertEqual(expected, block_order(projection.rows))
+                self.assertEqual([1] * count, [sum(r.session_id == s for r in projection.rows) for s in expected])
+                self.assertTrue(all(row.earlier and row.prompt.prompt_number == 2 for row in projection.rows))
+                self.assertEqual(0, projection.token_mix.request_count, "historical rows never enter run usage")
+                self.assertEqual(0, projection.run_total.request_count)
+                self.assertEqual(int(count > 0), rendered(projection).count(EARLIER_NOTE))
+
+    def test_cached_quiet_roots_keep_the_same_selection_and_hydrate_only_earlier(self):
+        with tempfile.TemporaryDirectory() as td:
+            watch, source = self.coordinator(td, 2)
+            first = watch.initialize().projection
+            again = WatchCoordinator(selection=watch.selection, report_service=watch.report_service,
+                                     config=watch.config, clock_ms=lambda: NOW + MINUTE)
+            self.addCleanup(again.close)
+            loads = source.load_count
+            cycle = again.initialize()
+            self.assertEqual(block_order(first.rows), block_order(cycle.projection.rows))
+            self.assertEqual(2, source.load_count - loads, "quiet non-Earlier roots stay unhydrated")
+            self.assertEqual(4, again.startup_quiet_roots)
+
+
+class OrderingAndHeaderTests(unittest.TestCase):
+    def test_blocks_follow_exact_latest_prompt_start_not_completion_or_polling(self):
+        blocks, snapshots = inputs(A=(prompt(1, NOW + 1, duration_ms=50 * MINUTE),), B=(prompt(1, NOW),),
+                                   C=(prompt(1, NOW + 1),))
         observed = tracker()
-        observed.project(blocks, snapshots, now_ms=NOW)
-        blocks["C"] = replace(blocks["C"], rows=(prompt(1, NOW - 60 * MINUTE, duration_ms=None),))
-        observed.project(blocks, snapshots, now_ms=NOW + MINUTE)
-        self.assertIn("C", sessions(observed.project(blocks, snapshots, now_ms=NOW + MINUTE + SESSION_IDLE_EXPIRY_MS - 1)))
-        self.assertNotIn("C", sessions(observed.project(blocks, snapshots, now_ms=NOW + MINUTE + SESSION_IDLE_EXPIRY_MS)))
+        self.assertEqual(["B", "A", "C"], block_order(observed.project(blocks, snapshots, now_ms=NOW + MINUTE)),
+                         "millisecond precision within one displayed minute; session ID breaks ties")
+        blocks["B"] = replace(blocks["B"], title="Renamed", rows=(prompt(1, NOW, duration_ms=90 * MINUTE),))
+        self.assertEqual(["B", "A", "C"], block_order(observed.project(blocks, snapshots, now_ms=NOW + 99 * MINUTE)))
+        blocks["A"] = replace(blocks["A"], rows=blocks["A"].rows + (running(2, NOW + 2 * MINUTE),))
+        self.assertEqual(["B", "C", "A"], block_order(observed.project(blocks, snapshots, now_ms=NOW + 3 * MINUTE)))
 
-    def test_row_cap_keeps_one_latest_row_per_protected_session(self):
-        blocks, snapshots = inputs(
-            A=tuple(finished_at(number, NOW - 60 * MINUTE + number) for number in range(1, 5)),
-            B=tuple(finished_at(number, NOW - 70 * MINUTE + number) for number in range(1, 5)),
-            C=(prompt(1, NOW - 90 * MINUTE, duration_ms=None, in_progress=True),),
-        )
-        rows = tracker(max_rows=1).project(blocks, snapshots, now_ms=NOW)
-        self.assertEqual([("C", 1), ("A", 4)], [(row.session_id, row.prompt.prompt_number) for row in rows],
-                         "running C takes a recent slot; A keeps its latest row; idle B expires")
-        rows = tracker(max_rows=3).project(blocks, snapshots, now_ms=NOW)
-        self.assertEqual([("C", 1), ("A", 3), ("A", 4)], [(row.session_id, row.prompt.prompt_number) for row in rows])
+    def header_line(self, output, title):
+        return next(line for line in output.splitlines() if title in line)
 
-    def test_startup_hydrates_metadata_recent_and_unexpired_roots(self):
-        base = make_snapshot().root
-        roots = tuple(replace(base, session_id=name, updated_at_ms=NOW - minutes * MINUTE)
-                      for name, minutes in (("A", 20), ("B", 30), ("C", 5), ("D", 40)))
-        ordered = tuple(sorted(roots, key=lambda item: item.updated_at_ms, reverse=True))
-        activity = root_activity(roots, {root.session_id: root.session_id for root in roots})
-        self.assertEqual({"C", "A"}, startup_visible_roots(ordered, activity, NOW))
-        self.assertEqual({"C", "A", "B"}, startup_visible_roots(ordered, activity, NOW - 21 * MINUTE + 1))
+    def test_merged_header_shows_time_and_keeps_columns_aligned(self):
+        blocks, snapshots = inputs(A=(prompt(1, 1_760_000_000_000),))
+        rows = tracker().project(blocks, snapshots, now_ms=1_760_000_100_000)
+        projection = WatchProjection("Watch", "V2", rows, now_ms=1_760_000_100_000)
+        output = rendered(projection)
+        header = self.header_line(output, "Session A")
+        prompt_line = self.header_line(output, "#1 prompt 1")
+        self.assertTrue(header.startswith("| 08:53 Session A "))
+        self.assertEqual(len(prompt_line), len(header))
+        self.assertEqual(6, header.count("|"), "Session/prompt and Model/effort share one header cell")
+        self.assertEqual(7, prompt_line.count("|"), "prompt rows keep every separator")
+        self.assertEqual([index for index, char in enumerate(prompt_line) if char == "|"][2:],
+                         [index for index, char in enumerate(header) if char == "|"][1:])
+        stockholm = rendered(projection, config={"colors": {}, "timezone": "Europe/Stockholm"})
+        self.assertIn("| 10:53 Session A ", stockholm)
 
+    def test_earlier_header_marker_truncation_color_and_sanitization(self):
+        title = "\x1b[31mEvil\nrow " + "long title " * 10
+        blocks, snapshots = inputs(A=(warned(1, 1_760_000_000_000),))
+        blocks["A"] = replace(blocks["A"], title=title)
+        observed = tracker(started_at_ms=1_770_000_000_000)
+        observed.set_earlier_sessions(("A",))
+        rows = observed.project(blocks, snapshots, now_ms=1_770_000_000_000)
+        projection = WatchProjection("Watch", "V2", rows, now_ms=1_770_000_000_000,
+                                     session_warnings={"A": rows[0].next_context_warning})
+        output = rendered(projection)
+        header = self.header_line(output, "[Earlier]")
+        self.assertTrue(header.startswith("| *1 [Earlier] 2025-10-09 08:53 Evil row long title"))
+        self.assertIn("... |", header)
+        self.assertNotIn("\x1b", output)
+        self.assertEqual(1, output.count(EARLIER_NOTE))
+        self.assertIn("*1 Context:", output)
+        config = dict(load_configuration(ROOT).values, timezone="UTC")
+        colored = rendered(projection, config=config, interactive=True)
+        renderer = WatchRenderer(config, stream=io.StringIO(), interactive=True)
+        self.assertIn(renderer.styler.apply("[Earlier]", "nextIctxWarning"), colored)
+        self.assertIn(renderer.styler.apply("2025-10-09 08:53 ", "watchSessionHeader"), colored)
+        self.assertNotIn(renderer.styler.apply("[Earlier]", "watchSessionHeader"), colored)
 
-def rendered(projection, *, width=200):
-    stream = io.StringIO()
-    WatchRenderer({"colors": {}}, stream=stream, interactive=False, terminal_width=width).render(projection)
-    return stream.getvalue()
+    def test_explanation_only_while_an_earlier_session_is_visible(self):
+        blocks, snapshots = inputs(A=(prompt(1, 1_000),), B=(prompt(1, 2_000),))
+        observed = tracker(started_at_ms=NOW)
+        observed.set_earlier_sessions(("A", "B"))
+        first = rendered(WatchProjection("Watch", "V2", observed.project(blocks, snapshots, now_ms=NOW)), width=60)
+        self.assertEqual(1, first.count("[Earlier] Historical session activity;"))
+        self.assertTrue(all(len(line) <= 60 for line in first.splitlines() if "Historical" in line or "Watch total" in line))
+        for name in "AB":
+            blocks[name] = replace(blocks[name], rows=blocks[name].rows + (prompt(2, NOW + 10),))
+        rows = observed.project(blocks, snapshots, now_ms=NOW + 20)
+        self.assertNotIn("[Earlier]", rendered(WatchProjection("Watch", "V2", rows)))
 
 
 class WarningConsolidationTests(unittest.TestCase):
@@ -177,7 +319,7 @@ class WarningConsolidationTests(unittest.TestCase):
         self.assertIn("*1,2,3,4 Context: Price threshold >200.0K exceeded (1.9x more expensive)", output)
         self.assertEqual(1, output.count("Context:"))
         for number in range(1, 5):
-            self.assertIn(f"*{number} Session ", output)
+            self.assertRegex(output, rf"\*{number} \d\d:\d\d Session ")
 
     def test_different_threshold_severity_or_cost_detail_stays_separate(self):
         blocks, snapshots = inputs(
@@ -198,21 +340,24 @@ class WarningConsolidationTests(unittest.TestCase):
         markers = [line.split(" ", 1)[0] for line in lines]
         self.assertEqual(sorted(markers, key=lambda marker: int(marker[1:].split(",")[0])), markers)
 
-    def test_expired_session_marker_leaves_the_group_and_last_group_disappears(self):
+    def test_evicted_session_marker_leaves_the_group_and_last_group_disappears(self):
         blocks, snapshots = inputs(A=(finished_at(1, NOW),), B=(finished_at(1, NOW - 1),),
                                    C=(warned(1, NOW - 2 * MINUTE),), D=(warned(1, NOW - 3 * MINUTE),))
         watch, before = self.coordinator_projection(blocks, snapshots, NOW)
         self.assertIn("*1,2 Context:", rendered(before))
-        after = watch._projection(now_ms=NOW - 3 * MINUTE + SESSION_IDLE_EXPIRY_MS)
+        watch.tracker.recent_ms = 0  # green first-observation markers no longer protect the rows
+        watch.tracker.max_rows = 3
+        after = watch._projection(now_ms=NOW)
         self.assertNotEqual(watch._transient_signature(before), watch._transient_signature(after),
-                            "time-based expiry repaints without a source change")
+                            "eviction repaints without a source change")
         self.assertIn("*1 Context: Price threshold", rendered(after))
         self.assertEqual(["A", "B", "C"], sessions(after.rows))
-        gone = watch._projection(now_ms=NOW - 2 * MINUTE + SESSION_IDLE_EXPIRY_MS)
+        watch.tracker.max_rows = 2
+        gone = watch._projection(now_ms=NOW)
         self.assertNotIn("Context:", rendered(gone))
         self.assertEqual({}, dict(gone.session_warnings))
 
-    def test_protected_session_keeps_warning_and_orange_next_ictx(self):
+    def test_old_sessions_keep_warning_and_orange_next_ictx(self):
         blocks, snapshots = inputs(A=(warned(1, NOW - 600 * MINUTE),),
                                    B=(warned(1, NOW - 700 * MINUTE, APPROACHING, PriceWarningSeverity.APPROACHING),))
         _watch, projection = self.coordinator_projection(blocks, snapshots, NOW)

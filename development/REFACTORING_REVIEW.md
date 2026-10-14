@@ -11,7 +11,7 @@ The authoritative baseline was the locally delivered v80.33 filesystem, includin
 | ~26 ms per V2 request opening a fresh connection | `opencode_v2_transport.py`: bounded pool of keep-alive loopback connections, one retry on a service-closed idle socket | ~0.3 ms overhead per request |
 | 0.5M regex calls resolving model identities | `PricingCatalog` memoizes identity/closest resolution per immutable instance | resolution leaves the profile |
 | Two full catalog listings per snapshot | `opencode_v2.py` reuses a <=2 s old complete catalog as the before-bracket; mismatch retries fresh | consistency proof unchanged |
-| Watch startup hydrating 20 mostly idle roots | `watch_root_is_quiet`: only stable cached analysis (never running work) with nothing since start is skipped | 6.2 s → 0.65 s |
+| Watch startup hydrating 20 mostly idle roots | `watch_root_latest_prompt_ms`: only stable cached analysis (never running work) with nothing since start is skipped unless chosen as `[Earlier]` | 6.2 s → 0.65 s |
 | Resync hydrating all history roots | `_changed_roots`: hydrated + changed + hinted roots | 13 s → 1.4 s |
 | Sequential availability/Claude helper waits | `AvailabilityPrefetch`; Claude helper stopped on a non-daemon cleanup thread | report 2.1 s → 0.65 s |
 | Watch discovery network reads on the main thread | `WatchModelDiscovery` check worker; main thread applies results | no poll stalls |

@@ -325,7 +325,7 @@ class ActiveActivityLifecycleTests(unittest.TestCase):
         rows = self.project((prompt(in_progress=True),), snapshot(self.parts))
         for width in range(1, 161):
             renderer = WatchRenderer({'colors': {}}, stream=io.StringIO(), interactive=False, terminal_width=width)
-            _table, _styles, activities = renderer._table_rows(WatchProjection('Watch', 'V2', rows))
+            _table, _styles, activities, _headers = renderer._table_rows(WatchProjection('Watch', 'V2', rows))
             for kind, marker, obs in activities.values():
                 line = renderer._activity_line(kind, marker, obs, max(0, width - 4)) if width >= 4 else '|'
                 self.assertLessEqual(len(line), width)

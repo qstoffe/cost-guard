@@ -1,66 +1,38 @@
-"""Presentation-only Watch session visibility: idle expiry and recent-session protection.
+"""Presentation-only Watch retention: global prompt selection and startup Earlier sessions.
 
-Visibility is derived on every projection from prompt lifecycle evidence alone,
-so it needs no per-session timer state, survives Watch restarts/reconnections
-and never treats polling, quota refreshes or title changes as activity.
+Sessions have no independent lifetime. A session block is visible exactly while
+one of its prompt rows is selected; protected (running or still-highlighted)
+rows always survive and the newest unprotected rows fill the remaining global
+capacity. Startup Earlier sessions are a one-time baseline chosen from actual
+prompt start times, never from catalog metadata, polling or quota refreshes.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Iterable, Mapping, Sequence
+from typing import Callable, Hashable, Iterable, Mapping, Sequence, TypeVar
 
-from src.domain import NormalizedSession
-
-SESSION_IDLE_EXPIRY_MS = 10 * 60 * 1000
-PROTECTED_RECENT_SESSIONS = 2
+Row = TypeVar("Row")
 
 
-@dataclass(frozen=True, slots=True)
-class SessionActivity:
-    """Prompt lifecycle evidence of one Watch session."""
-    session_id: str
-    running: bool
-    last_prompt_activity_ms: int
+def select_rows(
+    rows: Sequence[Row], *, max_rows: int, is_protected: Callable[[Row], bool], sort_key: Callable[[Row], Hashable],
+) -> list[Row]:
+    """Keep every protected row, then the newest unprotected rows up to the soft cap."""
+    ordered = sorted(rows, key=sort_key)
+    protected = [row for row in ordered if is_protected(row)]
+    ordinary = [row for row in ordered if not is_protected(row)]
+    room = max(0, max_rows - len(protected))
+    return sorted(protected + (ordinary[-room:] if room else []), key=sort_key)
 
 
-@dataclass(frozen=True, slots=True)
-class SessionVisibility:
-    visible: frozenset[str]
-    # Running or most recently prompt-active: the row cap keeps at least one row.
-    represented: frozenset[str]
+def select_earlier_sessions(latest_prompt_ms: Mapping[str, int], count: int) -> tuple[str, ...]:
+    """The ``count`` sessions with the newest completed pre-Watch prompt start.
 
-
-def startup_visible_roots(
-    roots: Sequence[NormalizedSession], activity: Mapping[str, int], now_ms: int,
-) -> set[str]:
-    """Roots that may still be visible at Watch startup, from catalog metadata only.
-
-    ``roots`` is ordered most recently active first. The leading roots are
-    protected; others qualify only inside the idle expiry. Hydrated prompt
-    timestamps then decide visibility, so a restart grants no fresh period.
+    Ties use the stable session ID; sessions without any prompt never qualify.
     """
-    keep = {root.session_id for root in roots[:PROTECTED_RECENT_SESSIONS]}
-    keep.update(root.session_id for root in roots
-                if now_ms - activity.get(root.session_id, root.updated_at_ms) < SESSION_IDLE_EXPIRY_MS)
-    return keep
+    ranked = sorted(((at_ms, session_id) for session_id, at_ms in latest_prompt_ms.items() if at_ms > 0), reverse=True)
+    return tuple(session_id for _at_ms, session_id in ranked[:max(0, int(count))])
 
 
-def _recency(activity: SessionActivity, now_ms: int) -> tuple[int, str]:
-    return (now_ms if activity.running else activity.last_prompt_activity_ms, activity.session_id)
-
-
-def session_visibility(activities: Iterable[SessionActivity], now_ms: int) -> SessionVisibility:
-    """Hide idle sessions after the expiry unless running or among the most recent.
-
-    Expiry applies exactly at the boundary. A session displaced from the most
-    recent set immediately uses its existing idle age; no new grace period starts.
-    """
-    items = tuple(activities)
-    ranked = sorted(items, key=lambda item: _recency(item, now_ms), reverse=True)
-    represented = {item.session_id for item in ranked[:PROTECTED_RECENT_SESSIONS]}
-    represented.update(item.session_id for item in items if item.running)
-    idle_visible = {
-        item.session_id for item in items
-        if now_ms - item.last_prompt_activity_ms < SESSION_IDLE_EXPIRY_MS
-    }
-    return SessionVisibility(frozenset(represented | idle_visible), frozenset(represented))
+def session_order(latest_start_ms: Iterable[tuple[str, int]]) -> list[str]:
+    """Ascending latest-prompt start; the newest session block is last."""
+    return [session_id for session_id, _at_ms in sorted(latest_start_ms, key=lambda item: (item[1], item[0]))]

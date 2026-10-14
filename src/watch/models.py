@@ -48,6 +48,10 @@ class WatchRow:
     marker: str = ""
     tool: ToolObservation | None = None
     is_latest_session_event: bool = True
+    # Exact start of the session's latest prompt/event; orders session blocks.
+    session_latest_ms: int = 0
+    # A startup historical representative of a session completed before Watch.
+    earlier: bool = False
 
     @property
     def next_context_warning(self) -> str:

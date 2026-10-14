@@ -301,7 +301,7 @@ class WatchDensityTests(unittest.TestCase):
                 self.assertEqual(expected, cycle.projection.token_mix)
 
     def test_default_and_overrides_only_limit_rows_not_87_prompt_run_mix(self):
-        self.assertEqual(14, load_configuration(compact.ROOT).values["watchDashboardMaxRows"])
+        self.assertEqual(12, load_configuration(compact.ROOT).values["watchDashboardMaxRows"])
         expected = None
         for limit in (None, 5, 14, 50, 100):
             with self.subTest(limit=limit), tempfile.TemporaryDirectory() as td:
@@ -314,7 +314,7 @@ class WatchDensityTests(unittest.TestCase):
                     config["watchDashboardMaxRows"] = limit
                 clock = [NOW]
                 watch = WatchCoordinator(selection=selection, report_service=service, config=config, clock_ms=lambda: clock[0])
-                self.assertEqual(limit or 14, watch.max_rows)
+                self.assertEqual(limit or 12, watch.max_rows)
                 watch.initialize()
                 for count in (30, 60, 87):
                     snapshot = make_root_snapshot(0, count, month_start_ms=NOW)
@@ -322,7 +322,7 @@ class WatchDensityTests(unittest.TestCase):
                     clock[0] = NOW + count * 1000 + 500
                     current = watch.poll_once(force_resync=True).projection
                     self.assertEqual(count, current.token_mix.sample_size)
-                    self.assertEqual(min(count, limit or 14), len(current.rows))
+                    self.assertEqual(min(count, limit or 12), len(current.rows))
                 self.assertEqual(87, current.token_mix.request_count)
                 if expected is None:
                     expected = current.token_mix

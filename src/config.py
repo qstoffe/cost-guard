@@ -230,6 +230,7 @@ def validate_configuration(config: dict[str, Any], defaults: dict[str, Any], ove
         "pricingMaxAgeHours": (0.0, float("inf"), False),
         "runningPromptWarningCCost": (0.0, float("inf"), False),
         "watchDashboardMaxRows": (-2147483648.0, 2147483647.0, True),
+        "watchStartupEarlierSessions": (0.0, 2147483647.0, True),
         "watchRecentEventSeconds": (-float("inf"), float("inf"), False),
     }
     for name, (minimum, maximum, whole) in numeric.items():

@@ -91,6 +91,20 @@ class ConfigurationCompatibilityTests(unittest.TestCase):
                 load_configuration(package)
             self.assertIn("Setting: openCode.source", str(caught.exception))
 
+    def test_startup_earlier_sessions_accepts_nonnegative_integers_only(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            package = make_package(tmp)
+            self.assertEqual(2, load_configuration(package).values["watchStartupEarlierSessions"])
+            user = package / "config/user-config.jsonc"
+            for value in (0, 1, 5):
+                user.write_text(f'{{"watchStartupEarlierSessions": {value}}}', encoding="utf-8")
+                self.assertEqual(value, load_configuration(package).values["watchStartupEarlierSessions"])
+            for value in ("-1", "1.5", '"two"'):
+                user.write_text(f'{{"watchStartupEarlierSessions": {value}}}', encoding="utf-8")
+                with self.assertRaises(ConfigError) as caught:
+                    load_configuration(package)
+                self.assertIn("Setting: watchStartupEarlierSessions", str(caught.exception))
+
     def test_malformed_jsonc_error_does_not_echo_parser_excerpt(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "config/user-config.jsonc"

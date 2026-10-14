@@ -50,8 +50,9 @@ def watch_for(snapshot=None, *, start=2200, max_rows=14, session_id=None):
 
 def table_for(projection):
     renderer = WatchRenderer({}, stream=io.StringIO(), interactive=False)
-    table, styles, _ = renderer._table_rows(projection)
-    headers = {row[0]: row[2] for row, style in zip(table, styles) if style[0] == "watchSessionHeader"}
+    table, _styles, _, header_rows = renderer._table_rows(projection)
+    # Key by the title segment; the merged header also carries its prompt time.
+    headers = {table[index][0].parts[-1][0]: table[index][2] for index in header_rows}
     return table, headers
 
 
@@ -130,8 +131,8 @@ class WatchSessionSubtotalTests(unittest.TestCase):
             B=(replace(prompt(1, 300), ccost=Decimal(2000)),
                replace(prompt(2, 400), ccost=Decimal(7))),
         )
-        # Both sessions are most recent, so each keeps one row even at cap 1.
-        for cap, expected in ((1, {"A": Decimal(5), "B": Decimal(7)}), (2, {"A": Decimal(5), "B": Decimal(7)}),
+        # The running row is protected; B exists only while one of its prompts is selected.
+        for cap, expected in ((1, {"A": Decimal(5)}), (2, {"A": Decimal(5), "B": Decimal(7)}),
                               (3, {"A": Decimal(5), "B": Decimal(2007)})):
             with self.subTest(cap=cap), watch_for(start=0, max_rows=cap) as (watch, _, _):
                 watch.blocks, watch.snapshots = blocks, snapshots

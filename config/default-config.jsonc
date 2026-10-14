@@ -83,12 +83,20 @@
   // while idle they use max(30 seconds, 3 × the configured interval).
   "sessionWatchIntervalSeconds": "auto",
 
-  // Normal retained-row cap for the persistent watch dashboard. Completed rows
-  // outside watchRecentEventSeconds are evicted oldest-completed-first when needed;
-  // running and still-recent completed rows are never evicted just to enforce the
-  // cap, so the live table may temporarily exceed this value. Session header rows
-  // are presentation-only and do not count toward this cap. Values below 1 clamp to 1.
-  "watchDashboardMaxRows": 14,
+  // Global soft cap on prompt/event rows across all Watch sessions. The newest
+  // rows are kept and the oldest unprotected row is evicted first; running rows
+  // and rows still showing their watchRecentEventSeconds green/red marker are
+  // never evicted just to enforce the cap, so the table may temporarily exceed
+  // it. A session block disappears only when none of its prompts remain selected.
+  // Session headers, tool/Skills/status rows and notes do not count. Values below
+  // 1 clamp to 1.
+  "watchDashboardMaxRows": 12,
+
+  // Global Watch startup shows up to this many sessions completed before the
+  // run, newest latest-prompt start first, each with only its latest prompt and
+  // marked [Earlier]. Their usage stays outside Token Mix and Watch total CCost.
+  // A new prompt in such a session replaces the historical row. 0 disables.
+  "watchStartupEarlierSessions": 2,
 
   // Observation-based recent-event window for persistent watch. A newly observed
   // running event shows "+"; any prompt first observed completed or later observed
