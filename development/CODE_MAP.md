@@ -6,7 +6,7 @@ Navigation, not another architecture authority: [ARCHITECTURE.md](ARCHITECTURE.m
 
 1. Read root [AGENTS.md](../AGENTS.md) and the workflow it selects. The current filesystem, including uncommitted work, is authoritative.
 2. Find the responsibility below, read its boundary types and focused tests, then the affected implementation. Do not put integration details into analysis or presentation.
-3. Run a focused pattern/profile while iterating; finish with the environment-appropriate suite and validator (hosted: Quick, never a ZIP; local: Full, live checks and a ZIP). Remote publication remains a separate authorization.
+3. Run a focused pattern/profile while iterating; finish with the environment-appropriate suite and validator (hosted: Quick; local: Full and read-only live checks; neither builds a product ZIP). Remote publication remains a separate authorization.
 
 Regenerate a whole-tree static inventory from the repository root:
 

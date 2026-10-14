@@ -149,8 +149,6 @@ def _fit_context_tokens(value: int | None, width: int, *, signed: bool = False,
     return f"{sign}1e{exponent}"
 
 
-
-
 def _duration(ms: int | None) -> str:
     if ms is None:
         return "N/A"
@@ -239,11 +237,6 @@ def _active_warning_rows(projection: WatchProjection) -> tuple[tuple[int, str, s
                  sorted(latest.items(), key=lambda item: item[1][0]))
 
 
-def _columns_for_warning_count(_count: int) -> tuple[Column, ...]:
-    """Warnings use a reserved subfield; the dashboard geometry never changes."""
-    return _WATCH_COLUMNS
-
-
 class WatchRenderer:
     def __init__(self, config: Mapping[str, object], *, stream: TextIO | None = None, interactive: bool | None = None,
                  terminal_width: int | None = None, started_at_ms: int | None = None) -> None:
@@ -259,6 +252,12 @@ class WatchRenderer:
                                   datetime.now(timezone.utc).timestamp() * 1000)
         self._status_visible = False
         self.terminal_width = terminal_width
+
+    def _content_width(self, *, minimum: int = 40) -> int:
+        """Configured test width, otherwise the live terminal's content width."""
+        if self.terminal_width is not None:
+            return self.terminal_width
+        return terminal_content_width(self.stream, minimum=minimum)
 
     def _write(self, text: str = "") -> None:
         self.stream.write(text + "\n")
@@ -286,7 +285,7 @@ class WatchRenderer:
             suffix = " — " + title[len(prefix):]
         heading = self._watch_heading("Prompt watch", started_at_ms or self.started_at_ms) + suffix
         source = f"Source: OpenCode {source_label}"
-        width = self.terminal_width if self.terminal_width is not None else terminal_content_width(self.stream)
+        width = self._content_width()
         complete = heading + " — " + source
         if len(complete) <= width:
             return complete
@@ -433,17 +432,17 @@ class WatchRenderer:
         rows, styles, activities, headers = self._table_rows(projection)
         if not rows:
             rows, styles = [_empty_row("No prompts since Watch started")], [("watchToolActivity",) + (None,) * 5]
-        lines = render_table(_columns_for_warning_count(len(_active_warning_rows(projection))), rows,
+        lines = render_table(_WATCH_COLUMNS, rows,
                              styles=styles, styler=self.styler,
                              leading_spans={index: 2 for index in headers})
         if lines and activities:
-            terminal_width = self.terminal_width if self.terminal_width is not None else terminal_content_width(self.stream, minimum=1)
+            terminal_width = self._content_width(minimum=1)
             span_width = max(0, min(len(lines[0]), terminal_width) - 4)
             for row_index, (kind, marker, tool) in activities.items():
                 lines[3 + row_index] = self._activity_line(kind, marker, tool, span_width) if terminal_width >= 4 else "|"[:max(0, terminal_width)]
         for line in lines:
             self._write(line)
-        width = self.terminal_width if self.terminal_width is not None else terminal_content_width(self.stream)
+        width = self._content_width()
         if any(row.earlier for row in projection.rows):
             for line in warning_explanation_lines(EARLIER_LABEL, EARLIER_EXPLANATION, PriceWarningSeverity.APPROACHING,
                                                   self.styler, width=width):
@@ -454,7 +453,7 @@ class WatchRenderer:
                 self._write(line)
 
     def _render_quota(self, projection: WatchProjection) -> None:
-        width = self.terminal_width if self.terminal_width is not None else terminal_content_width(self.stream)
+        width = self._content_width()
         mix = projection.token_mix
         for line in token_mix_lines(prompt_scope(mix.sample_size), mix, width=width):
             self._write(line)
@@ -493,7 +492,7 @@ class WatchRenderer:
         if not self.interactive:
             return
         self._clear()
-        width = self.terminal_width if self.terminal_width is not None else terminal_content_width(self.stream)
+        width = self._content_width()
         self._write("\n".join(wrap_prose(self._watch_heading("Watch", self.started_at_ms), width)))
         # Startup loading uses the default foreground like every other mode;
         # activeRunning stays reserved for the steady-state Watch status row.
@@ -511,7 +510,7 @@ class WatchRenderer:
         self._write(self._watch_title(projection.source_label, projection.title, projection.watch_started_at_ms))
         for warning in projection.source_warnings:
             self._write(self.styler.apply("WARNING: " + warning, "costQuotaWarning"))
-        width = self.terminal_width if self.terminal_width is not None else terminal_content_width(self.stream)
+        width = self._content_width()
         if projection.recent_model_notice:
             for line in pricing_notice_lines(projection.recent_model_notice, width, self.styler, "modelComparisonNew",
                                           highlight_spans=projection.recent_model_notice_highlight_spans):
