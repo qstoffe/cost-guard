@@ -98,6 +98,7 @@ class WatchProjection:
     status: str = ""
     status_active: bool = False
     now_ms: int = 0
+    watch_started_at_ms: int = 0
     session_warnings: Mapping[str, str] | None = None
     recent_model_notice: str = ""
     quota_recovering_accounts: tuple[tuple[str, str, str], ...] = ()

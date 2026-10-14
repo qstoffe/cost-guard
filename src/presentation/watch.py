@@ -7,12 +7,12 @@ import os
 import sys
 from typing import Mapping, TextIO
 
-from src.version import mode_heading
+from src.version import DISPLAY_VERSION, PRODUCT_NAME
 from src.numbers import ccost_amount
 from src.analysis.timezones import format_local_timestamp, resolve_timezone
 from src.watch.models import ToolObservation, WatchProjection, WatchRow, WatchSessionSubtotal
 
-from .terminal import AnsiStyler, Column, StyledText, fit, render_table, single_line
+from .terminal import AnsiStyler, Column, StyledText, fit, render_table, single_line, wrap_prose
 from .terminal import terminal_content_width
 from .accounts import capacity_block, compact_label_fits, quota_label
 from .token_mix import prompt_scope, token_mix_lines, watch_total_line
@@ -91,13 +91,9 @@ def _fit_model_effort(label: str, width: int) -> str:
     return _truncate_label(model, model_width) + " " + _fit_effort(effort, effort_width)
 
 
-def _model_effort_cell(label: str, warning_number: int | None) -> str | StyledText:
-    marker = f"*{warning_number}" if warning_number is not None else ""
+def _model_effort_cell(label: str) -> str:
     width = _WATCH_COLUMNS[1].fixed_width or 0
-    value = _fit_model_effort(label, max(0, width - len(marker)))
-    if not marker:
-        return value
-    return StyledText(((value, WARNING_ROLE), (marker, WARNING_ROLE)))
+    return _fit_model_effort(label, width)
 
 
 def _tokens(value: int | None, *, signed: bool = False, approximate: bool = False) -> str:
@@ -137,18 +133,21 @@ def _duration(ms: int | None) -> str:
     return f"{days}d" if remaining_hours == 0 else f"{days}d{remaining_hours}h"
 
 
-def _context_cell(row: WatchRow, row_role: str | None) -> StyledText:
+def _context_cell(row: WatchRow, row_role: str | None, warning_number: int | None = None) -> StyledText:
     prompt = row.prompt
     warning_role = row_role
     if row.next_context_warning_severity != PriceWarningSeverity.NONE:
         warning_role = WARNING_ROLE
     delta = prompt.watch_delta_context_tokens
     next_tokens = prompt.watch_next_context_tokens
-    return StyledText((
+    parts: list[tuple[str, str | None]] = [
         (f"{_tokens(delta, signed=True):>7}", row_role),
         (" → ", row_role),
         (f"{_tokens(next_tokens, approximate=True):>8}", warning_role),
-    ))
+    ]
+    if warning_number is not None:
+        parts.append((f" *{warning_number}", WARNING_ROLE))
+    return StyledText(tuple(parts))
 
 
 def _empty_row(text: str) -> tuple[str, ...]:
@@ -185,14 +184,30 @@ def _warning_groups(projection: WatchProjection) -> list[tuple[list[int], str, P
     detail) plus severity, so any meaningful difference stays separate.
     """
     groups: dict[tuple[str, PriceWarningSeverity], list[int]] = {}
-    for number, (session_id, warning) in enumerate((projection.session_warnings or {}).items(), start=1):
+    for number, (_row_index, session_id, warning) in enumerate(_active_warning_rows(projection), start=1):
         groups.setdefault(_warning_explanation(session_id, warning, projection.rows), []).append(number)
     return [(numbers, text, severity) for (text, severity), numbers in groups.items()]
 
 
+def _active_warning_rows(projection: WatchProjection) -> tuple[tuple[int, str, str], ...]:
+    """Choose only each displayed session's latest row with a live warning."""
+    latest: dict[str, tuple[int, str]] = {}
+    for index, row in enumerate(projection.rows):
+        if row.next_context_warning:
+            latest[row.session_id] = (index, row.next_context_warning)
+    return tuple((index, session_id, warning) for session_id, (index, warning) in
+                 sorted(latest.items(), key=lambda item: item[1][0]))
+
+
+def _columns_for_warning_count(count: int) -> tuple[Column, ...]:
+    marker_width = len(f"*{count}") if count else 0
+    context_width = (_WATCH_COLUMNS[-1].fixed_width or 0) + marker_width + (1 if marker_width else 0)
+    return _WATCH_COLUMNS[:-1] + (Column("Δctx → Next Ictx", True, fixed_width=context_width),)
+
+
 class WatchRenderer:
     def __init__(self, config: Mapping[str, object], *, stream: TextIO | None = None, interactive: bool | None = None,
-                 terminal_width: int | None = None) -> None:
+                 terminal_width: int | None = None, started_at_ms: int | None = None) -> None:
         self.config = config
         self.stream = stream or sys.stdout
         if interactive is None:
@@ -201,6 +216,8 @@ class WatchRenderer:
         colors = config.get("colors") if isinstance(config.get("colors"), Mapping) else {}
         self.styler = AnsiStyler(colors, enabled=self.interactive)
         self.timezone_id = str(config.get("timezone") or "Europe/Stockholm")
+        self.started_at_ms = int(started_at_ms if started_at_ms is not None else
+                                  datetime.now(timezone.utc).timestamp() * 1000)
         self._status_visible = False
         self.terminal_width = terminal_width
 
@@ -219,13 +236,22 @@ class WatchRenderer:
         if self.interactive:
             self.stream.write("\x1b[2J\x1b[3J\x1b[H")
 
-    @staticmethod
-    def _watch_title(source_label: str, title: str = "Cost Guard Watch") -> str:
+    def _watch_heading(self, mode: str, started_at_ms: int) -> str:
+        timestamp = format_local_timestamp(started_at_ms, self.timezone_id, "%Y-%m-%d %H:%M:%S")
+        return f"{PRODUCT_NAME} {DISPLAY_VERSION} (Watch started: {timestamp}) — {mode}"
+
+    def _watch_title(self, source_label: str, title: str = "Cost Guard Watch", started_at_ms: int = 0) -> str:
         suffix = ""
         prefix = "Cost Guard Watch - "
         if title.startswith(prefix):
             suffix = " — " + title[len(prefix):]
-        return mode_heading("Prompt watch") + f"{suffix} — Source: OpenCode {source_label}"
+        heading = self._watch_heading("Prompt watch", started_at_ms or self.started_at_ms) + suffix
+        source = f"Source: OpenCode {source_label}"
+        width = self.terminal_width if self.terminal_width is not None else terminal_content_width(self.stream)
+        complete = heading + " — " + source
+        if len(complete) <= width:
+            return complete
+        return "\n".join(wrap_prose(heading, width) + wrap_prose(source, width))
 
     @staticmethod
     def _status_text(text: str) -> str:
@@ -308,12 +334,12 @@ class WatchRenderer:
         activities: dict[int, tuple[str, str, ToolObservation]] = {}
         headers: list[int] = []
         previous_session = None
-        warnings = projection.session_warnings or {}
-        warning_numbers = {session_id: index + 1 for index, session_id in enumerate(warnings)}
         running_sessions = {row.session_id for row in projection.rows if row.prompt.in_progress and not row.earlier}
         today = (_current_local_date(self.timezone_id)
                  if any(row.earlier for row in projection.rows) else None)
-        for row in projection.rows:
+        warning_numbers = {row_index: number for number, (row_index, _session_id, _warning) in
+                           enumerate(_active_warning_rows(projection), start=1)}
+        for row_index, row in enumerate(projection.rows):
             if row.session_id != previous_session:
                 subtotal = _session_subtotal_text(projection.session_subtotals.get(row.session_id))
                 headers.append(len(rows))
@@ -325,16 +351,16 @@ class WatchRenderer:
             role = self._row_style(row)
             native_compaction_without_billing = prompt.is_compaction and prompt.calls == 0 and prompt.ccost == 0
             model_label = prompt.watch_model_effort or prompt.model_effort or "N/A"
-            warning_number = warning_numbers.get(row.session_id) if row.next_context_warning else None
+            warning_number = warning_numbers.get(row_index)
             model_cell = ("" if native_compaction_without_billing and model_label == "N/A" and warning_number is None
-                          else _model_effort_cell(model_label, warning_number))
+                          else _model_effort_cell(model_label))
             rows.append((
                 self._row_label(row),
                 model_cell,
                 "" if native_compaction_without_billing else ccost_amount(prompt.ccost, unresolved=prompt.unresolved_cost),
                 "" if native_compaction_without_billing else prompt.calls,
                 "" if native_compaction_without_billing and not prompt.in_progress else _duration(self._duration_for(row, projection.now_ms)),
-                _context_cell(row, role),
+                _context_cell(row, role, warning_number),
             ))
             styles.append((role, role, role, role, role, None))
             if row.tool is not None:
@@ -368,7 +394,8 @@ class WatchRenderer:
         rows, styles, activities, headers = self._table_rows(projection)
         if not rows:
             rows, styles = [_empty_row("No prompts since Watch started")], [("watchToolActivity",) + (None,) * 5]
-        lines = render_table(_WATCH_COLUMNS, rows, styles=styles, styler=self.styler,
+        lines = render_table(_columns_for_warning_count(len(_active_warning_rows(projection))), rows,
+                             styles=styles, styler=self.styler,
                              leading_spans={index: 2 for index in headers})
         if lines and activities:
             terminal_width = self.terminal_width if self.terminal_width is not None else terminal_content_width(self.stream, minimum=1)
@@ -425,7 +452,8 @@ class WatchRenderer:
         if not self.interactive:
             return
         self._clear()
-        self._write(mode_heading("Watch"))
+        width = self.terminal_width if self.terminal_width is not None else terminal_content_width(self.stream)
+        self._write("\n".join(wrap_prose(self._watch_heading("Watch", self.started_at_ms), width)))
         # Startup loading uses the default foreground like every other mode;
         # activeRunning stays reserved for the steady-state Watch status row.
         self._write_status("Initializing...", active=False, newline=False)
@@ -439,7 +467,7 @@ class WatchRenderer:
 
     def render(self, projection: WatchProjection) -> None:
         self._clear()
-        self._write(self._watch_title(projection.source_label, projection.title))
+        self._write(self._watch_title(projection.source_label, projection.title, projection.watch_started_at_ms))
         for warning in projection.source_warnings:
             self._write(self.styler.apply("WARNING: " + warning, "costQuotaWarning"))
         width = self.terminal_width if self.terminal_width is not None else terminal_content_width(self.stream)

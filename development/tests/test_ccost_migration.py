@@ -296,7 +296,7 @@ class StartupQuotaGeometryTests(unittest.TestCase):
         progress = StartupProgress(stream, mode="watch", interactive=True, animate=False, line_sink=renderer.render_startup_status)
         progress.update("Selecting OpenCode source", 5)
         progress.stop()
-        self.assertIn(mode_heading("Watch") + "\n", stream.getvalue())
+        self.assertRegex(stream.getvalue(), r"Cost Guard v\d+\.\d+ \(Watch started: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\) — Watch\n")
         self.assertNotIn("\n\n", stream.getvalue())
         before = len(stream.getvalue())
         renderer.render(WatchProjection("Watch", "V2", ()))

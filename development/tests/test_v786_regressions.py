@@ -68,7 +68,8 @@ class V786RegressionTests(unittest.TestCase):
         self.assertIn("Context:", text)
         prompt_line = next(line for line in text.splitlines() if "#2 " in line)
         model_cell = prompt_line.split("|")[2]
-        self.assertIn("*1", model_cell)
+        self.assertNotIn("*1", model_cell)
+        self.assertTrue(prompt_line.split("|")[6].strip().endswith("*1"))
         self.assertNotIn("N/A", prompt_line)
 
     def test_coordinator_projects_watch_specific_live_warning(self) -> None:

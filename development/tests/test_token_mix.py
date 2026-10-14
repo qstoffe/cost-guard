@@ -305,7 +305,7 @@ class TokenMixPresentationTests(unittest.TestCase):
         lines = stream.getvalue().splitlines()
         self.assertTrue(lines[0].startswith("Token Mix % · 0 prompts"))
         self.assertEqual(
-            "Watch total CCost: 0 (Today: 0; deleted sessions outside Watch excluded)", lines[1]
+            "Watch total CCost: 0 (Today: 0; Deleted sessions before Watch start excluded)", lines[1]
         )
         expected = capacity_lines(account, AnsiStyler({}, enabled=False), "UTC", width=120,
                                   watch=True, now_ms=quota.now_ms, account_label_width=len(account.label),
@@ -331,8 +331,7 @@ class TokenMixPresentationTests(unittest.TestCase):
     def test_initializing_and_help_document_abbreviations(self):
         stream = io.StringIO()
         WatchRenderer({}, stream=stream, interactive=True).render_initializing()
-        from src.version import mode_heading
-        self.assertIn(mode_heading("Watch") + "\n", stream.getvalue())
+        self.assertRegex(stream.getvalue(), r"Cost Guard v\d+\.\d+ \(Watch started: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\) — Watch\n")
         self.assertNotIn("Token Mix %", stream.getvalue())
         self.assertNotIn("Quotas", stream.getvalue())
         for phrase in ("I = uncached input", "C = cache read", "W = cache write", "O = output"):

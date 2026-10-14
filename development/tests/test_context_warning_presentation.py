@@ -53,12 +53,14 @@ class ContextWarningPresentationTests(unittest.TestCase):
                 header = next(line for line in text.splitlines() if "Normal session" in line)
                 self.assertNotIn("*1", header)
                 row = next(line for line in text.splitlines() if "Normal prompt" in line)
-                self.assertIn(styler.apply("Test (Default)", "nextIctxWarning"), row)
-                self.assertIn(styler.apply("*1", "nextIctxWarning"), row)
+                self.assertIn("Test (Default)", row)
+                self.assertNotIn(styler.apply("Test (Default)", "nextIctxWarning"), row)
+                self.assertIn(styler.apply(" *1", "nextIctxWarning"), row)
                 self.assertIn(styler.apply(f"{'~' + str(item.watch_next_context_tokens // 1000) + 'k':>8}", "nextIctxWarning"), row)
-                self.assertEqual(3, row.count("\x1b[0m"), "Model, marker and Next Ictx are styled independently")
+                self.assertEqual(2, row.count("\x1b[0m"), "marker and Next Ictx are styled independently")
                 self.assertNotIn("\x1b[91m", row)
                 self.assertIn("+4k →", ANSI.sub("", row))
+                self.assertLess(ANSI.sub("", row).index("~"), ANSI.sub("", row).index("*1"))
 
     def test_watch_approaching_marker_only_exceeded_full_explanation(self):
         styler = self.styles()
@@ -142,8 +144,9 @@ class ContextWarningPresentationTests(unittest.TestCase):
         title = "Long session title " * 8
         output = self.watch(warning_watch_projection(item, title))
         self.assertNotIn("*1", next(line for line in output.splitlines() if title[:18] in line))
-        self.assertIn(self.styles().apply("Test (Default)", "nextIctxWarning"), output)
-        self.assertIn(self.styles().apply("*1", "nextIctxWarning"), output)
+        self.assertIn("Test (Default)", output)
+        self.assertNotIn(self.styles().apply("Test (Default)", "nextIctxWarning"), output)
+        self.assertIn(self.styles().apply(" *1", "nextIctxWarning"), output)
         self.assertNotIn("\x1b", self.watch(warning_watch_projection(item), colored=False))
         self.assertNotIn("\x1b", self.report(warning_report_projection(item), colored=False))
 
@@ -163,15 +166,19 @@ class ContextWarningPresentationTests(unittest.TestCase):
         line = next(line for line in text.splitlines() if "#1 test prompt 12" in line)
         model_cell = ANSI.sub("", line).split("|")[2].strip()
         self.assertEqual(25, len(model_cell))
-        self.assertTrue(model_cell.endswith("*12"))
-        fitted = model_cell[:-3]
+        self.assertFalse(model_cell.endswith("*12"))
+        fitted = model_cell
         model, effort = fitted.rsplit(" ", 1)
         self.assertTrue(model.endswith("..."))
         self.assertTrue(effort.startswith("(") and effort.endswith(")"))
         self.assertIn("...", effort)
         styler = self.styles()
-        self.assertIn(styler.apply(fitted, "nextIctxWarning"), line)
-        self.assertIn(styler.apply("*12", "nextIctxWarning"), line)
+        self.assertNotIn(styler.apply(fitted, "nextIctxWarning"), line)
+        context_cell = ANSI.sub("", line).split("|")[6].strip()
+        self.assertTrue(context_cell.endswith("*12"))
+        self.assertIn(styler.apply(" *12", "nextIctxWarning"), line)
+        separator = next(line for line in text.splitlines() if line.startswith("|---"))
+        self.assertEqual(26, len(separator.split("|")[6]), "context column reserves the two-digit marker")
 
         no_warning = replace(base, preview="plain prompt", model_effort=long_label, watch_model_effort=long_label,
                              watch_next_context_warning="", watch_next_context_warning_severity=PriceWarningSeverity.NONE)
@@ -197,8 +204,10 @@ class ContextWarningPresentationTests(unittest.TestCase):
         current_line = next(line for line in scoped.splitlines() if "current prompt" in line)
         self.assertIn("Unrelated model", old_line)
         self.assertNotIn("*1", old_line)
-        self.assertIn(styler.apply("Current model", "nextIctxWarning"), current_line)
-        self.assertIn(styler.apply("*1", "nextIctxWarning"), current_line)
+        self.assertIn("Current model", current_line)
+        self.assertNotIn(styler.apply("Current model", "nextIctxWarning"), current_line)
+        self.assertIn(styler.apply(" *1", "nextIctxWarning"), current_line)
+        self.assertLess(ANSI.sub("", current_line).index("~"), ANSI.sub("", current_line).index("*1"))
 
     def test_compaction_warning_marker_follows_its_model_effort(self):
         item = replace(warning_prompt(PriceWarningSeverity.EXCEEDED), is_compaction=True,
@@ -206,7 +215,8 @@ class ContextWarningPresentationTests(unittest.TestCase):
         output = self.watch(warning_watch_projection(item))
         compaction_line = next(line for line in output.splitlines() if "/compact" in line)
         plain = ANSI.sub("", compaction_line)
-        self.assertIn("Claude (High)*1", plain)
+        self.assertIn("Claude (High)", plain)
+        self.assertTrue(plain.split("|")[6].strip().endswith("*1"))
         self.assertNotIn("*1", next(line for line in output.splitlines() if "Normal session" in line))
 
     def test_watch_expiry_live_none_and_report_fallback_share_state_selection(self):
@@ -217,6 +227,12 @@ class ContextWarningPresentationTests(unittest.TestCase):
         reduced = replace(item, watch_next_context_tokens=20_000, watch_next_context_warning="",
                           watch_next_context_warning_severity=PriceWarningSeverity.NONE)
         self.assertEqual(PriceWarningSeverity.NONE, WatchRow("root", "title", reduced).next_context_warning_severity)
+        stale_mapping = self.watch(WatchProjection(
+            "Watch", "V2", (WatchRow("root", "title", reduced),),
+            session_warnings={"root": item.watch_next_context_warning},
+        ))
+        self.assertNotIn("*1", stale_mapping)
+        self.assertNotIn("Context:", stale_mapping)
         fallback = replace(item, watch_next_context_tokens=None, watch_next_context_warning="",
                            watch_next_context_warning_severity=PriceWarningSeverity.NONE)
         self.assertEqual(PriceWarningSeverity.EXCEEDED, WatchRow("root", "title", fallback).next_context_warning_severity)

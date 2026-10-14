@@ -310,7 +310,9 @@ class OrderingAndHeaderTests(unittest.TestCase):
         header = self.header_line(output, "[Earlier]")
         self.assertTrue(header.startswith("|   2025-10-09 08:53 [Earlier] Evil row long title"))
         self.assertNotIn("*1", header)
-        self.assertIn("model*1", self.header_line(output, "#1 prompt 1"))
+        prompt_line = self.header_line(output, "#1 prompt 1")
+        self.assertIn("model", prompt_line.split("|")[2])
+        self.assertTrue(prompt_line.split("|")[6].strip().endswith("*1"))
         self.assertIn("... |", header)
         self.assertNotIn("\x1b", output)
         self.assertEqual(1, output.count(EARLIER_NOTE))
@@ -432,7 +434,8 @@ class WarningConsolidationTests(unittest.TestCase):
         prompt_rows = [line for line in output.splitlines() if "#1 prompt 1" in line]
         self.assertEqual(4, len(prompt_rows))
         for number, line in enumerate(prompt_rows, start=1):
-            self.assertIn(f"model*{number}", line)
+            self.assertIn("model", line.split("|")[2])
+            self.assertTrue(line.split("|")[6].strip().endswith(f"*{number}"))
         for title in "ABCD":
             header = next(line for line in output.splitlines() if f"Session {title}" in line)
             self.assertNotIn("*", header)

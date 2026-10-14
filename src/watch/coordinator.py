@@ -78,6 +78,7 @@ class WatchCoordinator:
         config: Mapping[str, object],
         session_id: str | None = None,
         clock_ms: ClockMs = _clock_ms,
+        started_at_ms: int | None = None,
         sleep: Sleep = time.sleep,
         monotonic: Callable[[], float] | None = None,
         record_observations: bool = True,
@@ -94,7 +95,7 @@ class WatchCoordinator:
         self.clock_ms = clock_ms
         self.sleep = sleep
         self._monotonic_clock = monotonic
-        self.started_at_ms = int(clock_ms())
+        self.started_at_ms = int(clock_ms() if started_at_ms is None else started_at_ms)
         self.token_mix = WatchTokenMix(self.started_at_ms)
         self.today_ccost = WatchTodayCCost(report_service.timezone_id)
         raw_interval = config.get("sessionWatchIntervalSeconds", "auto")
@@ -286,6 +287,7 @@ class WatchCoordinator:
             status=self._observer_error or status,
             status_active=status_active,
             now_ms=now_ms,
+            watch_started_at_ms=self.started_at_ms,
             session_warnings=session_warnings,
             recent_model_notice=recent_model_notice,
             recent_model_notice_highlight_spans=recent_model_highlight_spans,

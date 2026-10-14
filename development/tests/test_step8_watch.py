@@ -21,7 +21,7 @@ from src.domain import QuotaComponent, TokenUsage
 from src.presentation import ReportRenderer, WatchRenderer
 from src.reports import ReportRequest
 from src.sources.base import SourceChange
-from src.version import DISPLAY_VERSION, RELEASE_DATE
+from src.version import DISPLAY_VERSION
 from src.watch import LiveEventPump, WatchCoordinator
 from src.watch.observers import PumpResult
 
@@ -344,7 +344,7 @@ class WatchPresentationTests(unittest.TestCase):
             stream = io.StringIO()
             WatchRenderer(config, stream=stream, interactive=False).render(projection)
             text = stream.getvalue()
-            self.assertIn(f"Cost Guard {DISPLAY_VERSION} ({RELEASE_DATE}) — Prompt watch — Source: OpenCode V1", text)
+            self.assertRegex(text, rf"Cost Guard {DISPLAY_VERSION} \(Watch started: \d{{4}}-\d{{2}}-\d{{2}} \d{{2}}:\d{{2}}:\d{{2}}\) — Prompt watch — Source: OpenCode V1")
             self.assertIn("Session / prompt", text)
             self.assertIn("Δctx → Next Ictx", text)
             self.assertIn("Month", text)
@@ -400,8 +400,7 @@ class WatchLayoutRegressionTests(unittest.TestCase):
         renderer.render_startup_status("Watch: [####----] 50% / Analyzing")
         text = stream.getvalue()
         self.assertEqual(text.count("\x1b[2J\x1b[3J\x1b[H"), 1)
-        from src.version import mode_heading
-        self.assertIn(mode_heading("Watch") + "\n", text)
+        self.assertRegex(text, r"Cost Guard v\d+\.\d+ \(Watch started: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\) — Watch\n")
         self.assertNotIn("Session / prompt", text)
         self.assertNotIn("Token Mix %", text)
         self.assertNotIn("\n\n", text)

@@ -165,7 +165,8 @@ class Step9ParityTests(unittest.TestCase):
         self.assertNotIn("*1", header)
         self.assertIn("*1 Context: price threshold approaching", text)
         prompt_line = next(line for line in text.splitlines() if "#1 hello" in line)
-        self.assertIn("GPT-5.6 (Medium)*1", prompt_line)
+        self.assertIn("GPT-5.6 (Medium)", prompt_line)
+        self.assertTrue(prompt_line.split("|")[6].strip().endswith("*1"))
         self.assertNotIn("Default -> Medium", text)
 
 

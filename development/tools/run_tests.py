@@ -3,7 +3,7 @@
 
 `quick` is the default for constrained/hosted AI environments. Each test file is
 an isolated subprocess with a hard timeout, and files run concurrently to keep
-wall-clock time low. `full` adds package mutation, release-builder and
+wall-clock time low. `full` adds package mutation and
 benchmark checks and is intended for Diagnostics or unrestricted local use; its
 slowest (full-only) files start first so they overlap the many quick files.
 """
@@ -104,7 +104,6 @@ QUICK_PATTERNS: tuple[str, ...] = (
 )
 FULL_ONLY_PATTERNS: tuple[str, ...] = (
     # Slowest first: Full starts these before the quick files.
-    "test_release_builder.py",
     "test_foundation.py",
     "test_rc2_public_diagnostics.py",
     "test_step9_parity_performance.py",

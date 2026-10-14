@@ -270,6 +270,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 report_service=service,
                 config=config,
                 session_id=command.target if command.kind is CommandKind.SESSION else None,
+                started_at_ms=watch_renderer.started_at_ms if watch_renderer is not None else None,
             )
             # Watch uses coordinator recovery, never the short report retry policy.
             if selection.selected == "v2":
@@ -292,13 +293,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         if command.kind is CommandKind.SESSION and any(
             row.in_progress for block in projection.prompt_blocks for row in block.rows
         ):
+            watch_renderer = WatchRenderer(config)
             coordinator = WatchCoordinator(
                 selection=selection,
                 report_service=service,
                 config=config,
                 session_id=command.target,
+                started_at_ms=watch_renderer.started_at_ms,
             )
-            coordinator.run_until_inactive(WatchRenderer(config))
+            coordinator.run_until_inactive(watch_renderer)
         return 0
     except KeyboardInterrupt:
         check_pending()

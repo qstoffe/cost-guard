@@ -59,10 +59,10 @@ Reports retain Copilot's native $0.01/AI-credit conversion; Watch omits that con
 - Category CCost uses each request's model/tier; the four unrounded amounts reconcile with the same requests' CCost. Rounded cells need not sum exactly; `0.4% (24)` is a small but expensive share.
 - `~` marks approximate diagnostics (`~Ictx`, `~Ictx CCost`, `~Extra CCost`), never pricing provenance or Relative CCost.
 - `?` before a CCost cell means only the priced subset of an all-usage scope (prompt, session, date, account, `Watch total CCost`, `--token-mix`) is shown. Completely unpriced workloads show `N/A`.
-- Watch appends `(Today: <CCost>; deleted sessions outside Watch excluded)` to its existing run-total line. Today uses the configured local date from 00:00; it resets at local midnight without resetting the run total. Existing CCost rounding and incomplete-pricing markers apply.
+- Watch appends `(Today: <CCost>; Deleted sessions before Watch start excluded)` to its existing run-total line. Today uses the configured local date from 00:00; it resets at local midnight without resetting the run total. Existing CCost rounding and incomplete-pricing markers apply.
 - `N/A` means unavailable.
 - A trailing `*` on a model means linked child/subagent work used an additional model.
-- Watch's numbered `*1`, `*2`, ... context-warning markers follow the affected Model / effort value and point to the shared footnotes below the table.
+- Watch's numbered `*1`, `*2`, ... context-warning markers follow `Next Ictx` on each displayed session's latest relevant row and point to the shared footnotes below the table. Markers and footnotes reflect only current visible warnings.
 - Watch uses `▶` for each running prompt and in a session header while any prompt in that session is running; the marker remains until that prompt stops. Existing `✓` completion and `!` abort/error markers keep their own lifecycle.
 - `Δctx -> Next Ictx` describes change in the session's effective next-input context state, not a billed-token total.
 - A Next-Ictx price-threshold warning shows `(Nx more expensive)`: the model's Relative CCost level after that threshold divided by the level before it, from the same sample/mix as the model table and rounded to one decimal. Without a priced tier ratio it keeps the `(Next Ictx CCost low–high)` range.
