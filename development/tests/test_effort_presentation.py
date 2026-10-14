@@ -9,7 +9,7 @@ from development.fixtures.session_snapshots import make_snapshot
 from development.fixtures.pricing_catalog import catalog
 from development.fixtures.opencode_v2_service import source_with_current_service
 from src.analysis.core import analyze_snapshot
-from src.analysis.effort import EffortKind, interpret_effort, prompt_effort
+from src.analysis.effort import EffortKind, interpret_effort, prompt_effort, prompt_replies
 from src.analysis.comparisons import model_timeline_name, watch_model_timeline_name
 from src.domain import ModelRef
 from src.presentation import ReportRenderer, WatchRenderer
@@ -115,6 +115,16 @@ class EffortProjectionTests(unittest.TestCase):
                           if m.message_id == "a_next" else m for m in snapshot.messages))
         bundle, _ = project(changed)
         self.assertEqual(EffortKind.DEFAULT, prompt_effort(bundle.prompts[-1], changed).kind)
+
+    def test_shared_reply_index_matches_per_prompt_scan(self):
+        for actual in (None, "medium", "high"):
+            snapshot = normal_snapshot("default", actual)
+            bundle, _ = project(snapshot)
+            replies = prompt_replies(snapshot)
+            for record in bundle.prompts:
+                with self.subTest(actual=actual, prompt=record.prompt_id):
+                    self.assertEqual(prompt_effort(record, snapshot),
+                                     prompt_effort(record, snapshot, replies=replies))
 
     def test_conflicting_or_missing_actual_request_levels_stay_default(self):
         snapshot = normal_snapshot("default", "medium")

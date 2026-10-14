@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.54 — 2026-10-15
+
+- Behavior-neutral cleanup: prompt-block projection (one-shot detail reports and every changed Watch root) indexes model replies once for effort labels instead of rescanning all session messages per prompt, and builds one shared context-history index instead of two. A synthetic 2,000-prompt root fell from 0.76 s to 0.26 s (1,000: 0.25 s to 0.12 s) with identical projections. Watch rendering drops an unused column indirection and the code map no longer mentions local product ZIPs.
+
 ## v80.53 — 2026-10-15
 
 - Watch's CCost summary becomes `CCost · Watch: <run> · Today: <day> · Deleted sessions before Watch start are not included in Today`. From local midnight until 03:00 in the configured timezone, `Today` is replaced by the current local date `YYYY-MM-DD`; status wakes redraw both transitions while idle without source or account work. Narrow terminals move only the explanation to an indented continuation line. CCost values, rounding, `?`/`N/A` and Today retention are unchanged.
@@ -21,13 +25,9 @@
 - Watch keeps `[Earlier]` startup-only and subject to the shared global prompt-row cap, with no special protection or backfill; a prompt or `/compact` transitions it under the existing lifecycle. Session headers put timestamps first, use time-only for the configured local day, reserve aligned running `▶` prefixes and retain one shared Earlier exclusion explanation.
 - Running prompts and sessions use persistent `▶` indicators. Context-warning markers move from session headers to the affected Model / effort value; independent model/effort truncation preserves the full marker within the fixed column. Accounting, warning calculations and ordering are unchanged.
 
-## v80.49 — 2026-10-14
-
-- Watch appends `Today` CCost to its existing run-total line. It combines available local-day history with deduplicated process observations retained through session deletion until local midnight; unavailable history deleted before observation remains excluded, and no ledger is persisted.
-
 ## Earlier v80 history
 
-- v80.48 replaced idle session expiry with one global newest-prompt budget (`watchDashboardMaxRows`, default 12), added startup `[Earlier]` rows, latest-start session ordering and idle account redraw. v80.43–v80.47 added latest-100 priceable Token Mix, 12-hour New Models, grouped warnings and faster Watch CCost (67–70→43–47 ms).
+- v80.49 added deletion-resilient current-local-day Watch CCost. v80.48 replaced idle session expiry with one global newest-prompt budget (`watchDashboardMaxRows`, default 12), added startup `[Earlier]` rows, latest-start session ordering and idle account redraw. v80.43–v80.47 added latest-100 priceable Token Mix, 12-hour New Models, grouped warnings and faster Watch CCost (67–70→43–47 ms).
 - v80.35–v80.42 added native abort-cause labels (`[ABORTED by user]` only for matched live V2 interrupts), neutral tool-call endings, stable account ordering, refactored hot paths, bounded startup recovery/typed source errors, retained tool/skill evidence and stopped counting proven V2 tool continuations as `Calls`.
 - v80.34 pooled V2 reads, memoized model identity, overlapped report acquisition and bounded Watch discovery/startup/resync with identical output (report ~2.1→0.65 s, Watch startup ~6.2→0.65 s, resync 13→1.4 s); Diagnostics gained all-account evidence and Watch geometry.
 - v80.32–v80.33 separated Watch account refresh, prompt projection/report orchestration and source normalization; shared catalog ancestry and bounded sampling; moved fixtures (67→43 test-import edges, 46 fewer test-import dependencies), enforced bounded routine/coupling debt without raising caps, standardized `Context:` warning explanations, and added code maps/inventory/layer guards. Source/cache/billing semantics stayed unchanged.

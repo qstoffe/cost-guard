@@ -1,10 +1,11 @@
 """Request-attributable effort semantics, independent of model families/UI."""
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum
 
-from src.domain import MessageRole, SessionSnapshot
+from src.domain import MessageRole, NormalizedMessage, SessionSnapshot
 
 from .models import PromptRecord
 
@@ -45,15 +46,28 @@ def interpret_effort(
     return EffortSelection(EffortKind.DEFAULT, "Default")
 
 
-def prompt_effort(record: PromptRecord, snapshot: SessionSnapshot) -> EffortSelection:
-    """Use only the same root prompt/model, never child/previous/summary work."""
+PromptReplies = Mapping[tuple[str, str | None], tuple[NormalizedMessage, ...]]
+
+
+def prompt_replies(snapshot: SessionSnapshot) -> PromptReplies:
+    """Index non-summary model replies by (session, parent prompt) once per snapshot."""
+    replies: dict[tuple[str, str | None], list[NormalizedMessage]] = {}
+    for message in snapshot.messages:
+        if message.role is MessageRole.ASSISTANT and not message.summary and message.model is not None:
+            replies.setdefault((message.session_id, message.parent_message_id), []).append(message)
+    return {key: tuple(values) for key, values in replies.items()}
+
+
+def prompt_effort(record: PromptRecord, snapshot: SessionSnapshot, *,
+                  replies: PromptReplies | None = None) -> EffortSelection:
+    """Use only the same root prompt/model, never child/previous/summary work.
+
+    Pass one shared ``prompt_replies`` index when projecting many prompts.
+    """
+    replies = prompt_replies(snapshot) if replies is None else replies
     levels = tuple(
-        message.variant for message in snapshot.messages
-        if message.session_id == record.session_id
-        and message.parent_message_id == record.prompt_id
-        and message.role is MessageRole.ASSISTANT and not message.summary
-        and message.model is not None
-        and message.model.model == record.main_model_id
+        message.variant for message in replies.get((record.session_id, record.prompt_id), ())
+        if message.model.model == record.main_model_id
         and message.model.provider == record.main_provider_id
     )
     return interpret_effort(

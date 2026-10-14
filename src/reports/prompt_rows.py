@@ -9,7 +9,7 @@ from src.analysis.context import (
     ContextEpochs, NextContextWarningState, build_context_timeline,
     estimate_next_context, next_context_warning_state, watch_context_state,
 )
-from src.analysis.effort import prompt_effort
+from src.analysis.effort import prompt_effort, prompt_replies
 from src.analysis.models import CompactionRecord, PromptRecord, RootAnalysisBundle
 from src.analysis.valuation import billed_spend, comparison_cost
 from src.domain import SessionSnapshot
@@ -68,8 +68,10 @@ class PromptRowProjector:
         self.snapshot = snapshot
         self.bundle = bundle
         self.catalog = catalog
-        self.timeline = {state.event_id: state for state in build_context_timeline(snapshot, bundle, catalog)}
         self.epochs = ContextEpochs(snapshot, bundle)
+        self.timeline = {state.event_id: state
+                         for state in build_context_timeline(snapshot, bundle, catalog, self.epochs)}
+        self.replies = prompt_replies(snapshot)
         thresholds = config.get("thresholds") if isinstance(config.get("thresholds"), Mapping) else {}
         self.approach = float(thresholds.get("nextIctxPriceThresholdWarningPercent", 75))
         self.running_warning_ccost = Decimal(str(config.get("runningPromptWarningCCost", 1800)))
@@ -101,7 +103,7 @@ class PromptRowProjector:
         valuation = comparison_cost(record.entries, catalog.reference_valuation)
         main = comparison_cost(record.entries[:record.root_entry_count], catalog.reference_valuation)
         subagent = comparison_cost(record.entries[record.root_entry_count:], catalog.reference_valuation)
-        model_label = effort_model_name(catalog, record.main_model_id, prompt_effort(record, self.snapshot))
+        model_label = effort_model_name(catalog, record.main_model_id, prompt_effort(record, self.snapshot, replies=self.replies))
         return PromptProjection(
             at_ms=record.prompt_time_ms,
             prompt_number=record.prompt_number,

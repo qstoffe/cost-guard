@@ -29,6 +29,8 @@ Analysis records (2,528 across fixtures/live variants), cache JSON and Watch row
 
 Post-v80.46 cleanup (captured live month, 6,279 requests, min of 40 runs, three alternating rounds): a changed Watch poll spent most of its ~65–90 ms rebuilding local month/today CCost. `billing_request_fingerprint` packs its six IEEE-754 values in one `struct` call (14–16 → 10–12 ms) and `comparison_cost` formats each UTC day once (37–39 → 22–25 ms); `accounts_quota_projection` 67–70 → 43–47 ms. Fingerprints, de-duplicated entries, comparison costs, the quota projection and epoch/midnight edge cases hashed identically before and after. Decimal valuation itself is unchanged.
 
+Post-v80.53 cleanup (synthetic active-context root, median of 5): `prompt_effort` rescanned every session message per prompt, and `PromptRowProjector` built `ContextEpochs`/`ContextHistory` twice. One `prompt_replies` index and one shared epochs instance cut `build_prompt_block` 0.76 → 0.26 s at 2,000 prompts (1,000: 0.25 → 0.12 s; 250: 39 → 33 ms) with identical projection hashes.
+
 ## Behavioral evidence
 
 Baseline (v80.33 copy) and current trees rendered the same live data against one shared cache: Watch initial frame and token mix, and normal, all-models, sessions, session-detail and date reports were byte-identical. New regressions cover pooled transport reuse/retry/bounded idle sockets, overlapping discovery checks, the stuck Claude helper not delaying answers, Watch resync scope, and the numbers-only Diagnostics Watch smoke.

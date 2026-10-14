@@ -556,13 +556,15 @@ def build_context_timeline(
     snapshot: SessionSnapshot,
     bundle: RootAnalysisBundle,
     catalog: PricingCatalog,
+    epochs: ContextEpochs | None = None,
 ) -> tuple[ContextTimelineState, ...]:
+    """Pass an existing ``ContextEpochs`` for the same snapshot/bundle to reuse its index."""
     events: list[tuple[int, str, object]] = []
     events.extend((record.prompt_time_ms, "prompt", record) for record in bundle.prompts)
     events.extend((record.created_at_ms, "compaction", record) for record in bundle.compactions)
     events.extend((item.at_ms, "boundary", item) for item in snapshot.context_boundaries)
     events.sort(key=lambda item: (item[0], 0 if item[1] == "boundary" else 1 if item[1] == "prompt" else 2))
-    epochs = ContextEpochs(snapshot, bundle)
+    epochs = epochs or ContextEpochs(snapshot, bundle)
     states: list[ContextTimelineState] = []
     previous_next: dict[str, int] = {}
     for at_ms, kind, record in events:

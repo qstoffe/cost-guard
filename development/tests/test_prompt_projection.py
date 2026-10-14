@@ -2,10 +2,12 @@
 from dataclasses import replace
 from decimal import Decimal
 import unittest
+from unittest import mock
 
 from development.fixtures.pricing_catalog import catalog
 from development.fixtures.session_snapshots import make_snapshot, make_native_v2_compaction_snapshot
 from src.analysis import analyze_snapshot
+from src.analysis.context import ContextEpochs, build_context_timeline
 from src.domain import ModelRef
 from src.reports.prompt_rows import PromptRowProjector
 from src.reports.prompts import build_prompt_block
@@ -35,6 +37,23 @@ class PromptProjectionTests(unittest.TestCase):
         self.assertEqual((row,), block.rows)
         self.assertEqual(row.ccost, block.total_ccost)
         self.assertEqual(row.billed_cost, block.billed_cost)
+
+    def test_block_builds_one_shared_context_index_with_unchanged_timeline(self):
+        snapshot = make_native_v2_compaction_snapshot()
+        bundle = analyze_snapshot(snapshot, now_ms=10_000)
+        original = ContextEpochs.__init__
+        built = []
+
+        def counting(epochs, *args):
+            built.append(epochs)
+            original(epochs, *args)
+
+        with mock.patch.object(ContextEpochs, "__init__", counting):
+            projector = PromptRowProjector(snapshot=snapshot, bundle=bundle, catalog=self.prices, config={})
+
+        self.assertEqual([projector.epochs], built)
+        self.assertEqual(build_context_timeline(snapshot, bundle, self.prices),
+                         tuple(projector.timeline.values()))
 
     def test_unwarned_projection_does_not_acquire_comparison_sample(self):
         def forbidden(_model, _threshold):
