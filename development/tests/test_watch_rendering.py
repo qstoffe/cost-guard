@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from datetime import datetime, timezone
 from decimal import Decimal
 import io
 import unittest
@@ -13,6 +14,7 @@ from src.presentation import ReportRenderer, WatchRenderer
 from src.presentation.terminal import single_line
 from src.reports.models import AccountProjection, AccountsQuotasProjection, PromptProjection
 from src.watch.models import ToolObservation, WatchProjection, WatchRow, WatchSessionSubtotal
+from src.version import DISPLAY_VERSION
 
 CLEAR = "\x1b[2J\x1b[3J\x1b[H"
 ERASE_TAIL = "\x1b[0J"
@@ -53,6 +55,25 @@ def tall_projection():
 
 
 class WatchRenderingTests(unittest.TestCase):
+    def test_watch_heading_uses_one_local_lifecycle_timestamp_and_wraps_source(self):
+        started_at_ms = int(datetime(2026, 10, 14, 12, 34, 56, tzinfo=timezone.utc).timestamp() * 1000)
+        stream = io.StringIO()
+        renderer = WatchRenderer({"timezone": "Europe/Stockholm", "colors": {}}, stream=stream,
+                                 interactive=True, terminal_width=80, started_at_ms=started_at_ms)
+
+        renderer.render_initializing()
+        initializing = stream.getvalue()
+        renderer.render(WatchProjection("Watch", "V2", (), watch_started_at_ms=started_at_ms))
+        dashboard = stream.getvalue()[len(initializing):]
+
+        expected = f"Cost Guard {DISPLAY_VERSION} (Watch started: 2026-10-14 14:34:56)"
+        self.assertIn(expected + " — Watch", initializing)
+        title_lines = dashboard.replace(CLEAR, "").splitlines()[:2]
+        self.assertIn(expected + " — Prompt watch", title_lines[0])
+        self.assertEqual("Source: OpenCode V2", title_lines[1])
+        self.assertTrue(all(len(line) <= 80 for line in title_lines))
+        self.assertNotIn("(2026-10-14)", initializing + dashboard)
+
     def test_empty_watch_explains_observation_window(self):
         stream = io.StringIO()
         WatchRenderer({"colors": {}}, stream=stream, interactive=False).render(

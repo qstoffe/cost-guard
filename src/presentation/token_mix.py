@@ -108,7 +108,7 @@ def watch_total_line(mix: TokenMix, today: ComparisonCost) -> str:
     """Render the retained run total and deletion-resilient current-day CCost."""
     run = "0" if not mix.request_count else total_cost_text(mix)
     return (f"Watch total CCost: {run} (Today: {comparison_cost_text(today)}; "
-            "deleted sessions outside Watch excluded)")
+            "Deleted sessions before Watch start excluded)")
 
 
 def token_mix_line(scope: str, mix: TokenMix) -> str:

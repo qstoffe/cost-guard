@@ -27,6 +27,7 @@ def visible_signature(projection: WatchProjection) -> tuple[object, ...]:
             projection.source_warnings, warnings, projection.recent_model_notice,
             projection.recent_promotion_notices, projection.token_mix, projection.run_total,
             projection.today_total,
+            projection.watch_started_at_ms,
             tuple(projection.session_subtotals.items()))
 
 

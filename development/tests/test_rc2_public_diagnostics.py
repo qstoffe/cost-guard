@@ -119,7 +119,7 @@ class MacOSLauncherTests(unittest.TestCase):
             self.assertTrue(path.is_file(), name)
             # Source filesystem mode is intentionally not asserted here: Python
             # ZIP extraction and Windows worktrees do not reliably preserve Unix
-            # executable bits. The release-builder regression test verifies that
+            # executable bits. The package validator verifies that
             # every packaged macOS .command entry is normalized to executable.
             text = path.read_text(encoding="utf-8")
             self.assertTrue(text.startswith("#!/bin/zsh"), name)

@@ -134,7 +134,7 @@ class WatchTotalAndMoveTests(unittest.TestCase):
             lines = self.rendered(first).splitlines()
             mix = next(index for index, line in enumerate(lines) if line.startswith("Token Mix %"))
             expected = (f"Watch total CCost: {run_amount} (Today: {comparison_cost_text(first.today_total)}; "
-                        "deleted sessions outside Watch excluded)")
+                        "Deleted sessions before Watch start excluded)")
             self.assertEqual(expected, lines[mix + 1], "dedicated row directly below Token Mix")
 
             source.snapshot = moved_location(source.snapshot, 4600, "moved-to-worktree")

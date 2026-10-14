@@ -46,7 +46,7 @@ All paths in this table are relative to the repository root. Test names live und
 | Terminal output only | `src/presentation/report.py`, `source_errors.py`, `watch.py`, `accounts.py`, `model_comparison.py`, `model_supersession.py`, `terminal.py`, `context_warnings.py`, `definitions.py`, `token_mix.py` | `test_watch_rendering.py`, `test_quota_presentation.py`, `test_account_status_layout.py`, `test_report_polish.py`, `test_model_supersession.py` |
 | Fatal/recoverable fault boundaries and launchers | `src/runtime_errors.py`, `src/windows_launcher.ps1`; `windows/`, `macos/` | `test_runtime_errors.py`, `test_watch_lifecycle.py`, `test_step10_release_hardening.py`; [runtime policy](runtime-failures.md) |
 | Privacy-safe Diagnostics | `development/tools/collect_diagnostics.py`, `diagnostic_logs.py`, `diagnostic_metadata.py`, `diagnostic_screen.py`, `diagnostic_watch.py`, `diagnostic_connectivity.py`; `src/sources/connectivity.py`, `connectivity_events.py` | `test_rc2_public_diagnostics.py` (Full), `test_diagnostic_logs.py`, `test_diagnostics_ux.py` |
-| Inventory/layer/growth gates/tests/package builder | `development/tools/code_inventory.py`, `structure_guard.py`, `validate_package.py`, `run_tests.py`, `build_release.py` | `test_structure_growth.py`, `test_structure_contracts.py`, `test_foundation_quick.py`, `test_foundation.py`, `test_release_builder.py` (Full), `test_version_history.py` |
+| Inventory/layer/growth gates/tests/source validation | `development/tools/code_inventory.py`, `structure_guard.py`, `validate_package.py`, `run_tests.py` | `test_structure_growth.py`, `test_structure_contracts.py`, `test_foundation_quick.py`, `test_foundation.py`, `test_version_history.py` |
 
 ## Shared synthetic fixtures
 
@@ -59,7 +59,7 @@ All paths in this table are relative to the repository root. Test names live und
 - `development/fixtures/watch_runtime.py`: mutable/live synthetic sources, deterministic account scheduler and Watch service composition. It preserves the existing report/account seam without depending on test modules.
 - `development/fixtures/opencode_v2_service.py`: fake loopback V2 services (transitional and current wire) that drop keep-alive sockets on stop like a real process.
 - `development/fixtures/opencode_v1_database.py`: the synthetic V1 SQLite history used for generation parity.
-- `development/fixtures/package_copy.py`: disposable distributable and config-only package copies and tool subprocesses for validator/builder/config tests.
+- `development/fixtures/package_copy.py`: disposable distributable and config-only package copies and tool subprocesses for validator/config tests.
 - `development/fixtures/synthetic_month.py`: scalable histories for bounded-sampling/cache/performance checks.
 - `development/fixtures/opencode_v1/` and `opencode_v2/`: non-secret native wire/schema fixtures.
 
@@ -92,6 +92,6 @@ Before adding a feature, identify its **one semantic owner** and a protected nei
 3. Run the focused profile/pattern and validator while editing. `structure-policy.json` permits at most **55 body statements / 15 explicit control-flow branches** for ordinary runtime routines. Nested functions are measured independently; docstrings/field-per-line formatting do not inflate this metric.
 4. Named legacy routine limits and the remaining 10 test-import edges are **bounded debt**, not a feature budget. Growth, new edges and stale declarations fail. Split the owner or extract a fixture and remove its resolved debt entry; never auto-generate/accept a replacement baseline to silence the gate. A genuine limit change requires an explicit architectural decision, not a passing-test justification.
 5. Every runtime/fixture module describes its responsibility in a module docstring; local Markdown/table routes are regression-tested. Update this map and current contracts in place, not by accumulating version-specific copies. File caps remain unchanged.
-6. On a workstation, finish with Full/local validation, privacy-safe live evidence and the version ZIP (its builder also gates a clean extraction); hosted sessions stop at Quick + validation. UI, commits and remote publishing still require their own authorization.
+6. On a workstation, finish with Full/local validation and privacy-safe live evidence; hosted sessions stop at Quick + validation. Routine product-release ZIP generation is not supported. UI, commits and remote publishing still require their own authorization.
 
 The metrics are guardrails, not a quality score or a substitute for reviewing semantics. Do not compress control flow into clever expressions or weaken tests to evade them. See [the current inventory/refactoring review](REFACTORING_REVIEW.md) for measured changes and proof limits.

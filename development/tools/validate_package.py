@@ -85,7 +85,6 @@ REQUIRED_FILES = {
     "development/tools/structure_guard.py",
     "development/tools/collect_diagnostics.py",
     "development/tools/validate_package.py",
-    "development/tools/build_release.py",
     "development/tests/test_opencode_v1.py",
     "development/tests/test_opencode_v2.py",
     "development/tests/test_source_selection.py",

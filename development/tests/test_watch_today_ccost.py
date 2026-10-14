@@ -136,7 +136,7 @@ class WatchTodayCCostTests(unittest.TestCase):
         self.assertEqual("?2", comparison_cost_text(ComparisonCost(Decimal("1.1"), 2, 1)))
         line = watch_total_line(TokenMix(), ComparisonCost(Decimal(2458), 1, 1))
         self.assertEqual(
-            "Watch total CCost: 0 (Today: 2458; deleted sessions outside Watch excluded)", line
+            "Watch total CCost: 0 (Today: 2458; Deleted sessions before Watch start excluded)", line
         )
 
     def test_unchanged_status_projection_does_not_recalculate_retained_history(self):
@@ -155,6 +155,7 @@ class WatchTodayCCostTests(unittest.TestCase):
             watch = WatchCoordinator(selection=selection, report_service=service, config=config,
                                      clock_ms=lambda: 4000, record_observations=False)
             before_delete = watch.initialize().projection
+            self.assertEqual(4000, before_delete.watch_started_at_ms)
             self.assertEqual(1, before_delete.today_total.observed_requests)
             self.assertEqual(before_delete.quota.comparison_today, before_delete.today_total)
             self.assertEqual(0, before_delete.run_total.request_count)
@@ -170,7 +171,7 @@ class WatchTodayCCostTests(unittest.TestCase):
             line = next(value for value in output.getvalue().splitlines()
                         if value.startswith("Watch total CCost:"))
             self.assertIn("(Today: ", line)
-            self.assertIn("; deleted sessions outside Watch excluded)", line)
+            self.assertIn("; Deleted sessions before Watch start excluded)", line)
             lines = output.getvalue().splitlines()
             mix_index = next(index for index, value in enumerate(lines) if value.startswith("Token Mix %"))
             self.assertEqual(line, lines[mix_index + 1])

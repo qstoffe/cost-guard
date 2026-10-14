@@ -20,7 +20,7 @@ from src.reports import ReportService
 from src.reports.models import PromptProjection
 from src.sources.model_availability import OpenCodeModelAvailabilitySource
 from src.sources.selection import SourceSelection
-from src.version import DISPLAY_VERSION, RELEASE_DATE
+from src.version import DISPLAY_VERSION
 from src.watch import WatchCoordinator
 from src.watch.coordinator import WatchCycle
 from src.watch.models import ToolObservation, WatchProjection, WatchRow
@@ -113,7 +113,7 @@ class V784RegressionTests(unittest.TestCase):
         stream = io.StringIO()
         WatchRenderer({"timezone": "UTC", "colors": {}, "thresholds": {}}, stream=stream, interactive=False).render(projection)
         text = stream.getvalue()
-        self.assertIn(f"Cost Guard {DISPLAY_VERSION} ({RELEASE_DATE}) — Prompt watch — Source: OpenCode V1", text)
+        self.assertRegex(text, rf"Cost Guard {DISPLAY_VERSION} \(Watch started: \d{{4}}-\d{{2}}-\d{{2}} \d{{2}}:\d{{2}}:\d{{2}}\) — Prompt watch — Source: OpenCode V1")
         self.assertIn("+25k", text)
         self.assertIn("~42k", text)
         self.assertNotIn("25.4k", text)
