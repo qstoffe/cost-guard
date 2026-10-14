@@ -295,7 +295,8 @@ class OrderingAndHeaderTests(unittest.TestCase):
         observed.set_earlier_sessions(("A", "B"))
         first = rendered(WatchProjection("Watch", "V2", observed.project(blocks, snapshots, now_ms=NOW)), width=60)
         self.assertEqual(1, first.count("[Earlier] Historical session activity;"))
-        self.assertTrue(all(len(line) <= 60 for line in first.splitlines() if "Historical" in line or "Watch total" in line))
+        self.assertTrue(all(len(line) <= 60 for line in first.splitlines() if "Historical" in line))
+        self.assertEqual(1, sum(line.startswith("Watch total CCost:") for line in first.splitlines()))
         for name in "AB":
             blocks[name] = replace(blocks[name], rows=blocks[name].rows + (prompt(2, NOW + 10),))
         rows = observed.project(blocks, snapshots, now_ms=NOW + 20)

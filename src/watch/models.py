@@ -7,6 +7,7 @@ from typing import Mapping
 
 from src.reports.models import AccountsQuotasProjection, PromptProjection
 from src.analysis.token_mix import TokenMix
+from src.analysis.valuation import ComparisonCost
 from src.analysis.context import PriceWarningSeverity
 
 
@@ -102,6 +103,7 @@ class WatchProjection:
     quota_recovering_accounts: tuple[tuple[str, str, str], ...] = ()
     token_mix: TokenMix = field(default_factory=TokenMix)  # priceable requests only
     run_total: TokenMix = field(default_factory=TokenMix)  # every observed run request
+    today_total: ComparisonCost = field(default_factory=ComparisonCost)
     recent_promotion_notices: tuple[str, ...] = ()
     session_subtotals: Mapping[str, WatchSessionSubtotal] = field(default_factory=dict)
     recent_model_notice_highlight_spans: tuple[tuple[int, int], ...] = ()

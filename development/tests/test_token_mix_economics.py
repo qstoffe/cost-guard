@@ -131,7 +131,9 @@ class CategoryCostTests(unittest.TestCase):
         first = stream.getvalue().splitlines()[0]
         self.assertTrue(first.startswith(f"Token Mix % · {mix.sample_size} prompts · Input: "))
         self.assertNotIn("tokens", first)
-        self.assertEqual(["Watch total CCost: " + ccost_amount(sum(total.costs))], stream.getvalue().splitlines()[1:],
+        self.assertEqual(["Watch total CCost: " + ccost_amount(sum(total.costs))
+                          + " (Today: 0; deleted sessions outside Watch excluded)"],
+                         stream.getvalue().splitlines()[1:],
                          "the mix line has no total; only the dedicated Watch total row follows")
 
     def test_coordinator_watch_mix_reconciles_with_report_ccost(self):

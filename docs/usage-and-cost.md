@@ -14,7 +14,7 @@ Successful reference/current-price fallback is Diagnostics-only. Missing referen
 
 Date totals de-duplicate exact fork-cloned requests; session views retain available history. Child/subagent work and eligible synthetic continuations belong to their initiating prompt. Model work that OpenCode resumes after a background job (for example a backgrounded shell) ends, or after another invisible synthetic notice such as a subagent completion, stays on the prompt that was running; waiting adds Duration only, never Calls or CCost, and native job IDs are never shown. Only explicit completion/failure/cancellation notices or the service no longer listing the job end that wait. Completed `/compact` remains separate, including native V2 checkpoints without billable summaries. `Calls` counts model requests, not OpenCode assistant records: when one response emits several tool calls, OpenCode V2 may store each further call as a tool-only record with zero usage; it counts only with its response when the same provider response id or, without ids, the absent model latency proves that. Ambiguous zero-usage records still count, and their tools, failures and durations always remain visible.
 
-Deleted OpenCode sessions leave reports and Relative CCost samples; caches keep no ledger.
+Reports reflect available history. Watch's `Today` CCost combines available usage since local midnight with request observations retained for the current process; deletion after observation does not erase it. It cannot recover usage deleted before Watch could observe it, and restarting Watch rebuilds only from then-available history. This is process-local state, not a persistent ledger.
 
 ## Model comparison
 
@@ -59,6 +59,7 @@ Reports retain Copilot's native $0.01/AI-credit conversion; Watch omits that con
 - Category CCost uses each request's model/tier; the four unrounded amounts reconcile with the same requests' CCost. Rounded cells need not sum exactly; `0.4% (24)` is a small but expensive share.
 - `~` marks approximate diagnostics (`~Ictx`, `~Ictx CCost`, `~Extra CCost`), never pricing provenance or Relative CCost.
 - `?` before a CCost cell means only the priced subset of an all-usage scope (prompt, session, date, account, `Watch total CCost`, `--token-mix`) is shown. Completely unpriced workloads show `N/A`.
+- Watch appends `(Today: <CCost>; deleted sessions outside Watch excluded)` to its existing run-total line. Today uses the configured local date from 00:00; it resets at local midnight without resetting the run total. Existing CCost rounding and incomplete-pricing markers apply.
 - `N/A` means unavailable.
 - A trailing `*` on a model means linked child/subagent work used an additional model.
 - Numbered `*1`, `*2`, ... markers on a session header point to matching context-warning footnotes.

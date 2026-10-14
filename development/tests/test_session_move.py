@@ -20,6 +20,7 @@ from src.analysis import analyze_snapshot
 from src.analysis.context import PriceWarningSeverity, watch_context_state
 from src.domain import ContextBoundary, EventKind, MessageRole, ModelInvocation, NormalizedEvent, TokenUsage
 from src.numbers import ccost_amount
+from src.presentation.token_mix import comparison_cost_text
 from src.presentation import ReportRenderer, WatchRenderer
 from src.reports.prompts import build_prompt_block
 from src.watch import WatchCoordinator
@@ -129,16 +130,19 @@ class WatchTotalAndMoveTests(unittest.TestCase):
             source.snapshot = with_prompt(source.snapshot, "new", 4100, usage)
             clock[0] = 4500
             first = watch.poll_once().projection
-            expected = "Watch total CCost: " + ccost_amount(
-                service._load_comparison_catalog().reference_valuation(MODEL, usage))
+            run_amount = ccost_amount(service._load_comparison_catalog().reference_valuation(MODEL, usage))
             lines = self.rendered(first).splitlines()
             mix = next(index for index, line in enumerate(lines) if line.startswith("Token Mix %"))
+            expected = (f"Watch total CCost: {run_amount} (Today: {comparison_cost_text(first.today_total)}; "
+                        "deleted sessions outside Watch excluded)")
             self.assertEqual(expected, lines[mix + 1], "dedicated row directly below Token Mix")
 
             source.snapshot = moved_location(source.snapshot, 4600, "moved-to-worktree")
             clock[0] = 4700
             for cycle in (watch.poll_once(), watch.poll_once(force_resync=True), watch.poll_once()):
                 self.assertEqual(first.token_mix, cycle.projection.token_mix, "rehydration/move never re-adds usage")
+                self.assertEqual(first.today_total, cycle.projection.today_total,
+                                 "rehydration/move does not add a daily request twice")
             self.assertEqual(["root"], list(watch.blocks), "same logical session after the move")
             self.assertEqual(1, sum(item.prompt.event_id == "u_new" for item in watch._last_projection.rows))
             self.assertIn(expected, self.rendered(watch._last_projection))

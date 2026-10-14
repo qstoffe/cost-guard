@@ -25,6 +25,7 @@ from src.analysis.valuation import ComparisonCost, comparison_cost, unique_usage
 from src.cache import CacheRepository
 from src.numbers import ccost_amount
 from src.domain import AccountSnapshot, NormalizedSession, SessionSnapshot
+from src.domain.ccost import ReferenceValuation
 from src.domain.session_tree import root_activity, root_for_session
 from src.pricing.base import PricingProvider
 from src.pricing.catalog import PricingCatalog, normalized_average_token_mix
@@ -39,7 +40,7 @@ from .semantics import (
 
 from .model_comparison import AvailabilityPrefetch, price_summary, selectable_catalog
 from .prompts import build_prompt_block
-from .accounts import accounts_quota_projection
+from .accounts import accounts_quota_projection, accounts_quota_projection_with_today_entries
 from .migration_notice import migration_gap_notes
 from .token_mix_history import HistoryProgress, build_token_mix_history
 from .sampling import AnalyzedRoot, latest_prompts, latest_token_prompts, recent_sample_roots
@@ -365,6 +366,10 @@ class ReportService:
         """Per-request I/C/W/O CCost using the same reference catalog as CCost."""
         return self._load_comparison_catalog().reference_category_valuation
 
+    def token_reference_valuation(self) -> ReferenceValuation:
+        """Per-request scalar CCost valuation for process-local Watch totals."""
+        return self._load_comparison_catalog().reference_valuation
+
     def build_token_mix_history(self, progress: HistoryProgress | None = None) -> ReportProjection:
         """Deep available-history model comparison; never used by normal reports/Watch."""
         return build_token_mix_history(self, progress or (lambda _label, _percent: None))
@@ -431,6 +436,19 @@ class ReportService:
         quota_snapshots: Sequence[AccountSnapshot] | None = None,
         query_account: bool = True,
     ) -> AccountsQuotasProjection:
+        return self.build_watch_quota_with_today_entries(
+            sessions, quota_snapshot=quota_snapshot, quota_snapshots=quota_snapshots,
+            query_account=query_account,
+        )[0]
+
+    def build_watch_quota_with_today_entries(
+        self,
+        sessions: Sequence[NormalizedSession] | None = None,
+        *,
+        quota_snapshot: AccountSnapshot | None = None,
+        quota_snapshots: Sequence[AccountSnapshot] | None = None,
+        query_account: bool = True,
+    ) -> tuple[AccountsQuotasProjection, tuple[TraceEntry, ...]]:
         """Build live quota/local-usage status without model-comparison/report rendering work.
 
         Watch may pass a previously fetched account snapshot so source changes can
@@ -445,8 +463,11 @@ class ReportService:
         quotas = self._quotas() if query_account else tuple(
             quota_snapshots if quota_snapshots is not None else ((quota_snapshot,) if quota_snapshot else ())
         )
-        return self._accounts_quotas(
-            quotas, roots=analyzed, today_start_ms=today_start
+        entries = tuple(entry for item in analyzed for entry in item.bundle.trace_entries)
+        return accounts_quota_projection_with_today_entries(
+            quotas, entries, self._load_comparison_catalog(), now_ms=self.now_ms,
+            today_start_ms=today_start, month_start_ms=month_start,
+            timezone_id=self.timezone_id, workday_calendar=str(self.config.get("workdayCalendar") or ""),
         )
 
     def build(self, request: ReportRequest) -> ReportProjection:
