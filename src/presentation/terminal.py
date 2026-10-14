@@ -222,7 +222,13 @@ def render_table(
     target_width: int | None = None,
     separator_before_rows: Sequence[int] = (),
     faded_rows: Sequence[int] = (),
+    leading_spans: Mapping[int, int] | None = None,
 ) -> list[str]:
+    """Render a bordered table.
+
+    ``leading_spans`` maps a row index to how many leading columns that row's
+    first cell spans (dividers removed); later columns keep their alignment.
+    """
     widths = list(resolve_table_widths(columns, rows, target_width=target_width))
     separator = "|" + "|".join("-" * (width + 2) for width in widths) + "|"
     result = [separator]
@@ -234,12 +240,16 @@ def render_table(
         if row_index in separators:
             result.append(separator)
         cells: list[str] = []
+        span = max(1, min(len(columns), (leading_spans or {}).get(row_index, 1)))
         for index, column in enumerate(columns):
+            if 0 < index < span:
+                continue
             raw = row[index] if index < len(row) else ""
             role = None
             if styles and row_index < len(styles) and index < len(styles[row_index]):
                 role = styles[row_index][index]
-            cells.append(_render_cell(raw, widths[index], right=column.right, role=role, styler=styler,
+            width = sum(widths[:span]) + 3 * (span - 1) if index == 0 else widths[index]
+            cells.append(_render_cell(raw, width, right=column.right, role=role, styler=styler,
                                       faded=row_index in faded))
         result.append("| " + " | ".join(cells) + " |")
     result.append(separator)

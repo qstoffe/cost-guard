@@ -71,11 +71,11 @@ class WatchGroupingTests(unittest.TestCase):
             )
             self.assertEqual(single, tuple(row for row in rows if row.session_id == session_id))
         output = io.StringIO()
-        renderer = WatchRenderer({"colors": {}}, stream=output, interactive=False)
+        renderer = WatchRenderer({"colors": {}, "timezone": "UTC"}, stream=output, interactive=False)
         projection = WatchProjection("Watch", "V2", rows, now_ms=500)
-        table, styles, _ = renderer._table_rows(projection)
-        headers = [row[0] for row, style in zip(table, styles) if style[0] == "watchSessionHeader"]
-        self.assertEqual(["Session A", "Session B"], headers)
+        table, styles, _, header_rows = renderer._table_rows(projection)
+        self.assertEqual(header_rows, [index for index, style in enumerate(styles) if style[0] == "watchSessionHeader"])
+        self.assertEqual(["00:00 Session A", "00:00 Session B"], [str(table[index][0]) for index in header_rows])
         renderer.render(projection)
         self.assertEqual(1, output.getvalue().count("Session A"))
         self.assertEqual(1, output.getvalue().count("Session B"))
@@ -121,7 +121,7 @@ class WatchGroupingTests(unittest.TestCase):
             output = io.StringIO()
             renderer = WatchRenderer({"colors": {}}, stream=output, interactive=False)
             projection = WatchProjection("Watch", "V2", rows, now_ms=now_ms, session_warnings={"A": warning})
-            _table, styles, _activities = renderer._table_rows(projection)
+            _table, styles, _activities, _headers = renderer._table_rows(projection)
             self.assertEqual(2, sum(style[0] == "watchSessionHeader" for style in styles))
             renderer.render(projection)
             self.assertEqual(1, output.getvalue().count("Session A"))
@@ -132,8 +132,9 @@ class WatchGroupingTests(unittest.TestCase):
             A=(prompt(1, 10, in_progress=True), prompt(2, 100), prompt(3, 500)),
             B=(prompt(1, 20, watch_error=True), prompt(2, 200), prompt(3, 400)),
         )
-        ordinary = [("A", "event-2"), ("B", "event-2"), ("B", "event-3"), ("A", "event-3")]
-        protected = {("A", "event-1"), ("B", "event-1")}
+        # A permanent error marker is not a recent highlight, so it is ordinary history.
+        ordinary = [("B", "event-1"), ("A", "event-2"), ("B", "event-2"), ("B", "event-3"), ("A", "event-3")]
+        protected = {("A", "event-1")}
         for limit in range(1, 7):
             with self.subTest(max_rows=limit):
                 rows = tracker(max_rows=limit).project(blocks, snapshots, now_ms=600)
@@ -143,14 +144,15 @@ class WatchGroupingTests(unittest.TestCase):
                 self.assertEqual(expected, {(row.session_id, row.prompt.event_id) for row in rows})
                 self.assertEqual(max(limit, len(protected)), len(rows))
 
-    def test_block_activity_uses_selected_rows_not_excluded_session_history(self):
+    def test_block_order_uses_latest_prompt_start_even_when_that_row_is_capped(self):
         blocks, snapshots = inputs(
             A=(prompt(1, 100, in_progress=True), prompt(2, 1100)),
             B=(prompt(1, 200, in_progress=True), prompt(2, 1000)),
         )
         rows = tracker(max_rows=2).project(blocks, snapshots, now_ms=1200)
-        self.assertEqual(["A", "B"], self.assert_contiguous(rows))
+        self.assertEqual(["B", "A"], self.assert_contiguous(rows))
         self.assertEqual([1, 1], [row.prompt.prompt_number for row in rows])
+        self.assertEqual([1000, 1100], [row.session_latest_ms for row in rows])
 
     def test_recent_markers_remain_protected_over_cap_then_age_normally(self):
         blocks, snapshots = inputs(
@@ -175,9 +177,13 @@ class WatchGroupingTests(unittest.TestCase):
         scoped = WatchRowTracker(started_at_ms=500, recent_seconds=0, max_rows=1, session_scope=True)
         rows = scoped.project(blocks, snapshots, now_ms=600)
         self.assertEqual([2], [row.prompt.prompt_number for row in rows])
-        # Global Watch keeps a most recent session visible through its latest historical row.
-        rows = WatchRowTracker(started_at_ms=500, recent_seconds=0, max_rows=1).project(blocks, snapshots, now_ms=600)
-        self.assertEqual([("A", 2, "")], [(row.session_id, row.prompt.prompt_number, row.marker) for row in rows])
+        # Global Watch shows pre-run history only through a startup Earlier representative.
+        global_tracker = WatchRowTracker(started_at_ms=500, recent_seconds=0, max_rows=1)
+        self.assertEqual((), global_tracker.project(blocks, snapshots, now_ms=600))
+        global_tracker.set_earlier_sessions(("A",))
+        rows = global_tracker.project(blocks, snapshots, now_ms=600)
+        self.assertEqual([("A", 2, "", True)],
+                         [(row.session_id, row.prompt.prompt_number, row.marker, row.earlier) for row in rows])
 
 
 if __name__ == "__main__":

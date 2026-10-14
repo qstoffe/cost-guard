@@ -8,6 +8,7 @@ from typing import Mapping, TextIO
 
 from src.version import mode_heading
 from src.numbers import ccost_amount
+from src.analysis.timezones import format_local_timestamp
 from src.watch.models import ToolObservation, WatchProjection, WatchRow, WatchSessionSubtotal
 
 from .terminal import AnsiStyler, Column, StyledText, fit, render_table, single_line
@@ -27,6 +28,10 @@ _WATCH_COLUMNS = (
     Column("Duration", True, fixed_width=8),
     Column("Δctx → Next Ictx", True, fixed_width=20),
 )
+# Session headers span Session/prompt and Model/effort, including their divider.
+_HEADER_WIDTH = _WATCH_COLUMNS[0].fixed_width + 3 + _WATCH_COLUMNS[1].fixed_width
+EARLIER_LABEL = "[Earlier]"
+EARLIER_EXPLANATION = "Historical session activity; previous usage is excluded from Token Mix and Watch total CCost."
 
 
 def _tokens(value: int | None, *, signed: bool = False, approximate: bool = False) -> str:
@@ -206,28 +211,35 @@ class WatchRenderer:
             return max(row.prompt.duration_ms or 0, now_ms - row.prompt.at_ms)
         return row.prompt.duration_ms
 
+    def _session_header(self, row: WatchRow, warning_number: int | None) -> StyledText:
+        """Merged Session/Model header: [*N] [[Earlier]] time title; only the title truncates."""
+        segments: list[tuple[str, str | None]] = []
+        for label in ((f"*{warning_number}",) if warning_number is not None else ()) + ((EARLIER_LABEL,) if row.earlier else ()):
+            segments.extend(((label, WARNING_ROLE), (" ", "watchSessionHeader")))
+        if row.session_latest_ms > 0:
+            pattern = "%Y-%m-%d %H:%M" if row.earlier else "%H:%M"
+            segments.append((format_local_timestamp(row.session_latest_ms, self.timezone_id, pattern) + " ",
+                             "watchSessionHeader"))
+        # Checkpoint failures can leave Markdown/CRLF in OpenCode session titles.
+        room = _HEADER_WIDTH - sum(len(text) for text, _role in segments)
+        title = fit(single_line(row.session_title, "Untitled session"), room).rstrip()
+        return StyledText(tuple(segments) + ((title, "watchSessionHeader"),))
+
     def _table_rows(self, projection: WatchProjection) -> tuple[
-        list[tuple[object, ...]], list[tuple[str | None, ...]], dict[int, tuple[str, str, ToolObservation]]
+        list[tuple[object, ...]], list[tuple[str | None, ...]], dict[int, tuple[str, str, ToolObservation]], list[int]
     ]:
         rows: list[tuple[object, ...]] = []
         styles: list[tuple[str | None, ...]] = []
         activities: dict[int, tuple[str, str, ToolObservation]] = {}
+        headers: list[int] = []
         previous_session = None
         warnings = projection.session_warnings or {}
         warning_numbers = {session_id: index + 1 for index, session_id in enumerate(warnings)}
         for row in projection.rows:
             if row.session_id != previous_session:
-                # Checkpoint failures can leave Markdown/CRLF in OpenCode session titles.
-                safe_title = single_line(row.session_title, "Untitled session")
-                if row.session_id in warning_numbers:
-                    number = warning_numbers[row.session_id]
-                    marker = f"*{number}"
-                    name = fit(safe_title, _WATCH_COLUMNS[0].fixed_width - len(marker) - 1).rstrip()
-                    title = StyledText(((marker, WARNING_ROLE), (" " + name, "watchSessionHeader")))
-                else:
-                    title = safe_title
                 subtotal = _session_subtotal_text(projection.session_subtotals.get(row.session_id))
-                rows.append((title, "", subtotal, "", "", ""))
+                headers.append(len(rows))
+                rows.append((self._session_header(row, warning_numbers.get(row.session_id)), "", subtotal, "", "", ""))
                 styles.append(("watchSessionHeader", None, None, None, None, None))
                 previous_session = row.session_id
             prompt = row.prompt
@@ -254,7 +266,7 @@ class WatchRenderer:
                     activities[len(rows)] = (kind, marker, row.tool)
                     rows.append((marker, "", "", "", "", ""))
                     styles.append(("watchToolActivity", None, None, None, None, None))
-        return rows, styles, activities
+        return rows, styles, activities, headers
 
     def _activity_line(self, kind: str, marker: str, tool: ToolObservation, span_width: int) -> str:
         prefix = f"{marker} " if len(marker) + 1 < span_width else ""
@@ -271,10 +283,11 @@ class WatchRenderer:
         return "| " + body + " " * padding + " |"
 
     def _render_table(self, projection: WatchProjection) -> None:
-        rows, styles, activities = self._table_rows(projection)
+        rows, styles, activities, headers = self._table_rows(projection)
         if not rows:
             rows, styles = [_empty_row("No prompts since Watch started")], [("watchToolActivity",) + (None,) * 5]
-        lines = render_table(_WATCH_COLUMNS, rows, styles=styles, styler=self.styler)
+        lines = render_table(_WATCH_COLUMNS, rows, styles=styles, styler=self.styler,
+                             leading_spans={index: 2 for index in headers})
         if lines and activities:
             terminal_width = self.terminal_width if self.terminal_width is not None else terminal_content_width(self.stream, minimum=1)
             span_width = max(0, min(len(lines[0]), terminal_width) - 4)
@@ -283,6 +296,10 @@ class WatchRenderer:
         for line in lines:
             self._write(line)
         width = self.terminal_width if self.terminal_width is not None else terminal_content_width(self.stream)
+        if any(row.earlier for row in projection.rows):
+            for line in warning_explanation_lines(EARLIER_LABEL, EARLIER_EXPLANATION, PriceWarningSeverity.APPROACHING,
+                                                  self.styler, width=width):
+                self._write(line)
         for numbers, text, severity in _warning_groups(projection):
             marker = "*" + ",".join(str(number) for number in numbers)
             for line in warning_explanation_lines(marker, text, severity, self.styler, width=width):

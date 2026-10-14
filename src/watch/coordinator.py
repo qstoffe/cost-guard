@@ -18,7 +18,8 @@ from .observation_diagnostics import record_scan, record_source_error
 from .model_discovery import WatchModelDiscovery
 from .models import WatchProjection, WatchRow, WatchSessionSubtotal
 from .observers import CatalogObservation, LiveEventPump, observe_catalog
-from .session_retention import startup_visible_roots
+from .redraw import needs_full_render, transient_signature, visible_signature
+from .session_retention import select_earlier_sessions
 from .skill_registry import active_skill_origins
 from .tracker import WatchRowTracker
 from .token_mix import WatchTokenMix
@@ -99,7 +100,8 @@ class WatchCoordinator:
         self.interval_seconds = 5 if self.auto_interval else max(5, int(raw_interval))
         self.idle_interval_seconds = self.interval_seconds if self.auto_interval else max(30, self.interval_seconds * 3)
         self._refresh_ema_seconds: float | None = None
-        self.max_rows = max(1, int(config.get("watchDashboardMaxRows", 14)))
+        self.max_rows = max(1, int(config.get("watchDashboardMaxRows", 12)))
+        self.earlier_sessions = max(0, int(config.get("watchStartupEarlierSessions", 2)))
         self.recent_seconds = max(0.0, float(config.get("watchRecentEventSeconds", 30)))
         self.tracker = WatchRowTracker(
             started_at_ms=self.started_at_ms,
@@ -117,6 +119,8 @@ class WatchCoordinator:
         self._event_pump: LiveEventPump | None = None
         self._last_quota_refresh_ms = 0
         self._last_projection: WatchProjection | None = None
+        # What the dashboard last fully drew; _last_projection may already be newer.
+        self._rendered_projection: WatchProjection | None = None
         # Ephemeral lifecycle evidence for this process only; never persisted.
         self.source_recoveries = 0
         self.last_source_recovery_kind = ""
@@ -235,37 +239,18 @@ class WatchCoordinator:
             return f"{active_count} {noun} running{background} · Next refresh: {countdown}"
         return f"Idle · Next prompt check: {countdown}"
 
-    @staticmethod
-    def _visible_signature(projection: WatchProjection) -> tuple[object, ...]:
-        """Dashboard content excluding status; expired markers, quotas and model highlights repaint live."""
-        rows = tuple(
-            (
-                row.session_id, row.prompt.event_id, row.marker, row.prompt.in_progress,
-                row.prompt.aborted, row.prompt.duration_ms,
-                row.prompt.abort_reason, row.prompt.ended_after_tool_calls, row.prompt.watch_error,
-                row.prompt.watch_delta_context_tokens, row.prompt.watch_next_context_tokens,
-                row.is_latest_session_event, row.next_context_warning, row.next_context_warning_severity,
-                row.prompt.watch_next_context_cached_ccost, row.prompt.watch_next_context_fresh_ccost,
-                row.tool,
-            )
-            for row in projection.rows
-        )
-        warnings = tuple((projection.session_warnings or {}).items())
-        return (rows, projection.quota, projection.quota_stale, projection.quota_recovering_accounts,
-                projection.source_warnings, warnings, projection.recent_model_notice,
-                projection.recent_promotion_notices, projection.token_mix, projection.run_total,
-                tuple(projection.session_subtotals.items()))
+    _visible_signature = staticmethod(visible_signature)
+    _transient_signature = staticmethod(transient_signature)
 
     @staticmethod
-    def _transient_signature(projection: WatchProjection) -> tuple[object, ...]:
-        return (tuple((row.session_id, row.prompt.event_id, row.marker) for row in projection.rows),
-                projection.recent_model_notice, projection.recent_promotion_notices)
+    def _needs_full_render(previous: WatchProjection, current: WatchProjection, cycle: WatchCycle) -> bool:
+        return needs_full_render(previous, current,
+                                 source_changed=bool(cycle.changed_roots or cycle.resynced or cycle.recovered))
 
-    @classmethod
-    def _needs_full_render(cls, previous: WatchProjection, current: WatchProjection, cycle: WatchCycle) -> bool:
-        if cycle.changed_roots or cycle.resynced or cycle.recovered or current.active_count > 0:
-            return True
-        return cls._visible_signature(previous) != cls._visible_signature(current)
+    def _render(self, renderer, projection: WatchProjection) -> None:
+        """Draw the full dashboard and remember exactly what is now on screen."""
+        renderer.render(projection)
+        self._rendered_projection = projection
 
     def _token_valuation(self):
         return self.report_service.token_category_valuation()
@@ -325,16 +310,8 @@ class WatchCoordinator:
         self.report_service.set_now_ms(now_ms)
         observation = observe_catalog(self.source, session_id=self.session_id)
         roots = self._selected_roots(observation)
-        # Bounded hydration (all revisions known, so later changes enter). Global Watch
-        # skips quiet (cached, row-less) roots unless startup-visible.
-        initial_roots = roots if self.session_id is not None else roots[:INITIAL_ROOT_SAMPLE]
-        if self.session_id is None:
-            keep = startup_visible_roots(initial_roots, root_activity(observation.sessions, observation.root_by_session), now_ms)
-            quiet = {root.session_id for root in initial_roots if root.session_id not in keep
-                     and self.report_service.watch_root_is_quiet(root, self.started_at_ms)}
-            initial_roots = tuple(root for root in initial_roots if root.session_id not in quiet)
-            self.startup_quiet_roots = len(quiet)
-        hydrated = self._hydrate(initial_roots, now_ms=now_ms)
+        hydrated = (self._hydrate(roots, now_ms=now_ms) if self.session_id is not None
+                    else self._hydrate_startup(roots, now_ms=now_ms))
         self.observation = observation
         self._record_refresh_duration(time.monotonic() - refresh_started)
         self.quota = self.report_service.build_watch_quota(
@@ -352,6 +329,30 @@ class WatchCoordinator:
             hydrated,
             resynced=True,
         )
+
+    def _hydrate_startup(self, roots: Sequence[NormalizedSession], *, now_ms: int) -> tuple[str, ...]:
+        """Bounded startup hydration plus the one-time Earlier baseline (actual prompt starts, never running).
+
+        Metadata only bounds the sample; quiet cached roots hydrate only when chosen as Earlier.
+        """
+        sample = roots[:max(INITIAL_ROOT_SAMPLE, self.earlier_sessions)]
+        quiet: dict[str, int] = {}
+        for root in sample:
+            latest = self.report_service.watch_root_latest_prompt_ms(root)
+            if latest is not None and latest < self.started_at_ms:
+                quiet[root.session_id] = latest
+        hydrated = self._hydrate([root for root in sample if root.session_id not in quiet], now_ms=now_ms)
+        latest_ms = dict(quiet)
+        for root_id in hydrated:
+            prompts = self.blocks[root_id].rows
+            if prompts and all(not row.in_progress and row.at_ms < self.started_at_ms for row in prompts):
+                latest_ms[root_id] = max(row.at_ms for row in prompts)
+        earlier = select_earlier_sessions(latest_ms, self.earlier_sessions)
+        hydrated += self._hydrate([root for root in sample if root.session_id in quiet and root.session_id in earlier],
+                                  now_ms=now_ms)
+        self.tracker.set_earlier_sessions(earlier)
+        self.startup_quiet_roots = sum(1 for root_id in quiet if root_id not in earlier)
+        return hydrated
 
     def initialize_with_recovery(self, renderer) -> WatchCycle:
         """Recover unfinished startup with the same selected-source lifecycle."""
@@ -458,7 +459,6 @@ class WatchCoordinator:
 
     def _v1_wait(self, renderer) -> None:
         projection = self._last_projection or self._projection(now_ms=self.clock_ms(), status="Watching")
-        visible_projection = projection
         delay = self._wait_delay_seconds(projection.active_count)
         deadline = self._monotonic() + delay
         while True:
@@ -467,20 +467,22 @@ class WatchCoordinator:
             remaining = deadline - self._monotonic()
             if remaining <= 0:
                 return
-            status_projection = self.status_projection(seconds_until_check=int(remaining + 0.999))
-            if self._transient_signature(status_projection) != self._transient_signature(visible_projection):
-                # Presentation-only wake: expire markers and pricing notices
-                # without touching OpenCode or waiting for the next source poll.
-                renderer.render(status_projection)
-                visible_projection = status_projection
-            else:
-                renderer.render_status(status_projection)
+            # Presentation-only wake: expire markers/notices and publish accepted
+            # account results without touching OpenCode or waiting for a source poll.
+            self._render_wake(renderer, self.status_projection(seconds_until_check=int(remaining + 0.999)), projection)
             self.sleep(min(1.0, remaining))
+
+    def _render_wake(self, renderer, projection: WatchProjection, caller_frame: WatchProjection) -> None:
+        """Redraw when on-screen content changed, else repaint the status (``caller_frame``: drawn by the caller)."""
+        rendered = self._rendered_projection or caller_frame
+        if self._transient_signature(projection) != self._transient_signature(rendered):
+            self._render(renderer, projection)
+        else:
+            renderer.render_status(projection)
 
     def _v2_wait(self, renderer) -> tuple[bool, tuple[str, ...]]:
         """Wait one stable v77-style cadence while buffering V2 change hints."""
         projection = self._last_projection or self._projection(now_ms=self.clock_ms(), status="Watching")
-        visible_projection = projection
         delay = self._wait_delay_seconds(projection.active_count)
         started = self._monotonic()
         deadline = started + delay
@@ -494,12 +496,7 @@ class WatchCoordinator:
             remaining = effective_deadline - self._monotonic()
             if remaining <= 0:
                 return resync_required, tuple(sorted(hints))
-            status_projection = self.status_projection(seconds_until_check=int(remaining + 0.999))
-            if self._transient_signature(status_projection) != self._transient_signature(visible_projection):
-                renderer.render(status_projection)
-                visible_projection = status_projection
-            else:
-                renderer.render_status(status_projection)
+            self._render_wake(renderer, self.status_projection(seconds_until_check=int(remaining + 0.999)), projection)
             pump = self._event_pump
             result = pump.get(min(1.0, remaining)) if pump is not None else None
             if result is None:
@@ -526,7 +523,7 @@ class WatchCoordinator:
             cycle = self.initialize_with_recovery(renderer)
             if cycle.projection.active_count <= 0:
                 return
-            renderer.render(cycle.projection)
+            self._render(renderer, cycle.projection)
             while cycle.projection.active_count > 0:
                 cycle = self._advance(renderer, cycle)
             renderer.finish("Prompt completed.")
@@ -540,7 +537,9 @@ class WatchCoordinator:
         else:
             self._v1_wait(renderer)
             resync, hints = False, ()
-        previous_projection = self._last_projection or cycle.projection
+        # Compare with what is actually on screen: wakes may already have
+        # advanced _last_projection (for example with new account results).
+        previous_projection = self._rendered_projection or cycle.projection
         renderer.render_status(self.activity_projection("Refreshing..."))
         try:
             cycle = self.poll_once(force_resync=resync, hinted_session_ids=hints)
@@ -551,7 +550,7 @@ class WatchCoordinator:
                 self._observer_error = ""
                 self._start_event_pump()
         if self._needs_full_render(previous_projection, cycle.projection, cycle):
-            renderer.render(cycle.projection)
+            self._render(renderer, cycle.projection)
         else:
             renderer.render_status(cycle.projection)
         return cycle
@@ -589,7 +588,10 @@ class WatchCoordinator:
             else:
                 projection = self._last_projection or self.activity_projection(status)
                 projection = replace(projection, status=status, status_active=True)
-                (renderer.render if attempts == 1 else renderer.render_status)(projection)
+                if attempts == 1:
+                    self._render(renderer, projection)
+                else:
+                    renderer.render_status(projection)
             self.sleep(SOURCE_RETRY_SECONDS)
             # Outage waits are observed time, not a suspend gap that would arm
             # account-quota resume retries.
@@ -615,7 +617,7 @@ class WatchCoordinator:
     def run_forever(self, renderer, *, initial_cycle: WatchCycle | None = None) -> None:
         try:
             cycle = initial_cycle or self.initialize_with_recovery(renderer)
-            renderer.render(cycle.projection)
+            self._render(renderer, cycle.projection)
             while True:
                 cycle = self._advance(renderer, cycle)
         except KeyboardInterrupt:

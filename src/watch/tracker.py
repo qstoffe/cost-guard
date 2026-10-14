@@ -8,7 +8,7 @@ from src.domain import EventKind, SessionSnapshot
 from src.reports.models import PromptProjection, SessionPromptBlock
 
 from .models import ToolObservation, WatchRow
-from .session_retention import SessionActivity, session_visibility
+from .session_retention import select_rows, session_order
 from .tools import observe_tools
 
 
@@ -72,6 +72,13 @@ class WatchRowTracker:
         self.max_rows = max(1, int(max_rows))
         self.session_scope = bool(session_scope)
         self._observed: dict[tuple[str, str], _Observed] = {}
+        # Startup Earlier session -> its one historical representative ("" until resolved).
+        self._earlier: dict[str, str] = {}
+
+    def set_earlier_sessions(self, session_ids: tuple[str, ...]) -> None:
+        """Install the one-time startup baseline; global Watch only."""
+        if not self.session_scope:
+            self._earlier = {session_id: "" for session_id in session_ids}
 
     @staticmethod
     def _event_sequences(snapshot: SessionSnapshot) -> dict[str, int]:
@@ -303,40 +310,24 @@ class WatchRowTracker:
         session_rows.extend(self._retained_missing_rows(block, snapshot, present_event_ids, now_ms))
         return session_rows
 
-    def _finished_ms(self, session_id: str, prompt: PromptProjection) -> int:
-        """Source prompt end time; observed completion only when the source has none."""
-        if prompt.duration_ms is not None:
-            return prompt.at_ms + max(0, prompt.duration_ms)
-        observed = self._observed.get((session_id, _event_key(prompt)))
-        completed = observed.completion_seen_ms if observed is not None else None
-        return max(prompt.at_ms, completed or 0)
+    def _earlier_row(self, block: SessionPromptBlock, sequence_by_event: Mapping[str, int]) -> WatchRow | None:
+        """The startup representative of an Earlier session: its single latest prompt/event."""
+        key = self._earlier.get(block.session_id, "")
+        if not key and block.rows:
+            latest = max(block.rows, key=lambda item: (item.at_ms, sequence_by_event.get(item.event_id, 0)))
+            key = self._earlier[block.session_id] = _event_key(latest)
+        prompt = next((item for item in block.rows if _event_key(item) == key), None)
+        if prompt is None or prompt.in_progress:
+            self._earlier.pop(block.session_id, None)
+            return None
+        return WatchRow(block.session_id, block.title, prompt, "", earlier=True)
 
-    def _session_activity(self, block: SessionPromptBlock, rows: list[WatchRow]) -> SessionActivity:
-        prompts = list(block.rows) + [row.prompt for row in rows]
-        return SessionActivity(
-            block.session_id,
-            any(prompt.in_progress for prompt in prompts),
-            max((self._finished_ms(block.session_id, prompt) for prompt in prompts), default=0),
-        )
-
-    def _select(self, rows: list[WatchRow], represented: frozenset[str]) -> list[WatchRow]:
-        """Apply the global cap; protected rows and one row per represented session survive it."""
-        rows.sort(key=self._sort_key)
-        protected_keys = {
-            (row.session_id, row.prompt.event_id) for row in rows
-            if row.prompt.in_progress or row.marker in {"+", "✓", "!"}
-        }
-        covered = {session_id for session_id, _event_id in protected_keys}
-        for row in reversed(rows):
-            if row.session_id in represented and row.session_id not in covered:
-                protected_keys.add((row.session_id, row.prompt.event_id))
-                covered.add(row.session_id)
-        protected = [row for row in rows if (row.session_id, row.prompt.event_id) in protected_keys]
-        ordinary = [row for row in rows if (row.session_id, row.prompt.event_id) not in protected_keys]
-        room = max(0, self.max_rows - len(protected))
-        selected = protected + (ordinary[-room:] if room else [])
-        selected.sort(key=self._sort_key)
-        return selected
+    def _protected(self, row: WatchRow, now_ms: int) -> bool:
+        """Running rows and rows whose existing green/red marker is still active."""
+        if row.prompt.in_progress:
+            return True
+        observed = self._observed.get((row.session_id, _event_key(row.prompt)))
+        return observed is not None and self._recent_completion(observed, now_ms)
 
     def project(
         self,
@@ -346,47 +337,37 @@ class WatchRowTracker:
         now_ms: int,
         skill_origins_by_root: Mapping[str, Mapping[str, Mapping[str, str]]] | None = None,
     ) -> tuple[WatchRow, ...]:
-        candidates: list[tuple[SessionPromptBlock, SessionSnapshot, Mapping[str, int], list[WatchRow]]] = []
+        rows: list[WatchRow] = []
+        latest_start: dict[str, int] = {}
         for session_id, block in blocks.items():
             snapshot = snapshots.get(session_id)
             if snapshot is None:
                 continue
             sequence_by_event = self._event_sequences(snapshot)
-            candidates.append((block, snapshot, sequence_by_event,
-                               self._session_rows(block, snapshot, now_ms, sequence_by_event)))
-        # A session-scoped Watch follows its one session; global Watch hides idle sessions.
-        visibility = None if self.session_scope else session_visibility(
-            (self._session_activity(block, session_rows)
-             for block, _snapshot, _sequences, session_rows in candidates if block.rows or session_rows), now_ms)
-        rows: list[WatchRow] = []
-        for block, snapshot, sequence_by_event, session_rows in candidates:
-            if visibility is not None and block.session_id not in visibility.visible:
+            session_rows = self._session_rows(block, snapshot, now_ms, sequence_by_event)
+            if session_rows:
+                # Current-run activity permanently replaces the historical representative.
+                self._earlier.pop(session_id, None)
+            elif session_id in self._earlier:
+                earlier = self._earlier_row(block, sequence_by_event)
+                session_rows = [earlier] if earlier is not None else []
+            if not session_rows:
                 continue
-            if not session_rows and block.rows:
-                # Visible without a row observed by this process (session scope,
-                # or a protected/recent session at startup): show its latest event.
-                prompt = max(reversed(block.rows), key=lambda item: item.at_ms)
-                session_rows.append(WatchRow(
-                    block.session_id, block.title, prompt,
-                    "+" if prompt.in_progress and self.recent_ms > 0 else "",
-                    is_latest_session_event=True,
-                ))
             session_rows.sort(key=self._sort_key)
+            latest_start[session_id] = max(row.prompt.at_ms for row in session_rows)
             origins = (skill_origins_by_root or {}).get(block.session_id, {})
             rows.extend(self._attach_activity(session_rows, snapshot, now_ms, sequence_by_event, origins))
 
-        selected = self._select(rows, visibility.represented if visibility is not None else frozenset())
-        if self.session_scope:
-            return tuple(selected)
-
-        # Group only after the global cap/protection policy has selected rows.
-        # Each block retains canonical order; latest visible activity orders
-        # blocks chronologically, with session identity breaking timestamp ties.
+        selected = select_rows(rows, max_rows=self.max_rows, sort_key=self._sort_key,
+                               is_protected=lambda row: self._protected(row, now_ms))
         by_session: dict[str, list[WatchRow]] = {}
         for row in selected:
             by_session.setdefault(row.session_id, []).append(row)
-        ordered_blocks = sorted(
-            by_session.values(),
-            key=lambda block: (self._sort_key(block[-1])[0], block[-1].session_id),
+        for session_id in [item for item in self._earlier if item in latest_start and item not in by_session]:
+            del self._earlier[session_id]  # an evicted representative never returns
+        # Each block keeps canonical prompt order; blocks follow their latest prompt start.
+        ordered = session_order((session_id, latest_start[session_id]) for session_id in by_session)
+        return tuple(
+            replace(row, session_latest_ms=latest_start[session_id])
+            for session_id in ordered for row in by_session[session_id]
         )
-        return tuple(row for block in ordered_blocks for row in block)

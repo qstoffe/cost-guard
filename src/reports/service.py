@@ -391,21 +391,21 @@ class ReportService:
     ) -> NormalizedSession | None:
         return root_for_session(tuple(sessions) if sessions is not None else self.session_catalog(), session_id)
 
-    def watch_root_is_quiet(self, root: NormalizedSession, since_ms: int) -> bool:
-        """Stable cached analysis proves a root has no Watch row yet.
+    def watch_root_latest_prompt_ms(self, root: NormalizedSession) -> int | None:
+        """Latest prompt/compaction start proven by stable cached analysis, else None.
 
         Analysis is cached only for stable snapshots without running prompts,
         compactions, active sessions or background work, keyed by the exact
-        current revision. With no prompt/compaction at or after ``since_ms``
-        nothing is displayable; Watch hydrates the root once its revision changes.
+        current revision. A value before Watch start means nothing is displayable
+        yet (0: no prompt at all); Watch hydrates the root once its revision changes.
         """
         _revision, bundle = cached_analysis(self.source, root, self._derived, self._dependencies(self._load_catalog()))
         if bundle is None:
-            return False
+            return None
         # The same result _analyze would return; later quota/sample reads reuse it.
         self._analyzed[root.session_id] = AnalyzedRoot(root, bundle, True, None)
-        return (all(prompt.prompt_time_ms < since_ms for prompt in bundle.prompts)
-                and all(item.created_at_ms < since_ms for item in bundle.compactions))
+        return max([prompt.prompt_time_ms for prompt in bundle.prompts]
+                   + [item.created_at_ms for item in bundle.compactions], default=0)
 
     def build_watch_root(
         self, root: NormalizedSession, *, start_ms: int | None = None, force_fresh: bool = False

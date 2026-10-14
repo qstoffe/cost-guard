@@ -480,6 +480,7 @@ def collect(*, network: bool, snapshots: int, test_service_start: bool = False) 
                 if key.endswith("Quota") and isinstance(value, dict)
             },
             "watch_dashboard_max_rows": cfg.get("watchDashboardMaxRows"),
+            "watch_startup_earlier_sessions": cfg.get("watchStartupEarlierSessions"),
             "session_watch_interval_seconds": cfg.get("sessionWatchIntervalSeconds"),
         },
         "paths": {
