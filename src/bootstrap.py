@@ -91,7 +91,7 @@ def _prepare_console_output() -> None:
     if not encoding:
         return
     try:
-        "\u2192\u2588\u2591\u2713\u2014\u26a0".encode(encoding)
+        "\u2192\u2588\u2591\u2713\u2014\u26a0\u25b6".encode(encoding)
     except (UnicodeEncodeError, LookupError):
         reconfigure = getattr(sys.stdout, "reconfigure", None)
         if callable(reconfigure):

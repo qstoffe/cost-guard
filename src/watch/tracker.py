@@ -17,13 +17,13 @@ def _event_key(prompt: PromptProjection) -> str:
     return prompt.event_id or f"{prompt.at_ms}:{prompt.prompt_number}:{prompt.label}"
 
 
-def _marker(prompt: PromptProjection, *, recent_completion: bool, recent_running: bool) -> str:
+def _marker(prompt: PromptProjection, *, recent_completion: bool) -> str:
     if prompt.aborted:
         return "!" if recent_completion else ""
     if prompt.watch_error:
         return "!"
     if prompt.in_progress:
-        return "+" if recent_running else ""
+        return "▶"
     return "✓" if recent_completion else ""
 
 
@@ -199,13 +199,7 @@ class WatchRowTracker:
                 observed.event_sequence = compact_sequence
                 observed.after_compaction = True
 
-        recent_running = (
-            prompt.in_progress
-            and self.recent_ms > 0
-            and 0 <= now_ms - observed.first_seen_ms < self.recent_ms
-        )
-        marker = _marker(prompt, recent_completion=self._recent_completion(observed, now_ms),
-                         recent_running=recent_running)
+        marker = _marker(prompt, recent_completion=self._recent_completion(observed, now_ms))
         return WatchRow(block.session_id, block.title, prompt, marker)
 
     def _retained_missing_rows(
@@ -238,7 +232,7 @@ class WatchRowTracker:
                 prompt = replace(prompt, in_progress=False, duration_ms=duration)
                 observed.last_prompt = prompt
             # A retained prompt is never running: was_running tracks last_prompt.
-            marker = _marker(prompt, recent_completion=self._recent_completion(observed, now_ms), recent_running=False)
+            marker = _marker(prompt, recent_completion=self._recent_completion(observed, now_ms))
             retained.append(WatchRow(session_id, observed.session_title or block.title, prompt, marker, None))
         return retained
 

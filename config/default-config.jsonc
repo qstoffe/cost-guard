@@ -84,27 +84,25 @@
   "sessionWatchIntervalSeconds": "auto",
 
   // Global soft cap on prompt/event rows across all Watch sessions. The newest
-  // rows are kept and the oldest unprotected row is evicted first; running rows
-  // and rows still showing their watchRecentEventSeconds green/red marker are
-  // never evicted just to enforce the cap, so the table may temporarily exceed
-  // it. A session block disappears only when none of its prompts remain selected.
-  // Session headers, tool/Skills/status rows and notes do not count. Values below
-  // 1 clamp to 1.
+  // eligible unprotected rows win regardless of Earlier/ordinary status; Earlier
+  // rows get no extra slots or protection. Running rows and rows still showing
+  // their watchRecentEventSeconds green/red marker are protected, so the table
+  // may temporarily exceed the cap. Session headers, activity rows and notes do
+  // not count. Values below 1 clamp to 1.
   "watchDashboardMaxRows": 12,
 
-  // Global Watch startup shows up to this many sessions completed before the
-  // run, newest latest-prompt start first, each with only its latest prompt and
-  // marked [Earlier]. Their usage stays outside Token Mix and Watch total CCost.
-  // A new prompt in such a session replaces the historical row. 0 disables.
+  // Maximum startup-only [Earlier] representatives from sessions completed
+  // before the run, chosen by latest prompt start. Each contributes one row to
+  // the global soft cap; evicted rows are never replenished. Usage stays outside
+  // Token Mix and Watch total CCost. A new prompt or /compact replaces it. 0 disables.
   "watchStartupEarlierSessions": 2,
 
-  // Observation-based recent-event window for persistent watch. A newly observed
-  // running event shows "+"; any prompt first observed completed or later observed
-  // transitioning to completed shows "✓" and the watchRecentCompleted row color
-  // for this many seconds. The same window protects recently completed rows from
-  // row-cap eviction. Aborted prompts keep [ABORTED] permanently but use the
-  // critical row color only for this many seconds after first observation; actual
-  // errors keep permanent critical styling. Set to 0 to disable transient effects.
+  // Observation-based recent-event window for persistent Watch. Running prompts
+  // show "▶" until they stop, independent of this window. Completed prompts
+  // show "✓" and the watchRecentCompleted row color for this many seconds; that
+  // window also protects them from row-cap eviction. Aborted prompts keep
+  // [ABORTED] permanently but use critical row color only for this many seconds;
+  // actual errors keep permanent critical styling. Set 0 to disable transient effects.
   "watchRecentEventSeconds": 30,
 
   "thresholds": {

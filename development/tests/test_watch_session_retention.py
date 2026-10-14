@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from datetime import date, datetime, timezone
 from decimal import Decimal
 import io
 import re
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from development.fixtures.session_snapshots import make_snapshot
 from development.fixtures.synthetic_month import SyntheticMonthSource
@@ -24,7 +26,7 @@ MINUTE = 60_000
 NOW = 1_000 * MINUTE
 EXCEEDED = "[Price threshold >200.0K exceeded]"
 APPROACHING = "[Approaching price threshold >272.0K]"
-EARLIER_NOTE = "[Earlier] Historical session activity; previous usage is excluded from Token Mix and Watch total CCost."
+EARLIER_NOTE = "[Earlier] Session activity before Watch started; excluded from Token Mix and Watch total CCost."
 
 
 def prompt(number, at_ms, *, duration_ms=1_000, **changes):
@@ -197,6 +199,35 @@ class EarlierSessionTests(unittest.TestCase):
         for _ in range(3):  # resync/idle polls after the newer session disappears
             self.assertEqual(["B"], sessions(observed.project(blocks, snapshots, now_ms=NOW + 3)))
 
+    def test_earlier_representatives_compete_for_the_global_soft_cap_with_running_prompts(self):
+        for running_count in range(17):
+            data = {"A": (prompt(1, 1_000),), "B": (prompt(1, 2_000),)}
+            if running_count:
+                data["R"] = tuple(running(number, NOW + number) for number in range(1, running_count + 1))
+            blocks, snapshots = inputs(**data)
+            observed = tracker(started_at_ms=NOW, max_rows=15)
+            observed.set_earlier_sessions(("B", "A"))
+            rows = observed.project(blocks, snapshots, now_ms=NOW + running_count + 10)
+            expected_earlier = min(2, max(0, 15 - running_count))
+            self.assertEqual(expected_earlier, sum(row.earlier for row in rows), running_count)
+            self.assertEqual(running_count + expected_earlier, len(rows), running_count)
+
+    def test_newer_ordinary_row_can_evict_earlier_and_protected_completion_wins(self):
+        blocks, snapshots = inputs(A=(prompt(1, 1_000),), B=(prompt(1, 2_000),),
+                                   C=(prompt(1, NOW + 1),), R=(running(1, NOW + 2),))
+        observed = tracker(started_at_ms=NOW, max_rows=3)
+        observed.set_earlier_sessions(("B", "A"))
+        rows = observed.project(blocks, snapshots, now_ms=NOW + 10)
+        self.assertEqual(["B", "C", "R"], block_order(rows))
+        self.assertEqual([True, False, False], [row.earlier for row in rows])
+
+        blocks, snapshots = inputs(A=(prompt(1, 1_000),), C=(prompt(1, NOW + 1),))
+        observed = tracker(started_at_ms=NOW, max_rows=1, recent_seconds=30)
+        observed.set_earlier_sessions(("A",))
+        rows = observed.project(blocks, snapshots, now_ms=NOW + 10)
+        self.assertEqual(["C"], sessions(rows))
+        self.assertEqual("✓", rows[0].marker)
+
     def coordinator(self, td, count, *, metadata_newest="root-0000"):
         source = SyntheticMonthSource(6, 2, month_start_ms=NOW - 60 * MINUTE)
         root = source.snapshots[metadata_newest].root
@@ -257,14 +288,14 @@ class OrderingAndHeaderTests(unittest.TestCase):
         output = rendered(projection)
         header = self.header_line(output, "Session A")
         prompt_line = self.header_line(output, "#1 prompt 1")
-        self.assertTrue(header.startswith("| 08:53 Session A "))
+        self.assertTrue(header.startswith("|   08:53 Session A "))
         self.assertEqual(len(prompt_line), len(header))
         self.assertEqual(6, header.count("|"), "Session/prompt and Model/effort share one header cell")
         self.assertEqual(7, prompt_line.count("|"), "prompt rows keep every separator")
         self.assertEqual([index for index, char in enumerate(prompt_line) if char == "|"][2:],
                          [index for index, char in enumerate(header) if char == "|"][1:])
         stockholm = rendered(projection, config={"colors": {}, "timezone": "Europe/Stockholm"})
-        self.assertIn("| 10:53 Session A ", stockholm)
+        self.assertIn("|   10:53 Session A ", stockholm)
 
     def test_earlier_header_marker_truncation_color_and_sanitization(self):
         title = "\x1b[31mEvil\nrow " + "long title " * 10
@@ -277,7 +308,9 @@ class OrderingAndHeaderTests(unittest.TestCase):
                                      session_warnings={"A": rows[0].next_context_warning})
         output = rendered(projection)
         header = self.header_line(output, "[Earlier]")
-        self.assertTrue(header.startswith("| *1 [Earlier] 2025-10-09 08:53 Evil row long title"))
+        self.assertTrue(header.startswith("|   2025-10-09 08:53 [Earlier] Evil row long title"))
+        self.assertNotIn("*1", header)
+        self.assertIn("model*1", self.header_line(output, "#1 prompt 1"))
         self.assertIn("... |", header)
         self.assertNotIn("\x1b", output)
         self.assertEqual(1, output.count(EARLIER_NOTE))
@@ -287,15 +320,92 @@ class OrderingAndHeaderTests(unittest.TestCase):
         renderer = WatchRenderer(config, stream=io.StringIO(), interactive=True)
         self.assertIn(renderer.styler.apply("[Earlier]", "nextIctxWarning"), colored)
         self.assertIn(renderer.styler.apply("2025-10-09 08:53 ", "watchSessionHeader"), colored)
+        self.assertIn(renderer.styler.apply("Evil row long title long title ...", "watchSessionHeader"), colored)
         self.assertNotIn(renderer.styler.apply("[Earlier]", "watchSessionHeader"), colored)
+
+    def test_earlier_time_only_uses_configured_local_day_and_recomputes_after_midnight(self):
+        timestamp = 1_760_000_000_000
+        blocks, snapshots = inputs(A=(prompt(1, timestamp),))
+        observed = tracker(started_at_ms=1_770_000_000_000)
+        observed.set_earlier_sessions(("A",))
+        rows = observed.project(blocks, snapshots, now_ms=NOW)
+        projection = WatchProjection("Watch", "V2", rows)
+
+        with patch("src.presentation.watch._current_local_date", return_value=date(2025, 10, 9)):
+            same_day = rendered(projection)
+        self.assertTrue(self.header_line(same_day, "[Earlier]").startswith("|   08:53 [Earlier]"))
+
+        stream = io.StringIO()
+        renderer = WatchRenderer({"colors": {}, "timezone": "UTC"}, stream=stream, interactive=False)
+        with patch("src.presentation.watch._current_local_date",
+                   side_effect=(date(2025, 10, 9), date(2025, 10, 10))):
+            renderer.render(projection)
+            first = stream.getvalue()
+            renderer.render(projection)
+        second = stream.getvalue()[len(first):]
+        self.assertIn("|   08:53 [Earlier]", first)
+        self.assertIn("|   2025-10-09 08:53 [Earlier]", second)
+
+    def test_earlier_same_day_uses_configured_timezone_date(self):
+        timestamp = int(datetime(2026, 10, 13, 23, 30, tzinfo=timezone.utc).timestamp() * 1000)
+        blocks, snapshots = inputs(A=(prompt(1, timestamp),))
+        start = int(datetime(2026, 10, 15, tzinfo=timezone.utc).timestamp() * 1000)
+        observed = tracker(started_at_ms=start)
+        observed.set_earlier_sessions(("A",))
+        projection = WatchProjection("Watch", "V2", observed.project(blocks, snapshots, now_ms=start))
+        today = date(2026, 10, 14)
+        with patch("src.presentation.watch._current_local_date", return_value=today):
+            stockholm = rendered(projection, config={"colors": {}, "timezone": "Europe/Stockholm"})
+            utc = rendered(projection, config={"colors": {}, "timezone": "UTC"})
+        self.assertIn("|   01:30 [Earlier]", stockholm)
+        self.assertIn("|   2026-10-13 23:30 [Earlier]", utc)
+
+    def test_running_session_headers_keep_two_aligned_prefix_positions(self):
+        blocks, snapshots = inputs(
+            A=(prompt(1, NOW + 1), running(2, NOW + 2)),
+            B=(prompt(1, NOW + 3),),
+            C=(running(1, NOW + 4),),
+        )
+        rows = tracker(started_at_ms=NOW).project(blocks, snapshots, now_ms=NOW + 10)
+        projection = WatchProjection("Watch", "V2", rows, now_ms=NOW + 10)
+        config = {"timezone": "UTC", "colors": {"watchRunningWarning": {"foreground": "Yellow"}}}
+        output = rendered(projection, config=config, interactive=False)
+        running_header = self.header_line(output, "Session A")
+        idle_header = self.header_line(output, "Session B")
+        self.assertEqual("▶ ", running_header[2:4])
+        self.assertEqual("  ", idle_header[2:4])
+        self.assertEqual(running_header.index("16:40"), idle_header.index("16:40"))
+        self.assertIn("▶ #2", self.header_line(output, "#2 prompt 2"))
+        self.assertNotIn("▶ #1", self.header_line(output, "#1 prompt 1"))
+        self.assertIn("▶ ", self.header_line(output, "Session C"))
+        self.assertNotIn("▶️", output)
+        colored = rendered(projection, config=config, interactive=True)
+        self.assertIn("\x1b[93m▶\x1b[0m", self.header_line(colored, "Session A"))
+
+    def test_session_play_header_disappears_when_prompts_complete_or_abort(self):
+        blocks, snapshots = inputs(A=(running(1, NOW + 1),), B=(running(1, NOW + 2),))
+        observed = tracker(started_at_ms=NOW, recent_seconds=30)
+        live = observed.project(blocks, snapshots, now_ms=NOW + 3)
+        live_output = rendered(WatchProjection("Watch", "V2", live))
+        self.assertIn("▶ ", self.header_line(live_output, "Session A"))
+        self.assertIn("▶ ", self.header_line(live_output, "Session B"))
+
+        blocks["A"] = replace(blocks["A"], rows=(prompt(1, NOW + 1, completed_successfully=True),))
+        blocks["B"] = replace(blocks["B"], rows=(prompt(1, NOW + 2, aborted=True),))
+        stopped = observed.project(blocks, snapshots, now_ms=NOW + 10)
+        stopped_output = rendered(WatchProjection("Watch", "V2", stopped))
+        for title in ("Session A", "Session B"):
+            self.assertEqual("  ", self.header_line(stopped_output, title)[2:4])
+        self.assertIn("✓ #1 prompt 1", stopped_output)
+        self.assertIn("! #1 [ABORTED] prompt 1", stopped_output)
 
     def test_explanation_only_while_an_earlier_session_is_visible(self):
         blocks, snapshots = inputs(A=(prompt(1, 1_000),), B=(prompt(1, 2_000),))
         observed = tracker(started_at_ms=NOW)
         observed.set_earlier_sessions(("A", "B"))
         first = rendered(WatchProjection("Watch", "V2", observed.project(blocks, snapshots, now_ms=NOW)), width=60)
-        self.assertEqual(1, first.count("[Earlier] Historical session activity;"))
-        self.assertTrue(all(len(line) <= 60 for line in first.splitlines() if "Historical" in line))
+        self.assertEqual(1, first.count("[Earlier] Session activity before Watch started;"))
+        self.assertTrue(all(len(line) <= 60 for line in first.splitlines() if "Session activity" in line))
         self.assertEqual(1, sum(line.startswith("Watch total CCost:") for line in first.splitlines()))
         for name in "AB":
             blocks[name] = replace(blocks[name], rows=blocks[name].rows + (prompt(2, NOW + 10),))
@@ -319,8 +429,13 @@ class WarningConsolidationTests(unittest.TestCase):
         output = rendered(projection)
         self.assertIn("*1,2,3,4 Context: Price threshold >200.0K exceeded (1.9x more expensive)", output)
         self.assertEqual(1, output.count("Context:"))
-        for number in range(1, 5):
-            self.assertRegex(output, rf"\*{number} \d\d:\d\d Session ")
+        prompt_rows = [line for line in output.splitlines() if "#1 prompt 1" in line]
+        self.assertEqual(4, len(prompt_rows))
+        for number, line in enumerate(prompt_rows, start=1):
+            self.assertIn(f"model*{number}", line)
+        for title in "ABCD":
+            header = next(line for line in output.splitlines() if f"Session {title}" in line)
+            self.assertNotIn("*", header)
 
     def test_different_threshold_severity_or_cost_detail_stays_separate(self):
         blocks, snapshots = inputs(

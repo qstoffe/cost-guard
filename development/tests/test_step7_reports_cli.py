@@ -38,9 +38,9 @@ class CliParityTests(unittest.TestCase):
         stream = io.TextIOWrapper(buffer, encoding="cp1252", errors="strict")
         with patch.object(sys, "stdout", stream):
             _prepare_console_output()
-            print("Cost → █")
+            print("Cost → █ ▶")
             stream.flush()
-        self.assertEqual(["Cost ? ?"], buffer.getvalue().decode("cp1252").splitlines())
+        self.assertEqual(["Cost ? ? ?"], buffer.getvalue().decode("cp1252").splitlines())
 
     def test_v77_argument_shape_matrix(self) -> None:
         cases = {

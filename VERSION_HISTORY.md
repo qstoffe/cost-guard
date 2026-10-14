@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.50 — 2026-10-14
+
+- Watch keeps `[Earlier]` startup-only and subject to the shared global prompt-row cap, with no special protection or backfill; a prompt or `/compact` transitions it under the existing lifecycle. Session headers put timestamps first, use time-only for the configured local day, reserve aligned running `▶` prefixes and retain one shared Earlier exclusion explanation.
+- Running prompts and sessions use persistent `▶` indicators. Context-warning markers move from session headers to the affected Model / effort value; independent model/effort truncation preserves the full marker within the fixed column. Accounting, warning calculations and ordering are unchanged.
+
 ## v80.49 — 2026-10-14
 
 - Watch appends `Today` CCost to its existing run-total line. It combines available local-day history with deduplicated process observations retained through session deletion until local midnight; unavailable history deleted before observation remains excluded, and no ledger is persisted.
@@ -21,13 +26,9 @@
 - Global Watch removes a whole session block (rows, activity, `Σ`, context warning) once its last prompt finished 10 minutes ago. Running sessions and the two most recently prompt-active sessions always remain, each with at least its latest row under the row cap; startup shows them from recent metadata. Idle time uses source prompt end times (observed completion only as fallback), so polling, title changes, resyncs and restarts never extend it, and a session displaced from the recent pair disappears immediately. Presentation only; no timer state, extra hydration or OpenCode/history change.
 - Sessions with an identical displayed context warning (severity, threshold, explanation and multiplier or Next Ictx CCost range) share one explanation such as `*1,2,3,4 Context: …`, wrapped to terminal width; each header keeps its own marker and Next Ictx highlighting is unchanged.
 
-## v80.45 — 2026-10-13
-
-- Eligible New Models names receive a bold lime ✦ highlight for 12 hours from one atomic UTC first-sighting timestamp per provider-qualified model ID, shared by Watch and Report. Watch removes the emphasis on a live status wake; the existing seven-day visibility rules are unchanged.
-
 ## Earlier v80 history
 
-- v80.43 sampled the latest 100 priceable prompts for Token Mix %/Relative CCost; Watch Token Mix % uses this run's priceable requests. v80.38 added bounded Watch startup recovery, typed source errors and sanitized connectivity history. v80.37 refactored Watch/source boundaries and hot paths; Git delivery moved to isolated clones and every main PR versions docs. v80.39 added retained tool/skill stats, verified failures and width-adaptive rows; v80.40 made rows live-only before v80.44 tied final statistics to existing markers while clearing transient indicators. v80.41 moved shared test setup into owned fixtures (15 of 33 test-import edges retired) with no runtime change. v80.42 stopped counting zero-usage V2 tool-continuation records proven to continue the same response as separate `Calls`.
+- v80.43 sampled the latest 100 priceable prompts for Token Mix %/Relative CCost; Watch Token Mix % uses this run's priceable requests. v80.45 added eligible New Models' shared 12-hour bold-lime ✦ first-sighting highlight without changing seven-day visibility. v80.38 added bounded Watch startup recovery, typed source errors and sanitized connectivity history. v80.37 refactored Watch/source boundaries and hot paths; Git delivery moved to isolated clones and every main PR versions docs. v80.39 added retained tool/skill stats, verified failures and width-adaptive rows; v80.40 made rows live-only before v80.44 tied final statistics into existing markers while clearing transient indicators. v80.41 moved shared test setup into owned fixtures (15 of 33 test-import edges retired) with no runtime change. v80.42 stopped counting zero-usage V2 tool-continuation records proven to continue the same response as separate `Calls`.
 - v80.35–v80.36 added explicit native abort-cause labels, neutral tool-call endings and stable credit-first account ordering; Watch shows `[ABORTED by user]` only when a live V2 user interrupt matches authoritative interrupted history, keeping that actor evidence bounded and in memory.
 - v80.34 pooled V2 reads, memoized model identity, overlapped report acquisition and bounded Watch discovery/startup/resync with identical output (report ~2.1→0.65 s, Watch startup ~6.2→0.65 s, resync 13→1.4 s); Diagnostics gained all-account evidence and Watch geometry.
 - v80.32–v80.33 separated Watch account refresh, prompt projection/report orchestration and source normalization; shared catalog ancestry and bounded sampling; moved fixtures (67→43 test-import edges, 46 fewer test-import dependencies), enforced bounded routine/coupling debt without raising caps, standardized `Context:` warning explanations, and added code maps/inventory/layer guards. Source/cache/billing semantics stayed unchanged.
