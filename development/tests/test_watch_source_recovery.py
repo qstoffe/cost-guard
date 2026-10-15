@@ -116,8 +116,9 @@ class WatchSourceRecoveryTests(unittest.TestCase):
                              "transport failure never completes a prompt")
             self.assertTrue(all("retrying every 5s" in item.status for item in renderer.statuses[1:3]))
             self.assertEqual([SOURCE_RETRY_SECONDS] * 3, sleeps, "bounded cadence, no busy loop")
-            self.assertEqual([account_calls] * 3, calls_during, "source retries never query account providers")
-            self.assertEqual(account_calls + 1, account.calls, "only the normal minute cadence refreshes after recovery")
+            self.assertEqual([account_calls, account_calls + 1, account_calls + 2], calls_during,
+                             "quota publication keeps its independent cadence during a source outage")
+            self.assertEqual(account_calls + 3, account.calls, "source recovery never forces an extra quota request")
             self.assertIsNone(watch.accounts.recovery_until, "an observed outage is not a suspend/resume gap")
             self.assertTrue(cycle.recovered and cycle.resynced)
             self.assertEqual([1], pumps, "the event pump restarts after the authoritative snapshot")

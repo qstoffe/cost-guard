@@ -52,6 +52,7 @@ sys.path.insert(0, str(ROOT))
 from src.accounts.diagnostics import sanitized_account_observation  # noqa: E402
 from src.bootstrap import _account_providers, _model_availability_source, _select_source  # noqa: E402
 from src.cache import CacheDatabase, CacheRepository  # noqa: E402
+from src.cache.account_refresh_state import read_refresh_state  # noqa: E402
 from src.config import load_configuration  # noqa: E402
 from src.pricing.github_copilot import GitHubCopilotPricingProvider  # noqa: E402
 from src.presentation import StartupProgress  # noqa: E402
@@ -495,6 +496,7 @@ def collect(*, network: bool, snapshots: int, test_service_start: bool = False) 
 
     data["watch_source_recovery_events"] = recent_events()
     data["watch_observation_events"] = watch_observations()
+    data["watch_account_refresh"] = read_refresh_state(ROOT)
     # Includes failures that happened (and possibly self-healed) during earlier Watch runs.
     metadata, metadata_timing = _timed(lambda: model_metadata_section(
         ROOT, cfg, network=network, database_factory=CacheDatabase))

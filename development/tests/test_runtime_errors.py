@@ -386,7 +386,7 @@ class RuntimeErrorTests(unittest.TestCase):
                     roots.append(path.relative_to(ROOT).as_posix())
         # Reviewed in development/runtime-failures.md; claude_transport owns reader + bounded cleanup.
         self.assertEqual(sorted(["src/accounts/acquisition.py", "src/accounts/claude_transport.py",
-                                 "src/accounts/claude_transport.py", "src/presentation/progress.py",
+                             "src/accounts/claude_transport.py", "src/accounts/refresh_loop.py", "src/presentation/progress.py",
                                  "src/reports/model_comparison.py", "src/watch/model_discovery.py",
                                  "src/watch/observers.py"]), sorted(roots))
 

@@ -7,6 +7,8 @@ from typing import Callable, Mapping, Sequence
 
 from src.accounts.base import AccountProvider
 from src.accounts.acquisition import AccountAcquisition, AccountUpdate
+from src.accounts.refresh_loop import AccountRefreshLoop
+from src.cache.account_refresh_state import persist_refresh_state
 from src.analysis import (
     AnalysisDependencies,
     DerivedAnalysisCache,
@@ -119,8 +121,11 @@ class ReportService:
         self._analyzed: dict[str, AnalyzedRoot] = {}
         # Current account visibility never proves historical included billing.
         self._subscription_providers = frozenset()
-        self._account_work: AccountAcquisition | None = None
-        self.account_diagnostics: Mapping[str, int | float] = {}
+        self._account_work: AccountAcquisition | AccountRefreshLoop | None = None
+        self._watch_accounts = False
+        self._record_account_evidence = False
+        self._watch_quota_entries: tuple[TraceEntry, ...] = ()
+        self.account_diagnostics: Mapping[str, object] = {}
         self._comparison_mix: tuple[tuple[Decimal, Decimal, Decimal, Decimal, int], int] | None = None
         self._availability: AvailabilityPrefetch | None = None
 
@@ -220,23 +225,43 @@ class ReportService:
         finally:
             self.close_accounts()
 
+    def enable_watch_accounts(self, *, record_evidence: bool = True) -> None:
+        self._watch_accounts = True
+        self._record_account_evidence = record_evidence
+
+    def _record_account_refresh(self, evidence: dict) -> None:
+        if self._record_account_evidence:
+            persist_refresh_state(self.cache_repository.database.package_root, evidence)
+
     def begin_account_refresh(self) -> None:
         """Local shared inventory first; no worker touches progress or analysis."""
         if self._account_work is None:
-            self._account_work = AccountAcquisition(self.account_providers, self.source.source_id)
+            self._account_work = (AccountRefreshLoop(
+                self.account_providers, self.source.source_id,
+                evidence_sink=self._record_account_refresh)
+                if self._watch_accounts else AccountAcquisition(self.account_providers, self.source.source_id))
         if self._account_work.start(self.now_ms):
             self.progress("Checking account quotas")
 
     def poll_account_refresh(self) -> AccountUpdate | None:
-        return self._account_work.poll(self.now_ms) if self._account_work is not None else None
+        if self._account_work is None:
+            return None
+        update = self._account_work.poll(self.now_ms)
+        self.account_diagnostics = self._account_work.diagnostics()
+        return update
 
     @property
     def accounts_pending(self) -> bool:
         return self._account_work is not None and self._account_work.pending
 
+    def record_account_display(self, evidence: dict[str, object]) -> None:
+        self.account_diagnostics = {**self.account_diagnostics, "watch": evidence}
+        if isinstance(self._account_work, AccountRefreshLoop):
+            self._account_work.set_display(evidence)
+
     def close_accounts(self) -> None:
         if self._account_work is not None:
-            self.account_diagnostics = self._account_work.diagnostics()
+            self.account_diagnostics = {**self.account_diagnostics, **self._account_work.diagnostics()}
             self._account_work.close()
             self._account_work = None
 
@@ -457,16 +482,20 @@ class ReportService:
         """
         roots, root_activity = self._ordered_roots(tuple(sessions) if sessions is not None else self.session_catalog())
         month_start = utc_month_start_ms(now_ms=self.now_ms)
-        today_start = local_day_start_ms(self.timezone_id, now_ms=self.now_ms)
         analyzed = self._analysis_roots_for_watch(roots, month_start, root_activity)
         self.progress("Calculating month/today CCost")
         quotas = self._quotas() if query_account else tuple(
             quota_snapshots if quota_snapshots is not None else ((quota_snapshot,) if quota_snapshot else ())
         )
-        entries = tuple(entry for item in analyzed for entry in item.bundle.trace_entries)
+        self._watch_quota_entries = tuple(entry for item in analyzed for entry in item.bundle.trace_entries)
+        return self.project_watch_accounts(quotas)
+
+    def project_watch_accounts(self, quotas: Sequence[AccountSnapshot]) -> tuple[AccountsQuotasProjection, tuple[TraceEntry, ...]]:
+        """Publish new quota evidence over cached local usage, without source I/O."""
         return accounts_quota_projection_with_today_entries(
-            quotas, entries, self._load_comparison_catalog(), now_ms=self.now_ms,
-            today_start_ms=today_start, month_start_ms=month_start,
+            quotas, self._watch_quota_entries, self._load_comparison_catalog(), now_ms=self.now_ms,
+            today_start_ms=local_day_start_ms(self.timezone_id, now_ms=self.now_ms),
+            month_start_ms=utc_month_start_ms(now_ms=self.now_ms),
             timezone_id=self.timezone_id, workday_calendar=str(self.config.get("workdayCalendar") or ""),
         )
 

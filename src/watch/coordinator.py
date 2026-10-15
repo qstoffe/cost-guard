@@ -90,6 +90,7 @@ class WatchCoordinator:
         if hasattr(self.source, "read_recovery"):
             self.source.read_recovery = None
         self.report_service = report_service
+        self.report_service.enable_watch_accounts(record_evidence=record_observations)
         self.config = config
         self.session_id = session_id
         self.clock_ms = clock_ms
@@ -205,10 +206,14 @@ class WatchCoordinator:
             self.today_ccost.observe(bundle.trace_entries, now_ms=now_ms)
         return tuple(root_id for root_id, *_ in pending)
 
-    def _refresh_quota(self, observation: CatalogObservation, *, now_ms: int, force: bool = False) -> None:
+    def _refresh_quota(self, observation: CatalogObservation, *, now_ms: int, force: bool = False,
+                       allow_history: bool = True) -> None:
         # Source changes/5m refresh local usage; account requests keep their cadence.
         account_changed = self.accounts.refresh(now_ms=now_ms)
-        if not self.today_ccost.refresh_due(now_ms, self._last_quota_refresh_ms, force or account_changed):
+        self.report_service.record_account_display(self.accounts.diagnostics())
+        if account_changed:
+            self.quota = self.report_service.project_watch_accounts(self.accounts.snapshots)[0]
+        if not allow_history or not self.today_ccost.refresh_due(now_ms, self._last_quota_refresh_ms, force):
             return
         self.quota = self.today_ccost.refresh_available_history(
             self.report_service, observation.sessions, self.accounts.snapshots, now_ms
@@ -449,7 +454,7 @@ class WatchCoordinator:
         # The cadence's one-second main-thread wake publishes individual provider
         # completions without waiting for source hydration or the entire batch.
         if not self._closed and self.observation is not None:
-            self._refresh_quota(self.observation, now_ms=now_ms)
+            self._refresh_quota(self.observation, now_ms=now_ms, allow_history=False)
         active = 0 if self._last_projection is None else self._last_projection.active_count
         status = "Watching" if seconds_until_check is None else self._steady_status(active, seconds_until_check)
         return self._projection(now_ms=now_ms, status=status, status_active=active > 0)
@@ -595,6 +600,9 @@ class WatchCoordinator:
                 else:
                     renderer.render_status(projection)
             self.sleep(SOURCE_RETRY_SECONDS)
+            if not initializing:
+                frame = replace(self.status_projection(), status=status, status_active=True)
+                self._render_wake(renderer, frame, self._rendered_projection or projection)
             # Outage waits are observed time, not a suspend gap that would arm
             # account-quota resume retries.
             self._last_cycle_end_ms = int(self.clock_ms())

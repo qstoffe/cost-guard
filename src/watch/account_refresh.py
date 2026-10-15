@@ -7,7 +7,7 @@ from typing import Protocol
 from src.accounts.acquisition import AccountUpdate
 from src.domain import AccountSnapshot
 
-from .accounts import AccountKey, durable_quota_failure, reconcile_accounts, recovery_account_keys
+from .accounts import AccountKey, age_accounts, durable_quota_failure, reconcile_accounts, recovery_account_keys
 
 QUOTA_REFRESH_MS = 60_000
 QUOTA_RECOVERY_SECONDS = 60.0
@@ -90,7 +90,11 @@ class WatchAccountRefresh:
                 self.retry_at = None
         update = self.work.poll_account_refresh()
         if update is None:
-            return expired
+            aged = age_accounts(self.snapshots, self.seen_ms, now_ms=now_ms)
+            changed = aged != self.snapshots
+            self.snapshots = aged
+            self.stale = any(item.availability == "stale" for item in aged)
+            return expired or changed
         self._publish(update)
         return True
 
@@ -103,12 +107,19 @@ class WatchAccountRefresh:
             previous, fresh, self.seen_ms, now_ms=completed_ms, recovering=recovering,
             observed_keys=update.observed_keys,
         )
+        # A mailbox may have waited during hydration: completion, not drain time,
+        # is the observation epoch. A retained/cached value cannot advance it.
+        observed = dict(update.observed_at_ms)
+        for item in self.snapshots:
+            if item.key in update.observed_keys and item.key in observed and item.availability in {"available", "partial"}:
+                self.seen_ms[item.key] = observed[item.key]
+        self.snapshots = age_accounts(self.snapshots, self.seen_ms, now_ms=completed_ms)
+        self.stale = any(item.availability == "stale" for item in self.snapshots)
         self._last_fresh = fresh
-        if not self.work.accounts_pending:
-            self.last_started_ms = completed_ms
+        self._first_retried.difference_update(item.key for item in fresh if item.availability in {"available", "partial"})
         unseen = {item.key for item in fresh if item.availability == "error" and not durable_quota_failure(item)
-                  and item.key not in self.seen_ms and item.key not in self._first_retried}
-        if unseen and not recovering:
+                  and item.key not in self._first_retried}
+        if unseen and not recovering and self.recovery_until is None:
             self._first_retried |= unseen
             self.recovery_until = self.monotonic() + QUOTA_RECOVERY_SECONDS
             self.retry_index = 0
@@ -133,3 +144,11 @@ class WatchAccountRefresh:
     def close(self) -> None:
         self._closed = True
         self.work.close_accounts()
+
+    def diagnostics(self) -> dict[str, object]:
+        now = int(self.clock_ms())
+        return {"accounts": [{"observation_age_seconds": max(0.0, (now - self.seen_ms[item.key]) / 1000)
+                              if item.key in self.seen_ms else None,
+                              "display_state": "stale" if item.availability == "stale" else
+                              "fresh" if item.availability in {"available", "partial"} else "unavailable"}
+                             for item in self.snapshots]}
