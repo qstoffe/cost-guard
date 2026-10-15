@@ -255,7 +255,7 @@ Headers span two columns with aligned two-character prefixes and configured-loca
 
 `watchStartupEarlierSessions` (default 2; 0 disables) selects at most that many representatives once at startup, by latest pre-Watch prompt start. Their single rows compete unprotected for the global cap and never replenish after eviction; a prompt or `/compact` transitions the session to ordinary activity. The timestamp precedes gold-orange `[Earlier]`: `HH:mm` on the configured local date, otherwise `YYYY-MM-DD HH:mm`. Earlier usage stays out of Token Mix and `Watch total CCost`; one shared `[Earlier] Session activity before Watch started; excluded from Token Mix and Watch total CCost.` explanation appears while any representative is visible. Identical context warnings retain shared numbered footnotes.
 
-Watch's first view never waits for quotas. Accounts arrive individually and are drawn on the next one-second wake, even while idle; normal refresh discovers account changes without reparsing unchanged sources. Identity/recovery rules and late-reply protection remain.
+Watch's first view never waits for quotas. An account-only scheduler refreshes healthy providers every 30 seconds from refresh start, independently of source activity. With whole-provider acquisition ≤20s, scheduler overhead ≤1s and publication/rendering ≤2s, newly available native values reach Watch within 60s (budget ≤53s), idle or active. Upstream propagation, outages and a blocked local render/hydration operation cannot be guaranteed away. See [freshness and diagnostics](docs/account-support.md#watch-freshness-budget).
 
 | Column | Meaning |
 | --- | --- |
@@ -281,7 +281,7 @@ OpenAI Plus          5h     ████████░░  82% · Reset@22:49 |
 
 `Watch:` stays last. Interactive startup uses `Cost Guard vX.Y (YYYY-MM-DD) — <Mode>` with progress immediately below, no blank row. Transient UI disappears before final reports/Watch dashboards; redirected output remains plain, without animation.
 
-`[ABORTED by …]` names proven user/quota/tool-call/step/rate-limit causes; unknown stays `[ABORTED]`. V2 live `reason: user` is matched to the same persisted interruption and retained only in bounded process memory, not reconstructed from older history or after restart. `[ENDED after tool calls]` never guesses a limit. Labels outlast red emphasis. Quota values survive errors for five minutes; wake/startup recovery: 60s, 5/10/20s retries; auth rejection stays visible.
+`[ABORTED by …]` names proven user/quota/tool-call/step/rate-limit causes; unknown stays `[ABORTED]`. V2 live `reason: user` is matched to the same persisted interruption and retained only in bounded process memory, not reconstructed from older history or after restart. `[ENDED after tool calls]` never guesses a limit. Labels outlast red emphasis. Quotas become stale after a failed refresh or an observation age over 60s, and expire after five minutes, including resume. Transient failures get bounded 5/10/20s retries; auth/capability failures get no fast retry.
 
 Full redraws clear screen/scrollback; countdowns replace only the status line. V1 Watch uses process-free SQLite gating; V2 events are hints with a five-second cooldown and authoritative resync. `"auto"` refresh adapts within 5–30 seconds; quota refresh is independently rate-limited.
 
@@ -350,7 +350,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.55:** Global Watch separates history from active/recent sessions with lifecycle-aware chronological ordering, start/end header times and one conditional divider (2026-10-15).
+**v80.56:** Responsive, isolated Watch quota refresh with a measured 60-second healthy freshness budget, bounded recovery, strict stale expiry and privacy-safe refresh diagnostics (2026-10-15).
 
 **v80.54:** Behavior-neutral prompt-block performance cleanup for long sessions. **v80.53:** Watch's compact `CCost · Watch · Today` line shows the local date instead of `Today` from midnight to 03:00. **v80.52:** Continuing context follows active history independently of request accounting; Watch's 20-character context cell stays aligned through `*99`. **v80.51:** Watch headings use one configured-local start timestamp; context-warning markers follow `Next Ictx` on the latest relevant row, with live numbered footnotes. Today names sessions deleted before Watch start; routine local release-ZIP generation is removed. **v80.50:** Watch adds persistent `▶` markers, startup-only Earlier rows sharing the soft cap and timestamp-first session headers. **v80.49:** Adds deletion-resilient current-local-day CCost. **v80.48:** Adds the global prompt budget, Earlier startup rows, latest-start ordering and idle account redraw. **v80.47:** Behavior-neutral Watch CCost performance cleanup. Older versions remain below; v80.0 is the Python 3.11+ public baseline. Restart/sleep need separate live evidence; Claude quotas remain experimental.
 

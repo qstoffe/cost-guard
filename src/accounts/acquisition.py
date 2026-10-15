@@ -6,6 +6,7 @@ worker slot until the call really ends; retries never multiply stuck requests.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from copy import copy
 from queue import Empty, Queue
 import threading
 import time
@@ -15,6 +16,7 @@ from src.domain import AccountRef, AccountSnapshot, AccountUsageStatus
 from src.runtime_errors import recoverable, recovered
 from .base import normalize_quota
 from .discovery import AccountCandidate, AccountDiscovery
+from .refresh_policy import ProviderRefresh, WATCH_TIMEOUT_SECONDS, transient_failure
 
 WORKERS = 4
 PROVIDER_TIMEOUT_SECONDS = 45.0
@@ -25,6 +27,7 @@ REPORT_REMAINING_WAIT_SECONDS = 15.0
 class AccountUpdate:
     snapshots: tuple[AccountSnapshot, ...]
     observed_keys: tuple[tuple[str, str, str], ...]
+    observed_at_ms: tuple[tuple[tuple[str, str, str], int], ...] = ()
 
 
 @dataclass(slots=True)
@@ -60,10 +63,18 @@ def _failure(candidate: AccountCandidate, previous: Sequence[AccountSnapshot], s
 
 class AccountAcquisition:
     def __init__(self, providers: Sequence[object], source_id: str, *, workers: int = WORKERS,
-                 timeout: float = PROVIDER_TIMEOUT_SECONDS, clock: Callable[[], float] = time.monotonic):
+                 timeout: float = PROVIDER_TIMEOUT_SECONDS, clock: Callable[[], float] = time.monotonic,
+                 continuous: bool = False, wall_ms: Callable[[], int] | None = None):
         self.discovery = AccountDiscovery(providers)
         self.source_id, self.timeout, self.clock = source_id, timeout, clock
-        self.limit = max(1, min(WORKERS, workers))
+        self.continuous = continuous
+        self.wall_ms = wall_ms or (lambda: time.time_ns() // 1_000_000)
+        self.limit = max(1, len(providers)) if continuous else max(1, min(WORKERS, workers))
+        if continuous:
+            self.timeout = min(timeout, WATCH_TIMEOUT_SECONDS)
+        self.refresh: dict[int, ProviderRefresh] = {}
+        self._desired: dict[int, AccountCandidate] = {}
+        self._observed_at_ms: dict[tuple[str, str, str], int] = {}
         self._stop = threading.Event()
         self._jobs: Queue = Queue(self.limit)
         self._results: Queue = Queue()
@@ -85,11 +96,47 @@ class AccountAcquisition:
 
     @property
     def pending(self) -> bool:
-        return bool(self._waiting or any(not attempt.expired for attempt in self._running.values()))
+        waiting = any(slot not in self._running and (not self.continuous or self.clock() >= self.refresh[slot].due)
+                      for slot in self._waiting)
+        return waiting or any(not attempt.expired for attempt in self._running.values())
 
-    def _publish(self, slot: int, snapshots: tuple[AccountSnapshot, ...]) -> None:
+    def _publish(self, slot: int, snapshots: tuple[AccountSnapshot, ...], *, observed=None) -> None:
         self._snapshots[slot] = snapshots
-        self._changed_keys.update(item.key for item in snapshots)
+        self._changed_keys.update(item.key for item in snapshots if observed is None or item.key in observed)
+        present = {item.key for values in self._snapshots.values() for item in values}
+        self._observed_at_ms = {key: value for key, value in self._observed_at_ms.items() if key in present}
+
+    def _retry_candidate(self, candidate: AccountCandidate) -> AccountCandidate:
+        if not self.continuous or not self.refresh[candidate.slot].retry_scheduled or not candidate.records:
+            return candidate
+        failed = {(item.ref.source_instance, item.ref.source_account)
+                  for item in self._snapshots.get(candidate.slot, ()) if transient_failure(item)}
+        records = tuple(record for record in candidate.records
+                        if (record.ref.source_instance, record.ref.source_account) in failed)
+        if not records:
+            return candidate
+        provider = copy(candidate.provider)
+        provider.credential_records = records
+        return replace(candidate, provider=provider, records=records)
+
+    def _apply(self, candidate: AccountCandidate, accounts: tuple[AccountSnapshot, ...]) -> None:
+        """A targeted retry observes only its pinned records, not cached neighbors."""
+        previous = self._snapshots.get(candidate.slot, ())
+        locators = {(r.ref.source_instance, r.ref.source_account) for r in candidate.records or ()}
+        desired = self._desired.get(candidate.slot)
+        targeted = desired is not None and candidate.records != desired.records
+        untouched = tuple(item for item in previous if targeted
+                          and (item.ref.source_instance, item.ref.source_account) not in locators)
+        incoming = {item.key for item in accounts + untouched}
+        removed = tuple(replace(item, quotas=(), billing=(), plan=None, availability="unavailable",
+                                reason="Account no longer configured", observations={"parser_reason": "auth_failure"})
+                        for item in previous if item.key not in incoming and item.availability != "unavailable")
+        self._publish(candidate.slot, accounts + untouched + removed, observed={item.key for item in accounts + removed})
+
+    def _timeout(self, attempt: _Attempt, now_ms: int, completed_at: float) -> None:
+        candidate = attempt.candidate
+        self._apply(candidate, _failure(candidate, self._snapshots.get(candidate.slot, ()), self.source_id, now_ms, timeout=True))
+        self.refresh[candidate.slot].complete((), completed_at, timeout=True)
 
     def start(self, now_ms: int) -> bool:
         if self._stop.is_set():
@@ -101,6 +148,16 @@ class AccountAcquisition:
         self.discovery_seconds = max(0.0, self.clock() - started)
         self.providers_discovered = len(candidates)
         desired = {item.slot: item for item in candidates}
+        self._desired = desired
+        for slot, candidate in desired.items():
+            state = self.refresh.get(slot)
+            if state is None or state.revision != candidate.revision:
+                self.refresh[slot] = ProviderRefresh(candidate.revision)
+                if state is not None and slot in self._snapshots:
+                    self._publish(slot, tuple(replace(item, quotas=(), billing=(), availability="unavailable",
+                                                     reason="Account credentials changed; verification pending",
+                                                     observations={"parser_reason": "auth_failure"})
+                                              for item in self._snapshots[slot]))
         # Explicitly disappeared credentials must not remain verified capacity.
         for slot, previous in tuple(self._snapshots.items()):
             candidate = desired.get(slot)
@@ -135,11 +192,23 @@ class AccountAcquisition:
                 break
             if slot in self._running:
                 continue
+            state = self.refresh[slot]
+            # Targeted retries must not postpone healthy credentials in the same
+            # adapter indefinitely: their regular full inventory still runs.
+            healthy = any(item.availability in {"available", "partial"} for item in self._snapshots.get(slot, ()))
+            periodic = self.continuous and healthy and self.clock() >= state.normal_due
+            if self.continuous and self.clock() < state.due and not periodic:
+                continue
+            selected = candidate if periodic else self._retry_candidate(candidate)
             self._sequence += 1
-            attempt = _Attempt(self._sequence, candidate, self.clock() + self.timeout)
+            attempt = _Attempt(self._sequence, selected, self.clock() + self.timeout)
             self._running[slot] = attempt
+            if periodic:
+                state.due = min(state.due, state.normal_due)
+            state.begin(self.clock(), full=selected.records == candidate.records,
+                        retry=state.retry_scheduled and not periodic)
             del self._waiting[slot]
-            self._jobs.put_nowait((attempt.sequence, candidate, self._snapshots.get(slot, ())))
+            self._jobs.put_nowait((attempt.sequence, selected, self._snapshots.get(slot, ()), self.clock()))
             self.checks_started += 1
         while len(self._threads) < min(self.limit, len(self._running)):
             thread = threading.Thread(target=self._worker, name="cost-guard-account-quota", daemon=True)
@@ -149,14 +218,15 @@ class AccountAcquisition:
     def _worker(self) -> None:
         while not self._stop.is_set():
             try:
-                sequence, candidate, previous = self._jobs.get(timeout=0.1)
+                sequence, candidate, previous, dispatched_at = self._jobs.get(timeout=0.1)
             except Empty:
                 continue
             if self._stop.is_set():
                 return
             provider = candidate.provider
+            worker_wait = max(0.0, self.clock() - dispatched_at)
             component = f"account-provider-{candidate.slot}"
-            now_ms = time.time_ns() // 1_000_000
+            now_ms = self.wall_ms()
             try:
                 health = provider.probe()
                 if not (health.available and health.healthy):
@@ -178,38 +248,41 @@ class AccountAcquisition:
                 if not self._stop.is_set():
                     recovered(component)
             if not self._stop.is_set():
-                self._results.put((sequence, candidate.slot, accounts, self.clock()))
+                self._results.put((sequence, candidate.slot, accounts, self.clock(), self.wall_ms(), worker_wait))
 
     def poll(self, now_ms: int) -> AccountUpdate | None:
         if self._stop.is_set():
             return None
         while True:
             try:
-                sequence, slot, accounts, completed_at = self._results.get_nowait()
+                sequence, slot, accounts, completed_at, observed_ms, worker_wait = self._results.get_nowait()
             except Empty:
                 break
             attempt = self._running.get(slot)
             if attempt is None or attempt.sequence != sequence:
                 continue
             del self._running[slot]
+            if not attempt.expired:
+                self.refresh[slot].worker_wait = worker_wait
             if not attempt.expired and completed_at > attempt.deadline:
-                self._publish(slot, _failure(attempt.candidate, self._snapshots.get(slot, ()), self.source_id, now_ms, timeout=True))
+                self._timeout(attempt, now_ms, completed_at)
             elif not attempt.expired:
                 # Accounts absent in a completed, successful inventory are no
                 # longer configured; pending providers are never treated absent.
-                incoming = {item.key for item in accounts}
-                removed = tuple(replace(item, quotas=(), billing=(), plan=None, availability="unavailable",
-                                       reason="Account no longer configured", observations={"parser_reason": "auth_failure"})
-                                for item in self._snapshots.get(slot, ()) if item.key not in incoming)
-                self._publish(slot, accounts + removed)
+                self._apply(attempt.candidate, accounts)
+                self.refresh[slot].complete(accounts, completed_at)
+                self._observed_at_ms.update((item.key, observed_ms) for item in accounts
+                                            if item.availability in {"available", "partial"})
         for slot, attempt in self._running.items():
             if not attempt.expired and self.clock() >= attempt.deadline:
                 attempt.expired = True
-                self._publish(slot, _failure(attempt.candidate, self._snapshots.get(slot, ()), self.source_id, now_ms, timeout=True))
+                self._timeout(attempt, now_ms, self.clock())
+        if self.continuous:
+            self._waiting = {slot: item for slot, item in self._desired.items() if slot not in self._running}
         self._schedule()
         if not self._changed_keys:
             return None
-        update = AccountUpdate(self.snapshots, tuple(self._changed_keys))
+        update = AccountUpdate(self.snapshots, tuple(self._changed_keys), tuple(self._observed_at_ms.items()))
         self._changed_keys.clear()
         return update
 
@@ -228,6 +301,10 @@ class AccountAcquisition:
             self._publish(slot, _failure(candidate, self._snapshots.get(slot, ()), self.source_id, now_ms, timeout=True))
         return self.snapshots
 
+    def cancel(self) -> None:
+        """Thread-safe signal; only the acquisition owner clears mutable work."""
+        self._stop.set()
+
     def close(self) -> None:
         self._stop.set()
         self._waiting.clear()
@@ -242,10 +319,11 @@ class AccountAcquisition:
         # No join of in-flight HTTP. Idle workers exit in <=0.1s; bounded
         # daemon workers cannot keep the process/terminal alive at shutdown.
 
-    def diagnostics(self) -> dict[str, int | float]:
+    def diagnostics(self) -> dict[str, object]:
         """Allowlisted performance evidence only; jobs are not HTTP-call counts."""
         return {"local_discovery_ms": round(self.discovery_seconds * 1000, 2),
                 "candidate_providers": self.providers_discovered,
                 "provider_jobs_started": self.checks_started, "worker_limit": self.limit,
                 "acquisition_elapsed_ms": round(max(0.0, self.clock() - self._started_at) * 1000, 2)
-                if self._started_at is not None else 0.0}
+                 if self._started_at is not None else 0.0,
+                "providers": {str(slot): state.diagnostics(self.clock()) for slot, state in self.refresh.items()}}

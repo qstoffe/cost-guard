@@ -8,6 +8,21 @@ from src.domain import AccountSnapshot, AccountUsageStatus
 
 AccountKey = tuple[str, str, str]
 MAX_STALE_MS = 300_000
+FRESH_MS = 60_000
+
+
+def age_accounts(snapshots: Sequence[AccountSnapshot], seen: Mapping[AccountKey, int], *, now_ms: int) -> tuple[AccountSnapshot, ...]:
+    """Age visible observations even when no provider completes (e.g. stuck I/O)."""
+    result = []
+    for item in snapshots:
+        age = max(0, now_ms - seen.get(item.key, now_ms))
+        if (item.quotas or item.billing) and age > MAX_STALE_MS:
+            item = replace(item, quotas=(), billing=(), availability="unavailable",
+                           reason="Last known capacity expired; refresh unavailable")
+        elif (item.quotas or item.billing) and age > FRESH_MS and item.availability in {"available", "partial"}:
+            item = replace(item, availability="stale", reason="Quota observation overdue; last known capacity")
+        result.append(item)
+    return tuple(result)
 
 
 def durable_quota_failure(snapshot: AccountSnapshot | None) -> bool:
@@ -16,6 +31,7 @@ def durable_quota_failure(snapshot: AccountSnapshot | None) -> bool:
         snapshot.availability == "unavailable"
         or snapshot.observations.get("parser_reason") == "auth_failure"
         or snapshot.observations.get("parser_reason") == "software_failure"
+        or snapshot.observations.get("parser_reason") in {"format_changed", "method_missing", "account_mismatch", "quota_unavailable"}
         or snapshot.observations.get("http_status") in (401, 403)
     )
 
@@ -53,7 +69,7 @@ def reconcile_accounts(
             result.append(prior or current)
             continue  # Unrelated completion cannot erase this account's stale state.
         recent = prior is not None and 0 <= now_ms - timestamps.get(key, 0) <= MAX_STALE_MS
-        retain = prior is not None and not durable_quota_failure(prior) and (recent or recovering)
+        retain = prior is not None and not durable_quota_failure(prior) and recent
         if durable_quota_failure(current):
             result.append(current)
             continue

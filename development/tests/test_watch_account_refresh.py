@@ -66,11 +66,11 @@ class WatchAccountRefreshTests(unittest.TestCase):
 
     def test_recovery_expiry_without_new_update_is_not_an_observation(self):
         self.publish(self.good)
-        self.advance(600)
+        self.advance(240)
         self.refresh.resume()
         self.publish(self.error)
         self.assertTrue(self.refresh.stale)
-        self.advance(60)
+        self.advance(61)
 
         changed = self.refresh.refresh(now_ms=self.clock[0])
 

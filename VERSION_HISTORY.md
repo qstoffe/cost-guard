@@ -1,5 +1,11 @@
 # Cost Guard version history
 
+## v80.56 — 2026-10-15
+
+- Watch quotas use an independent account-only scheduler, start-anchored 30-second healthy refreshes and one bounded lane per configured adapter. Provider attempts have a 20-second Watch deadline; blocked lanes cannot starve other providers or spawn replacements. Normal reports retain four workers and their existing wait budget.
+- Transient failures, including after success, receive at most three 5/10/20-second recovery retries before 60-second degraded checks; durable auth/capability/format failures get no fast retries. Credential-backed retries pin failed accounts without reobserving healthy neighbors. Publication uses cached local usage, never source hydration; unchanged provider responses are new observations, cached replays are not.
+- Observations older than 60 seconds are visibly stale and last-known values expire after five minutes even without another completion; resume never extends that bound. Privacy-allowlisted numeric evidence distinguishes attempts, completion, observation, publication, scheduling/worker delay and displayed freshness. Deterministic idle/active rendering tests demonstrate the 60-second end-to-end objective for whole-provider acquisition up to 20 seconds and responsive local scheduling/rendering; upstream propagation and external outages remain outside the guarantee.
+
 ## v80.55 — 2026-10-15
 
 - Global Watch keeps historical session blocks above active/recent blocks in one unchanged six-column table, with one border-style divider only when both groups exist. Active/recent headers and ordering use latest prompt/compaction start; history uses the latest existing terminal/completion evidence, falling back to event start when an end is unavailable. Session ID breaks ties.
@@ -19,15 +25,9 @@
 - V2 snapshots retain the documented active-context message IDs and include revert/fork metadata in source revision gating. Completed compaction still owns its shrink; inactive reverted rows do not become the continuing anchor.
 - Keep Watch's `Δctx → Next Ictx` content width fixed at 20 with aligned delta/arrow/Next fields and a reserved warning-marker slot through `*99`; warning changes no longer widen the 119-character table.
 
-## v80.51 — 2026-10-14
-
-- Watch captures one configured-local start epoch shared with its lifecycle and renders it as `YYYY-MM-DD HH:mm:ss`, replacing the release date in Watch headings. Today uses the exact exclusion wording `Deleted sessions before Watch start excluded`.
-- Current context-warning markers follow `Next Ictx` on each displayed session's latest relevant row. Numbering and grouped footnotes derive from active visible rows; severity colors, warning deduplication, compaction behavior and expiry remain synchronized.
-- Removed the dedicated local release-ZIP builder/test and routine archive-generation instructions. Source validation, normal tests, Diagnostics and current-main source distribution remain.
-
 ## Earlier v80 history
 
-- v80.50 made Earlier rows startup-only under the global soft cap, added timestamp-first headers/running `▶` prefixes and moved warning markers to prompt rows. v80.49 added deletion-resilient current-local-day Watch CCost. v80.48 replaced idle expiry with a global newest-prompt budget (`watchDashboardMaxRows`, default 12), Earlier rows, latest-start session ordering and idle account redraw. v80.43–v80.47 added latest-100 priceable Token Mix, 12-hour New Models, grouped warnings and faster Watch CCost (67–70→43–47 ms).
+- v80.50–v80.51 added configured-local Watch start headings, timestamp-first headers/running `▶`, current-row grouped context warnings and startup-only Earlier rows, and removed routine local release-ZIP generation. v80.49 added deletion-resilient current-local-day CCost. v80.48 replaced idle expiry with a global newest-prompt budget (`watchDashboardMaxRows`, default 12), Earlier rows, latest-start ordering and idle account redraw. v80.43–v80.47 added latest-100 priceable Token Mix, 12-hour New Models, grouped warnings and faster Watch CCost (67–70→43–47 ms).
 - v80.35–v80.42 added native abort-cause labels (`[ABORTED by user]` only for matched live V2 interrupts), neutral tool-call endings, stable account ordering, refactored hot paths, bounded startup recovery/typed source errors, retained tool/skill evidence and stopped counting proven V2 tool continuations as `Calls`.
 - v80.34 pooled V2 reads, memoized model identity, overlapped report acquisition and bounded Watch discovery/startup/resync with identical output (report ~2.1→0.65 s, Watch startup ~6.2→0.65 s, resync 13→1.4 s); Diagnostics gained all-account evidence and Watch geometry.
 - v80.32–v80.33 separated Watch account refresh, prompt projection/report orchestration and source normalization; shared catalog ancestry and bounded sampling; moved fixtures (67→43 test-import edges, 46 fewer test-import dependencies), enforced bounded routine/coupling debt without raising caps, standardized `Context:` warning explanations, and added code maps/inventory/layer guards. Source/cache/billing semantics stayed unchanged.

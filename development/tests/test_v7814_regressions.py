@@ -278,16 +278,16 @@ class QuotaResumeRecoveryTests(unittest.TestCase):
         self.clock.advance(600)
         return self.watch.poll_once().projection
 
-    def test_expired_wake_capacity_is_stale_then_success_ends_recovery_immediately(self):
+    def test_expired_wake_capacity_is_removed_then_success_ends_recovery_immediately(self):
         resumed = self.wake()
-        self.assertEqual(self.good.quotas, resumed.quota.accounts[0].account.quotas)
-        self.assertTrue(resumed.quota_stale)
+        self.assertFalse(resumed.quota.accounts[0].account.quotas)
+        self.assertFalse(resumed.quota_stale)
         self.assertEqual((self.good.key,), resumed.quota_recovering_accounts)
         self.assertEqual(100_000, self.watch.accounts.seen_ms[self.good.key])
         self.assertEqual(self.good.fetched_at_ms, resumed.quota.accounts[0].account.fetched_at_ms)
         stream = io.StringIO()
         WatchRenderer(self.config, stream=stream, interactive=False).render(resumed)
-        self.assertIn("STALE / RECONNECTING", stream.getvalue())
+        self.assertIn("Retrying...", stream.getvalue())
         self.assertNotIn("up to 5 min old", stream.getvalue())
         self.assertNotIn("ERROR", stream.getvalue())
         self.fetch.return_value = (self.good,)
@@ -356,7 +356,7 @@ class QuotaResumeRecoveryTests(unittest.TestCase):
         self.fetch.return_value = (self.good,)
         self.clock.advance(30)
         self.watch.poll_once()
-        self.assertEqual(1, self.fetch.call_count)
+        self.assertEqual(2, self.fetch.call_count, "cadence is anchored to request start, not completion")
         self.assertIsNone(self.watch.accounts.recovery_until)
         self.watch.interval_seconds = 120
         self.watch.idle_interval_seconds = 360
@@ -458,7 +458,8 @@ class QuotaResumeRecoveryTests(unittest.TestCase):
         self.assertEqual((other.key,), resumed.quota_recovering_accounts)
         by_key = {row.account.key: row.account for row in resumed.quota.accounts}
         self.assertEqual("available", by_key[self.good.key].availability)
-        self.assertEqual("stale", by_key[other.key].availability)
+        self.assertEqual("error", by_key[other.key].availability)
+        self.assertFalse(by_key[other.key].quotas, "resume never extends the five-minute retention bound")
         for delay in (5, 10, 20, 25):
             self.clock.advance(delay)
             expired = self.watch.poll_once().projection

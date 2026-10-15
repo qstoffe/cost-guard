@@ -298,17 +298,17 @@ class AdapterTests(unittest.TestCase):
 
 
 class RefreshTests(unittest.TestCase):
-    def test_resume_retains_expired_network_or_ambiguous_failure_without_refreshing_age(self):
+    def test_resume_retains_recent_network_or_ambiguous_failure_without_extending_ttl(self):
         a = account()
         for observations in ({"parser_reason": "network_failure"}, {"http_status": 503}, {}):
             error = replace(a, quotas=(), availability="error", observations=observations)
             values, seen, stale = reconcile_accounts((a,), (error,), {a.key: 100_000},
-                                                     now_ms=700_000, recovering=True)
+                                                     now_ms=340_000, recovering=True)
             self.assertTrue(stale)
             self.assertEqual(a.quotas, values[0].quotas)
             self.assertEqual(a.fetched_at_ms, values[0].fetched_at_ms)
             self.assertEqual(100_000, seen[a.key])
-            expired, seen, stale = reconcile_accounts(values, (error,), seen, now_ms=760_000)
+            expired, seen, stale = reconcile_accounts(values, (error,), seen, now_ms=400_001, recovering=True)
             self.assertFalse(stale)
             self.assertFalse(expired[0].quotas)
             self.assertEqual(100_000, seen[a.key])
@@ -327,13 +327,13 @@ class RefreshTests(unittest.TestCase):
         a, b = account(identity="a"), account(identity="b")
         partial = replace(a, availability="partial", quotas=(replace(a.quotas[0], remaining_fraction=None),))
         values, seen, _ = reconcile_accounts((a, b), (partial, b), {a.key: 100_000, b.key: 100_000},
-                                             now_ms=700_000, recovering=True)
+                                             now_ms=340_000, recovering=True)
         self.assertEqual("stale", values[0].availability)
         self.assertEqual(100_000, seen[a.key])
-        self.assertEqual(700_000, seen[b.key])
-        expired, seen, _ = reconcile_accounts(values, (partial, b), seen, now_ms=760_000, update_seen=False)
+        self.assertEqual(340_000, seen[b.key])
+        expired, seen, _ = reconcile_accounts(values, (partial, b), seen, now_ms=400_001, update_seen=False)
         self.assertIsNone(expired[0].quotas[0].remaining_fraction)
-        self.assertEqual({a.key: 100_000, b.key: 700_000}, seen)
+        self.assertEqual({a.key: 100_000, b.key: 340_000}, seen)
 
     def test_recovery_rendering_is_generic_and_no_duplicate_error_state(self):
         for provider in ("openai", "github-copilot", "anthropic"):

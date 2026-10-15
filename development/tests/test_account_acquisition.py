@@ -14,6 +14,7 @@ import unittest
 from unittest.mock import patch
 
 from development.fixtures.watch_runtime import MutableSource, make_service
+from development.fixtures.account_workers import Provider, wait_for
 from src.accounts.acquisition import AccountAcquisition
 from src.accounts.discovery import AccountDiscovery
 from src.accounts.simple_http import SIMPLE_HTTP_PROVIDERS, SimpleHttpAccountProvider
@@ -24,41 +25,6 @@ from src.accounts.credentials import read_credentials
 from src.domain import AccountRef, AccountSnapshot, IntegrationHealth, QuotaComponent
 from src.reports import ReportRequest
 from src.watch import WatchCoordinator
-
-
-class Provider:
-    def __init__(self, name, *, gate=None, failure=None, callback=None):
-        self.provider_id = name
-        self.gate, self.failure, self.callback = gate, failure, callback
-        self.entered = threading.Event()
-        self.returned = threading.Event()
-        self.calls = 0
-
-    def probe(self):
-        return IntegrationHealth(True, True, "fixture")
-
-    def get_account_snapshots(self):
-        self.calls += 1
-        self.entered.set()
-        if self.callback:
-            self.callback()
-        if self.gate and not self.gate.wait(2):
-            raise TimeoutError("fixture deadline")
-        self.returned.set()
-        if self.failure:
-            raise self.failure
-        return (AccountSnapshot(AccountRef("fixture", self.provider_id, "account"), self.calls,
-                                self.provider_id, quotas=(QuotaComponent("quota", remaining_fraction=Decimal("0.5")),)),)
-
-
-def wait_for(predicate, *, timeout=2):
-    deadline = time.monotonic() + timeout
-    wake = threading.Event()
-    while time.monotonic() < deadline:
-        if predicate():
-            return
-        wake.wait(0.002)
-    raise AssertionError("fixture completion deadline exceeded")
 
 
 class DiscoveryTests(unittest.TestCase):
@@ -179,6 +145,11 @@ class DiscoveryTests(unittest.TestCase):
             self.assertNotEqual(first.revision, second.revision)
 
     def test_changed_credentials_discard_old_generation_without_concurrent_refresh(self):
+        for continuous in (False, True):
+            with self.subTest(continuous=continuous):
+                self.assert_credential_generation(continuous)
+
+    def assert_credential_generation(self, continuous):
         gate = threading.Event()
         self.addCleanup(gate.set)
         entered = threading.Event()
@@ -195,7 +166,7 @@ class DiscoveryTests(unittest.TestCase):
             self.auth.write_text(json.dumps({"openai": {"type": "api", "key": "fixture", "accountId": identity}}))
 
         write("old")
-        engine = AccountAcquisition((PinnedProvider(auth_json_path=str(self.auth)),), "fixture")
+        engine = AccountAcquisition((PinnedProvider(auth_json_path=str(self.auth)),), "fixture", continuous=continuous)
         self.addCleanup(engine.close)
         engine.start(1000)
         self.assertTrue(entered.wait(1))
@@ -203,8 +174,10 @@ class DiscoveryTests(unittest.TestCase):
         engine.start(2000)
         self.assertEqual(1, engine.checks_started)
         gate.set()
-        snapshots = engine.finish(3000)
+        wait_for(lambda: (engine.poll(3000), any(s.ref.account_id == "new" for s in engine.snapshots))[1])
+        snapshots = engine.snapshots
         self.assertEqual(["new"], [s.ref.account_id for s in snapshots])
+        self.assertEqual(2, engine.checks_started)
 
     def test_corrupted_storage_does_not_claim_account_was_signed_out(self):
         self.auth.write_text(json.dumps({"openai": {"type": "api", "key": "fixture"}}))
@@ -217,6 +190,58 @@ class DiscoveryTests(unittest.TestCase):
         snapshot = engine.poll(2000).snapshots[0]
         self.assertEqual("error", snapshot.availability)
         self.assertEqual("discovery_failure", snapshot.observations["parser_reason"])
+
+    def test_fast_retry_pins_only_failed_credentials_and_does_not_reobserve_healthy_neighbor(self):
+        calls = []
+
+        class PinnedProvider(OpenAIAccountProvider):
+            def get_account_snapshots(inner):
+                ids = tuple(record.ref.account_id for record in inner.credential_records)
+                calls.append(ids)
+                return tuple(AccountSnapshot(record.ref, 1000, "OpenAI", availability="error"
+                                             if record.ref.account_id == "a" else "available",
+                                             observations={"parser_reason": "network_failure"}
+                                             if record.ref.account_id == "a" else {})
+                             for record in inner.credential_records)
+
+        self.auth.write_text("{}")
+        with closing(sqlite3.connect(self.db)) as conn:
+            conn.execute("CREATE TABLE credential(id TEXT, integration_id TEXT, value TEXT, active INTEGER)")
+            for identity in ("a", "b"):
+                conn.execute("INSERT INTO credential VALUES(?,?,?,1)", (identity, "openai",
+                             json.dumps({"type": "api", "key": "fixture", "accountId": identity})))
+            conn.commit()
+        provider = PinnedProvider()
+        provider.auth_json_path, provider.credential_db_path = self.auth, self.db
+        clock = [0.0]
+        engine = AccountAcquisition((provider,), "fixture", continuous=True, clock=lambda: clock[0])
+        self.addCleanup(engine.close)
+        engine.start(1000)
+        wait_for(lambda: (engine.poll(1000), len(engine.snapshots) == 2)[1])
+        healthy = next(item for item in engine.snapshots if item.ref.account_id == "b")
+        clock[0] = 5
+        engine.poll(6000)
+        wait_for(lambda: len(calls) == 2)
+        updates = []
+
+        def completed():
+            update = engine.poll(6000)
+            if update:
+                updates.append(update)
+            return 0 not in engine._running
+
+        wait_for(completed)
+        self.assertEqual([("a", "b"), ("a",)], calls)
+        self.assertEqual(healthy, next(item for item in engine.snapshots if item.key == healthy.key))
+        self.assertNotIn(healthy.key, updates[-1].observed_keys)
+        for second in (15, 30, 60, 90):
+            clock[0] = second
+            update = engine.poll(int(second * 1000))
+            if update:
+                updates.append(update)
+            wait_for(completed)
+        self.assertEqual([("a", "b"), ("a",), ("a",), ("a", "b"), ("a", "b"), ("a", "b")], calls)
+        self.assertIn(healthy.key, updates[-1].observed_keys, "persistent failure cannot suppress healthy full inventories")
 
 
 class AcquisitionTests(unittest.TestCase):

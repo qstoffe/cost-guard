@@ -9,6 +9,8 @@ from unittest.mock import Mock
 from src.accounts.claude_code import ClaudeCodeAccountProvider, normalize_claude_usage
 from src.accounts.claude_transport import ClaudeUsageResult
 from src.watch.accounts import reconcile_accounts
+from src.accounts.acquisition import AccountAcquisition
+from development.fixtures.account_workers import wait_for
 
 
 LOGIN = {"loggedIn": True, "authMethod": "claude.ai", "apiProvider": "firstParty",
@@ -30,6 +32,33 @@ def provider(result=None, login=None):
 
 
 class ClaudeAccountTests(unittest.TestCase):
+    def test_shared_scheduler_reobserves_unchanged_claude_values_and_recovers_transport_failure(self):
+        p = provider()
+        valid = ClaudeUsageResult(ACCOUNT, usage())
+        p.usage_reader.side_effect = [valid, TimeoutError("private"), valid, valid]
+        clock = [0.0]
+        engine = AccountAcquisition((p,), "fixture", continuous=True, clock=lambda: clock[0],
+                                    wall_ms=lambda: int(100_000 + clock[0] * 1000))
+        self.addCleanup(engine.close)
+        engine.start(100_000)
+        updates = []
+
+        def completed():
+            update = engine.poll(int(100_000 + clock[0] * 1000))
+            if update:
+                updates.append(update)
+            return 0 not in engine._running
+
+        for second, expected in ((0, "success"), (30, "transient_failure"), (35, "success"), (65, "success")):
+            clock[0] = second
+            engine.poll(int(100_000 + second * 1000))
+            wait_for(completed)
+            self.assertEqual(expected, engine.refresh[0].outcome)
+        self.assertEqual(4, p.usage_reader.call_count)
+        self.assertEqual(65, engine.refresh[0].observed)
+        self.assertEqual([D(".75"), D(".5")], [q.remaining_fraction for q in engine.snapshots[0].quotas])
+        self.assertEqual(165_000, dict(updates[-1].observed_at_ms)[engine.snapshots[0].key])
+
     def test_report_watch_account_visibility_and_minute_cadence_with_other_providers(self):
         from development.fixtures.accounts import NormalizedProvider, account
         from development.fixtures.session_snapshots import make_snapshot
