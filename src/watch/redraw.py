@@ -18,7 +18,7 @@ def visible_signature(projection: WatchProjection) -> tuple[object, ...]:
             row.prompt.watch_delta_context_tokens, row.prompt.watch_next_context_tokens,
             row.is_latest_session_event, row.next_context_warning, row.next_context_warning_severity,
             row.prompt.watch_next_context_cached_ccost, row.prompt.watch_next_context_fresh_ccost,
-            row.tool, row.session_latest_ms, row.earlier,
+            row.tool, row.session_latest_ms, row.session_active, row.earlier,
         )
         for row in projection.rows
     )
@@ -33,7 +33,8 @@ def visible_signature(projection: WatchProjection) -> tuple[object, ...]:
 
 def transient_signature(projection: WatchProjection) -> tuple[object, ...]:
     """Wake-time dashboard changes: marker/retention transitions, notices, accounts and the Today label."""
-    return (tuple((row.session_id, row.prompt.event_id, row.marker, row.earlier) for row in projection.rows),
+    return (tuple((row.session_id, row.prompt.event_id, row.marker, row.earlier,
+                   row.session_active, row.session_latest_ms) for row in projection.rows),
             projection.recent_model_notice, projection.recent_promotion_notices,
             projection.quota, projection.quota_stale, projection.quota_recovering_accounts,
             projection.today_total, projection.today_label)

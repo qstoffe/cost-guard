@@ -57,6 +57,7 @@ All paths in this table are relative to the repository root. Test names live und
 - `development/fixtures/compact_reports.py`: cache-backed `report_service(test, ...)` factory, fixed model `Availability`, plain `rendered` reports and their `START`/`NOW` clock.
 - `development/fixtures/accounts.py` and `quota_rendering.py`: normalized account snapshots/fixed providers; fixed-time rolling quota projections with report/Watch account-section text.
 - `development/fixtures/watch_runtime.py`: mutable/live synthetic sources, deterministic account scheduler and Watch service composition. It preserves the existing report/account seam without depending on test modules.
+- `development/fixtures/watch_rows.py`: synthetic neutral prompt blocks/canonical snapshots for global grouping, chronological lifecycle order and divider regression tests (`test_watch_session_groups.py`).
 - `development/fixtures/opencode_v2_service.py`: fake loopback V2 services (transitional and current wire) that drop keep-alive sockets on stop like a real process.
 - `development/fixtures/opencode_v1_database.py`: the synthetic V1 SQLite history used for generation parity.
 - `development/fixtures/package_copy.py`: disposable distributable and config-only package copies and tool subprocesses for validator/config tests.

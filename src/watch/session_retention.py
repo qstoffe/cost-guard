@@ -33,6 +33,7 @@ def select_earlier_sessions(latest_prompt_ms: Mapping[str, int], count: int) -> 
     return tuple(session_id for _at_ms, session_id in ranked[:max(0, int(count))])
 
 
-def session_order(latest_start_ms: Iterable[tuple[str, int]]) -> list[str]:
-    """Ascending latest-prompt start; the newest session block is last."""
-    return [session_id for session_id, _at_ms in sorted(latest_start_ms, key=lambda item: (item[1], item[0]))]
+def session_order(session_times: Iterable[tuple[str, int]], *, active_sessions: set[str]) -> list[str]:
+    """History first, active/recent last; chronological within each, with ID ties."""
+    return [session_id for session_id, _at_ms in sorted(
+        session_times, key=lambda item: (item[0] in active_sessions, item[1], item[0]))]

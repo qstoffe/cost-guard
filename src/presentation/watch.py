@@ -430,16 +430,22 @@ class WatchRenderer:
 
     def _render_table(self, projection: WatchProjection) -> None:
         rows, styles, activities, headers = self._table_rows(projection)
+        sessions = list(dict.fromkeys(row.session_id for row in projection.rows))
+        active = {row.session_id for row in projection.rows if row.session_active}
+        separators = [headers[index] for index, session_id in enumerate(sessions)
+                      if index > 0 and session_id in active and sessions[index - 1] not in active]
         if not rows:
             rows, styles = [_empty_row("No prompts since Watch started")], [("watchToolActivity",) + (None,) * 5]
         lines = render_table(_WATCH_COLUMNS, rows,
                              styles=styles, styler=self.styler,
+                             separator_before_rows=separators,
                              leading_spans={index: 2 for index in headers})
         if lines and activities:
             terminal_width = self._content_width(minimum=1)
             span_width = max(0, min(len(lines[0]), terminal_width) - 4)
             for row_index, (kind, marker, tool) in activities.items():
-                lines[3 + row_index] = self._activity_line(kind, marker, tool, span_width) if terminal_width >= 4 else "|"[:max(0, terminal_width)]
+                line_index = 3 + row_index + sum(index <= row_index for index in separators)
+                lines[line_index] = self._activity_line(kind, marker, tool, span_width) if terminal_width >= 4 else "|"[:max(0, terminal_width)]
         for line in lines:
             self._write(line)
         width = self._content_width()

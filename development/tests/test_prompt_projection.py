@@ -75,6 +75,27 @@ class PromptProjectionTests(unittest.TestCase):
         self.assertEqual("", block.total_mix_text)
         self.assertEqual("", block.total_ictx_cost_text)
         self.assertIsNone(block.rows[0].incoming_context_ccost)
+        self.assertIsNone(block.rows[0].completed_at_ms)
+
+    def test_terminal_timestamp_projects_existing_analysis_evidence_not_duration(self):
+        for generation in ("v1", "v2"):
+            snapshot = make_snapshot(generation=generation)
+            bundle = analyze_snapshot(snapshot, now_ms=10_000)
+            projector = PromptRowProjector(snapshot=snapshot, bundle=bundle, catalog=self.prices, config={})
+
+            for record in bundle.prompts:
+                row = projector.prompt(replace(record, duration_ms=999_999))
+                self.assertEqual(None if record.in_progress else record.terminal_time_ms or None, row.completed_at_ms)
+            for record in bundle.compactions:
+                row = projector.compaction(record, 1)
+                self.assertEqual(None if record.in_progress else record.completed_at_ms or None, row.completed_at_ms)
+
+    def test_missing_terminal_time_stays_unknown(self):
+        record = replace(self.record, in_progress=False, terminal_time_ms=0, duration_ms=999_999)
+
+        row = self.projector().prompt(record)
+
+        self.assertIsNone(row.completed_at_ms)
 
     def test_range_filter_does_not_erase_the_unfiltered_latest_context_anchor(self):
         complete = self.block()
@@ -110,3 +131,5 @@ class PromptProjectionTests(unittest.TestCase):
         self.assertEqual("/compact (auto)", compact.label)
         self.assertEqual(Decimal(0), compact.ccost)
         self.assertEqual(2, compact.prompt_number)
+        record = next(item for item in bundle.compactions if item.user_message_id == compact.event_id)
+        self.assertEqual(record.completed_at_ms, compact.completed_at_ms)
