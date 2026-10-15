@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.55 — 2026-10-15
+
+- Global Watch keeps historical session blocks above active/recent blocks in one unchanged six-column table, with one border-style divider only when both groups exist. Active/recent headers and ordering use latest prompt/compaction start; history uses the latest existing terminal/completion evidence, falling back to event start when an end is unavailable. Session ID breaks ties.
+- Sessions remain active through the existing finite completion/abort highlight, then move to history on idle wakes using the event end rather than observation/expiry time. New activity moves the whole block back; persistent error markers do not keep history active. Row selection, Earlier accounting, scoped Watch, colors, subtotals, warnings, activity/Skills rows and quotas are preserved.
+
 ## v80.54 — 2026-10-15
 
 - Behavior-neutral cleanup: prompt-block projection (one-shot detail reports and every changed Watch root) indexes model replies once for effort labels instead of rescanning all session messages per prompt, and builds one shared context-history index instead of two. A synthetic 2,000-prompt root fell from 0.76 s to 0.26 s (1,000: 0.25 s to 0.12 s) with identical projections. Watch rendering drops an unused column indirection and the code map no longer mentions local product ZIPs.
@@ -20,14 +25,9 @@
 - Current context-warning markers follow `Next Ictx` on each displayed session's latest relevant row. Numbering and grouped footnotes derive from active visible rows; severity colors, warning deduplication, compaction behavior and expiry remain synchronized.
 - Removed the dedicated local release-ZIP builder/test and routine archive-generation instructions. Source validation, normal tests, Diagnostics and current-main source distribution remain.
 
-## v80.50 — 2026-10-14
-
-- Watch keeps `[Earlier]` startup-only and subject to the shared global prompt-row cap, with no special protection or backfill; a prompt or `/compact` transitions it under the existing lifecycle. Session headers put timestamps first, use time-only for the configured local day, reserve aligned running `▶` prefixes and retain one shared Earlier exclusion explanation.
-- Running prompts and sessions use persistent `▶` indicators. Context-warning markers move from session headers to the affected Model / effort value; independent model/effort truncation preserves the full marker within the fixed column. Accounting, warning calculations and ordering are unchanged.
-
 ## Earlier v80 history
 
-- v80.49 added deletion-resilient current-local-day Watch CCost. v80.48 replaced idle session expiry with one global newest-prompt budget (`watchDashboardMaxRows`, default 12), added startup `[Earlier]` rows, latest-start session ordering and idle account redraw. v80.43–v80.47 added latest-100 priceable Token Mix, 12-hour New Models, grouped warnings and faster Watch CCost (67–70→43–47 ms).
+- v80.50 made Earlier rows startup-only under the global soft cap, added timestamp-first headers/running `▶` prefixes and moved warning markers to prompt rows. v80.49 added deletion-resilient current-local-day Watch CCost. v80.48 replaced idle expiry with a global newest-prompt budget (`watchDashboardMaxRows`, default 12), Earlier rows, latest-start session ordering and idle account redraw. v80.43–v80.47 added latest-100 priceable Token Mix, 12-hour New Models, grouped warnings and faster Watch CCost (67–70→43–47 ms).
 - v80.35–v80.42 added native abort-cause labels (`[ABORTED by user]` only for matched live V2 interrupts), neutral tool-call endings, stable account ordering, refactored hot paths, bounded startup recovery/typed source errors, retained tool/skill evidence and stopped counting proven V2 tool continuations as `Calls`.
 - v80.34 pooled V2 reads, memoized model identity, overlapped report acquisition and bounded Watch discovery/startup/resync with identical output (report ~2.1→0.65 s, Watch startup ~6.2→0.65 s, resync 13→1.4 s); Diagnostics gained all-account evidence and Watch geometry.
 - v80.32–v80.33 separated Watch account refresh, prompt projection/report orchestration and source normalization; shared catalog ancestry and bounded sampling; moved fixtures (67→43 test-import edges, 46 fewer test-import dependencies), enforced bounded routine/coupling debt without raising caps, standardized `Context:` warning explanations, and added code maps/inventory/layer guards. Source/cache/billing semantics stayed unchanged.

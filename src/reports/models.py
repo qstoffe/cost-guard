@@ -85,6 +85,8 @@ class PromptProjection:
     background_only: bool = False
     abort_reason: str = ""
     ended_after_tool_calls: bool = False
+    # Existing analysis terminal/event evidence; absent while running or unknown.
+    completed_at_ms: int | None = None
 
 
 @dataclass(frozen=True, slots=True)

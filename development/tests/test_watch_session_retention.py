@@ -185,9 +185,9 @@ class EarlierSessionTests(unittest.TestCase):
         observed = tracker(started_at_ms=NOW)
         observed.set_earlier_sessions(("A", "B"))
         rows = observed.project(blocks, snapshots, now_ms=NOW + 20)
-        self.assertEqual([("B", 2), ("A", 3)], shown(rows))
+        self.assertEqual([("A", 3), ("B", 2)], shown(rows))
         self.assertEqual([False, False], [row.earlier for row in rows])
-        self.assertTrue(rows[0].prompt.in_progress)
+        self.assertTrue(rows[1].prompt.in_progress)
 
     def test_evicted_representatives_are_not_resurrected(self):
         blocks, snapshots = self.history()
@@ -267,10 +267,10 @@ class EarlierSessionTests(unittest.TestCase):
 
 
 class OrderingAndHeaderTests(unittest.TestCase):
-    def test_blocks_follow_exact_latest_prompt_start_not_completion_or_polling(self):
+    def test_active_blocks_follow_exact_latest_prompt_start_not_completion_or_polling(self):
         blocks, snapshots = inputs(A=(prompt(1, NOW + 1, duration_ms=50 * MINUTE),), B=(prompt(1, NOW),),
                                    C=(prompt(1, NOW + 1),))
-        observed = tracker()
+        observed = tracker(recent_seconds=120 * 60)
         self.assertEqual(["B", "A", "C"], block_order(observed.project(blocks, snapshots, now_ms=NOW + MINUTE)),
                          "millisecond precision within one displayed minute; session ID breaks ties")
         blocks["B"] = replace(blocks["B"], title="Renamed", rows=(prompt(1, NOW, duration_ms=90 * MINUTE),))

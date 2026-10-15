@@ -1,6 +1,16 @@
-# Watch activity — v80.44
+# Watch lifecycle and activity — v80.55
 
 Watch derives prompt activity from already-hydrated normalized snapshots and existing causal prompt scope, including attributed task children. It does not run tools, scan skill files, mutate OpenCode data, or change usage, billing, token accounting or quota refresh.
+
+## Global session groups
+
+One shared six-column table shows historical sessions first and active/recent sessions last, with exactly one normal horizontal table rule between them only when both groups are nonempty. There are no extra headings or settings. Session blocks remain contiguous, with one header and unchanged internal prompt/compaction order, subtotals, context warnings and activity rows.
+
+A session is active/recent while any prompt is running or has the existing finite completion/abort highlight controlled by `watchRecentEventSeconds`. This lower group's ordering and configured-local `HH:mm` header use the latest prompt/compaction start, with session-ID ties. A new event updates its position; completion, abort, tools and polling do not. The whole block stays there through its last finite highlight, not just until its last running prompt ends.
+
+After that highlight expires, the existing idle update redraws the dashboard and moves the block to history. Historical ordering and headers use the latest supported prompt/compaction end from the source-neutral analysis projection, never the observation, polling, group-transition or highlight-expiry time. When an end is unavailable, the event's start is the deterministic fallback, not an invented completion or an observation-derived duration. Historical blocks stay stable unless new authoritative event information arrives or the session is reactivated. A new prompt/compaction moves the block back to the lower group immediately under the same existing lifecycle.
+
+Persistent error `!` markers retain their red styling and existing lifetime even in history; the marker string alone never makes a session active/recent. No new timer, retention rule, completion inference or accounting is introduced. The global row soft cap and running/recent protection apply before grouping. Ordering uses all available session event information, including events omitted by the cap. Startup `[Earlier]` representatives keep their selection, marker, date-aware timestamp format, retention and exclusion from run usage; their header uses the supported end or the same stable event-start fallback. Session-specific Watch and ordinary reports are unchanged.
 
 ## Prompt activity rows
 

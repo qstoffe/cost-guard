@@ -323,6 +323,30 @@ class WatchRowTracker:
         observed = self._observed.get((row.session_id, _event_key(row.prompt)))
         return observed is not None and self._recent_completion(observed, now_ms)
 
+    def _session_state(
+        self, block: SessionPromptBlock, rows: list[WatchRow], now_ms: int,
+    ) -> tuple[bool, int]:
+        """Order from all available events, never from only cap-selected rows.
+
+        Missing ends fall back to reliable event starts, not observation time or
+        duration (retained post-compaction durations can be observation-based).
+        Permanent error markers do not participate in finite recent membership.
+        """
+        if self.session_scope:
+            return False, max(row.prompt.at_ms for row in rows)
+        # Error rows keep their existing cap protection, but their red marker is
+        # not a finite completion/abort highlight and cannot establish membership.
+        active = any(
+            row.prompt.in_progress or (self._protected(row, now_ms)
+                                       and (row.prompt.aborted or not row.prompt.watch_error))
+            for row in rows
+        )
+        prompts = {_event_key(prompt): prompt for prompt in block.rows}
+        prompts.update((_event_key(row.prompt), row.prompt) for row in rows)
+        if active:
+            return True, max(prompt.at_ms for prompt in prompts.values())
+        return False, max(prompt.completed_at_ms or prompt.at_ms for prompt in prompts.values())
+
     def project(
         self,
         blocks: Mapping[str, SessionPromptBlock],
@@ -332,7 +356,8 @@ class WatchRowTracker:
         skill_origins_by_root: Mapping[str, Mapping[str, Mapping[str, str]]] | None = None,
     ) -> tuple[WatchRow, ...]:
         rows: list[WatchRow] = []
-        latest_start: dict[str, int] = {}
+        session_times: dict[str, int] = {}
+        active_sessions: set[str] = set()
         for session_id, block in blocks.items():
             snapshot = snapshots.get(session_id)
             if snapshot is None:
@@ -348,7 +373,9 @@ class WatchRowTracker:
             if not session_rows:
                 continue
             session_rows.sort(key=self._sort_key)
-            latest_start[session_id] = max(row.prompt.at_ms for row in session_rows)
+            active, session_times[session_id] = self._session_state(block, session_rows, now_ms)
+            if active:
+                active_sessions.add(session_id)
             origins = (skill_origins_by_root or {}).get(block.session_id, {})
             rows.extend(self._attach_activity(session_rows, snapshot, now_ms, sequence_by_event, origins))
 
@@ -357,11 +384,12 @@ class WatchRowTracker:
         by_session: dict[str, list[WatchRow]] = {}
         for row in selected:
             by_session.setdefault(row.session_id, []).append(row)
-        for session_id in [item for item in self._earlier if item in latest_start and item not in by_session]:
+        for session_id in [item for item in self._earlier if item in session_times and item not in by_session]:
             del self._earlier[session_id]  # an evicted representative never returns
-        # Each block keeps canonical prompt order; blocks follow their latest prompt start.
-        ordered = session_order((session_id, latest_start[session_id]) for session_id in by_session)
+        # Selection is unchanged; reorder only whole blocks after the global cap.
+        ordered = session_order(((session_id, session_times[session_id]) for session_id in by_session),
+                                active_sessions=active_sessions)
         return tuple(
-            replace(row, session_latest_ms=latest_start[session_id])
+            replace(row, session_latest_ms=session_times[session_id], session_active=session_id in active_sessions)
             for session_id in ordered for row in by_session[session_id]
         )
