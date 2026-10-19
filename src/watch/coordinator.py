@@ -134,6 +134,9 @@ class WatchCoordinator:
         self._resume_recovery_deadline_ms = 0
         self._closed = False
         self.startup_quiet_roots = 0
+        self._defer_history = False
+        self._startup_measurement_start = 0.0
+        self.report_service.metrics.mode = "watch-session" if session_id else "watch-global"
 
     def _record_refresh_duration(self, seconds: float) -> None:
         value = max(0.001, float(seconds))
@@ -192,10 +195,11 @@ class WatchCoordinator:
         pending = []
         force_fresh = set(force_fresh_ids)
         self.report_service.set_now_ms(now_ms)
+        self.report_service.invalidate_roots(tuple(root.session_id for root in roots))
+        prepared = self.report_service.prepare_roots(roots, detail=True, force_fresh_ids=force_fresh_ids)
         for root in roots:
-            self.report_service.invalidate_roots((root.session_id,))
             block, snapshot, bundle = self.report_service.build_watch_root(
-                root, force_fresh=root.session_id in force_fresh
+                root, force_fresh=root.session_id in force_fresh and root.session_id not in prepared
             )
             pending.append((root.session_id, block, snapshot, bundle))
         for root_id, block, snapshot, bundle in pending:
@@ -207,7 +211,7 @@ class WatchCoordinator:
         return tuple(root_id for root_id, *_ in pending)
 
     def _refresh_quota(self, observation: CatalogObservation, *, now_ms: int, force: bool = False,
-                       allow_history: bool = True) -> None:
+                       allow_history: bool = True, fresh_root_ids: Sequence[str] = ()) -> None:
         # Source changes/5m refresh local usage; account requests keep their cadence.
         account_changed = self.accounts.refresh(now_ms=now_ms)
         self.report_service.record_account_display(self.accounts.diagnostics())
@@ -215,9 +219,15 @@ class WatchCoordinator:
             self.quota = self.report_service.project_watch_accounts(self.accounts.snapshots)[0]
         if not allow_history or not self.today_ccost.refresh_due(now_ms, self._last_quota_refresh_ms, force):
             return
-        self.quota = self.today_ccost.refresh_available_history(
-            self.report_service, observation.sessions, self.accounts.snapshots, now_ms
-        )
+        if self._defer_history:
+            self.today_ccost.defer_history(observation.sessions, now_ms, active_root_ids=tuple(observation.active_candidates),
+                                           fresh_root_ids=fresh_root_ids, live_root_ids=tuple(observation.live_candidates))
+            self.quota = self.report_service.project_watch_accounts(self.accounts.snapshots)[0]
+        else:
+            self.quota = self.today_ccost.refresh_available_history(
+                self.report_service, observation.sessions, self.accounts.snapshots, now_ms,
+                active_root_ids=tuple(observation.active_candidates), fresh_root_ids=fresh_root_ids,
+                live_root_ids=tuple(observation.live_candidates))
         self._last_quota_refresh_ms = now_ms
 
     @staticmethod
@@ -251,14 +261,24 @@ class WatchCoordinator:
 
     def _render(self, renderer, projection: WatchProjection) -> None:
         """Draw the full dashboard and remember exactly what is now on screen."""
-        renderer.render(projection)
+        with self.report_service.metrics.measure("rendering"):
+            renderer.render(projection)
         self._rendered_projection = projection
+        elapsed = (time.perf_counter() - self._startup_measurement_start) * 1000
+        self.report_service.metrics.milliseconds.setdefault("first_rendered_dashboard", elapsed)
+        if not projection.today_pending:
+            self.report_service.metrics.milliseconds.setdefault("fully_rendered_dashboard", elapsed)
 
     def _token_valuation(self):
         return self.report_service.token_category_valuation()
 
     def _projection(self, *, now_ms: int, status: str = "", status_active: bool = False,
-                    scanned: bool = False) -> WatchProjection:
+                     scanned: bool = False) -> WatchProjection:
+        with self.report_service.metrics.measure("projection"):
+            return self._build_projection(now_ms=now_ms, status=status, status_active=status_active, scanned=scanned)
+
+    def _build_projection(self, *, now_ms: int, status: str = "", status_active: bool = False,
+                          scanned: bool = False) -> WatchProjection:
         check_pending()
         rows = self.tracker.project(
             self.blocks, self.snapshots, now_ms=now_ms, skill_origins_by_root=self._skill_origins_by_root
@@ -301,6 +321,7 @@ class WatchCoordinator:
             run_total=self.token_mix.project_total(valuation),
             today_total=self.today_ccost.project_from_report(self.report_service, now_ms),
             today_label=self.today_ccost.label(now_ms),
+            today_pending=self.today_ccost.needs_history_refresh(now_ms),
             session_subtotals=session_subtotals,
         )
         self._last_projection = projection
@@ -309,45 +330,72 @@ class WatchCoordinator:
                         startup_quiet_roots=self.startup_quiet_roots)
         return projection
 
-    def initialize(self) -> WatchCycle:
+    def initialize(self, *, defer_history: bool = False) -> WatchCycle:
         refresh_started = time.monotonic()
+        self._startup_measurement_start = time.perf_counter()
+        self._defer_history = defer_history
         now_ms = int(self.clock_ms())
         self.report_service.set_now_ms(now_ms)
         observation = observe_catalog(self.source, session_id=self.session_id)
+        self._record_catalog_counts(observation)
+        self.observation = observation
         roots = self._selected_roots(observation)
         hydrated = (self._hydrate(roots, now_ms=now_ms) if self.session_id is not None
                     else self._hydrate_startup(roots, now_ms=now_ms))
         self.observation = observation
         self._record_refresh_duration(time.monotonic() - refresh_started)
-        self.quota = self.today_ccost.refresh_available_history(
-            self.report_service, observation.sessions, self.accounts.snapshots, now_ms
-        )
+        if defer_history:
+            self.today_ccost.defer_history(observation.sessions, now_ms, active_root_ids=tuple(observation.active_candidates),
+                                           fresh_root_ids=hydrated, live_root_ids=tuple(observation.live_candidates))
+        else:
+            self.today_ccost.schedule_history(self.report_service, observation.sessions, now_ms,
+                                              active_root_ids=tuple(observation.active_candidates), fresh_root_ids=hydrated,
+                                              live_root_ids=tuple(observation.live_candidates))
+            while self.today_ccost.history_pending:
+                self.today_ccost.advance_history(self.report_service, now_ms)
+        self.quota = self.report_service.project_watch_accounts(self.accounts.snapshots)[0]
+        self._last_quota_refresh_ms = now_ms
         self.accounts.begin(now_ms)
         self.model_discovery.refresh(now_ms)
-        self._refresh_quota(observation, now_ms=now_ms, force=True)
+        self._refresh_quota(observation, now_ms=now_ms, allow_history=False)
         if self.live:
             self._start_event_pump()
         completed_ms = int(self.clock_ms())
         self._last_cycle_end_ms = completed_ms
-        return WatchCycle(
+        cycle = WatchCycle(
             self._projection(now_ms=completed_ms, scanned=True),
             tuple(root.session_id for root in roots),
             hydrated,
             resynced=True,
         )
+        self.report_service.metrics.milliseconds["first_usable_dashboard"] = (time.perf_counter() - self._startup_measurement_start) * 1000
+        self._record_full_dashboard(cycle.projection)
+        return cycle
+
+    def _record_catalog_counts(self, observation: CatalogObservation) -> None:
+        self.report_service.metrics.counts.update(catalog_sessions=len(observation.sessions), catalog_roots=len(observation.roots))
+
+    def _record_full_dashboard(self, projection: WatchProjection) -> None:
+        metrics = self.report_service.metrics
+        if not projection.today_pending and "fully_populated_dashboard" not in metrics.milliseconds:
+            metrics.milliseconds["fully_populated_dashboard"] = (time.perf_counter() - self._startup_measurement_start) * 1000
 
     def _hydrate_startup(self, roots: Sequence[NormalizedSession], *, now_ms: int) -> tuple[str, ...]:
         """Bounded startup hydration plus the one-time Earlier baseline (actual prompt starts, never running).
 
         Metadata only bounds the sample; quiet cached roots hydrate only when chosen as Earlier.
         """
-        sample = roots[:max(INITIAL_ROOT_SAMPLE, self.earlier_sessions)]
+        active = self.observation.active_candidates if self.observation is not None else frozenset()
+        baseline = {root.session_id for root in roots[:max(INITIAL_ROOT_SAMPLE, self.earlier_sessions)]}
+        sample = tuple(root for root in roots if root.session_id in baseline or root.session_id in active)
+        self.report_service.metrics.add("dashboard_candidate_roots", len(sample))
         quiet: dict[str, int] = {}
         for root in sample:
-            latest = self.report_service.watch_root_latest_prompt_ms(root)
+            latest = None if root.session_id in active else self.report_service.watch_root_latest_prompt_ms(root)
             if latest is not None and latest < self.started_at_ms:
                 quiet[root.session_id] = latest
-        hydrated = self._hydrate([root for root in sample if root.session_id not in quiet], now_ms=now_ms)
+        hydrated = self._hydrate([root for root in sample if root.session_id not in quiet], now_ms=now_ms,
+                                 force_fresh_ids=tuple(self.observation.live_candidates) if self.observation is not None else ())
         latest_ms = dict(quiet)
         for root_id in hydrated:
             prompts = self.blocks[root_id].rows
@@ -363,7 +411,7 @@ class WatchCoordinator:
     def initialize_with_recovery(self, renderer) -> WatchCycle:
         """Recover unfinished startup with the same selected-source lifecycle."""
         try:
-            return self.initialize()
+            return self.initialize(defer_history=True)
         except SourceError as error:
             self._discard_initialization()
             return self._recover_source(renderer, error, initializing=True)
@@ -397,6 +445,10 @@ class WatchCoordinator:
         changed = {root_id for root_id, revision in observation.revisions.items()
                    if old_revisions.get(root_id) != revision}
         changed.update(root_id for root_id in old_revisions if root_id not in observation.revisions)
+        if old is not None:
+            before = root_activity(old.sessions, old.root_by_session)
+            after = root_activity(observation.sessions, observation.root_by_session)
+            changed.update(root_id for root_id, activity in after.items() if before.get(root_id) != activity)
         if force_resync:
             changed.update(root_id for root_id in self.blocks if root_id in observation.revisions)
         for session_id in hinted_session_ids:
@@ -413,8 +465,13 @@ class WatchCoordinator:
         self._resume_pending = False
         old = self.observation
         observation = observe_catalog(self.source, session_id=self.session_id)
+        self._record_catalog_counts(observation)
         roots = self._selected_roots(observation)
         changed = self._changed_roots(old, observation, force_resync=force_resync, hinted_session_ids=hinted_session_ids)
+        newly_active = observation.active_candidates - (old.active_candidates if old is not None else frozenset())
+        newly_live = observation.live_candidates - (old.live_candidates if old is not None else frozenset())
+        newly_active |= newly_live
+        changed.update(newly_active)
         current_roots = {item.session_id: item for item in roots}
         active_roots = {
             root_id for root_id, block in self.blocks.items()
@@ -422,10 +479,16 @@ class WatchCoordinator:
         }
         removed = set(self.blocks) - set(current_roots)
 
-        hydrate_ids = changed | active_roots
+        activity = root_activity(observation.sessions, observation.root_by_session)
+        relevant = {root_id for root_id in changed if root_id in self.blocks or root_id in observation.active_candidates
+                    or activity.get(root_id, 0) >= self.started_at_ms - int(self.recent_seconds * 1000)}
+        hydrate_ids = relevant | active_roots
+        # Accounting has its own daily candidate/revision plan; a changed old
+        # archived or inactive tree does not imply a dashboard snapshot.
+        self.report_service.invalidate_roots(tuple(changed - hydrate_ids))
         hydrate = [current_roots[root_id] for root_id in hydrate_ids if root_id in current_roots]
         hydrated = self._hydrate(
-            hydrate, now_ms=now_ms, force_fresh_ids=active_roots
+            hydrate, now_ms=now_ms, force_fresh_ids=active_roots | newly_live
         ) if hydrate else ()
         for root_id in removed:
             self.blocks.pop(root_id, None)
@@ -435,12 +498,13 @@ class WatchCoordinator:
 
         self.observation = observation
         self._record_refresh_duration(time.monotonic() - refresh_started)
-        if changed:
-            self._refresh_quota(observation, now_ms=now_ms, force=True)
+        if changed or observation.active_candidates:
+            self._refresh_quota(observation, now_ms=now_ms, force=True, fresh_root_ids=hydrated)
         else:
-            self._refresh_quota(observation, now_ms=now_ms, force=False)
+            self._refresh_quota(observation, now_ms=now_ms, force=False, fresh_root_ids=hydrated)
         completed_ms = int(self.clock_ms())
         self._last_cycle_end_ms = completed_ms
+        self.report_service.metrics.milliseconds["watch_refresh"] = (time.monotonic() - refresh_started) * 1000
         return WatchCycle(
             self._projection(now_ms=completed_ms, scanned=True),
             tuple(sorted(changed)),
@@ -539,7 +603,11 @@ class WatchCoordinator:
 
     def _advance(self, renderer, cycle: WatchCycle) -> WatchCycle:
         """Wait one cadence, poll the selected source and render the result."""
-        if self.live:
+        if self.today_ccost.history_pending and int(self.clock_ms()) - (self._last_cycle_end_ms or 0) < self.interval_seconds * 1000:
+            return self._enrich_history(renderer)
+        if self.today_ccost.history_pending:
+            resync, hints = False, ()
+        elif self.live:
             resync, hints = self._v2_wait(renderer)
         else:
             self._v1_wait(renderer)
@@ -561,6 +629,29 @@ class WatchCoordinator:
         else:
             renderer.render_status(cycle.projection)
         return cycle
+
+    def _enrich_history(self, renderer) -> WatchCycle:
+        """Enrich only after a usable dashboard is drawn, yielding between bounded batches."""
+        try:
+            cycle = self.enrich_once()
+        except SourceError as error:
+            cycle = self._recover_source(renderer, error)
+        previous = self._rendered_projection
+        if previous is None or self._visible_signature(previous) != self._visible_signature(cycle.projection):
+            self._render(renderer, cycle.projection)
+        else:
+            renderer.render_status(cycle.projection)
+        return cycle
+
+    def enrich_once(self) -> WatchCycle:
+        """One bounded, renderer-independent history slice; errors retain their source identity."""
+        now_ms = int(self.clock_ms())
+        self.today_ccost.advance_history(self.report_service, now_ms)
+        self._refresh_quota(self.observation, now_ms=now_ms, allow_history=False)
+        self.quota = self.report_service.project_watch_accounts(self.accounts.snapshots)[0]
+        projection = self._projection(now_ms=int(self.clock_ms()))
+        self._record_full_dashboard(projection)
+        return WatchCycle(projection, (), ())
 
     def _recover_source(self, renderer, error: SourceError, *, initializing: bool = False) -> WatchCycle:
         """Keep Watch alive across transient failures of the already-selected source.
@@ -612,7 +703,7 @@ class WatchCoordinator:
                     refresh()
                 if initializing:
                     self.report_service.invalidate_source_observations()
-                cycle = self.initialize() if initializing else self.poll_once(force_resync=self.live)
+                cycle = self.initialize(defer_history=self._defer_history) if initializing else self.poll_once(force_resync=self.live)
             except SourceError as exc:
                 if initializing:
                     self._discard_initialization()

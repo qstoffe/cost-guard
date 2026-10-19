@@ -175,9 +175,10 @@ def source_with_service(payload: dict | None = None):
 class CurrentV2Service:
     """Synthetic current OpenCode 2 global/cursor API."""
 
-    def __init__(self, *, password: str = "secret", message_path: str = "session-message"):
+    def __init__(self, *, password: str = "secret", message_path: str = "session-message", session_page_size: int = 1):
         self.password = password
         self.message_path = message_path
+        self.session_page_size = max(1, session_page_size)
         self.requests: list[tuple[str, str | None]] = []
         self.server: ThreadingHTTPServer | None = None
         self.thread: threading.Thread | None = None
@@ -275,12 +276,12 @@ class CurrentV2Service:
                     return
                 if parsed.path == "/api/session":
                     cursor = query.get("cursor", [None])[0]
-                    if cursor is None:
-                        self._json({"data": [owner.sessions[0]], "cursor": {"next": "sessions:2"}})
-                    elif cursor == "sessions:2":
-                        self._json({"data": [owner.sessions[1]], "cursor": {"next": "sessions:end"}})
-                    elif cursor == "sessions:end":
-                        self._json({"data": [], "cursor": {}})
+                    if cursor is None or cursor == "sessions:end" or (cursor.startswith("sessions:") and cursor[9:].isdigit()):
+                        offset = 0 if cursor is None else len(owner.sessions) if cursor == "sessions:end" else int(cursor[9:]) - 1
+                        page = owner.sessions[offset:offset + owner.session_page_size]
+                        next_offset = offset + len(page)
+                        next_cursor = f"sessions:{next_offset + 1}" if next_offset < len(owner.sessions) else "sessions:end"
+                        self._json({"data": page, "cursor": {"next": next_cursor} if page else {}})
                     else:
                         self._json({"error": "bad cursor"}, 400)
                     return

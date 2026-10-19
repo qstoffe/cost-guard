@@ -75,13 +75,19 @@ def batch_revisions(connection: sqlite3.Connection, session_ids: Sequence[str]) 
     unique = tuple(dict.fromkeys(str(value) for value in session_ids if str(value)))
     if not unique:
         return {}
+    # Bound SQLite parameters, not history. All requested roots are still probed.
+    if len(unique) > 400:
+        result: dict[str, str] = {}
+        for offset in range(0, len(unique), 400):
+            result.update(batch_revisions(connection, unique[offset:offset + 400]))
+        return result
     values_sql = ",".join("(?)" for _ in unique)
     rows = connection.execute(
         f"""
         WITH RECURSIVE requested(root_id) AS (VALUES {values_sql}),
         tree(root_id, id) AS (
           SELECT r.root_id, s.id FROM requested r JOIN session s ON s.id = r.root_id
-          UNION ALL
+          UNION
           SELECT t.root_id, s.id FROM session s JOIN tree t ON s.parent_id = t.id
         ),
         msg_state AS (

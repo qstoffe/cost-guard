@@ -231,7 +231,11 @@ class WatchEvidenceTests(unittest.TestCase):
             else:
                 yield value
 
-        # Numbers/flags only: no title, prompt, model, session or path text can leak.
+        acquisition = result["acquisition"]
+        self.assertEqual("watch-global", acquisition.pop("mode"))
+        self.assertIn(acquisition.pop("generation"), {"v1", "v2"})
+        # Only explicit mode/generation enums add text; other leaves remain
+        # numbers/flags, never title, prompt, model, session or path text.
         self.assertTrue(all(value is None or isinstance(value, (bool, int, float)) for value in leaves(result)))
 
     def test_terminal_facts_are_booleans_and_sizes_only(self) -> None:

@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 from collections import Counter
+from dataclasses import replace
 from typing import Sequence
 
 from src.analysis.models import TraceEntry
 from src.analysis.quota_pace import quota_pace
 from src.analysis.valuation import billed_spend, comparison_cost, unique_usage
 from src.domain import AccountSnapshot, CostDisposition
+from src.domain.acquisition import AcquisitionMetrics
 from src.pricing.catalog import PricingCatalog, canonical_model_name
 
 from .models import AccountProjection, AccountsQuotasProjection
@@ -72,6 +74,40 @@ def account_projections(
             actual_billing(today_start_ms), actual_billing(month_start_ms), pace,
         ))
     return tuple(projections)
+
+
+def native_watch_accounts(accounts: Sequence[AccountSnapshot], catalog: PricingCatalog, *, now_ms: int,
+                          timezone_id: str, workday_calendar: str) -> tuple[AccountProjection, ...]:
+    """Visible Watch capacity/status/Pace has no historical attribution dependency."""
+    projections = account_projections(accounts, (), catalog, now_ms=now_ms, today_start_ms=0, month_start_ms=0,
+                                      timezone_id=timezone_id, workday_calendar=workday_calendar)
+    return tuple(replace(item, ccost_scopes=tuple((label, None) for label, _value in item.ccost_scopes),
+                         billed_today=None, billed_month=None) for item in projections)
+
+
+class WatchAccountProjection:
+    """Native account publication reuses unchanged local accounting, never source I/O."""
+
+    def __init__(self, metrics: AcquisitionMetrics) -> None:
+        self.metrics = metrics
+        self._entries: tuple[TraceEntry, ...] | None = None
+        self._catalog: PricingCatalog | None = None
+        self._boundaries: tuple[int, int] | None = None
+        self._local: tuple[AccountsQuotasProjection, tuple[TraceEntry, ...]] | None = None
+
+    def project(self, accounts: Sequence[AccountSnapshot], entries: tuple[TraceEntry, ...], catalog: PricingCatalog, *,
+                now_ms: int, day_start_ms: int, month_start_ms: int, timezone_id: str,
+                workday_calendar: str) -> tuple[AccountsQuotasProjection, tuple[TraceEntry, ...]]:
+        boundaries = (day_start_ms, month_start_ms)
+        if self._entries is not entries or self._catalog is not catalog or self._boundaries != boundaries:
+            self._local = accounts_quota_projection_with_today_entries(
+                (), entries, catalog, now_ms=now_ms, today_start_ms=day_start_ms, month_start_ms=month_start_ms)
+            self._entries, self._catalog, self._boundaries = entries, catalog, boundaries
+            self.metrics.add("daily_usage_projections")
+        assert self._local is not None
+        projection, today = self._local
+        native = native_watch_accounts(accounts, catalog, now_ms=now_ms, timezone_id=timezone_id, workday_calendar=workday_calendar)
+        return replace(projection, accounts=native, now_ms=now_ms), today
 
 
 def accounts_quota_projection(

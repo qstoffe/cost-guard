@@ -108,6 +108,7 @@ class WatchProjection:
     run_total: TokenMix = field(default_factory=TokenMix)  # every observed run request
     today_total: ComparisonCost = field(default_factory=ComparisonCost)
     today_label: str = "Today"  # local `YYYY-MM-DD` from midnight until 03:00
+    today_pending: bool = False
     recent_promotion_notices: tuple[str, ...] = ()
     session_subtotals: Mapping[str, WatchSessionSubtotal] = field(default_factory=dict)
     recent_model_notice_highlight_spans: tuple[tuple[int, int], ...] = ()

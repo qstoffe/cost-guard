@@ -6,6 +6,7 @@ Everything in this directory exists to design, maintain, test and validate Cost 
 - **Distribution:** current `main` is the supported source distribution. GitHub's **Code → Download ZIP** creates a source snapshot; there is no local product-release ZIP builder. Diagnostics bundles are separate troubleshooting artifacts.
 - **Brainstorm/design/Feature Requests:** read `FR_GUIDE.md`. Discussion does not modify Cost Guard until explicitly authorized and never builds a ZIP.
 - **Architecture:** `ARCHITECTURE.md` owns runtime layering, dependency direction, source/provider contracts, cache ownership and Watch ownership.
+- **History/performance:** [history-loading.md](history-loading.md) owns mode scopes, staged Watch accounting, consistency/cache proofs and reproducible source-operation benchmarks.
 - **Code navigation/evolution:** [CODE_MAP.md](CODE_MAP.md) maps responsibilities, feature placement and tests; [REFACTORING_REVIEW.md](REFACTORING_REVIEW.md) records the current inventory/refactor and proof limits. `python development/tools/code_inventory.py --json` emits a read-only AST map. `run_tests.py --profile structure` covers extracted contracts and growth/navigation guards.
 - **HTTP account providers:** `simple-http-accounts.md` owns maintained definition/mapping limits, network/credential safety, provider evidence and extension guidance; complex providers stay first-class adapters.
 - **Budgets:** `file-budgets.json` is the machine-readable authority for design warnings and hard file caps.

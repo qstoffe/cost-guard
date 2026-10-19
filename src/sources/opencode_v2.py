@@ -28,6 +28,7 @@ from src.domain import (
     SessionCapabilities,
     SessionSnapshot,
 )
+from src.domain.acquisition import AcquisitionMetrics
 
 from .base import SourceChange
 from .discovery import (
@@ -48,6 +49,8 @@ from .opencode_v2_background import background_activities, running_jobs
 from .opencode_v2_diagnostics import summarize_v2_diagnostics
 from .opencode_v2_events import normalize_event
 from .opencode_v2_interruptions import LiveInterruptionReasons
+from .opencode_v2_catalog import V2CatalogIndex
+from .opencode_v2_snapshot import load_snapshots
 from .opencode_v2_transport import V2Endpoint, V2HttpClient, normalize_local_service_url
 from .opencode_v2_wire import (
     fetch_global_sessions,
@@ -147,6 +150,8 @@ class OpenCodeV2Source:
         self._endpoint: V2Endpoint | None = None
         self._endpoint_marker: tuple[int, ...] | None = None
         self._catalog_cache: tuple[_NativeSession, ...] | None = None
+        self._catalog_index: V2CatalogIndex | None = None
+        self.metrics = AcquisitionMetrics(generation="v2")
         self._skill_origin_cache: dict[str, dict[str, str]] = {}
         self._catalog_listed_at = 0.0
         self._http: V2HttpClient | None = None
@@ -189,6 +194,7 @@ class OpenCodeV2Source:
                 self._http.close()
             self._http = None
             self._catalog_cache = None
+            self._catalog_index = None
             self._catalog_listed_at = 0.0
             self._skill_origin_cache.clear()
         else:
@@ -241,6 +247,7 @@ class OpenCodeV2Source:
             self._endpoint = None
             self._endpoint_marker = None
             self._catalog_cache = None
+            self._catalog_index = None
             self._catalog_listed_at = 0.0
             self._skill_origin_cache.clear()
             if timeout_seconds is not None:
@@ -275,6 +282,7 @@ class OpenCodeV2Source:
     def diagnostic_metadata(self) -> Mapping[str, Any]:
         """Return non-secret observation metadata for the diagnostics bundle."""
         return {**summarize_v2_diagnostics(self._diagnostics),
+                "acquisition": self.metrics.snapshot(),
                 "connectivity": self._connectivity.snapshot()}
 
     def available_model_ids(self) -> tuple[str, ...] | None:
@@ -317,6 +325,8 @@ class OpenCodeV2Source:
     ) -> list[_NativeSession]:
         if since_ms is None and not refresh and self._catalog_cache is not None:
             return list(self._catalog_cache)
+        started = time.perf_counter()
+        self.metrics.add("full_catalog_fetches")
         client = self._client()
         raw_values: list[tuple[Mapping[str, Any], str]]
         contract: str
@@ -372,9 +382,13 @@ class OpenCodeV2Source:
         )
         self._diagnostics["session_contract"] = contract
         self._diagnostics["session_pages"] = pages
+        self.metrics.add("catalog_pages", pages)
+        self.metrics.milliseconds["catalog"] = self.metrics.milliseconds.get("catalog", 0) + (time.perf_counter() - started) * 1000
         self._diagnostics["raw_sessions"] = len(result)
         if since_ms is None:
             self._catalog_cache = tuple(result)
+            self._catalog_index = V2CatalogIndex(result)
+            self.metrics.add("catalog_index_builds")
             self._catalog_listed_at = time.monotonic()
         return result
 
@@ -401,29 +415,27 @@ class OpenCodeV2Source:
         self._diagnostics["last_snapshot_stage"] = "catalog"
         return tuple(self._normalize_session(value) for value in self._list_native_sessions(since_ms, refresh=True))
 
+    @observed("catalog")
+    def recent_session_catalog(self) -> Sequence[NormalizedSession]:
+        """A just-completed selection/gap observation may serve the same report start."""
+        fresh = self._catalog_cache is not None and time.monotonic() - self._catalog_listed_at <= _CATALOG_REUSE_SECONDS
+        return tuple(self._normalize_session(value) for value in self._list_native_sessions(refresh=not fresh))
+
     @staticmethod
     def _tree(native: Sequence[_NativeSession], root_id: str) -> list[_NativeSession]:
-        by_id = {str(item.data["id"]): item for item in native}
-        if root_id not in by_id:
-            raise SourceDataError("OpenCode V2 session does not exist")
-        children: dict[str, list[str]] = {}
-        for item in native:
-            parent = item.data.get("parentID")
-            if parent not in (None, ""):
-                children.setdefault(str(parent), []).append(str(item.data["id"]))
-        result: list[_NativeSession] = []
-        queue = [root_id]
-        seen: set[str] = set()
-        while queue:
-            current = queue.pop(0)
-            if current in seen:
-                continue
-            seen.add(current)
-            result.append(by_id[current])
-            queue.extend(sorted(children.get(current, ())))
-        return result
+        return V2CatalogIndex(native).tree(root_id)
+
+    def _index(self) -> V2CatalogIndex:
+        catalog = self._list_native_sessions(refresh=self._catalog_cache is None)
+        return self._catalog_index or V2CatalogIndex(catalog)
+
+    def watch_candidate_session_ids(self) -> frozenset[str]:
+        """Native running state is independent of age; unsupported state fails open."""
+        return frozenset(session_id for session_id, item in self._index().by_id.items() if item.active is not False)
 
     def _revision(self, tree: Sequence[_NativeSession]) -> str:
+        started = time.perf_counter()
+        self.metrics.add("revision_calculations")
         digest = hashlib.sha256()
         for item in sorted(tree, key=lambda value: str(value.data["id"])):
             data = item.data
@@ -454,14 +466,15 @@ class OpenCodeV2Source:
                 stable["live_interruptions"] = live_reasons
             digest.update(json.dumps(stable, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8"))
             digest.update(b"\n")
+        self.metrics.milliseconds["revision"] = self.metrics.milliseconds.get("revision", 0) + (time.perf_counter() - started) * 1000
         return "v2-api:" + digest.hexdigest()
 
     def get_session_tree_revision(self, session_id: str) -> str:
         # Reuse the most recent complete catalog so a report can obtain many
         # root revisions without relisting every V2 project per root.  Snapshot
         # hydration refreshes independently and live events invalidate this hint.
-        catalog = self._list_native_sessions(refresh=self._catalog_cache is None)
-        return self._revision(self._tree(catalog, session_id))
+        self.metrics.add("revision_checks")
+        return self._index().revision(session_id, self._revision)
 
     def get_session_tree_revisions(self, session_ids: Sequence[str]) -> Mapping[str, str]:
         """Compute multiple V2 tree revisions from one complete session catalog."""
@@ -469,18 +482,21 @@ class OpenCodeV2Source:
         if not unique:
             return {}
         self._diagnostics["last_snapshot_stage"] = "catalog"
-        catalog = self._list_native_sessions(refresh=self._catalog_cache is None)
-        return {session_id: self._revision(self._tree(catalog, session_id)) for session_id in unique}
+        self.metrics.add("revision_checks", len(unique))
+        index = self._index()
+        return {session_id: index.revision(session_id, self._revision) for session_id in unique}
 
     def _load_messages(self, native: _NativeSession) -> tuple[
         tuple[NormalizedMessage, ...], tuple[NormalizedPart, ...], tuple[ContextBoundary, ...],
         tuple[BackgroundActivity, ...], frozenset[str], ActiveContext | None,
     ]:
         session_id = str(native.data["id"])
+        self.metrics.add("message_operations")
         active_context = fetch_active_context(self._client(), session_id=session_id)
         items, contract, pages, rejected_routes = fetch_messages(
             self._client(), session_id=session_id, directory=native.directory
         )
+        self.metrics.add("message_pages", pages)
         background, notices = background_activities(
             items, session_id=session_id, running_jobs=lambda: running_jobs(self._client(), native.directory))
         bundles, shape = normalize_message_items(items, session=native.data)
@@ -550,73 +566,11 @@ class OpenCodeV2Source:
 
     @observed("snapshot")
     def load_session_snapshot(self, session_id: str) -> SessionSnapshot:
-        reuse = True
-        attempt = 0
-        while attempt < 2:
-            self._diagnostics["last_snapshot_stage"] = "catalog_before"
-            before_all, reused = self._catalog_before_messages(session_id, allow_reuse=reuse)
-            before_tree = self._tree(before_all, session_id)
-            before_revision = self._revision(before_tree)
-            messages: list[NormalizedMessage] = []
-            parts: list[NormalizedPart] = []
-            boundaries: list[ContextBoundary] = []
-            background: list[BackgroundActivity] = []
-            active_contexts: list[ActiveContext] = []
-            notices: set[str] = set()
-            self._diagnostics["last_snapshot_stage"] = "messages"
-            for native in before_tree:
-                (native_messages, native_parts, native_boundaries, native_background,
-                 native_notices, native_active_context) = self._load_messages(native)
-                messages.extend(native_messages)
-                parts.extend(native_parts)
-                boundaries.extend(native_boundaries)
-                background.extend(native_background)
-                notices.update(native_notices)
-                if native_active_context is not None:
-                    active_contexts.append(native_active_context)
-            self._diagnostics["last_snapshot_stage"] = "catalog_after"
-            after_all = self._list_native_sessions(refresh=True)
-            try:
-                after_tree = self._tree(after_all, session_id)
-            except SourceDataError as exc:
-                raise SourceConcurrentChangeError("OpenCode V2 session changed while it was being read",
-                                                  phase="snapshot", generation="v2") from exc
-            after_revision = self._revision(after_tree)
-            if before_revision == after_revision:
-                self._diagnostics["last_snapshot_stage"] = "normalize"
-                sessions = tuple(self._normalize_session(item) for item in before_tree)
-                events = tuple(
-                    event for message in messages
-                    if (event := normalize_event(message, frozenset(notices))) is not None
-                )
-                invocations = normalize_request_invocations(messages, self._provenance)
-                invocations.sort(key=lambda value: (
-                    value.completed_at_ms if value.completed_at_ms is not None else value.created_at_ms,
-                    value.invocation_id,
-                ))
-                root = next(value for value in sessions if value.session_id == session_id)
-                self._diagnostics["last_snapshot_stage"] = "complete"
-                return SessionSnapshot(
-                    root=root,
-                    sessions=sessions,
-                    messages=tuple(sorted(messages, key=lambda value: (value.created_at_ms, value.message_id))),
-                    parts=tuple(sorted(parts, key=lambda value: (value.message_id, value.created_at_ms, value.part_id))),
-                    events=events,
-                    invocations=tuple(invocations),
-                    source_revision=after_revision,
-                    context_boundaries=tuple(boundaries),
-                    background=tuple(background),
-                    active_contexts=tuple(active_contexts),
-                )
-            if reused:
-                reuse = False  # the reused catalog was stale; not a fresh attempt
-                self._diagnostics["snapshot_catalog_reuse_misses"] += 1
-                continue
-            self._diagnostics["snapshot_revision_rechecks"] += 1
-            attempt += 1
-        self._diagnostics["last_snapshot_stage"] = "revision_changed"
-        raise SourceConcurrentChangeError("OpenCode V2 session changed repeatedly while it was being read",
-                                          phase="snapshot", generation="v2")
+        return load_snapshots(self, (session_id,))[session_id]
+
+    @observed("snapshot")
+    def load_session_snapshots(self, session_ids: Sequence[str]) -> Mapping[str, SessionSnapshot]:
+        return load_snapshots(self, session_ids)
 
     @staticmethod
     def _event_session_id(value: Mapping[str, Any]) -> str | None:
@@ -651,6 +605,7 @@ class OpenCodeV2Source:
         try:
             for value in self._client().sse("/api/event", stop_event=stop_event):
                 self._catalog_cache = None
+                self._catalog_index = None
                 payload = value.get("payload") if isinstance(value.get("payload"), Mapping) else value
                 self._interruptions.observe(payload)
                 event_type = str(payload.get("type", "unknown")) if isinstance(payload, Mapping) else "unknown"
