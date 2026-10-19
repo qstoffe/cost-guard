@@ -356,7 +356,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.59:** Mode-aware history acquisition, staged Watch `Today: Pending`, incremental local-day accounting, shared V2 catalog/snapshot batches and semantic pricing-cache reuse. Diagnostics measures source operations and startup stages (2026-10-20).
+**v80.60:** Watch cold/expired pricing refresh no longer waits for optional model release dates on its startup thread. Existing dates are retained and refreshed in the background; report enrichment and CCost prices are unchanged (2026-10-20).
 
 **v80.58:** Sanitized quota histories separate retrieval, changes and Watch publication; upstream freshness remains unknown. Claude quota-source limitations remain documented.
 
