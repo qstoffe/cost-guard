@@ -64,7 +64,7 @@ class PromptRowProjector:
 
     def __init__(self, *, snapshot: SessionSnapshot, bundle: RootAnalysisBundle,
                  catalog: PricingCatalog, config: Mapping[str, object],
-                 threshold_multiplier: ThresholdMultiplier | None = None) -> None:
+                 threshold_multiplier: ThresholdMultiplier | None = None, watch_duration: bool = False) -> None:
         self.snapshot = snapshot
         self.bundle = bundle
         self.catalog = catalog
@@ -76,6 +76,7 @@ class PromptRowProjector:
         self.approach = float(thresholds.get("nextIctxPriceThresholdWarningPercent", 75))
         self.running_warning_ccost = Decimal(str(config.get("runningPromptWarningCCost", 1800)))
         self.threshold_multiplier = threshold_multiplier
+        self.watch_duration = watch_duration
 
     def multiplier(self, state: NextContextWarningState, model_id: str) -> Decimal | None:
         if self.threshold_multiplier is None or not state.price_threshold or not model_id:
@@ -132,7 +133,7 @@ class PromptRowProjector:
             next_context_warning=warning.text,
             next_context_warning_severity=warning.price_severity,
             event_id=record.prompt_id,
-            duration_ms=record.duration_ms,
+            duration_ms=record.duration_ms if self.watch_duration else record.execution_duration_ms,
             completed_at_ms=(record.terminal_time_ms or None) if not record.in_progress else None,
             watch_error=record.watch_error,
             main_ccost=main.known_ccost,
@@ -187,7 +188,7 @@ class PromptRowProjector:
             delta_context_tokens=state.delta_tokens if state else None,
             next_context_tokens=state.next_tokens if state else None,
             event_id=record.user_message_id,
-            duration_ms=max(0, record.completed_at_ms - record.created_at_ms),
+            duration_ms=max(0, record.completed_at_ms - record.created_at_ms) if self.watch_duration else record.duration_ms,
             completed_at_ms=(record.completed_at_ms or None) if not record.in_progress else None,
             ictx_price_threshold=input_context_above_price_threshold(catalog, record.model_id, record.input_context_tokens),
             watch_delta_context_tokens=state.delta_tokens if state else None,

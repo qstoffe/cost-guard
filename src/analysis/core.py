@@ -89,6 +89,7 @@ def analyze_snapshot(
     )
     compactions = completed_compactions(
         snapshot,
+        now_ms=now_ms,
         tracked_provider=tracked_provider,
         estimator=estimator,
         subscription_providers=subscription_providers,

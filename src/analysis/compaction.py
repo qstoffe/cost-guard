@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+import time
 
 from src.domain import EventKind, MessageRole, SessionSnapshot
 
@@ -9,6 +10,7 @@ from .billing import CostEstimator, ProviderScope, actual_entry_cost, provider_m
 from .causal import TRACKED_PROVIDER_DEFAULT, active_compaction_event, trace_entries
 from .context import estimate_text_tokens
 from .models import CompactionRecord
+from .duration import execution_duration
 
 
 def completed_compactions(
@@ -19,6 +21,7 @@ def completed_compactions(
     tracked_provider: ProviderScope = TRACKED_PROVIDER_DEFAULT,
     estimator: CostEstimator | None = None,
     subscription_providers: frozenset[str] = frozenset(),
+    now_ms: int | None = None,
 ) -> tuple[CompactionRecord, ...]:
     events = {
         event.event_id: event
@@ -75,6 +78,7 @@ def completed_compactions(
             summary_message_id=message.message_id,
             created_at_ms=event.created_at_ms,
             completed_at_ms=message.completed_at_ms or event.created_at_ms,
+            duration_ms=execution_duration(event.created_at_ms, message.completed_at_ms),
             automatic=event.metadata.get("auto", "false").lower() == "true",
             model_id=model_id,
             provider_id=provider_id,
@@ -129,6 +133,7 @@ def completed_compactions(
             summary_message_id=message.message_id,
             created_at_ms=event.created_at_ms,
             completed_at_ms=message.completed_at_ms or message.created_at_ms or event.created_at_ms,
+            duration_ms=execution_duration(event.created_at_ms, message.completed_at_ms),
             automatic=event.metadata.get("auto", "false").lower() == "true",
             model_id=model_id,
             provider_id=provider_id,
@@ -161,5 +166,6 @@ def completed_compactions(
             unresolved_fallback_requests=0, input_context_tokens=0,
             input_tokens=0, cache_read_tokens=0, cache_write_tokens=0,
             output_tokens=0, in_progress=True,
+            duration_ms=execution_duration(active.created_at_ms, int(time.time() * 1000) if now_ms is None else now_ms),
         ))
     return tuple(sorted(result, key=lambda item: (item.created_at_ms, item.summary_message_id)))

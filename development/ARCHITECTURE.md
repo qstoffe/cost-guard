@@ -130,6 +130,8 @@ Dates use `zoneinfo`; clean Windows Python may lack IANA data, so dependency-fre
 
 The latest assistant's `termination` ends running/duration and distinguishes success/failure/cancellation, even without usage. Actual root/child or newer tool activity stays live; stale tool flags do not. Reports/Watch/resync share this truth. Running background work keeps the newest prompt active without usage; resumes stay on it. Incomplete inference stays uncached; older algorithm keys are invalidated.
 
+`analysis/duration.py` qualifies retrospective execution boundaries from normalized assistant/tool/background evidence, never session metadata or report time for terminated work. `PromptRecord.execution_duration_ms` and compaction timing survive derived caching; the legacy prompt `duration_ms` remains unchanged for Watch. Reports project qualified timing into `PromptProjection.duration_ms`; listings union the cached bundle directly, without detail hydration. A sorted interval union excludes idle gaps/overlap and propagates unknown timing to `N/A`; date totals union only selected events. Presentation shares Watch's compact formatter, not timing calculations.
+
 ## Reports
 
 `src/reports/` owns use cases/neutral projections over abstract sources/providers, analysis and cache; never concrete integrations, Watch or presentation.

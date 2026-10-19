@@ -14,6 +14,7 @@ from src.domain import (
 
 from .billing import CostEstimator, ProviderScope, measure_prompt_billing, provider_matches
 from .models import PromptRecord, PromptReference, TraceEntry
+from .duration import prompt_duration
 
 TRACKED_PROVIDER_DEFAULT = "github-copilot"
 TOOL_CALLS_CONTINUATION_GRACE_MS = 60_000
@@ -589,6 +590,8 @@ def build_prompt_record(
             in_progress=in_progress,
             completed_successfully=successful_final,
             duration_ms=max(0, terminal_time - ref.prompt_time_ms) if evidence else 0,
+            execution_duration_ms=prompt_duration(ref, assistant_messages, latest, (), timeline.messages,
+                                                  in_progress=in_progress, now_ms=now_ms, background=snapshot.background),
             **background_fields,
         )
 
@@ -649,6 +652,8 @@ def build_prompt_record(
         output_tokens=output_total, cache_read_tokens=billed.cache_read_tokens,
         cache_write_tokens=billed.cache_write_tokens, input_context_tokens=meaningful_first.request_input_approx,
         total_token_volume=total_volume, model_costs=billed.model_costs, duration_ms=duration,
+        execution_duration_ms=prompt_duration(ref, assistant_messages, latest, entries, timeline.messages,
+                                              in_progress=in_progress, now_ms=now_ms, background=snapshot.background),
         local_duration_ms=local_ms, model_wait_ms=max(0, duration - local_ms),
         prompt_context_tokens_approx=prompt_context_approx, previous_entry=previous,
         pre_prompt_entry=previous_before_prompt,
