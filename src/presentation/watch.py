@@ -20,6 +20,7 @@ from src.analysis.context import PriceWarningSeverity
 from .context_warnings import WARNING_ROLE, context_warning_text, warning_cost_suffix, warning_explanation_lines
 from .pricing_notices import pricing_notice_lines
 from .watch_activity import BASE_ROLE, skill_summary_segments, status_segments, tool_summary_segments
+from .duration import duration_text as _duration
 
 _WATCH_COLUMNS = (
     Column("Session / prompt", fixed_width=35),
@@ -147,22 +148,6 @@ def _fit_context_tokens(value: int | None, width: int, *, signed: bool = False,
         if len(candidate) <= width:
             return candidate
     return f"{sign}1e{exponent}"
-
-
-def _duration(ms: int | None) -> str:
-    if ms is None:
-        return "N/A"
-    seconds = max(0, int((Decimal(ms) / Decimal(1000)).to_integral_value(rounding=ROUND_HALF_UP)))
-    if seconds < 60:
-        return f"{seconds}s"
-    minutes, remaining_seconds = divmod(seconds, 60)
-    if minutes < 60:
-        return f"{minutes}m" if remaining_seconds == 0 else f"{minutes}m{remaining_seconds}s"
-    hours, remaining_minutes = divmod(minutes, 60)
-    if hours < 24:
-        return f"{hours}h" if remaining_minutes == 0 else f"{hours}h{remaining_minutes}m"
-    days, remaining_hours = divmod(hours, 24)
-    return f"{days}d" if remaining_hours == 0 else f"{days}d{remaining_hours}h"
 
 
 def _context_cell(row: WatchRow, row_role: str | None, warning_number: int | None = None) -> StyledText:

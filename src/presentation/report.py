@@ -19,6 +19,7 @@ from .context_warnings import WARNING_ROLE, context_warning_text, next_ictx_ccos
 from .pricing_notices import pricing_notice_lines
 from .model_comparison import aligned_price_summaries as _aligned_price_summaries, aligned_relative_costs
 from .model_supersession import superseded_rows
+from .duration import duration_text as _duration
 
 
 def _context_k(value: int | None) -> str:
@@ -37,19 +38,6 @@ def _context_delta_k(value: int | None) -> str:
         return "0k"
     magnitude = _context_k(abs(value))
     return ("+" if value > 0 else "-") + magnitude
-
-
-def _duration(ms: int | None) -> str:
-    if ms is None:
-        return "N/A"
-    seconds = max(0, ms // 1000)
-    if seconds < 60:
-        return f"{seconds}s"
-    minutes, seconds = divmod(seconds, 60)
-    if minutes < 60:
-        return f"{minutes}m {seconds:02d}s"
-    hours, minutes = divmod(minutes, 60)
-    return f"{hours}h {minutes:02d}m"
 
 
 def _percentile(values: list[Decimal], percentile: Decimal) -> Decimal:
@@ -181,18 +169,19 @@ class ReportRenderer:
     def _render_sessions(self, report: ReportProjection) -> None:
         rows = [(
             item.session_id, single_line(item.title, item.session_id), item.model + (" *" if item.multiple_models else ""),
-            ccost_amount(item.ccost, unresolved=not item.complete), item.prompt_count,
+            ccost_amount(item.ccost, unresolved=not item.complete), item.prompt_count, _duration(item.duration_ms),
         ) for item in report.session_usage]
         for line in render_table(
             (Column("Session id", max_width=512),
              Column("Name", min_width=12, max_width=100, flexible=True),
              Column("Model", min_width=10, max_width=60, flexible=True),
-             Column("CCost", True), Column("#", True)),
+             Column("CCost", True), Column("#", True), Column("Duration", True)),
             rows, styler=self.styler, target_width=self.table_width,
         ):
             self._write(line)
         self._prose("CCost is whole-session reference token valuation, not billing; ? marks partial pricing.", prefix="* ")
         self._prose("# counts visible prompts; linked child work is included. Only currently available OpenCode data is shown.", prefix="* ")
+        self._prose("Duration: accumulated execution wall-clock time, excluding idle gaps; overlaps count once. N/A means timing is incomplete.", prefix="* ")
         if any(item.multiple_models for item in report.session_usage):
             self._prose("A trailing * in Model means more than one model contributed; the dominant model is selected by CCost.", prefix="* ")
 
@@ -227,22 +216,20 @@ class ReportRenderer:
         for _at, _order, kind, item in timeline:
             if kind == "abort":
                 clock = format_local_timestamp(item.abort_at_ms or item.at_ms, self.timezone_id, "%H:%M")
-                rows.append((f"{clock} #{item.prompt_number} [ABORTED]", "", "", "", "", "", ""))
-                styles.append((None,) * 7)
+                rows.append((f"{clock} #{item.prompt_number} [ABORTED]", "", "", "", "", "", "", ""))
+                styles.append((None,) * 8)
                 continue
             clock = format_local_timestamp(item.at_ms, self.timezone_id, "%H:%M")
+            current_model = (item.model_effort, item.has_additional_model)
+            if item.model_effort and (not item.is_compaction or item.model_effort != "N/A") and current_model != last_model:
+                model_text = "Model: " + item.model_effort + (" *" if item.has_additional_model else "")
+                rows.append((model_text, "", "", "", "", "", "", ""))
+                styles.append((None,) * 8)
+                last_model = current_model
+                table_has_additional = table_has_additional or item.has_additional_model
             if item.is_compaction:
                 prompt = f"{clock} #{item.prompt_number} {item.label}{' [RUNNING]' if item.in_progress else ''}"
-                if item.model_effort and item.model_effort != "N/A":
-                    prompt += "  " + item.model_effort
             else:
-                current_model = (item.model_effort, item.has_additional_model)
-                if item.model_effort and current_model != last_model:
-                    model_text = "Model: " + item.model_effort + (" *" if item.has_additional_model else "")
-                    rows.append((model_text, "", "", "", "", "", ""))
-                    styles.append((None,) * 7)
-                    last_model = current_model
-                    table_has_additional = table_has_additional or item.has_additional_model
                 prompt = f"{clock} #{item.prompt_number} {single_line(item.preview)}" + (" [RUNNING]" if item.in_progress else "")
 
             native_compaction_without_billing = item.is_compaction and item.calls == 0
@@ -262,6 +249,7 @@ class ReportRenderer:
                 prompt,
                 "" if native_compaction_without_billing else ccost_amount(item.ccost, unresolved=item.unresolved_cost),
                 "" if native_compaction_without_billing else item.calls,
+                _duration(item.duration_ms),
                 context_cell,
                 "" if native_compaction_without_billing else ccost_amount(item.incoming_context_ccost),
                 "" if native_compaction_without_billing else ccost_amount(item.extra_ccost),
@@ -272,34 +260,35 @@ class ReportRenderer:
             ictx_role = "promptIctxPriceThreshold" if item.ictx_price_threshold and not isinstance(context_cell, StyledText) else None
             ictx_cost_role = None if native_compaction_without_billing else ictx_cost_profile.role(item.incoming_context_ccost)
             extra_role = None if native_compaction_without_billing else extra_cost_profile.role(item.extra_ccost)
-            styles.append((active, cost_role, None, ictx_role, ictx_cost_role, extra_role, None))
+            styles.append((active, cost_role, None, None, ictx_role, ictx_cost_role, extra_role, None))
             if item.has_cost_breakdown and item.breakdown_known:
                 total_text = ccost_amount(item.ccost, unresolved=item.unresolved_cost)
                 rows.append((_breakdown(
                     item.main_ccost, item.subagent_ccost,
                     main_estimated=item.main_estimated, subagent_estimated=item.subagent_estimated,
                     total_text=total_text,
-                ), "", "", "", "", "", ""))
-                styles.append((None,) * 7)
+                ), "", "", "", "", "", "", ""))
+                styles.append((None,) * 8)
 
         total_index = len(rows)
         rows.append((
-            "Total", ccost_amount(block.total_ccost, unresolved=not block.comparison_cost_complete), block.total_calls, "",
+            "Total", ccost_amount(block.total_ccost, unresolved=not block.comparison_cost_complete), block.total_calls, _duration(block.duration_ms), "",
             block.total_ictx_cost_text, block.total_extra_cost_text, block.total_mix_text,
         ))
-        styles.append((None,) * 7)
+        styles.append((None,) * 8)
         if block.total_has_cost_breakdown and block.total_breakdown_known:
             rows.append((_breakdown(
                 block.total_main_ccost, block.total_subagent_ccost,
                 main_estimated=block.total_main_estimated, subagent_estimated=block.total_subagent_estimated,
                 total_text=ccost_amount(block.total_ccost),
-            ), "", "", "", "", "", ""))
-            styles.append((None,) * 7)
+            ), "", "", "", "", "", "", ""))
+            styles.append((None,) * 8)
 
         table_lines = render_table(
-            (Column("Prompt", min_width=18, max_width=240, flexible=True), Column("CCost", True), Column("Calls", True), Column("~Ictx", True, max_width=22),
+            (Column("Prompt", min_width=18, max_width=240, flexible=True), Column("CCost", True), Column("Calls", True), Column("Duration", True), Column("~Ictx", True, max_width=22),
              Column("~Ictx CCost", True), Column("~Extra CCost", True), Column("I/C/W/O %", True, max_width=24)),
             rows, styles=styles, styler=self.styler, target_width=self.table_width, separator_before_rows=(total_index,),
+            leading_spans={index: 8 for index, row in enumerate(rows) if not any(str(cell) for cell in row[1:])},
         )
         rendered_width = len(table_lines[0]) if table_lines else max(4, self.table_width)
         content_width = max(0, rendered_width - 4)
@@ -345,6 +334,7 @@ class ReportRenderer:
         for explanation in (
             "CCost: reference token valuation including linked child work, not actual billing; ? marks partial pricing.",
             "Calls: causal model requests. I/C/W/O %: input/cache-read/cache-write/output (including reasoning) token shares.",
+            "Duration: execution wall-clock time, not calendar elapsed time. Total unions selected prompt/compaction intervals, excluding idle gaps; N/A means timing is incomplete.",
             "~Ictx: approximate incoming context, or context change → next-input context along the session timeline.",
             "~Ictx CCost: current-price reference value of incoming context; not actual billing.",
             "~Extra CCost: current-price reference value of additional causal usage beyond incoming context; not actual billing.",

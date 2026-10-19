@@ -7,6 +7,7 @@ from typing import Mapping, Sequence
 
 from src.analysis.context import ContextEpochs, context_composition, estimate_next_context
 from src.analysis.models import RootAnalysisBundle
+from src.analysis.duration import accumulated_duration
 from src.domain import EventKind, SessionSnapshot
 from src.pricing.catalog import PricingCatalog
 
@@ -87,6 +88,7 @@ def _session_block(*, session_id: str, title: str, rows: list[PromptProjection],
         rows=tuple(rows),
         total_ccost=total_ccost,
         total_calls=sum(row.calls for row in rows),
+        duration_ms=accumulated_duration((row.at_ms, row.duration_ms) for row in rows),
         total_ictx_cost_text=ictx_text,
         total_extra_cost_text=extra_text,
         total_mix_text="" if mix is None else "/".join(str(value) for value in mix),
@@ -115,9 +117,10 @@ def build_prompt_block(
     *, session_id: str, title: str, bundle: RootAnalysisBundle, snapshot: SessionSnapshot,
     catalog: PricingCatalog, config: Mapping[str, object], start_ms: int | None = None,
     end_ms: int | None = None, threshold_multiplier: ThresholdMultiplier | None = None,
+    watch_duration: bool = False,
 ) -> SessionPromptBlock:
     projector = PromptRowProjector(snapshot=snapshot, bundle=bundle, catalog=catalog, config=config,
-                                   threshold_multiplier=threshold_multiplier)
+                                   threshold_multiplier=threshold_multiplier, watch_duration=watch_duration)
     event_numbers = {
         event.event_id: index + 1 for index, event in enumerate(sorted(
             (event for event in snapshot.events if event.session_id == session_id

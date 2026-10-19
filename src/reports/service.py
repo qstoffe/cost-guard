@@ -22,6 +22,7 @@ from src.analysis import (
 )
 from src.analysis.comparisons import model_comparison_rows, threshold_cost_multiplier
 from src.analysis.models import PromptRecord, RootAnalysisBundle, TraceEntry
+from src.analysis.duration import accumulated_duration
 from src.analysis.token_mix import CategoryValuation, PricedUsage, priceable_request, priced_sample_mix, priced_usage
 from src.analysis.valuation import ComparisonCost, comparison_cost, unique_usage
 from src.cache import CacheRepository
@@ -290,6 +291,9 @@ class ReportService:
                 ccost=valuation.known_ccost,
                 prompt_count=prompt_count,
                 complete=valuation.complete,
+                duration_ms=accumulated_duration(
+                    [(record.prompt_time_ms, record.execution_duration_ms) for record in item.bundle.prompts]
+                    + [(record.created_at_ms, record.duration_ms) for record in item.bundle.compactions]),
             ))
         return tuple(rows)
 
@@ -299,6 +303,7 @@ class ReportService:
         *,
         start_ms: int | None = None,
         end_ms: int | None = None,
+        watch_duration: bool = False,
     ) -> SessionPromptBlock:
         catalog = self._load_comparison_catalog()
         snapshot = item.snapshot or self.source.load_session_snapshot(item.session.session_id)
@@ -312,6 +317,7 @@ class ReportService:
             start_ms=start_ms,
             end_ms=end_ms,
             threshold_multiplier=self._threshold_multiplier,
+            watch_duration=watch_duration,
         )
 
     def _ordered_roots(self, sessions: Sequence[NormalizedSession]) -> tuple[tuple[NormalizedSession, ...], dict[str, int]]:
@@ -443,7 +449,7 @@ class ReportService:
         """Build one Watch root from the same analysis/context truth as one-shot reports."""
         item = self._analyze(root, detail=True, force_fresh=force_fresh)
         snapshot = item.snapshot or self.source.load_session_snapshot(root.session_id)
-        return self._prompt_block(item, start_ms=start_ms), snapshot, item.bundle
+        return self._prompt_block(item, start_ms=start_ms, watch_duration=True), snapshot, item.bundle
 
     def recent_promotion_notice_texts(self) -> tuple[str, ...]:
         """Watch's seven-day change notices, independent of full report promotion lifetime."""

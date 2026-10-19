@@ -111,6 +111,8 @@ class PromptRecord:
     background_only: bool = False
     abort_reason: str = ""
     ended_after_tool_calls: bool = False
+    # Evidence-qualified retrospective timing; keep Watch's established metric intact.
+    execution_duration_ms: int | None = None
 
     @property
     def model_calls(self) -> int:
@@ -139,6 +141,7 @@ class CompactionRecord:
     output_tokens: int
     result_context_tokens: int | None = None
     in_progress: bool = False
+    duration_ms: int | None = None
 
     @property
     def model_calls(self) -> int:

@@ -464,7 +464,7 @@ class ReportProjectionTests(unittest.TestCase):
         ReportRenderer(self.config, stream=stream, color_enabled=False, terminal_width=160).render(report)
         lines = [line for line in stream.getvalue().splitlines() if line.startswith("|") and "#" in line and " → " in line]
         self.assertGreaterEqual(len(lines), 2)
-        cells = [line.split("|")[4] for line in lines[:2]]
+        cells = [line.split("|")[5] for line in lines[:2]]
         self.assertEqual(cells[0].index(" → "), cells[1].index(" → "), cells)
         self.assertIn("-142k → 41k", cells[0])
         self.assertIn("+5k → 45k", cells[1])

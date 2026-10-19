@@ -214,6 +214,7 @@ Shows only a session table and legend, newest causal-tree activity first (not co
 | `Model` | Primary model by attributed CCost; trailing `*` means another model also contributed. |
 | `CCost` | Reference valuation for the entire available session, across day/month boundaries; not billing. |
 | `#` | Relevant visible prompts across the entire session; compactions remain distinct detail events, not user prompts. |
+| `Duration` | Accumulated execution wall-clock time of the root's prompts and compactions, including attributed child work; overlapping intervals count once. |
 
 ## Session and date detail reports
 
@@ -224,12 +225,15 @@ Passing a session ID shows only that session/root's prompt analysis and explanat
 | `Prompt` | Local time, prompt number and preview. Separate `Model:` and `[ABORTED]` timeline rows provide history context. `/compact` is shown as its own event. |
 | `CCost` | Reference token valuation of the prompt/event, independent of billing; `?` marks a partial subtotal. |
 | `Calls` | Completed causal model requests belonging to the prompt/event. |
+| `Duration` | Prompt/compaction execution wall-clock time, using the same compact format and rounding as Watch. |
 | `~Ictx` | Incoming context or `Δctx -> Next Ictx` when the chronological context state is available. |
 | `~Ictx CCost` | Incoming-context reference valuation, not billing. |
 | `~Extra CCost` | Additional causal usage reference valuation beyond incoming context, not billing. |
 | `I/C/W/O %` | Token-category mix, or running-state text while a prompt is still active. |
 
 Known causal splits show **Main / Subagents / Total**; running prompts may show `running - consider ABORT`. `(Next Ictx CCost 0.3–3)` is the next input's cached–fresh CCost range; price-threshold warnings show `(1.9x more expensive)`, the model table's Relative CCost ratio across that threshold. Amber `nextIctxWarning`: approaching highlights the marker; exceeded the full explanation.
+
+Duration excludes idle gaps, session creation time and unrelated child work: 20 minutes of work followed three days later by 40 minutes totals `1h`, not three days. It includes reasoning, tools, attributed subagents, verified background waits, compactions and failed/cancelled execution with reliable timing. Detail Total unions only the selected prompt/event intervals (also for date ranges); it never sums overlapping parent/child time twice. Running intervals use the report observation time; completed intervals stay fixed. Historical/archived sessions need no prior Watch run, but unavailable/deleted history cannot be reconstructed. A missing or invalid execution boundary is `N/A`, and any included unresolved interval makes the total `N/A`, not a misleading subtotal. No separate tracking ledger or history migration is needed.
 
 Moving a session (e.g. to a worktree) keeps its ID and never re-counts history. The non-billable move starts a new context epoch: Next Ictx is N/A until the first request after it.
 
@@ -350,7 +354,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.56:** Responsive, isolated Watch quota refresh with a measured 60-second healthy freshness budget, bounded recovery, strict stale expiry and privacy-safe refresh diagnostics (2026-10-15).
+**v80.57:** Duration in session/date prompt tables, scoped overlap-safe totals and session listings; existing historical timing evidence, explicit `N/A` and Watch-compatible formatting (2026-10-19).
 
 **v80.54:** Behavior-neutral prompt-block performance cleanup for long sessions. **v80.53:** Watch's compact `CCost · Watch · Today` line shows the local date instead of `Today` from midnight to 03:00. **v80.52:** Continuing context follows active history independently of request accounting; Watch's 20-character context cell stays aligned through `*99`. **v80.51:** Watch headings use one configured-local start timestamp; context-warning markers follow `Next Ictx` on the latest relevant row, with live numbered footnotes. Today names sessions deleted before Watch start; routine local release-ZIP generation is removed. **v80.50:** Watch adds persistent `▶` markers, startup-only Earlier rows sharing the soft cap and timestamp-first session headers. **v80.49:** Adds deletion-resilient current-local-day CCost. **v80.48:** Adds the global prompt budget, Earlier startup rows, latest-start ordering and idle account redraw. **v80.47:** Behavior-neutral Watch CCost performance cleanup. Older versions remain below; v80.0 is the Python 3.11+ public baseline. Restart/sleep need separate live evidence; Claude quotas remain experimental.
 

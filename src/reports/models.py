@@ -129,6 +129,7 @@ class SessionUsageRow:
     ccost: Decimal
     prompt_count: int
     complete: bool = True
+    duration_ms: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
