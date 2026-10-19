@@ -110,7 +110,7 @@ See [Token Mix reference](#token-mix--by-model---token-mix). Screenshots are ill
 - Optional Copilot quota reuses OpenCode OAuth in memory, without login, credential writes or GitHub CLI.
 - Optional OpenAI subscription quota is fail-soft. Read-only V2 accounts take priority; legacy `auth.json` applies only without V2 rows. Credentials are never refreshed, rotated or written.
 - Configured OpenAI/Anthropic API accounts are distinct from **Claude Code subscriptions**, discovered through the optional installed `claude` CLI. Cost Guard never reads/copies Claude credentials or attributes current login to history.
-- Claude Code quotas use optional experimental SDK-control metadata (no prompts, transcript scans or new dependencies); accounts stay visible when quotas fail. See [Claude integration and limitations](development/claude-code.md).
+- Claude Code quotas use optional experimental SDK-control metadata (no prompts, transcript scans or new dependencies); accounts stay visible when quotas fail. Successful retrieval does not guarantee current upstream values. Diagnostics separates retrieval, value changes and Watch publication with bounded observations. See [Claude integration and limitations](development/claude-code.md).
 - OpenRouter/DeepSeek accounts reuse configured OpenCode API keys through maintained read-only HTTPS endpoints. MiniMax Token Plan uses its dedicated subscription integration; generic API keys do not establish subscription entitlement.
 - No third-party Python packages are required.
 
@@ -353,6 +353,8 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 **`COST GUARD FAILED`** means an unexpected software fault: non-zero exit, an error log under `logs/errors/` and a report under `logs/crashes/`. Stopping errors end with the Diagnostics launcher path; nothing starts automatically. Isolated faults show ERROR while safe results continue. [Error diagnostics](docs/runtime-errors.md) explains privacy, 30-day retention and reporting fallback.
 
 ## Current version
+
+**v80.58:** Bounded, sanitized quota observation history in Diagnostics separates retrieval success, value changes and Watch publication; upstream freshness stays unknown. Claude quota investigation documents supported-source limitations without additional polling/model requests (2026-10-19).
 
 **v80.57:** Duration in session/date prompt tables, scoped overlap-safe totals and session listings; existing historical timing evidence, explicit `N/A` and Watch-compatible formatting (2026-10-19).
 
