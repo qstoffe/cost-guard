@@ -53,6 +53,7 @@ from src.accounts.diagnostics import sanitized_account_observation  # noqa: E402
 from src.bootstrap import _account_providers, _model_availability_source, _select_source  # noqa: E402
 from src.cache import CacheDatabase, CacheRepository  # noqa: E402
 from src.cache.account_refresh_state import read_refresh_state  # noqa: E402
+from development.tools.diagnostic_accounts import quota_freshness_summary  # noqa: E402
 from src.config import load_configuration  # noqa: E402
 from src.pricing.github_copilot import GitHubCopilotPricingProvider  # noqa: E402
 from src.presentation import StartupProgress  # noqa: E402
@@ -420,6 +421,7 @@ def _text_summary(data: dict[str, Any]) -> str:
         f"Selected source: {(data.get('selection') or {}).get('selected')}",
     ]
     lines.extend(connectivity_summary(data))
+    lines.extend(quota_freshness_summary(data))
     startup = data.get("service_start_test")
     if startup is not None:
         lines.append(f"V2 startup test: {startup['outcome']} (before: {startup['v2_healthy_before']}, after: {startup['v2_healthy_after']})")

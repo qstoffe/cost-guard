@@ -28,6 +28,8 @@ for line in sys.stdin:
         assert request['skip_behaviors'] is True
         if mode=='timeout':time.sleep(30)
         body={'subscription_type':'pro','rate_limits_available':True,'rate_limits':{},'behaviors':'PRIVATE','session':{'model_usage':{}}}
+        if mode in ('fifteen', 'one'):
+            body['rate_limits']={'five_hour':{'utilization':85 if mode=='fifteen' else 99,'resets_at':None}}
     response={'subtype':'success','request_id':value['request_id'],'response':body}
     if subtype=='get_usage' and mode in ('missing','auth_failure'):
         response={'subtype':'error','request_id':value['request_id'],'error': 'Unknown control request subtype: get_usage' if mode=='missing' else 'Failed to authenticate: OAuth token revoked SECRET'}
@@ -65,6 +67,14 @@ class ClaudeTransportTests(unittest.TestCase):
         for flag in ('--no-session-persistence','--strict-mcp-config','--no-chrome'):
             self.assertIn(flag, commands[0])
         self.assertIn('{"disableAllHooks":true}', commands[0])
+
+    def test_separate_cli_processes_parse_their_own_response_not_a_previous_snapshot(self):
+        first, _, first_requests = self.run_fake('fifteen')
+        second, _, second_requests = self.run_fake('one')
+        self.assertEqual(85, first.usage['rate_limits']['five_hour']['utilization'])
+        self.assertEqual(99, second.usage['rate_limits']['five_hour']['utilization'])
+        for requests in (first_requests, second_requests):
+            self.assertEqual(['initialize', 'get_usage'], [item['request']['subtype'] for item in requests])
 
     def test_method_absence_auth_rejection_and_changed_shape_are_safe(self):
         for mode, reason in (('missing','method_missing'), ('auth_failure','auth_failure'), ('format','format_changed')):

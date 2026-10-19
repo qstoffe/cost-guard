@@ -17,6 +17,7 @@ from src.runtime_errors import recoverable, recovered
 from .base import normalize_quota
 from .discovery import AccountCandidate, AccountDiscovery
 from .refresh_policy import ProviderRefresh, WATCH_TIMEOUT_SECONDS, transient_failure
+from .quota_observations import QuotaObservations
 
 WORKERS = 4
 PROVIDER_TIMEOUT_SECONDS = 45.0
@@ -73,6 +74,7 @@ class AccountAcquisition:
         if continuous:
             self.timeout = min(timeout, WATCH_TIMEOUT_SECONDS)
         self.refresh: dict[int, ProviderRefresh] = {}
+        self.observations = QuotaObservations(continuous=continuous)
         self._desired: dict[int, AccountCandidate] = {}
         self._observed_at_ms: dict[tuple[str, str, str], int] = {}
         self._stop = threading.Event()
@@ -135,8 +137,16 @@ class AccountAcquisition:
 
     def _timeout(self, attempt: _Attempt, now_ms: int, completed_at: float) -> None:
         candidate = attempt.candidate
-        self._apply(candidate, _failure(candidate, self._snapshots.get(candidate.slot, ()), self.source_id, now_ms, timeout=True))
+        accounts = _failure(candidate, self._snapshots.get(candidate.slot, ()), self.source_id, now_ms, timeout=True)
+        self._apply(candidate, accounts)
         self.refresh[candidate.slot].complete((), completed_at, timeout=True)
+        self._record(attempt, accounts, now_ms)
+
+    def _record(self, attempt, accounts, observed_ms):
+        state = self.refresh[attempt.candidate.slot]
+        self.observations.record(attempt.candidate.slot, attempt.candidate.revision, accounts,
+                                 at_ms=observed_ms, duration=state.duration, outcome=state.outcome,
+                                 provider_id=attempt.candidate.provider.provider_id)
 
     def start(self, now_ms: int) -> bool:
         if self._stop.is_set():
@@ -271,6 +281,7 @@ class AccountAcquisition:
                 # longer configured; pending providers are never treated absent.
                 self._apply(attempt.candidate, accounts)
                 self.refresh[slot].complete(accounts, completed_at)
+                self._record(attempt, accounts, observed_ms)
                 self._observed_at_ms.update((item.key, observed_ms) for item in accounts
                                             if item.availability in {"available", "partial"})
         for slot, attempt in self._running.items():
@@ -296,9 +307,15 @@ class AccountAcquisition:
         for slot, attempt in self._running.items():
             if not attempt.expired:
                 attempt.expired = True
-                self._publish(slot, _failure(attempt.candidate, self._snapshots.get(slot, ()), self.source_id, now_ms, timeout=True))
+                accounts = _failure(attempt.candidate, self._snapshots.get(slot, ()), self.source_id, now_ms, timeout=True)
+                self._publish(slot, accounts)
+                self.refresh[slot].complete((), self.clock(), timeout=True)
+                self._record(attempt, accounts, int(self.wall_ms()))
         for slot, candidate in self._waiting.items():
-            self._publish(slot, _failure(candidate, self._snapshots.get(slot, ()), self.source_id, now_ms, timeout=True))
+            accounts = _failure(candidate, self._snapshots.get(slot, ()), self.source_id, now_ms, timeout=True)
+            self._publish(slot, accounts)
+            self.observations.record(slot, candidate.revision, accounts, at_ms=int(self.wall_ms()),
+                                     duration=None, outcome="timeout", provider_id=candidate.provider.provider_id)
         return self.snapshots
 
     def cancel(self) -> None:
@@ -319,11 +336,14 @@ class AccountAcquisition:
         # No join of in-flight HTTP. Idle workers exit in <=0.1s; bounded
         # daemon workers cannot keep the process/terminal alive at shutdown.
 
-    def diagnostics(self) -> dict[str, object]:
+    def diagnostics(self, *, include_observations: bool = True) -> dict[str, object]:
         """Allowlisted performance evidence only; jobs are not HTTP-call counts."""
-        return {"local_discovery_ms": round(self.discovery_seconds * 1000, 2),
+        evidence = {"local_discovery_ms": round(self.discovery_seconds * 1000, 2),
                 "candidate_providers": self.providers_discovered,
                 "provider_jobs_started": self.checks_started, "worker_limit": self.limit,
                 "acquisition_elapsed_ms": round(max(0.0, self.clock() - self._started_at) * 1000, 2)
                  if self._started_at is not None else 0.0,
                 "providers": {str(slot): state.diagnostics(self.clock()) for slot, state in self.refresh.items()}}
+        if include_observations:
+            evidence["quota_observations"] = self.observations.diagnostics(int(self.wall_ms()))
+        return evidence

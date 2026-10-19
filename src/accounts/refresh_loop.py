@@ -73,7 +73,7 @@ class AccountRefreshLoop:
                     self._published.pop(slot, None)
                 self._revisions[slot] = state.revision
                 state.published = self._published.get(slot)
-            self._diagnostics = {**self.engine.diagnostics(),
+            self._diagnostics = {**self.engine.diagnostics(include_observations=False),
                                  "providers": {str(slot): state.diagnostics(now)
                                                for slot, state in self.engine.refresh.items()},
                                  "blocked_lanes": sum(attempt.expired for attempt in self.engine._running.values()),
@@ -83,7 +83,7 @@ class AccountRefreshLoop:
                                  if self._display_at is not None else None}
             evidence = self._diagnostics
         if self._evidence_sink is not None and now >= self._evidence_at:
-            self._evidence_sink(evidence)
+            self._evidence_sink({**evidence, "quota_observations": self.engine.observations.diagnostics(wall)})
             self._evidence_at = now + 5.0
 
     def set_display(self, evidence: dict[str, object]) -> None:
@@ -103,6 +103,7 @@ class AccountRefreshLoop:
                         self._published[slot] = self.clock()
                 observed = dict(update.observed_at_ms)
                 if successful:
+                    self.engine.observations.published({key: observed[key] for key in successful if key in observed}, now_ms)
                     self._publication_delay = max(
                         (max(0.0, (now_ms - observed[key]) / 1000) for key in successful if key in observed),
                         default=0.0)
@@ -116,7 +117,7 @@ class AccountRefreshLoop:
 
     def diagnostics(self) -> dict[str, object]:
         with self._lock:
-            return {**self._diagnostics}
+            return {**self._diagnostics, "quota_observations": self.engine.observations.diagnostics(int(self.wall_ms()))}
 
     def close(self) -> None:
         self._stop.set()
