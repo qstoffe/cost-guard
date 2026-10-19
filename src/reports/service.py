@@ -13,7 +13,6 @@ from src.analysis import (
     AnalysisDependencies,
     DerivedAnalysisCache,
     analyze_snapshot,
-    analyze_with_cache,
     cached_analysis,
     dependency_signature,
     local_day_start_ms,
@@ -28,6 +27,7 @@ from src.analysis.valuation import ComparisonCost, comparison_cost, unique_usage
 from src.cache import CacheRepository
 from src.numbers import ccost_amount
 from src.domain import AccountSnapshot, NormalizedSession, SessionSnapshot
+from src.domain.acquisition import AcquisitionMetrics
 from src.domain.ccost import ReferenceValuation
 from src.domain.session_tree import root_activity, root_for_session
 from src.pricing.base import PricingProvider
@@ -43,10 +43,12 @@ from .semantics import (
 
 from .model_comparison import AvailabilityPrefetch, price_summary, selectable_catalog
 from .prompts import build_prompt_block
-from .accounts import accounts_quota_projection, accounts_quota_projection_with_today_entries
+from .accounts import accounts_quota_projection, WatchAccountProjection
 from .migration_notice import migration_gap_notes
 from .token_mix_history import HistoryProgress, build_token_mix_history
 from .sampling import AnalyzedRoot, latest_prompts, latest_token_prompts, recent_sample_roots
+from .history import HistoryRequirements, WatchHistoryAcquisition
+from .acquisition import RootAcquisition
 
 from .models import (
     AccountsQuotasProjection,
@@ -106,6 +108,7 @@ class ReportService:
     ) -> None:
         self.selection = selection
         self.source = selection.source
+        self.metrics = getattr(self.source, "metrics", AcquisitionMetrics(generation=selection.selected))
         self.pricing_provider = pricing_provider
         self.comparison_pricing_provider = comparison_pricing_provider or pricing_provider
         values = tuple(account_providers) if account_providers is not None else ((account_provider,) if account_provider else ())
@@ -118,8 +121,12 @@ class ReportService:
         self.progress = progress or _noop_progress
         self.catalog: PricingCatalog | None = None
         self.comparison_pricing_catalog: PricingCatalog | None = None
-        self._derived = DerivedAnalysisCache(cache_repository)
-        self._analyzed: dict[str, AnalyzedRoot] = {}
+        self._derived = DerivedAnalysisCache(cache_repository, metrics=self.metrics)
+        self._acquisition = RootAcquisition(self.source, self._derived,
+            dependencies=lambda: self._dependencies(self._load_catalog()), analyzer=self._analyze_snapshot,
+            progress=lambda label: self.progress(label), metrics=self.metrics)
+        self._analyzed = self._acquisition.analyzed
+        self._analyzed_at_ms = self._acquisition.analyzed_at_ms
         # Current account visibility never proves historical included billing.
         self._subscription_providers = frozenset()
         self._account_work: AccountAcquisition | AccountRefreshLoop | None = None
@@ -129,6 +136,9 @@ class ReportService:
         self.account_diagnostics: Mapping[str, object] = {}
         self._comparison_mix: tuple[tuple[Decimal, Decimal, Decimal, Decimal, int], int] | None = None
         self._availability: AvailabilityPrefetch | None = None
+        self._watch_history = WatchHistoryAcquisition()
+        self._watch_history_active: set[str] = set()
+        self._watch_account_projection = WatchAccountProjection(self.metrics)
 
     @property
     def timezone_id(self) -> str:
@@ -155,65 +165,25 @@ class ReportService:
             "timezone": self.timezone_id,
             "subscription_providers": sorted(self._subscription_providers),
         }
-        return AnalysisDependencies(
-            config_signature=dependency_signature(config_semantics),
-            pricing_signature=dependency_signature({
-                "provider": self.pricing_provider.provider_id,
-                "source_revision": catalog.source_revision,
-                "retrieved_at_ms": catalog.retrieved_at_ms,
-            }),
-        )
+        return AnalysisDependencies(dependency_signature(config_semantics), catalog.analysis_signature)
 
     def _analyze(
-        self, root: NormalizedSession, *, detail: bool = False, force_fresh: bool = False
+        self, root: NormalizedSession, *, detail: bool = False, force_fresh: bool = False,
+        snapshot: SessionSnapshot | None = None,
     ) -> AnalyzedRoot:
-        existing = self._analyzed.get(root.session_id)
-        if not force_fresh and existing is not None and (not detail or existing.snapshot is not None):
-            return existing
-        catalog = self._load_catalog()
-        dependencies = self._dependencies(catalog)
-        self.progress(f"Analyzing {root.session_id}")
+        return self._acquisition.analyze(root, now_ms=self.now_ms, detail=detail, force_fresh=force_fresh, snapshot=snapshot)
 
-        def analyze(snapshot: SessionSnapshot) -> RootAnalysisBundle:
-            return analyze_snapshot(
-                snapshot,
-                tracked_provider=_TRACKED_PROVIDER,
-                estimator=catalog.estimate,
-                now_ms=self.now_ms,
-                subscription_providers=self._subscription_providers,
-            )
+    def _analyze_snapshot(self, snapshot: SessionSnapshot) -> RootAnalysisBundle:
+        with self.metrics.measure("analysis"):
+            bundle = analyze_snapshot(snapshot, tracked_provider=_TRACKED_PROVIDER, estimator=self._load_catalog().estimate,
+                                      now_ms=self.now_ms, subscription_providers=self._subscription_providers)
+        self.metrics.add("analyzed_prompts", len(bundle.prompts))
+        self.metrics.add("analyzed_requests", len(bundle.trace_entries))
+        return bundle
 
-        if force_fresh:
-            # Active Watch roots are intentionally hydrated authoritatively on
-            # every scheduled refresh. OpenCode V1 may update live token/cost JSON
-            # in place without changing the cheap payload-free tree revision.
-            snapshot = self.source.load_session_snapshot(root.session_id)
-            bundle = analyze(snapshot)
-            analyzed = AnalyzedRoot(root, bundle, False, snapshot)
-        else:
-            result = analyze_with_cache(self.source, root, self._derived, dependencies, analyze)
-            snapshot = existing.snapshot if existing else result.snapshot
-            if detail and snapshot is None:
-                snapshot = self.source.load_session_snapshot(root.session_id)
-            analyzed = AnalyzedRoot(root, result.bundle, result.cache_hit, snapshot)
-        self._analyzed[root.session_id] = analyzed
-        return analyzed
-
-    def _analysis_roots_for_watch(
-        self,
-        roots: Sequence[NormalizedSession],
-        month_start: int,
-        root_activity: Mapping[str, int],
-    ) -> tuple[AnalyzedRoot, ...]:
-        result: list[AnalyzedRoot] = []
-        sample_prompts = 0
-        for root in roots:
-            if root_activity.get(root.session_id, root.updated_at_ms) < month_start and sample_prompts >= 100:
-                break
-            item = self._analyze(root)
-            result.append(item)
-            sample_prompts += len([p for p in item.bundle.prompts if not p.in_progress and not p.aborted])
-        return tuple(result)
+    def prepare_roots(self, roots: Sequence[NormalizedSession], *, detail: bool = False,
+                      force_fresh_ids: Sequence[str] = ()) -> frozenset[str]:
+        return self._acquisition.prepare(roots, now_ms=self.now_ms, detail=detail, force_fresh_ids=force_fresh_ids)
 
     def _quotas(self) -> tuple[AccountSnapshot, ...]:
         if self._account_work is None:
@@ -229,6 +199,7 @@ class ReportService:
     def enable_watch_accounts(self, *, record_evidence: bool = True) -> None:
         self._watch_accounts = True
         self._record_account_evidence = record_evidence
+        self._watch_history.reset()
 
     def _record_account_refresh(self, evidence: dict) -> None:
         if self._record_account_evidence:
@@ -307,18 +278,13 @@ class ReportService:
     ) -> SessionPromptBlock:
         catalog = self._load_comparison_catalog()
         snapshot = item.snapshot or self.source.load_session_snapshot(item.session.session_id)
-        return build_prompt_block(
-            session_id=item.session.session_id,
-            title=item.session.title or item.session.session_id,
-            bundle=item.bundle,
-            snapshot=snapshot,
-            catalog=catalog,
-            config=self.config,
-            start_ms=start_ms,
-            end_ms=end_ms,
-            threshold_multiplier=self._threshold_multiplier,
-            watch_duration=watch_duration,
-        )
+        with self.metrics.measure("projection"):
+            return build_prompt_block(
+                session_id=item.session.session_id, title=item.session.title or item.session.session_id,
+                bundle=item.bundle, snapshot=snapshot, catalog=catalog, config=self.config,
+                start_ms=start_ms, end_ms=end_ms, threshold_multiplier=self._threshold_multiplier,
+                watch_duration=watch_duration,
+            )
 
     def _ordered_roots(self, sessions: Sequence[NormalizedSession]) -> tuple[tuple[NormalizedSession, ...], dict[str, int]]:
         activity = root_activity(sessions)
@@ -340,9 +306,11 @@ class ReportService:
     def _threshold_multiplier(self, model_id: str, threshold: int) -> Decimal | None:
         """Warning multiplier from the normal report's Relative CCost sample (refreshed every 15 min)."""
         if self._comparison_mix is None or self.now_ms - self._comparison_mix[1] >= 900_000:
-            roots, activity = self._ordered_roots(tuple(self.source.list_sessions()))
+            roots, activity = self._ordered_roots(self.session_catalog())
             priceable = self._priceable()
-            sample = latest_prompts(recent_sample_roots(roots, activity, self._analyze, priceable), priceable)
+            sampled = recent_sample_roots(roots, activity, self._analyze, priceable)
+            self.metrics.add("context_warning_sample_roots", len(sampled))
+            sample = latest_prompts(sampled, priceable)
             self._comparison_mix = (normalized_average_token_mix(self._relative_usage(sample)), self.now_ms)
         return threshold_cost_multiplier(self._load_comparison_catalog(), model_id, threshold, self._comparison_mix[0])
 
@@ -403,6 +371,7 @@ class ReportService:
 
     def build_token_mix_history(self, progress: HistoryProgress | None = None) -> ReportProjection:
         """Deep available-history model comparison; never used by normal reports/Watch."""
+        self.metrics.mode = "token-mix-history"
         return build_token_mix_history(self, progress or (lambda _label, _percent: None))
 
     def set_now_ms(self, now_ms: int) -> None:
@@ -412,15 +381,20 @@ class ReportService:
     def invalidate_source_observations(self) -> None:
         """Discard unfinished startup's analysis gates, not providers/prices/quotas."""
         self._analyzed.clear()
+        self._analyzed_at_ms.clear()
         self._comparison_mix = None
+        self._watch_history.reset()
+        self._watch_quota_entries = ()
 
     def invalidate_roots(self, root_ids: Sequence[str]) -> None:
         """Drop in-process analyzed snapshots for source roots known to have changed."""
         for root_id in root_ids:
             self._analyzed.pop(root_id, None)
+            self._analyzed_at_ms.pop(root_id, None)
 
     def session_catalog(self) -> tuple[NormalizedSession, ...]:
-        return tuple(self.source.list_sessions())
+        recent = getattr(self.source, "recent_session_catalog", None)
+        return tuple(recent() if callable(recent) else self.source.list_sessions())
 
     def root_for_session(
         self, session_id: str, sessions: Sequence[NormalizedSession] | None = None
@@ -486,26 +460,54 @@ class ReportService:
         refresh local usage without turning every OpenCode change into a network
         request against the account provider.
         """
-        roots, root_activity = self._ordered_roots(tuple(sessions) if sessions is not None else self.session_catalog())
-        month_start = utc_month_start_ms(now_ms=self.now_ms)
-        analyzed = self._analysis_roots_for_watch(roots, month_start, root_activity)
-        self.progress("Calculating month/today CCost")
+        roots = self.watch_history_candidates(tuple(sessions) if sessions is not None else self.session_catalog())
+        self.watch_history_batch(roots)
+        self.publish_watch_history()
         quotas = self._quotas() if query_account else tuple(
             quota_snapshots if quota_snapshots is not None else ((quota_snapshot,) if quota_snapshot else ())
         )
-        self._watch_quota_entries = tuple(entry for item in analyzed for entry in item.bundle.trace_entries)
         return self.project_watch_accounts(quotas)
+
+    def watch_history_candidates(self, sessions: Sequence[NormalizedSession], *,
+                                 active_root_ids: Sequence[str] = (), fresh_root_ids: Sequence[str] = (),
+                                 live_root_ids: Sequence[str] = ()) -> tuple[NormalizedSession, ...]:
+        """Daily accounting, independent of display scope, comparison sampling and quotas."""
+        self._watch_history_active = set(live_root_ids) - set(fresh_root_ids)
+        roots, revisions = self._watch_history.candidates(self.source, sessions, timezone_id=self.timezone_id,
+                                                         now_ms=self.now_ms, active_root_ids=active_root_ids)
+        self.metrics.add("history_candidate_roots", len(roots))
+        for root in roots:
+            item = self._analyzed.get(root.session_id)
+            if item is not None and (item.bundle.source_revision != revisions[root.session_id]
+                    or (root.session_id not in fresh_root_ids and not item.bundle.cacheable
+                        and self._analyzed_at_ms.get(root.session_id) != self.now_ms)):
+                self.invalidate_roots((root.session_id,))
+        return tuple(root for root in roots if root.session_id in active_root_ids
+                     or not self._watch_history.unchanged(root.session_id, revisions[root.session_id]))
+
+    def watch_history_batch(self, roots: Sequence[NormalizedSession]) -> tuple[TraceEntry, ...]:
+        with self.metrics.measure("historical_accounting"):
+            force = {root.session_id for root in roots if root.session_id in self._watch_history_active}
+            prepared = self.prepare_roots(roots, force_fresh_ids=force)
+            entries = []
+            for root in roots:
+                item = self._analyze(root, force_fresh=root.session_id in force and root.session_id not in prepared)
+                entries.extend(self._watch_history.record(root.session_id, item.bundle, now_ms=self.now_ms))
+        return tuple(entries)
+
+    def publish_watch_history(self) -> None:
+        self._watch_quota_entries = self._watch_history.entries()
 
     def project_watch_accounts(self, quotas: Sequence[AccountSnapshot]) -> tuple[AccountsQuotasProjection, tuple[TraceEntry, ...]]:
         """Publish new quota evidence over cached local usage, without source I/O."""
-        return accounts_quota_projection_with_today_entries(
+        return self._watch_account_projection.project(
             quotas, self._watch_quota_entries, self._load_comparison_catalog(), now_ms=self.now_ms,
-            today_start_ms=local_day_start_ms(self.timezone_id, now_ms=self.now_ms),
-            month_start_ms=utc_month_start_ms(now_ms=self.now_ms),
-            timezone_id=self.timezone_id, workday_calendar=str(self.config.get("workdayCalendar") or ""),
-        )
+            day_start_ms=local_day_start_ms(self.timezone_id, now_ms=self.now_ms),
+            month_start_ms=utc_month_start_ms(now_ms=self.now_ms), timezone_id=self.timezone_id,
+            workday_calendar=str(self.config.get("workdayCalendar") or ""))
 
     def build(self, request: ReportRequest) -> ReportProjection:
+        self.metrics.mode = request.kind.value
         try:
             if request.kind is ReportKind.NORMAL:
                 # Both are I/O-bound and independent of local analysis: overlap them.
@@ -519,8 +521,9 @@ class ReportService:
 
     def _build(self, request: ReportRequest) -> ReportProjection:
         catalog = self._load_catalog()
-        all_sessions = tuple(self.source.list_sessions())
+        all_sessions = self.session_catalog()
         roots, root_activity = self._ordered_roots(all_sessions)
+        self.metrics.counts.update(catalog_sessions=len(all_sessions), catalog_roots=len(roots))
         if request.kind is ReportKind.SESSIONS:
             return self._build_session_list(request, roots, root_activity)
         if request.kind is ReportKind.SESSION:
@@ -533,7 +536,8 @@ class ReportService:
                             root_activity: Mapping[str, int]) -> ReportProjection:
         if request.session_limit is not None and request.session_limit < 1:
             raise ValueError("Session limit must be positive or all")
-        selected = roots if request.session_limit is None else roots[:request.session_limit]
+        selected = HistoryRequirements("session-list", limit=request.session_limit).select(roots, root_activity)
+        self.prepare_roots(selected)
         analyzed = tuple(self._analyze(root) for root in selected)
         # A truncated listing only covers activity since its oldest listed root.
         cutoff = (root_activity.get(selected[-1].session_id, selected[-1].updated_at_ms)
@@ -565,7 +569,8 @@ class ReportService:
         if not request.date_text:
             raise ValueError("Date report requires a date target")
         date_range = local_report_range(request.date_text, self.timezone_id)
-        candidates = [root for root in roots if root_activity.get(root.session_id, root.updated_at_ms) >= date_range.start_ms]
+        candidates = HistoryRequirements("date", start_ms=date_range.start_ms).select(roots, root_activity)
+        self.prepare_roots(candidates, detail=True)
         analyzed = tuple(self._analyze(root, detail=True) for root in candidates)
         blocks = _chronological_blocks(tuple(
             block for item in analyzed

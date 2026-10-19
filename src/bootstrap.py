@@ -115,9 +115,9 @@ def _wake_cli_service(executable: str) -> None:
             code=FailureCode.ENDPOINT_UNRESPONSIVE, phase="selection", generation="v2")
 
 
-def _select_source(requested: str):
+def _select_source(requested: str, *, inspect_migration_gap: bool = True):
     """Wake once if appropriate; reports share a short discovery/read retry budget."""
-    selector = SourceSelector()
+    selector = SourceSelector(inspect_migration_gap=inspect_migration_gap)
     recovery = ReadRecovery()
     try:
         selection = selector.select(requested)
@@ -139,7 +139,7 @@ def _select_source(requested: str):
 
 def _wait_for_watch_source(requested: str, renderer: WatchRenderer, *, sleep=time.sleep):
     """Keep Watch open while OpenCode is offline; reconnect without CLI polling."""
-    selector = SourceSelector()
+    selector = SourceSelector(inspect_migration_gap=False)
     message = source_wait_message(requested)
     if not renderer.interactive:
         renderer._write(message)
@@ -162,7 +162,7 @@ def _wait_for_watch_source(requested: str, renderer: WatchRenderer, *, sleep=tim
 
 def _select_or_wait(requested: str, progress, renderer):
     try:
-        return _select_source(requested)
+        return (_select_source(requested, inspect_migration_gap=False) if renderer is not None else _select_source(requested))
     except SourceUnavailableError as error:
         if error.terminal or (error.code != FailureCode.UNKNOWN and not error.watch_retryable):
             raise

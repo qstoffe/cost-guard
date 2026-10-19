@@ -124,9 +124,11 @@ class SourceSelector:
         *,
         v1_factory: Callable[[], SessionSource] = OpenCodeV1Source,
         v2_factory: Callable[[], SessionSource] | None = None,
+        inspect_migration_gap: bool = True,
     ):
         self._v1_factory = v1_factory
         self._v2_factory = v2_factory or (lambda: OpenCodeV2Source(timeout_seconds=1.0))
+        self._inspect_migration_gap = inspect_migration_gap
 
     @staticmethod
     def _probe(source: SessionSource) -> IntegrationHealth:
@@ -154,6 +156,8 @@ class SourceSelector:
         warnings: list[str] | None = None,
     ) -> SourceSelection:
         result_warnings = list(warnings or ())
+        if not self._inspect_migration_gap:
+            return SourceSelection(v2, "v2", tuple(result_warnings), health)
         gap: MigrationGapDiagnostic | None = None
         # Gap inspection is explicitly best-effort and metadata-only.  It can
         # never switch the selected source or fail an otherwise healthy V2 run.

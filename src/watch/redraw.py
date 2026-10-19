@@ -26,7 +26,7 @@ def visible_signature(projection: WatchProjection) -> tuple[object, ...]:
     return (rows, projection.quota, projection.quota_stale, projection.quota_recovering_accounts,
             projection.source_warnings, warnings, projection.recent_model_notice,
             projection.recent_promotion_notices, projection.token_mix, projection.run_total,
-            projection.today_total, projection.today_label,
+            projection.today_total, projection.today_label, projection.today_pending,
             projection.watch_started_at_ms,
             tuple(projection.session_subtotals.items()))
 
@@ -37,7 +37,7 @@ def transient_signature(projection: WatchProjection) -> tuple[object, ...]:
                    row.session_active, row.session_latest_ms) for row in projection.rows),
             projection.recent_model_notice, projection.recent_promotion_notices,
             projection.quota, projection.quota_stale, projection.quota_recovering_accounts,
-            projection.today_total, projection.today_label)
+            projection.today_total, projection.today_label, projection.today_pending)
 
 
 def needs_full_render(drawn: WatchProjection, current: WatchProjection, *, source_changed: bool) -> bool:

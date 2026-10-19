@@ -11,6 +11,7 @@ import hashlib
 import json
 import re
 import sqlite3
+import time
 from contextlib import contextmanager
 from copy import deepcopy
 from dataclasses import dataclass
@@ -42,6 +43,8 @@ from .opencode_errors import normalize_error_name as _error_name
 from .opencode_errors import normalize_abort_reason
 from .opencode_tokens import token_usage
 from .opencode_v1_revision import batch_revisions, revision_from_rows, revision_rows
+from .opencode_v1_catalog import catalog_rows, watch_candidates
+from src.domain.acquisition import AcquisitionMetrics
 
 
 REQUIRED_COLUMNS: dict[str, frozenset[str]] = {
@@ -249,6 +252,7 @@ class OpenCodeV1Source:
 
     source_id = "opencode-v1"
     capabilities = V1_CAPABILITIES
+    watch_candidates_have_live_evidence = True
 
     def __init__(self, db_path: Path | str | None = None, *, candidate: DatabaseCandidate | None = None):
         if candidate is not None and db_path is not None:
@@ -262,6 +266,7 @@ class OpenCodeV1Source:
         self._path = candidate.path
         path_key = str(self._path).encode("utf-8", errors="surrogatepass")
         self._instance_id = "sqlite:" + hashlib.sha256(path_key).hexdigest()[:16]
+        self.metrics = AcquisitionMetrics(generation="v1")
 
     @property
     def database_path(self) -> Path:
@@ -376,7 +381,7 @@ class OpenCodeV1Source:
             session_id=session_id,
             title=str(row["title"] or session_id),
             created_at_ms=_safe_int(row["time_created"]),
-            updated_at_ms=_safe_int(row["time_updated"]),
+            updated_at_ms=_safe_int(row["activity"] if "activity" in row.keys() else row["time_updated"]),
             archived_at_ms=_optional_positive_int(row["time_archived"]),
             parent_session_id=str(row["parent_id"]) if row["parent_id"] not in (None, "") else None,
             provenance=self._session_provenance(session_id),
@@ -384,19 +389,19 @@ class OpenCodeV1Source:
         )
 
     def list_sessions(self, since_ms: int | None = None) -> Sequence[NormalizedSession]:
-        with self._connection() as connection:
+        with self.metrics.measure("catalog"), self._connection() as connection:
+            self.metrics.add("full_catalog_fetches")
             self._require_schema(connection)
-            sql = (
-                "SELECT id, parent_id, project_id, directory, title, "
-                "time_created, time_updated, time_archived FROM session"
-            )
-            params: tuple[Any, ...] = ()
-            if since_ms is not None:
-                sql += " WHERE time_updated >= ?"
-                params = (int(since_ms),)
-            sql += " ORDER BY time_updated DESC, id DESC"
-            rows = connection.execute(sql, params).fetchall()
-            return tuple(self._normalize_session(row) for row in rows)
+            rows = catalog_rows(connection)
+            return tuple(self._normalize_session(row) for row in rows if since_ms is None or row["activity"] >= since_ms)
+
+    def watch_candidate_session_ids(self) -> frozenset[str]:
+        with self.metrics.measure("liveness"), self._connection() as connection:
+            self._require_schema(connection)
+            return watch_candidates(connection)
+
+    def diagnostic_metadata(self) -> Mapping[str, object]:
+        return {"acquisition": self.metrics.snapshot()}
 
     def _tree_rows(self, connection: sqlite3.Connection, session_id: str) -> list[sqlite3.Row]:
         rows = connection.execute(
@@ -419,13 +424,15 @@ class OpenCodeV1Source:
         return list(rows)
 
     def get_session_tree_revision(self, session_id: str) -> str:
-        with self._connection() as connection:
+        self.metrics.add("revision_checks")
+        with self.metrics.measure("revision"), self._connection() as connection:
             self._require_schema(connection)
             return revision_from_rows(revision_rows(connection, session_id))
 
     def get_session_tree_revisions(self, session_ids: Sequence[str]) -> Mapping[str, str]:
         """Return multiple conservative tree revisions with one SQLite statement."""
-        with self._connection() as connection:
+        self.metrics.add("revision_checks", len(session_ids))
+        with self.metrics.measure("revision"), self._connection() as connection:
             self._require_schema(connection)
             return batch_revisions(connection, session_ids)
 
@@ -561,7 +568,8 @@ class OpenCodeV1Source:
         return result
 
     def load_session_snapshot(self, session_id: str) -> SessionSnapshot:
-        with self._connection() as connection:
+        self.metrics.add("hydrated_roots")
+        with self.metrics.measure("hydration"), self._connection() as connection:
             self._require_schema(connection)
             # Pin one SQLite read snapshot so session/tree metadata, revision
             # evidence, messages and parts cannot come from different writer

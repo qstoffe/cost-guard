@@ -84,14 +84,15 @@ class WatchStartupRecoveryTests(unittest.TestCase):
             watch = WatchCoordinator(selection=selection, report_service=service, config=config,
                                      clock_ms=lambda: 2200, sleep=sleep)
             watches.append(watch)
-            quota = service.build_watch_quota_with_today_entries
+            hydrate = watch._hydrate_startup
             failure = [True]
             def first_quota(*args, **kwargs):
+                result = hydrate(*args, **kwargs)
                 if failure:
                     failure.pop()
                     raise SourceUnavailableError("offline", code=FailureCode.RESET)
-                return quota(*args, **kwargs)
-            with patch.object(service, "build_watch_quota_with_today_entries", side_effect=first_quota), \
+                return result
+            with patch.object(watch, "_hydrate_startup", side_effect=first_quota), \
                  patch.object(watch, "_start_event_pump"):
                 cycle = watch.initialize_with_recovery(Renderer())
             self.assertTrue(cycle.recovered)

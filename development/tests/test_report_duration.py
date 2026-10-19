@@ -217,7 +217,7 @@ class ReportDurationTests(unittest.TestCase):
                     self.assertNotIn("| Total", text)
                 self.assertEqual(1, load.call_count)
                 fresh = report_service(self, source)
-                fresh._derived = service._derived
+                fresh._acquisition.cache = service._derived
                 cached = fresh.build(ReportRequest(ReportKind.SESSIONS))
                 self.assertEqual(3_600_000, cached.session_usage[0].duration_ms)
                 self.assertEqual(1, load.call_count)

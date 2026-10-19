@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from dataclasses import replace
+from src.domain.acquisition import AcquisitionMetrics
 
 from src.domain import (
     CostKind, CostObservation, EventKind, IntegrationHealth, MessageRole, ModelInvocation,
@@ -53,7 +55,9 @@ class SyntheticMonthSource:
     source_id = "synthetic-v1"
     capabilities = CAP
 
-    def __init__(self, roots: int, prompts_per_root: int, *, month_start_ms: int) -> None:
+    def __init__(self, roots: int, prompts_per_root: int, *, month_start_ms: int,
+                 children_per_root: int = 0, today_roots: int = 0, running_roots: int = 0,
+                 now_ms: int | None = None) -> None:
         self.snapshots = {
             snapshot.root.session_id: snapshot
             for snapshot in (make_root_snapshot(index, prompts_per_root, month_start_ms=month_start_ms) for index in range(roots))
@@ -61,24 +65,61 @@ class SyntheticMonthSource:
         self.load_count = 0
         self.revision_count = 0
         self.batch_count = 0
+        self.catalog_count = 0
+        self.metrics = AcquisitionMetrics(generation="synthetic")
+        if today_roots and now_ms is None:
+            raise ValueError("today_roots requires now_ms")
+        for index, (root_id, snapshot) in enumerate(tuple(self.snapshots.items())):
+            if index >= roots - today_roots:
+                start = int(now_ms) - 3_600_000 - index * 60_000 + (index - roots + today_roots) * 1000
+                snapshot = make_root_snapshot(index, prompts_per_root, month_start_ms=start)
+            if children_per_root:
+                children = [make_root_snapshot(10_000_000 + index * children_per_root + child, prompts_per_root,
+                            month_start_ms=snapshot.root.created_at_ms + (child + 1) * 10 - (10_000_000 + index * children_per_root + child) * 60_000)
+                            for child in range(children_per_root)]
+                snapshot = replace(snapshot,
+                    sessions=(*snapshot.sessions, *(replace(item.root, parent_session_id=root_id) for item in children)),
+                    messages=(*snapshot.messages, *(message for item in children for message in item.messages)),
+                    parts=(*snapshot.parts, *(part for item in children for part in item.parts)),
+                    events=(*snapshot.events, *(event for item in children for event in item.events)),
+                    invocations=(*snapshot.invocations, *(request for item in children for request in item.invocations)))
+            if index < running_roots:
+                latest = next(item for item in reversed(snapshot.messages)
+                              if item.session_id == root_id and item.role is MessageRole.ASSISTANT)
+                snapshot = replace(snapshot, root=replace(snapshot.root, active=True),
+                    messages=tuple(replace(item, completed_at_ms=None, finish_reason=None)
+                                   if item.message_id == latest.message_id else item for item in snapshot.messages),
+                    invocations=tuple(replace(item, completed_at_ms=None, finish_reason=None)
+                                      if item.message_id == latest.message_id else item for item in snapshot.invocations))
+                snapshot = replace(snapshot, sessions=(snapshot.root, *snapshot.sessions[1:]))
+            self.snapshots[root_id] = snapshot
 
     def probe(self):
         return IntegrationHealth(True, True, "synthetic")
 
     def list_sessions(self, since_ms=None):
-        values = tuple(snapshot.root for snapshot in self.snapshots.values())
+        self.catalog_count += 1
+        self.metrics.add("full_catalog_fetches")
+        values = tuple(session for snapshot in self.snapshots.values()
+                       for session in (snapshot.root, *(item for item in snapshot.sessions if item.session_id != snapshot.root.session_id)))
         if since_ms is None:
             return values
         return tuple(item for item in values if item.updated_at_ms >= since_ms)
 
     def get_session_tree_revision(self, session_id):
         self.revision_count += 1
+        self.metrics.add("revision_checks")
         return self.snapshots[session_id].source_revision
 
     def get_session_tree_revisions(self, session_ids):
         self.batch_count += 1
+        self.metrics.add("revision_checks", len(session_ids))
         return {session_id: self.snapshots[session_id].source_revision for session_id in session_ids}
 
     def load_session_snapshot(self, session_id):
         self.load_count += 1
+        self.metrics.add("hydrated_roots")
         return self.snapshots[session_id]
+
+    def watch_candidate_session_ids(self):
+        return frozenset(snapshot.root.session_id for snapshot in self.snapshots.values() if snapshot.root.active is True)

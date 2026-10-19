@@ -9,6 +9,7 @@ from typing import Any, Callable, Mapping, Protocol
 
 from src.cache import CacheRepository
 from src.domain import AccountRef, CostDisposition, ModelRef, NormalizedSession, Provenance, SessionSnapshot, TokenUsage
+from src.domain.acquisition import AcquisitionMetrics
 
 from .models import CompactionRecord, PromptRecord, RootAnalysisBundle, TraceEntry
 
@@ -166,8 +167,9 @@ class AnalysisSessionSource(Protocol):
 
 
 class DerivedAnalysisCache:
-    def __init__(self, repository: CacheRepository) -> None:
+    def __init__(self, repository: CacheRepository, *, metrics: AcquisitionMetrics | None = None) -> None:
         self.repository = repository
+        self.metrics = metrics
 
     def load(
         self,
@@ -177,6 +179,16 @@ class DerivedAnalysisCache:
         source_revision: str,
         dependencies: AnalysisDependencies,
     ) -> RootAnalysisBundle | None:
+        if self.metrics is None:
+            return self._load(provenance, root_session_id, source_revision, dependencies)
+        self.metrics.add("cache_reads")
+        with self.metrics.measure("cache_reads"):
+            bundle = self._load(provenance, root_session_id, source_revision, dependencies)
+        self.metrics.add("cache_hits" if bundle is not None else "cache_misses")
+        return bundle
+
+    def _load(self, provenance: Provenance, root_session_id: str, source_revision: str,
+              dependencies: AnalysisDependencies) -> RootAnalysisBundle | None:
         entry = self.repository.get(_CACHE_NAMESPACE, _source_key(provenance, root_session_id))
         if entry is None:
             return None
@@ -204,6 +216,8 @@ class DerivedAnalysisCache:
     ) -> None:
         if not bundle.cacheable:
             return
+        if self.metrics is not None:
+            self.metrics.add("cache_writes")
         self.repository.put(
             _CACHE_NAMESPACE,
             _source_key(provenance, bundle.root_session_id),
@@ -235,6 +249,7 @@ def analyze_with_cache(
     cache: DerivedAnalysisCache,
     dependencies: AnalysisDependencies,
     analyzer: Callable[[SessionSnapshot], RootAnalysisBundle],
+    *, snapshot: SessionSnapshot | None = None,
 ) -> CachedAnalysisResult:
     """Reuse stable derived analysis or hydrate/analyze conservatively.
 
@@ -244,10 +259,10 @@ def analyze_with_cache(
     """
     root_session_id = root_session.session_id
     revision, cached = cached_analysis(source, root_session, cache, dependencies)
-    if cached is not None:
-        return CachedAnalysisResult(cached, True, None)
+    if cached is not None and (snapshot is None or snapshot.source_revision == revision):
+        return CachedAnalysisResult(cached, True, snapshot)
 
-    snapshot = source.load_session_snapshot(root_session_id)
+    snapshot = snapshot or source.load_session_snapshot(root_session_id)
     bundle = analyzer(snapshot)
     if bundle.source_revision != snapshot.source_revision:
         raise ValueError("Analyzer returned a bundle with mismatched source revision")

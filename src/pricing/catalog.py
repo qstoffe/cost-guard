@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+import hashlib
+import json
+from dataclasses import asdict, dataclass, field
 from decimal import Decimal
 from functools import lru_cache
 from typing import Iterable
@@ -38,6 +40,7 @@ class PricingCatalog:
     _ccost_by_model: dict[int, CCostPricing] = field(init=False, repr=False, compare=False)
     _reference_memo: dict[str, ModelPricing | None] = field(init=False, repr=False, compare=False)
     _resolve_memo: dict[str, ModelPricing | None] = field(init=False, repr=False, compare=False)
+    analysis_signature: str = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         ccost_models = tuple(ccost_pricing(model) for model in self.models)
@@ -45,6 +48,13 @@ class PricingCatalog:
         object.__setattr__(self, "_ccost_by_model", {id(m): c for m, c in zip(self.models, ccost_models)})
         object.__setattr__(self, "_reference_memo", {})
         object.__setattr__(self, "_resolve_memo", {})
+        # Estimator identity/rates, not acquisition timestamps, document labels
+        # or presentation-only release/promotion metadata.
+        semantics = [asdict(model) for model in self.models]
+        for model in semantics:
+            model.pop("metadata", None)
+        payload = json.dumps(semantics, ensure_ascii=False, separators=(",", ":"), sort_keys=True, default=str)
+        object.__setattr__(self, "analysis_signature", hashlib.sha256(payload.encode("utf-8")).hexdigest())
 
     def reference_prices(self, name: str, *, exact: bool = True) -> CCostPricing | None:
         native = self.resolve_reference(name) if exact else self.resolve(name)

@@ -22,6 +22,8 @@ ROOT = Path(__file__).resolve().parents[2]
 TESTS = ROOT / "development/tests"
 
 QUICK_PATTERNS: tuple[str, ...] = (
+    "test_history_loading.py",
+    "test_source_history_loading.py",
     "test_foundation_quick.py",
     "test_step10_release_hardening.py",
     "test_config.py",

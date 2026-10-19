@@ -276,6 +276,8 @@ Session `Σ` sums its displayed prompt/event CCost before rounding, preserving `
 
 `Token Mix % · N prompts` shows run-scoped unique prompts, shares and CCost of priced requests only, without volume/bar. Startup-running requests, between-poll completions, child work and compactions qualify; completed pre-Watch history does not. The next line, `CCost · Watch: <run> · Today: <day> · Deleted sessions before Watch start are not included in Today`, shows the Watch total CCost: qualifying run usage (zero when none; `?` when partly unpriced), unchanged by eviction, disappearance, resync or moves. From local midnight until 03:00 (configured timezone) `Today` reads as the current local date `YYYY-MM-DD`, switching live even while idle; narrow terminals move only the explanation to a continuation line. Today is available usage since local midnight plus deduplicated requests observed by this Watch, retained if their sessions disappear. Midnight starts a new daily scope; restart rebuilds from available history, so deletions before observation cannot be recovered. No account provider or persistent ledger is required. It may differ from `Σ`: mid-prompt startup can show `Σ 78`, row `78`, run total `59`; eviction changes only row subtotals.
 
+Watch first renders required activity with `Today: Pending`, then automatically publishes exact local-day accounting in bounded steps, independently of native quota refresh. It does not analyze month history merely for Today. All running candidates remain discoverable regardless of age or row cap; scoped Watch still accounts for global Today.
+
 Any account count uses compact rows when they fit, then split rows, otherwise individual wrapped blocks. Resets use `Reset@...`; fixed quotas with Remaining omit duplicate compact reset text, retained in reports/narrow fallback:
 
 ```text
@@ -354,7 +356,9 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.58:** Bounded, sanitized quota observation history in Diagnostics separates retrieval success, value changes and Watch publication; upstream freshness stays unknown. Claude quota investigation documents supported-source limitations without additional polling/model requests (2026-10-19).
+**v80.59:** Mode-aware history acquisition, staged Watch `Today: Pending`, incremental local-day accounting, shared V2 catalog/snapshot batches and semantic pricing-cache reuse. Diagnostics measures source operations and startup stages (2026-10-20).
+
+**v80.58:** Sanitized quota histories separate retrieval, changes and Watch publication; upstream freshness remains unknown. Claude quota-source limitations remain documented.
 
 **v80.57:** Duration in session/date prompt tables, scoped overlap-safe totals and session listings; existing historical timing evidence, explicit `N/A` and Watch-compatible formatting (2026-10-19).
 

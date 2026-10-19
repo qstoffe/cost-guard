@@ -73,8 +73,14 @@ def watch_evidence(selection: Any, config: Mapping[str, Any], repository: Any, *
     watch = WatchCoordinator(selection=selection, report_service=service, config=config, record_observations=False)
     try:
         started = time.perf_counter()
-        initial = watch.initialize()
+        initial = watch.initialize(defer_history=True)
         initialize_ms = _ms(started)
+        renderer = WatchRenderer(config, stream=io.StringIO(), interactive=False, terminal_width=120)
+        watch._render(renderer, initial.projection)
+        enriched = initial
+        while watch.today_ccost.history_pending:
+            enriched = watch.enrich_once()
+        watch._render(renderer, enriched.projection)
         started = time.perf_counter()
         polled = watch.poll_once()
         poll_ms = _ms(started)
@@ -95,4 +101,7 @@ def watch_evidence(selection: Any, config: Mapping[str, Any], repository: Any, *
         "rendered_accounts": len(quota.accounts) if quota is not None else 0,
         "renders": {str(width): _render_geometry(config, projection, width) for width in WIDTHS},
         "selected_source_transport": dict(transport) if isinstance(transport, Mapping) else None,
+        "acquisition": service.metrics.snapshot(),
+        "initial_today_pending": initial.projection.today_pending,
+        "fully_populated_today_pending": enriched.projection.today_pending,
     }
