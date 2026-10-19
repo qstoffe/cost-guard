@@ -623,9 +623,11 @@ class GitHubCopilotPricingProvider:
         models = list(_preserve_known_promotions(models, previous, self.now_ms()))
         if len(models) < 5:
             raise PricingUnavailableError(f"GitHub pricing parser found only {len(models)} models")
-        # Release dates are enrichment only. A failed optional fetch never
-        # invalidates fresh pricing and never erases previously verified dates.
-        models = list(self._enrich(models, previous.models if previous else (), reason="pricing_refresh"))
+        # Watch defers enrichment even when cold/expired prices require a fetch.
+        # Preserve verified dates locally; its bounded metadata worker refreshes them.
+        known = previous.models if previous else ()
+        models = list(merge_release_dates(models, known)[0] if self.defer_metadata_refresh
+                      else self._enrich(models, known, reason="pricing_refresh"))
         now = self.now_ms()
         revision = hashlib.sha256(pricing.encode("utf-8")).hexdigest()
         expiries = [
