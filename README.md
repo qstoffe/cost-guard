@@ -44,7 +44,7 @@ Double-click the `.cmd` launchers under `windows/`:
 | `Cost Guard.cmd` | Normal model comparison/account quota report. |
 | `Cost Guard Watch.cmd` | Live/global Watch; Ctrl+C stops Watch only. |
 
-Windows launchers reuse one persistent PowerShell console: completion, errors and Ctrl+C leave a usable prompt. See [download trust](#open-source-license-and-windows-download-trust).
+Windows launchers use PowerShell 7 (`pwsh.exe`) when available, otherwise Windows PowerShell 5.1 (`powershell.exe`). They reuse one persistent console: completion, errors and Ctrl+C leave a usable prompt. Python discovery checks available `py.exe` and `python.exe` installations for Python 3.11+. See [download trust](#open-source-license-and-windows-download-trust).
 
 ### macOS
 
@@ -355,6 +355,8 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 **`COST GUARD FAILED`** means an unexpected software fault: non-zero exit, an error log under `logs/errors/` and a report under `logs/crashes/`. Stopping errors end with the Diagnostics launcher path; nothing starts automatically. Isolated faults show ERROR while safe results continue. [Error diagnostics](docs/runtime-errors.md) explains privacy, 30-day retention and reporting fallback.
 
 ## Current version
+
+**v80.61:** Windows launchers prefer PowerShell 7 when available (falling back to 5.1) and test individual Python executables when multiple installations are on PATH (2026-10-20).
 
 **v80.60:** Watch cold/expired pricing refresh no longer waits for optional model release dates on its startup thread. Existing dates are retained and refreshed in the background; report enrichment and CCost prices are unchanged (2026-10-20).
 
