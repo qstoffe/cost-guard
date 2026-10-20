@@ -25,17 +25,20 @@ public static class CostGuardLauncherConsole {
     $python = $null
     $pythonArgs = @()
     foreach ($candidate in @(@{Name = 'py.exe'; Args = @('-3')}, @{Name = 'python.exe'; Args = @()})) {
-        $application = Get-Command $candidate.Name -CommandType Application -ErrorAction SilentlyContinue
-        if (-not $application) { continue }
-        $arguments = $candidate.Args
-        try {
-            & $application.Source @arguments -c 'import sys; raise SystemExit(0 if sys.version_info >= (3,11) else 1)' 1>$null 2>$null
-            if ($LASTEXITCODE -eq 0) {
-                $python = $application.Source
-                $pythonArgs = $arguments
-                break
-            }
-        } catch { continue }
+        # Get-Command may return multiple PATH matches. Probe each executable independently.
+        foreach ($application in @(Get-Command $candidate.Name -All -CommandType Application -ErrorAction SilentlyContinue)) {
+            if (-not $application -or -not $application.Source) { continue }
+            $arguments = $candidate.Args
+            try {
+                & $application.Source @arguments -c 'import sys; raise SystemExit(0 if sys.version_info >= (3,11) else 1)' 1>$null 2>$null
+                if ($LASTEXITCODE -eq 0) {
+                    $python = $application.Source
+                    $pythonArgs = $arguments
+                    break
+                }
+            } catch { continue }
+        }
+        if ($python) { break }
     }
     if (-not $python) {
         Write-Host 'Cost Guard could not find Python 3.11 or newer.'

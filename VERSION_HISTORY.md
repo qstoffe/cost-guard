@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.61 — 2026-10-20
+
+- Windows launchers prefer PowerShell 7 (`pwsh.exe`) when available and fall back to Windows PowerShell 5.1. Python discovery probes each matching `py.exe` or `python.exe` separately, rather than treating multiple `Get-Command` results as one path; the report, Watch and Diagnostics launchers share the fix.
+
 ## v80.60 — 2026-10-20
 
 - Watch no longer fetches optional model release dates on its startup thread when prices need a cold-cache or expired-cache refresh. Previously verified dates survive locally; the existing bounded background worker refreshes metadata without blocking the dashboard. Report enrichment, pinned CCost prices and promotion expiry remain unchanged.
