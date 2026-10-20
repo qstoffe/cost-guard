@@ -217,6 +217,8 @@ class ContextHistory:
         return text + max(0, entry.tokens.reasoning) if text > 0 else None
 
     def _entry_context_tokens(self, entry: TraceEntry) -> int | None:
+        if not {"input", "cache_read", "cache_write"}.issubset(entry.tokens.known_fields):
+            return None
         output = self._entry_output_tokens(entry)
         if output is None:
             return None
@@ -369,6 +371,28 @@ class ContextHistory:
 
     def session_for_event(self, event_id: str) -> str | None:
         return self._event_sessions.get(event_id)
+
+    def comparable_selection(self, previous: TraceEntry, current: TraceEntry) -> bool:
+        """A selection alone is not a rewrite, but current membership must prove continuity.
+
+        Only the same provider/model with complete retained history and nondecreasing
+        observed input supports this comparison. Effort may differ. Missing history
+        or telemetry never proves that an earlier epoch remains comparable.
+        """
+        active = self._active.get(current.session_id)
+        if active is None or previous.model != current.model:
+            return False
+        fields = {"input", "cache_read", "cache_write", "output"}
+        if not all(fields.issubset(entry.tokens.known_fields) for entry in (previous, current)):
+            return False
+        before = self._entry_context_tokens(previous)
+        after = self._entry_context_tokens(current)
+        if before is None or after is None or current.request_input_approx < before:
+            return False
+        messages = [message for message in self._snapshot.messages
+                    if message.session_id == current.session_id
+                    and message.created_at_ms <= self._request_start(current)]
+        return bool(messages) and all(message.message_id in active for message in messages)
 
     def _activity_end(self, record: PromptRecord, entry: TraceEntry) -> int:
         end = max(record.prompt_time_ms, record.last_request_time_ms, record.terminal_time_ms, entry.completed_at_ms)

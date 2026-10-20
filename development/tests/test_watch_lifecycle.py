@@ -134,7 +134,7 @@ class WindowsShellContractTests(unittest.TestCase):
         for name, mode in launchers.items():
             with self.subTest(launcher=name):
                 text = (ROOT / name).read_text(encoding="utf-8")
-                self.assertIn('/b powershell.exe -NoLogo -NoProfile -NoExit', text)
+                self.assertIn('/b %costguard_shell% -NoLogo -NoProfile -NoExit', text)
                 self.assertIn('src\\windows_launcher.ps1" -Mode ' + mode, text)
                 self.assertIn("exit /b 0", text)
                 self.assertNotIn("call :detect_python", text, "Python probes belong after batch handoff")

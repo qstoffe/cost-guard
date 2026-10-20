@@ -35,7 +35,7 @@ def _coherent_watch_deltas(rows: list[PromptProjection], *, epochs: ContextEpoch
         last_root = last_root_by_session.get(row_session)
         if not row.is_compaction:
             delta = row.watch_delta_context_tokens
-            crossed = last_root is not None and epochs.crossed(row_session, last_root.at_ms, row.at_ms + 1)
+            crossed = last_root is not None and not epochs.comparable_events(last_root.event_id, row.event_id)
             anchor = None if last_root is None or crossed else last_root.watch_next_context_tokens
             if anchor:
                 next_tokens = row.watch_next_context_tokens

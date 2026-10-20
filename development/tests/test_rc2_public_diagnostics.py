@@ -62,7 +62,7 @@ class WindowsLauncherTests(unittest.TestCase):
         text = (ROOT / "windows/Cost Guard.cmd").read_text(encoding="utf-8")
         self.assertIn("powershell.exe", text.lower())
         self.assertIn("-NoExit", text)
-        self.assertIn("/b powershell.exe", text)
+        self.assertIn("/b %costguard_shell%", text)
         self.assertIn("-Mode report", text)
         driver = (ROOT / "src/windows_launcher.ps1").read_text(encoding="utf-8")
         self.assertIn("cost-guard.py", driver)
@@ -73,7 +73,7 @@ class WindowsLauncherTests(unittest.TestCase):
         self.assertIn("powershell.exe", text.lower())
         self.assertIn("-Mode watch", text)
         self.assertIn("-NoExit", text)
-        self.assertIn("/b powershell.exe", text)
+        self.assertIn("/b %costguard_shell%", text)
         self.assertNotIn("Read-Host", text)
         self.assertLess(text.index('start "Cost Guard Watch"'), text.index("exit /b 0"))
 

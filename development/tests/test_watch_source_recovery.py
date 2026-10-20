@@ -254,7 +254,7 @@ class WatchSourceRecoveryTests(unittest.TestCase):
 class WatchLauncherExitTests(unittest.TestCase):
     def test_windows_watch_launcher_preserves_shell_and_nonzero_result(self):
         text = (ROOT / "windows/Cost Guard Watch.cmd").read_text(encoding="utf-8")
-        self.assertIn('start "Cost Guard Watch" /b powershell.exe', text)
+        self.assertIn('start "Cost Guard Watch" /b %costguard_shell%', text)
         self.assertIn("-NoExit", text)
         driver = (ROOT / "src/windows_launcher.ps1").read_text(encoding="utf-8")
         self.assertIn("$code = $LASTEXITCODE", driver)

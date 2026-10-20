@@ -71,7 +71,7 @@ class ContextEpochTests(unittest.TestCase):
         self.assertIsNone(after.next_context_tokens)
         self.assertEqual("", after.next_context_warning)
         stale = row(after, "u_next")
-        self.assertEqual((None, None, ""), (stale.next_context_tokens, stale.watch_next_context_tokens,
+        self.assertEqual((80_005, 80_005, ""), (stale.next_context_tokens, stale.watch_next_context_tokens,
                                             stale.watch_next_context_warning))
         historical = row(after, "u_sub")
         self.assertIsNotNone(historical.next_context_tokens, "an anchor already followed by a same-epoch request stays")
@@ -112,7 +112,7 @@ class ContextEpochTests(unittest.TestCase):
         stale = moved_location(with_prompt(history, "span", 2400, TokenUsage(input=50, output=5)), 2800)
         bundle = analyze_snapshot(stale, now_ms=9000)
         record = next(item for item in bundle.prompts if item.prompt_id == "u_span")
-        self.assertIsNone(watch_context_state(stale, bundle, record, sample_catalog()).next_tokens)
+        self.assertEqual(55, watch_context_state(stale, bundle, record, sample_catalog()).next_tokens)
 
 
 class WatchTotalAndMoveTests(unittest.TestCase):

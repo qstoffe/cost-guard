@@ -7,7 +7,7 @@ from typing import Callable, Mapping
 from src.analysis.comparisons import compaction_model_timeline_name, effort_model_name
 from src.analysis.context import (
     ContextEpochs, NextContextWarningState, build_context_timeline,
-    estimate_next_context, next_context_warning_state, watch_context_state,
+    estimate_event_context, estimate_next_context, next_context_warning_state, watch_context_state,
 )
 from src.analysis.effort import prompt_effort, prompt_replies
 from src.analysis.models import CompactionRecord, PromptRecord, RootAnalysisBundle
@@ -93,10 +93,12 @@ class PromptRowProjector:
         catalog = self.catalog
         state = self.timeline.get(record.prompt_id)
         watch_state = watch_context_state(self.snapshot, self.bundle, record, catalog, self.epochs)
-        estimate = estimate_next_context(record, catalog, epochs=self.epochs)
+        estimate = estimate_event_context(record, catalog, epochs=self.epochs)
+        current = estimate_next_context(record, catalog, epochs=self.epochs)
         model_id = record.last_root_entry.model.model if record.last_root_entry else ""
-        warning = self.warning(estimate.tokens, model_id)
-        watch_warning = self.warning(watch_state.next_tokens, watch_state.model_id)
+        warning = self.warning(current.tokens, model_id)
+        live_tokens = watch_state.next_tokens if not self.epochs.retired(record.session_id, watch_state.last_activity_ms) else None
+        watch_warning = self.warning(live_tokens, watch_state.model_id)
         mix = None if record.in_progress else mix_percent(
             (record.input_tokens, record.cache_read_tokens, record.cache_write_tokens, record.output_tokens))
         ictx_ccost = None if record.in_progress else _context_ccost(catalog, record)
