@@ -48,6 +48,8 @@ QUICK_PATTERNS: tuple[str, ...] = (
     "test_source_selection.py",
     "test_analysis_core.py",
     "test_step6_context_comparisons.py",
+    "test_context_history_projection.py",
+    "test_windows_launcher.py",
     "test_effort_presentation.py",
     "test_context_warning_presentation.py",
     "test_step6_pricing_accounts.py",

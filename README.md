@@ -235,7 +235,7 @@ Known causal splits show **Main / Subagents / Total**; running prompts may show 
 
 Duration excludes idle gaps, session creation time and unrelated child work: 20 minutes of work followed three days later by 40 minutes totals `1h`, not three days. It includes reasoning, tools, attributed subagents, verified background waits, compactions and failed/cancelled execution with reliable timing. Detail Total unions only the selected prompt/event intervals (also for date ranges); it never sums overlapping parent/child time twice. Running intervals use the report observation time; completed intervals stay fixed. Historical/archived sessions need no prior Watch run, but unavailable/deleted history cannot be reconstructed. A missing or invalid execution boundary is `N/A`, and any included unresolved interval makes the total `N/A`, not a misleading subtotal. No separate tracking ledger or history migration is needed.
 
-Moving a session (e.g. to a worktree) keeps its ID and never re-counts history. The non-billable move starts a new context epoch: Next Ictx is N/A until the first request after it.
+Moving a session keeps its ID and accounting. Completed rows retain historical context; current continuation and warnings become N/A until a qualifying post-boundary request. [Context semantics](docs/usage-and-cost.md#continuing-context-and-history-changes) explain comparisons and uncertainty.
 
 A one-shot session report automatically follows an already-running latest prompt until that prompt completes or aborts.
 
@@ -268,7 +268,7 @@ Watch's first view never waits for quotas. An account-only scheduler refreshes h
 | `CCost` | Current observed prompt/event reference valuation, not billing. |
 | `Calls` | Completed causal model requests. |
 | `Duration` | Wall-clock duration; a prompt stays running (footer `background shell`) while its verified background job runs. |
-| `Δctx -> Next Ictx` | Continuing active-history context when available, in a fixed-width aligned cell. |
+| `Δctx -> Next Ictx` | Historical effective context for completed rows; continuing context for live work. N/A when unsupported. |
 
 [Watch activity](docs/watch-activity.md): yellow `Skills (N)` lists confirmed exact IDs, newest first; red `[N tool call failures]` requires direct evidence, never load recency. Native errors and recognized Toolkit error contracts count once; cancellations and exit codes alone do not. Narrow rows preserve total/failures and whole skill IDs with `+N more`; the metric table keeps fixed geometry.
 
@@ -356,7 +356,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.61:** Windows launchers prefer PowerShell 7 when available (falling back to 5.1) and test individual Python executables when multiple installations are on PATH (2026-10-20).
+**v80.62:** Historical context survives later switches; current anchors stay independently guarded (2026-10-20). v80.61 fixed Windows shell/Python selection.
 
 **v80.60:** Watch cold/expired pricing refresh no longer waits for optional model release dates on its startup thread. Existing dates are retained and refreshed in the background; report enrichment and CCost prices are unchanged (2026-10-20).
 

@@ -6,7 +6,7 @@ estimates back into authoritative billing.
 from __future__ import annotations
 
 import json
-from bisect import bisect_left, bisect_right
+from bisect import bisect_left
 from dataclasses import dataclass
 from decimal import Decimal
 from enum import Enum
@@ -81,7 +81,7 @@ class ContextTimelineState:
 
 @dataclass(frozen=True, slots=True)
 class WatchContextState:
-    """Live Watch context values matching the retained v77 session-timeline semantics."""
+    """Historical completed-row or live provisional context values for Watch."""
 
     next_tokens: int | None
     delta_tokens: int | None
@@ -164,7 +164,7 @@ def _message_tokens(message: NormalizedMessage) -> int:
 
 
 def _estimate_entry_next_context(entry: TraceEntry, catalog: PricingCatalog) -> NextContextEstimate:
-    if "output" not in entry.tokens.known_fields:
+    if not {"input", "cache_read", "cache_write", "output"}.issubset(entry.tokens.known_fields):
         return NextContextEstimate(None)
     next_tokens = entry.tokens.total
     if next_tokens <= 0:
@@ -216,14 +216,15 @@ class ContextEpochs:
     """Explicit context boundaries and verified active history scope anchors."""
 
     def __init__(self, snapshot: SessionSnapshot, bundle: RootAnalysisBundle) -> None:
+        self._boundary_events = snapshot.context_boundaries
+        self._prompt_by_entry = {(entry.session_id, entry.message_id): record for record in bundle.prompts
+                                 for entry in record.entries if entry.session_id == record.session_id}
+        self._prompts = {record.prompt_id: record for record in bundle.prompts}
+        self._compactions = {record.user_message_id: record for record in bundle.compactions}
         self._boundaries: dict[str, list[int]] = {}
         for item in snapshot.context_boundaries:
             self._boundaries.setdefault(item.session_id, []).append(item.at_ms)
-        self._requests: dict[str, list[int]] = {}
-        for entry in bundle.trace_entries:
-            if entry.session_id in self._boundaries:
-                self._requests.setdefault(entry.session_id, []).append(entry.completed_at_ms)
-        for values in (*self._boundaries.values(), *self._requests.values()):
+        for values in self._boundaries.values():
             values.sort()
         compacted = tuple(
             CompactionContext(item.session_id, item.user_message_id, item.completed_at_ms,
@@ -239,11 +240,13 @@ class ContextEpochs:
         return index < len(boundaries) and (end_ms is None or boundaries[index] < end_ms)
 
     def retired(self, session_id: str, anchor_ms: int) -> bool:
-        """Whether an explicit boundary retires an anchor before the next request."""
-        requests = self._requests.get(session_id, ())
-        later = bisect_right(requests, anchor_ms)
-        # A tie with the move cannot prove that the request followed it.
-        return self.crossed(session_id, anchor_ms, requests[later] + 1 if later < len(requests) else None)
+        """Current future-use eligibility: any later boundary retires this anchor.
+
+        Historical projections must not call this. Even an intervening request
+        cannot revive this anchor if that request was later removed by undo.
+        A timestamp tie cannot prove that a request followed the boundary.
+        """
+        return self.crossed(session_id, anchor_ms, None)
 
     def active_entry(self, entry: TraceEntry) -> bool | None:
         return self._history.active_entry(entry)
@@ -256,6 +259,37 @@ class ContextEpochs:
 
     def session_for_event(self, event_id: str) -> str | None:
         return self._history.session_for_event(event_id)
+
+    def comparable(self, previous: TraceEntry, record: PromptRecord) -> bool:
+        """Compare at the projected event, never against a later session boundary."""
+        current = _latest_meaningful_watch_root(record)
+        end = current.completed_at_ms if current is not None else record.prompt_time_ms
+        boundaries = [item for item in self._boundary_events if item.session_id == record.session_id
+                      and previous.completed_at_ms <= item.at_ms <= end]
+        if self.active_entry(previous) is False or self.active_prompt(record) is False:
+            return False
+        if not boundaries:
+            return True
+        return (current is not None and all(item.kind == "model-selection" for item in boundaries)
+                and self._history.comparable_selection(previous, current))
+
+    def prior_estimate(self, entry: TraceEntry) -> int | None:
+        record = self._prompt_by_entry.get((entry.session_id, entry.message_id))
+        if record is None:
+            return None
+        return self.estimate(record, None, candidate=entry).tokens
+
+    def comparable_events(self, previous_id: str, current_id: str) -> bool:
+        current = self._prompts.get(current_id)
+        if current is None or self.active_prompt(current) is False:
+            return False
+        previous = self._prompts.get(previous_id)
+        if previous is not None:
+            return previous.last_root_entry is not None and self.comparable(previous.last_root_entry, current)
+        compacted = self._compactions.get(previous_id)
+        return (compacted is not None
+                and self.active_message(compacted.session_id, previous_id) is not False
+                and not self.crossed(compacted.session_id, compacted.completed_at_ms, current.prompt_time_ms + 1))
 
     def estimate(self, record: PromptRecord, catalog: PricingCatalog | None, *,
                  candidate: TraceEntry | None = None) -> NextContextEstimate:
@@ -273,13 +307,24 @@ class ContextEpochs:
 
 def estimate_next_context(record: PromptRecord, catalog: PricingCatalog, *,
                           epochs: ContextEpochs | None = None) -> NextContextEstimate:
+    """Assess continuation eligibility, including boundaries after completion."""
     if record.in_progress or record.aborted or record.last_root_entry is None:
+        return NextContextEstimate(None)
+    if epochs is not None and epochs.active_prompt(record) is False:
         return NextContextEstimate(None)
     if epochs is not None and epochs.retired(record.session_id, record.last_root_entry.completed_at_ms):
         return NextContextEstimate(None)
     if epochs is not None:
         return epochs.estimate(record, catalog)
     return _estimate_entry_next_context(record.last_root_entry, catalog)
+
+
+def estimate_event_context(record: PromptRecord, catalog: PricingCatalog, *,
+                           epochs: ContextEpochs) -> NextContextEstimate:
+    """Historical completion state; future-use retirement is deliberately irrelevant."""
+    if record.in_progress or record.aborted or record.last_root_entry is None:
+        return NextContextEstimate(None)
+    return epochs.estimate(record, catalog)
 
 
 def _latest_meaningful_watch_root(record: PromptRecord) -> TraceEntry | None:
@@ -454,10 +499,11 @@ def watch_context_state(
     if record.prompt_kind == "subtask" or record.watch_error:
         return WatchContextState(None, None)
 
-    # Anchors from before a location move belong to a retired context epoch.
+    # Historical completion and current future-use eligibility are separate.
     epochs = epochs or ContextEpochs(snapshot, bundle)
     if epochs.active_prompt(record) is False:
-        return WatchContextState(None, None)
+        estimate = estimate_event_context(record, catalog, epochs=epochs) if catalog is not None else epochs.estimate(record, None)
+        return WatchContextState(estimate.tokens, None)
     prior_entry = record.pre_prompt_entry
     prior_tokens: int | None = None
     prior_time = 0
@@ -467,10 +513,10 @@ def watch_context_state(
         and prior_entry.request_input_approx > 0
         and prior_entry.completed_at_ms < record.prompt_time_ms
         and epochs.active_entry(prior_entry) is not False
-        and not epochs.retired(record.session_id, prior_entry.completed_at_ms)
+        and epochs.comparable(prior_entry, record)
     ):
-        value = prior_entry.tokens.total
-        if value > 0:
+        value = epochs.prior_estimate(prior_entry)
+        if value is not None and value > 0:
             prior_tokens = value
             prior_time = prior_entry.completed_at_ms
 
@@ -482,7 +528,7 @@ def watch_context_state(
             and not item.in_progress
             and item.completed_at_ms > 0
             and item.completed_at_ms < record.prompt_time_ms
-            and not epochs.retired(record.session_id, item.completed_at_ms)
+            and not epochs.crossed(record.session_id, item.completed_at_ms, record.prompt_time_ms + 1)
         ),
         key=lambda item: (item.completed_at_ms, item.created_at_ms, item.user_message_id),
         default=None,
@@ -501,7 +547,8 @@ def watch_context_state(
 
     current_tokens: int | None = None
     current_entry = _latest_meaningful_watch_root(record)
-    if current_entry is not None and epochs.retired(record.session_id, current_entry.completed_at_ms):
+    if (current_entry is not None and (record.in_progress or record.aborted)
+            and epochs.retired(record.session_id, current_entry.completed_at_ms)):
         current_entry = None  # wait for the first real request after the move
     estimate = epochs.estimate(record, catalog, candidate=current_entry) if current_entry is not None else None
     if estimate is not None:
@@ -543,6 +590,8 @@ def watch_context_state(
     if (baseline is None or baseline <= 0) and not mixed:
         baseline = record.input_context_tokens if record.input_context_tokens > 0 else None
     delta = current_tokens - baseline if baseline is not None and baseline > 0 else None
+    if delta is not None and delta < 0:
+        delta = None  # only explicit compaction owns a supported reduction
     model_id = current_entry.model.model if current_entry is not None else record.main_model_id
     last_activity_ms = current_entry.completed_at_ms if current_entry is not None else record.prompt_time_ms
     return WatchContextState(
@@ -595,7 +644,7 @@ def build_context_timeline(
                 else:
                     previous_next.pop(session_id, None)
                 continue
-            estimate = estimate_next_context(record, catalog, epochs=epochs)
+            estimate = estimate_event_context(record, catalog, epochs=epochs)
             next_tokens = estimate.tokens
             event_id = record.prompt_id
         else:
@@ -606,6 +655,8 @@ def build_context_timeline(
             event_id = record.user_message_id
         baseline = incoming if kind == "compaction" and incoming is not None else previous_next.get(session_id, incoming)
         delta = next_tokens - baseline if next_tokens is not None and baseline is not None else None
+        if kind == "prompt":
+            delta = watch_context_state(snapshot, bundle, record, catalog, epochs).delta_tokens
         states.append(ContextTimelineState(kind, event_id, at_ms, incoming, next_tokens, delta, next_tokens is not None))
         if next_tokens is not None:
             previous_next[session_id] = next_tokens

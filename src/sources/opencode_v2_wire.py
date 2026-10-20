@@ -565,7 +565,8 @@ def selection_boundaries(items: Sequence[Mapping[str, Any]], *, session_id: str)
         if (not isinstance(message_id, str) or not message_id or isinstance(at, bool)
                 or not isinstance(at, (int, float)) or not math.isfinite(at) or at <= 0):
             continue
-        result.append(ContextBoundary(session_id, message_id, int(at)))
+        kind = "model-selection" if item["type"] == "model-switched" else "reset"
+        result.append(ContextBoundary(session_id, message_id, int(at), kind))
     return tuple(sorted(result, key=lambda value: (value.at_ms, value.boundary_id)))
 
 

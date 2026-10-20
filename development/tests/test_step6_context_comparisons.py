@@ -370,10 +370,11 @@ class WatchContextDeltaRegressionTests(unittest.TestCase):
 
     @staticmethod
     def aligned(rows, *, crossed=(), subtasks=frozenset()):
+        by_id = {row.event_id: row for row in rows}
         class Epochs:
-            def crossed(self, session_id, start, end):
-                assert session_id == "root"
-                return any(start <= boundary < end for boundary in crossed)
+            def comparable_events(self, previous_id, current_id):
+                start, end = by_id[previous_id].at_ms, by_id[current_id].at_ms + 1
+                return not any(start <= boundary < end for boundary in crossed)
         return _coherent_watch_deltas(
             list(rows), epochs=Epochs(), session_id="root", subtask_ids=subtasks,
         )
@@ -455,8 +456,8 @@ class WatchContextDeltaRegressionTests(unittest.TestCase):
             def session_for_event(self, event_id):
                 return self.sessions[event_id]
 
-            def crossed(self, session_id, _start, _end):
-                return False
+            def comparable_events(self, _previous_id, _current_id):
+                return True
 
         rows = [self.row(1, 1000, 100, 10), self.row(2, 1500, 5, 5), self.row(3, 2000, 120, 999)]
         fixed = _coherent_watch_deltas(rows, epochs=SessionEpochs(), session_id="root", subtask_ids=frozenset())

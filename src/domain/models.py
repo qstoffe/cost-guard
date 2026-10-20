@@ -236,11 +236,14 @@ class ContextBoundary:
     """Non-billable start of a new context epoch, e.g. move or selection change.
 
     Carries no usage and no filesystem location; identity remains the session.
+    ``model-selection`` permits evidence-backed historical comparison, never
+    automatic future anchor reuse. Other/unknown kinds remain reset boundaries.
     """
 
     session_id: str
     boundary_id: str
     at_ms: int
+    kind: str = "reset"
 
 
 @dataclass(frozen=True, slots=True)
