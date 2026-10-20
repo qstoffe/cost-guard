@@ -33,11 +33,14 @@ from .version import DISPLAY_VERSION, PRODUCT_NAME, mode_heading
 from .watch import WatchCoordinator
 from .watch.coordinator import WatchedSessionEnded
 from .runtime_errors import check_pending, context, diagnostics_hint
+from .launcher_feedback import release_launcher_status
+from .domain.progress import WorkProgress
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 
 
 def _print_error(title: str, message: str) -> None:
+    release_launcher_status()
     print(title)
     print()
     print(message)
@@ -184,12 +187,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         if len(args) != 1:
             _print_error("Cost Guard - Argument error", "--help cannot be combined with report arguments.")
             return 2
+        release_launcher_status()
         print(help_text(), end="")
         return 0
     if "--version" in args:
         if len(args) != 1:
             _print_error("Cost Guard - Argument error", "--version cannot be combined with report arguments.")
             return 2
+        release_launcher_status()
         print(f"{PRODUCT_NAME} {DISPLAY_VERSION}")
         return 0
 
@@ -220,23 +225,19 @@ def main(argv: Sequence[str] | None = None) -> int:
             watch_renderer = WatchRenderer(config)
             watch_renderer.render_initializing("detecting...")
             progress = StartupProgress(
-                mode="watch",
+                mode="Watch Session" if command.kind is CommandKind.SESSION else "Watch",
                 line_sink=watch_renderer.render_startup_status if watch_renderer.interactive else None,
             )
         else:
-            progress = StartupProgress(mode="normal", heading=mode_heading(startup_mode(command)))
+            progress = StartupProgress(mode=startup_mode(command), heading=mode_heading(startup_mode(command)))
 
-        progress.update("Selecting OpenCode source")
+        progress.update(WorkProgress("Selecting OpenCode source", "source"))
         context(phase="source selection")
         requested_source = str(config["openCode"]["source"])
         selection = _select_or_wait(requested_source, progress, watch_renderer)
         if selection is None:
             return 1
-        if command.watch and watch_renderer is not None:
-            # The transient two-line startup surface gives way to the full dashboard.
-            watch_renderer.render_initializing(selection.selected.upper())
-
-        progress.update("Initializing cache")
+        progress.update(WorkProgress("Initializing cache", "cache"))
         context(phase="cache initialization")
         database = CacheDatabase(PACKAGE_ROOT)
         database.initialize()
@@ -263,7 +264,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             progress=progress.update if command.kind is not CommandKind.TOKEN_MIX else (lambda _label: None),
         )
         if command.watch:
-            progress.update("Initializing Watch")
+            progress.update(WorkProgress("Initializing Watch", "pricing"))
             context(phase="Watch initialization")
             coordinator = WatchCoordinator(
                 selection=selection,
@@ -275,8 +276,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             # Watch uses coordinator recovery, never the short report retry policy.
             if selection.selected == "v2":
                 selection.source.read_recovery = None
-            initial_cycle = coordinator.initialize_with_recovery(watch_renderer)
-            progress.stop()
+            initial_cycle = coordinator.initialize_with_recovery(watch_renderer, before_recovery=progress.stop)
+            progress.stop(complete=True)
             assert watch_renderer is not None
             context(phase="Watch runtime")
             coordinator.run_forever(watch_renderer, initial_cycle=initial_cycle)
@@ -287,7 +288,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             projection = service.build_token_mix_history(progress.update)
         else:
             projection = service.build(_report_request(command))
-        progress.stop()
+        progress.stop(complete=True)
         context(phase="report presentation")
         ReportRenderer(config).render(projection)
         if command.kind is CommandKind.SESSION and any(

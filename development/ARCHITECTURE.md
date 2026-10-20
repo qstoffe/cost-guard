@@ -176,9 +176,9 @@ Watch tool observations use canonical prompt/task scope and one physical-call id
 
 ## Presentation and CLI
 
-Presentation renders projections/progress, never integration queries or analysis. One-shot tables shrink flexible text, not identifiers/numbers/costs. Watch retains fixed geometry and one overwriteable status row, including empty-dashboard startup progress. `cost-guard.py` stays thin; `src/bootstrap.py` wires concrete layers.
+Presentation renders projections/progress, never integration queries or analysis. One-shot tables shrink flexible text, not identifiers/numbers/costs. Watch retains fixed geometry and one status row. `watch_screen.py` buffers/diffs rows only when both frames fit; wrapping/resize uses one overwrite with stale-tail cleanup, never screen/scrollback clears. `domain/progress.py` carries stage/work facts; `startup_estimate.py` owns approximate mode budgets and run-local interpolation, not billing/timing telemetry. Unknown steps are indeterminate; success alone reaches 100%. Animation joins before dashboard or recovery output. `cost-guard.py` stays thin; `src/bootstrap.py` wires concrete layers.
 
-CLI retains v77 report/Watch argument shapes. Public `windows/|macos/` hold everyday launchers; Diagnostics lives under `development/windows|macos/`. Windows `.cmd` files hand off with `start /b` then exit; `src/windows_launcher.ps1` restores inherited Ctrl+C handling, detects Python 3.11+ and runs the relative entry point. `-NoExit` leaves one usable shell after completion/failure/Ctrl+C, never an Enter-to-close or batch confirmation.
+CLI retains v77 report/Watch argument shapes. Public `windows/|macos/` hold everyday launchers; Diagnostics lives under `development/windows|macos/`. Shell-native requirements feedback precedes environment checks; `launcher_feedback.py` consumes its transient row when Python can replace it (plain lines on redirection). Windows `.cmd` files hand off with `start /b` then exit; `src/windows_launcher.ps1` restores inherited Ctrl+C, detects Python 3.11+ and runs the relative entry point. `-NoExit` leaves one usable shell after completion/failure/Ctrl+C, never an Enter-to-close or batch confirmation.
 
 ## Dependency direction
 

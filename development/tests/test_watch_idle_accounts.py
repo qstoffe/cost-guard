@@ -89,6 +89,16 @@ class IdleAccountPublicationTests(unittest.TestCase):
         self.assertEqual(loads, watch.source.load_count, "no source hydration was needed")
         self.assertEqual(starts, len(self.starts), "no redundant provider request")
 
+    def test_quota_completed_during_initialization_is_in_first_dashboard(self):
+        watch = self.watch(MutableSource(make_snapshot()))
+        self.published.append(self.update)
+        cycle = watch.initialize(defer_history=True)
+        renderer = RecordingRenderer()
+        watch._render(renderer, cycle.projection)
+        self.assertIn(ACCOUNT, renderer.frames[0])
+        watch._render_wake(renderer, watch.status_projection(seconds_until_check=5), cycle.projection)
+        self.assertEqual(1, len(renderer.frames), "the accepted early result must not require a second dashboard")
+
     def test_projection_absorbed_before_a_source_poll_is_still_drawn(self):
         watch, renderer, cycle = self.idle_dashboard(MutableSource(make_snapshot()))
         self.published.append(self.update)

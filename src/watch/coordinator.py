@@ -408,11 +408,13 @@ class WatchCoordinator:
         self.startup_quiet_roots = sum(1 for root_id in quiet if root_id not in earlier)
         return hydrated
 
-    def initialize_with_recovery(self, renderer) -> WatchCycle:
+    def initialize_with_recovery(self, renderer, *, before_recovery: Callable[[], None] | None = None) -> WatchCycle:
         """Recover unfinished startup with the same selected-source lifecycle."""
         try:
             return self.initialize(defer_history=True)
         except SourceError as error:
+            if before_recovery is not None:
+                before_recovery()
             self._discard_initialization()
             return self._recover_source(renderer, error, initializing=True)
 

@@ -378,7 +378,7 @@ class WatchLayoutRegressionTests(unittest.TestCase):
             renderer = WatchRenderer(config, stream=stream, interactive=True)
             renderer.render(projection)
             text = stream.getvalue()
-            clear = "\x1b[2J\x1b[3J\x1b[H"
+            clear = "\x1b[H"
             self.assertEqual(text.count(clear), 1)
             self.assertFalse(text.endswith("\n"), "interactive status must remain on the current row")
             renderer.render_status(replace(projection, status="Refreshing...", status_active=True))
@@ -390,7 +390,8 @@ class WatchLayoutRegressionTests(unittest.TestCase):
             self.assertIn("Watch: Idle · Next prompt check: 00:30", tail)
             self.assertNotIn("Refreshing...\nWatch: Idle", tail)
             renderer.render(projection)
-            self.assertEqual(stream.getvalue().count(clear), 2, "each full redraw must clear scrollback")
+            self.assertEqual(stream.getvalue().count(clear), 2, "changed full frames overwrite from home")
+            self.assertNotIn("\x1b[3J", stream.getvalue())
 
     def test_watch_initialization_has_transient_heading_and_adjacent_progress(self):
         config = dict(load_configuration(ROOT).values)
@@ -399,7 +400,9 @@ class WatchLayoutRegressionTests(unittest.TestCase):
         renderer.render_initializing("V2")
         renderer.render_startup_status("Watch: [####----] 50% / Analyzing")
         text = stream.getvalue()
-        self.assertEqual(text.count("\x1b[2J\x1b[3J\x1b[H"), 1)
+        self.assertEqual(text.count("\x1b[H"), 1)
+        self.assertNotIn("\x1b[2J", text)
+        self.assertNotIn("\x1b[3J", text)
         self.assertRegex(text, r"Cost Guard v\d+\.\d+ \(Watch started: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\) — Watch\n")
         self.assertNotIn("Session / prompt", text)
         self.assertNotIn("Token Mix %", text)

@@ -7,6 +7,7 @@ from src.analysis.cache import AnalysisDependencies, DerivedAnalysisCache, analy
 from src.analysis.models import RootAnalysisBundle
 from src.domain import NormalizedSession, SessionSnapshot
 from src.domain.acquisition import AcquisitionMetrics
+from src.domain.progress import WorkProgress
 from src.sources.base import SessionSource
 from .sampling import AnalyzedRoot
 
@@ -25,12 +26,13 @@ class RootAcquisition:
         self.analyzed_at_ms: dict[str, int] = {}
 
     def analyze(self, root: NormalizedSession, *, now_ms: int, detail: bool = False, force_fresh: bool = False,
-                snapshot: SessionSnapshot | None = None) -> AnalyzedRoot:
+                snapshot: SessionSnapshot | None = None, report_progress: bool = True) -> AnalyzedRoot:
         existing = self.analyzed.get(root.session_id)
         if not force_fresh and existing is not None and (not detail or existing.snapshot is not None):
             return existing
         self.metrics.add("analysis_candidate_roots")
-        self.progress(f"Analyzing {root.session_id}")
+        if report_progress:
+            self.progress(WorkProgress(f"Analyzing {root.session_id}", "history"))
         if force_fresh:
             # Live payloads may advance in place even when a cheap revision does
             # not. Running roots are authoritatively hydrated on every poll.
@@ -57,6 +59,7 @@ class RootAcquisition:
             return frozenset()
         force = set(force_fresh_ids)
         pending = []
+        self.progress(WorkProgress("Checking session cache", "history"))
         for root in roots:
             existing = self.analyzed.get(root.session_id)
             if root.session_id not in force and existing is None:
@@ -67,14 +70,19 @@ class RootAcquisition:
             if root.session_id in force or existing is None or (detail and existing.snapshot is None):
                 pending.append(root)
         if not pending:
+            self.progress(WorkProgress("Session cache ready", "history", len(roots), len(roots)))
             return frozenset()
+        self.progress(WorkProgress("Loading session snapshots", "history"))
         snapshots = batch(tuple(root.session_id for root in pending))
-        for root in pending:
+        self.progress(WorkProgress("Analyzing sessions", "history", 0, len(pending)))
+        for index, root in enumerate(pending):
             snapshot = snapshots[root.session_id]
             existing = self.analyzed.get(root.session_id)
             if root.session_id not in force and existing is not None and existing.bundle.source_revision == snapshot.source_revision:
                 existing.snapshot = snapshot
             else:
                 self.analyzed.pop(root.session_id, None)
-                self.analyze(root, now_ms=now_ms, detail=detail, force_fresh=root.session_id in force, snapshot=snapshot)
+                self.analyze(root, now_ms=now_ms, detail=detail, force_fresh=root.session_id in force,
+                             snapshot=snapshot, report_progress=False)
+            self.progress(WorkProgress("Analyzing sessions", "history", index + 1, len(pending)))
         return frozenset(snapshots)

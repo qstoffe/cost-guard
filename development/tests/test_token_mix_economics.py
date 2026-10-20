@@ -181,8 +181,10 @@ class ModelHistoryTests(unittest.TestCase):
         self.assertEqual(("GPT Test", 2, len(bundle.trace_entries)), (row.model, row.prompts, row.calls))
         self.assertEqual(HISTORY_NOTE, report.notes[0])
         self.assertFalse(service._analyzed, "deep scan must not retain snapshots")
-        self.assertIn(("Analyzing usage history...", 5), calls)
-        self.assertEqual(sorted(p for _l, p in calls), [p for _l, p in calls])
+        self.assertIn(("Analyzing usage history...", None), calls)
+        observation = next(label for label, _ in calls if label == "Analyzing usage history...")
+        self.assertEqual((0, 1), (observation.completed, observation.total))
+        self.assertTrue(all(percent is None for _label, percent in calls), "history reports work, not invented percentages")
         text = rendered(report)
         for heading in ("Model", "Prompts", "Calls", "Input", "Cache", "Write", "Output", "CCost", "not actual billing"):
             self.assertIn(heading, text)

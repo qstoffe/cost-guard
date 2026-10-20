@@ -16,7 +16,7 @@ from src.reports.models import AccountProjection, AccountsQuotasProjection, Prom
 from src.watch.models import ToolObservation, WatchProjection, WatchRow, WatchSessionSubtotal
 from src.version import DISPLAY_VERSION
 
-CLEAR = "\x1b[2J\x1b[3J\x1b[H"
+CLEAR = "\x1b[H"
 ERASE_TAIL = "\x1b[0J"
 STATUS = "Idle · Next prompt check: 00:30"
 
@@ -68,7 +68,7 @@ class WatchRenderingTests(unittest.TestCase):
 
         expected = f"Cost Guard {DISPLAY_VERSION} (Watch started: 2026-10-14 14:34:56)"
         self.assertIn(expected + " — Watch", initializing)
-        title_lines = dashboard.replace(CLEAR, "").splitlines()[:2]
+        title_lines = dashboard.replace(CLEAR, "").replace("\x1b[2K", "").splitlines()[:2]
         self.assertIn(expected + " — Prompt watch", title_lines[0])
         self.assertEqual("Source: OpenCode V2", title_lines[1])
         self.assertTrue(all(len(line) <= 80 for line in title_lines))
@@ -135,7 +135,9 @@ class WatchRenderingTests(unittest.TestCase):
 
     def assert_full_frame(self, frame):
         self.assertTrue(frame.startswith(CLEAR))
-        self.assertEqual(1, frame.count(CLEAR), "full redraw still clears scrollback")
+        self.assertEqual(1, frame.count(CLEAR))
+        self.assertNotIn("\x1b[2J", frame, "overwrite frames must never blank the screen")
+        self.assertNotIn("\x1b[3J", frame, "scrollback must survive")
         self.assertEqual(1, frame.count(ERASE_TAIL))
         self.assertTrue(frame.endswith("Watch: " + STATUS + ERASE_TAIL),
                         "cleanup follows the final status cursor without a newline")
@@ -213,9 +215,9 @@ class WatchRenderingTests(unittest.TestCase):
         self.assertTrue(frame.endswith("\x1b[92mWatch: Refreshing...\x1b[0m" + ERASE_TAIL))
         self.assertEqual([frame], stream.flushed)
         renderer.render_status(projection)
-        update = "\r\x1b[2K\x1b[92mWatch: Refreshing...\x1b[0m"
+        update = ""
         self.assertEqual(update, stream.getvalue()[len(frame):])
-        self.assertEqual([frame, frame + update], stream.flushed)
+        self.assertEqual([frame], stream.flushed, "identical status is not terminal I/O")
 
     def test_redirected_frames_remain_plain_newline_terminated_output(self):
         stream = FlushedBuffer()
@@ -241,7 +243,7 @@ class WatchRenderingTests(unittest.TestCase):
         ):
             stream = io.StringIO()
             render(WatchRenderer({"colors": {}}, stream=stream, interactive=True))
-            lines = stream.getvalue().replace(CLEAR, "").splitlines()
+            lines = stream.getvalue().replace(CLEAR, "").replace("\x1b[2K", "").splitlines()
             table = [line for line in lines if line.startswith("|")]
             self.assertEqual(5, len(table), "rule, header, rule, placeholder, rule")
             self.assertIn(placeholder, table[3])

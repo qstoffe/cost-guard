@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import tempfile
+import io
 import unittest
 from unittest.mock import patch
 
@@ -9,6 +10,7 @@ from development.fixtures.watch_runtime import CountingAccountProvider, FakeLive
 from src.sources.errors import FailureCode, SourceDataError, SourceSchemaError, SourceUnavailableError
 from src.watch import WatchCoordinator
 from src.watch.coordinator import SOURCE_UNREADABLE_RETRIES
+from src.presentation.progress import StartupProgress
 
 
 class FlakySource(FakeLiveSource):
@@ -41,6 +43,29 @@ class Renderer:
 
 
 class WatchStartupRecoveryTests(unittest.TestCase):
+    def test_animation_is_closed_before_initial_recovery_writes_status(self):
+        with tempfile.TemporaryDirectory() as td:
+            source = FlakySource(error=SourceUnavailableError("offline", code=FailureCode.REFUSED))
+            config, selection, service, _ = make_service(td, source)
+            progress = StartupProgress(io.StringIO(), interactive=True)
+            progress.update("Selecting source")
+            renderer = Renderer()
+            write = renderer.render_startup_status
+
+            def status(text, *, active):
+                self.assertTrue(progress._closed)
+                self.assertFalse(progress._worker.is_alive())
+                write(text, active=active)
+
+            renderer.render_startup_status = status
+            watch = WatchCoordinator(selection=selection, report_service=service, config=config,
+                                     clock_ms=lambda: 2200, sleep=lambda _seconds: setattr(source, "failure", None))
+            self.addCleanup(watch.close)
+            with patch.object(watch, "_start_event_pump"):
+                cycle = watch.initialize_with_recovery(renderer, before_recovery=progress.stop)
+            self.assertTrue(cycle.recovered)
+            self.assertTrue(renderer.statuses)
+
     def test_initial_catalog_and_snapshot_failures_recover_without_quota_refresh(self):
         for phase in ("catalog", "snapshot"):
             with self.subTest(phase=phase), tempfile.TemporaryDirectory() as td:
