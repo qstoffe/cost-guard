@@ -113,9 +113,12 @@ class ActiveActivityLifecycleTests(unittest.TestCase):
             prompt(in_progress=False, aborted=True, abort_reason='user', calls=9,
                    ccost=Decimal('2.5'), duration_ms=12_000, incoming_context_tokens=128,
                    incoming_context_ccost=Decimal('0.5')),
+            prompt(in_progress=False, watch_error=True, calls=9,
+                   ccost=Decimal('2.5'), duration_ms=12_000, incoming_context_tokens=128,
+                   incoming_context_ccost=Decimal('0.5')),
         )
         for terminal in terminal_prompts:
-            with self.subTest(aborted=terminal.aborted):
+            with self.subTest(aborted=terminal.aborted, error=terminal.watch_error):
                 tracker = WatchRowTracker(started_at_ms=0, recent_seconds=30, max_rows=20)
                 active = prompt(in_progress=True, background_kinds=('shell',), background_started_ms=2000)
                 active_snapshot = snapshot(parts)
@@ -128,7 +131,7 @@ class ActiveActivityLifecycleTests(unittest.TestCase):
                 terminal_snapshot = snapshot(parts, running=False)
                 rows = self.project((terminal,), terminal_snapshot, now=61_000, tracker=tracker)
                 row = next(item for item in rows if item.prompt.event_id == terminal.event_id)
-                self.assertEqual('!' if terminal.aborted else '\u2713', row.marker)
+                self.assertEqual('!' if terminal.aborted or terminal.watch_error else '\u2713', row.marker)
                 self.assertIsNotNone(row.tool)
                 self.assertEqual(4, row.tool.tool_count)
                 self.assertEqual(1, row.tool.failed_count)
@@ -147,16 +150,19 @@ class ActiveActivityLifecycleTests(unittest.TestCase):
                 for label in ('running:', 'background:', 'TODO', 'unfinished'):
                     self.assertNotIn(label, output)
 
-    def test_terminal_error_keeps_its_existing_red_marker_and_final_activity(self):
-        tracker = WatchRowTracker(started_at_ms=0, recent_seconds=30, max_rows=20)
+    def test_zero_window_keeps_neutral_error_outcome_without_terminal_activity(self):
         terminal = prompt(in_progress=False, watch_error=True)
-        rows = self.project((terminal,), snapshot(self.parts, running=False), tracker=tracker)
+        self.project((prompt(in_progress=True),), snapshot(self.parts))
+        rows = self.project((terminal,), snapshot(self.parts, running=False))
         row = rows[0]
-        self.assertEqual('!', row.marker)
-        self.assertIsNotNone(row.tool)
-        self.assertEqual(2, row.tool.tool_count)
-        self.assertEqual((SkillObservation(BROWSER, 1),), row.tool.skills)
-        self.assertFalse(row.tool.has_status_row)
+        self.assertEqual('', row.marker)
+        self.assertIsNone(row.tool)
+        renderer = WatchRenderer({}, stream=io.StringIO(), interactive=True)
+        self.assertIsNone(renderer._row_style(row))
+        self.assertIn('#1 [ERROR] work', render(rows))
+        long_row = replace(row, prompt=replace(terminal, preview='x' * 500))
+        self.assertIn('#1 [ERROR]', renderer._row_label(long_row))
+        self.assertLessEqual(len(renderer._row_label(long_row)), 35)
 
     def test_running_play_marker_outlives_recent_window_then_transitions_to_completion(self):
         tracker = WatchRowTracker(started_at_ms=0, recent_seconds=1, max_rows=20)
@@ -177,8 +183,9 @@ class ActiveActivityLifecycleTests(unittest.TestCase):
 
     def test_recent_green_and_red_markers_expire_with_their_activity_rows(self):
         for terminal in (prompt(in_progress=False, completed_successfully=True),
-                         prompt(in_progress=False, aborted=True)):
-            with self.subTest(aborted=terminal.aborted):
+                         prompt(in_progress=False, aborted=True),
+                         prompt(in_progress=False, watch_error=True)):
+            with self.subTest(aborted=terminal.aborted, error=terminal.watch_error):
                 tracker = WatchRowTracker(started_at_ms=0, recent_seconds=30, max_rows=20)
                 active = prompt(in_progress=True)
                 terminal_snapshot = snapshot(self.parts, running=False)
@@ -191,6 +198,11 @@ class ActiveActivityLifecycleTests(unittest.TestCase):
                 self.assertEqual('', expired[0].marker)
                 self.assertIsNone(expired[0].tool)
                 self.assertNotIn('tool calls', render(expired))
+                for now in (91_001, 120_000, 600_000):
+                    snap = terminal_snapshot if now == 91_001 else replace(
+                        terminal_snapshot, source_revision=f'resynced-{now}')
+                    again = self.project((terminal,), snap, now=now, tracker=tracker)
+                    self.assertEqual(expired, again)
 
     def test_historical_aborted_flag_does_not_recreate_a_recent_marker_or_activity(self):
         tracker = WatchRowTracker(started_at_ms=60_000, recent_seconds=30, max_rows=20, session_scope=True)
@@ -229,7 +241,7 @@ class ActiveActivityLifecycleTests(unittest.TestCase):
 
     def test_new_prompt_immediately_supersedes_recent_activity_without_inheriting_it(self):
         tracker = WatchRowTracker(started_at_ms=0, recent_seconds=30, max_rows=20)
-        old = prompt(in_progress=False, completed_successfully=True)
+        old = prompt(in_progress=False, watch_error=True)
         snap = snapshot(self.parts, running=False)
         previous = self.project((old,), snap, tracker=tracker)
         self.assertIsNotNone(previous[0].tool)
@@ -240,6 +252,8 @@ class ActiveActivityLifecycleTests(unittest.TestCase):
         new_snapshot = replace(snap, events=snap.events + (event,))
         rows = self.project((old, new), new_snapshot, tracker=tracker)
         self.assertIsNone(rows[0].tool)
+        self.assertTrue(rows[0].prompt.watch_error)
+        self.assertIn('[ERROR]', render(rows))
         self.assertEqual(0, rows[1].tool.tool_count)
         self.assertEqual((), rows[1].tool.skills)
         self.assertNotIn(BROWSER, render(rows))
@@ -272,8 +286,8 @@ class ActiveActivityLifecycleTests(unittest.TestCase):
 
     def test_fresh_tracker_does_not_restore_expired_terminal_activity(self):
         tracker = WatchRowTracker(started_at_ms=60_000, recent_seconds=30, max_rows=20, session_scope=True)
-        for terminal in (prompt(), prompt(aborted=True)):
-            with self.subTest(aborted=terminal.aborted):
+        for terminal in (prompt(), prompt(aborted=True), prompt(watch_error=True)):
+            with self.subTest(aborted=terminal.aborted, error=terminal.watch_error):
                 rows = self.project((terminal,), snapshot(self.parts, running=False),
                                     now=61_000, tracker=tracker)
                 self.assertIsNone(rows[0].tool)
@@ -298,13 +312,22 @@ class ActiveActivityLifecycleTests(unittest.TestCase):
         self.assertEqual((SkillObservation(BROWSER, 1),), observations['root'].skills)
         self.assertEqual((SkillObservation(GITHUB),), observations['other'].skills)
 
-        blocks['root'] = block((prompt(in_progress=False),))
+        blocks['root'] = block((prompt(in_progress=False, watch_error=True),))
         snapshots['root'] = snapshot(self.parts, running=False)
         rows = tracker.project(blocks, snapshots, now_ms=61_000, skill_origins_by_root=origin_maps)
         observations = {row.session_id: row.tool for row in rows}
         self.assertEqual((SkillObservation(BROWSER, 1),), observations['root'].skills)
         self.assertIsNotNone(observations['other'])
         self.assertEqual((SkillObservation(GITHUB),), observations['other'].skills)
+
+        expired = tracker.project(blocks, snapshots, now_ms=91_000, skill_origins_by_root=origin_maps)
+        first_row, = (row for row in expired if row.session_id == 'root')
+        other_row, = (row for row in expired if row.session_id == 'other')
+        self.assertEqual('', first_row.marker)
+        self.assertIsNone(first_row.tool)
+        self.assertTrue(first_row.prompt.watch_error)
+        self.assertEqual('▶', other_row.marker)
+        self.assertIsNotNone(other_row.tool)
 
     def test_skills_row_uses_tool_activity_color_and_failures_stay_red(self):
         rows = self.project((prompt(in_progress=True),), snapshot(self.parts))

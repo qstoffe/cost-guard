@@ -18,10 +18,8 @@ def _event_key(prompt: PromptProjection) -> str:
 
 
 def _marker(prompt: PromptProjection, *, recent_completion: bool) -> str:
-    if prompt.aborted:
+    if prompt.aborted or prompt.watch_error:
         return "!" if recent_completion else ""
-    if prompt.watch_error:
-        return "!"
     if prompt.in_progress:
         return "▶"
     return "✓" if recent_completion else ""
@@ -330,17 +328,11 @@ class WatchRowTracker:
 
         Missing ends fall back to reliable event starts, not observation time or
         duration (retained post-compaction durations can be observation-based).
-        Permanent error markers do not participate in finite recent membership.
+        Terminal outcomes share the same finite recent membership.
         """
         if self.session_scope:
             return False, max(row.prompt.at_ms for row in rows)
-        # Error rows keep their existing cap protection, but their red marker is
-        # not a finite completion/abort highlight and cannot establish membership.
-        active = any(
-            row.prompt.in_progress or (self._protected(row, now_ms)
-                                       and (row.prompt.aborted or not row.prompt.watch_error))
-            for row in rows
-        )
+        active = any(self._protected(row, now_ms) for row in rows)
         prompts = {_event_key(prompt): prompt for prompt in block.rows}
         prompts.update((_event_key(row.prompt), row.prompt) for row in rows)
         if active:

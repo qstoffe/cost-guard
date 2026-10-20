@@ -100,9 +100,10 @@
   // Observation-based recent-event window for persistent Watch. Running prompts
   // show "▶" until they stop, independent of this window. Completed prompts
   // show "✓" and the watchRecentCompleted row color for this many seconds; that
-  // window also protects them from row-cap eviction. Aborted prompts keep
-  // [ABORTED] permanently but use critical row color only for this many seconds;
-  // actual errors keep permanent critical styling. Set 0 to disable transient effects.
+  // window also protects them from row-cap eviction. Aborted/failed prompts keep
+  // neutral [ABORTED]/[ERROR] outcome labels but show "!" and critical row color
+  // only within this window. Final activity rows expire with the marker. Historical
+  // startup errors get no fresh highlight. Set 0 to disable transient effects only.
   "watchRecentEventSeconds": 30,
 
   "thresholds": {

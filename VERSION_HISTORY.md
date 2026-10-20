@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.64 — 2026-10-20
+
+- Terminal Watch failures share the finite `watchRecentEventSeconds` highlight: red `!`, critical row styling and final tool/Skills activity expire together, leaving a neutral `[ERROR]` outcome. Startup historical failures receive no fresh emphasis; polling, redraws, quota refreshes and unchanged/revised source snapshots do not restart the window. Zero disables only transient effects. Existing analysis/report outcomes, accounting, row selection and successful/aborted/running semantics are preserved.
+
 ## v80.63 — 2026-10-20
 
 - Watch overwrites buffered frames without clearing the screen or scrollback, patches changed rows when they safely fit the viewport, suppresses identical output and preserves shrinking/resize fallback. One initializing surface replaces the duplicate startup render; source hints alone no longer force an unchanged dashboard redraw. Quotas and staged Today enrichment retain their acquisition cadence.
@@ -20,17 +24,12 @@
 
 - Watch no longer fetches optional model release dates on its startup thread when prices need a cold-cache or expired-cache refresh. Previously verified dates survive locally; the existing bounded background worker refreshes metadata without blocking the dashboard. Report enrichment, pinned CCost prices and promotion expiry remain unchanged.
 
-## v80.59 — 2026-10-20
-
-- Watch separates active/recent/startup rows from incremental local-day accounting, no longer scans month history or collects unrelated comparison samples, and renders `Today: Pending` until available daily history is reconciled. All running candidates survive age/row limits; archived usage, deletion retention, midnight/DST, independent native quotas and sample-based context-price warnings retain their semantics.
-- V2 shares catalog topology/revisions and before/after consistency brackets across required snapshots; unstable trees alone retry. V1 discovery includes message/part row activity and conservatively probes liveness separately from payload-free revisions. Stable analysis depends on semantic identities/rates, not pricing retrieval dates. Mode scopes and both latest-100 eligibility/cutoff rules remain intact; privacy-safe stage/operation diagnostics and configurable large-history regressions/benchmarks expose actual work.
-
 ## Earlier v80 history
 
-- v80.58 added bounded quota histories (64 observations/series, 64 series), acquisition/publication changes without upstream guarantees and separate Diagnostics evidence. v80.57 added execution Duration, overlap-safe totals and unknown timing. v80.56 isolated quota lanes/retries, 60s stale/5min expiry. v80.55 grouped Watch blocks. v80.54 indexed effort/context (2,000 prompts: 0.76→0.26s). v80.53 added overnight Today dates. v80.52 separated active context/accounting. v80.50–v80.51 added timestamp-first/running headings and shared warnings/Earlier rows; routine ZIPs stopped. v80.49 retained deleted usage; v80.48 added the global prompt budget; v80.43–v80.47 added priced Token Mix, New Models and faster CCost. Claude source/cache limitations remain documented.
+- v80.59 staged Watch local-day accounting (`Today: Pending`), shared V2 catalog/revision batches and added payload-free V1 liveness probes plus semantic pricing cache keys. v80.58 bounded quota histories without upstream freshness guarantees. v80.57 added execution Duration/overlap-safe totals; v80.56 isolated quota lanes/retries (60s stale/5min expiry); v80.55 grouped Watch; v80.54 indexed effort/context. v80.48–v80.53 added overnight Today dates, active-context separation, timestamp-first/running headers, shared warnings/Earlier rows, deleted usage and a global row cap; routine ZIPs stopped. v80.43–v80.47 added priced Token Mix, New Models and faster CCost. Claude limitations remain documented.
 - v80.35–v80.42 added native abort-cause labels (`[ABORTED by user]` only for matched live V2 interrupts), neutral tool-call endings, stable account ordering, refactored hot paths, bounded startup recovery/typed source errors, retained tool/skill evidence and stopped counting proven V2 tool continuations as `Calls`.
 - v80.34 pooled V2 reads, memoized model identity, overlapped report acquisition and bounded Watch discovery/startup/resync with identical output (report ~2.1→0.65 s, Watch startup ~6.2→0.65 s, resync 13→1.4 s); Diagnostics gained all-account evidence and Watch geometry.
-- v80.32–v80.33 separated account refresh, prompt projection/report orchestration and source normalization, shared ancestry/bounded sampling, and moved fixtures (67→43 test-import edges, 46 fewer dependencies). Bounded routine/coupling debt, `Context:` warnings, code maps/inventory/layer guards preserved source/cache/billing semantics without raising caps.
+- v80.32–v80.33 separated refresh, prompt projection/report orchestration and normalization, shared ancestry/bounded sampling, moved fixtures (67→43 test-import edges) and added routine/coupling, inventory and layer guards without raising caps or changing billing.
 - v80.29–v80.31 fixed synthetic/background continuation and running-model attribution, restored move/unanchored Watch Δctx and N/A for unexplained shrinks, sanitized terminal text and deduplicated source scans. Priced Next-Ictx tiers show one-decimal sample/mix cost multipliers refreshed every 15 minutes; unpriced thresholds keep CCost ranges.
 - v80.25–v80.28 kept BLOCKED on accounts, split wide Watch quotas, added privacy-safe observations, compared consecutive Next-Ictx anchors for Δctx and removed mutable session-model attribution; v80.30 corrected move/unanchored regressions.
 - v80.21–v80.24 added conservative table-local model fading (plain GPT tiers, Claude families, numeric Grok; preview/variant exclusions), parallel bounded quota acquisition, shared credential discovery and nonblocking Watch account refresh. Current main became recommended; packaged GitHub Releases remain paused.

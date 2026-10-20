@@ -302,8 +302,13 @@ class WatchRenderer:
             return f"  {marker}#{prompt.prompt_number} /compact"
         reason = {"user": "user", "quota_limit": "quota limit", "tool_call_limit": "tool call limit",
                   "step_limit": "step limit", "rate_limit": "rate limit"}.get(prompt.abort_reason)
-        prefix = (f"[ABORTED by {reason}] " if reason else "[ABORTED] ") if prompt.aborted else (
-            "[ENDED after tool calls] " if prompt.ended_after_tool_calls else "")
+        prefix = ""
+        if prompt.aborted:
+            prefix = f"[ABORTED by {reason}] " if reason else "[ABORTED] "
+        elif prompt.watch_error:
+            prefix = "[ERROR] "
+        elif prompt.ended_after_tool_calls:
+            prefix = "[ENDED after tool calls] "
         lead = f"  {marker}#{prompt.prompt_number} "
         if prefix:
             # Reserve the full stop label before shortening the expendable preview.
@@ -315,10 +320,8 @@ class WatchRenderer:
         return lead + single_line(prompt.preview)
 
     def _row_style(self, row: WatchRow) -> str | None:
-        if row.prompt.aborted:
+        if row.prompt.aborted or row.prompt.watch_error:
             return "costQuotaCritical" if row.marker else None
-        if row.prompt.watch_error:
-            return "costQuotaCritical"
         if row.prompt.in_progress:
             return "watchRunningWarning"
         if row.marker == "✓":
