@@ -285,7 +285,7 @@ GitHub Copilot Pro+   Month  ██████████ 100% · 7000/7000 ·
 OpenAI Plus          5h     ████████░░  82% · Reset@22:49 | Week ██████████  98% · Reset@Sunday 07:59
 ```
 
-`Watch:` stays last. Startup progress stops before dashboard/recovery output. Watch buffers frames, skips identical output and patches changed rows when they fit; wrapped/oversize or resized layouts use a complete overwrite, never a screen/scrollback clear. Shrinking frames erase their old tail; countdowns update only the status row. `Today: Pending` still precedes daily-history completion. Redirected output stays plain.
+`Watch:` stays last. Startup progress stops before dashboard/recovery output. Watch buffers frames, skips identical output and patches changed rows when they fit. Wrapped or taller-than-viewport dashboards clear and rebuild the screen/scrollback, keeping only the current frame scrollable instead of accumulating old title/table fragments; returning from overflow also clears stale fragments. Safe resizes overwrite without clearing; shrinking frames erase their old tail. Countdowns update only the status row. `Today: Pending` still precedes daily-history completion. Redirected output stays plain.
 
 `[ABORTED by …]` names proven user/quota/tool-call/step/rate-limit causes; unknown stays `[ABORTED]`. V2 live `reason: user` is matched to the same persisted interruption and retained only in bounded process memory, not reconstructed from older history or after restart. `[ENDED after tool calls]` never guesses a limit. Labels outlast red emphasis. Quotas become stale after a failed refresh or an observation age over 60s, and expire after five minutes, including resume. Transient failures get bounded 5/10/20s retries; auth/capability failures get no fast retry.
 
@@ -356,7 +356,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.64 (2026-10-20):** Terminal Watch errors now use the existing finite recent-event window for red emphasis and final activity rows, retaining a neutral `[ERROR]` outcome afterwards. Historical startup errors are not re-highlighted; zero disables transient effects only. Analysis, ordinary reports, accounting and retention remain unchanged.
+**v80.65 (2026-10-20):** Fix repeated Watch title/table fragments in scrollback for wrapped or oversized dashboards, including returning to a fitting layout. Buffered updates remain for fitting frames; status-only output, accounting, acquisition and retention are unchanged. Terminal errors retain finite red emphasis followed by a neutral `[ERROR]` outcome.
 
 Recent predecessors added buffered Watch/startup progress and launcher feedback ([evidence and limits](development/history-loading.md#startup-presentation-and-launcher-evidence)), independent historical context/current anchors, nonblocking metadata, quota histories, execution Duration and retained daily CCost. v80.0 is the Python 3.11+ public baseline; see [version history](VERSION_HISTORY.md). Claude quotas remain experimental; terminal visuals, restart and sleep/wake need separate live evidence.
 

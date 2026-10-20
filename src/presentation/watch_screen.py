@@ -21,14 +21,20 @@ class WatchScreen:
         geometry = (size.columns, size.lines)
         if lines == self.lines and geometry == self.size:
             return
-        # Absolute row patches are safe only while both frames fit the viewport.
-        # Fixed-width tables can wrap in narrow terminals: overwrite the whole
-        # frame there, in one write, and erase the stale tail AFTER the new text.
-        fits = geometry == self.size and self._fits(self.lines, *geometry) and self._fits(lines, *geometry)
+        # Home addresses the viewport, not the beginning of a scrolled frame.
+        # Overflow must use the historical clear/rebuild path or each redraw
+        # pushes another partial heading/table into scrollback. Check the old
+        # geometry too: resizing/shrinking cannot repair an already-scrolled frame.
+        previous_fits = not self.lines or (
+            self._fits(self.lines, *self.size) and self._fits(self.lines, *geometry)
+        )
+        overflow = not previous_fits or not self._fits(lines, *geometry)
+        fits = bool(self.lines) and geometry == self.size and not overflow
         if fits:
             output = self._patch(lines)
         else:
-            output = "\x1b[H" + "\n".join("\x1b[2K" + line for line in lines) + "\x1b[0J"
+            home = "\x1b[2J\x1b[3J\x1b[H" if overflow else "\x1b[H"
+            output = home + "\n".join("\x1b[2K" + line for line in lines) + "\x1b[0J"
         self.stream.write(output)
         self.stream.flush()
         self.lines, self.size = lines, geometry

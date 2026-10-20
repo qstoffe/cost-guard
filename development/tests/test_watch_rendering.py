@@ -5,7 +5,10 @@ from dataclasses import replace
 from datetime import datetime, timezone
 from decimal import Decimal
 import io
+import os
+import re
 import unittest
+from unittest.mock import patch
 
 from src.domain import AccountRef, AccountSnapshot, QuotaComponent
 from development.fixtures.warning_projections import warning_prompt, warning_report_projection
@@ -55,6 +58,12 @@ def tall_projection():
 
 
 class WatchRenderingTests(unittest.TestCase):
+    def setUp(self):
+        size = patch("src.presentation.watch_screen.shutil.get_terminal_size",
+                     return_value=os.terminal_size((80, 24)))
+        size.start()
+        self.addCleanup(size.stop)
+
     def test_watch_heading_uses_one_local_lifecycle_timestamp_and_wraps_source(self):
         started_at_ms = int(datetime(2026, 10, 14, 12, 34, 56, tzinfo=timezone.utc).timestamp() * 1000)
         stream = io.StringIO()
@@ -68,7 +77,7 @@ class WatchRenderingTests(unittest.TestCase):
 
         expected = f"Cost Guard {DISPLAY_VERSION} (Watch started: 2026-10-14 14:34:56)"
         self.assertIn(expected + " — Watch", initializing)
-        title_lines = dashboard.replace(CLEAR, "").replace("\x1b[2K", "").splitlines()[:2]
+        title_lines = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", dashboard).splitlines()[:2]
         self.assertIn(expected + " — Prompt watch", title_lines[0])
         self.assertEqual("Source: OpenCode V2", title_lines[1])
         self.assertTrue(all(len(line) <= 80 for line in title_lines))
@@ -134,10 +143,10 @@ class WatchRenderingTests(unittest.TestCase):
         self.assertFalse([line for line in rendered.splitlines() if line.startswith(("next line", "failed"))])
 
     def assert_full_frame(self, frame):
-        self.assertTrue(frame.startswith(CLEAR))
+        self.assertTrue(frame.startswith("\x1b[2J\x1b[3J" + CLEAR))
         self.assertEqual(1, frame.count(CLEAR))
-        self.assertNotIn("\x1b[2J", frame, "overwrite frames must never blank the screen")
-        self.assertNotIn("\x1b[3J", frame, "scrollback must survive")
+        self.assertEqual(1, frame.count("\x1b[2J"), "wrapped frames rebuild instead of accumulating fragments")
+        self.assertEqual(1, frame.count("\x1b[3J"), "old partial frames must leave scrollback")
         self.assertEqual(1, frame.count(ERASE_TAIL))
         self.assertTrue(frame.endswith("Watch: " + STATUS + ERASE_TAIL),
                         "cleanup follows the final status cursor without a newline")
