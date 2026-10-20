@@ -288,7 +288,8 @@ print(json.dumps([row.in_progress, row.duration_ms, row.watch_error,
             native.messages["ses_current"].append(idle())
             native.active = {}
             native.sessions[0]["time"]["updated"] = 5000
-            for now in (10_000, 50_000, 100_000):
+            renderer = WatchRenderer(config, stream=io.StringIO(), interactive=True)
+            for now in (10_000, 39_999, 40_000, 50_000, 100_000):
                 clock[0] = now
                 projection = watch.poll_once(force_resync=True).projection
                 self.assertEqual(0, projection.active_count)
@@ -296,18 +297,26 @@ print(json.dumps([row.in_progress, row.duration_ms, row.watch_error,
                 self.assertFalse(row.prompt.in_progress)
                 self.assertTrue(row.prompt.watch_error)
                 self.assertFalse(row.prompt.aborted)
+                self.assertFalse(row.prompt.completed_successfully)
                 self.assertEqual(2000, row.prompt.duration_ms)
+                self.assertEqual("!" if now < 40_000 else "", row.marker)
+                self.assertEqual("costQuotaCritical" if now < 40_000 else None, renderer._row_style(row))
+                self.assertIn("[ERROR]", renderer._row_label(row))
             fresh = OpenCodeV2Source(registration, timeout_seconds=2)
             _, fresh_selection, fresh_reports, _ = make_service(td, fresh, now_ms=100_000)
             report = fresh_reports.build(ReportRequest(kind=ReportKind.SESSION, session_id="ses_current"))
             report_row, = report.prompt_blocks[0].rows
             self.assertFalse(report_row.in_progress)
             self.assertTrue(report_row.watch_error)
+            self.assertFalse(report_row.completed_successfully)
             self.assertEqual(2000, report_row.duration_ms)
             restored = WatchCoordinator(selection=fresh_selection, report_service=fresh_reports,
                 config=config, session_id="ses_current", clock_ms=lambda: 100_000).initialize().projection
             self.assertEqual(0, restored.active_count)
             self.assertEqual(2000, restored.rows[0].prompt.duration_ms)
+            self.assertTrue(restored.rows[0].prompt.watch_error)
+            self.assertEqual("", restored.rows[0].marker)
+            self.assertIsNone(renderer._row_style(restored.rows[0]))
 
 
 class BackgroundLifecycleTests(unittest.TestCase):

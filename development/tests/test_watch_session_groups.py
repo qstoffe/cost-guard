@@ -141,7 +141,7 @@ class SessionGroupLifecycleTests(unittest.TestCase):
         self.assertEqual([800, 900], [row.session_latest_ms for row in rows])
         self.assertEqual([1, 2], [row.prompt.prompt_number for row in rows])
 
-    def test_persistent_error_remains_red_but_is_historical_after_finite_recent_window(self):
+    def test_error_joins_recent_group_until_finite_highlight_expires(self):
         observed = tracker(recent_seconds=1)
         blocks, snapshots = inputs(E=(prompt(1, 100, watch_error=True, completed_at_ms=200),),
                                    R=(prompt(1, 50, in_progress=True),))
@@ -151,12 +151,17 @@ class SessionGroupLifecycleTests(unittest.TestCase):
         rows = observed.project(blocks, snapshots, now_ms=1300)
 
         self.assertEqual(["E", "R"], order(rows))
-        self.assertFalse(initial[0].session_active, "a persistent error is not a finite completion/abort highlight")
+        self.assertTrue(initial[-1].session_active)
+        self.assertEqual("E", initial[-1].session_id)
+        self.assertEqual("!", initial[-1].marker)
         self.assertEqual(2, len(protected), "existing soft-cap protection is independent of grouping")
         self.assertFalse(rows[0].session_active)
-        self.assertEqual("!", rows[0].marker)
+        self.assertEqual("", rows[0].marker)
         renderer = WatchRenderer({"colors": {}}, stream=io.StringIO(), interactive=True)
-        self.assertEqual("costQuotaCritical", renderer._row_style(rows[0]))
+        self.assertIsNone(renderer._row_style(rows[0]))
+        self.assertIn("[ERROR]", renderer._row_label(rows[0]))
+        capped = tracker(max_rows=1, recent_seconds=0).project(blocks, snapshots, now_ms=1300)
+        self.assertEqual(["R"], order(capped))
         self.assertEqual(4, len(rules(rendered(rows))))
 
     def test_retained_post_compaction_prompt_never_uses_observation_derived_duration_as_end(self):
@@ -186,7 +191,7 @@ class SessionGroupLifecycleTests(unittest.TestCase):
         self.assertEqual(500, after[0].session_latest_ms)
 
     def test_earlier_unknown_end_falls_back_to_start_without_poll_drift(self):
-        blocks, snapshots = inputs(A=(prompt(1, 100), prompt(2, 300)),
+        blocks, snapshots = inputs(A=(prompt(1, 100), prompt(2, 300, watch_error=True)),
                                    B=(prompt(1, 200, completed_at_ms=500),))
         observed = WatchRowTracker(started_at_ms=1000, recent_seconds=30, max_rows=12)
         observed.set_earlier_sessions(("B", "A"))
@@ -197,6 +202,10 @@ class SessionGroupLifecycleTests(unittest.TestCase):
         self.assertEqual([300, 500], [row.session_latest_ms for row in rows])
         self.assertTrue(all(row.earlier and not row.session_active and not row.marker for row in rows))
         self.assertEqual(rows, observed.project(blocks, snapshots, now_ms=1_000_000))
+        renderer = WatchRenderer({}, stream=io.StringIO(), interactive=True)
+        self.assertIn('[ERROR]', renderer._row_label(rows[0]))
+        self.assertIsNone(renderer._row_style(rows[0]))
+        self.assertIsNone(rows[0].tool)
         self.assertIn("excluded from Token Mix and Watch total CCost", rendered(rows))
 
     def test_ties_and_unchanged_history_are_deterministic_in_both_groups(self):
@@ -261,7 +270,8 @@ class SessionGroupRenderingTests(unittest.TestCase):
         self.assertIn("Σ 7", next(line for line in lines if "Session R" in line))
         self.assertIn("*1 Context:", output)
         self.assertIn("*1", next(line for line in lines if "▶ #1" in line))
-        self.assertIn("! #1", output)
+        self.assertIn("#1 [ERROR]", output)
+        self.assertNotIn("! #1", output)
         self.assertIn("OpenAI Plus", output)
         table_end = max(index for index, line in enumerate(lines) if line.startswith("|-"))
         self.assertTrue(all(len(line) == len(rules(output)[0]) for line in lines[1:table_end + 1] if line.startswith("|")))
@@ -278,7 +288,7 @@ class SessionGroupRenderingTests(unittest.TestCase):
             watch = WatchCoordinator(selection=selection, report_service=service, config=config, clock_ms=lambda: now[0])
             self.addCleanup(watch.close)
             watch.tracker = tracker(recent_seconds=1)
-            watch.blocks, watch.snapshots = inputs(E=(prompt(1, 100, completed_at_ms=500),))
+            watch.blocks, watch.snapshots = inputs(E=(prompt(1, 100, watch_error=True, completed_at_ms=500),))
             before = watch._projection(now_ms=1000)
             renderer = Mock()
             watch._render(renderer, before)
@@ -287,7 +297,7 @@ class SessionGroupRenderingTests(unittest.TestCase):
             after = watch.status_projection()
             watch._render_wake(renderer, after, before)
 
-            self.assertEqual("✓", before.rows[0].marker)
+            self.assertEqual("!", before.rows[0].marker)
             self.assertEqual("", after.rows[0].marker)
             self.assertNotEqual(transient_signature(before), transient_signature(after))
             self.assertNotEqual(visible_signature(before), visible_signature(after))

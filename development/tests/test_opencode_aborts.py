@@ -103,7 +103,7 @@ class V2AbortRegressionTests(unittest.TestCase):
             self.assertFalse(record.watch_error)
             self.assertTrue(record.completed_successfully)
 
-    def test_genuine_error_keeps_generic_watch_rendering_after_timeout(self):
+    def test_startup_historical_error_keeps_neutral_outcome_without_highlighting(self):
         with source_with_current_service() as (source, native, _), tempfile.TemporaryDirectory() as td:
             assistant = native.messages["ses_current"][1]
             assistant.update(error={"type": "provider.transport", "message": "provider timeout"}, finish="error")
@@ -119,8 +119,10 @@ class V2AbortRegressionTests(unittest.TestCase):
             for row in (initial, aged):
                 self.assertFalse(row.prompt.aborted)
                 self.assertTrue(row.prompt.watch_error)
-                self.assertEqual("!", row.marker)
-                self.assertEqual("costQuotaCritical", renderer._row_style(row))
+                self.assertEqual("", row.marker)
+                self.assertIsNone(renderer._row_style(row))
+                self.assertIn("[ERROR]", renderer._row_label(row))
+                self.assertIsNone(row.tool)
                 self.assertNotIn("[ABORTED]", renderer._row_label(row))
 
     def test_watch_native_abort_survives_hints_refresh_reconstruction_and_timeout(self):
