@@ -37,7 +37,7 @@ class ContextWarningPresentationTests(unittest.TestCase):
     def watch(self, projection, *, colored=True, config=None):
         stream = io.StringIO()
         WatchRenderer(config or self.config, stream=stream, interactive=colored).render(projection)
-        return stream.getvalue()
+        return stream.getvalue().replace("\x1b[2K", "")
 
     def report(self, projection, *, colored=True, width=160, config=None):
         stream = io.StringIO()

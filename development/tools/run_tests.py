@@ -50,6 +50,9 @@ QUICK_PATTERNS: tuple[str, ...] = (
     "test_step6_context_comparisons.py",
     "test_context_history_projection.py",
     "test_windows_launcher.py",
+    "test_launcher_feedback.py",
+    "test_startup_progress.py",
+    "test_watch_screen.py",
     "test_effort_presentation.py",
     "test_context_warning_presentation.py",
     "test_step6_pricing_accounts.py",
@@ -121,6 +124,7 @@ FULL_ONLY_PATTERNS: tuple[str, ...] = (
 # None currently: every test_*.py module belongs to Quick or Full-only.
 EXCLUDED_TEST_MODULES: dict[str, str] = {}
 PROFILES: dict[str, tuple[str, ...]] = {
+    "startup": ("test_launcher_feedback.py", "test_windows_launcher.py", "test_startup_progress.py", "test_watch_screen.py", "test_watch_rendering.py", "test_watch_startup_recovery.py"),
     "foundation": ("test_foundation_quick.py", "test_structure_contracts.py"),
     "sources": ("test_opencode_v1.py", "test_opencode_v2.py", "test_v2_normalization.py", "test_v2_tool_continuations.py", "test_opencode_aborts.py", "test_opencode_terminal.py", "test_source_selection.py", "test_v7814_regressions.py"),
     "analysis": ("test_analysis_core.py", "test_step6_context_comparisons.py", "test_effort_presentation.py", "test_step6_pricing_accounts.py"),

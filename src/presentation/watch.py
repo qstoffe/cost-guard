@@ -4,6 +4,7 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
 import os
+import io
 import sys
 from typing import Mapping, TextIO
 
@@ -21,6 +22,8 @@ from .context_warnings import WARNING_ROLE, context_warning_text, warning_cost_s
 from .pricing_notices import pricing_notice_lines
 from .watch_activity import BASE_ROLE, skill_summary_segments, status_segments, tool_summary_segments
 from .duration import duration_text as _duration
+from .watch_screen import WatchScreen
+from src.launcher_feedback import release_launcher_status
 
 _WATCH_COLUMNS = (
     Column("Session / prompt", fixed_width=35),
@@ -237,27 +240,25 @@ class WatchRenderer:
                                   datetime.now(timezone.utc).timestamp() * 1000)
         self._status_visible = False
         self.terminal_width = terminal_width
+        self._screen = WatchScreen(self.stream)
+        self._initializing = False
 
     def _content_width(self, *, minimum: int = 40) -> int:
         """Configured test width, otherwise the live terminal's content width."""
         if self.terminal_width is not None:
             return self.terminal_width
-        return terminal_content_width(self.stream, minimum=minimum)
+        return terminal_content_width(self._screen.stream, minimum=minimum)
 
     def _write(self, text: str = "") -> None:
         self.stream.write(text + "\n")
 
     def _supports_arrow(self) -> bool:
-        encoding = getattr(self.stream, "encoding", None) or "utf-8"
+        encoding = getattr(self._screen.stream, "encoding", None) or "utf-8"
         try:
             "↳".encode(encoding)
             return True
         except (UnicodeEncodeError, LookupError):
             return False
-
-    def _clear(self) -> None:
-        if self.interactive:
-            self.stream.write("\x1b[2J\x1b[3J\x1b[H")
 
     def _watch_heading(self, mode: str, started_at_ms: int) -> str:
         timestamp = format_local_timestamp(started_at_ms, self.timezone_id, "%Y-%m-%d %H:%M:%S")
@@ -282,12 +283,15 @@ class WatchRenderer:
         return value if value.startswith("Watch:") else "Watch: " + value
 
     def _write_status(self, text: str, *, active: bool, newline: bool) -> None:
-        rendered = self.styler.apply(self._status_text(text), "activeRunning" if active else None)
+        status = self._status_text(text)
+        if self.interactive:
+            status = fit(status, self._content_width(minimum=1)).rstrip()
+        rendered = self.styler.apply(status, "activeRunning" if active else None)
         if newline:
             self._write(rendered)
         else:
-            # Full frames end here: erase any old rows below the status cursor.
-            self.stream.write(rendered + "\x1b[0J")
+            # The buffered screen owner cleans the tail after this status.
+            self.stream.write(rendered)
         self.stream.flush()
         self._status_visible = True
 
@@ -481,14 +485,16 @@ class WatchRenderer:
 
     def render_initializing(self, source_label: str = "detecting...") -> None:
         """Transient heading/status; steady-state dashboard geometry is unchanged."""
-        if not self.interactive:
+        if not self.interactive or self._initializing:
             return
-        self._clear()
+        release_launcher_status()
+        self._initializing = True
         width = self._content_width()
-        self._write("\n".join(wrap_prose(self._watch_heading("Watch", self.started_at_ms), width)))
         # Startup loading uses the default foreground like every other mode;
         # activeRunning stays reserved for the steady-state Watch status row.
-        self._write_status("Initializing...", active=False, newline=False)
+        heading = "\n".join(wrap_prose(self._watch_heading("Watch", self.started_at_ms), width))
+        self._screen.publish(heading + "\nWatch: Initializing...")
+        self._status_visible = True
 
     def render_startup_status(self, line: str, *, active: bool = False) -> None:
         if not self.interactive:
@@ -498,7 +504,19 @@ class WatchRenderer:
         self._status_visible = True
 
     def render(self, projection: WatchProjection) -> None:
-        self._clear()
+        if not self.interactive:
+            self._render_frame(projection)
+            return
+        output = self.stream
+        buffer = io.StringIO()
+        try:
+            self.stream = buffer
+            self._render_frame(projection)
+        finally:
+            self.stream = output
+        self._screen.publish(buffer.getvalue())
+
+    def _render_frame(self, projection: WatchProjection) -> None:
         self._write(self._watch_title(projection.source_label, projection.title, projection.watch_started_at_ms))
         for warning in projection.source_warnings:
             self._write(self.styler.apply("WARNING: " + warning, "costQuotaWarning"))
@@ -526,12 +544,14 @@ class WatchRenderer:
     def render_status(self, projection: WatchProjection) -> None:
         if not self.interactive:
             return
+        if self._screen.resized():
+            self.render(projection)
+            return
         text = self.styler.apply(
-            self._status_text(projection.status or "Watching"),
+            fit(self._status_text(projection.status or "Watching"), self._content_width(minimum=1)).rstrip(),
             "activeRunning" if (projection.status_active or projection.active_count) else None,
         )
-        self.stream.write("\r\x1b[2K" + text)
-        self.stream.flush()
+        self._screen.status(text)
         self._status_visible = True
 
     def finish(self, text: str) -> None:

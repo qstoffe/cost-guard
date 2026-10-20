@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Callable
 from src.analysis.token_mix import model_token_mixes, priced_token_mix
 from src.analysis.valuation import unique_usage
 from src.domain import ModelRef
+from src.domain.progress import WorkProgress
 from src.pricing.identities import reference_identity
 
 from .migration_notice import migration_gap_notes
@@ -19,7 +20,7 @@ from .models import ModelTokenMixProjection, ReportKind, ReportProjection
 if TYPE_CHECKING:
     from .service import ReportService
 
-HistoryProgress = Callable[[str, int], None]
+HistoryProgress = Callable[[str, int | None], None]
 HISTORY_NOTE = ("History includes OpenCode usage data that is still available; "
                 "deleted or pruned history is not reconstructed.")
 
@@ -29,14 +30,14 @@ def _model_key(model: ModelRef) -> str:
 
 
 def build_token_mix_history(service: ReportService, progress: HistoryProgress) -> ReportProjection:
-    progress("Loading pricing catalog", 2)
+    progress(WorkProgress("Loading pricing catalog", "pricing"), None)
     reference = service._load_comparison_catalog()
-    progress("Listing OpenCode sessions", 4)
+    progress(WorkProgress("Listing OpenCode sessions", "catalog"), None)
     roots = [item for item in service.source.list_sessions() if item.parent_session_id is None]
     entries = []
     prompt_of = {}
     for index, root in enumerate(roots):
-        progress("Analyzing usage history...", 5 + 85 * index // len(roots))
+        progress(WorkProgress("Analyzing usage history...", "history", index, len(roots)), None)
         bundle = service._analyze(root).bundle
         # A full-history scan must not retain every hydrated snapshot in memory.
         service._analyzed.pop(root.session_id, None)
@@ -44,7 +45,7 @@ def build_token_mix_history(service: ReportService, progress: HistoryProgress) -
         for prompt in bundle.prompts:
             for entry in prompt.entries:
                 prompt_of.setdefault(entry, (prompt.session_id, prompt.prompt_id))
-    progress("Checking available OpenCode models", 92)
+    progress(WorkProgress("Checking available OpenCode models", "availability"), None)
     try:
         source = service.model_availability_source
         available = source.available_model_ids() if source is not None else None
@@ -61,7 +62,7 @@ def build_token_mix_history(service: ReportService, progress: HistoryProgress) -
         from src.runtime_errors import recovered
         recovered("history-model-availability")
         software_fault = False
-    progress("Pricing token categories", 96)
+    progress(WorkProgress("Pricing token categories", "finalizing"), None)
     usage = unique_usage(entries)
     groups = model_token_mixes(usage, prompt_of, reference.reference_category_valuation, model_key=_model_key)
     warnings = tuple(service.selection.warnings)

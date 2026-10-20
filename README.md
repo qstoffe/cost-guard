@@ -201,7 +201,7 @@ Scans all available OpenCode history; the first uncached run can be slow. `Total
 - Deleted or pruned history is not reconstructed; no private ledger exists. Rows never imply which account or subscription served a model.
 - If current model availability cannot be established, all historically used models are shown with a warning (fail open).
 
-Interactive progress is transient; redirected output uses stage lines.
+Launchers immediately show `Cost Guard: Checking requirements...`, without Python. This row stays until Python progress can replace it. Interactive progress uses approximate (`~`) mode-specific time/work estimates; unknown stages show a spinner without a percentage. Only successful startup reaches 100%; redirected output uses plain stage lines.
 
 ## Available sessions: `--sessions N|all`
 
@@ -285,11 +285,11 @@ GitHub Copilot Pro+   Month  ██████████ 100% · 7000/7000 ·
 OpenAI Plus          5h     ████████░░  82% · Reset@22:49 | Week ██████████  98% · Reset@Sunday 07:59
 ```
 
-`Watch:` stays last. Interactive startup uses `Cost Guard vX.Y (YYYY-MM-DD) — <Mode>` with progress immediately below, no blank row. Transient UI disappears before final reports/Watch dashboards; redirected output remains plain, without animation.
+`Watch:` stays last. Startup progress stops before dashboard/recovery output. Watch buffers frames, skips identical output and patches changed rows when they fit; wrapped/oversize or resized layouts use a complete overwrite, never a screen/scrollback clear. Shrinking frames erase their old tail; countdowns update only the status row. `Today: Pending` still precedes daily-history completion. Redirected output stays plain.
 
 `[ABORTED by …]` names proven user/quota/tool-call/step/rate-limit causes; unknown stays `[ABORTED]`. V2 live `reason: user` is matched to the same persisted interruption and retained only in bounded process memory, not reconstructed from older history or after restart. `[ENDED after tool calls]` never guesses a limit. Labels outlast red emphasis. Quotas become stale after a failed refresh or an observation age over 60s, and expire after five minutes, including resume. Transient failures get bounded 5/10/20s retries; auth/capability failures get no fast retry.
 
-Full redraws clear screen/scrollback; countdowns replace only the status line. V1 Watch uses process-free SQLite gating; V2 events are hints with a five-second cooldown and authoritative resync. `"auto"` refresh adapts within 5–30 seconds; quota refresh is independently rate-limited.
+V1 Watch uses process-free SQLite gating; V2 events are hints with a five-second cooldown and authoritative resync. `"auto"` refresh adapts within 5–30 seconds; quota refresh is independently rate-limited.
 
 **Watch troubleshooting.** Before connection, Watch suggests starting Desktop V2 if needed. Failures during first catalog/snapshot reads recover without partial rows or repeated quota requests. Later outages keep the last dashboard, retry the same source every five seconds and resync snapshots/events; no V1 fallback or recurring CLI start. Unsupported schemas or data unreadable for ~1 minute remain terminal. Ctrl+C stops Watch, not OpenCode. See [connectivity guidance](docs/connectivity.md).
 
@@ -356,15 +356,9 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.62:** Historical context survives later switches; current anchors stay independently guarded (2026-10-20). v80.61 fixed Windows shell/Python selection.
+**v80.63 (2026-10-20):** Buffered Watch updates without repeated clears, time/work-based approximate startup progress and immediate Windows/macOS launcher feedback. Acquisition, accounting, polling and staged Today remain unchanged. Measurements and terminal/platform limitations: [startup evidence](development/history-loading.md#startup-presentation-and-launcher-evidence).
 
-**v80.60:** Watch cold/expired pricing refresh no longer waits for optional model release dates on its startup thread. Existing dates are retained and refreshed in the background; report enrichment and CCost prices are unchanged (2026-10-20).
-
-**v80.58:** Sanitized quota histories separate retrieval, changes and Watch publication; upstream freshness remains unknown. Claude quota-source limitations remain documented.
-
-**v80.57:** Duration in session/date prompt tables, scoped overlap-safe totals and session listings; existing historical timing evidence, explicit `N/A` and Watch-compatible formatting (2026-10-19).
-
-**v80.54:** Behavior-neutral prompt-block performance cleanup for long sessions. **v80.53:** Watch's compact `CCost · Watch · Today` line shows the local date instead of `Today` from midnight to 03:00. **v80.52:** Continuing context follows active history independently of request accounting; Watch's 20-character context cell stays aligned through `*99`. **v80.51:** Watch headings use one configured-local start timestamp; context-warning markers follow `Next Ictx` on the latest relevant row, with live numbered footnotes. Today names sessions deleted before Watch start; routine local release-ZIP generation is removed. **v80.50:** Watch adds persistent `▶` markers, startup-only Earlier rows sharing the soft cap and timestamp-first session headers. **v80.49:** Adds deletion-resilient current-local-day CCost. **v80.48:** Adds the global prompt budget, Earlier startup rows, latest-start ordering and idle account redraw. **v80.47:** Behavior-neutral Watch CCost performance cleanup. Older versions remain below; v80.0 is the Python 3.11+ public baseline. Restart/sleep need separate live evidence; Claude quotas remain experimental.
+Recent predecessors added independent historical context/current anchors, Windows shell/Python selection, nonblocking Watch metadata, quota histories, execution Duration, grouped rows and retained daily CCost. v80.0 is the Python 3.11+ public baseline; see [version history](VERSION_HISTORY.md). Claude quotas remain experimental; terminal visuals, restart and sleep/wake need separate live evidence.
 
 Product versions identify code state; they do not imply a Git tag, release ZIP or GitHub Release. Packaged GitHub Releases are currently paused. Recommending them at a slower/stable cadence requires an explicit policy change; version numbers never trigger it automatically.
 

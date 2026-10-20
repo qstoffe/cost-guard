@@ -225,7 +225,7 @@ class RenderingTests(unittest.TestCase):
                     WatchRenderer({"colors": colors}, stream=stream, interactive=interactive).render(
                         replace(projection, rows=(row,)))
                     raw = stream.getvalue()
-                    lines = re.sub(r"\x1b\[[0-9;]*m", "", raw).splitlines()
+                    lines = re.sub(r"\x1b\[[0-9;]*[mKHJ]", "", raw).splitlines()
                     prompt = next(line for line in lines if "#1 work" in line)
                     arrow = "↳" if interactive else "->"
                     status = [line for line in lines if arrow in line and line.startswith("|")]

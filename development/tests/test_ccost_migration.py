@@ -301,7 +301,9 @@ class StartupQuotaGeometryTests(unittest.TestCase):
         before = len(stream.getvalue())
         renderer.render(WatchProjection("Watch", "V2", ()))
         final = stream.getvalue()[before:]
-        self.assertTrue(final.startswith("\x1b[2J\x1b[3J\x1b[H"))
+        self.assertTrue(final.startswith("\x1b[H"))
+        self.assertNotIn("\x1b[2J", final)
+        self.assertNotIn("\x1b[3J", final)
         self.assertIn("Session / prompt", final)
         self.assertIn("Token Mix %", final)
         self.assertNotIn("Initializing", final)

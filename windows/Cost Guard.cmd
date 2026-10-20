@@ -1,4 +1,6 @@
 @echo off
+<nul set /p "=Cost Guard: Checking requirements..."
+set "COST_GUARD_LAUNCHER_STATUS=pending"
 rem Reuse this console; retire cmd before the persistent PowerShell runs Python.
 rem Prefer PowerShell 7 when installed; Windows PowerShell remains supported.
 where pwsh.exe >nul 2>nul

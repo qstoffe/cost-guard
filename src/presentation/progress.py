@@ -5,8 +5,11 @@ import shutil
 import sys
 import threading
 import textwrap
+import time
 from typing import Callable, TextIO
 from src.runtime_errors import recoverable
+from src.launcher_feedback import release_launcher_status
+from .startup_estimate import StartupEstimate
 
 _FRAMES = ("|", "/", "-", "\\")
 
@@ -21,7 +24,7 @@ def _supports_blocks(stream: TextIO) -> bool:
 
 
 def _format_progress_line(
-    percent: int,
+    percent: int | None,
     frame: str,
     label: str,
     width: int,
@@ -30,6 +33,8 @@ def _format_progress_line(
     blocks: bool = True,
 ) -> str:
     width = max(1, int(width))
+    if percent is None:
+        return (f"{prefix}{frame} {label}")[:width]
     percent = max(0, min(100, int(percent)))
     if width >= 40:
         bar_width = min(24, max(8, width - 38))
@@ -54,6 +59,7 @@ class StartupProgress:
         animate: bool = True,
         line_sink: Callable[[str], None] | None = None,
         heading: str | None = None,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self.stream = stream or sys.stderr
         # Interactive-only transient heading, removed again by stop().
@@ -64,7 +70,7 @@ class StartupProgress:
         if interactive is None:
             interactive = bool(getattr(self.stream, "isatty", lambda: False)())
         self.interactive = bool(interactive)
-        self.mode = "watch" if mode == "watch" else "normal"
+        self.mode = "watch" if mode.lower().startswith("watch") else "normal"
         self.animate = bool(animate)
         self.line_sink = line_sink
         self._blocks = _supports_blocks(self.stream)
@@ -74,41 +80,28 @@ class StartupProgress:
         self._percent = 0
         self._label = "Initializing"
         self._frame_index = 0
-        self._analyzed_count = 0
         self._last_length = 0
         self._lock = threading.Lock()
         self._stop_event = threading.Event()
         self._worker: threading.Thread | None = None
-
-    def _target_for(self, label: str) -> int:
-        if label.startswith("Analyzing "):
-            self._analyzed_count += 1
-            return min(76, 28 + self._analyzed_count * 8)
-        stages = (
-            ("Selecting OpenCode source", 5),
-            ("Initializing cache", 10),
-            ("Initializing Watch", 15),
-            ("Loading GitHub Copilot pricing", 22),
-            ("Calculating month/today billing", 78),
-            ("Building prompt analytics", 84),
-            ("Comparing model prices", 89),
-            ("Checking GitHub Copilot quota", 94),
-        )
-        for name, target in stages:
-            if label.startswith(name):
-                return target
-        return min(95, self._percent + 3)
+        self._clock = clock
+        self._estimate = StartupEstimate(mode, clock())
+        self._explicit = False
+        self._launcher_released = False
+        self._last_render_time = float("-inf")
 
     def _render_locked(self, *, frame: str | None = None) -> None:
         if not self.interactive or not self._active:
             return
         width = max(1, shutil.get_terminal_size((80, 24)).columns - 1)
         current_frame = frame or _FRAMES[self._frame_index % len(_FRAMES)]
+        if not self._explicit:
+            self._percent = max(self._percent, self._estimate.percent(self._clock()))
         prefix = "Watch: " if self.mode == "watch" else ""
         line = _format_progress_line(
-            self._percent,
+            self._percent if self._explicit or self._estimate.known else None,
             current_frame,
-            self._label,
+            ("~ " if not self._explicit and self._estimate.known else "") + self._label,
             width,
             prefix=prefix,
             blocks=self._blocks,
@@ -116,7 +109,11 @@ class StartupProgress:
         if self.line_sink is not None:
             self.line_sink(line)
             self._last_length = len(line)
+            self._last_render_time = self._clock()
             return
+        if not self._launcher_released:
+            release_launcher_status()
+            self._launcher_released = True
         if self.heading and not self._heading_shown:
             lines = textwrap.wrap(self.heading, width=width) or [""]
             self.stream.write("\n".join(lines) + "\n")
@@ -126,6 +123,7 @@ class StartupProgress:
         self.stream.write("\r" + line + padding)
         self.stream.flush()
         self._last_length = len(line)
+        self._last_render_time = self._clock()
 
     def _animate(self) -> None:
         while not self._stop_event.wait(0.12):
@@ -172,6 +170,7 @@ class StartupProgress:
             return
         text = str(label).strip() or "Initializing"
         if not self.interactive:
+            release_launcher_status()
             # Percentage-only updates of the same stage are not redirected noise.
             if text != self._last_plain_label:
                 self.stream.write(f"Cost Guard: {text}\n")
@@ -179,29 +178,32 @@ class StartupProgress:
             self._last_plain_label = text
             return
         with self._lock:
+            previous_label = self._label
             self._active = True
             self._label = text
-            target = self._target_for(text) if percent is None else max(0, min(100, int(percent)))
-            self._percent = max(self._percent, target)
-            self._render_locked()
+            self._explicit = percent is not None
+            self._estimate.update(label, self._clock())
+            if percent is not None:
+                self._percent = max(self._percent, max(0, min(99, int(percent))))
+            if text != previous_label or percent is not None or self._clock() - self._last_render_time >= .12:
+                self._render_locked()
         self._ensure_worker()
 
-    def stop(self) -> None:
+    def stop(self, *, complete: bool = False) -> None:
         if self._closed:
             return
         self._closed = True
-        if not self.interactive:
-            return
         with self._lock:
-            if self._active:
+            if self.interactive and self._active and complete:
                 self._percent = 100
+                self._explicit = True
                 self._render_locked(frame="✓" if self._blocks else "*")
             self._active = False
         self._stop_event.set()
         worker = self._worker
         if worker is not None and worker is not threading.current_thread():
-            worker.join(timeout=0.25)
-        if self._last_length and self.line_sink is None:
+            worker.join()
+        if self.interactive and self._last_length and self.line_sink is None:
             self.stream.write("\r" + (" " * self._last_length) + "\r")
             if self._heading_shown:
                 # Clear every heading row, including narrow-terminal wraps.

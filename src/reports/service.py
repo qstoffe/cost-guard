@@ -28,6 +28,7 @@ from src.cache import CacheRepository
 from src.numbers import ccost_amount
 from src.domain import AccountSnapshot, NormalizedSession, SessionSnapshot
 from src.domain.acquisition import AcquisitionMetrics
+from src.domain.progress import WorkProgress
 from src.domain.ccost import ReferenceValuation
 from src.domain.session_tree import root_activity, root_for_session
 from src.pricing.base import PricingProvider
@@ -146,7 +147,7 @@ class ReportService:
 
     def _load_catalog(self) -> PricingCatalog:
         if self.catalog is None:
-            self.progress("Loading pricing catalog")
+            self.progress(WorkProgress("Loading pricing catalog", "pricing"))
             self.catalog = self.pricing_provider.get_catalog()
         return self.catalog
 
@@ -191,6 +192,7 @@ class ReportService:
             if self._account_work.start(self.now_ms):
                 self.progress("Checking account quotas")
         assert self._account_work is not None
+        self.progress(WorkProgress("Waiting for account quotas", "quotas"))
         try:
             return self._account_work.finish(self.now_ms)
         finally:
@@ -321,7 +323,7 @@ class ReportService:
         if all_models:
             comparison_catalog, warnings = catalog, ()
         else:
-            self.progress("Checking available OpenCode models")
+            self.progress(WorkProgress("Checking available OpenCode models", "availability"))
             comparison_catalog, warnings = selectable_catalog(
                 catalog, availability_source=self._availability or self.model_availability_source,
             )
@@ -521,6 +523,7 @@ class ReportService:
 
     def _build(self, request: ReportRequest) -> ReportProjection:
         catalog = self._load_catalog()
+        self.progress(WorkProgress("Listing OpenCode sessions", "catalog"))
         all_sessions = self.session_catalog()
         roots, root_activity = self._ordered_roots(all_sessions)
         self.metrics.counts.update(catalog_sessions=len(all_sessions), catalog_roots=len(roots))
@@ -539,6 +542,7 @@ class ReportService:
         selected = HistoryRequirements("session-list", limit=request.session_limit).select(roots, root_activity)
         self.prepare_roots(selected)
         analyzed = tuple(self._analyze(root) for root in selected)
+        self.progress(WorkProgress("Building session summaries", "projection"))
         # A truncated listing only covers activity since its oldest listed root.
         cutoff = (root_activity.get(selected[-1].session_id, selected[-1].updated_at_ms)
                   if selected and len(selected) < len(roots) else None)
@@ -555,6 +559,7 @@ class ReportService:
         if root is None:
             raise ValueError(f"OpenCode session '{request.session_id}' was not found.")
         item = self._analyze(root, detail=True)
+        self.progress(WorkProgress("Building prompt analytics", "projection"))
         block = self._prompt_block(item)
         return ReportProjection(
             ReportKind.SESSION, f"Session {request.session_id}", self.selection.selected.upper(), tuple(self.selection.warnings),
@@ -572,6 +577,7 @@ class ReportService:
         candidates = HistoryRequirements("date", start_ms=date_range.start_ms).select(roots, root_activity)
         self.prepare_roots(candidates, detail=True)
         analyzed = tuple(self._analyze(root, detail=True) for root in candidates)
+        self.progress(WorkProgress("Building prompt analytics", "projection"))
         blocks = _chronological_blocks(tuple(
             block for item in analyzed
             if (block := self._prompt_block(item, start_ms=date_range.start_ms, end_ms=date_range.end_ms)).rows
@@ -589,7 +595,7 @@ class ReportService:
                          root_activity: Mapping[str, int]) -> ReportProjection:
         priceable = self._priceable()
         analyzed = recent_sample_roots(roots, root_activity, self._analyze, priceable)
-        self.progress("Comparing model prices")
+        self.progress(WorkProgress("Comparing model prices", "projection"))
         comparisons, sample, promo_notes, recent, recent_highlight_spans, availability_warnings = self._model_comparison(
             analyzed, all_models=request.kind is ReportKind.ALL_MODELS,
         )

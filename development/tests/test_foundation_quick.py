@@ -94,7 +94,8 @@ class BootstrapQuickTests(unittest.TestCase):
     def test_watch_runtime_is_wired_to_single_startup_dashboard(self) -> None:
         bootstrap = (ROOT / "src/bootstrap.py").read_text(encoding="utf-8")
         self.assertIn("render_initializing", bootstrap)
-        self.assertIn("initial_cycle = coordinator.initialize_with_recovery(watch_renderer)", bootstrap)
+        self.assertIn("initial_cycle = coordinator.initialize_with_recovery(watch_renderer, before_recovery=progress.stop)", bootstrap)
+        self.assertEqual(1, bootstrap.count("watch_renderer.render_initializing("))
         self.assertIn("run_forever(watch_renderer, initial_cycle=initial_cycle)", bootstrap)
 
     def test_one_shot_header_is_rendered_once_with_selected_source(self) -> None:
@@ -107,7 +108,7 @@ class BootstrapQuickTests(unittest.TestCase):
         progress = StartupProgress(stream, mode="normal", interactive=True, animate=False)
         progress.update("Selecting OpenCode source")
         progress.update("Diagnostics validation", 67)
-        progress.stop()
+        progress.stop(complete=True)
         rendered = stream.getvalue()
         self.assertIn("67%", rendered)
         closed = stream.getvalue()
@@ -121,7 +122,7 @@ class BootstrapQuickTests(unittest.TestCase):
             line_sink=lines.append,
         )
         progress.update("Analyzing ses_fixture")
-        progress.stop()
+        progress.stop(complete=True)
         self.assertTrue(lines)
         self.assertIn("Watch: ", lines[-1])
         self.assertIn("100%", lines[-1])
@@ -144,7 +145,7 @@ class BootstrapQuickTests(unittest.TestCase):
         progress.stop()
         self.assertEqual("Cost Guard: Analyzing\n", quiet.getvalue())
         bootstrap = (ROOT / "src/bootstrap.py").read_text(encoding="utf-8")
-        self.assertIn('StartupProgress(mode="normal", heading=mode_heading(startup_mode(command)))', bootstrap)
+        self.assertIn('StartupProgress(mode=startup_mode(command), heading=mode_heading(startup_mode(command)))', bootstrap)
 
 
 if __name__ == "__main__":
