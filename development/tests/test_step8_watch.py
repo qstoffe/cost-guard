@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import closing
 
 import io
+import os
 import sqlite3
 import tempfile
 import threading
@@ -360,7 +361,8 @@ class _TtyBuffer(io.StringIO):
 
 
 class WatchLayoutRegressionTests(unittest.TestCase):
-    def test_watch_table_width_is_fixed_and_status_is_single_overwritable_row(self):
+    @mock.patch("src.presentation.watch_screen.shutil.get_terminal_size", return_value=os.terminal_size((80, 24)))
+    def test_watch_table_width_is_fixed_and_status_is_single_overwritable_row(self, _size):
         with tempfile.TemporaryDirectory() as td:
             source = MutableSource()
             config, selection, service, _db = make_service(td, source)
@@ -385,13 +387,14 @@ class WatchLayoutRegressionTests(unittest.TestCase):
             renderer.render_status(replace(projection, status="Idle · Next prompt check: 00:30", status_active=False, active_count=0))
             tail = stream.getvalue()
             self.assertEqual(tail.count(clear), 1, "status updates must not clear the dashboard")
+            self.assertEqual(tail.count("\x1b[3J"), 1, "only the initial wrapped frame clears scrollback")
             self.assertIn("\r\x1b[2K", tail)
             self.assertIn("Watch: Refreshing...", tail)
             self.assertIn("Watch: Idle · Next prompt check: 00:30", tail)
             self.assertNotIn("Refreshing...\nWatch: Idle", tail)
             renderer.render(projection)
             self.assertEqual(stream.getvalue().count(clear), 2, "changed full frames overwrite from home")
-            self.assertNotIn("\x1b[3J", stream.getvalue())
+            self.assertEqual(2, stream.getvalue().count("\x1b[3J"), "wrapped frames rebuild clean scrollback")
 
     def test_watch_initialization_has_transient_heading_and_adjacent_progress(self):
         config = dict(load_configuration(ROOT).values)

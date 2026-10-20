@@ -6,6 +6,7 @@ import ast
 from decimal import Decimal as D
 import io
 import json
+import os
 from pathlib import Path
 import re
 import shutil
@@ -289,7 +290,8 @@ class StartupQuotaGeometryTests(unittest.TestCase):
         from development.tools.collect_diagnostics import _diagnostic_header
         self.assertEqual(mode_heading("Diagnostics"), _diagnostic_header())
 
-    def test_watch_startup_transitions_to_unchanged_dashboard(self):
+    @patch("src.presentation.watch_screen.shutil.get_terminal_size", return_value=os.terminal_size((80, 24)))
+    def test_watch_startup_transitions_to_unchanged_dashboard(self, _size):
         stream = io.StringIO()
         renderer = WatchRenderer({}, stream=stream, interactive=True)
         renderer.render_initializing()
@@ -301,9 +303,9 @@ class StartupQuotaGeometryTests(unittest.TestCase):
         before = len(stream.getvalue())
         renderer.render(WatchProjection("Watch", "V2", ()))
         final = stream.getvalue()[before:]
-        self.assertTrue(final.startswith("\x1b[H"))
-        self.assertNotIn("\x1b[2J", final)
-        self.assertNotIn("\x1b[3J", final)
+        self.assertTrue(final.startswith("\x1b[2J\x1b[3J\x1b[H"), "fixed table wraps at 80 columns")
+        self.assertEqual(1, final.count("\x1b[2J"))
+        self.assertEqual(1, final.count("\x1b[3J"))
         self.assertIn("Session / prompt", final)
         self.assertIn("Token Mix %", final)
         self.assertNotIn("Initializing", final)
