@@ -356,7 +356,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.65 (2026-10-20):** Fix repeated Watch title/table fragments in scrollback for wrapped or oversized dashboards, including returning to a fitting layout. Buffered updates remain for fitting frames; status-only output, accounting, acquisition and retention are unchanged. Terminal errors retain finite red emphasis followed by a neutral `[ERROR]` outcome.
+**v80.66 (2026-10-23):** The [FR authoring guide](development/FR_GUIDE.md) now defines explicit finalization, shared backlog layout, priority allocation and authorized Git delivery. Empty pending/completed directories are tracked for future FRs; authoring does not implement them. Runtime behavior is unchanged, including buffered Watch updates and overflow scrollback recovery.
 
 Recent predecessors added buffered Watch/startup progress and launcher feedback ([evidence and limits](development/history-loading.md#startup-presentation-and-launcher-evidence)), independent historical context/current anchors, nonblocking metadata, quota histories, execution Duration and retained daily CCost. v80.0 is the Python 3.11+ public baseline; see [version history](VERSION_HISTORY.md). Claude quotas remain experimental; terminal visuals, restart and sleep/wake need separate live evidence.
 

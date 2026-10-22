@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.66 — 2026-10-23
+
+- Define repository-native FR finalization, shared lowercase backlog layout, collision-safe priority selection and authorized Git delivery while retaining Cost Guard's ownership/handoff standards and documentation release gates. Track empty pending/completed directories; no backlog execution or runtime behavior changes.
+
 ## v80.65 — 2026-10-20
 
 - Fix repeated Watch title/table fragments when scrolling up: wrapped or taller-than-viewport dashboards clear and rebuild the current frame instead of accumulating partial old frames in scrollback. Returning from overflow also clears stale fragments. Fitting dashboards retain buffered row patches, safe resize overwrites and unchanged-frame suppression; status-only updates, redirected output, row selection, acquisition and accounting are unchanged.
@@ -20,13 +24,9 @@
 - Historical deltas compare effective states, not accumulated billed tokens. An effort selection permits cross-boundary comparison only for the same provider/model with complete retained history and compatible telemetry; resets, missing evidence and unexplained decreases remain unknown. Compaction keeps its explicit shrink semantics and request accounting is unchanged.
 - Register the pre-existing Windows launcher regression in the bounded test runner and restore the five-release expanded history limit.
 
-## v80.61 — 2026-10-20
-
-- Windows launchers prefer PowerShell 7 (`pwsh.exe`) when available and fall back to Windows PowerShell 5.1. Python discovery probes each matching `py.exe` or `python.exe` separately, rather than treating multiple `Get-Command` results as one path; the report, Watch and Diagnostics launchers share the fix.
-
 ## Earlier v80 history
 
-- v80.60 moved optional Watch release-date refresh off startup, retaining verified dates, report enrichment, prices and promotion expiry. v80.59 staged Watch local-day accounting (`Today: Pending`), shared V2 catalog/revision batches and added payload-free V1 liveness plus semantic cache keys. v80.58 bounded quota histories without upstream freshness guarantees. v80.57 added execution Duration/overlap-safe totals; v80.56 isolated quota lanes/retries (60s stale/5min expiry); v80.55 grouped Watch; v80.54 indexed effort/context. v80.48–v80.53 added overnight Today dates, active-context separation, timestamp-first/running headers, shared warnings/Earlier rows, deleted usage and a global row cap; routine ZIPs stopped. v80.43–v80.47 added priced Token Mix, New Models and faster CCost. Claude limitations remain documented.
+- v80.61 made Windows launchers prefer PowerShell 7 (5.1 fallback) and probe each discovered Python executable separately. v80.60 moved optional Watch release-date refresh off startup, retaining verified dates, report enrichment, prices and promotion expiry. v80.59 staged Watch local-day accounting (`Today: Pending`), shared V2 catalog/revision batches and added payload-free V1 liveness plus semantic cache keys. v80.58 bounded quota histories without upstream freshness guarantees. v80.57 added execution Duration/overlap-safe totals; v80.56 isolated quota lanes/retries (60s stale/5min expiry); v80.55 grouped Watch; v80.54 indexed effort/context. v80.48–v80.53 added overnight Today dates, active-context separation, timestamp-first/running headers, shared warnings/Earlier rows, deleted usage and a global row cap; routine ZIPs stopped. v80.43–v80.47 added priced Token Mix, New Models and faster CCost. Claude limitations remain documented.
 - v80.35–v80.42 added native abort-cause labels (`[ABORTED by user]` only for matched live V2 interrupts), neutral tool-call endings, stable account ordering, refactored hot paths, bounded startup recovery/typed source errors, retained tool/skill evidence and stopped counting proven V2 tool continuations as `Calls`.
 - v80.34 pooled V2 reads, memoized model identity, overlapped report acquisition and bounded Watch discovery/startup/resync with identical output (report ~2.1→0.65 s, Watch startup ~6.2→0.65 s, resync 13→1.4 s); Diagnostics gained all-account evidence and Watch geometry.
 - v80.32–v80.33 separated refresh, prompt projection/report orchestration and normalization, shared ancestry/bounded sampling, moved fixtures (67→43 test-import edges) and added routine/coupling, inventory and layer guards without raising caps or changing billing.
