@@ -6,7 +6,7 @@ This repository tree is designed to be maintainable by a fresh AI coding session
 
 - **Implement, fix, refactor or package:** read `development/MAINTAINER.md` first. Read `development/ARCHITECTURE.md` when boundaries are affected; use `development/CODE_MAP.md` to locate the relevant owners/tests. Make the change directly in this authoritative tree. Verification and packaging depend on where you run (below).
 - **Git delivery explicitly authorized by the user** (through the current task or a development workflow they started): follow [authorized Git delivery](development/MAINTAINER.md#authorized-git-delivery). Work may happen in an isolated repository clone without changing the ordinary working tree; all quality gates still apply.
-- **Brainstorm, design or create a Feature Request:** read `development/FR_GUIDE.md`. Do not modify production code unless the user explicitly transitions to implementation; brainstorming never builds a ZIP.
+- **Brainstorm, design or create a Feature Request:** read `development/FR_GUIDE.md`. Direct instructions to create/add/update an FR in the repository authorize publishing and merging it into `main` by default; brainstorming alone does not. Do not modify production code unless the user explicitly transitions to implementation; brainstorming never builds a ZIP.
 - **Understand the package:** start with `README.md`, then `development/README.md` and `development/ARCHITECTURE.md` as needed.
 
 ## Non-negotiable maintenance rules
@@ -17,9 +17,9 @@ This repository tree is designed to be maintainable by a fresh AI coding session
 - Feature placement and focused tests are in `development/CODE_MAP.md`. `development/structure-policy.json` gates routine growth and test coupling: do not auto-rebaseline, grow legacy exceptions or introduce test-to-test fixtures to make a feature pass. Refactor the owner; retire resolved debt entries.
 - Add or strengthen deterministic regression tests for bug fixes and important behavior changes.
 - Never package secrets, credentials, `config/user-config.jsonc`, runtime `cache/`, runtime `diagnostics/`, `.git/`, Python bytecode, historical checkpoint artifacts or generated release debris.
-- Do not commit or push automatically unless the user has explicitly authorized Git commit, push, PR or merge through the current task or a development workflow they started; those already-authorized actions need no further confirmation.
+- Do not commit or push automatically unless the user authorizes Git through the current task or a development workflow they started. A direct repository FR creation/update request explicitly authorizes commit, push, PR and merge; those already-authorized actions need no further confirmation.
 - Current `main` is the recommended/latest supported distribution during rapid development. Packaged GitHub Releases are currently paused; changing that policy requires an explicit decision, never a version-number trigger.
-- Every PR merged to `main` must increment the product version and update release date, `VERSION_HISTORY.md`, README current version and affected current docs in the same PR, including documentation-only and behavior-neutral changes; verify against the latest base before merge. See [versioning and history](development/MAINTAINER.md#versioning-and-history). Git tags, GitHub Releases and ZIP policy remain independent.
+- Every PR merged to `main` that changes shipped Cost Guard product code or functionality must increment the product version and update release date, `VERSION_HISTORY.md`, README current version and affected current docs in the same PR. **FR-only, documentation-only, test-only and development-tool-only changes must not bump product version/history**. Verify the latest base and change scope before merge. See [versioning and history](development/MAINTAINER.md#versioning-and-history). Git tags, GitHub Releases and ZIP policy remain independent.
 
 ## Verification by environment
 
