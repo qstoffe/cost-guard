@@ -364,7 +364,7 @@ Product versions identify code state; they do not imply a Git tag, release ZIP o
 
 ## Development
 
-`AGENTS.md` routes maintainers to `development/`. Verify the working tree, not ZIPs. Never commit or push automatically.
+`AGENTS.md` routes maintainers to `development/`. Verify the working tree, not ZIPs. Repository FR creation/update requests authorize publishing and merging to `main` by default; other Git operations need explicit authorization.
 
 [Code/test map and inventory review](development/CODE_MAP.md); refresh with `python development/tools/code_inventory.py --json`.
 
