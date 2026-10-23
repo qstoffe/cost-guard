@@ -3,7 +3,7 @@
 ## Problem / dependency
 Cost Guard currently stores a pending or completed request as one `development/backlog/todo|complete/NNNN-slug.md`. That cannot durably co-locate screenshots, sanitized diagnostics, benchmark inputs or other per-request evidence. The user wants one portable format owned centrally by OpenCode Toolkit, retroactively applied to both repositories.
 
-**Required prerequisite:** Toolkit FR 0180 folder-based backlog requests and FR 0190 bounded completed retention must have been delivered and the corresponding Toolkit installed/available. Existing Cost Guard FR 0100 must have completed its development/ migration. If those central features are missing, leave this request pending and explain the dependency; do not fork their implementation into Cost Guard.
+**Required prerequisite:** Toolkit FR 0180 folder-based backlog requests, FR 0185 shared FR authoring and FR 0190 bounded completed retention must have been delivered and the corresponding Toolkit installed/available. Existing Cost Guard FR 0100 must have completed its development/ migration. If those central features are missing, leave this request pending and explain the dependency; do not fork their implementation into Cost Guard.
 
 ## Required behavior
 - Convert **every existing Cost Guard pending and completed FR** from a flat numbered Markdown file to one numbered directory containing canonical `FR.md`, e.g. `development/backlog/todo/0110-convert-backlog-to-fr-bundles-and-attachments/FR.md`. Place optional relevant artifacts in its local `attachments/` subdirectory, linked relatively. Migrate this very FR as part of final delivery when appropriate.

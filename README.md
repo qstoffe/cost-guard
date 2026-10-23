@@ -356,7 +356,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.68 (2026-10-23):** Added pending FR 0130 for Watch history retention by terminal recency, including investigation of plugin-driven stops and missing end evidence. This is a specification only; Watch runtime behavior is unchanged. [FR authoring guide](development/FR_GUIDE.md) and [version history](VERSION_HISTORY.md) remain authoritative.
+**v80.69 (2026-10-23):** Added [FR 0130](development/backlog/todo/0130-watch-history-terminal-recency.md) to retain recently finished Watch prompts in history by genuine terminal recency. This is a pending specification only; program behavior remains unchanged. [FR authoring guide](development/FR_GUIDE.md) and [version history](VERSION_HISTORY.md) remain authoritative.
 
 Recent predecessors added buffered Watch/startup progress and launcher feedback ([evidence and limits](development/history-loading.md#startup-presentation-and-launcher-evidence)), independent historical context/current anchors, nonblocking metadata, quota histories, execution Duration and retained daily CCost. v80.0 is the Python 3.11+ public baseline; see [version history](VERSION_HISTORY.md). Claude quotas remain experimental; terminal visuals, restart and sleep/wake need separate live evidence.
 
