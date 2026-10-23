@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.68 — 2026-10-23
+
+- Added two pending Cost Guard adoption FRs for Toolkit-owned release/version-history and version-free Feature Request authoring, with explicit Toolkit/migration prerequisites. No production Watch, quota or shared-authoring runtime changed.
+
 ## v80.67 — 2026-10-23
 
 - Added two pending repository-native backlog FRs: migrate Cost Guard to the Toolkit-owned FR-folder/attachment contract, then fix OpenAI account replacement and rejected quota after a subscription upgrade. Diagnostic observations are sanitized in the bug specification; no production account, Watch or quota behavior changed.
@@ -16,14 +20,9 @@
 
 - Terminal Watch failures share the finite `watchRecentEventSeconds` highlight: red `!`, critical row styling and final tool/Skills activity expire together, leaving a neutral `[ERROR]` outcome. Startup historical failures receive no fresh emphasis; polling, redraws, quota refreshes and unchanged/revised source snapshots do not restart the window. Zero disables only transient effects. Existing analysis/report outcomes, accounting, row selection and successful/aborted/running semantics are preserved.
 
-## v80.63 — 2026-10-20
-
-- Watch overwrites buffered frames without clearing the screen or scrollback, patches changed rows when they safely fit the viewport, suppresses identical output and preserves shrinking/resize fallback. One initializing surface replaces the duplicate startup render; source hints alone no longer force an unchanged dashboard redraw. Quotas and staged Today enrichment retain their acquisition cadence.
-- Startup progress combines mode-specific time estimates with completed/total session work where known. Estimates are explicitly approximate, unknown stages remain indeterminate, and only successful startup can show 100%. Animation is joined before dashboard/recovery output; fast startup never waits for a visual target.
-- Windows and macOS report/Watch launchers show Python-independent requirements feedback before environment checks, retained until Python can replace it. Python probes deduplicate repeated executable paths; shell fallback, Python 3.11+, Ctrl+C and terminal/process lifetimes remain unchanged. Headless measurements and platform-verification limits are documented in `development/history-loading.md`.
-
 ## Earlier v80 history
 
+- v80.63 made Watch patch/suppress identical buffered frames without clearing scrollback, added truthful staged startup progress, and improved cross-platform launcher prerequisites/Python probing; active quotas and source accounting stayed intact.
 - v80.62 preserved completed context estimates and separated current anchors across model/effort boundaries with explicit compaction semantics; v80.61 made Windows launchers prefer PowerShell 7 (5.1 fallback) and probe each discovered Python executable separately. v80.60 moved optional Watch release-date refresh off startup, retaining verified dates, report enrichment, prices and promotion expiry. v80.59 staged Watch local-day accounting (`Today: Pending`), shared V2 catalog/revision batches and added payload-free V1 liveness plus semantic cache keys. v80.58 bounded quota histories without upstream freshness guarantees. v80.57 added execution Duration/overlap-safe totals; v80.56 isolated quota lanes/retries (60s stale/5min expiry); v80.55 grouped Watch; v80.54 indexed effort/context. v80.48–v80.53 added overnight Today dates, active-context separation, timestamp-first/running headers, shared warnings/Earlier rows, deleted usage and a global row cap; routine ZIPs stopped. v80.43–v80.47 added priced Token Mix, New Models and faster CCost. Claude limitations remain documented.
 - v80.35–v80.42 added native abort-cause labels (`[ABORTED by user]` only for matched live V2 interrupts), neutral tool-call endings, stable account ordering, refactored hot paths, bounded startup recovery/typed source errors, retained tool/skill evidence and stopped counting proven V2 tool continuations as `Calls`.
 - v80.34 pooled V2 reads, memoized model identity, overlapped report acquisition and bounded Watch discovery/startup/resync with identical output (report ~2.1→0.65 s, Watch startup ~6.2→0.65 s, resync 13→1.4 s); Diagnostics gained all-account evidence and Watch geometry.
