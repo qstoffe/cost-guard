@@ -356,7 +356,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.68 (2026-10-23):** Added pending FRs to adopt Toolkit-wide version/history rules and version-free FR writing after shared infrastructure migration. Runtime functionality is unchanged; these standards are not yet implemented. [Pending FR guide](development/FR_GUIDE.md) and [history](VERSION_HISTORY.md).
+**v80.69 (2026-10-23):** Added [FR 0130](development/backlog/todo/0130-watch-ccost-per-subscription-and-stable-today.md) for stable Watch Today rendering, shorter CCost labels and period-scoped provider/subscription CCost in Watch and reports. This is a pending specification, not implemented runtime behavior. [Pending FR guide](development/FR_GUIDE.md) and [history](VERSION_HISTORY.md).
 
 Recent predecessors added buffered Watch/startup progress and launcher feedback ([evidence and limits](development/history-loading.md#startup-presentation-and-launcher-evidence)), independent historical context/current anchors, nonblocking metadata, quota histories, execution Duration and retained daily CCost. v80.0 is the Python 3.11+ public baseline; see [version history](VERSION_HISTORY.md). Claude quotas remain experimental; terminal visuals, restart and sleep/wake need separate live evidence.
 
