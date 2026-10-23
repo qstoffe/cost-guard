@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.69 — 2026-10-23
+
+- Authored pending FR 0130 for clearer Watch CCost presentation, stable Today values during refresh, and provider/subscription CCost scoped to daily, five-hour and weekly windows with explanatory report rows. No runtime billing, quota, Watch or report behavior changed.
+
 ## v80.68 — 2026-10-23
 
 - Added two pending Cost Guard adoption FRs for Toolkit-owned release/version-history and version-free Feature Request authoring, with explicit Toolkit/migration prerequisites. No production Watch, quota or shared-authoring runtime changed.
