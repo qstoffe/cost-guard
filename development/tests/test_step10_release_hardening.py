@@ -79,23 +79,26 @@ class DistributionDocumentationTests(unittest.TestCase):
         self.assertIn("python development/tools/collect_diagnostics.py", development_commands)
         self.assertIn("current `main` remains the supported source distribution", readme)
 
-    def test_every_pr_requires_version_metadata_before_merge(self) -> None:
+    def test_only_product_changes_require_release_metadata_before_merge(self) -> None:
         for name in ("AGENTS.md", "development/MAINTAINER.md", "development/README.md"):
             with self.subTest(path=name):
                 text = (ROOT / name).read_text(encoding="utf-8")
-                self.assertIn("Every PR merged to `main`", text)
                 self.assertIn("documentation-only", text)
-                self.assertIn("behavior-neutral", text)
+                self.assertIn("product code or functionality", text)
                 self.assertIn("latest base", text)
         maintainer = (ROOT / "development/MAINTAINER.md").read_text(encoding="utf-8")
         delivery = maintainer.split("## Authorized Git delivery", 1)[1].split("\n## ", 1)[0]
         self.assertIn("Before opening the PR", delivery)
         self.assertIn("Immediately before merge", delivery)
-        self.assertIn("Missing or conflicting version metadata blocks merge", delivery)
+        self.assertIn("including merging the PR to `main` by default", delivery)
+        self.assertIn("for a non-product change", delivery)
+        self.assertIn("remain unchanged", delivery)
         versioning = maintainer.split("## Versioning and history", 1)[1].split("\n## ", 1)[0]
         for required in ("VERSION", "RELEASE_DATE", "src/version.py", "VERSION_HISTORY.md",
-                         "README", "affected current docs", "same PR", "increments MINOR sequentially"):
+                         "README", "affected current docs", "same PR", "increment MINOR sequentially"):
             self.assertIn(required, versioning)
+        self.assertIn("documentation-only, test-only", versioning)
+        self.assertIn("must **not** update `VERSION` or `RELEASE_DATE`", versioning)
         self.assertIn("A version bump does not create a local product archive", versioning)
 
     def test_git_delivery_policy_is_generic_and_consistent(self) -> None:
