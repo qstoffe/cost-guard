@@ -356,7 +356,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.69 (2026-10-23):** Added [FR 0130](development/backlog/todo/0130-watch-history-terminal-recency.md) to retain recently finished Watch prompts in history by genuine terminal recency. This is a pending specification only; program behavior remains unchanged. [FR authoring guide](development/FR_GUIDE.md) and [version history](VERSION_HISTORY.md) remain authoritative.
+**v80.70 (2026-10-23):** Added [FR 0140](development/backlog/todo/0140-watch-ccost-per-subscription-and-stable-today.md) for shorter Watch CCost labels, stable Today on refresh and provider/subscription CCost by quota period. This is a pending FR, not implemented behavior. Previously added [FR 0130](development/backlog/todo/0130-watch-history-terminal-recency.md) remains pending. [FR authoring guide](development/FR_GUIDE.md) and [version history](VERSION_HISTORY.md) remain authoritative.
 
 Recent predecessors added buffered Watch/startup progress and launcher feedback ([evidence and limits](development/history-loading.md#startup-presentation-and-launcher-evidence)), independent historical context/current anchors, nonblocking metadata, quota histories, execution Duration and retained daily CCost. v80.0 is the Python 3.11+ public baseline; see [version history](VERSION_HISTORY.md). Claude quotas remain experimental; terminal visuals, restart and sleep/wake need separate live evidence.
 
