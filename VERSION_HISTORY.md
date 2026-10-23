@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.69 — 2026-10-23
+
+- Added pending FR 0130 for global Watch historical recency of newly finished prompts, including verified terminal evidence and plugin-end behavior. This documentation-only delivery does not change running Watch behavior.
+
 ## v80.68 — 2026-10-23
 
 - Added two pending Cost Guard adoption FRs for Toolkit-owned release/version-history and version-free Feature Request authoring, with explicit Toolkit/migration prerequisites. No production Watch, quota or shared-authoring runtime changed.
@@ -16,12 +20,9 @@
 
 - Fix repeated Watch title/table fragments when scrolling up: wrapped or taller-than-viewport dashboards clear and rebuild the current frame instead of accumulating partial old frames in scrollback. Returning from overflow also clears stale fragments. Fitting dashboards retain buffered row patches, safe resize overwrites and unchanged-frame suppression; status-only updates, redirected output, row selection, acquisition and accounting are unchanged.
 
-## v80.64 — 2026-10-20
-
-- Terminal Watch failures share the finite `watchRecentEventSeconds` highlight: red `!`, critical row styling and final tool/Skills activity expire together, leaving a neutral `[ERROR]` outcome. Startup historical failures receive no fresh emphasis; polling, redraws, quota refreshes and unchanged/revised source snapshots do not restart the window. Zero disables only transient effects. Existing analysis/report outcomes, accounting, row selection and successful/aborted/running semantics are preserved.
-
 ## Earlier v80 history
 
+- v80.64 applied finite Watch terminal-failure highlights that expire without losing permanent error labels.
 - v80.63 improved Watch redraws, staged startup progress and launcher/Python preflight.
 - v80.62 preserved completed context estimates and separated current anchors across model/effort boundaries with explicit compaction semantics; v80.61 made Windows launchers prefer PowerShell 7 (5.1 fallback) and probe each discovered Python executable separately. v80.60 moved optional Watch release-date refresh off startup, retaining verified dates, report enrichment, prices and promotion expiry. v80.59 staged Watch local-day accounting (`Today: Pending`), shared V2 catalog/revision batches and added payload-free V1 liveness plus semantic cache keys. v80.58 bounded quota histories without upstream freshness guarantees. v80.57 added execution Duration/overlap-safe totals; v80.56 isolated quota lanes/retries (60s stale/5min expiry); v80.55 grouped Watch; v80.54 indexed effort/context. v80.48–v80.53 added overnight Today dates, active-context separation, timestamp-first/running headers, shared warnings/Earlier rows, deleted usage and a global row cap; routine ZIPs stopped. v80.43–v80.47 added priced Token Mix, New Models and faster CCost. Claude limitations remain documented.
 - v80.35–v80.42 added native abort-cause labels (`[ABORTED by user]` only for matched live V2 interrupts), neutral tool-call endings, stable account ordering, refactored hot paths, bounded startup recovery/typed source errors, retained tool/skill evidence and stopped counting proven V2 tool continuations as `Calls`.
