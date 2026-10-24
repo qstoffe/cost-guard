@@ -1,12 +1,12 @@
 # Cost Guard agent entry point
 
-This repository tree is designed to be maintainable by a fresh AI coding session without hidden conversation context. Treat the files in this tree as the source of truth; never reconstruct or reset them from Git unless the user explicitly asks.
+This repository tree is designed to be maintainable by a fresh AI coding session without hidden conversation context. **Read `development/TOOLKIT_CONTRACT.md` first for current central Toolkit development, backlog, FR publication and delivery authority;** local rules govern only unique Cost Guard product facts and safeguards. Treat the files in this tree as the source of truth; never reconstruct or reset them from Git unless the user explicitly asks.
 
 ## Choose the workflow from the user's request
 
 - **Implement, fix, refactor or package:** read `development/MAINTAINER.md` first. Read `development/ARCHITECTURE.md` when boundaries are affected; use `development/CODE_MAP.md` to locate the relevant owners/tests. Make the change directly in this authoritative tree. Verification and packaging depend on where you run (below).
 - **Git delivery explicitly authorized by the user** (through the current task or a development workflow they started): follow [authorized Git delivery](development/MAINTAINER.md#authorized-git-delivery). Work may happen in an isolated repository clone without changing the ordinary working tree; all quality gates still apply.
-- **Brainstorm, design or create a Feature Request:** read `development/FR_GUIDE.md`. Direct instructions to create/add/update an FR in the repository authorize publishing and merging it into `main` by default; brainstorming alone does not. Do not modify production code unless the user explicitly transitions to implementation; brainstorming never builds a ZIP.
+- **Brainstorm, design or create a Feature Request:** read `development/FR_GUIDE.md`. Direct instructions to create/add/update an unselected FR-only specification authorize publishing it **directly to the verified `main` without a PR or product release**, as in Toolkit; brainstorming alone does not. Do not modify production code unless the user explicitly transitions to implementation; brainstorming never builds a ZIP.
 - **Understand the package:** start with `README.md`, then `development/README.md` and `development/ARCHITECTURE.md` as needed.
 
 ## Non-negotiable maintenance rules
@@ -17,7 +17,7 @@ This repository tree is designed to be maintainable by a fresh AI coding session
 - Feature placement and focused tests are in `development/CODE_MAP.md`. `development/structure-policy.json` gates routine growth and test coupling: do not auto-rebaseline, grow legacy exceptions or introduce test-to-test fixtures to make a feature pass. Refactor the owner; retire resolved debt entries.
 - Add or strengthen deterministic regression tests for bug fixes and important behavior changes.
 - Never package secrets, credentials, `config/user-config.jsonc`, runtime `cache/`, runtime `diagnostics/`, `.git/`, Python bytecode, historical checkpoint artifacts or generated release debris.
-- Do not commit or push automatically unless the user authorizes Git through the current task or a development workflow they started. A direct repository FR creation/update request explicitly authorizes commit, push, PR and merge; those already-authorized actions need no further confirmation.
+- Do not commit or push automatically unless the user authorizes Git through the current task or a development workflow they started. A direct repository FR-only creation/update request authorizes a verified direct-main specification commit, not an authoring PR or version bump; the protected PR/merge workflow applies to implementation and mixed changes.
 - Current `main` is the recommended/latest supported distribution during rapid development. Packaged GitHub Releases are currently paused; changing that policy requires an explicit decision, never a version-number trigger.
 - Every PR merged to `main` that changes shipped Cost Guard product code or functionality must increment the product version and update release date, `VERSION_HISTORY.md`, README current version and affected current docs in the same PR. **FR-only, documentation-only, test-only and development-tool-only changes must not bump product version/history**. Verify the latest base and change scope before merge. See [versioning and history](development/MAINTAINER.md#versioning-and-history). Git tags, GitHub Releases and ZIP policy remain independent.
 
