@@ -1,3 +1,5 @@
+> **Current shared authority (2026-10-24):** [TOOLKIT_CONTRACT.md](TOOLKIT_CONTRACT.md) and the verified Toolkit FR authoring reference supersede every older PR-only/four-digit-only generic procedure below. An approved unselected FR-only specification publishes directly to verified `main` without PR, product-version change or release testing; implementation uses protected PR delivery. The older verification examples below document legacy behavior and are not current authoring requirements.
+
 # Feature Request / brainstorming guide
 
 Use this route when designing Cost Guard changes. The goal is an implementation-ready FR that preserves behavioral contracts without recreating a monolith.
