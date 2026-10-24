@@ -53,7 +53,8 @@ class FrBacklogContractTests(unittest.TestCase):
         self.assertIn("directly to the verified `main` without a PR", agents)
         self.assertIn("TOOLKIT_CONTRACT.md", agents)
         contract = (ROOT / "development/TOOLKIT_CONTRACT.md").read_text(encoding="utf-8")
-        self.assertIn("without PR, product version/date/history bump", contract)
+        self.assertIn("No authoring PR", contract)
+        self.assertIn("product version/date/history", contract)
         self.assertIn("Toolkit", contract)
 
     def test_guide_retains_quality_authorities_and_publication_boundaries(self):
