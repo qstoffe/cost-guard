@@ -132,7 +132,7 @@ class AccountPeriodCCostTests(unittest.TestCase):
                 native = subscription(provider)
                 row = project((native,), (), observed_start_ms=MONTH)[0]
                 self.assertTrue(all(value is not None and value.ccost == 0 for _, value in row.ccost_scopes))
-                self.assertEqual(("CCost today: 0", "CCost this month: 0"), account_ccost_lines(row))
+                self.assertEqual(("CCost today: 0", "CCost this month: 0"), account_ccost_lines(row)[:2])
                 watch = project((native,), (), watch=True, observed_start_ms=MONTH)[0]
                 text = "\n".join(capacity_lines(watch, AnsiStyler({}, enabled=False), "UTC",
                                                width=160, now_ms=NOW, watch=True))

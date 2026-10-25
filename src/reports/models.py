@@ -163,6 +163,7 @@ class AccountProjection:
     pace: tuple[QuotaPace, ...] = ()
     ccost_notes: tuple[str, ...] = ()
     ccost_account_unknown: bool = False
+    unaccounted_usage: Decimal | None = None
 
 
 @dataclass(frozen=True, slots=True)

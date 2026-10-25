@@ -360,9 +360,9 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.77 (2026-10-25):** Account CCost shows the priced subtotal, rounded upward without a partial marker; missing prices may understate it. Empty acquired periods show `0`, unknown `—`. Global markers unchanged. See [details](docs/usage-and-cost.md).
+**v80.78 (2026-10-26):** Copilot reports add signed `Unaccounted usage` for comparable native-month evidence, otherwise `—`. It is an estimate, not billing. Watch is unchanged. [Details](docs/usage-and-cost.md#copilot-unaccounted-usage).
 
-Recent predecessors added buffered Watch/startup progress and launcher feedback ([evidence and limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence)), independent historical context/current anchors, nonblocking metadata, quota histories, execution Duration and retained daily CCost. v80.0 is the Python 3.11+ public baseline; see [version history](VERSION_HISTORY.md). Claude quotas remain experimental; terminal visuals, restart and sleep/wake need separate live evidence.
+See [version history](VERSION_HISTORY.md) for predecessors and [startup evidence](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence) for live-proof limits. v80.0 is the Python 3.11+ baseline. Claude quotas remain experimental; terminal visuals, restart and sleep/wake need separate live evidence.
 
 Product versions identify code state; they do not imply a Git tag, release ZIP or GitHub Release. Packaged GitHub Releases are currently paused. Recommending them at a slower/stable cadence requires an explicit policy change; version numbers never trigger it automatically.
 

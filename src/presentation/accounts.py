@@ -265,6 +265,11 @@ def account_ccost_lines(account: AccountProjection) -> tuple[str, ...]:
     for name, value in account.ccost_scopes:
         if name in {"today", "this month"}:
             lines.append("CCost " + name + ": " + account_ccost_text(value))
+    if account.account.ref.provider_id in {"github-copilot", "github-copilot-enterprise"}:
+        value = account.unaccounted_usage
+        text = "—" if value is None else "0" if value == 0 else (
+            ("+" if value > 0 else "-") + consumed_capacity(abs(value)))
+        lines.append("Unaccounted usage: " + text)
     return tuple(lines)
 
 

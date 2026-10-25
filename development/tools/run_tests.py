@@ -85,6 +85,7 @@ QUICK_PATTERNS: tuple[str, ...] = (
     "test_v7814_regressions.py",
     "test_accounts_ccost.py",
     "test_account_period_ccost.py",
+    "test_copilot_unaccounted_usage.py",
     "test_account_ordering.py",
     "test_simple_http_engine.py",
     "test_http_account_providers.py",

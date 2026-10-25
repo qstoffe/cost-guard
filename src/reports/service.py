@@ -531,7 +531,7 @@ class ReportService:
             return self._accounts_quotas(())
         day = local_day_start_ms(self.timezone_id, now_ms=self.now_ms)
         month = local_month_start_ms(self.timezone_id, now_ms=self.now_ms)
-        cutoff = min(month, history_start(quotas, day, self.now_ms))
+        cutoff = min(month, history_start(quotas, day, self.now_ms, include_copilot_month=True))
         selected = HistoryRequirements("account-periods", start_ms=cutoff).select(roots, root_activity)
         self.prepare_roots(selected)
         return self._accounts_quotas(quotas, roots=tuple(self._analyze(root) for root in selected),
