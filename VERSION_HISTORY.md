@@ -1,5 +1,11 @@
 # Cost Guard version history
 
+## v80.76 — 2026-10-25
+
+- Compact normal account sections retain today/month numeric CCost and show independent rolling CCost beside the corresponding quota percentage (or textual window when no percentage exists). Remove per-account provenance prose and the final account legend; documentation retains the distinctions.
+- Established, acquired empty periods show `0` independently of account type; unpublished/missing history, ambiguous attribution and unknown window anchors remain unknown. Account-only values use `—` for unavailable and downward-rounded `≥…` for partially priced lower bounds; prompt/session/global question-mark semantics stay unchanged. No broader history scans or new polling.
+- Known ChatGPT token-sharing accounts explain separate model/quota access and suggest trying OpenCode's Codex browser (legacy) or Codex device code (legacy) for now, without guaranteeing quotas. API keys do not supply Codex subscription quota; other method/status handling and read-only acquisition are unchanged.
+
 ## v80.75 — 2026-10-25
 
 - Classify OpenAI OAuth methods and token-sharing scopes before quota lookup. ChatGPT token sharing and unfamiliar methods never send their tokens to legacy WHAM; Watch, reports and sanitized Diagnostics distinguish an unsupported quota method from model sign-in rejection. Legacy browser/headless Codex quota retrieval and genuine returned plans/windows remain supported; 401 is request rejection, 403 endpoint policy and 429 throttling.

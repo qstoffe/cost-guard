@@ -9,15 +9,18 @@ from unittest.mock import patch
 
 from development.tests.fixtures.accounts import account
 from development.tests.fixtures.report_runtime import FakePricingProvider
+from development.tests.fixtures.quota_rendering import quotas, report_text, watch_text
 from development.tests.fixtures.session_snapshots import make_snapshot
 from development.tests.fixtures.watch_runtime import MutableSource, make_service
 from development.tests.fixtures.synthetic_month import SyntheticMonthSource, make_root_snapshot
 from src.analysis.causal import trace_entries
 from src.analysis.period_ccost import PeriodCCostIndex, quota_window
 from src.analysis.timezones import local_day_start_ms, local_month_start_ms
+from src.analysis.valuation import ComparisonCost
 from src.domain import ModelRef, QuotaComponent, TokenUsage
 from src.domain.acquisition import AcquisitionMetrics
-from src.presentation.accounts import account_ccost_lines, capacity_lines
+from src.presentation.accounts import account_ccost_lines, account_ccost_text, capacity_lines
+from src.presentation.token_mix import comparison_cost_text
 from src.presentation.terminal import AnsiStyler
 from src.reports.accounts import account_projections, WatchAccountProjection
 
@@ -45,9 +48,10 @@ def subscription(provider="claude-code", identity="one"):
                        reset_at_ms=NOW + HOUR),))
 
 
-def project(accounts, entries, *, watch=False):
+def project(accounts, entries, *, watch=False, observed_start_ms=None):
     return account_projections(accounts, entries, FakePricingProvider().catalog, now_ms=NOW,
-                               today_start_ms=DAY, month_start_ms=MONTH, timezone_id="Europe/Stockholm", watch=watch)
+                               today_start_ms=DAY, month_start_ms=MONTH, timezone_id="Europe/Stockholm", watch=watch,
+                               observed_start_ms=observed_start_ms)
 
 
 class AccountPeriodCCostTests(unittest.TestCase):
@@ -67,9 +71,11 @@ class AccountPeriodCCostTests(unittest.TestCase):
         self.assertNotIn("this month", dict(project((subscription(),), entries, watch=True)[0].ccost_scopes))
         report = "\n".join(account_ccost_lines(claude))
         self.assertIn("CCost this month: 300", report)
-        self.assertIn("trailing lookback", report)
-        self.assertIn("native reset window", report)
-        self.assertIn("not verified account/billing attribution", report)
+        self.assertEqual(("CCost today: 100", "CCost this month: 300"), account_ccost_lines(claude))
+        notes = "\n".join(claude.ccost_notes)
+        self.assertIn("trailing lookback", notes)
+        self.assertIn("native reset window", notes)
+        self.assertIn("not verified account/billing attribution", notes)
 
     def test_provider_is_request_source_not_publisher_and_direct_api_stays_separate(self):
         entries = (request("gpt-via-copilot", NOW, provider="github-copilot-enterprise"),
@@ -108,7 +114,7 @@ class AccountPeriodCCostTests(unittest.TestCase):
         row = project((subscription(),), (known, clone, unknown))[0]
         value = dict(row.ccost_scopes)["today"]
         self.assertEqual((D(100), 2, 1), (value.known_ccost, value.observed_requests, value.priced_requests))
-        self.assertIn("CCost today: ?100", account_ccost_lines(row))
+        self.assertIn("CCost today: ≥100", account_ccost_lines(row))
         scoped = replace(subscription(), quotas=(replace(subscription().quotas[1], scope="model", model_id="claude-test"),))
         self.assertIsNone(dict(project((scoped,), (known,))[0].ccost_scopes)["weekly"])
 
@@ -118,6 +124,96 @@ class AccountPeriodCCostTests(unittest.TestCase):
         self.assertIsNone(quota_window(replace(component, reset_at_ms=NOW), NOW))
         self.assertIsNone(quota_window(replace(component, reset_at_ms=NOW + 8 * 86_400_000), NOW))
         self.assertEqual(NOW - 5 * HOUR, quota_window(subscription().quotas[0], NOW)[0])
+
+    def test_established_empty_periods_are_zero_for_every_provider_and_both_surfaces(self):
+        for provider in ("openai", "github-copilot", "claude-code", "anthropic"):
+            with self.subTest(provider=provider):
+                native = subscription(provider)
+                row = project((native,), (), observed_start_ms=MONTH)[0]
+                self.assertTrue(all(value is not None and value.ccost == 0 for _, value in row.ccost_scopes))
+                self.assertEqual(("CCost today: 0", "CCost this month: 0"), account_ccost_lines(row))
+                watch = project((native,), (), watch=True, observed_start_ms=MONTH)[0]
+                text = "\n".join(capacity_lines(watch, AnsiStyler({}, enabled=False), "UTC",
+                                               width=160, now_ms=NOW, watch=True))
+                self.assertIn("100% (0)", text)
+                self.assertIn("57% (0)", text)
+
+    def test_empty_periods_require_history_not_just_account_attribution(self):
+        native = replace(subscription(), usage_attribution_complete=True)
+        missing = project((native,), ())[0]
+        self.assertTrue(all(value is None for _, value in missing.ccost_scopes))
+        partial_history = project((native,), (), observed_start_ms=DAY)[0]
+        self.assertEqual(0, dict(partial_history.ccost_scopes)["today"].ccost)
+        self.assertIsNone(dict(partial_history.ccost_scopes)["this month"])
+        self.assertIsNone(dict(partial_history.ccost_scopes)["weekly"])
+        no_anchor = replace(native, quotas=(replace(native.quotas[1], reset_at_ms=None),))
+        self.assertIsNone(dict(project((no_anchor,), (), observed_start_ms=MONTH)[0].ccost_scopes)["weekly"])
+        ambiguous = project((native, subscription(identity="two")), (request("unassigned", NOW),),
+                            observed_start_ms=MONTH)
+        self.assertTrue(all(dict(row.ccost_scopes)["today"] is None for row in ambiguous))
+
+    def test_account_formatter_preserves_lower_bounds_without_changing_global_markers(self):
+        for value, expected in ((None, "—"), (ComparisonCost(), "0"), (ComparisonCost(D(0), 1, 0), "—"),
+                                (ComparisonCost(D("37.2"), 2, 1), "≥37"),
+                                (ComparisonCost(D("0.15"), 2, 1), "≥0.1"),
+                                (ComparisonCost(D("0.01"), 2, 1), "≥0"),
+                                (ComparisonCost(D("37.2"), 1, 1), "38")):
+            with self.subTest(expected=expected):
+                self.assertEqual(expected, account_ccost_text(value))
+        self.assertEqual("?38", comparison_cost_text(ComparisonCost(D("37.2"), 2, 1)))
+        unpriced = project((subscription(),), (request("unknown", NOW, model="unpriced"),),
+                           observed_start_ms=MONTH)[0]
+        self.assertIn("CCost today: —", account_ccost_lines(unpriced))
+
+    def test_compact_report_keeps_distinct_values_inline_without_prose_or_footer(self):
+        row = project((subscription(),), (request("week", NOW - 2 * 86_400_000),
+                                          request("today", NOW)), observed_start_ms=MONTH)[0]
+        for width in (80, 120, 160):
+            for color in (False, True):
+                with self.subTest(width=width, color=color):
+                    lines = capacity_lines(row, AnsiStyler({}, enabled=color), "UTC", width=width,
+                                           force_vertical=True, now_ms=NOW)
+                    text = "\n".join(strip_ansi(line) for line in lines)
+                    self.assertIn("100% (100)", text)
+                    self.assertIn("57% (200)", text)
+                    self.assertTrue(all(len(strip_ansi(line)) <= width for line in lines))
+            text = report_text(replace(quotas(row), now_ms=NOW), width=width)
+            self.assertIn("CCost today: 100", text)
+            self.assertIn("CCost this month: 200", text)
+            for unwanted in ("CCost in ", "configured local", "native reset window", "provider-attributed",
+                             "Account CCost values", "Overlapping windows", "?"):
+                self.assertNotIn(unwanted, text)
+
+    def test_monthly_empty_today_precedes_remaining_and_report_does_not_duplicate_scope(self):
+        native = replace(subscription("github-copilot"), quotas=(QuotaComponent(
+            "Month", "fixed", remaining=D(200), limit=D(300), remaining_fraction=D("0.67"),
+            unit="AI credits", reset_at_ms=NOW + 86_400_000),))
+        row = project((native,), (), watch=True, observed_start_ms=DAY)[0]
+        text = watch_text(replace(quotas(row), now_ms=NOW), width=160)
+        self.assertIn("Today: 0 · Remaining:", text)
+        self.assertNotIn("?", text)
+        report = project((native,), (), observed_start_ms=MONTH)[0]
+        text = report_text(replace(quotas(report), now_ms=NOW))
+        self.assertEqual(1, text.count("CCost today: 0"))
+        self.assertNotIn("Today: 0", text)
+
+    def test_watch_zero_is_published_only_after_successful_history_and_failed_report_stays_failed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = MutableSource(replace(make_snapshot(), sessions=()))
+            _, _, service, _ = make_service(directory, source, now_ms=NOW)
+            self.addCleanup(service.close_accounts)
+            native = subscription("openai")
+            before = service.project_watch_accounts((native,))[0].accounts[0]
+            self.assertTrue(all(value is None for _, value in before.ccost_scopes))
+            service.watch_history_candidates(())
+            service.publish_watch_history()
+            after = service.project_watch_accounts((native,))[0].accounts[0]
+            self.assertTrue(all(value is not None and value.ccost == 0 for _, value in after.ccost_scopes))
+            report = service._account_history((native,), (), {}).accounts[0]
+            self.assertTrue(all(value is not None and value.ccost == 0 for _, value in report.ccost_scopes))
+            with patch.object(service, "prepare_roots", side_effect=OSError("history unavailable")):
+                with self.assertRaisesRegex(OSError, "history unavailable"):
+                    service._account_history((native,), (), {})
 
     def test_local_month_boundary_uses_stockholm_midnight_across_dst(self):
         self.assertEqual(int(datetime(2026, 9, 30, 22, tzinfo=timezone.utc).timestamp() * 1000), MONTH)

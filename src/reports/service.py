@@ -353,6 +353,7 @@ class ReportService:
         today_start_ms: int = 0,
         today_prompt_count: int = 0,
         today_session_count: int = 0,
+        observed_start_ms: int | None = None,
     ) -> AccountsQuotasProjection:
         entries = tuple(entry for item in roots for entry in item.bundle.trace_entries)
         return accounts_quota_projection(
@@ -360,6 +361,7 @@ class ReportService:
             today_start_ms=today_start_ms, month_start_ms=local_month_start_ms(self.timezone_id, now_ms=self.now_ms),
             today_prompt_count=today_prompt_count,
             today_session_count=today_session_count,
+            observed_start_ms=observed_start_ms,
             timezone_id=self.timezone_id, workday_calendar=str(self.config.get("workdayCalendar") or ""),
         )
 
@@ -515,7 +517,9 @@ class ReportService:
             day_start_ms=day,
             month_start_ms=local_month_start_ms(self.timezone_id, now_ms=self.now_ms), timezone_id=self.timezone_id,
             workday_calendar=str(self.config.get("workdayCalendar") or ""),
-            period_entries=self._watch_history.retained_entries())
+            period_entries=self._watch_history.retained_entries(),
+            observed_start_ms=(self._watch_history.published_start_ms
+                               if self._watch_history.day_start_ms == day else None))
         if self._watch_history.published_start_ms is None or self._watch_history.published_start_ms > self._watch_period_start_ms:
             projection = replace(projection, accounts=tuple(replace(account, ccost_scopes=tuple(
                 (name, None) for name, _cost in account.ccost_scopes)) for account in projection.accounts))
@@ -530,7 +534,8 @@ class ReportService:
         cutoff = min(month, history_start(quotas, day, self.now_ms))
         selected = HistoryRequirements("account-periods", start_ms=cutoff).select(roots, root_activity)
         self.prepare_roots(selected)
-        return self._accounts_quotas(quotas, roots=tuple(self._analyze(root) for root in selected), today_start_ms=day)
+        return self._accounts_quotas(quotas, roots=tuple(self._analyze(root) for root in selected),
+                                     today_start_ms=day, observed_start_ms=cutoff)
 
     def build(self, request: ReportRequest) -> ReportProjection:
         self.metrics.mode = request.kind.value

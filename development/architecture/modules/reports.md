@@ -1,7 +1,7 @@
 # Reports source contracts
 
-Source revision: a97a6c8a13a845bda25624acd9fefbea27761373
-Checked revision: a97a6c8a13a845bda25624acd9fefbea27761373
+Source revision: 22f0bff2df29d57de05c12c9586e6a6640771175
+Checked revision: 22f0bff2df29d57de05c12c9586e6a6640771175
 Last checked: 2026-10-25
 Status: current
 
@@ -28,7 +28,7 @@ V2 availability uses settled global `/api/model` selectable `id`, not `modelID`;
 `reports/accounts.py` separates attributed CCost/billing from native capacity/status/balances; visibility/inclusion/percentages never imply history/billing/money. Adapters own `AccountSnapshot.capacity_kind`; errors retain metadata. Projection sorts credit before usage-limit accounts, then casefolded provider/plan/account names and stable identity, never remaining values/timing. `presentation/accounts.py` shares bars/values/resets/warnings: Watch compact/split/vertical, reports native units/money/verbose resets. Remaining is Pace; only paced compact rows omit resets. Watch omits AI-credit conversion; Copilot overage stays a separate limit. No provider rendering branches/gross daily billing; pricing diagnostics are sample-scoped. [Details](../../../docs/account-support.md).
 
 
-`src/analysis/period_ccost.py` owns canonical provider aliases (never model publishers), validated reset/trailing-window bounds, shared incomplete-telemetry reconciliation and deduplicated valuation prefix indexes. `src/reports/accounts.py` permits unassigned provider estimates only for one compatible detected account; multiple accounts stay unknown, with provider totals explained once. Proven history from another account is never reassigned. Calendar-month scopes are independent of overlapping windows and never appear in Watch. Indexed quota publication performs no source I/O or repeated history valuation.
+`src/analysis/period_ccost.py` owns canonical provider aliases (never model publishers), validated reset/trailing-window bounds, shared incomplete-telemetry reconciliation and deduplicated valuation prefix indexes. `src/reports/accounts.py` permits unassigned provider estimates only for one compatible detected account; multiple accounts stay unknown, with provider totals retained in projection notes but not printed as account prose. Proven history from another account is never reassigned. Calendar-month scopes are independent of overlapping windows and never appear in Watch. Indexed quota publication performs no source I/O or repeated history valuation. `ReportService` supplies the existing acquired range through `observed_start_ms`; an empty period becomes zero only when that range covers its start, never from account-attribution capability alone. Watch uses only a published current-day history range. Missing history, unknown window bounds and ambiguous requests remain unknown. `presentation/accounts.py` owns account-only zero/unknown/lower-bound notation (`0`, `—`, `≥…`), rolling CCost inline on quota rows, and numeric today/month report rows without provenance prose or a footer. Global partial markers are unchanged; no new layer dependency or acquisition scope is introduced.
 
 ## Allowed dependencies
 

@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "epochRevision": "df44c06a97244278abd8d0dc9ed90ea12c368e47",
-  "ordinaryCount": 5,
+  "ordinaryCount": 6,
   "completed": {"architecture": 0, "test-health": 5, "performance": 0},
   "template": {"id": "shared-repository-maintenance", "version": 1},
-  "lastDeliveredRevision": "86e4a2dab9393bb634e2247c4278e1be2de50190",
+  "lastDeliveredRevision": "632bfbc287997b6aa14ec29b134e78548c30855e",
   "lastItem": {
-    "id": "test-health/5",
-    "kind": "test-health"
+    "id": "fr/000160-compact-account-ccost-and-clear-codex-quota-auth-hint.md",
+    "kind": "ordinary"
   }
 }
