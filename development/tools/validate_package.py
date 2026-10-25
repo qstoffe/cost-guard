@@ -24,7 +24,6 @@ else:
 
 REQUIRED_FILES = {
     ".gitignore",
-    "AGENTS.md",
     "LICENSE",
     "cost-guard.py",
     "README.md",

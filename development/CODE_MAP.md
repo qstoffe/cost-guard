@@ -4,7 +4,7 @@ Navigation, not another architecture authority: [ARCHITECTURE.md](ARCHITECTURE.m
 
 ## Start here
 
-1. Read root [AGENTS.md](../AGENTS.md) and the workflow it selects. The current filesystem, including uncommitted work, is authoritative.
+1. Use the installed OpenCode Toolkit `/repo-backlog` command and currently loaded skills for development workflow; the current filesystem, including unrelated uncommitted work, remains authoritative.
 2. Find the responsibility below, read its boundary types and focused tests, then the affected implementation. Do not put integration details into analysis or presentation.
 3. Run a focused pattern/profile while iterating; finish with the environment-appropriate suite and validator (hosted: Quick; local: Full and read-only live checks; neither builds a product ZIP). Remote publication remains a separate authorization.
 
@@ -13,7 +13,6 @@ Regenerate a whole-tree static inventory from the repository root:
 ```text
 python development/tools/code_inventory.py
 python development/tools/code_inventory.py --json
-python development/tools/run_tests.py --profile structure
 ```
 
 The inventory scans only Python under `src/`, `development/tools/`, `development/tests/` and `development/fixtures/`. It lists module purposes, sizes, longest functions, local imports, layer edges and test coupling. It never imports analyzed code, accesses credentials/runtime history, performs network requests or creates output files. JSON contains the complete per-module map. Lazy/type-only imports are included: these are navigation paths, **not measured test coverage or proof of runtime cycles**.
@@ -24,7 +23,7 @@ All paths in this table are relative to the repository root. Test names live und
 
 | Change area | Read/edit first | Focused tests |
 | --- | --- | --- |
-| Entry/CLI/config/version | `cost-guard.py`, `src/bootstrap.py`, `src/cli.py`, `src/config.py`, `src/version.py` | `test_config.py`, `test_step7_reports_cli.py`, `test_zero_data_robustness.py`, `test_version_history.py` |
+| Entry/CLI/config/version | `cost-guard.py`, `src/bootstrap.py`, `src/cli.py`, `src/config.py`, `src/version.py` | `test_config.py`, `test_step7_reports_cli.py`, `test_zero_data_robustness.py` |
 | Canonical values/account identity/CCost | `src/domain/models.py`, `accounts.py`, `ccost.py`, `capabilities.py` | `test_domain.py`, `test_accounts_ccost.py`, `test_ccost_migration.py` |
 | Catalog ancestry and whole-tree metadata activity | `src/domain/session_tree.py`; call sites in `src/reports/service.py`, `src/watch/observers.py`, `coordinator.py` | `test_session_tree.py`, `test_compact_reports.py`, `test_watch_grouping.py` |
 | V1 SQLite acquisition/change gates | `src/sources/opencode_v1.py`, `opencode_v1_revision.py`, `opencode_v1_catalog.py` (row activity and separate liveness) | `test_opencode_v1.py`, `test_source_history_loading.py`, `test_source_selection.py`, `test_step9_parity_performance.py` (Full) |

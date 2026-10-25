@@ -364,7 +364,7 @@ Product versions identify code state; they do not imply a Git tag, release ZIP o
 
 ## Development
 
-`AGENTS.md` routes maintainers to `development/`. Verify the working tree, not ZIPs. Development-only changes follow actively loaded Toolkit skills without Cost Guard product tests, package validation or product versioning.
+The installed OpenCode Toolkit `/repo-backlog` command and its actively loaded skills exclusively govern development workflow. Verify the actual working tree, not ZIPs. Development-only changes follow actively loaded Toolkit skills without Cost Guard product tests, package validation or product versioning.
 
 [Code/test map and inventory review](development/CODE_MAP.md); refresh with `python development/tools/code_inventory.py --json`.
 
