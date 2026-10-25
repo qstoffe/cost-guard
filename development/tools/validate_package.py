@@ -118,6 +118,8 @@ def iter_package_files(root: Path) -> Iterable[Path]:
         if not path.is_file():
             continue
         relative = path.relative_to(root)
+        if relative.parts and relative.parts[0] == "development":
+            continue
         if any(part in {".git", "__pycache__"} for part in relative.parts):
             continue
         if relative.parts and relative.parts[0] == "releases":
@@ -137,20 +139,8 @@ def file_kind(root: Path, path: Path) -> str:
         return "versionHistory"
     if rp == "config/default-config.jsonc":
         return "defaultConfig"
-    if rp == "development/MAINTAINER.md":
-        return "maintainer"
-    if rp == "development/ARCHITECTURE.md":
-        return "architecture"
-    if rp.startswith("development/tests/") and path.suffix == ".py":
-        return "testModule"
     if path.suffix == ".py":
         return "pythonModule"
-    if path.name == "file-budgets.json":
-        return "jsonConfig"
-    if rp.startswith("development/fixtures/"):
-        return "fixture"
-    if rp.startswith("development/") and path.suffix in {".md", ".txt"}:
-        return "developmentProse"
     if rp.startswith("docs/images/") and path.suffix == ".png":
         # Static documentation images are binary assets, not otherText.
         # Retain the existing universal file cap; no text budget is raised.
