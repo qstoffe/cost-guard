@@ -6,16 +6,16 @@
 
 Migration candidate, not a claim of merge. This report travels with its delivery PR; Git/native delivery receipts establish actual publication.
 
-## Publication dependency
+## Product ownership
 
-Canonical installed `verify-release` currently rejects the immutable base history with `HISTORY_INVALID: Earlier active minors need one exact rolling consolidation range.` The base uses `## Earlier v80 history`; the helper requires a `### Earlier minors (v80.1-v80.65) — consolidated` range even before first adoption. Its documented first-adoption exception allows legacy excess bullets, not this heading format. The candidate uses the strict current range and older-version heading, but cannot rewrite the Git base. Native Contract Sync verification passed; no PR, push, merge, delivery or cleanup is claimed. An authorized Toolkit helper compatibility fix and manual installation/reload are required before publication can proceed; no local verifier fallback or installed-runtime edit is permitted.
+The installed command and shared contract now leave product versions, release checks and history entirely to each repository. The previous central history/SHA-verifier failures are superseded, not claimed as PASS; no Toolkit release verifier is invoked for this delivery. Native Contract Sync ownership/retention verification remains separate. Cost Guard's own tests, package validator, runtime/README metadata and source-distribution safeguards apply to the shipped Diagnostics hint changes. The existing adapter-shaped `repository.json` is retained as opaque compatibility data, not a Toolkit-enforced release policy. History keeps Cost Guard's own summary headings.
 
 ## Changes and deliberate exclusions
 
 - Relocated architecture contracts into six owner leaves, with owner/test routes, failure/privacy facts, unchanged file-budget facts and historical performance evidence in their current categories. Added the bounded overview Mermaid and journal routes. Consolidated the legacy development-root README/router into the overview, preserving its authority/data facts while meeting the installed manifest's two-file development root; installed Toolkit remains the only workflow authority.
 - Used the installed source-bound priority migration: 90, 120, 130 and 140 keep their numerical identities, bodies and order, now in six-digit bundles. No ordinary FR is completed by this maintenance selection; all four remain todo. There were no completed records to backfill or prune and no attachments to transfer.
 - Moved all 28 fixture files under tests, updated package imports/resource roots, and retained Quick/Full/profile membership exactly. Updated the AST inventory to count nested fixtures once, with a deterministic regression.
-- Moved both human Diagnostics launchers, corrected their root traversal, and changed only the shipped Diagnostics path literals in `cost-guard.py` and `src/runtime_errors.py`. These source changes qualify one functional minor, v80.71 dated 2026-10-25; release adapter facts bind runtime, README and separate root history. Consolidated the legacy rolling history to ten bullets without rewriting retained published minor entries.
+- Moved both human Diagnostics launchers, corrected their root traversal, and changed only the shipped Diagnostics path literals in `cost-guard.py` and `src/runtime_errors.py`. Cost Guard's product policy advances this PR one minor to v80.71 dated 2026-10-25, reflected in runtime, README and separate root history. Consolidated the legacy rolling history to ten bullets without rewriting retained published minor entries.
 - No Watch/account/usage/pricing semantics, dependencies, source credentials, shared-service lifecycle, user configuration, native protections or GitHub Release/tag/ZIP policy changed. No installation/restart or UI automation occurred.
 
 ## Verification
