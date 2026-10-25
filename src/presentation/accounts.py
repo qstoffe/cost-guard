@@ -62,12 +62,9 @@ def money(value: Decimal | None) -> str:
 
 
 def account_ccost_text(value: ComparisonCost | None) -> str:
-    """Account-only unknown/zero/lower-bound notation; global partial markers stay intact."""
+    """Show the known account subtotal; global partial markers stay intact."""
     if value is None or (value.observed_requests and not value.priced_requests):
         return "—"
-    if not value.complete:
-        # A lower bound must round down, unlike complete consumed amounts.
-        return "≥" + (remaining_capacity(value.known_ccost) if value.known_ccost >= Decimal("0.1") else "0")
     return consumed_capacity(value.known_ccost)
 
 

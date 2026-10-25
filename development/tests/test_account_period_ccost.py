@@ -114,7 +114,8 @@ class AccountPeriodCCostTests(unittest.TestCase):
         row = project((subscription(),), (known, clone, unknown))[0]
         value = dict(row.ccost_scopes)["today"]
         self.assertEqual((D(100), 2, 1), (value.known_ccost, value.observed_requests, value.priced_requests))
-        self.assertIn("CCost today: ≥100", account_ccost_lines(row))
+        self.assertIn("CCost today: 100", account_ccost_lines(row))
+        self.assertFalse(value.complete)
         scoped = replace(subscription(), quotas=(replace(subscription().quotas[1], scope="model", model_id="claude-test"),))
         self.assertIsNone(dict(project((scoped,), (known,))[0].ccost_scopes)["weekly"])
 
@@ -152,11 +153,11 @@ class AccountPeriodCCostTests(unittest.TestCase):
                             observed_start_ms=MONTH)
         self.assertTrue(all(dict(row.ccost_scopes)["today"] is None for row in ambiguous))
 
-    def test_account_formatter_preserves_lower_bounds_without_changing_global_markers(self):
+    def test_account_formatter_rounds_known_subtotal_without_changing_global_markers(self):
         for value, expected in ((None, "—"), (ComparisonCost(), "0"), (ComparisonCost(D(0), 1, 0), "—"),
-                                (ComparisonCost(D("37.2"), 2, 1), "≥37"),
-                                (ComparisonCost(D("0.15"), 2, 1), "≥0.1"),
-                                (ComparisonCost(D("0.01"), 2, 1), "≥0"),
+                                (ComparisonCost(D("37.2"), 2, 1), "38"),
+                                (ComparisonCost(D("0.15"), 2, 1), "0.2"),
+                                (ComparisonCost(D("0.01"), 2, 1), "<0.1"),
                                 (ComparisonCost(D("37.2"), 1, 1), "38")):
             with self.subTest(expected=expected):
                 self.assertEqual(expected, account_ccost_text(value))
@@ -164,6 +165,35 @@ class AccountPeriodCCostTests(unittest.TestCase):
         unpriced = project((subscription(),), (request("unknown", NOW, model="unpriced"),),
                            observed_start_ms=MONTH)[0]
         self.assertIn("CCost today: —", account_ccost_lines(unpriced))
+
+    def test_partial_subtotal_is_plain_in_report_watch_and_compact_fallbacks(self):
+        value = ComparisonCost(D("37.2"), 2, 1)
+        row = project((subscription(),), (request("known", NOW),))[0]
+        row = replace(row, ccost_scopes=tuple((name, value) for name, _ in row.ccost_scopes))
+        for width in (65, 160):
+            for color in (False, True):
+                with self.subTest(width=width, color=color):
+                    styler = AnsiStyler({}, enabled=color)
+                    for watch in (False, True):
+                        text = "\n".join(strip_ansi(line) for line in capacity_lines(
+                            row, styler, "UTC", width=width, now_ms=NOW, watch=watch))
+                        self.assertIn("100% (38)", text)
+                        self.assertIn("57% (38)", text)
+                        self.assertNotIn("≥", text)
+                        self.assertNotIn("?", text)
+                    text = strip_ansi(report_text(replace(quotas(row), now_ms=NOW), width=width))
+                    self.assertEqual(1, text.count("CCost today: 38"))
+                    self.assertEqual(1, text.count("CCost this month: 38"))
+                    fallback = replace(row, account=replace(row.account, quotas=(), billing=()))
+                    text = "\n".join(capacity_lines(fallback, styler, "UTC", width=width, now_ms=NOW, watch=True))
+                    self.assertIn("CCost today: 38", text)
+        no_percent = replace(row, account=replace(row.account, quotas=(replace(
+            row.account.quotas[0], remaining_fraction=None),)))
+        text = "\n".join(capacity_lines(no_percent, AnsiStyler({}, enabled=False), "UTC",
+                                       width=160, now_ms=NOW, watch=True))
+        self.assertIn("N/A · CCost: 38", text)
+        self.assertEqual((D("37.2"), 2, 1, False),
+                         (value.known_ccost, value.observed_requests, value.priced_requests, value.complete))
 
     def test_compact_report_keeps_distinct_values_inline_without_prose_or_footer(self):
         row = project((subscription(),), (request("week", NOW - 2 * 86_400_000),
