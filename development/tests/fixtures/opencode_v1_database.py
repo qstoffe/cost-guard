@@ -5,8 +5,8 @@ import json
 import sqlite3
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-SCHEMA = ROOT / "development/fixtures/opencode_v1/schema.sql"
+ROOT = Path(__file__).resolve().parents[3]
+SCHEMA = ROOT / "development/tests/fixtures/opencode_v1/schema.sql"
 
 
 def _json(value: dict) -> str:

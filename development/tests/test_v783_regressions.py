@@ -7,8 +7,8 @@ from dataclasses import replace
 from decimal import Decimal
 from pathlib import Path
 
-from development.fixtures.session_snapshots import make_snapshot
-from development.fixtures.pricing_catalog import catalog as sample_catalog
+from development.tests.fixtures.session_snapshots import make_snapshot
+from development.tests.fixtures.pricing_catalog import catalog as sample_catalog
 from src.analysis import analyze_snapshot
 from src.cache import CacheDatabase, CacheRepository
 from src.config import load_configuration

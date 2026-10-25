@@ -7,11 +7,11 @@ from dataclasses import replace
 from decimal import Decimal
 from pathlib import Path
 
-from development.fixtures.synthetic_month import SyntheticMonthSource
-from development.fixtures.session_snapshots import make_snapshot
-from development.fixtures.pricing_catalog import catalog as sample_catalog
-from development.fixtures.report_runtime import FakePricingProvider, FakeSource
-from development.fixtures.watch_runtime import MutableSource, make_service
+from development.tests.fixtures.synthetic_month import SyntheticMonthSource
+from development.tests.fixtures.session_snapshots import make_snapshot
+from development.tests.fixtures.pricing_catalog import catalog as sample_catalog
+from development.tests.fixtures.report_runtime import FakePricingProvider, FakeSource
+from development.tests.fixtures.watch_runtime import MutableSource, make_service
 from src.analysis.comparisons import compaction_model_timeline_name, watch_model_timeline_name
 from src.cache import CacheDatabase, CacheRepository
 from src.config import load_configuration

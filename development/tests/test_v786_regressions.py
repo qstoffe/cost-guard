@@ -5,9 +5,9 @@ import tempfile
 import unittest
 from dataclasses import replace
 
-from development.fixtures.session_snapshots import make_uncompacted_snapshot
-from development.fixtures.pricing_catalog import catalog as sample_catalog, threshold_catalog
-from development.fixtures.watch_runtime import MutableSource, make_service
+from development.tests.fixtures.session_snapshots import make_uncompacted_snapshot
+from development.tests.fixtures.pricing_catalog import catalog as sample_catalog, threshold_catalog
+from development.tests.fixtures.watch_runtime import MutableSource, make_service
 from src.analysis import analyze_snapshot
 from src.analysis.context import watch_context_state
 from src.domain import ModelInvocation, TokenUsage

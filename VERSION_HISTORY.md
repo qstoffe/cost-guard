@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.71 — 2026-10-25
+
+- Adopted Toolkit's development layout, six-digit backlog bundles and functional-only release adapter while preserving test membership, repository facts and pending requests. Relocated human Diagnostics launchers and updated software-failure hints; Watch, account and cost semantics are unchanged.
+
 ## v80.70 — 2026-10-23
 
 - Added pending FR 0140 for stable Watch Today rendering, a shorter overall CCost label and per-provider/subscription CCost for current day and native quota periods, with explanatory normal-report output. FR 0130 remains distinct. No production Watch, report, cost or quota code changed.
@@ -16,21 +20,14 @@
 
 - Added two pending repository-native backlog FRs: migrate Cost Guard to the Toolkit-owned FR-folder/attachment contract, then fix OpenAI account replacement and rejected quota after a subscription upgrade. Diagnostic observations are sanitized in the bug specification; no production account, Watch or quota behavior changed.
 
-## v80.66 — 2026-10-23
-
-- Define repository-native FR finalization, shared lowercase backlog layout, collision-safe priority selection and authorized Git delivery while retaining Cost Guard's ownership/handoff standards and documentation release gates. Track empty pending/completed directories; no backlog execution or runtime behavior changes.
-
 ## Earlier v80 history
 
-- v80.65 fixed repeated Watch table/title fragments and overflow scrollback while retaining fitting-frame patches and resize behavior.
-- v80.64 applied finite Watch terminal-failure highlights that expire without losing permanent error labels.
-- v80.63 improved Watch redraws, staged startup progress and launcher/Python preflight.
+- v80.66 defined repository-native FR finalization, lowercase backlog layout and collision-safe priorities with tracked empty todo/complete directories. v80.65 fixed repeated Watch fragments/overflow scrollback; v80.64 applied finite terminal-failure highlights without losing permanent labels; v80.63 improved redraws, staged progress and launcher/Python preflight.
 - v80.62 preserved completed context estimates and separated current anchors across model/effort boundaries with explicit compaction semantics; v80.61 made Windows launchers prefer PowerShell 7 (5.1 fallback) and probe each discovered Python executable separately. v80.60 moved optional Watch release-date refresh off startup, retaining verified dates, report enrichment, prices and promotion expiry. v80.59 staged Watch local-day accounting (`Today: Pending`), shared V2 catalog/revision batches and added payload-free V1 liveness plus semantic cache keys. v80.58 bounded quota histories without upstream freshness guarantees. v80.57 added execution Duration/overlap-safe totals; v80.56 isolated quota lanes/retries (60s stale/5min expiry); v80.55 grouped Watch; v80.54 indexed effort/context. v80.48–v80.53 added overnight Today dates, active-context separation, timestamp-first/running headers, shared warnings/Earlier rows, deleted usage and a global row cap; routine ZIPs stopped. v80.43–v80.47 added priced Token Mix, New Models and faster CCost. Claude limitations remain documented.
 - v80.35–v80.42 added native abort-cause labels (`[ABORTED by user]` only for matched live V2 interrupts), neutral tool-call endings, stable account ordering, refactored hot paths, bounded startup recovery/typed source errors, retained tool/skill evidence and stopped counting proven V2 tool continuations as `Calls`.
 - v80.34 pooled V2 reads, memoized model identity, overlapped report acquisition and bounded Watch discovery/startup/resync with identical output (report ~2.1→0.65 s, Watch startup ~6.2→0.65 s, resync 13→1.4 s); Diagnostics gained all-account evidence and Watch geometry.
 - v80.32–v80.33 separated refresh, prompt projection/report orchestration and normalization, shared ancestry/bounded sampling, moved fixtures (67→43 test-import edges) and added routine/coupling, inventory and layer guards without raising caps or changing billing.
-- v80.29–v80.31 fixed synthetic/background continuation and running-model attribution, restored move/unanchored Watch Δctx and N/A for unexplained shrinks, sanitized terminal text and deduplicated source scans. Priced Next-Ictx tiers show one-decimal sample/mix cost multipliers refreshed every 15 minutes; unpriced thresholds keep CCost ranges.
-- v80.25–v80.28 kept BLOCKED on accounts, split wide Watch quotas, added privacy-safe observations, compared consecutive Next-Ictx anchors for Δctx and removed mutable session-model attribution; v80.30 corrected move/unanchored regressions.
+- v80.25–v80.31 kept BLOCKED on accounts, split wide quotas, added private-safe observations, fixed synthetic/background continuation and running-model attribution, restored move/unanchored Δctx and N/A for unexplained shrinks, sanitized terminal text and deduplicated source scans. Consecutive Next-Ictx anchors own Δctx without mutable session-model attribution. Priced tiers show one-decimal cost multipliers refreshed every 15 minutes; unpriced thresholds keep CCost ranges.
 - v80.21–v80.24 added conservative table-local model fading (plain GPT tiers, Claude families, numeric Grok; preview/variant exclusions), parallel bounded quota acquisition, shared credential discovery and nonblocking Watch account refresh. Current main became recommended; packaged GitHub Releases remain paused.
 - v80.15–v80.20 added four-column Relative CCost, exact USD/M `--all-models` tiers, shared sorting and non-destructive cache/state/ metadata. Independent metadata health/backoff/cache/Diagnostics, hourly Copilot/15-minute V2 checks with pinned CCost, verified model/promotional notices, sleep/wake quota recovery and safe bounded error/recovery logs gained regressions.
 - v80.8–v80.14 unified persistent Windows launchers with usable Ctrl+C/completion/error prompts, added session row subtotals without changing run CCost, simulated macOS diagnostics, hardened Windows release paths and sanitized read-only V1 SQLite errors/cleanup.

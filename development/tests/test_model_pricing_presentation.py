@@ -10,10 +10,10 @@ import tempfile
 import unittest
 from types import SimpleNamespace
 
-from development.fixtures.synthetic_month import SyntheticMonthSource, make_root_snapshot
-from development.fixtures import compact_reports as compact
+from development.tests.fixtures.synthetic_month import SyntheticMonthSource, make_root_snapshot
+from development.tests.fixtures import compact_reports as compact
 from development.tests.test_step6_pricing_accounts import pricing_markdown
-from development.fixtures.watch_runtime import MutableSource, make_service
+from development.tests.fixtures.watch_runtime import MutableSource, make_service
 from src.analysis.comparisons import model_comparison_rows
 from src.config import load_configuration
 from src.domain import TokenUsage

@@ -24,10 +24,10 @@ from src.domain import (
     CostDisposition, CostKind, CostObservation, SessionSnapshot, TokenUsage,
 )
 
-from development.fixtures.session_snapshots import (
+from development.tests.fixtures.session_snapshots import (
     CAP, MODEL, part, make_snapshot, make_native_v2_compaction_snapshot,
 )
-from development.fixtures.synthetic_month import make_root_snapshot
+from development.tests.fixtures.synthetic_month import make_root_snapshot
 
 
 class BillingTests(unittest.TestCase):

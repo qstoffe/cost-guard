@@ -13,8 +13,8 @@ from dataclasses import replace
 from decimal import Decimal
 from pathlib import Path
 
-from development.fixtures.session_snapshots import make_snapshot, make_uncompacted_snapshot, part
-from development.fixtures.watch_runtime import (
+from development.tests.fixtures.session_snapshots import make_snapshot, make_uncompacted_snapshot, part
+from development.tests.fixtures.watch_runtime import (
     MutableSource, FakeLiveSource, CountingAccountProvider, openai_account, make_service,
 )
 from src.config import load_configuration

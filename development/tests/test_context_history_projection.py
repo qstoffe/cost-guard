@@ -3,9 +3,9 @@ from dataclasses import replace
 import tempfile
 import unittest
 
-from development.fixtures.pricing_catalog import catalog, threshold_catalog
-from development.fixtures.session_snapshots import MODEL, make_native_v2_compaction_snapshot, make_uncompacted_snapshot, message, part, prov
-from development.fixtures.watch_runtime import MutableSource, make_service
+from development.tests.fixtures.pricing_catalog import catalog, threshold_catalog
+from development.tests.fixtures.session_snapshots import MODEL, make_native_v2_compaction_snapshot, make_uncompacted_snapshot, message, part, prov
+from development.tests.fixtures.watch_runtime import MutableSource, make_service
 from src.analysis import analyze_snapshot
 from src.analysis.context import ContextEpochs, estimate_event_context, estimate_next_context
 from src.domain import ActiveContext, ContextBoundary, EventKind, MessageRole, ModelInvocation, NormalizedEvent, TokenUsage

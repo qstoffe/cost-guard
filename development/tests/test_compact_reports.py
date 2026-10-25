@@ -5,11 +5,11 @@ from dataclasses import replace
 import unittest
 from unittest.mock import patch
 
-from development.fixtures.compact_reports import NOW, START, Availability, rendered, report_service
-from development.fixtures.synthetic_month import SyntheticMonthSource
-from development.fixtures.session_snapshots import make_snapshot
-from development.fixtures.quota_rendering import quotas, rolling
-from development.fixtures.report_runtime import FakePricingProvider, FakeSource
+from development.tests.fixtures.compact_reports import NOW, START, Availability, rendered, report_service
+from development.tests.fixtures.synthetic_month import SyntheticMonthSource
+from development.tests.fixtures.session_snapshots import make_snapshot
+from development.tests.fixtures.quota_rendering import quotas, rolling
+from development.tests.fixtures.report_runtime import FakePricingProvider, FakeSource
 from src.reports.sampling import latest_prompts
 from src.bootstrap import _report_request
 from src.cli import CliUsageError, CommandKind, parse_command

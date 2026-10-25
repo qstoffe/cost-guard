@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from development.fixtures.synthetic_month import SyntheticMonthSource
+from development.tests.fixtures.synthetic_month import SyntheticMonthSource
 from src.cache import CacheDatabase, CacheRepository
 from src.config import load_configuration
 from src.domain import IntegrationHealth, ModelPricing, ModelRef, PricingTier, ProviderCapabilities

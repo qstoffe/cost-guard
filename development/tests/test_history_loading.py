@@ -10,8 +10,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from development.fixtures.synthetic_month import SyntheticMonthSource, make_root_snapshot
-from development.fixtures.watch_runtime import make_service
+from development.tests.fixtures.synthetic_month import SyntheticMonthSource, make_root_snapshot
+from development.tests.fixtures.watch_runtime import make_service
 from src.analysis import analyze_snapshot
 from src.analysis.valuation import comparison_cost, unique_usage
 from src.domain import ModelRef

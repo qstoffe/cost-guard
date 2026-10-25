@@ -276,7 +276,7 @@ class RuntimeErrorTests(unittest.TestCase):
         self.assertFalse(self.crashes())
 
     def test_optional_provider_unknown_failure_is_visible_not_missing(self):
-        from development.fixtures.watch_runtime import MutableSource, make_service
+        from development.tests.fixtures.watch_runtime import MutableSource, make_service
         _, _, service, _ = make_service(str(self.root), MutableSource())
         provider = Mock(provider_id="synthetic-provider")
         provider.probe.side_effect = TypeError("SECRET")
@@ -291,7 +291,7 @@ class RuntimeErrorTests(unittest.TestCase):
         self.assertIn("account-provider", self.logged())
 
     def test_provider_expected_timeout_auth_and_unavailability_do_not_log(self):
-        from development.fixtures.watch_runtime import MutableSource, make_service
+        from development.tests.fixtures.watch_runtime import MutableSource, make_service
         from src.domain import AccountRef, AccountSnapshot
         _, _, service, _ = make_service(str(self.root), MutableSource())
         provider = Mock(provider_id="synthetic-provider")

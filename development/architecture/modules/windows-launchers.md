@@ -23,7 +23,7 @@ windows, inject keys or depend on the user's OpenCode installation. Do not stop 
    `Get-Location` and inspect `$LASTEXITCODE` at the ordinary package-root PowerShell prompt.
 2. Open `windows/Cost Guard Watch.cmd`, wait for the steady dashboard, press Ctrl+C and verify
    `Watch stopped.` followed by a usable prompt in the same console, without batch confirmation.
-3. Open `development/windows/Cost Guard Diagnostics.cmd`, let it finish, verify its bundle and
+3. Open `development/user-tools/diagnostics/windows/Cost Guard Diagnostics.cmd`, let it finish, verify its bundle and
    execute a harmless command at the surviving prompt. Validation failure must still be inspected
    in the bundle; successful ZIP collection alone does not establish a passing validation gate.
 4. In a disposable package copy only, inject `ValueError('launcher smoke failure')` into

@@ -11,10 +11,10 @@ import sqlite3
 import tempfile
 import unittest
 
-from development.fixtures.accounts import NormalizedProvider, account
-from development.fixtures.session_snapshots import make_snapshot
-from development.fixtures.report_runtime import FakePricingProvider, FakeSource
-from development.fixtures.watch_runtime import MutableSource, make_service
+from development.tests.fixtures.accounts import NormalizedProvider, account
+from development.tests.fixtures.session_snapshots import make_snapshot
+from development.tests.fixtures.report_runtime import FakePricingProvider, FakeSource
+from development.tests.fixtures.watch_runtime import MutableSource, make_service
 from src.accounts.anthropic import AnthropicAccountProvider, normalize_anthropic_usage
 from src.accounts.credentials import configured_credentials
 from src.accounts.diagnostics import sanitized_account_observation

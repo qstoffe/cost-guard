@@ -4,10 +4,10 @@ import unittest
 from dataclasses import replace
 from decimal import Decimal
 
-from development.fixtures.session_snapshots import (
+from development.tests.fixtures.session_snapshots import (
     MODEL, make_native_v2_compaction_snapshot, make_snapshot, make_uncompacted_snapshot, message, part, prov,
 )
-from development.fixtures.pricing_catalog import catalog
+from development.tests.fixtures.pricing_catalog import catalog
 from src.analysis.comparisons import (
     model_comparison_rows, model_timeline_name,
 )

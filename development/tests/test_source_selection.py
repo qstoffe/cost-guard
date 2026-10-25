@@ -7,11 +7,11 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
-from development.fixtures.synthetic_month import SyntheticMonthSource
-from development.fixtures.session_snapshots import make_snapshot
-from development.fixtures.compact_reports import NOW, START, Availability, rendered
-from development.fixtures.report_runtime import FakePricingProvider
-from development.fixtures.watch_runtime import MutableSource, make_service as make_watch_service
+from development.tests.fixtures.synthetic_month import SyntheticMonthSource
+from development.tests.fixtures.session_snapshots import make_snapshot
+from development.tests.fixtures.compact_reports import NOW, START, Availability, rendered
+from development.tests.fixtures.report_runtime import FakePricingProvider
+from development.tests.fixtures.watch_runtime import MutableSource, make_service as make_watch_service
 from src.cache import CacheDatabase, CacheRepository
 from src.config import load_configuration
 from src.domain import IntegrationHealth, NormalizedSession, Provenance, SessionCapabilities

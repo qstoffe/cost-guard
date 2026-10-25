@@ -5,9 +5,9 @@ import io
 import unittest
 from dataclasses import replace
 
-from development.fixtures.session_snapshots import make_snapshot
-from development.fixtures.pricing_catalog import catalog
-from development.fixtures.opencode_v2_service import source_with_current_service
+from development.tests.fixtures.session_snapshots import make_snapshot
+from development.tests.fixtures.pricing_catalog import catalog
+from development.tests.fixtures.opencode_v2_service import source_with_current_service
 from src.analysis.core import analyze_snapshot
 from src.analysis.effort import EffortKind, interpret_effort, prompt_effort, prompt_replies
 from src.analysis.comparisons import model_timeline_name, watch_model_timeline_name

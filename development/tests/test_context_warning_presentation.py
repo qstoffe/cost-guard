@@ -6,9 +6,9 @@ import unittest
 from dataclasses import replace
 from pathlib import Path
 
-from development.fixtures.pricing_catalog import threshold_catalog
-from development.fixtures.session_snapshots import make_uncompacted_snapshot
-from development.fixtures.warning_projections import warning_prompt, warning_report_projection, warning_watch_projection
+from development.tests.fixtures.pricing_catalog import threshold_catalog
+from development.tests.fixtures.session_snapshots import make_uncompacted_snapshot
+from development.tests.fixtures.warning_projections import warning_prompt, warning_report_projection, warning_watch_projection
 from src.analysis.context import PriceWarningSeverity, next_context_warning_state
 from src.analysis.core import analyze_snapshot
 from src.config import load_configuration

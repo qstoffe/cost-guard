@@ -21,8 +21,8 @@ from urllib.parse import parse_qs, urlsplit
 
 from src.sources.opencode_v2 import OpenCodeV2Source
 
-ROOT = Path(__file__).resolve().parents[2]
-FIXTURE = ROOT / "development/fixtures/opencode_v2/service-fixture.json"
+ROOT = Path(__file__).resolve().parents[3]
+FIXTURE = ROOT / "development/tests/fixtures/opencode_v2/service-fixture.json"
 
 
 class LoopbackServer(ThreadingHTTPServer):

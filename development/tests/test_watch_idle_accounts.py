@@ -5,8 +5,8 @@ import io
 import tempfile
 import unittest
 
-from development.fixtures.session_snapshots import make_snapshot
-from development.fixtures.watch_runtime import FakeLiveSource, MutableSource, make_service
+from development.tests.fixtures.session_snapshots import make_snapshot
+from development.tests.fixtures.watch_runtime import FakeLiveSource, MutableSource, make_service
 from src.accounts.acquisition import AccountUpdate
 from src.presentation import WatchRenderer
 from src.watch import WatchCoordinator

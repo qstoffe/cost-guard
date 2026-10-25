@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "epochRevision": "df44c06a97244278abd8d0dc9ed90ea12c368e47",
+  "ordinaryCount": 0,
+  "completed": {"architecture": 0, "test-health": 0, "performance": 0},
+  "template": {"id": "shared-repository-maintenance", "version": 1},
+  "lastDeliveredRevision": "df44c06a97244278abd8d0dc9ed90ea12c368e47",
+  "lastItem": {
+    "id": "contract-sync/2/df44c06a97244278abd8d0dc9ed90ea12c368e47",
+    "kind": "contract-sync"
+  }
+}

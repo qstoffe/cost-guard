@@ -6,9 +6,9 @@ import tempfile
 import unittest
 from unittest.mock import Mock
 
-from development.fixtures.quota_rendering import quotas, rolling
-from development.fixtures.watch_rows import inputs, prompt, tracker
-from development.fixtures.watch_runtime import MutableSource, make_service
+from development.tests.fixtures.quota_rendering import quotas, rolling
+from development.tests.fixtures.watch_rows import inputs, prompt, tracker
+from development.tests.fixtures.watch_runtime import MutableSource, make_service
 from src.analysis.context import PriceWarningSeverity
 from src.presentation import WatchRenderer
 from src.watch import WatchCoordinator

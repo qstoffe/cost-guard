@@ -4,8 +4,8 @@ from decimal import Decimal
 import unittest
 from unittest import mock
 
-from development.fixtures.pricing_catalog import catalog
-from development.fixtures.session_snapshots import make_snapshot, make_native_v2_compaction_snapshot
+from development.tests.fixtures.pricing_catalog import catalog
+from development.tests.fixtures.session_snapshots import make_snapshot, make_native_v2_compaction_snapshot
 from src.analysis import analyze_snapshot
 from src.analysis.context import ContextEpochs, build_context_timeline
 from src.domain import ModelRef

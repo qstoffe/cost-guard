@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-from development.fixtures.watch_runtime import MutableSource, make_service
+from development.tests.fixtures.watch_runtime import MutableSource, make_service
 from development.tests.test_watch_source_recovery import Recorder
 from src import bootstrap
 from src.sources.errors import SourceDataError, SourceSchemaError
@@ -129,7 +129,7 @@ class WindowsShellContractTests(unittest.TestCase):
         launchers = {
             "windows/Cost Guard.cmd": "report",
             "windows/Cost Guard Watch.cmd": "watch",
-            "development/windows/Cost Guard Diagnostics.cmd": "diagnostics",
+            "development/user-tools/diagnostics/windows/Cost Guard Diagnostics.cmd": "diagnostics",
         }
         for name, mode in launchers.items():
             with self.subTest(launcher=name):

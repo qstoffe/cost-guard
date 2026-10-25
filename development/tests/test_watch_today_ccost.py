@@ -9,8 +9,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from development.fixtures.session_snapshots import make_snapshot
-from development.fixtures.watch_runtime import MutableSource, make_service
+from development.tests.fixtures.session_snapshots import make_snapshot
+from development.tests.fixtures.watch_runtime import MutableSource, make_service
 from src.analysis.models import TraceEntry
 from src.analysis.timezones import local_day_start_ms
 from src.analysis.valuation import ComparisonCost

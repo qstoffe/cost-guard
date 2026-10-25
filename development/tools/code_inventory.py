@@ -10,7 +10,7 @@ from pathlib import Path
 import sys
 
 ROOT = Path(__file__).resolve().parents[2]
-CODE_AREAS = ("src", "development/tools", "development/tests", "development/fixtures")
+CODE_AREAS = ("src", "development/tools", "development/tests", "development/tests/fixtures")
 
 
 def module_name(path: Path, root: Path) -> str:
@@ -105,8 +105,9 @@ def inspect_module(path: Path, root: Path) -> dict:
 
 
 def inventory(root: Path = ROOT) -> dict:
-    modules = [inspect_module(path, root) for area in CODE_AREAS for path in sorted((root / area).rglob("*.py"))
-               if "__pycache__" not in path.parts]
+    paths = {path for area in CODE_AREAS for path in (root / area).rglob("*.py")
+             if "__pycache__" not in path.parts}
+    modules = [inspect_module(path, root) for path in sorted(paths)]
     names = {item["module"] for item in modules}
     for item in modules:
         item["imports"] = sorted(set(item["imports"]) & names - {item["module"]})

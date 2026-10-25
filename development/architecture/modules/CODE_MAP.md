@@ -1,12 +1,12 @@
 # Cost Guard code map
 
-Navigation, not another architecture authority: [ARCHITECTURE.md](ARCHITECTURE.md) owns the contracts; installed OpenCode Toolkit skills own the workflow. This map helps a fresh human/AI session find the smallest relevant implementation and tests without importing the entire application or reading historical release material.
+Navigation, not another architecture authority: [OVERVIEW.md](../OVERVIEW.md) owns the source contracts; installed OpenCode Toolkit skills own the workflow. This map routes implementation and tests without importing the application or loading historical releases.
 
 ## Start here
 
 1. Use the installed OpenCode Toolkit `/repo-backlog` command and currently loaded skills for development workflow; the current filesystem, including unrelated uncommitted work, remains authoritative.
 2. Find the responsibility below, read its boundary types and focused tests, then the affected implementation. Do not put integration details into analysis or presentation.
-3. Run a focused pattern/profile while iterating; finish with the environment-appropriate suite and validator (hosted: Quick; local: Full and read-only live checks; neither builds a product ZIP). Remote publication remains a separate authorization.
+3. The runner exposes focused patterns/profiles and Quick/Full suites. Installed Toolkit determines which verification is applicable; remote publication and UI retain independent authorization.
 
 Regenerate a whole-tree static inventory from the repository root:
 
@@ -15,7 +15,7 @@ python development/tools/code_inventory.py
 python development/tools/code_inventory.py --json
 ```
 
-The inventory scans only Python under `src/`, `development/tools/`, `development/tests/` and `development/fixtures/`. It lists module purposes, sizes, longest functions, local imports, layer edges and test coupling. It never imports analyzed code, accesses credentials/runtime history, performs network requests or creates output files. JSON contains the complete per-module map. Lazy/type-only imports are included: these are navigation paths, **not measured test coverage or proof of runtime cycles**.
+The inventory scans only Python under `src/`, `development/tools/`, `development/tests/` and `development/tests/fixtures/`. It lists module purposes, sizes, longest functions, local imports, layer edges and test coupling. It never imports analyzed code, accesses credentials/runtime history, performs network requests or creates output files. JSON contains the complete per-module map. Lazy/type-only imports are included: these are navigation paths, **not measured test coverage or proof of runtime cycles**.
 
 ## Ownership and test routes
 
@@ -46,26 +46,26 @@ All paths in this table are relative to the repository root. Test names live und
 | Watch global prompt retention, startup Earlier sessions, session order, skills/tool failures, run totals and retained daily CCost | `src/watch/tracker.py`, `session_retention.py`, `skill_registry.py`, `tools.py`, `tool_contracts.py`, `token_mix.py`, `today_ccost.py`, `models.py`; `src/presentation/watch_activity.py` renders activity | `test_watch_grouping.py`, `test_watch_session_retention.py`, `test_watch_activity_lifecycle.py`, `test_watch_tool_activity.py`, `test_watch_skills.py`, `test_watch_subtotals.py`, `test_watch_today_ccost.py`, `test_token_mix.py` |
 | Terminal output only | `src/presentation/report.py`, `source_errors.py`, `watch.py`, `accounts.py`, `model_comparison.py`, `model_supersession.py`, `terminal.py`, `context_warnings.py`, `definitions.py`, `token_mix.py` | `test_watch_rendering.py`, `test_quota_presentation.py`, `test_account_status_layout.py`, `test_report_polish.py`, `test_model_supersession.py` |
 | Startup work/progress, buffered Watch rows/overflow scrollback and launcher handoff | `src/domain/progress.py`, `src/presentation/progress.py`, `startup_estimate.py`, `watch_screen.py`; `src/launcher_feedback.py`, `src/windows_launcher.ps1`, `windows/`, `macos/` | `test_startup_progress.py`, `test_watch_screen.py`, `test_launcher_feedback.py`, `test_windows_launcher.py`, `test_watch_startup_recovery.py`; `--profile startup` |
-| Fatal/recoverable fault boundaries and launchers | `src/runtime_errors.py`, `src/windows_launcher.ps1`; `windows/`, `macos/` | `test_runtime_errors.py`, `test_watch_lifecycle.py`, `test_step10_release_hardening.py`; [runtime policy](runtime-failures.md) |
+| Fatal/recoverable fault boundaries and launchers | `src/runtime_errors.py`, `src/windows_launcher.ps1`; `windows/`, `macos/` | `test_runtime_errors.py`, `test_watch_lifecycle.py`, `test_step10_release_hardening.py`; [runtime policy](../governance/policies/runtime-failures.md) |
 | Privacy-safe Diagnostics | `development/tools/collect_diagnostics.py`, `diagnostic_accounts.py`, `diagnostic_logs.py`, `diagnostic_metadata.py`, `diagnostic_screen.py`, `diagnostic_watch.py`, `diagnostic_connectivity.py`; `src/sources/connectivity.py`, `connectivity_events.py` | `test_rc2_public_diagnostics.py` (Full), `test_diagnostic_logs.py`, `test_diagnostics_ux.py`, `test_quota_observations.py` |
 
 ## Shared synthetic fixtures
 
-- `development/fixtures/session_snapshots.py`: canonical root/child/task/continuation/compaction/running snapshots (also without the /compact work, or after a location move) and message/part/provenance builders.
-- `development/fixtures/pricing_catalog.py`: the small deterministic two-model reference catalog and a two-tier 100K-threshold catalog.
-- `development/fixtures/warning_projections.py`: single-prompt report/Watch projections carrying one Next-Ictx warning severity.
-- `development/fixtures/report_runtime.py`: in-memory source/pricing/quota boundaries and a stale-root/recent-child scenario.
-- `development/fixtures/compact_reports.py`: cache-backed `report_service(test, ...)` factory, fixed model `Availability`, plain `rendered` reports and their `START`/`NOW` clock.
-- `development/fixtures/accounts.py` and `quota_rendering.py`: normalized account snapshots/fixed providers; fixed-time rolling quota projections with report/Watch account-section text.
-- `development/fixtures/watch_runtime.py`: mutable/live synthetic sources, deterministic account scheduler and Watch service composition. It preserves the existing report/account seam without depending on test modules.
-- `development/fixtures/terminal_buffer.py`: in-memory VT cursor/erase/wrap and scrollback replay for Watch overflow redraws; no terminal process or UI automation.
-- `development/fixtures/account_workers.py`: finite gated provider calls, virtual-latency quota observations and bounded worker synchronization.
-- `development/fixtures/watch_rows.py`: synthetic neutral prompt blocks/canonical snapshots for global grouping, chronological lifecycle order and divider regression tests (`test_watch_session_groups.py`).
-- `development/fixtures/opencode_v2_service.py`: fake loopback V2 services (transitional and current wire) that drop keep-alive sockets on stop like a real process.
-- `development/fixtures/opencode_v1_database.py`: the synthetic V1 SQLite history used for generation parity.
-- `development/fixtures/package_copy.py`: disposable distributable and config-only package copies and tool subprocesses for validator/config tests.
-- `development/fixtures/synthetic_month.py`: scalable histories for bounded-sampling/cache/performance checks.
-- `development/fixtures/opencode_v1/` and `opencode_v2/`: non-secret native wire/schema fixtures.
+- `development/tests/fixtures/session_snapshots.py`: canonical root/child/task/continuation/compaction/running snapshots (also without the /compact work, or after a location move) and message/part/provenance builders.
+- `development/tests/fixtures/pricing_catalog.py`: the small deterministic two-model reference catalog and a two-tier 100K-threshold catalog.
+- `development/tests/fixtures/warning_projections.py`: single-prompt report/Watch projections carrying one Next-Ictx warning severity.
+- `development/tests/fixtures/report_runtime.py`: in-memory source/pricing/quota boundaries and a stale-root/recent-child scenario.
+- `development/tests/fixtures/compact_reports.py`: cache-backed `report_service(test, ...)` factory, fixed model `Availability`, plain `rendered` reports and their `START`/`NOW` clock.
+- `development/tests/fixtures/accounts.py` and `quota_rendering.py`: normalized account snapshots/fixed providers; fixed-time rolling quota projections with report/Watch account-section text.
+- `development/tests/fixtures/watch_runtime.py`: mutable/live synthetic sources, deterministic account scheduler and Watch service composition. It preserves the existing report/account seam without depending on test modules.
+- `development/tests/fixtures/terminal_buffer.py`: in-memory VT cursor/erase/wrap and scrollback replay for Watch overflow redraws; no terminal process or UI automation.
+- `development/tests/fixtures/account_workers.py`: finite gated provider calls, virtual-latency quota observations and bounded worker synchronization.
+- `development/tests/fixtures/watch_rows.py`: synthetic neutral prompt blocks/canonical snapshots for global grouping, chronological lifecycle order and divider regression tests (`test_watch_session_groups.py`).
+- `development/tests/fixtures/opencode_v2_service.py`: fake loopback V2 services (transitional and current wire) that drop keep-alive sockets on stop like a real process.
+- `development/tests/fixtures/opencode_v1_database.py`: the synthetic V1 SQLite history used for generation parity.
+- `development/tests/fixtures/package_copy.py`: disposable distributable and config-only package copies and tool subprocesses for validator/config tests.
+- `development/tests/fixtures/synthetic_month.py`: scalable histories for bounded-sampling/cache/performance checks.
+- `development/tests/fixtures/opencode_v1/` and `opencode_v2/`: non-secret native wire/schema fixtures.
 
 Import common setup from fixtures, not another test module. Fixture modules may import runtime contracts but never `development/tests/`. Some historical specialized test-to-test imports remain; the inventory shows exact remaining edges so they can be migrated when that responsibility is changed. Do not introduce a universal test `helpers.py` or a production dependency on fixtures.
 
@@ -89,13 +89,13 @@ Before adding a feature, identify its **one semantic owner** and a protected nei
 | Account retry/liveness behavior | Acquisition `ProviderRefresh` / `AccountRefreshLoop`; `WatchAccountRefresh` publishes/ages full account keys | Source-event independence, successful-seen timestamps, bounded lanes, deadline/late-result rules |
 | Source generation/wire variant | Source adapter normalization and fake native fixtures | Reports/analysis must not branch on raw wire generation |
 | Watch row/geometry behavior | Tracker/projection or presentation according to responsibility | Run totals vs visible-row subtotals; no renderer/provider calls |
-| Shared test setup | Responsibility-owned `development/fixtures/` module | Never import another test module for a new fixture or import development into runtime |
+| Shared test setup | Responsibility-owned `development/tests/fixtures/` module | Never import another test module for a new fixture or import development into runtime |
 
 1. Read the relevant table row and focused tests; characterize the behavior before moving code. Preserve the exact working tree, not an older Git/package version.
 2. Use explicit typed inputs and named projection fields. Keep side-effect orchestration separate from normalized transformation; prefer cohesive functions/state owners, not mixins, dynamic forwarding or generic helpers.
 3. Run focused product tests and applicable source validation only for product-code changes; development-only workflow comes from installed Toolkit skills.
 4. Named legacy routine limits and the remaining 10 test-import edges are **bounded debt**, not a feature budget. Growth, new edges and stale declarations fail. Split the owner or extract a fixture and remove its resolved debt entry; never auto-generate/accept a replacement baseline to silence the gate. A genuine limit change requires an explicit architectural decision, not a passing-test justification.
 5. Every runtime/fixture module describes its responsibility in a module docstring; local Markdown/table routes are regression-tested. Update this map and current contracts in place, not by accumulating version-specific copies. File caps remain unchanged.
-6. On a workstation, finish with Full/local validation and privacy-safe live evidence; hosted sessions stop at Quick + validation. Routine product-release ZIP generation is not supported. UI, commits and remote publishing still require their own authorization.
+6. Routine product-release ZIP generation is not supported. UI, commits and remote publishing retain independent authorization; development-only verification comes from installed Toolkit.
 
-The metrics are guardrails, not a quality score or a substitute for reviewing semantics. Do not compress control flow into clever expressions or weaken tests to evade them. See [the current inventory/refactoring review](REFACTORING_REVIEW.md) for measured changes and proof limits.
+The metrics are guardrails, not a quality score or a substitute for reviewing semantics. Do not compress control flow into clever expressions or weaken tests to evade them. See [the current inventory/refactoring review](../../journal/PERFORMANCE.md) for measured changes and proof limits.

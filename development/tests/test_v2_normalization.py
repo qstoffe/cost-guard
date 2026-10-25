@@ -3,7 +3,7 @@ from copy import deepcopy
 from decimal import Decimal
 import unittest
 
-from development.fixtures.session_snapshots import prov
+from development.tests.fixtures.session_snapshots import prov
 from src.domain import ModelRef
 from src.sources.errors import SourceDataError
 from src.sources.opencode_v2_normalization import normalize_invocations, normalize_message_bundle

@@ -5,7 +5,7 @@ import os
 import unittest
 from unittest.mock import patch
 
-from development.fixtures.terminal_buffer import TerminalBuffer
+from development.tests.fixtures.terminal_buffer import TerminalBuffer
 from src.presentation.watch import WatchRenderer
 from src.presentation.watch_screen import WatchScreen
 from src.watch.models import WatchProjection

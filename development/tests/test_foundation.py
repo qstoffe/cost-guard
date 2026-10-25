@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from development.fixtures.package_copy import ROOT, copy_package, run_python
+from development.tests.fixtures.package_copy import ROOT, copy_package, run_python
 from development.tools import validate_package
 from src.version import DISPLAY_VERSION
 
@@ -17,8 +17,8 @@ class ValidationTests(unittest.TestCase):
     def test_documentation_images_use_existing_binary_cap_not_text_cap(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            (root / "development").mkdir()
-            shutil.copyfile(ROOT / "development/file-budgets.json", root / "development/file-budgets.json")
+            (root / "development/architecture/governance/policies").mkdir(parents=True)
+            shutil.copyfile(ROOT / "development/architecture/governance/policies/file-budgets.json", root / "development/architecture/governance/policies/file-budgets.json")
             image = root / "docs/images/example.png"
             image.parent.mkdir(parents=True)
             self.assertEqual("universalFile", validate_package.file_kind(root, image))

@@ -2,7 +2,7 @@
 from dataclasses import replace
 from decimal import Decimal
 
-from development.fixtures.session_snapshots import make_snapshot
+from development.tests.fixtures.session_snapshots import make_snapshot
 from src.domain import EventKind, NormalizedEvent
 from src.reports.models import PromptProjection, SessionPromptBlock
 from src.watch.tracker import WatchRowTracker

@@ -8,9 +8,9 @@ from pathlib import Path
 import threading
 import unittest
 
-from development.fixtures.account_workers import ControlledQuota, Provider, wait_for
-from development.fixtures.session_snapshots import make_snapshot
-from development.fixtures.watch_runtime import MutableSource, make_service
+from development.tests.fixtures.account_workers import ControlledQuota, Provider, wait_for
+from development.tests.fixtures.session_snapshots import make_snapshot
+from development.tests.fixtures.watch_runtime import MutableSource, make_service
 from src.accounts.refresh_loop import AccountRefreshLoop
 from src.accounts.refresh_policy import ProviderRefresh
 from src.watch.account_refresh import WatchAccountRefresh

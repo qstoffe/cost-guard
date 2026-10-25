@@ -78,8 +78,8 @@ class WindowsLauncherTests(unittest.TestCase):
         self.assertLess(text.index('start "Cost Guard Watch"'), text.index("exit /b 0"))
 
     def test_diagnostics_launcher_is_double_clickable(self) -> None:
-        text = (ROOT / "development/windows/Cost Guard Diagnostics.cmd").read_text(encoding="utf-8")
-        self.assertIn('%~dp0..\\..\\src\\windows_launcher.ps1', text)
+        text = (ROOT / "development/user-tools/diagnostics/windows/Cost Guard Diagnostics.cmd").read_text(encoding="utf-8")
+        self.assertIn('%~dp0..\\..\\..\\..\\src\\windows_launcher.ps1', text)
         self.assertIn("-Mode diagnostics", text)
         driver = (ROOT / "src/windows_launcher.ps1").read_text(encoding="utf-8")
         self.assertIn("development\\tools\\collect_diagnostics.py", driver)
@@ -112,7 +112,7 @@ class MacOSLauncherTests(unittest.TestCase):
         expected = {
             "macos/Cost Guard.command": "cost-guard.py",
             "macos/Cost Guard Watch.command": "--watch",
-            "development/macos/Cost Guard Diagnostics.command": "/development/tools/collect_diagnostics.py",
+            "development/user-tools/diagnostics/macos/Cost Guard Diagnostics.command": "/development/tools/collect_diagnostics.py",
         }
         for name, needle in expected.items():
             path = ROOT / name
@@ -128,8 +128,8 @@ class MacOSLauncherTests(unittest.TestCase):
             self.assertIn(needle, text, name)
         watch = (ROOT / "macos/Cost Guard Watch.command").read_text(encoding="utf-8")
         self.assertIn('exec "$PYTHON"', watch)
-        diagnostics = (ROOT / "development/macos/Cost Guard Diagnostics.command").read_text(encoding="utf-8")
-        self.assertIn('CG_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"', diagnostics)
+        diagnostics = (ROOT / "development/user-tools/diagnostics/macos/Cost Guard Diagnostics.command").read_text(encoding="utf-8")
+        self.assertIn('CG_ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"', diagnostics)
 
 
 class DiagnosticBundleTests(unittest.TestCase):

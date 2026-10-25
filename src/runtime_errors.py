@@ -28,9 +28,9 @@ def diagnostics_hint(root: Path | None = None) -> str:
     try:
         base = Path(root) if root is not None else Path(__file__).resolve().parents[1]
         if sys.platform == "win32":
-            target = str(base / "development" / "windows" / "Cost Guard Diagnostics.cmd")
+            target = str(base / "development" / "user-tools" / "diagnostics" / "windows" / "Cost Guard Diagnostics.cmd")
         elif sys.platform == "darwin":
-            target = str(base / "development" / "macos" / "Cost Guard Diagnostics.command")
+            target = str(base / "development" / "user-tools" / "diagnostics" / "macos" / "Cost Guard Diagnostics.command")
         else:
             target = f'python3 "{base / "development" / "tools" / "collect_diagnostics.py"}"'
         return f"\nNeed help? Run Cost Guard Diagnostics:\n{target}\n"

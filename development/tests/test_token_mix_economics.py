@@ -10,11 +10,11 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from development.fixtures.session_snapshots import make_snapshot
+from development.tests.fixtures.session_snapshots import make_snapshot
 from src.reports.sampling import latest_token_prompts
-from development.fixtures.compact_reports import Availability, rendered, report_service
-from development.fixtures.pricing_catalog import catalog
-from development.fixtures.watch_runtime import MutableSource, make_service
+from development.tests.fixtures.compact_reports import Availability, rendered, report_service
+from development.tests.fixtures.pricing_catalog import catalog
+from development.tests.fixtures.watch_runtime import MutableSource, make_service
 from development.tests.test_token_mix import observe
 from src.accounts.base import normalize_quota
 from src.accounts.github_copilot import (GitHubCopilotAccountProvider, JsonResponse,

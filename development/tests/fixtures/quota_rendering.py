@@ -7,7 +7,7 @@ from decimal import Decimal
 import io
 from pathlib import Path
 
-from development.fixtures.accounts import account
+from development.tests.fixtures.accounts import account
 from src.analysis.valuation import ComparisonCost
 from src.config import read_jsonc
 from src.domain import QuotaComponent
@@ -15,7 +15,7 @@ from src.presentation import ReportRenderer, WatchRenderer
 from src.reports.models import AccountProjection, AccountsQuotasProjection, ReportKind, ReportProjection
 from src.watch.models import WatchProjection
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 D = Decimal
 NOW = int(datetime(2026, 9, 30, 20, tzinfo=timezone.utc).timestamp() * 1000)
 

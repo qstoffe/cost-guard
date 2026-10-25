@@ -9,13 +9,13 @@ from dataclasses import replace
 from decimal import Decimal
 from urllib.parse import parse_qs, urlsplit
 
-from development.fixtures.session_snapshots import (
+from development.tests.fixtures.session_snapshots import (
     MODEL, make_uncompacted_snapshot, message, moved_location, part, prov,
 )
-from development.fixtures.warning_projections import warning_prompt, warning_report_projection, warning_watch_projection
-from development.fixtures.opencode_v2_service import source_with_current_service
-from development.fixtures.pricing_catalog import catalog as sample_catalog, threshold_catalog
-from development.fixtures.watch_runtime import MutableSource, make_service
+from development.tests.fixtures.warning_projections import warning_prompt, warning_report_projection, warning_watch_projection
+from development.tests.fixtures.opencode_v2_service import source_with_current_service
+from development.tests.fixtures.pricing_catalog import catalog as sample_catalog, threshold_catalog
+from development.tests.fixtures.watch_runtime import MutableSource, make_service
 from src.analysis import analyze_snapshot
 from src.analysis.context import PriceWarningSeverity, watch_context_state
 from src.domain import ContextBoundary, EventKind, MessageRole, ModelInvocation, NormalizedEvent, TokenUsage
