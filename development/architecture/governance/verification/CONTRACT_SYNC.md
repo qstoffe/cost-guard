@@ -6,6 +6,10 @@
 
 Migration candidate, not a claim of merge. This report travels with its delivery PR; Git/native delivery receipts establish actual publication.
 
+## Publication dependency
+
+Canonical installed `verify-release` currently rejects the immutable base history with `HISTORY_INVALID: Earlier active minors need one exact rolling consolidation range.` The base uses `## Earlier v80 history`; the helper requires a `### Earlier minors (v80.1-v80.65) — consolidated` range even before first adoption. Its documented first-adoption exception allows legacy excess bullets, not this heading format. The candidate uses the strict current range and older-version heading, but cannot rewrite the Git base. Native Contract Sync verification passed; no PR, push, merge, delivery or cleanup is claimed. An authorized Toolkit helper compatibility fix and manual installation/reload are required before publication can proceed; no local verifier fallback or installed-runtime edit is permitted.
+
 ## Changes and deliberate exclusions
 
 - Relocated architecture contracts into six owner leaves, with owner/test routes, failure/privacy facts, unchanged file-budget facts and historical performance evidence in their current categories. Added the bounded overview Mermaid and journal routes. Consolidated the legacy development-root README/router into the overview, preserving its authority/data facts while meeting the installed manifest's two-file development root; installed Toolkit remains the only workflow authority.
