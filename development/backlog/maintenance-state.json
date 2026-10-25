@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "epochRevision": "df44c06a97244278abd8d0dc9ed90ea12c368e47",
-  "ordinaryCount": 3,
+  "ordinaryCount": 4,
   "completed": {"architecture": 0, "test-health": 0, "performance": 0},
   "template": {"id": "shared-repository-maintenance", "version": 1},
-  "lastDeliveredRevision": "6c636ce9bfd3f2813e8902b4f00026be3210fd9d",
+  "lastDeliveredRevision": "cabd3bd5c1325ae0e1c85ec3d26c0af05f8353fb",
   "lastItem": {
-    "id": "fr/000130-watch-history-terminal-recency.md",
+    "id": "fr/000140-watch-ccost-per-subscription-and-stable-today.md",
     "kind": "ordinary"
   }
 }

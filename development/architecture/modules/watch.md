@@ -1,12 +1,19 @@
 # Watch source contracts
 
+Source revision: a97a6c8a13a845bda25624acd9fefbea27761373
+Checked revision: a97a6c8a13a845bda25624acd9fefbea27761373
+Last checked: 2026-10-25
+Status: current
+
 [Architecture overview](../OVERVIEW.md) · [Owner/test routes](CODE_MAP.md). Source remains authoritative.
 
-## Watch
+## Responsibility and ownership
 
 The coordinator owns lifecycle, cadence/rendering and provider refreshes over abstract source/report contracts; lower layers never import Watch. Watch shares `ReportService` analysis/cache/context, never a second billing implementation or recurring subprocess. New Models shares the 12-hour first-sighting accent; existing seven-day eligibility is unchanged.
 
-`watch/token_mix.py` owns run CCost and priced-only Token Mix keyed by source/session/message/step; completed pre-Watch requests stay excluded. `today_ccost.py` reconciles exact local-day requests with shared clone de-duplication, retaining deleted observations without a ledger. Interactive startup renders `Today: Pending` before daily revision/history work. Main-thread slices acquire at most four necessary roots, reuse unchanged stable analysis and publish only after reconciliation. Midnight/DST resets the plan/day; native account publication reuses unchanged local totals. The local date replaces `Today` from 00:00–03:00, with idle redraws. [History acquisition](history-loading.md) owns scopes/evidence.
+## Public contract
+
+`watch/token_mix.py` owns run CCost and priced-only Token Mix keyed by source/session/message/step; completed pre-Watch requests stay excluded. `today_ccost.py` reconciles exact local-day requests with shared clone de-duplication, retaining deleted observations without a ledger. Interactive startup renders `Total today: Pending` (or the overnight date) before daily revision/history work. Once published, same-day CCost remains visible throughout subsequent enrichment/failure/recovery until atomic replacement; corrections may lower it. Midnight never relabels yesterday's publication. Main-thread slices acquire at most four necessary roots, reuse unchanged stable analysis and publish only after reconciliation. Midnight/DST resets the plan/day; native account publication reuses unchanged local totals. `Total YYYY-MM-DD` replaces `Total today` from 00:00–03:00, with idle redraws. [History acquisition](history-loading.md) owns scopes/evidence.
 
 `WatchSessionSubtotal` sums selected rows' `PromptProjection.ccost` as Decimals, propagating unresolved provenance. Presentation formats `Σ`; native non-billable compactions contribute known zero. Amount/completeness enter change detection. Row subtotals need not partition run totals; no per-session run aggregate exists.
 
@@ -24,3 +31,17 @@ Source recovery retains the last projection and retries only the selected source
 
 Watch tool observations use canonical prompt/task scope and one physical-call identity. `watch/tool_contracts.py` owns conservative persisted skill-input/metadata and bounded, known-script result evidence; no source reads, commands, secret discovery or accounting changes. `ToolObservation.skills` projects exact confirmed IDs and direct failure counts. Tracker attaches activity only to each session's latest prompt while it runs or retains its existing terminal marker, then removes rows on marker expiry or same-session supersession. Terminal snapshots retain final counts without live status; the final observation is reused for an unchanged source revision and may update on new authoritative evidence. Presentation adapts tool/skill rows to terminal width independently of fixed metric geometry; [activity contracts](../../../docs/watch-activity.md) define uncertainty and omissions.
 
+
+Rolling account history extends the daily plan only to usable native/trailing-window starts, never a Watch calendar-month comparison. `src/reports/history.py` retains observed requests in that process-local scope and publishes after a finite plan completes. `src/analysis/period_ccost.py` indexes shared request valuation; source-free account queries advance on idle wakes/midnight without quota-driven history scans. Timestamp-only projection changes do not trigger redraws.
+
+## Allowed dependencies
+
+Watch depends on shared reports/analysis/domain and abstract source contracts; reports/analysis never import Watch. Presentation consumes projections without fetching history or native quotas.
+
+## Entrypoints
+
+`src/watch/coordinator.py`, `src/watch/today_ccost.py`, `src/reports/history.py`, `src/reports/accounts.py`, `src/presentation/token_mix.py`, `src/presentation/accounts.py`.
+
+## Tests
+
+`development/tests/test_watch_today_ccost.py`, `development/tests/test_account_period_ccost.py`, `development/tests/test_watch_idle_accounts.py`, `development/tests/test_history_loading.py`, `development/tests/test_watch_source_recovery.py`, `development/tests/test_quota_presentation.py`.
