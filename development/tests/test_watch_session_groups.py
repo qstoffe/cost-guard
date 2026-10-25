@@ -139,7 +139,8 @@ class SessionGroupLifecycleTests(unittest.TestCase):
 
         self.assertEqual(["B", "A"], order(rows))
         self.assertEqual([800, 900], [row.session_latest_ms for row in rows])
-        self.assertEqual([1, 2], [row.prompt.prompt_number for row in rows])
+        self.assertEqual([1, 1], [row.prompt.prompt_number for row in rows],
+                         "supported ends win history membership; duration cannot rank A's unknown-end #2")
 
     def test_error_joins_recent_group_until_finite_highlight_expires(self):
         observed = tracker(recent_seconds=1)

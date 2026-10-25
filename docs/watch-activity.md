@@ -1,4 +1,4 @@
-# Watch lifecycle and activity — v80.64
+# Watch lifecycle and activity — v80.73
 
 Watch derives prompt activity from already-hydrated normalized snapshots and existing causal prompt scope, including attributed task children. It does not run tools, scan skill files, mutate OpenCode data, or change usage, billing, token accounting or quota refresh.
 
@@ -12,7 +12,11 @@ After that highlight expires, the existing idle update redraws the dashboard and
 
 Terminal failures show a red `!` and critical row styling only during the existing observation-based recent-event window, just like aborts. Afterwards the row retains a neutral `[ERROR]` outcome label, not a successful completion. `[ABORTED]` labels likewise outlast red emphasis. Polling, redraws, quota refreshes and source resynchronization do not renew an expired highlight. Historical failures loaded at startup (including scoped Watch and `[Earlier]` rows) receive no fresh emphasis. A zero-second window disables transient markers, styling and terminal activity, not historical outcome labels or running status.
 
-No new timer, retention rule, completion inference or accounting is introduced. The global row soft cap and running/recent protection apply before grouping. Ordering uses all available session event information, including events omitted by the cap. Startup `[Earlier]` representatives keep their selection, marker, date-aware timestamp format, retention and exclusion from run usage; their header uses the supported end or the same stable event-start fallback. Session-specific Watch keeps its ordering and start-time header; ordinary reports are unchanged.
+The global soft prompt-row cap applies before grouping. All running/recent rows remain protected, even beyond the cap. Other current-run historical rows compete by their supported terminal end (success, abort or error), not their original start: a long-running prompt that finishes last stays eligible as the newest completion on the exact refresh its highlight expires. Genuinely newer completions can evict it normally. Membership ranking does not reorder prompts/compactions within a session. Historical session ordering uses all available session event information, including events omitted by the cap.
+
+Unknown ends retain the deterministic event-start fallback for both history membership and headers. Watch does not introduce a local terminal-observation timestamp: confirmed transitions without a source end therefore do not receive synthetic recency. Polling, account redraws, reconnects, elapsed duration and highlight expiry never supply a native end; a later authoritative end updates history ranking without renewing the highlight. A retained zero-call post-compaction row keeps its identity and established display placement, but its observation-derived duration is not terminal-time evidence.
+
+V1 assistant completion/error times and V2 causally matched assistant/idle terminal evidence flow through the same source-neutral projection. A plugin-driven stop with a native interruption has the same abort semantics as other interruptions; a plugin/tool call or session status alone proves neither success nor a prompt-specific end. No stop initiator is guessed. Startup `[Earlier]` representatives keep their start-based selection/one-shot eviction, marker, date-aware timestamp format and exclusion from run usage; their header uses the supported end or the same stable event-start fallback. Session-specific Watch keeps its ordering and start-time header; ordinary reports, Duration and accounting are unchanged.
 
 ## Prompt activity rows
 

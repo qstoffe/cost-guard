@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.73 — 2026-10-25
+
+- Fixed global Watch history cap selection to use supported terminal ends for success, abort and error, independently of prompt/compaction display order. Long-running prompts remain eligible at exact highlight expiry; newer completions still evict normally. Unknown ends retain deterministic start ranking without Watch-local timestamps. Earlier startup selection, scoped Watch, Duration, costs, quotas and source read-only behavior are unchanged.
+
 ## v80.72 — 2026-10-25
 
 - Fixed OpenAI account-switch inventory: authoritative removal drops superseded rows, generation-pinned requests cannot restore old accounts, and proven aliases prefer canonical V2 credentials without merging distinct subscriptions. Watch clears failed OpenAI quota instead of restoring stale values or an unknown prior plan. Safe novel returned plan names retain valid windows; 403 means endpoint access denied rather than proven bad sign-in. Historical 401 evidence alone cannot establish upgraded-tier support or valid current auth; no credential writes, refreshes or paid probes were added.

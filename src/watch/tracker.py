@@ -118,6 +118,18 @@ class WatchRowTracker:
             rank = 1
         return (at_ms, sequence, rank, row.session_id, event_id)
 
+    def _retention_key(self, row: WatchRow, now_ms: int) -> tuple[int, int, int, str, str]:
+        """Rank global history by supported end, independently of display order.
+
+        Earlier representatives keep their one-shot start-based competition.
+        Unknown ends use the same honest start fallback as historical headers;
+        neither marker observation nor a retained duration proves a source end.
+        """
+        display_key = self._sort_key(row)
+        if self.session_scope or row.earlier or self._protected(row, now_ms):
+            return display_key
+        return (row.prompt.completed_at_ms or row.prompt.at_ms, *display_key[1:])
+
     @staticmethod
     def _latest_compaction_after(
         prompt: PromptProjection,
@@ -371,14 +383,16 @@ class WatchRowTracker:
             origins = (skill_origins_by_root or {}).get(block.session_id, {})
             rows.extend(self._attach_activity(session_rows, snapshot, now_ms, sequence_by_event, origins))
 
-        selected = select_rows(rows, max_rows=self.max_rows, sort_key=self._sort_key,
+        selected = select_rows(rows, max_rows=self.max_rows, sort_key=lambda row: self._retention_key(row, now_ms),
                                is_protected=lambda row: self._protected(row, now_ms))
+        # Recency selects membership, not the chronology inside each session.
+        selected.sort(key=self._sort_key)
         by_session: dict[str, list[WatchRow]] = {}
         for row in selected:
             by_session.setdefault(row.session_id, []).append(row)
         for session_id in [item for item in self._earlier if item in session_times and item not in by_session]:
             del self._earlier[session_id]  # an evicted representative never returns
-        # Selection is unchanged; reorder only whole blocks after the global cap.
+        # Reorder only whole blocks after the global cap.
         ordered = session_order(((session_id, session_times[session_id]) for session_id in by_session),
                                 active_sessions=active_sessions)
         return tuple(
