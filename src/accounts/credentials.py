@@ -103,7 +103,10 @@ def read_credentials(
         healthy = False
     if isinstance(auth, Mapping):
         for provider in providers if providers is not None else auth:
-            if provider not in present:
+            # V2 OpenAI owns the alias family, even if unusable.
+            # A stale legacy codex entry must not resurrect a replaced account.
+            openai_ids = {"openai", "openai-codex", "codex"}
+            if provider not in present and not (provider in openai_ids and present & openai_ids):
                 record = _record(provider, auth_path, f"auth:{provider}", auth.get(provider))
                 if record:
                     records.append(record)
@@ -123,5 +126,8 @@ def configured_credentials(auth_path: Path, db_path: Path | None,
 def provider_credentials(provider, integration_ids: Sequence[str]) -> tuple[CredentialRecord, ...]:
     """Acquisition uses the discovery-pinned read-only view, or legacy direct calls."""
     records = getattr(provider, "credential_records", None)
-    return records if records is not None else configured_credentials(
-        provider.auth_json_path, provider.credential_db_path, integration_ids)
+    if records is not None:
+        return records
+    records = configured_credentials(provider.auth_json_path, provider.credential_db_path, integration_ids)
+    select = getattr(provider, "select_credentials", None)
+    return select(records) if select else records

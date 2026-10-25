@@ -103,6 +103,8 @@ class AccountAcquisition:
         return waiting or any(not attempt.expired for attempt in self._running.values())
 
     def _publish(self, slot: int, snapshots: tuple[AccountSnapshot, ...], *, observed=None) -> None:
+        incoming = {item.key for item in snapshots}
+        self._changed_keys.update(item.key for item in self._snapshots.get(slot, ()) if item.key not in incoming)
         self._snapshots[slot] = snapshots
         self._changed_keys.update(item.key for item in snapshots if observed is None or item.key in observed)
         present = {item.key for values in self._snapshots.values() for item in values}
@@ -132,7 +134,8 @@ class AccountAcquisition:
         incoming = {item.key for item in accounts + untouched}
         removed = tuple(replace(item, quotas=(), billing=(), plan=None, availability="unavailable",
                                 reason="Account no longer configured", observations={"parser_reason": "auth_failure"})
-                        for item in previous if item.key not in incoming and item.availability != "unavailable")
+                        for item in previous if item.key not in incoming and item.availability != "unavailable"
+                        and candidate.provider.provider_id != "openai")
         self._publish(candidate.slot, accounts + untouched + removed, observed={item.key for item in accounts + removed})
 
     def _timeout(self, attempt: _Attempt, now_ms: int, completed_at: float) -> None:
@@ -164,7 +167,7 @@ class AccountAcquisition:
             if state is None or state.revision != candidate.revision:
                 self.refresh[slot] = ProviderRefresh(candidate.revision)
                 if state is not None and slot in self._snapshots:
-                    self._publish(slot, tuple(replace(item, quotas=(), billing=(), availability="unavailable",
+                    self._publish(slot, tuple(replace(item, quotas=(), billing=(), plan=None, availability="unavailable",
                                                      reason="Account credentials changed; verification pending",
                                                      observations={"parser_reason": "auth_failure"})
                                               for item in self._snapshots[slot]))
@@ -183,6 +186,9 @@ class AccountAcquisition:
                                     availability="unavailable", reason="Account no longer configured",
                                     observations={"parser_reason": "auth_failure"})
                             if (item.ref.source_instance, item.ref.source_account) not in locators else item for item in previous)
+            if previous and previous[0].ref.provider_id == "openai":
+                keys = {record.ref.key for record in candidate.records or ()} if candidate else set()
+                removed = tuple(item for item in removed if item.key in keys)
             if removed != previous:
                 self._publish(slot, removed)
         for slot, attempt in self._running.items():

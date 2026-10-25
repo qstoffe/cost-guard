@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.72 — 2026-10-25
+
+- Fixed OpenAI account-switch inventory: authoritative removal drops superseded rows, generation-pinned requests cannot restore old accounts, and proven aliases prefer canonical V2 credentials without merging distinct subscriptions. Watch clears failed OpenAI quota instead of restoring stale values or an unknown prior plan. Safe novel returned plan names retain valid windows; 403 means endpoint access denied rather than proven bad sign-in. Historical 401 evidence alone cannot establish upgraded-tier support or valid current auth; no credential writes, refreshes or paid probes were added.
+
 ## v80.71 — 2026-10-25
 
 - Adopted Toolkit's development layout and six-digit backlog bundles while preserving test membership, repository facts and pending requests. Product versions and release checks remain Cost Guard-owned; legacy adapter data is opaque to Toolkit. Relocated human Diagnostics launchers and updated software-failure hints; Watch, account and cost semantics are unchanged.

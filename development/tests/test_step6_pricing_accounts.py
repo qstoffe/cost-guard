@@ -325,13 +325,16 @@ class AccountProviderTests(unittest.TestCase):
                     home=home, json_get=lambda *_: JsonResponse(False, status, None), now_ms=lambda: 5).get_quota_snapshot()
                 openai = OpenAIAccountProvider(
                     home=home, usage_get=lambda *_: UsageResponse(False, status), now_ms=lambda: 5).get_quota_snapshot()
-                for snap, reason, action in (
+                for snap, reason, action, parser_reason in (
                     (copilot, "GitHub Copilot sign-in was rejected; sign in to GitHub Copilot again in OpenCode.",
-                     "Sign-in rejected; sign in to GitHub again in OpenCode"),
-                    (openai, "OpenAI sign-in was rejected; reconnect OpenAI in OpenCode.",
-                     "Sign-in rejected; reconnect OpenAI in OpenCode"),
+                     "Sign-in rejected; sign in to GitHub again in OpenCode", "auth_failure"),
+                    (openai, "OpenAI sign-in was rejected; reconnect OpenAI in OpenCode." if status == 401 else
+                     "OpenAI quota endpoint denied access; account or backend policy may restrict usage lookup.",
+                     "Sign-in rejected; reconnect OpenAI in OpenCode" if status == 401 else
+                     "Check OpenAI account access in OpenCode; quota lookup was denied",
+                     "auth_failure" if status == 401 else "access_denied"),
                 ):
-                    self.assertEqual((reason, action, "auth_failure"),
+                    self.assertEqual((reason, action, parser_reason),
                                      (snap.reason, snap.observations["user_action"], snap.observations["parser_reason"]))
                     self.assertNotIn("REVOKED-SECRET", repr(snap))
 

@@ -58,7 +58,12 @@ class AccountDiscovery:
                 self._views[key] = view
             if not view[1].healthy:
                 self.failed_slots.add(slot)
+                if getattr(provider, "provider_id", None) == "openai":
+                    continue  # A partial inventory cannot authoritatively remove identities.
             records = tuple(record for record in view[1].records if record.ref.provider_id in ids)
+            select = getattr(provider, "select_credentials", None)
+            if select:
+                records = select(records)
             previous, generation = self._identities.get(slot, ((), 0))
             if previous != records:
                 generation += 1
