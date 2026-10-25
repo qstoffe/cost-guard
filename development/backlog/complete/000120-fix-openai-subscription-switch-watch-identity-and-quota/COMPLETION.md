@@ -1,5 +1,7 @@
 # FR 000120 completion — OpenAI account replacement
 
+Implementation candidate: [38ad8e20880e1b81cc740a028a91c258e913068f](https://github.com/qstoffe/cost-guard/commit/38ad8e20880e1b81cc740a028a91c258e913068f). Native delivery records the verified PR and squash merge separately.
+
 ## Delivered behavior
 
 - Canonical V2 inventory suppresses stale legacy OpenAI aliases; proven OAuth aliases collapse by source-aware account identity, preferring canonical V2 records. Distinct configured accounts remain visible.
