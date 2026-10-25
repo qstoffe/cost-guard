@@ -4,7 +4,7 @@
 
 2026-10-25; source base [df44c06](https://github.com/qstoffe/cost-guard/commit/df44c06a97244278abd8d0dc9ed90ea12c368e47). Native selection: `contract-sync/2/df44c06a97244278abd8d0dc9ed90ea12c368e47`. Installed schema SHA-256: `547e9d73f34cb3997f826d4c62c0fd9d55719c57aeef6c7568d15c73b06f4fcb`.
 
-Migration candidate, not a claim of merge. This report travels with its delivery PR; Git/native delivery receipts establish actual publication.
+Delivery candidate: [PR #43](https://github.com/qstoffe/cost-guard/pull/43). This report is not a claim of merge; Git/native delivery receipts establish actual publication.
 
 ## Product ownership
 
