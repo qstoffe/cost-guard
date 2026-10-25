@@ -287,7 +287,7 @@ GitHub Copilot Pro+   Month  ██████████ 100% · 7000/7000 ·
 OpenAI Plus          5h     ████████░░  82% (651) · Reset@22:49 | Week ██████████  98% (25407) · Reset@Sunday 07:59
 ```
 
-Per-account `Today` is daily CCost; percentage parentheses are window CCost, not utilization. Unknowns stay `N/A`/`?`, without fake bars. Watch has no month-to-date row; normal reports explain provenance/trailing lookbacks.
+Per-account `Today` is daily CCost; percentage parentheses are window CCost, not utilization. Unknowns use `—`, without fake bars. Watch has no month-to-date or Unaccounted usage row. [Accounting details](docs/usage-and-cost.md#account-period-ccost).
 
 `Watch:` stays last. Startup progress stops before dashboard/recovery output. Watch buffers frames, skips identical output and patches changed rows when they fit. Wrapped or taller-than-viewport dashboards clear and rebuild the screen/scrollback, keeping only the current frame scrollable instead of accumulating old title/table fragments; returning from overflow also clears stale fragments. Safe resizes overwrite without clearing; shrinking frames erase their old tail. Countdowns update only the status row. Pending appears only before the first complete publication for a local day. Redirected output stays plain.
 
@@ -362,9 +362,9 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 **v80.78 (2026-10-26):** Copilot reports add signed `Unaccounted usage` for comparable native-month evidence, otherwise `—`. It is an estimate, not billing. Watch is unchanged. [Details](docs/usage-and-cost.md#copilot-unaccounted-usage).
 
-See [version history](VERSION_HISTORY.md) for predecessors and [startup evidence](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence) for live-proof limits. v80.0 is the Python 3.11+ baseline. Claude quotas remain experimental; terminal visuals, restart and sleep/wake need separate live evidence.
+Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 
-Product versions identify code state; they do not imply a Git tag, release ZIP or GitHub Release. Packaged GitHub Releases are currently paused. Recommending them at a slower/stable cadence requires an explicit policy change; version numbers never trigger it automatically.
+Versions identify code, not tags, ZIPs or GitHub Releases. Packaged Releases remain paused; resuming them requires an explicit policy decision, never a version-number trigger.
 
 ## Development
 
