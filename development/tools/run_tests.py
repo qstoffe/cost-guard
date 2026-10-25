@@ -161,7 +161,8 @@ def main(argv: list[str] | None = None) -> int:
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(errors="replace")
 
-    patterns = (args.pattern,)
+    if args.pattern:
+        patterns = (args.pattern,)
     elif args.profile:
         patterns = PROFILES[args.profile]
     elif args.suite == "full":
