@@ -36,6 +36,8 @@ from .credentials import CredentialRecord, provider_credentials, resolve_auth_pa
 USAGE_URL = "https://chatgpt.com/backend-api/wham/usage"
 # OpenCode renews the OAuth token when it next calls OpenAI; Cost Guard never does.
 EXPIRED_REASON = "OpenAI token expired; it renews automatically on your next OpenAI prompt in OpenCode."
+TOKEN_SHARING_REASON = "OpenAI quota unavailable for this sign-in method (ChatGPT token sharing); model authentication is separate."
+UNKNOWN_METHOD_REASON = "OpenAI quota unavailable for this sign-in method; no compatible quota source is known."
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,6 +46,7 @@ class OpenAICredential:
     access_token: str = field(default="", repr=False)
     account_id: str = field(default="", repr=False)
     reason: str = ""
+    method_class: str = "legacy"
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,6 +85,28 @@ def _jwt_account_id(token: str) -> str:
     return str(candidate) if candidate else ""
 
 
+def _quota_method(item: Mapping[str, object], token: str) -> str:
+    """Classify locally, never export raw methods, audiences, scopes or claims.
+
+    Token-sharing metadata can accompany migrated browser credentials. It must
+    win over the old method name and must never authorize a legacy WHAM probe.
+    Methodless auth.json remains compatible with historical Codex storage.
+    """
+    metadata = item.get("metadata")
+    metadata = metadata if isinstance(metadata, Mapping) else {}
+    claims = _jwt_payload(token)
+    for raw in (metadata.get("scopes"), claims.get("scope"), claims.get("scp")):
+        scopes = raw.split() if isinstance(raw, str) else raw if isinstance(raw, list) else ()
+        if "chatgpt.tokens.use.direct" in scopes:
+            return "token-sharing"
+    method = item.get("methodID")
+    if method == "chatgpt-token-sharing":
+        return "token-sharing"
+    if method in (None, "", "chatgpt-browser", "chatgpt-headless"):
+        return "legacy"
+    return "unknown"
+
+
 def credential_from_auth_object(value: object) -> OpenAICredential:
     if not isinstance(value, Mapping):
         return OpenAICredential(False, reason="OpenCode auth.json is empty or invalid")
@@ -103,7 +128,8 @@ def credential_from_auth_object(value: object) -> OpenAICredential:
             or metadata.get("accountID")
             or _jwt_account_id(access)
         )
-        return OpenAICredential(True, access.strip(), str(account or ""))
+        return OpenAICredential(True, access.strip(), str(account or ""),
+                                method_class=_quota_method(item, access))
     return OpenAICredential(False, reason="OpenAI ChatGPT OAuth credential not found in OpenCode auth.json")
 
 
@@ -419,6 +445,14 @@ class OpenAIAccountProvider:
 
     def _fetch(self, credential: OpenAICredential, now: int, component="openai-account-refresh") -> QuotaSnapshot:
         from src.runtime_errors import recoverable, recovered
+        evidence = {"credential_category": credential.method_class,
+                    "account_header_present": bool(credential.account_id),
+                    "endpoint_family": "wham" if credential.method_class == "legacy" else "none",
+                    "request_attempted": False}
+        if credential.method_class != "legacy":
+            reason = TOKEN_SHARING_REASON if credential.method_class == "token-sharing" else UNKNOWN_METHOD_REASON
+            return replace(_unavailable(reason, now), observations={**evidence,
+                           "parser_reason": "unsupported_auth_method", "user_action": reason})
         try:
             result = self._request_quota(credential, now)
         except Exception as exc:
@@ -426,7 +460,7 @@ class OpenAIAccountProvider:
             return replace(_unavailable("ERROR: OpenAI account refresh failed internally", now),
                            availability="error", observations={"parser_reason": "software_failure"})
         recovered(component)
-        return result
+        return replace(result, observations={**evidence, **result.observations, "request_attempted": True})
 
     def _request_quota(self, credential: OpenAICredential, now: int) -> QuotaSnapshot:
         token = credential.access_token
@@ -439,16 +473,19 @@ class OpenAIAccountProvider:
                 snapshot = convert_usage_payload(response.payload, fetched_at_ms=now)
                 return replace(snapshot, observations={**snapshot.observations, "http_status": response.status_code})
             if response.status_code == 401:
-                return replace(_unavailable("OpenAI sign-in was rejected; reconnect OpenAI in OpenCode.", now),
-                               observations={"http_status": response.status_code, "parser_reason": "auth_failure",
-                                              "user_action": "Sign-in rejected; reconnect OpenAI in OpenCode"})
+                return replace(_unavailable("OpenAI quota request rejected; model sign-in status is not established by this endpoint.", now),
+                                observations={"http_status": response.status_code, "parser_reason": "auth_failure",
+                                               "user_action": "Quota request rejected; check the OpenCode connection and quota access"})
             if response.status_code == 403:
                 return replace(_unavailable("OpenAI quota endpoint denied access; account or backend policy may restrict usage lookup.", now),
                                observations={"http_status": 403, "parser_reason": "access_denied",
                                              "user_action": "Check OpenAI account access in OpenCode; quota lookup was denied"})
             if response.network_error:
                 return replace(_unavailable("OpenAI usage request failed (network)", now), availability="error",
-                               observations={"http_status": 0, "parser_reason": "network_failure"})
+                                observations={"http_status": 0, "parser_reason": "network_failure"})
+            if response.status_code == 429:
+                return replace(_unavailable("OpenAI quota lookup throttled; no current quota was returned.", now),
+                               availability="error", observations={"http_status": 429, "parser_reason": "rate_limited"})
             return replace(_unavailable("OpenAI usage request failed", now), availability="error",
                            observations={"http_status": response.status_code,
                                "parser_reason": "parser_failure" if 200 <= response.status_code < 300 else "http_failure"})

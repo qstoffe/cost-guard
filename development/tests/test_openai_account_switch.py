@@ -12,7 +12,9 @@ import unittest
 from development.tests.fixtures.account_workers import wait_for
 from src.accounts.acquisition import AccountAcquisition
 from src.accounts.discovery import AccountDiscovery
+from src.accounts.diagnostics import sanitized_account_observation
 from src.accounts.openai_subscription import OpenAIAccountProvider, UsageResponse, USAGE_URL
+from src.accounts.credentials import provider_credentials
 from src.watch.accounts import reconcile_accounts
 
 
@@ -215,6 +217,88 @@ class OpenAISwitchTests(unittest.TestCase):
         self.assertIsNone(shown[0].quotas[0].remaining_fraction)
         self.assertEqual(1, len(shown[0].quotas))
         self.assertFalse(stale)
+
+    def test_token_sharing_and_future_methods_never_send_tokens_to_wham(self):
+        for method, metadata, category in (
+            ("chatgpt-token-sharing", {}, "token-sharing"),
+            ("chatgpt-browser", {"scopes": ["chatgpt.tokens.use.direct", "resource.invoke"]}, "token-sharing"),
+            ("future-private-method", {}, "unknown"),
+        ):
+            with self.subTest(method=method):
+                self.rows([("one", "openai", oauth("one", "private-token", methodID=method,
+                                                  metadata=metadata, expires=5000), 1)])
+                provider = self.provider(lambda *_: self.fail("incompatible resource must not be called"))
+                account = provider.get_account_snapshots()[0]
+                self.assertEqual("unavailable", account.availability)
+                self.assertFalse(account.quotas)
+                self.assertIsNone(account.plan)
+                self.assertEqual(category, account.observations["credential_category"])
+                evidence = sanitized_account_observation(account)["quota_shape"]
+                self.assertFalse(evidence["request_attempted"])
+                self.assertEqual("none", evidence["endpoint_family"])
+                self.assertEqual("unsupported_auth_method", evidence["parser_reason"])
+                self.assertNotIn("private-token", repr(account) + repr(evidence))
+                self.assertNotIn("future-private-method", repr(account) + repr(evidence))
+                # Legacy direct callers must obey the same method eligibility.
+                provider.auth_json_path.write_text(json.dumps({"openai": oauth("one", methodID=method, metadata=metadata)}))
+                provider.credential_db_path = None
+                self.assertFalse(provider.get_quota_snapshot().available)
+
+    def test_scope_claim_without_method_blocks_legacy_fallback_and_missing_header_is_not_guessed(self):
+        payload = base64.urlsafe_b64encode(json.dumps({"scope": "resource.invoke chatgpt.tokens.use.direct"}).encode()).decode().rstrip("=")
+        self.rows([("one", "openai", {"type": "oauth", "access": "e30." + payload + ".fixture"}, 1)])
+        account = self.provider(lambda *_: self.fail("scope rules out WHAM")).get_account_snapshots()[0]
+        self.assertFalse(account.observations["account_header_present"])
+        self.assertEqual("token-sharing", account.observations["credential_category"])
+
+    def test_active_sharing_and_inactive_legacy_remain_distinct_without_alias_fallback(self):
+        self.auth.write_text(json.dumps({"codex": oauth("stale")}))
+        self.rows([("active", "openai", {"type": "oauth", "access": "sharing", "methodID": "chatgpt-token-sharing"}, 1),
+                   ("inactive", "openai", oauth("other", methodID="chatgpt-headless"), 0)])
+        calls = []
+        provider = self.provider(lambda url, token, account, timeout: (calls.append(account), usage())[1])
+        records = provider_credentials(provider, provider.integration_ids)
+        self.assertEqual([False, True], sorted(r.active for r in records))
+        accounts = provider.get_account_snapshots()
+        self.assertEqual(["other"], calls)
+        self.assertEqual(2, len(accounts))
+        self.assertEqual({"available", "unavailable"}, {a.availability for a in accounts})
+
+    def test_legacy_methods_preserve_quota_without_required_account_header(self):
+        for method in ("chatgpt-browser", "chatgpt-headless"):
+            with self.subTest(method=method):
+                self.rows([("one", "openai", {"type": "oauth", "access": "legacy", "methodID": method}, 1)])
+                calls = []
+                account = self.provider(lambda url, token, account, timeout: (calls.append((url, account)), usage())[1]).get_account_snapshots()[0]
+                self.assertEqual([(USAGE_URL, "")], calls)
+                self.assertEqual("available", account.availability)
+                self.assertEqual(2, len(account.quotas))
+                self.assertTrue(account.observations["request_attempted"])
+
+    def test_watch_method_switch_clears_native_quota_and_matches_report_acquisition(self):
+        self.rows([("one", "openai", oauth("one", methodID="chatgpt-browser"), 1)])
+        engine = AccountAcquisition((self.provider(),), "fixture")
+        self.addCleanup(engine.close)
+        engine.start(1000)
+        old = engine.finish(1000)
+        self.rows([("one", "openai", oauth("one", methodID="chatgpt-token-sharing"), 1)])
+        engine.start(2000)
+        new = engine.finish(2000)
+        shown, _, stale = reconcile_accounts(old, new, {old[0].key: 1000}, now_ms=2000)
+        report = self.provider().get_account_snapshots()
+        self.assertEqual(report, shown)
+        self.assertFalse(stale)
+        self.assertFalse(shown[0].quotas)
+        self.assertIsNone(shown[0].plan)
+        self.assertEqual("unsupported_auth_method", shown[0].observations["parser_reason"])
+
+    def test_quota_rejection_does_not_diagnose_model_login_and_throttling_is_separate(self):
+        self.rows([("one", "openai", oauth("one", methodID="chatgpt-browser"), 1)])
+        rejected = self.provider(lambda *_: UsageResponse(False, 401)).get_account_snapshots()[0]
+        self.assertNotIn("reconnect", rejected.observations["user_action"].lower())
+        limited = self.provider(lambda *_: UsageResponse(False, 429)).get_account_snapshots()[0]
+        self.assertEqual("rate_limited", limited.observations["parser_reason"])
+        self.assertFalse(limited.quotas)
 
 
 if __name__ == "__main__":

@@ -13,6 +13,7 @@ _OBSERVATION_FIELDS = frozenset({
     "auth_status", "backend_status", "account_kind",
     "credential_discovered", "credential_category", "credential_active", "credential_qualifying",
     "request_attempted", "mapping_matched", "malformed_fields", "ignored_rows",
+    "account_header_present", "endpoint_family",
     "quota_components", "billing_components", "response_form", "quota_windows", "provider_status",
 })
 

@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.75 — 2026-10-25
+
+- Classify OpenAI OAuth methods and token-sharing scopes before quota lookup. ChatGPT token sharing and unfamiliar methods never send their tokens to legacy WHAM; Watch, reports and sanitized Diagnostics distinguish an unsupported quota method from model sign-in rejection. Legacy browser/headless Codex quota retrieval and genuine returned plans/windows remain supported; 401 is request rejection, 403 endpoint policy and 429 throttling.
+- Read-only inspection of the affected OpenCode 2.1.4 installation confirmed the active API-resource token-sharing connection and no installed usage/limits API route. Headless report/Watch checks agree on method-specific unavailability with zero quota requests. Actual token-sharing quotas remain unavailable; no live legacy 200 or upstream 401 root cause is claimed. No credential writes, token refreshes, paid inference or shared-service restarts occurred.
+
 ## v80.74 — 2026-10-25
 
 - Watch keeps the last fully published local-day CCost during later enrichment, accepting completed corrections atomically and resetting truthfully at midnight. Its overall line now uses `Total today` without a deletion disclaimer.
