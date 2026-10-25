@@ -360,7 +360,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.74 (2026-10-25):** Stable Watch daily publication and compact account-period CCost, with explanatory calendar-month comparison in normal reports. Provider estimates never prove account billing or quota consumption. See [period accounting](docs/usage-and-cost.md#account-period-ccost) and [history](VERSION_HISTORY.md).
+**v80.75 (2026-10-25):** OpenAI quota lookup respects the sign-in method. ChatGPT token sharing no longer triggers incompatible legacy requests or misleading reconnect advice; its quota remains unavailable. Legacy quotas and CCost are preserved. See [account support](docs/account-support.md) and [history](VERSION_HISTORY.md).
 
 Recent predecessors added buffered Watch/startup progress and launcher feedback ([evidence and limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence)), independent historical context/current anchors, nonblocking metadata, quota histories, execution Duration and retained daily CCost. v80.0 is the Python 3.11+ public baseline; see [version history](VERSION_HISTORY.md). Claude quotas remain experimental; terminal visuals, restart and sleep/wake need separate live evidence.
 

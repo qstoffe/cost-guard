@@ -315,7 +315,7 @@ class AccountProviderTests(unittest.TestCase):
             self.assertNotIn("LEAK-ME-NOT", snap.reason)
             self.assertNotIn("LEAK-ME-NOT", repr(snap))
 
-    def test_rejected_sign_in_tells_user_how_to_restore_quota(self) -> None:
+    def test_rejected_quota_request_preserves_provider_specific_auth_boundary(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             home = Path(td); auth = home / ".local/share/opencode/auth.json"; auth.parent.mkdir(parents=True)
             auth.write_text(json.dumps({"github-copilot": {"type": "oauth", "refresh": "REVOKED-SECRET"},
@@ -328,9 +328,9 @@ class AccountProviderTests(unittest.TestCase):
                 for snap, reason, action, parser_reason in (
                     (copilot, "GitHub Copilot sign-in was rejected; sign in to GitHub Copilot again in OpenCode.",
                      "Sign-in rejected; sign in to GitHub again in OpenCode", "auth_failure"),
-                    (openai, "OpenAI sign-in was rejected; reconnect OpenAI in OpenCode." if status == 401 else
+                    (openai, "OpenAI quota request rejected; model sign-in status is not established by this endpoint." if status == 401 else
                      "OpenAI quota endpoint denied access; account or backend policy may restrict usage lookup.",
-                     "Sign-in rejected; reconnect OpenAI in OpenCode" if status == 401 else
+                     "Quota request rejected; check the OpenCode connection and quota access" if status == 401 else
                      "Check OpenAI account access in OpenCode; quota lookup was denied",
                      "auth_failure" if status == 401 else "access_denied"),
                 ):
