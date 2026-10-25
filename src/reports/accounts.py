@@ -21,6 +21,7 @@ def account_projections(
     catalog: PricingCatalog, *, now_ms: int, today_start_ms: int, month_start_ms: int,
     timezone_id: str = "UTC", workday_calendar: str = "",
     period_index: PeriodCCostIndex | None = None, watch: bool = False,
+    observed_start_ms: int | None = None,
 ) -> tuple[AccountProjection, ...]:
     counts = Counter((item.ref.provider_id, item.plan) for item in accounts)
     providers = Counter(usage_provider(item.ref.provider_id) for item in accounts)
@@ -44,7 +45,7 @@ def account_projections(
         attributed = tuple(entry for entry in entries if entry.account_ref and entry.account_ref.key == account.key
                            and entry.model.provider == account.ref.provider_id)
         scopes, notes, account_unknown = _period_scopes(account, index, providers, explained, today_start_ms,
-                                       month_start_ms, now_ms, watch=watch)
+                                       month_start_ms, now_ms, watch=watch, observed_start_ms=observed_start_ms)
         unassigned = any(entry.model.provider == account.ref.provider_id and entry.account_ref is None
                          and month_start_ms <= entry.completed_at_ms <= now_ms for entry in entries)
         billing_known = not unassigned
@@ -65,7 +66,8 @@ def account_projections(
     return tuple(projections)
 
 
-def _period_scopes(account, index, providers, explained, today_start_ms, month_start_ms, now_ms, *, watch):
+def _period_scopes(account, index, providers, explained, today_start_ms, month_start_ms, now_ms, *, watch,
+                   observed_start_ms):
     provider = usage_provider(account.ref.provider_id)
     ranges = [("today", (today_start_ms, now_ms + 1, "configured local calendar day"), None)]
     if not watch:
@@ -98,7 +100,10 @@ def _period_scopes(account, index, providers, explained, today_start_ms, month_s
                 notes.append(f"Provider-only CCost {name}: {number}{' (partial pricing)' if not total.complete else ''}; not allocated to accounts.")
                 explained.add((provider, name))
         else:
-            value = proven if proven.observed_requests or account.usage_attribution_complete else None
+            # Empty attribution is not missing history: only an acquired scope
+            # establishes an observed zero, irrespective of provider/account type.
+            observed = observed_start_ms is not None and observed_start_ms <= start <= now_ms
+            value = proven if proven.observed_requests or observed else None
             attribution = "verified request account references" if proven.observed_requests else "no attributable observed requests"
         scopes.append((name, value))
         notes.append(f"CCost {name}: {basis}; {attribution}.")
@@ -120,7 +125,8 @@ class WatchAccountProjection:
 
     def project(self, accounts: Sequence[AccountSnapshot], entries: tuple[TraceEntry, ...], catalog: PricingCatalog, *,
                 now_ms: int, day_start_ms: int, month_start_ms: int, timezone_id: str,
-                workday_calendar: str, period_entries: tuple[TraceEntry, ...] | None = None) -> tuple[AccountsQuotasProjection, tuple[TraceEntry, ...]]:
+                 workday_calendar: str, period_entries: tuple[TraceEntry, ...] | None = None,
+                 observed_start_ms: int | None = None) -> tuple[AccountsQuotasProjection, tuple[TraceEntry, ...]]:
         boundaries = (day_start_ms, month_start_ms)
         if self._entries is not entries or self._catalog is not catalog or self._boundaries != boundaries:
             self._local = accounts_quota_projection_with_today_entries(
@@ -135,7 +141,8 @@ class WatchAccountProjection:
         projection, today = self._local
         native = account_projections(accounts, (), catalog, now_ms=now_ms, today_start_ms=day_start_ms,
                                      month_start_ms=month_start_ms, timezone_id=timezone_id,
-                                     workday_calendar=workday_calendar, period_index=self._period_index, watch=True)
+                                     workday_calendar=workday_calendar, period_index=self._period_index, watch=True,
+                                     observed_start_ms=observed_start_ms)
         return replace(projection, accounts=native, now_ms=now_ms), today
 
 
@@ -144,12 +151,14 @@ def accounts_quota_projection(
     *, now_ms: int, today_start_ms: int, month_start_ms: int,
     today_prompt_count: int = 0, today_session_count: int = 0,
     timezone_id: str = "UTC", workday_calendar: str = "",
+    observed_start_ms: int | None = None,
 ) -> AccountsQuotasProjection:
     return accounts_quota_projection_with_today_entries(
         accounts, entries, catalog, now_ms=now_ms, today_start_ms=today_start_ms,
         month_start_ms=month_start_ms, today_prompt_count=today_prompt_count,
         today_session_count=today_session_count, timezone_id=timezone_id,
         workday_calendar=workday_calendar,
+        observed_start_ms=observed_start_ms,
     )[0]
 
 
@@ -158,6 +167,7 @@ def accounts_quota_projection_with_today_entries(
     *, now_ms: int, today_start_ms: int, month_start_ms: int,
     today_prompt_count: int = 0, today_session_count: int = 0,
     timezone_id: str = "UTC", workday_calendar: str = "",
+    observed_start_ms: int | None = None,
 ) -> tuple[AccountsQuotasProjection, tuple[TraceEntry, ...]]:
     """Project quota data and expose its exact deduplicated daily request scope."""
     entries = unique_usage(entries)
@@ -168,7 +178,8 @@ def accounts_quota_projection_with_today_entries(
         comparison_month=comparison_cost(month, catalog.reference_valuation),
         accounts=account_projections(accounts, entries, catalog, now_ms=now_ms,
                                      today_start_ms=today_start_ms, month_start_ms=month_start_ms,
-                                     timezone_id=timezone_id, workday_calendar=workday_calendar),
+                                     timezone_id=timezone_id, workday_calendar=workday_calendar,
+                                     observed_start_ms=observed_start_ms),
         billed_today=billed_spend(today), billed_month=billed_spend(month),
         today_prompt_count=today_prompt_count, today_session_count=today_session_count,
         today_request_count=len(today),

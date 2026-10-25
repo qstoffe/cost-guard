@@ -10,11 +10,13 @@ import threading
 import unittest
 
 from development.tests.fixtures.account_workers import wait_for
+from development.tests.fixtures.quota_rendering import quotas, report_text, watch_text
 from src.accounts.acquisition import AccountAcquisition
 from src.accounts.discovery import AccountDiscovery
 from src.accounts.diagnostics import sanitized_account_observation
 from src.accounts.openai_subscription import OpenAIAccountProvider, UsageResponse, USAGE_URL
 from src.accounts.credentials import provider_credentials
+from src.reports.models import AccountProjection
 from src.watch.accounts import reconcile_accounts
 
 
@@ -250,6 +252,37 @@ class OpenAISwitchTests(unittest.TestCase):
         account = self.provider(lambda *_: self.fail("scope rules out WHAM")).get_account_snapshots()[0]
         self.assertFalse(account.observations["account_header_present"])
         self.assertEqual("token-sharing", account.observations["credential_category"])
+
+    def test_method_guidance_is_actionable_once_on_both_surfaces_and_never_guessed(self):
+        for method in ("chatgpt-token-sharing", "chatgpt-browser", "chatgpt-headless", None,
+                       "future-method", "api", "legacy-401"):
+            with self.subTest(method=method):
+                value = ({"type": "api", "key": "synthetic-api-key"} if method == "api" else
+                         oauth("one", "private-token", **({} if method is None else
+                               {"methodID": "chatgpt-browser" if method == "legacy-401" else method})))
+                self.rows([("one", "openai", value, 1)])
+                calls = []
+                def get(*_args):
+                    calls.append(True)
+                    return UsageResponse(False, 401) if method == "legacy-401" else usage()
+                before = self.db.read_bytes(), self.auth.read_bytes()
+                native = self.provider(get).get_account_snapshots()[0]
+                quota = quotas(AccountProjection(native, "OpenAI"))
+                for width in (80, 120, 160):
+                    for text in (report_text(quota, width=width), watch_text(quota, width=width)):
+                        plain = " ".join(text.split())
+                        for label in ("Codex browser (legacy)", "Codex device code (legacy)"):
+                            self.assertEqual(1 if method == "chatgpt-token-sharing" else 0, plain.count(label))
+                        if method == "chatgpt-token-sharing":
+                            self.assertIn("For now, try", plain)
+                            self.assertIn("Model access and Codex quota access use different authentication", plain)
+                            self.assertIn("quota availability is not guaranteed", plain)
+                            self.assertIn("API keys also do not provide Codex subscription quota", plain)
+                        self.assertNotIn("private-token", text)
+                        self.assertNotIn("synthetic-api-key", text)
+                        self.assertTrue(all(len(line) <= width for line in text.splitlines()))
+                self.assertEqual(before, (self.db.read_bytes(), self.auth.read_bytes()))
+                self.assertEqual(0 if method in {"api", "future-method", "chatgpt-token-sharing"} else 1, len(calls))
 
     def test_active_sharing_and_inactive_legacy_remain_distinct_without_alias_fallback(self):
         self.auth.write_text(json.dumps({"codex": oauth("stale")}))

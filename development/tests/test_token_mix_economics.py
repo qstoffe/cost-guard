@@ -271,7 +271,7 @@ class QuotaPaceTests(unittest.TestCase):
         self.assertEqual(1, len(projection.pace))
         styler = AnsiStyler({}, enabled=False)
         wide = capacity_lines(projection, styler, "UTC", width=240, now_ms=now, watch=True, primary_label_width=5)
-        self.assertEqual("GitHub Copilot Pro+   Month  ██████████ 100% · 7000/7000 · Today: N/A · Remaining: 259/day · 350/workday", wide[0])
+        self.assertEqual("GitHub Copilot Pro+   Month  ██████████ 100% · 7000/7000 · Today: — · Remaining: 259/day · 350/workday", wide[0])
         tall = capacity_lines(projection, styler, "UTC", width=60, force_vertical=True, now_ms=now)
         self.assertIn("  Remaining  259/day · 350/workday", tall)
 
@@ -287,7 +287,7 @@ class QuotaPaceTests(unittest.TestCase):
         styler = AnsiStyler({}, enabled=False)
         watch = "\n".join(capacity_lines(projection, styler, "UTC", width=200, watch=True, now_ms=now,
                                         primary_label_width=5))
-        self.assertIn("0/7000 · Today: N/A · Remaining: 0/day · 0/workday | Extra credit limit 500", watch)
+        self.assertIn("0/7000 · Today: — · Remaining: 0/day · 0/workday | Extra credit limit 500", watch)
         self.assertNotIn("AI credits", watch)
         self.assertNotIn("$", watch)
         report = "\n".join(capacity_lines(projection, styler, "UTC", width=120, force_vertical=True, now_ms=now))

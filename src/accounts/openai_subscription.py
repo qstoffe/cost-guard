@@ -36,7 +36,12 @@ from .credentials import CredentialRecord, provider_credentials, resolve_auth_pa
 USAGE_URL = "https://chatgpt.com/backend-api/wham/usage"
 # OpenCode renews the OAuth token when it next calls OpenAI; Cost Guard never does.
 EXPIRED_REASON = "OpenAI token expired; it renews automatically on your next OpenAI prompt in OpenCode."
-TOKEN_SHARING_REASON = "OpenAI quota unavailable for this sign-in method (ChatGPT token sharing); model authentication is separate."
+TOKEN_SHARING_REASON = (
+    "Codex quota unavailable with Sign in with ChatGPT (token sharing). "
+    "Model access and Codex quota access use different authentication. "
+    "For now, try Codex browser (legacy) or Codex device code (legacy) in OpenCode for quota lookup; "
+    "quota availability is not guaranteed. API keys also do not provide Codex subscription quota."
+)
 UNKNOWN_METHOD_REASON = "OpenAI quota unavailable for this sign-in method; no compatible quota source is known."
 
 
