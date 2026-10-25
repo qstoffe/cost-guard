@@ -217,7 +217,8 @@ class WatchCoordinator:
         self.report_service.record_account_display(self.accounts.diagnostics())
         if account_changed:
             self.quota = self.report_service.project_watch_accounts(self.accounts.snapshots)[0]
-        if not allow_history or not self.today_ccost.refresh_due(now_ms, self._last_quota_refresh_ms, force):
+        period_due = self.report_service.watch_period_history_due()
+        if not allow_history or not self.today_ccost.refresh_due(now_ms, self._last_quota_refresh_ms, force or period_due):
             return
         if self._defer_history:
             self.today_ccost.defer_history(observation.sessions, now_ms, active_root_ids=tuple(observation.active_candidates),
@@ -300,6 +301,13 @@ class WatchCoordinator:
             delay = int(math.ceil(self._wait_delay_seconds(active)))
             status = self._steady_status(active, delay, rows)
         recent_model_notice, recent_model_highlight_spans = self.model_discovery.notice_details(now_ms)
+        if self.quota is not None:
+            # Source-free indexed periods also advance on idle wakes/midnight;
+            # never leave yesterday's daily account amount under today's label.
+            self.report_service.set_now_ms(now_ms)
+            current = self.report_service.project_watch_accounts(self.accounts.snapshots)[0]
+            if replace(current, now_ms=self.quota.now_ms) != self.quota:
+                self.quota = current
         projection = WatchProjection(
             title=(f"Cost Guard Watch - {self.session_id}" if self.session_id else "Cost Guard Watch"),
             source_label=self.selection.selected.upper(),
@@ -321,7 +329,7 @@ class WatchCoordinator:
             run_total=self.token_mix.project_total(valuation),
             today_total=self.today_ccost.project_from_report(self.report_service, now_ms),
             today_label=self.today_ccost.label(now_ms),
-            today_pending=self.today_ccost.needs_history_refresh(now_ms),
+            today_pending=self.today_ccost.display_pending(now_ms),
             session_subtotals=session_subtotals,
         )
         self._last_projection = projection

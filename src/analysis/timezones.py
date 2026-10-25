@@ -152,6 +152,12 @@ def local_day_start_ms(timezone_id: str, *, now_ms: int | None = None) -> int:
     return int(midnight.timestamp() * 1000)
 
 
+def local_month_start_ms(timezone_id: str, *, now_ms: int) -> int:
+    zone = resolve_timezone(timezone_id)
+    local = datetime.fromtimestamp(now_ms / 1000, timezone.utc).astimezone(zone)
+    return int(datetime(local.year, local.month, 1, tzinfo=zone).timestamp() * 1000)
+
+
 def utc_month_start_ms(*, now_ms: int | None = None) -> int:
     now = datetime.now(tz=timezone.utc) if now_ms is None else datetime.fromtimestamp(now_ms / 1000, tz=timezone.utc)
     return int(datetime(now.year, now.month, 1, tzinfo=timezone.utc).timestamp() * 1000)

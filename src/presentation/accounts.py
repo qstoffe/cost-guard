@@ -13,6 +13,7 @@ from src.domain import AccountSnapshot, AccountUsageStatus, BillingComponent, Qu
 from src.reports.models import AccountProjection
 from src.numbers import consumed_capacity, remaining_capacity, exact_number
 from .terminal import AnsiStyler, StyledText
+from .token_mix import comparison_cost_text
 
 QUOTA_BAR_WIDTH = 10
 # Provider-normalized transient causes; never raw provider/stderr text.
@@ -73,7 +74,8 @@ def _native_amount(value: Decimal, unit: str | None, *, kind: str = "exact") -> 
 
 def quota_parts(component: QuotaComponent, timezone_id: str, *, now_ms: int,
                 compact: bool = False, label_width: int = 4, watch: bool = False,
-                omit_reset: bool = False, account_blocked: bool = False) -> tuple[StyledText, ...]:
+                 omit_reset: bool = False, account_blocked: bool = False,
+                 ccost: str | None = None) -> tuple[StyledText, ...]:
     """``account_blocked``: the account owns the restriction, so no per-window BLOCKED."""
     parts = []
     label = quota_label(component.label)
@@ -90,6 +92,9 @@ def quota_parts(component: QuotaComponent, timezone_id: str, *, now_ms: int,
     elif component.remaining is None and component.used is None and component.limit is None:
         if not blocked:
             parts.append(StyledText(((prefix(label) + "N/A", None),)))
+    if ccost is not None and component.duration_seconds and parts:
+        suffix = f" ({ccost})" if fraction is not None else f" · CCost: {ccost}"
+        parts[-1] = StyledText(parts[-1].parts + ((suffix, None),))
     if blocked:
         if parts:
             parts[-1] = StyledText(parts[-1].parts + ((" · BLOCKED", "copilotPausedWarning"),))
@@ -122,6 +127,13 @@ def quota_parts(component: QuotaComponent, timezone_id: str, *, now_ms: int,
             parts[-1] = StyledText(parts[-1].parts + ((" · " + native, None),))
         else:
             parts.append(StyledText(((prefix(label) + native, None),)))
+    if ccost is not None and not component.duration_seconds:
+        if parts:
+            parts[-1] = StyledText(parts[-1].parts + ((" · Today: " + ccost, None),))
+        else:
+            parts.append(StyledText(((prefix(label) + "CCost today: " + ccost, None),)))
+    elif ccost is not None and not parts:
+        parts.append(StyledText(((prefix(label) + "CCost: " + ccost, None),)))
     reset = None
     if component.reset_at_ms is not None:
         reset = format_reset(component.reset_at_ms, timezone_id, now_ms=now_ms, compact=compact)
@@ -191,7 +203,8 @@ def account_capacity_parts(account: AccountProjection, timezone_id: str, *, now_
         merge = watch and compact and pace is not None and sum(q.label == component.label for q in snapshot.quotas) == 1
         width = (primary_label_width or label_width) if index == 0 or aligned else (0 if compact else label_width)
         components = quota_parts(component, timezone_id, now_ms=now_ms, compact=compact, label_width=width,
-                                 watch=watch, omit_reset=merge, account_blocked=account_blocked)
+                                 watch=watch, omit_reset=merge, account_blocked=account_blocked,
+                                 ccost=_watch_ccost(account, component) if watch else None)
         if merge and components:
             components = (*components[:-1], StyledText(components[-1].parts + ((" · Remaining: " + pace_text(pace), None),)))
             merged_pace.add(pace)
@@ -219,7 +232,29 @@ def account_capacity_parts(account: AccountProjection, timezone_id: str, *, now_
         parts.append(StyledText((("STALE / RECONNECTING", "costQuotaWarning"),)))
     elif snapshot.availability in {"error", "stale", "unavailable", "partial"}:
         parts.append(StyledText(((snapshot.availability.upper(), "costQuotaWarning"),)))
+    if watch and not snapshot.quotas and "today" in dict(account.ccost_scopes):
+        value = dict(account.ccost_scopes)["today"]
+        parts.append(StyledText((("CCost today: " + (comparison_cost_text(value) if value is not None else "N/A"), None),)))
+    if watch and account.ccost_account_unknown:
+        parts.append(StyledText((("CCost: account unknown", None),)))
     return tuple(parts)
+
+
+def _watch_ccost(account: AccountProjection, component: QuotaComponent) -> str | None:
+    name = component.label if component.duration_seconds else "today"
+    scopes = dict(account.ccost_scopes)
+    if name not in scopes:
+        return None
+    value = scopes[name]
+    return comparison_cost_text(value) if value is not None else "N/A"
+
+
+def account_ccost_lines(account: AccountProjection) -> tuple[str, ...]:
+    lines = []
+    for name, value in account.ccost_scopes:
+        scope = name if name in {"today", "this month"} else "in " + quota_label(name) + " window"
+        lines.append("CCost " + scope + ": " + (comparison_cost_text(value) if value is not None else "N/A"))
+    return tuple(lines) + account.ccost_notes
 
 
 def _styled(value: StyledText, styler: AnsiStyler) -> str:

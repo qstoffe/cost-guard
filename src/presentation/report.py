@@ -12,7 +12,7 @@ from src.version import DISPLAY_VERSION, PRODUCT_NAME, RELEASE_DATE
 from src.numbers import ccost_amount
 
 from .terminal import AnsiStyler, Column, StyledText, fit, render_table, single_line, terminal_content_width, wrap_prose
-from .accounts import capacity_lines, money, quota_label
+from .accounts import capacity_lines, money, quota_label, account_ccost_lines
 from .token_mix import MIX_TERM, aligned_mix_cells, compact_tokens, mix_cells, packed_cells, total_cost_text
 from .definitions import concept_lines
 from .context_warnings import WARNING_ROLE, context_warning_text, next_ictx_ccost, threshold_multiplier_text, warning_explanation_lines
@@ -358,6 +358,8 @@ class ReportRenderer:
             if index:
                 self._write()
             self._write(account.label)
+            for line in account_ccost_lines(account):
+                self._prose(line, prefix="  ")
             if account.billed_today is not None:
                 self._write("  Billed today: " + money(account.billed_today))
             if account.billed_month is not None:
@@ -368,6 +370,9 @@ class ReportRenderer:
                 self._write(line)
             if account.account.reason:
                 self._prose(account.account.reason, prefix="  ")
+        if quota.accounts:
+            self._prose("Account CCost values available observed requests only: not native quota consumption, remaining allowance or billed spend. "
+                        "Overlapping windows must not be added. Missing/deleted history cannot be reconstructed; ? marks partial pricing.")
 
     def _render_model_token_mix(self, report: ReportProjection) -> None:
         self._write()

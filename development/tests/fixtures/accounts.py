@@ -5,7 +5,8 @@ from decimal import Decimal
 
 from src.domain import AccountRef, AccountSnapshot, IntegrationHealth, QuotaComponent
 
-_PROVIDER_NAMES = {"openai": "OpenAI", "github-copilot": "GitHub Copilot", "anthropic": "Anthropic"}
+_PROVIDER_NAMES = {"openai": "OpenAI", "github-copilot": "GitHub Copilot", "anthropic": "Anthropic",
+                   "claude-code": "Claude Code"}
 
 
 def account(provider="openai", identity="a", *, label=None, plan="Plus", source="source"):

@@ -242,10 +242,10 @@ class AdapterTests(unittest.TestCase):
                                                     scope="model", model_id="claude-test"),))
         entries = tuple(replace(e, model=replace(e.model, provider="openai"), account_ref=a.ref) for e in trace_entries(make_snapshot()))
         rows = account_projections((a,), entries, FakePricingProvider().catalog, now_ms=4000, today_start_ms=0, month_start_ms=0)
-        self.assertIsNone(rows[0].ccost_scopes[0][1], "All observed requests use another model")
+        self.assertIsNone(dict(rows[0].ccost_scopes)["Model weekly"], "All observed requests use another model")
         a = replace(a, quotas=(replace(a.quotas[0], model_id=None),))
         rows = account_projections((a,), entries, FakePricingProvider().catalog, now_ms=4000, today_start_ms=0, month_start_ms=0)
-        self.assertIsNone(rows[0].ccost_scopes[0][1], "Quota label alone cannot prove model scope")
+        self.assertIsNone(dict(rows[0].ccost_scopes)["Model weekly"], "Quota label alone cannot prove model scope")
 
     def test_v2_inventory_reads_multiple_accounts_without_mutation_or_secrets(self):
         with tempfile.TemporaryDirectory() as td:

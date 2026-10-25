@@ -104,17 +104,13 @@ def comparison_cost_text(cost: ComparisonCost) -> str:
     return ("" if cost.complete else "?") + ccost_amount(cost.known_ccost)
 
 
-TODAY_EXCLUSION = "Deleted sessions before Watch start are not included in Today"
-
-
 def watch_total_lines(mix: TokenMix, today: ComparisonCost, today_label: str = "Today", *,
                       width: int | None = None, pending: bool = False) -> list[str]:
     """Retained run total and deletion-resilient current-day CCost; one line when it fits."""
     run = "0" if not mix.request_count else total_cost_text(mix)
     daily = "Pending" if pending else comparison_cost_text(today)
-    values = f"CCost · Watch: {run} · {today_label}: {daily}"
-    line = values + " · " + TODAY_EXCLUSION
-    return [line] if width is None or len(line) <= width else [values, "  " + TODAY_EXCLUSION]
+    label = "Total today" if today_label == "Today" else "Total " + today_label
+    return [f"CCost · Watch: {run} · {label}: {daily}"]
 
 
 def token_mix_line(scope: str, mix: TokenMix) -> str:

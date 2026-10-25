@@ -7,6 +7,7 @@ from decimal import Decimal
 import io
 import tempfile
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from development.tests.fixtures.session_snapshots import make_snapshot
@@ -75,6 +76,28 @@ class WatchTodayCCostTests(unittest.TestCase):
         self.assertEqual(first, self.project(tracker, 300))
         self.assertEqual((Decimal(20), 1), (first.known_ccost, first.observed_requests))
 
+    def test_refresh_keeps_last_complete_value_then_atomically_accepts_a_correction(self):
+        tracker = WatchTodayCCost("UTC")
+        service = SimpleNamespace(token_reference_valuation=lambda: reference_value)
+        self.assertTrue(tracker.display_pending(200))
+        tracker.observe((entry(20, 100),), now_ms=200, historical=True)
+        published = tracker.project_from_report(service, 200)
+        for amount in (25, 30, 15):
+            tracker.defer_history((), 200)
+            tracker.observe((entry(amount, 100),), now_ms=200)
+            self.assertFalse(tracker.display_pending(200))
+            self.assertEqual(published, tracker.project_from_report(service, 200))
+        # A failed enrichment does not clear the last publication either.
+        service.watch_history_candidates = lambda *args, **kwargs: (_ for _ in ()).throw(OSError("offline"))
+        service.set_now_ms = lambda now: None
+        with self.assertRaises(OSError):
+            tracker.advance_history(service, 200)
+        self.assertEqual(published, tracker.project_from_report(service, 200))
+        tracker.observe((entry(15, 100),), now_ms=200, historical=True)
+        self.assertEqual(Decimal(15), tracker.project_from_report(service, 200).ccost)
+        self.assertTrue(tracker.display_pending(epoch_ms(1970, 1, 2)))
+        self.assertEqual(ComparisonCost(), tracker.project_from_report(service, epoch_ms(1970, 1, 2)))
+
     def test_new_observations_deduplicate_and_reconcile_telemetry(self):
         tracker = WatchTodayCCost("UTC")
         partial = entry(10, 100, message_id=None, known_fields=("input",))
@@ -136,18 +159,17 @@ class WatchTodayCCostTests(unittest.TestCase):
         self.assertEqual("?2", comparison_cost_text(ComparisonCost(Decimal("1.1"), 2, 1)))
         lines = watch_total_lines(TokenMix(), ComparisonCost(Decimal(2458), 1, 1), width=120)
         self.assertEqual(
-            ["CCost · Watch: 0 · Today: 2458 · Deleted sessions before Watch start are not included in Today"], lines
+            ["CCost · Watch: 0 · Total today: 2458"], lines
         )
         night = watch_total_lines(TokenMix(), ComparisonCost(Decimal("1.1"), 2, 1), "2026-10-15")
         self.assertEqual(
-            ["CCost · Watch: 0 · 2026-10-15: ?2 · Deleted sessions before Watch start are not included in Today"],
+            ["CCost · Watch: 0 · Total 2026-10-15: ?2"],
             night,
         )
 
-    def test_narrow_terminal_moves_only_the_explanation_to_a_continuation_line(self):
+    def test_narrow_terminal_never_adds_a_deletion_explanation(self):
         lines = watch_total_lines(TokenMix(), ComparisonCost(Decimal(2458), 1, 1), "2026-10-15", width=80)
-        self.assertEqual(["CCost · Watch: 0 · 2026-10-15: 2458",
-                          "  Deleted sessions before Watch start are not included in Today"], lines)
+        self.assertEqual(["CCost · Watch: 0 · Total 2026-10-15: 2458"], lines)
 
     def test_today_label_shows_local_date_from_midnight_until_three(self):
         tracker = WatchTodayCCost("Europe/Stockholm")
@@ -195,7 +217,8 @@ class WatchTodayCCostTests(unittest.TestCase):
                 self.assertTrue(watch._needs_full_render(drawn, current, WatchCycle(current, (), ())))
                 output = io.StringIO()
                 WatchRenderer(config, stream=output, interactive=False).render(current)
-                self.assertIn(f"CCost · Watch: 0 · {label}: ", output.getvalue())
+                total_label = "Total today" if label == "Today" else "Total " + label
+                self.assertIn(f"CCost · Watch: 0 · {total_label}: ", output.getvalue())
                 drawn = current
 
     def test_unchanged_status_projection_does_not_recalculate_retained_history(self):
@@ -229,8 +252,8 @@ class WatchTodayCCostTests(unittest.TestCase):
             WatchRenderer(config, stream=output, interactive=False).render(after_delete)
             line = next(value for value in output.getvalue().splitlines()
                         if value.startswith("CCost · Watch:"))
-            self.assertIn(f" · {after_delete.today_label}: ", line)
-            self.assertTrue(line.endswith(" · Deleted sessions before Watch start are not included in Today"), line)
+            self.assertIn(f" · Total {after_delete.today_label}: ", line)
+            self.assertNotIn("Deleted sessions", output.getvalue())
             self.assertNotIn("(", line)
             lines = output.getvalue().splitlines()
             mix_index = next(index for index, value in enumerate(lines) if value.startswith("Token Mix %"))

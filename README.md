@@ -169,7 +169,7 @@ Reports show `OpenCode not found` only when selection fails and no PATH executab
 
 ## Normal report
 
-`python cost-guard.py` shows CCost/Token Mix %/Relative CCost definitions, models/notices and `Accounts Overview`. Token Mix covers the 100 latest visible priced prompts (including running/interrupted/child work), skipping unpriceable ones into older history: count, volume, shares and CCost from priced requests only, without `?`. No monthly usage, prompt detail or graph is built.
+`python cost-guard.py` shows definitions, models/notices and `Accounts Overview`. Token Mix uses the latest 100 visible priced prompts, including running/child work. Account CCost independently loads relevant local-day/window/month history, without changing that sample or adding prompt detail/graphs.
 
 ### Model comparison
 
@@ -249,6 +249,8 @@ Shared read-only discovery skips absent providers. Four quota workers overlap an
 
 Accounts share aligned 10-cell remaining bars, native values, resets and narrow fallback. Bars require real provider-reported capacity (a denominator or explicit percentage); balance/spend alone stays textual and is never CCost.
 
+Reports explain daily/window/local-month CCost and provider/account provenance. CCost is neither billing nor quota consumption; ambiguous accounts stay unknown. See [period accounting](docs/usage-and-cost.md#account-period-ccost).
+
 **OpenRouter** shows authenticated-key Day/Week/Month spend and genuine key limits; **DeepSeek** shows separate native balances without a fabricated bar; **MiniMax Token Plan** supports native subscription windows, not entitlement inferred from a generic key. See [account support](docs/account-support.md) for all providers, Copilot Remaining/overage semantics, alignment, resets and limitations.
 
 ## Watch
@@ -274,18 +276,20 @@ Watch's first view never waits for quotas. An account-only scheduler refreshes h
 
 Session `Σ` sums its displayed prompt/event CCost before rounding, preserving `?`/`N/A`. Native non-billable compactions contribute zero with blank row cost. Rounded row strings need not sum to the subtotal.
 
-`Token Mix % · N prompts` shows run-scoped unique prompts, shares and CCost of priced requests only, without volume/bar. Startup-running requests, between-poll completions, child work and compactions qualify; completed pre-Watch history does not. The next line, `CCost · Watch: <run> · Today: <day> · Deleted sessions before Watch start are not included in Today`, shows the Watch total CCost: qualifying run usage (zero when none; `?` when partly unpriced), unchanged by eviction, disappearance, resync or moves. From local midnight until 03:00 (configured timezone) `Today` reads as the current local date `YYYY-MM-DD`, switching live even while idle; narrow terminals move only the explanation to a continuation line. Today is available usage since local midnight plus deduplicated requests observed by this Watch, retained if their sessions disappear. Midnight starts a new daily scope; restart rebuilds from available history, so deletions before observation cannot be recovered. No account provider or persistent ledger is required. It may differ from `Σ`: mid-prompt startup can show `Σ 78`, row `78`, run total `59`; eviction changes only row subtotals.
+`Token Mix % · N prompts` shows run-scoped unique prompts, shares and CCost of priced requests only. Startup-running requests, between-poll completions, child work and compactions qualify; completed pre-Watch history does not. `CCost · Watch: <run> · Total today: <day>` retains run usage across eviction, disappearance, resync and moves (zero when empty; `?` when partly priced). Today combines available local-day history with deduplicated requests observed and retained by this Watch. Requests deleted before observation cannot be reconstructed; restart uses available history, not a ledger. From local midnight until 03:00, `Total today` reads `Total YYYY-MM-DD`, even while idle. Row `Σ` can differ: startup mid-prompt may show row/Σ `78` but run `59`.
 
-Watch first renders required activity with `Today: Pending`, then automatically publishes exact local-day accounting in bounded steps, independently of native quota refresh. It does not analyze month history merely for Today. All running candidates remain discoverable regardless of age or row cap; scoped Watch still accounts for global Today.
+First daily accounting may show Pending; refreshes/failures retain the complete same-day value until atomic replacement, allowing corrections. Midnight starts a new scope. Bounded enrichment is quota-independent; Today needs no month scan. All running candidates remain discoverable; scoped Watch keeps global Today.
 
 Any account count uses compact rows when they fit, then split rows, otherwise individual wrapped blocks. Resets use `Reset@...`; fixed quotas with Remaining omit duplicate compact reset text, retained in reports/narrow fallback:
 
 ```text
-GitHub Copilot Pro+   Month  ██████████ 100% · 7000/7000 · Remaining: 259/day · 350/workday
-OpenAI Plus          5h     ████████░░  82% · Reset@22:49 | Week ██████████  98% · Reset@Sunday 07:59
+GitHub Copilot Pro+   Month  ██████████ 100% · 7000/7000 · Today: 1467 · Remaining: 259/day · 350/workday
+OpenAI Plus          5h     ████████░░  82% (651) · Reset@22:49 | Week ██████████  98% (25407) · Reset@Sunday 07:59
 ```
 
-`Watch:` stays last. Startup progress stops before dashboard/recovery output. Watch buffers frames, skips identical output and patches changed rows when they fit. Wrapped or taller-than-viewport dashboards clear and rebuild the screen/scrollback, keeping only the current frame scrollable instead of accumulating old title/table fragments; returning from overflow also clears stale fragments. Safe resizes overwrite without clearing; shrinking frames erase their old tail. Countdowns update only the status row. `Today: Pending` still precedes daily-history completion. Redirected output stays plain.
+Per-account `Today` is daily CCost; percentage parentheses are window CCost, not utilization. Unknowns stay `N/A`/`?`, without fake bars. Watch has no month-to-date row; normal reports explain provenance/trailing lookbacks.
+
+`Watch:` stays last. Startup progress stops before dashboard/recovery output. Watch buffers frames, skips identical output and patches changed rows when they fit. Wrapped or taller-than-viewport dashboards clear and rebuild the screen/scrollback, keeping only the current frame scrollable instead of accumulating old title/table fragments; returning from overflow also clears stale fragments. Safe resizes overwrite without clearing; shrinking frames erase their old tail. Countdowns update only the status row. Pending appears only before the first complete publication for a local day. Redirected output stays plain.
 
 `[ABORTED by …]` names proven user/quota/tool-call/step/rate-limit causes; unknown stays `[ABORTED]`. V2 live `reason: user` is matched to the same persisted interruption and retained only in bounded process memory, not reconstructed from older history or after restart. `[ENDED after tool calls]` never guesses a limit. Labels outlast red emphasis. Quotas become stale after a failed refresh or an observation age over 60s, and expire after five minutes, including resume. Transient failures get bounded 5/10/20s retries; auth/capability failures get no fast retry.
 
@@ -356,7 +360,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.73 (2026-10-25):** Watch history retains newly finished prompts by supported terminal recency after highlight expiry. Protection and prompt order stay unchanged; unknown ends use the start fallback. See [Watch lifecycle](docs/watch-activity.md) and [history](VERSION_HISTORY.md).
+**v80.74 (2026-10-25):** Stable Watch daily publication and compact account-period CCost, with explanatory calendar-month comparison in normal reports. Provider estimates never prove account billing or quota consumption. See [period accounting](docs/usage-and-cost.md#account-period-ccost) and [history](VERSION_HISTORY.md).
 
 Recent predecessors added buffered Watch/startup progress and launcher feedback ([evidence and limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence)), independent historical context/current anchors, nonblocking metadata, quota histories, execution Duration and retained daily CCost. v80.0 is the Python 3.11+ public baseline; see [version history](VERSION_HISTORY.md). Claude quotas remain experimental; terminal visuals, restart and sleep/wake need separate live evidence.
 

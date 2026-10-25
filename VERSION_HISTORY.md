@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.74 — 2026-10-25
+
+- Watch keeps the last fully published local-day CCost during later enrichment, accepting completed corrections atomically and resetting truthfully at midnight. Its overall line now uses `Total today` without a deletion disclaimer.
+- Account rows show daily CCost beside monthly native quotas and independent CCost parentheses beside rolling-window percentages. Normal reports explain period/account/provider provenance and include configured-local calendar-month CCost for all detected providers. Ambiguous accounts stay unallocated; reference valuation is never billing or quota consumption. Period indexing reuses canonical deduplicated valuation; Watch enriches relevant windows in bounded slices without a monthly comparison row or quota-triggered history rescans.
+
 ## v80.73 — 2026-10-25
 
 - Fixed global Watch history cap selection to use supported terminal ends for success, abort and error, independently of prompt/compaction display order. Long-running prompts remain eligible at exact highlight expiry; newer completions still evict normally. Unknown ends retain deterministic start ranking without Watch-local timestamps. Earlier startup selection, scoped Watch, Duration, costs, quotas and source read-only behavior are unchanged.

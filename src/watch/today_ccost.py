@@ -1,13 +1,12 @@
 """Process-local retention for the current local day's deduplicated CCost."""
 from __future__ import annotations
 
-from dataclasses import replace
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Iterable, Sequence
 
 from src.analysis.models import TraceEntry
 from src.analysis.timezones import local_day_start_ms, resolve_timezone
-from src.analysis.token_mix import MIX_FIELDS
+from src.analysis.period_ccost import reconcile_usage
 from src.analysis.valuation import ComparisonCost, comparison_cost, unique_usage
 from src.domain.ccost import ReferenceValuation
 
@@ -35,6 +34,7 @@ class WatchTodayCCost:
         self._entries: dict[RequestIdentity, TraceEntry] = {}
         self._stepped: set[BaseIdentity] = set()
         self._total = ComparisonCost()
+        self._published: ComparisonCost | None = None
         self._valuation: ReferenceValuation | None = None
         self._dirty = True
         self._pending_history: tuple[NormalizedSession, ...] = ()
@@ -47,6 +47,10 @@ class WatchTodayCCost:
     def needs_history_refresh(self, now_ms: int) -> bool:
         """Refresh historical candidates once for a new local date, not per status wake."""
         return self._history_day_start_ms != local_day_start_ms(self.timezone_id, now_ms=now_ms)
+
+    def display_pending(self, now_ms: int) -> bool:
+        self._rollover(local_day_start_ms(self.timezone_id, now_ms=now_ms))
+        return self._published is None and self.needs_history_refresh(now_ms)
 
     def refresh_due(self, now_ms: int, last_refresh_ms: int, immediate: bool) -> bool:
         """Refresh on explicit changes/date rollover or the existing five-minute cadence."""
@@ -144,10 +148,10 @@ class WatchTodayCCost:
     def project_from_report(self, report_service: ReportService, now_ms: int) -> ComparisonCost:
         self._rollover(local_day_start_ms(self.timezone_id, now_ms=now_ms))
         if self.needs_history_refresh(now_ms):
-            # Hidden behind explicit Pending; do not rebuild a partial daily
-            # total after every slice of a large accounting plan.
-            return ComparisonCost()
-        return self.project(now_ms=now_ms, valuation=report_service.token_reference_valuation())
+            # A refresh builds privately; only the first load has no published value.
+            return self._published or ComparisonCost()
+        self._published = self.project(now_ms=now_ms, valuation=report_service.token_reference_valuation())
+        return self._published
 
     def observe(self, entries: Iterable[TraceEntry], *, now_ms: int, historical: bool = False) -> None:
         day_start_ms = local_day_start_ms(self.timezone_id, now_ms=now_ms)
@@ -170,6 +174,7 @@ class WatchTodayCCost:
             return
         self._day_start_ms = day_start_ms
         self._history_day_start_ms = None
+        self._published = None
         self._entries.clear()
         self._stepped.clear()
         self._dirty = True
@@ -189,22 +194,6 @@ class WatchTodayCCost:
             del self._entries[identity]
             self._dirty = True
 
-    @staticmethod
-    def _reconcile(previous: TraceEntry | None, entry: TraceEntry) -> TraceEntry:
-        if previous is None:
-            return entry
-        old = previous.tokens
-        new = entry.tokens
-        usage = replace(
-            new,
-            **{name: getattr(old, name) for name in MIX_FIELDS
-               if name not in new.known_fields and name in old.known_fields},
-            reasoning=old.reasoning if "output" not in new.known_fields else new.reasoning,
-            known_fields=tuple(name for name in MIX_FIELDS
-                               if name in new.known_fields or name in old.known_fields),
-        )
-        return replace(entry, tokens=usage)
-
     def _observe_entry(self, entry: TraceEntry, day_start_ms: int, now_ms: int) -> None:
         identity = self._identity(entry)
         base = self._base_identity(entry)
@@ -218,7 +207,7 @@ class WatchTodayCCost:
             self._remove(identity)
             return
         previous = self._entries.get(identity)
-        updated = self._reconcile(previous, entry)
+        updated = reconcile_usage(previous, entry)
         if previous != updated:
             self._entries[identity] = updated
             self._dirty = True
