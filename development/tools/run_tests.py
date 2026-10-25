@@ -57,6 +57,7 @@ QUICK_PATTERNS: tuple[str, ...] = (
     "test_watch_grouping.py",
     "test_watch_session_groups.py",
     "test_watch_session_retention.py",
+    "test_watch_terminal_recency.py",
     "test_watch_idle_accounts.py",
     "test_watch_subtotals.py",
     "test_watch_today_ccost.py",

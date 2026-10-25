@@ -5,6 +5,8 @@ one of its prompt rows is selected; protected (running or still-highlighted)
 rows always survive and the newest unprotected rows fill the remaining global
 capacity. Startup Earlier sessions are a one-time baseline chosen from actual
 prompt start times, never from catalog metadata, polling or quota refreshes.
+The tracker supplies history's supported-end ranking separately from its
+prompt/compaction display sequence.
 """
 from __future__ import annotations
 
