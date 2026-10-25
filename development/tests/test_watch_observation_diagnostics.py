@@ -9,9 +9,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from development.fixtures.opencode_v2_service import source_with_current_service
-from development.fixtures.session_snapshots import make_uncompacted_snapshot
-from development.fixtures.watch_runtime import MutableSource, make_service
+from development.tests.fixtures.opencode_v2_service import source_with_current_service
+from development.tests.fixtures.session_snapshots import make_uncompacted_snapshot
+from development.tests.fixtures.watch_runtime import MutableSource, make_service
 from src.watch import WatchCoordinator
 from src.watch import coordinator as watch_coordinator
 from src.watch import observation_diagnostics as observations

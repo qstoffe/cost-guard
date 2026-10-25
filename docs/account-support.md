@@ -26,7 +26,7 @@ Positive reported overage allowances show separately as `Extra credit limit N` (
 
 ## OpenAI and Anthropic / Claude Code
 
-OpenAI's fail-soft subscription reader normalizes native rolling/model quota windows and extra credits independently of configured API accounts. Anthropic API accounts are separate from optional Claude Code CLI-owned subscriptions. No current login attributes history; credentials are never refreshed/written by Cost Guard. See [Claude integration and limits](../development/claude-code.md).
+OpenAI's fail-soft subscription reader normalizes native rolling/model quota windows and extra credits independently of configured API accounts. Anthropic API accounts are separate from optional Claude Code CLI-owned subscriptions. No current login attributes history; credentials are never refreshed/written by Cost Guard. See [Claude integration and limits](../development/architecture/modules/claude-code.md).
 
 ## OpenRouter
 
@@ -54,7 +54,7 @@ Four bounded provider workers overlap normal-report analysis (45-second attempt 
 
 `openrouterQuota`, `deepseekQuota` and `minimaxQuota` expose only `enabled` / `authJsonPath`. Existing Copilot/OpenAI/Anthropic controls are unchanged. Account refresh is independent of source activity; redraws do not trigger provider requests. Existing stale retention, bounded recovery retries and isolated auth failures apply per account.
 
-Diagnostics reports sanitized discovery/category, request/HTTP/schema classification, component categories and ignored/malformed data, never keys, headers, raw responses or account labels/locators. New providers can be tested with synthetic documented responses without personal accounts; a passing fixture is not authenticated live-account evidence. See [maintained HTTP account developer contracts](../development/simple-http-accounts.md) for endpoints, response evidence, security limits and adding providers.
+Diagnostics reports sanitized discovery/category, request/HTTP/schema classification, component categories and ignored/malformed data, never keys, headers, raw responses or account labels/locators. New providers can be tested with synthetic documented responses without personal accounts; a passing fixture is not authenticated live-account evidence. See [maintained HTTP account developer contracts](../development/architecture/modules/simple-http-accounts.md) for endpoints, response evidence, security limits and adding providers.
 
 ## Watch freshness budget
 

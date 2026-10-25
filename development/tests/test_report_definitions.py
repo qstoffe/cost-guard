@@ -6,13 +6,13 @@ from decimal import Decimal
 import re
 import unittest
 
-from development.fixtures.synthetic_month import SyntheticMonthSource
-from development.fixtures import compact_reports as compact
-from development.fixtures.session_snapshots import make_snapshot
+from development.tests.fixtures.synthetic_month import SyntheticMonthSource
+from development.tests.fixtures import compact_reports as compact
+from development.tests.fixtures.session_snapshots import make_snapshot
 from src.reports.sampling import latest_prompts, latest_token_prompts
-from development.fixtures.compact_reports import Availability, rendered
-from development.fixtures.quota_rendering import quotas, rolling
-from development.fixtures.watch_runtime import MutableSource
+from development.tests.fixtures.compact_reports import Availability, rendered
+from development.tests.fixtures.quota_rendering import quotas, rolling
+from development.tests.fixtures.watch_runtime import MutableSource
 from src.analysis.token_mix import TokenMix, priced_token_mix, token_mix
 from src.cli import CommandKind, help_text, parse_command
 from src.domain import ModelRef, TokenUsage

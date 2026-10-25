@@ -7,8 +7,8 @@ from types import SimpleNamespace
 import re
 import unittest
 
-from development.fixtures.compact_reports import Availability, rendered, report_service
-from development.fixtures.watch_runtime import MutableSource
+from development.tests.fixtures.compact_reports import Availability, rendered, report_service
+from development.tests.fixtures.watch_runtime import MutableSource
 from src.analysis.comparisons import model_comparison_rows
 from src.domain import ModelPricing, ModelRef, PricingTier
 from src.pricing.catalog import PricingCatalog

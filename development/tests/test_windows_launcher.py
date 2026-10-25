@@ -18,7 +18,7 @@ class WindowsLauncherTests(unittest.TestCase):
 
     def test_all_windows_entrypoints_select_shell_with_fallback(self):
         for path in ("windows/Cost Guard.cmd", "windows/Cost Guard Watch.cmd",
-                     "development/windows/Cost Guard Diagnostics.cmd"):
+                     "development/user-tools/diagnostics/windows/Cost Guard Diagnostics.cmd"):
             with self.subTest(path=path):
                 text = (ROOT / path).read_text(encoding="utf-8")
                 self.assertIn("where pwsh.exe >nul 2>nul", text)

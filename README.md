@@ -58,7 +58,7 @@ Equivalent launchers are under `macos/`:
 Prefer `git clone` on macOS: Git records launchers as executable. Source ZIPs carry executable metadata, but extraction tools may not preserve it. After extracting, run from the repository root:
 
 ```sh
-chmod +x macos/*.command development/macos/*.command
+chmod +x macos/*.command development/user-tools/diagnostics/macos/*.command
 ```
 
 Use Finder's **Open** for quarantine prompts.
@@ -110,7 +110,7 @@ See [Token Mix reference](#token-mix--by-model---token-mix). Screenshots are ill
 - Optional Copilot quota reuses OpenCode OAuth in memory, without login, credential writes or GitHub CLI.
 - Optional OpenAI subscription quota is fail-soft. Read-only V2 accounts take priority; legacy `auth.json` applies only without V2 rows. Credentials are never refreshed, rotated or written.
 - Configured OpenAI/Anthropic API accounts are distinct from **Claude Code subscriptions**, discovered through the optional installed `claude` CLI. Cost Guard never reads/copies Claude credentials or attributes current login to history.
-- Claude Code quotas use optional experimental SDK-control metadata (no prompts, transcript scans or new dependencies); accounts stay visible when quotas fail. Successful retrieval does not guarantee current upstream values. Diagnostics separates retrieval, value changes and Watch publication with bounded observations. See [Claude integration and limitations](development/claude-code.md).
+- Claude Code quotas use optional experimental SDK-control metadata (no prompts, transcript scans or new dependencies); accounts stay visible when quotas fail. Successful retrieval does not guarantee current upstream values. Diagnostics separates retrieval, value changes and Watch publication with bounded observations. See [Claude integration and limitations](development/architecture/modules/claude-code.md).
 - OpenRouter/DeepSeek accounts reuse configured OpenCode API keys through maintained read-only HTTPS endpoints. MiniMax Token Plan uses its dedicated subscription integration; generic API keys do not establish subscription entitlement.
 - No third-party Python packages are required.
 
@@ -340,7 +340,7 @@ SQLite WAL, short transactions and bounded waits support concurrent report/globa
 
 ## Diagnostics for environment-specific problems
 
-For troubleshooting, use `Cost Guard Diagnostics` under `development/windows/` or `development/macos/`, or run from the repository root:
+For troubleshooting, use `Cost Guard Diagnostics` under `development/user-tools/diagnostics/windows/` or `development/user-tools/diagnostics/macos/`, or run from the repository root:
 
 ```text
 python development/tools/collect_diagnostics.py
@@ -356,9 +356,9 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.70 (2026-10-23):** Added [FR 0140](development/backlog/todo/0140-watch-ccost-per-subscription-and-stable-today.md) for shorter Watch CCost labels, stable Today on refresh and provider/subscription CCost by quota period. This is a pending FR, not implemented behavior. Previously added [FR 0130](development/backlog/todo/0130-watch-history-terminal-recency.md) remains pending. [Installed OpenCode Toolkit skills](https://github.com/qstoffe/opencode-toolkit/tree/main/skills/shared-repo-contract) govern FR authoring; [version history](VERSION_HISTORY.md) records product releases.
+**v80.71 (2026-10-25):** Adopted Toolkit's development layout. Cost Guard owns its version policy. Diagnostics launchers and failure hints now use `development/user-tools/diagnostics/`. Watch, accounts and costs are unchanged; feature requests remain pending. See [development](development/architecture/OVERVIEW.md) and [version history](VERSION_HISTORY.md).
 
-Recent predecessors added buffered Watch/startup progress and launcher feedback ([evidence and limits](development/history-loading.md#startup-presentation-and-launcher-evidence)), independent historical context/current anchors, nonblocking metadata, quota histories, execution Duration and retained daily CCost. v80.0 is the Python 3.11+ public baseline; see [version history](VERSION_HISTORY.md). Claude quotas remain experimental; terminal visuals, restart and sleep/wake need separate live evidence.
+Recent predecessors added buffered Watch/startup progress and launcher feedback ([evidence and limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence)), independent historical context/current anchors, nonblocking metadata, quota histories, execution Duration and retained daily CCost. v80.0 is the Python 3.11+ public baseline; see [version history](VERSION_HISTORY.md). Claude quotas remain experimental; terminal visuals, restart and sleep/wake need separate live evidence.
 
 Product versions identify code state; they do not imply a Git tag, release ZIP or GitHub Release. Packaged GitHub Releases are currently paused. Recommending them at a slower/stable cadence requires an explicit policy change; version numbers never trigger it automatically.
 
@@ -366,7 +366,7 @@ Product versions identify code state; they do not imply a Git tag, release ZIP o
 
 The installed OpenCode Toolkit `/repo-backlog` command and its actively loaded skills exclusively govern development workflow. Verify the actual working tree, not ZIPs. Development-only changes follow actively loaded Toolkit skills without Cost Guard product tests, package validation or product versioning.
 
-[Code/test map and inventory review](development/CODE_MAP.md); refresh with `python development/tools/code_inventory.py --json`.
+[Code/test map and inventory review](development/architecture/modules/CODE_MAP.md); refresh with `python development/tools/code_inventory.py --json`.
 
 ```text
 python development/tools/run_tests.py --suite quick

@@ -9,8 +9,8 @@ import tempfile
 import unittest
 from unittest import mock
 
-from development.fixtures.session_snapshots import make_snapshot, message, MODEL
-from development.fixtures.watch_runtime import MutableSource, make_service
+from development.tests.fixtures.session_snapshots import make_snapshot, message, MODEL
+from development.tests.fixtures.watch_runtime import MutableSource, make_service
 from src import bootstrap
 from src.config import load_configuration
 from src.domain import CostKind, CostObservation, MessageRole, TokenUsage

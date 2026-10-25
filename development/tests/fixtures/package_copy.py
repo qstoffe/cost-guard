@@ -7,7 +7,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 
 
 def run_python(
@@ -46,5 +46,5 @@ def make_package(tmp: str, fixture: str | None = None) -> Path:
     (package / "config").mkdir()
     shutil.copy2(ROOT / "config/default-config.jsonc", package / "config/default-config.jsonc")
     if fixture:
-        shutil.copy2(ROOT / "development/fixtures/config" / fixture, package / "config/user-config.jsonc")
+        shutil.copy2(ROOT / "development/tests/fixtures/config" / fixture, package / "config/user-config.jsonc")
     return package

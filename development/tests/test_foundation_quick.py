@@ -26,6 +26,20 @@ def run_python(*args: str) -> subprocess.CompletedProcess[str]:
 
 
 class BootstrapQuickTests(unittest.TestCase):
+    def test_inventory_counts_nested_fixture_modules_once(self) -> None:
+        from development.tools.code_inventory import inventory
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            fixture = root / "development/tests/fixtures/example.py"
+            fixture.parent.mkdir(parents=True)
+            fixture.write_text('"""Synthetic fixture."""\n', encoding="utf-8")
+
+            data = inventory(root)
+
+        self.assertEqual(["development.tests.fixtures.example"],
+                         [module["module"] for module in data["modules"]])
+
     def test_http_product_identifiers_follow_authoritative_version(self) -> None:
         from src.accounts.github_copilot import _default_json_get
         from src.accounts.openai_subscription import _default_usage_get

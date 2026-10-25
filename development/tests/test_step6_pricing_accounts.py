@@ -353,7 +353,7 @@ class AccountProviderTests(unittest.TestCase):
         self.assertEqual(Decimal("12.5"), snap.credit_balance)
 
     def test_sanitized_plus_usage_fixture_maps_native_windows(self) -> None:
-        fixture = Path(__file__).resolve().parents[1] / "fixtures/openai/usage-plus.json"
+        fixture = Path(__file__).resolve().parent / "fixtures/openai/usage-plus.json"
         snap = convert_usage_payload(json.loads(fixture.read_text(encoding="utf-8")), fetched_at_ms=1000)
         self.assertEqual("plus", snap.plan)
         self.assertEqual(["5-hour", "weekly"], [window.name for window in snap.windows])
@@ -363,7 +363,7 @@ class AccountProviderTests(unittest.TestCase):
         self.assertEqual(Decimal(0), snap.credit_balance)
 
     def test_active_v2_openai_oauth_supplies_quota_without_auth_json(self) -> None:
-        fixture = Path(__file__).resolve().parents[1] / "fixtures/openai/usage-plus.json"
+        fixture = Path(__file__).resolve().parent / "fixtures/openai/usage-plus.json"
         payload = json.loads(fixture.read_text(encoding="utf-8"))
         with tempfile.TemporaryDirectory() as td:
             db = Path(td) / "opencode.db"

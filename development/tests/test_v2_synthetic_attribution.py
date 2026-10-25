@@ -4,7 +4,7 @@ from __future__ import annotations
 import unittest
 
 from development.tests.test_effort_presentation import project
-from development.fixtures.opencode_v2_service import source_with_current_service
+from development.tests.fixtures.opencode_v2_service import source_with_current_service
 
 
 def assistant(message_id: str, created: int, *, completed: int | None = None, tokens: int = 100) -> dict:

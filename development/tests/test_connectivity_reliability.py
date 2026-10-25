@@ -17,7 +17,7 @@ import urllib.error
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from development.fixtures.opencode_v2_service import FakeV2Service, fixture, source_with_service
+from development.tests.fixtures.opencode_v2_service import FakeV2Service, fixture, source_with_service
 from development.tools.diagnostic_connectivity import connectivity_summary
 from development.tools.diagnostic_logs import create_bundle
 from src import bootstrap

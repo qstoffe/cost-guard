@@ -5,8 +5,8 @@ from dataclasses import replace
 from decimal import Decimal
 from pathlib import Path
 
-from development.fixtures.session_snapshots import make_snapshot
-from development.fixtures.report_runtime import FakeAccountProvider, FakePricingProvider
+from development.tests.fixtures.session_snapshots import make_snapshot
+from development.tests.fixtures.report_runtime import FakeAccountProvider, FakePricingProvider
 from src.accounts.acquisition import AccountUpdate
 from src.cache import CacheDatabase, CacheRepository
 from src.config import load_configuration
@@ -16,7 +16,7 @@ from src.reports.models import AccountProjection
 from src.sources.errors import SourceResyncRequiredError
 from src.sources.selection import SourceSelection
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 
 
 class MutableSource:

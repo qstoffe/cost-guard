@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from development.fixtures.package_copy import make_package
+from development.tests.fixtures.package_copy import make_package
 from src.config import ConfigError, load_configuration, merge_config, read_jsonc, remove_json_comments
 
 

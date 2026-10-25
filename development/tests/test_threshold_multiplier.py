@@ -7,8 +7,8 @@ import unittest
 from dataclasses import replace
 from decimal import Decimal
 
-from development.fixtures.session_snapshots import make_uncompacted_snapshot
-from development.fixtures.watch_runtime import MutableSource, make_service
+from development.tests.fixtures.session_snapshots import make_uncompacted_snapshot
+from development.tests.fixtures.watch_runtime import MutableSource, make_service
 from src.analysis.comparisons import threshold_cost_multiplier
 from src.domain import ModelPricing, ModelRef, PricingTier, TokenUsage
 from src.presentation import ReportRenderer, WatchRenderer

@@ -9,8 +9,8 @@ from decimal import Decimal
 from pathlib import Path
 from unittest.mock import patch
 
-from development.fixtures.session_snapshots import make_snapshot
-from development.fixtures.report_runtime import (
+from development.tests.fixtures.session_snapshots import make_snapshot
+from development.tests.fixtures.report_runtime import (
     FakeSource, FakePricingProvider, FakeAccountProvider, shifted_snapshot_with_stale_root,
 )
 from src.cache import CacheDatabase, CacheRepository

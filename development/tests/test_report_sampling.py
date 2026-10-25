@@ -2,8 +2,8 @@
 from dataclasses import replace
 import unittest
 
-from development.fixtures.pricing_catalog import catalog
-from development.fixtures.session_snapshots import make_snapshot
+from development.tests.fixtures.pricing_catalog import catalog
+from development.tests.fixtures.session_snapshots import make_snapshot
 from src.analysis import analyze_snapshot
 from src.analysis.token_mix import priceable_request
 from src.domain import ModelRef, TokenUsage

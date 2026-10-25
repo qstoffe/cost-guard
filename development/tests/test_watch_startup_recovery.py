@@ -6,7 +6,7 @@ import io
 import unittest
 from unittest.mock import patch
 
-from development.fixtures.watch_runtime import CountingAccountProvider, FakeLiveSource, make_service
+from development.tests.fixtures.watch_runtime import CountingAccountProvider, FakeLiveSource, make_service
 from src.sources.errors import FailureCode, SourceDataError, SourceSchemaError, SourceUnavailableError
 from src.watch import WatchCoordinator
 from src.watch.coordinator import SOURCE_UNREADABLE_RETRIES

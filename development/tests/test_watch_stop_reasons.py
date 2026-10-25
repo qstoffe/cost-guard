@@ -6,8 +6,8 @@ import io
 import tempfile
 import unittest
 
-from development.fixtures.opencode_v2_service import source_with_current_service
-from development.fixtures.watch_runtime import make_service
+from development.tests.fixtures.opencode_v2_service import source_with_current_service
+from development.tests.fixtures.watch_runtime import make_service
 from src.analysis.causal import build_prompt_records
 from src.presentation import WatchRenderer
 from src.sources.opencode_errors import normalize_abort_reason, normalize_error_name

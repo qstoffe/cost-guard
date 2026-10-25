@@ -10,8 +10,8 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch, Mock
 
-from development.fixtures.synthetic_month import SyntheticMonthSource
-from development.fixtures import compact_reports as compact
+from development.tests.fixtures.synthetic_month import SyntheticMonthSource
+from development.tests.fixtures import compact_reports as compact
 from src import bootstrap
 from src.analysis.comparisons import model_comparison_rows
 from src.domain import ModelPricing, ModelRef, PricingTier

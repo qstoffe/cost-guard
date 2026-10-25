@@ -11,7 +11,7 @@ import unittest
 from unittest.mock import patch
 
 from src.domain import AccountRef, AccountSnapshot, QuotaComponent
-from development.fixtures.warning_projections import warning_prompt, warning_report_projection
+from development.tests.fixtures.warning_projections import warning_prompt, warning_report_projection
 from src.analysis.context import PriceWarningSeverity
 from src.presentation import ReportRenderer, WatchRenderer
 from src.presentation.terminal import single_line

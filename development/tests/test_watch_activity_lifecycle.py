@@ -10,7 +10,7 @@ import re
 import unittest
 from unittest.mock import patch
 
-from development.fixtures.session_snapshots import make_snapshot, part, prov
+from development.tests.fixtures.session_snapshots import make_snapshot, part, prov
 from src.domain import EventKind, NormalizedEvent
 from src.presentation import WatchRenderer
 from src.presentation.watch_activity import BASE_ROLE, FAILED_ROLE

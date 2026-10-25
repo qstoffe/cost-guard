@@ -4,8 +4,8 @@ from __future__ import annotations
 from dataclasses import replace
 from decimal import Decimal
 
-from development.fixtures.session_snapshots import make_snapshot
-from development.fixtures.pricing_catalog import catalog as sample_catalog
+from development.tests.fixtures.session_snapshots import make_snapshot
+from development.tests.fixtures.pricing_catalog import catalog as sample_catalog
 from src.domain import (
     AccountUsageStatus, IntegrationHealth, ProviderCapabilities, QuotaSnapshot, QuotaWindow,
     QuotaWindowKind, SessionCapabilities,

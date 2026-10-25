@@ -3,7 +3,7 @@ from dataclasses import replace
 from itertools import permutations
 import unittest
 
-from development.fixtures.session_snapshots import make_snapshot
+from development.tests.fixtures.session_snapshots import make_snapshot
 from src.domain.session_tree import root_activity, root_by_session, root_for_session
 from src.watch.observers import _root_map
 

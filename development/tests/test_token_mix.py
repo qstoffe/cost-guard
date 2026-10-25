@@ -7,12 +7,12 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from development.fixtures.synthetic_month import SyntheticMonthSource
-from development.fixtures.session_snapshots import make_snapshot
+from development.tests.fixtures.synthetic_month import SyntheticMonthSource
+from development.tests.fixtures.session_snapshots import make_snapshot
 from src.reports.sampling import latest_token_prompts
-from development.fixtures.compact_reports import START, rendered, report_service
-from development.fixtures.quota_rendering import quotas, rolling
-from development.fixtures.watch_runtime import MutableSource, make_service
+from development.tests.fixtures.compact_reports import START, rendered, report_service
+from development.tests.fixtures.quota_rendering import quotas, rolling
+from development.tests.fixtures.watch_runtime import MutableSource, make_service
 from src.analysis import analyze_snapshot
 from src.analysis.cache import AnalysisDependencies, _bundle_from_dict, _bundle_to_dict
 from src.analysis.token_mix import token_mix

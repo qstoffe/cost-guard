@@ -15,11 +15,11 @@ from src.sources.opencode_v1 import OpenCodeV1Source
 from src.analysis.causal import build_prompt_records
 
 ROOT = Path(__file__).resolve().parents[2]
-SCHEMA = ROOT / "development/fixtures/opencode_v1/schema.sql"
+SCHEMA = ROOT / "development/tests/fixtures/opencode_v1/schema.sql"
 SOURCE_FILE = ROOT / "src/sources/opencode_v1.py"
 
 
-from development.fixtures.opencode_v1_database import create_v1_database
+from development.tests.fixtures.opencode_v1_database import create_v1_database
 
 
 def _json(value: dict) -> str:

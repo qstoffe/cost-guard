@@ -18,7 +18,7 @@ from src.pricing.github_copilot import (
 from src.pricing.metadata_health import MetadataHealthStore
 from src.watch.model_discovery import WatchModelDiscovery
 from src.watch import WatchCoordinator
-from development.fixtures.watch_runtime import MutableSource, make_service
+from development.tests.fixtures.watch_runtime import MutableSource, make_service
 
 NOW = int(datetime(2026, 10, 20, 12, tzinfo=timezone.utc).timestamp() * 1000)
 PRICES = (

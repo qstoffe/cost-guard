@@ -11,12 +11,12 @@ import re
 import tempfile
 import unittest
 
-from development.fixtures.accounts import account
-from development.fixtures.package_copy import make_package
-from development.fixtures.quota_rendering import NOW, quotas, report_text, rolling, watch_text
-from development.fixtures.session_snapshots import make_snapshot
-from development.fixtures.report_runtime import FakePricingProvider
-from development.fixtures.watch_runtime import MutableSource, make_service
+from development.tests.fixtures.accounts import account
+from development.tests.fixtures.package_copy import make_package
+from development.tests.fixtures.quota_rendering import NOW, quotas, report_text, rolling, watch_text
+from development.tests.fixtures.session_snapshots import make_snapshot
+from development.tests.fixtures.report_runtime import FakePricingProvider
+from development.tests.fixtures.watch_runtime import MutableSource, make_service
 from development.tools.collect_diagnostics import _projection_summary
 from src.analysis.causal import trace_entries
 from src.analysis.valuation import ComparisonCost

@@ -49,8 +49,8 @@ Pricing/release metadata uses **external HTTPS**, with normal certificate checks
 An internet outage or external TLS error does not by itself explain localhost
 failures. Cached metadata may remain usable while external acquisition is degraded.
 
-Use `development/windows/Cost Guard Diagnostics.cmd` on Windows,
-`development/macos/Cost Guard Diagnostics.command` on macOS, or
+Use `development/user-tools/diagnostics/windows/Cost Guard Diagnostics.cmd` on Windows,
+`development/user-tools/diagnostics/macos/Cost Guard Diagnostics.command` on macOS, or
 `python development/tools/collect_diagnostics.py` from the repository root.
 Review the bundle before sharing. It records bounded categories, phases, exception
 types, counts, durations, registration/health observations, transport counters,

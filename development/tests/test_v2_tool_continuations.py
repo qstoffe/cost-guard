@@ -4,8 +4,8 @@ from __future__ import annotations
 from dataclasses import replace
 import unittest
 
-from development.fixtures.opencode_v2_service import source_with_current_service
-from development.fixtures.session_snapshots import prov
+from development.tests.fixtures.opencode_v2_service import source_with_current_service
+from development.tests.fixtures.session_snapshots import prov
 from src.analysis.causal import build_prompt_records
 from src.sources.opencode_v2_normalization import (
     normalize_invocations, normalize_message_bundle, normalize_request_invocations,

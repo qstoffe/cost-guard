@@ -10,9 +10,9 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from development.fixtures.opencode_v1_database import create_v1_database
-from development.fixtures.opencode_v2_service import source_with_current_service, source_with_service
-from development.fixtures.watch_runtime import make_service
+from development.tests.fixtures.opencode_v1_database import create_v1_database
+from development.tests.fixtures.opencode_v2_service import source_with_current_service, source_with_service
+from development.tests.fixtures.watch_runtime import make_service
 from src.sources.opencode_v1 import OpenCodeV1Source
 from src.sources.selection import SourceSelector
 

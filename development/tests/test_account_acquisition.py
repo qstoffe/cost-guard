@@ -13,8 +13,8 @@ import time
 import unittest
 from unittest.mock import patch
 
-from development.fixtures.watch_runtime import MutableSource, make_service
-from development.fixtures.account_workers import Provider, wait_for
+from development.tests.fixtures.watch_runtime import MutableSource, make_service
+from development.tests.fixtures.account_workers import Provider, wait_for
 from src.accounts.acquisition import AccountAcquisition
 from src.accounts.discovery import AccountDiscovery
 from src.accounts.simple_http import SIMPLE_HTTP_PROVIDERS, SimpleHttpAccountProvider

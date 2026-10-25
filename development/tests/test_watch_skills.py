@@ -8,7 +8,7 @@ import re
 import unittest
 from unittest.mock import patch
 
-from development.fixtures.session_snapshots import make_snapshot, part, prov
+from development.tests.fixtures.session_snapshots import make_snapshot, part, prov
 from src.presentation.watch_activity import BASE_ROLE, FAILED_ROLE, skill_summary_segments, tool_summary_segments
 from src.reports.models import PromptProjection, SessionPromptBlock
 from src.sources.opencode_v2_normalization import normalize_message_bundle

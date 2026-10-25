@@ -6,10 +6,10 @@ from decimal import Decimal
 import io
 import unittest
 
-from development.fixtures.compact_reports import Availability, rendered, report_service
-from development.fixtures.pricing_catalog import catalog
-from development.fixtures.session_snapshots import make_snapshot
-from development.fixtures.watch_runtime import MutableSource
+from development.tests.fixtures.compact_reports import Availability, rendered, report_service
+from development.tests.fixtures.pricing_catalog import catalog
+from development.tests.fixtures.session_snapshots import make_snapshot
+from development.tests.fixtures.watch_runtime import MutableSource
 from src.analysis import analyze_snapshot
 from src.analysis.comparisons import model_comparison_rows
 from src.analysis.models import TraceEntry

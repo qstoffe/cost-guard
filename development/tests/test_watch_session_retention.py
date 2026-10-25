@@ -10,9 +10,9 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from development.fixtures.session_snapshots import make_snapshot
-from development.fixtures.synthetic_month import SyntheticMonthSource
-from development.fixtures.watch_runtime import ROOT, MutableSource, make_service
+from development.tests.fixtures.session_snapshots import make_snapshot
+from development.tests.fixtures.synthetic_month import SyntheticMonthSource
+from development.tests.fixtures.watch_runtime import ROOT, MutableSource, make_service
 from src.analysis.context import PriceWarningSeverity
 from src.config import load_configuration
 from src.domain import EventKind, NormalizedEvent

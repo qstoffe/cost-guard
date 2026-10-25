@@ -19,8 +19,8 @@ from src.sources.errors import SourceDataError, SourceResyncRequiredError, Sourc
 from src.sources.opencode_v1 import OpenCodeV1Source
 from src.sources.opencode_v2 import OpenCodeV2Source
 from src.sources.opencode_v2_transport import V2Endpoint, V2HttpClient
-from development.fixtures.opencode_v1_database import create_v1_database
-from development.fixtures.opencode_v2_service import (
+from development.tests.fixtures.opencode_v1_database import create_v1_database
+from development.tests.fixtures.opencode_v2_service import (
     LoopbackServer, fixture, source_with_current_service, source_with_service,
 )
 

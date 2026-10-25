@@ -7,8 +7,8 @@ import json
 import tempfile
 import unittest
 
-from development.fixtures.opencode_v2_service import source_with_current_service
-from development.fixtures.watch_runtime import make_service
+from development.tests.fixtures.opencode_v2_service import source_with_current_service
+from development.tests.fixtures.watch_runtime import make_service
 from src.analysis.core import analyze_snapshot
 from src.presentation import WatchRenderer
 from src.sources.errors import SourceResyncRequiredError

@@ -1,6 +1,6 @@
 #!/bin/zsh
 set -u
-CG_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+CG_ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
 
 find_python() {
   for candidate in python3 python /opt/homebrew/bin/python3 /usr/local/bin/python3 /Library/Frameworks/Python.framework/Versions/Current/bin/python3; do

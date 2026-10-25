@@ -6,7 +6,7 @@ import io
 from itertools import groupby
 import unittest
 
-from development.fixtures.watch_rows import inputs, prompt, tracker
+from development.tests.fixtures.watch_rows import inputs, prompt, tracker
 from src.presentation import WatchRenderer
 from src.watch.models import WatchProjection
 from src.watch.tracker import WatchRowTracker

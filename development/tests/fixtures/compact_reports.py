@@ -6,14 +6,14 @@ import io
 from pathlib import Path
 import tempfile
 
-from development.fixtures.report_runtime import FakePricingProvider, FakeSource
+from development.tests.fixtures.report_runtime import FakePricingProvider, FakeSource
 from src.cache import CacheDatabase, CacheRepository
 from src.config import load_configuration
 from src.presentation import ReportRenderer
 from src.reports import ReportService
 from src.sources.selection import SourceSelection
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 START = int(datetime(2026, 9, 30, 23, 50, tzinfo=timezone.utc).timestamp() * 1000)
 NOW = START + 2 * 86_400_000
 

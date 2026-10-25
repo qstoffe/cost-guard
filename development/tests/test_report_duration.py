@@ -5,9 +5,9 @@ from dataclasses import replace
 import unittest
 from unittest.mock import patch
 
-from development.fixtures.compact_reports import rendered, report_service
-from development.fixtures.report_runtime import FakeSource
-from development.fixtures.session_snapshots import (
+from development.tests.fixtures.compact_reports import rendered, report_service
+from development.tests.fixtures.report_runtime import FakeSource
+from development.tests.fixtures.session_snapshots import (
     MODEL, make_snapshot, make_native_v2_compaction_snapshot, message, part, prov,
 )
 from src.analysis.core import analyze_snapshot

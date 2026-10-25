@@ -7,7 +7,7 @@ import itertools
 from types import SimpleNamespace
 import unittest
 
-from development.fixtures.pricing_catalog import catalog
+from development.tests.fixtures.pricing_catalog import catalog
 from src.accounts.acquisition import _failure
 from src.accounts.base import normalize_quota
 from src.accounts.discovery import AccountCandidate

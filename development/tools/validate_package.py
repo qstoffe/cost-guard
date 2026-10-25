@@ -210,7 +210,7 @@ def check_text_encoding(root: Path, results: Results) -> None:
 
 
 def check_budgets(root: Path, results: Results) -> None:
-    budget_path = root / "development/file-budgets.json"
+    budget_path = root / "development/architecture/governance/policies/file-budgets.json"
     budgets = load_json(budget_path, results, "file budgets")
     if not budgets:
         return
@@ -441,7 +441,7 @@ def check_architecture_imports(root: Path, results: Results) -> None:
 
 
 def check_history_bounds(root: Path, results: Results) -> None:
-    budgets = load_json(root / "development/file-budgets.json", results, "history budgets")
+    budgets = load_json(root / "development/architecture/governance/policies/file-budgets.json", results, "history budgets")
     if not budgets:
         return
     spec = budgets["limits"]["versionHistory"]

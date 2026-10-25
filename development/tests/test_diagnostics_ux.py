@@ -143,8 +143,8 @@ class StopHelpTests(unittest.TestCase):
     def test_hint_points_at_this_installation_per_platform(self) -> None:
         root = Path(tempfile.gettempdir()) / "Cost Guard"
         for platform, target in (
-            ("win32", str(root / "development" / "windows" / "Cost Guard Diagnostics.cmd")),
-            ("darwin", str(root / "development" / "macos" / "Cost Guard Diagnostics.command")),
+            ("win32", str(root / "development/user-tools/diagnostics/windows/Cost Guard Diagnostics.cmd")),
+            ("darwin", str(root / "development/user-tools/diagnostics/macos/Cost Guard Diagnostics.command")),
             ("linux", str(root / "development" / "tools" / "collect_diagnostics.py")),
         ):
             with mock.patch("sys.platform", platform):
@@ -205,9 +205,9 @@ class WatchStartupColorTests(unittest.TestCase):
 
 class WatchEvidenceTests(unittest.TestCase):
     def test_headless_watch_smoke_reports_geometry_and_counts_without_private_text(self) -> None:
-        from development.fixtures.report_runtime import FakePricingProvider
-        from development.fixtures.session_snapshots import make_snapshot
-        from development.fixtures.watch_runtime import MutableSource, make_service, openai_account
+        from development.tests.fixtures.report_runtime import FakePricingProvider
+        from development.tests.fixtures.session_snapshots import make_snapshot
+        from development.tests.fixtures.watch_runtime import MutableSource, make_service, openai_account
         from development.tools.diagnostic_watch import watch_evidence
 
         with tempfile.TemporaryDirectory() as tmp:

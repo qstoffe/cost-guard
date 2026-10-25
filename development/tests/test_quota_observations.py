@@ -8,7 +8,7 @@ import tempfile
 import unittest
 import zipfile
 
-from development.fixtures.account_workers import ControlledQuota, wait_for
+from development.tests.fixtures.account_workers import ControlledQuota, wait_for
 from development.tools.collect_diagnostics import _text_summary
 from development.tools.diagnostic_logs import create_bundle
 from src.accounts.acquisition import AccountAcquisition

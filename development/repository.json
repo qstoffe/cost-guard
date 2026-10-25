@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "contract": "opencode-toolkit/shared-repository-contract/v1",
+  "release": {
+    "trigger": "functional",
+    "baseline": "v80.71",
+    "metadataPaths": ["src/version.py"],
+    "workflowPaths": ["development/backlog/maintenance-state.json"],
+    "presentation": {
+      "historyFormat": "date",
+      "historyMaxBytes": 32768,
+      "olderSummaryMaxBytes": 4096,
+      "bindings": [
+        {"path": "src/version.py", "kind": "python-version-date"},
+        {"path": "README.md", "kind": "readme-version", "heading": "## Current version"}
+      ]
+    }
+  }
+}
