@@ -28,6 +28,8 @@ Positive reported overage allowances show separately as `Extra credit limit N` (
 
 OpenAI's fail-soft subscription reader normalizes native rolling/model quota windows and extra credits independently of configured API accounts. Anthropic API accounts are separate from optional Claude Code CLI-owned subscriptions. No current login attributes history; credentials are never refreshed/written by Cost Guard. See [Claude integration and limits](../development/architecture/modules/claude-code.md).
 
+OpenAI replacement uses the current authoritative inventory: removed identities disappear, old in-flight results cannot restore them, and proven OAuth aliases prefer canonical V2 records. A canonical V2 OpenAI record suppresses legacy `codex`/`openai-codex` fallback, even when unusable; distinct configured identities stay separate. Failed lookups clear old OpenAI capacity; unknown plans do not inherit a prior tier. Safe returned plan identifiers, including new names, retain native windows without inferring a price or entitlement. HTTP 401 means the selected request was rejected (renew sign-in in OpenCode); 403 means quota-endpoint access was denied and does not prove invalid credentials. Neither establishes tier support. Cost Guard never refreshes auth or retries another identity to make quota succeed.
+
 ## OpenRouter
 
 The authenticated key's current UTC Day/Week/Month spend is shown in native USD. A reported key limit and authoritative remaining limit produce a normal remaining-capacity bar labelled Day, Week, Month or non-resetting Limit. The limit's period is not a reset timestamp, so no reset instant is invented.

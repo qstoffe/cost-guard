@@ -29,6 +29,7 @@ def durable_quota_failure(snapshot: AccountSnapshot | None) -> bool:
     """Provider-normalized rejection/unavailability must not be masked by Watch."""
     return snapshot is not None and (
         snapshot.availability == "unavailable"
+        or (snapshot.ref.provider_id == "openai" and snapshot.availability == "error")
         or snapshot.observations.get("parser_reason") == "auth_failure"
         or snapshot.observations.get("parser_reason") == "software_failure"
         or snapshot.observations.get("parser_reason") in {"format_changed", "method_missing", "account_mismatch", "quota_unavailable"}
@@ -65,6 +66,9 @@ def reconcile_accounts(
     for key in dict.fromkeys((*old, *incoming)):
         prior = old.get(key)
         current = incoming.get(key)
+        if current is None and observed is not None and key in observed:
+            timestamps.pop(key, None)
+            continue  # Explicit inventory removal, not a transient missing result.
         if current is not None and observed is not None and key not in observed:
             result.append(prior or current)
             continue  # Unrelated completion cannot erase this account's stale state.
@@ -83,7 +87,7 @@ def reconcile_accounts(
                 result.append(replace(prior, quotas=(), billing=(), availability="unavailable",
                                       reason="Last known capacity expired; refresh unavailable"))
             continue
-        if current.availability == "partial" and retain and prior:
+        if current.availability == "partial" and retain and prior and current.ref.provider_id != "openai":
             older = {component.label: component for component in prior.quotas}
             components = []
             retained = False
@@ -109,7 +113,7 @@ def reconcile_accounts(
                 current = replace(current, quotas=tuple(components), availability="stale",
                                   plan=current.plan or prior.plan, status=status,
                                   warnings=current.warnings or (prior.warnings if current.status is AccountUsageStatus.UNKNOWN else ()))
-        if prior and current.plan is None:
+        if prior and current.plan is None and current.ref.provider_id != "openai":
             current = replace(current, plan=prior.plan)
         if update_seen and (observed is None or key in observed) and current.availability in {"available", "partial"}:
             timestamps[key] = now_ms

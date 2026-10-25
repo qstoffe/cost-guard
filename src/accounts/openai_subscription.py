@@ -31,7 +31,7 @@ from src.domain import (
     QuotaWindowKind,
 )
 from .base import normalize_quota
-from .credentials import provider_credentials, resolve_auth_path
+from .credentials import CredentialRecord, provider_credentials, resolve_auth_path
 
 USAGE_URL = "https://chatgpt.com/backend-api/wham/usage"
 # OpenCode renews the OAuth token when it next calls OpenAI; Cost Guard never does.
@@ -61,15 +61,18 @@ def _auth_path(override: str | None, *, home: Path | None = None) -> Path:
     return resolve_auth_path(override, home=home)
 
 
-def _jwt_account_id(token: str) -> str:
+def _jwt_payload(token: str) -> Mapping[str, object]:
     try:
         payload = token.split(".")[1]
         payload += "=" * (-len(payload) % 4)
         value = json.loads(base64.urlsafe_b64decode(payload.encode("ascii")))
     except (ValueError, IndexError, UnicodeError):
-        return ""
-    if not isinstance(value, Mapping):
-        return ""
+        return {}
+    return value if isinstance(value, Mapping) else {}
+
+
+def _jwt_account_id(token: str) -> str:
+    value = _jwt_payload(token)
     auth = value.get("https://api.openai.com/auth")
     if isinstance(auth, Mapping):
         candidate = auth.get("chatgpt_account_id") or auth.get("account_id")
@@ -102,6 +105,28 @@ def credential_from_auth_object(value: object) -> OpenAICredential:
         )
         return OpenAICredential(True, access.strip(), str(account or ""))
     return OpenAICredential(False, reason="OpenAI ChatGPT OAuth credential not found in OpenCode auth.json")
+
+
+def select_credentials(records: tuple[CredentialRecord, ...]) -> tuple[CredentialRecord, ...]:
+    """Collapse proven OAuth aliases, never distinct accounts or unknown identities.
+
+    Canonical active V2 rows win aliases of the same true account. A token is
+    request material, not an account ID; token renewal preserves display identity.
+    """
+    selected = {}
+    ordered = sorted(records, key=lambda r: (r.ref.source_account.startswith("credential:"),
+                                            r.ref.provider_id == "openai", r.active), reverse=True)
+    for record in ordered:
+        ref = replace(record.ref, provider_id="openai")
+        if record.value.get("type") == "oauth":
+            credential = credential_from_auth_object({"openai": record.value})
+            if credential.account_id:
+                ref = replace(ref, account_id=credential.account_id)
+        # source_instance keeps genuinely independent installations distinct.
+        key = ref.key
+        if key not in selected:
+            selected[key] = replace(record, ref=ref)
+    return tuple(selected.values())
 
 
 def load_credential(path: Path) -> OpenAICredential:
@@ -271,8 +296,8 @@ def convert_usage_payload(payload: object, *, fetched_at_ms: int) -> QuotaSnapsh
         status = AccountUsageStatus.AVAILABLE
     else:
         status = AccountUsageStatus.UNKNOWN
-    plan_raw = str(payload.get("plan_type") or "").lower()
-    plan = plan_raw if plan_raw in {"plus", "pro", "free", "team", "business", "enterprise", "edu"} else None
+    plan_raw = payload.get("plan_type")
+    plan = plan_raw if isinstance(plan_raw, str) and re.fullmatch(r"[a-zA-Z][a-zA-Z0-9_-]{0,63}", plan_raw) else None
     billing = ()
     if (balance is not None and balance >= 0) or credit_map.get("has_credits") is True or credit_map.get("unlimited") is True:
         currency = "USD" if credit_map.get("currency") == "USD" else "credits"
@@ -280,6 +305,9 @@ def convert_usage_payload(payload: object, *, fetched_at_ms: int) -> QuotaSnapsh
                                     status="ACTIVE" if credit_map.get("has_credits") is True or credit_map.get("unlimited") is True else "unknown"),)
     elif balance is not None:
         balance = None
+    if not windows and not billing and not isinstance(allowed, bool) and not isinstance(reached, bool):
+        return replace(_unavailable("OpenAI usage returned no recognized quota data", fetched_at_ms),
+                       availability="error", observations={"parser_reason": "parser_failure"})
     partial = not windows or any(w.remaining_fraction is None for w in windows)
     return QuotaSnapshot(
         provider="openai",
@@ -320,6 +348,7 @@ class OpenAIAccountProvider:
     # handled a historical model invocation (API-key traffic shares this ID).
     included_usage = False
     capabilities = ProviderCapabilities(account_quota=True, reset_windows=True)
+    select_credentials = staticmethod(select_credentials)
 
     def __init__(
         self,
@@ -373,7 +402,9 @@ class OpenAIAccountProvider:
                 credential = credential_from_auth_object({"openai": record.value})
                 if credential.account_id and ref.account_id is None:
                     ref = replace(ref, account_id=credential.account_id)
-                expires = _decimal(record.value.get("expires"))
+                nested = record.value.get("tokens")
+                nested = nested if isinstance(nested, Mapping) else {}
+                expires = _decimal(record.value.get("expires", nested.get("expires", _jwt_payload(credential.access_token).get("exp"))))
                 expiration_ms = expires * 1000 if expires is not None and expires < 10_000_000_000 else expires
                 if expiration_ms is not None and expiration_ms <= now:
                     quota = _expired(now)
@@ -382,7 +413,7 @@ class OpenAIAccountProvider:
                 else:
                     quota = _unavailable(credential.reason, now)
             account = normalize_quota(quota, ref, "OpenAI")
-            plan = account.plan.title() if account.plan and account.plan != "Pay as you go" else account.plan
+            plan = account.plan.title() if account.plan in {"plus", "pro", "free", "team", "business", "enterprise", "edu"} else account.plan
             accounts.append(replace(account, plan=plan))
         return tuple(accounts)
 
@@ -404,13 +435,17 @@ class OpenAIAccountProvider:
                 response = self.usage_get(USAGE_URL, token, credential.account_id, 15)
             except OSError:
                 response = UsageResponse(False, network_error=True)
-            if response.succeeded:
+            if response.succeeded and 200 <= response.status_code < 300:
                 snapshot = convert_usage_payload(response.payload, fetched_at_ms=now)
                 return replace(snapshot, observations={**snapshot.observations, "http_status": response.status_code})
-            if response.status_code in (401, 403):
+            if response.status_code == 401:
                 return replace(_unavailable("OpenAI sign-in was rejected; reconnect OpenAI in OpenCode.", now),
                                observations={"http_status": response.status_code, "parser_reason": "auth_failure",
-                                             "user_action": "Sign-in rejected; reconnect OpenAI in OpenCode"})
+                                              "user_action": "Sign-in rejected; reconnect OpenAI in OpenCode"})
+            if response.status_code == 403:
+                return replace(_unavailable("OpenAI quota endpoint denied access; account or backend policy may restrict usage lookup.", now),
+                               observations={"http_status": 403, "parser_reason": "access_denied",
+                                             "user_action": "Check OpenAI account access in OpenCode; quota lookup was denied"})
             if response.network_error:
                 return replace(_unavailable("OpenAI usage request failed (network)", now), availability="error",
                                observations={"http_status": 0, "parser_reason": "network_failure"})

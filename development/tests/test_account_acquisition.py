@@ -115,8 +115,8 @@ class DiscoveryTests(unittest.TestCase):
         self.auth.write_text("{}")
         engine.start(3000)
         update = engine.poll(3000)
-        self.assertEqual("unavailable", update.snapshots[0].availability)
-        self.assertEqual("auth_failure", update.snapshots[0].observations["parser_reason"])
+        self.assertEqual((), update.snapshots)
+        self.assertEqual((snapshots[0].key,), update.observed_keys)
 
     def test_v2_wal_reinventory_pins_one_shared_view_and_ignores_unrelated_changes(self):
         self.auth.write_text("{}")

@@ -356,7 +356,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.71 (2026-10-25):** Adopted Toolkit's development layout. Cost Guard owns its version policy. Diagnostics launchers and failure hints now use `development/user-tools/diagnostics/`. Watch, accounts and costs are unchanged; feature requests remain pending. See [development](development/architecture/OVERVIEW.md) and [version history](VERSION_HISTORY.md).
+**v80.72 (2026-10-25):** Fixed superseded OpenAI Watch rows, stale quota and credential aliases. Distinct accounts remain separate; new returned plans retain quota windows. HTTP 401/403 remain unavailable, not proof of tier support. See [account support](docs/account-support.md) and [history](VERSION_HISTORY.md).
 
 Recent predecessors added buffered Watch/startup progress and launcher feedback ([evidence and limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence)), independent historical context/current anchors, nonblocking metadata, quota histories, execution Duration and retained daily CCost. v80.0 is the Python 3.11+ public baseline; see [version history](VERSION_HISTORY.md). Claude quotas remain experimental; terminal visuals, restart and sleep/wake need separate live evidence.
 

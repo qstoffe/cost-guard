@@ -299,7 +299,7 @@ class AdapterTests(unittest.TestCase):
 
 class RefreshTests(unittest.TestCase):
     def test_resume_retains_recent_network_or_ambiguous_failure_without_extending_ttl(self):
-        a = account()
+        a = account("github-copilot")  # OpenAI deliberately clears failed quota (FR 0120).
         for observations in ({"parser_reason": "network_failure"}, {"http_status": 503}, {}):
             error = replace(a, quotas=(), availability="error", observations=observations)
             values, seen, stale = reconcile_accounts((a,), (error,), {a.key: 100_000},
@@ -324,7 +324,7 @@ class RefreshTests(unittest.TestCase):
             self.assertEqual(100_000, seen[a.key])
 
     def test_resume_partial_retention_and_expiry_do_not_timestamp_replayed_success(self):
-        a, b = account(identity="a"), account(identity="b")
+        a, b = account("github-copilot", identity="a"), account("github-copilot", identity="b")
         partial = replace(a, availability="partial", quotas=(replace(a.quotas[0], remaining_fraction=None),))
         values, seen, _ = reconcile_accounts((a, b), (partial, b), {a.key: 100_000, b.key: 100_000},
                                              now_ms=340_000, recovering=True)
@@ -357,7 +357,7 @@ class RefreshTests(unittest.TestCase):
             self.assertEqual(1, text.lower().count("error"))
 
     def test_transient_missing_fraction_retains_bar_with_stale_state(self):
-        a = account()
+        a = account("github-copilot")
         partial = replace(a, availability="partial", quotas=(replace(a.quotas[0], remaining_fraction=None),))
         values, seen, stale = reconcile_accounts((a,), (partial,), {a.key: 100_000}, now_ms=160_000)
         self.assertTrue(stale)
@@ -368,7 +368,7 @@ class RefreshTests(unittest.TestCase):
         self.assertIsNone(values[0].quotas[0].remaining_fraction)
 
     def test_error_preserves_two_same_provider_accounts_independently(self):
-        a, b = account(identity="a"), account(identity="b")
+        a, b = account("github-copilot", identity="a"), account("github-copilot", identity="b")
         error = replace(a, quotas=(), availability="error")
         changed = replace(b, quotas=(replace(b.quotas[0], remaining_fraction=D("0.5")),))
         values, _, stale = reconcile_accounts((a, b), (error, changed), {a.key: 100_000, b.key: 100_000}, now_ms=160_000)
