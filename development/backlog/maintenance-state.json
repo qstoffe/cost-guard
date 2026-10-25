@@ -4,9 +4,7 @@
   "ordinaryCount": 6,
   "completed": {"architecture": 0, "test-health": 5, "performance": 0},
   "template": {"id": "shared-repository-maintenance", "version": 1},
-  "lastDeliveredRevision": "632bfbc287997b6aa14ec29b134e78548c30855e",
-  "lastItem": {
-    "id": "fr/000160-compact-account-ccost-and-clear-codex-quota-auth-hint.md",
-    "kind": "ordinary"
-  }
+  "lastDeliveredRevision": "03d58cd1dabe98aa628ae4ed977dfbfe0f4f3fbb",
+  "lastItem": {"id": "contract-sync/3/03d58cd1dabe98aa628ae4ed977dfbfe0f4f3fbb", "kind": "contract-sync"},
+  "featureDiscovery": {"completed": 0}
 }
