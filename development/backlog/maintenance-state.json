@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
   "epochRevision": "df44c06a97244278abd8d0dc9ed90ea12c368e47",
-  "ordinaryCount": 6,
+  "ordinaryCount": 7,
   "completed": {"architecture": 0, "test-health": 5, "performance": 0},
   "template": {"id": "shared-repository-maintenance", "version": 1},
-  "lastDeliveredRevision": "03d58cd1dabe98aa628ae4ed977dfbfe0f4f3fbb",
-  "lastItem": {"id": "contract-sync/3/03d58cd1dabe98aa628ae4ed977dfbfe0f4f3fbb", "kind": "contract-sync"},
+  "lastDeliveredRevision": "0bb79b9189bd974697f5b1d23e5d158d5de27a29",
+  "lastItem": {"id": "fr/000170-link-root-readme-to-synced-development-guide.md", "kind": "ordinary"},
   "featureDiscovery": {"completed": 0}
 }
