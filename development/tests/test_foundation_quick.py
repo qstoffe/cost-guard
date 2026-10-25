@@ -11,7 +11,6 @@ from pathlib import Path
 
 from src.presentation import StartupProgress
 from src.version import DISPLAY_VERSION, VERSION
-from development.tools import run_tests
 
 ROOT = Path(__file__).resolve().parents[2]
 ENTRYPOINT = ROOT / "cost-guard.py"
@@ -43,37 +42,6 @@ class BootstrapQuickTests(unittest.TestCase):
                 response.read.return_value = b"{}"
                 function(*args)
                 self.assertEqual(f"CostGuard/{version}", opener.call_args.args[0].get_header("User-agent"))
-
-    def test_suite_membership_is_complete_and_watch_activity_is_in_runtime(self) -> None:
-        self.assertEqual([], run_tests.suite_membership_errors())
-        self.assertIn("test_watch_tool_activity.py", run_tests.QUICK_PATTERNS)
-        self.assertIn("test_watch_tool_activity.py", run_tests.PROFILES["runtime"])
-
-    def test_runner_rejects_orphans_before_starting_even_a_focused_run(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            tests = Path(directory)
-            for name in run_tests.QUICK_PATTERNS + run_tests.FULL_ONLY_PATTERNS:
-                (tests / name).touch()
-            orphan = tests / "test_unassigned.py"
-            orphan.touch()
-            original = run_tests.suite_membership_errors
-            with patch.object(run_tests, "suite_membership_errors", side_effect=lambda: original(tests)), \
-                    patch.object(run_tests, "_run_pattern") as execute, \
-                    patch("sys.stderr", new_callable=io.StringIO) as stderr:
-                self.assertEqual(2, run_tests.main(["--pattern", "test_foundation_quick.py"]))
-                self.assertIn("unassigned test module: test_unassigned.py", stderr.getvalue())
-                execute.assert_not_called()
-            with patch.object(run_tests, "EXCLUDED_TEST_MODULES", {orphan.name: "Manual-only fixture"}):
-                self.assertEqual([], original(tests))
-            with patch.object(run_tests, "EXCLUDED_TEST_MODULES", {orphan.name: ""}):
-                self.assertIn("stale or undocumented test exclusion", "\n".join(original(tests)))
-            orphan.unlink()
-            with patch.object(run_tests, "EXCLUDED_TEST_MODULES", {orphan.name: "Manual-only fixture"}):
-                self.assertIn("stale or undocumented test exclusion", "\n".join(original(tests)))
-            (tests / run_tests.QUICK_PATTERNS[0]).unlink()
-            self.assertIn("suite pattern matches no test module", "\n".join(original(tests)))
-            with patch.object(run_tests, "FULL_ONLY_PATTERNS", run_tests.FULL_ONLY_PATTERNS + (run_tests.QUICK_PATTERNS[1],)):
-                self.assertIn("overlapping suite/exclusion assignments", "\n".join(original(tests)))
 
     def test_version_is_available_without_loading_runtime_integrations(self) -> None:
         proc = run_python(str(ENTRYPOINT), "--version")

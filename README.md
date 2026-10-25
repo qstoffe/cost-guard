@@ -356,7 +356,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.70 (2026-10-23):** Added [FR 0140](development/backlog/todo/0140-watch-ccost-per-subscription-and-stable-today.md) for shorter Watch CCost labels, stable Today on refresh and provider/subscription CCost by quota period. This is a pending FR, not implemented behavior. Previously added [FR 0130](development/backlog/todo/0130-watch-history-terminal-recency.md) remains pending. [FR authoring guide](development/FR_GUIDE.md) and [version history](VERSION_HISTORY.md) remain authoritative.
+**v80.70 (2026-10-23):** Added [FR 0140](development/backlog/todo/0140-watch-ccost-per-subscription-and-stable-today.md) for shorter Watch CCost labels, stable Today on refresh and provider/subscription CCost by quota period. This is a pending FR, not implemented behavior. Previously added [FR 0130](development/backlog/todo/0130-watch-history-terminal-recency.md) remains pending. [Installed OpenCode Toolkit skills](https://github.com/qstoffe/opencode-toolkit/tree/main/skills/shared-repo-contract) govern FR authoring; [version history](VERSION_HISTORY.md) records product releases.
 
 Recent predecessors added buffered Watch/startup progress and launcher feedback ([evidence and limits](development/history-loading.md#startup-presentation-and-launcher-evidence)), independent historical context/current anchors, nonblocking metadata, quota histories, execution Duration and retained daily CCost. v80.0 is the Python 3.11+ public baseline; see [version history](VERSION_HISTORY.md). Claude quotas remain experimental; terminal visuals, restart and sleep/wake need separate live evidence.
 
@@ -364,7 +364,7 @@ Product versions identify code state; they do not imply a Git tag, release ZIP o
 
 ## Development
 
-`AGENTS.md` routes maintainers to `development/`. Verify the working tree, not ZIPs. Repository FR creation/update requests authorize publishing and merging to `main` by default; other Git operations need explicit authorization.
+`AGENTS.md` routes maintainers to `development/`. Verify the working tree, not ZIPs. Development-only changes follow actively loaded Toolkit skills without Cost Guard product tests, package validation or product versioning.
 
 [Code/test map and inventory review](development/CODE_MAP.md); refresh with `python development/tools/code_inventory.py --json`.
 

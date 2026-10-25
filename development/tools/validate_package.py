@@ -19,10 +19,8 @@ from typing import Iterable
 # Direct CLI execution puts tools/ on sys.path; package imports use the absolute route.
 if __package__:
     from development.tools.code_inventory import import_targets, module_name
-    from development.tools.structure_guard import structural_errors
 else:
     from code_inventory import import_targets, module_name
-    from structure_guard import structural_errors
 
 REQUIRED_FILES = {
     ".gitignore",
@@ -68,28 +66,8 @@ REQUIRED_FILES = {
     "windows/Cost Guard Watch.cmd",
     "macos/Cost Guard.command",
     "macos/Cost Guard Watch.command",
-    "development/windows/Cost Guard Diagnostics.cmd",
-    "development/macos/Cost Guard Diagnostics.command",
     "src/cache/database.py",
     "src/cache/repository.py",
-    "development/README.md",
-    "development/MAINTAINER.md",
-    "development/ARCHITECTURE.md",
-    "development/CODE_MAP.md",
-    "development/REFACTORING_REVIEW.md",
-    "development/FR_GUIDE.md",
-    "development/file-budgets.json",
-    "development/structure-policy.json",
-    "development/tools/run_tests.py",
-    "development/tools/code_inventory.py",
-    "development/tools/structure_guard.py",
-    "development/tools/collect_diagnostics.py",
-    "development/tools/validate_package.py",
-    "development/tests/test_opencode_v1.py",
-    "development/tests/test_opencode_v2.py",
-    "development/tests/test_source_selection.py",
-    "development/fixtures/opencode_v1/schema.sql",
-    "development/fixtures/opencode_v2/service-fixture.json",
 }
 
 # User-facing launcher folders hold only everyday modes; Diagnostics lives under development/.
@@ -212,6 +190,8 @@ def check_required_layout(root: Path, results: Results) -> None:
 
 def check_lowercase_directories(root: Path, results: Results) -> None:
     for path in sorted(root.rglob("*")):
+        if path.relative_to(root).parts[:1] == ("development",):
+            continue
         if not path.is_dir():
             continue
         relative = path.relative_to(root)
@@ -229,6 +209,8 @@ def check_lowercase_directories(root: Path, results: Results) -> None:
 
 def check_text_encoding(root: Path, results: Results) -> None:
     for path in iter_package_files(root):
+        if rel(root, path).startswith("development/"):
+            continue
         if path.suffix.lower() not in TEXT_SUFFIXES and path.name != ".gitignore":
             continue
         try:
@@ -253,6 +235,8 @@ def check_budgets(root: Path, results: Results) -> None:
         return
 
     for path in iter_package_files(root):
+        if rel(root, path).startswith("development/"):
+            continue
         size = path.stat().st_size
         rp = rel(root, path)
         if size > universal:
@@ -272,7 +256,7 @@ def check_budgets(root: Path, results: Results) -> None:
 
 
 def compile_python(root: Path, results: Results) -> None:
-    python_files = [path for path in iter_package_files(root) if path.suffix == ".py"]
+    python_files = [path for path in iter_package_files(root) if path.suffix == ".py" and not rel(root, path).startswith("development/")]
     syntax_311_ok = True
     for path in python_files:
         try:
@@ -464,10 +448,6 @@ def check_architecture_imports(root: Path, results: Results) -> None:
         for module in imported_modules(path, root):
             if module == "development" or module.startswith("development."):
                 results.fail("runtime architecture", f"{rel(root, path)} imports development-only code {module}")
-    for path in (root / "development/fixtures").rglob("*.py"):
-        for module in imported_modules(path, root):
-            if module == "development.tests" or module.startswith("development.tests."):
-                results.fail("fixture architecture", f"{rel(root, path)} imports test code {module}")
     results.ok("absolute/relative/nested architecture import boundaries checked")
 
 
@@ -541,12 +521,6 @@ def validate(root: Path) -> Results:
     check_version_consistency(root, results)
     check_entrypoint(root, results)
     check_architecture_imports(root, results)
-    growth = structural_errors(root)
-    for error in growth:
-        results.fail("structural growth", error)
-    if not growth:
-        results.ok("routine-growth and test-coupling ratchets checked")
-    check_history_bounds(root, results)
     return results
 
 

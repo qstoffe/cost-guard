@@ -1,6 +1,6 @@
 # Cost Guard code map
 
-Navigation, not another architecture authority: [ARCHITECTURE.md](ARCHITECTURE.md) owns the contracts; [MAINTAINER.md](MAINTAINER.md) owns the workflow. This map helps a fresh human/AI session find the smallest relevant implementation and tests without importing the entire application or reading historical release material.
+Navigation, not another architecture authority: [ARCHITECTURE.md](ARCHITECTURE.md) owns the contracts; installed OpenCode Toolkit skills own the workflow. This map helps a fresh human/AI session find the smallest relevant implementation and tests without importing the entire application or reading historical release material.
 
 ## Start here
 
@@ -49,7 +49,6 @@ All paths in this table are relative to the repository root. Test names live und
 | Startup work/progress, buffered Watch rows/overflow scrollback and launcher handoff | `src/domain/progress.py`, `src/presentation/progress.py`, `startup_estimate.py`, `watch_screen.py`; `src/launcher_feedback.py`, `src/windows_launcher.ps1`, `windows/`, `macos/` | `test_startup_progress.py`, `test_watch_screen.py`, `test_launcher_feedback.py`, `test_windows_launcher.py`, `test_watch_startup_recovery.py`; `--profile startup` |
 | Fatal/recoverable fault boundaries and launchers | `src/runtime_errors.py`, `src/windows_launcher.ps1`; `windows/`, `macos/` | `test_runtime_errors.py`, `test_watch_lifecycle.py`, `test_step10_release_hardening.py`; [runtime policy](runtime-failures.md) |
 | Privacy-safe Diagnostics | `development/tools/collect_diagnostics.py`, `diagnostic_accounts.py`, `diagnostic_logs.py`, `diagnostic_metadata.py`, `diagnostic_screen.py`, `diagnostic_watch.py`, `diagnostic_connectivity.py`; `src/sources/connectivity.py`, `connectivity_events.py` | `test_rc2_public_diagnostics.py` (Full), `test_diagnostic_logs.py`, `test_diagnostics_ux.py`, `test_quota_observations.py` |
-| Inventory/layer/growth gates/tests/source validation | `development/tools/code_inventory.py`, `structure_guard.py`, `validate_package.py`, `run_tests.py` | `test_structure_growth.py`, `test_structure_contracts.py`, `test_foundation_quick.py`, `test_foundation.py`, `test_version_history.py` |
 
 ## Shared synthetic fixtures
 
@@ -95,7 +94,7 @@ Before adding a feature, identify its **one semantic owner** and a protected nei
 
 1. Read the relevant table row and focused tests; characterize the behavior before moving code. Preserve the exact working tree, not an older Git/package version.
 2. Use explicit typed inputs and named projection fields. Keep side-effect orchestration separate from normalized transformation; prefer cohesive functions/state owners, not mixins, dynamic forwarding or generic helpers.
-3. Run the focused profile/pattern and validator while editing. `structure-policy.json` permits at most **55 body statements / 15 explicit control-flow branches** for ordinary runtime routines. Nested functions are measured independently; docstrings/field-per-line formatting do not inflate this metric.
+3. Run focused product tests and applicable source validation only for product-code changes; development-only workflow comes from installed Toolkit skills.
 4. Named legacy routine limits and the remaining 10 test-import edges are **bounded debt**, not a feature budget. Growth, new edges and stale declarations fail. Split the owner or extract a fixture and remove its resolved debt entry; never auto-generate/accept a replacement baseline to silence the gate. A genuine limit change requires an explicit architectural decision, not a passing-test justification.
 5. Every runtime/fixture module describes its responsibility in a module docstring; local Markdown/table routes are regression-tested. Update this map and current contracts in place, not by accumulating version-specific copies. File caps remain unchanged.
 6. On a workstation, finish with Full/local validation and privacy-safe live evidence; hosted sessions stop at Quick + validation. Routine product-release ZIP generation is not supported. UI, commits and remote publishing still require their own authorization.

@@ -197,7 +197,7 @@ domain
   -> Python standard library only
 ```
 
-The validator resolves absolute/relative/nested layer imports, rejects runtime→development/fixture→tests edges and V2 process/SQLite use. `code_inventory.py` owns AST resolution/metrics; `structure_guard.py` gates `structure-policy.json`: bounded routines, explained legacy debt, no new test coupling/stale exemptions, explicit module responsibilities. Never auto-rebaseline/grow limits for a feature. [CODE_MAP.md](CODE_MAP.md) owns navigation, not runtime logic; new directions/limits require architectural decisions and matching tests.
+The validator resolves absolute/relative/nested layer imports, rejects runtime→development/fixture→tests edges and V2 process/SQLite use. `code_inventory.py` owns AST resolution/metrics; `source-architecture review` gates `Toolkit-owned contract`: bounded routines, explained legacy debt, no new test coupling/stale exemptions, explicit module responsibilities. Never auto-rebaseline/grow limits for a feature. [CODE_MAP.md](CODE_MAP.md) owns navigation, not runtime logic; new directions/limits require architectural decisions and matching tests.
 
 ## Software-failure boundaries
 

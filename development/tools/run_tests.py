@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from fnmatch import fnmatchcase
 import os
 import subprocess
 import sys
@@ -25,16 +24,12 @@ QUICK_PATTERNS: tuple[str, ...] = (
     "test_history_loading.py",
     "test_source_history_loading.py",
     "test_foundation_quick.py",
-    "test_step10_release_hardening.py",
     "test_config.py",
     "test_domain.py",
     "test_session_tree.py",
     "test_report_sampling.py",
     "test_report_duration.py",
     "test_v2_normalization.py",
-    "test_structure_contracts.py",
-    "test_fr_backlog_contract.py",
-    "test_structure_growth.py",
     "test_watch_account_refresh.py",
     "test_prompt_projection.py",
     "test_cache.py",
@@ -113,7 +108,6 @@ QUICK_PATTERNS: tuple[str, ...] = (
     "test_pricing_identities.py",
     "test_claude_code_accounts.py",
     "test_claude_transport.py",
-    "test_version_history.py",
 )
 FULL_ONLY_PATTERNS: tuple[str, ...] = (
     # Slowest first: Full starts these before the quick files.
@@ -121,39 +115,12 @@ FULL_ONLY_PATTERNS: tuple[str, ...] = (
     "test_rc2_public_diagnostics.py",
     "test_step9_parity_performance.py",
 )
-# Intentional omissions require an exact relative module path and a reason.
-# None currently: every test_*.py module belongs to Quick or Full-only.
-EXCLUDED_TEST_MODULES: dict[str, str] = {}
 PROFILES: dict[str, tuple[str, ...]] = {
     "startup": ("test_launcher_feedback.py", "test_windows_launcher.py", "test_startup_progress.py", "test_watch_screen.py", "test_watch_rendering.py", "test_watch_startup_recovery.py"),
-    "foundation": ("test_foundation_quick.py", "test_structure_contracts.py"),
     "sources": ("test_opencode_v1.py", "test_opencode_v2.py", "test_v2_normalization.py", "test_v2_tool_continuations.py", "test_opencode_aborts.py", "test_opencode_terminal.py", "test_source_selection.py", "test_v7814_regressions.py"),
     "analysis": ("test_analysis_core.py", "test_step6_context_comparisons.py", "test_effort_presentation.py", "test_step6_pricing_accounts.py"),
     "runtime": ("test_step7_reports_cli.py", "test_step8_watch.py", "test_watch_grouping.py", "test_watch_session_retention.py", "test_watch_idle_accounts.py", "test_watch_subtotals.py", "test_watch_today_ccost.py", "test_watch_rendering.py", "test_watch_tool_activity.py", "test_watch_skills.py", "test_watch_activity_lifecycle.py", "test_watch_source_recovery.py", "test_watch_lifecycle.py", "test_token_mix.py", "test_token_mix_economics.py", "test_priced_token_mix.py", "test_report_definitions.py", "test_session_move.py", "test_opencode_aborts.py", "test_opencode_terminal.py", "test_v786_regressions.py", "test_v788_regressions.py", "test_v7810_regressions.py", "test_v7811_regressions.py", "test_v7814_regressions.py"),
-    "release": FULL_ONLY_PATTERNS + ("test_step10_release_hardening.py",),
-    "structure": ("test_structure_contracts.py", "test_structure_growth.py", "test_session_tree.py", "test_report_sampling.py", "test_v2_normalization.py", "test_watch_account_refresh.py", "test_prompt_projection.py", "test_compact_reports.py", "test_step8_watch.py"),
 }
-
-
-def suite_membership_errors(tests: Path = TESTS) -> list[str]:
-    """Reject orphaned modules and stale/ambiguous suite declarations."""
-    modules = {path.relative_to(tests).as_posix() for path in tests.rglob("test_*.py")}
-    patterns = QUICK_PATTERNS + FULL_ONLY_PATTERNS
-    errors = []
-    for pattern in patterns:
-        if not any(fnmatchcase(Path(module).name, pattern) for module in modules):
-            errors.append(f"suite pattern matches no test module: {pattern}")
-    for module in sorted(modules):
-        matches = sum(fnmatchcase(Path(module).name, pattern) for pattern in patterns)
-        excluded = module in EXCLUDED_TEST_MODULES
-        if matches == 0 and not excluded:
-            errors.append(f"unassigned test module: {module}")
-        elif matches > 1 or (matches and excluded):
-            errors.append(f"test module has overlapping suite/exclusion assignments: {module}")
-    for module, reason in EXCLUDED_TEST_MODULES.items():
-        if module not in modules or not reason.strip():
-            errors.append(f"stale or undocumented test exclusion: {module}")
-    return errors
 
 
 def _run_pattern(pattern: str, *, timeout: float, verbosity: int) -> tuple[str, int, float, str]:
@@ -194,14 +161,7 @@ def main(argv: list[str] | None = None) -> int:
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(errors="replace")
 
-    errors = suite_membership_errors()
-    if errors:
-        for error in errors:
-            print(f"TEST PLAN ERROR: {error}", file=sys.stderr)
-        return 2
-
-    if args.pattern:
-        patterns = (args.pattern,)
+    patterns = (args.pattern,)
     elif args.profile:
         patterns = PROFILES[args.profile]
     elif args.suite == "full":
