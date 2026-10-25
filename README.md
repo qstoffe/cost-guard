@@ -360,7 +360,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.76 (2026-10-25):** Compact account CCost beside rolling quotas; today/month values without prose. Acquired empty periods show `0`, unknown `—`, partial pricing `≥…`. Token-sharing accounts suggest legacy Codex sign-in options without promising quota access. See [account support](docs/account-support.md) and [history](VERSION_HISTORY.md).
+**v80.77 (2026-10-25):** Account CCost shows the priced subtotal, rounded upward without a partial marker; missing prices may understate it. Empty acquired periods show `0`, unknown `—`. Global markers unchanged. See [details](docs/usage-and-cost.md).
 
 Recent predecessors added buffered Watch/startup progress and launcher feedback ([evidence and limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence)), independent historical context/current anchors, nonblocking metadata, quota histories, execution Duration and retained daily CCost. v80.0 is the Python 3.11+ public baseline; see [version history](VERSION_HISTORY.md). Claude quotas remain experimental; terminal visuals, restart and sleep/wake need separate live evidence.
 

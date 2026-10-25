@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.77 — 2026-10-25
+
+- Account CCost displays the known priced subtotal without a partial marker, using standard upward rounding in reports and Watch. Unknown/empty distinctions, internal priceability evidence and global partial markers are unchanged; documented that missing prices may understate complete reference valuation.
+
 ## v80.76 — 2026-10-25
 
 - Compact normal account sections retain today/month numeric CCost and show independent rolling CCost beside the corresponding quota percentage (or textual window when no percentage exists). Remove per-account provenance prose and the final account legend; documentation retains the distinctions.

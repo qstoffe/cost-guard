@@ -1,10 +1,22 @@
 {
   "schemaVersion": 1,
   "epochRevision": "df44c06a97244278abd8d0dc9ed90ea12c368e47",
-  "ordinaryCount": 7,
-  "completed": {"architecture": 0, "test-health": 5, "performance": 0},
-  "template": {"id": "shared-repository-maintenance", "version": 1},
-  "lastDeliveredRevision": "0bb79b9189bd974697f5b1d23e5d158d5de27a29",
-  "lastItem": {"id": "fr/000170-link-root-readme-to-synced-development-guide.md", "kind": "ordinary"},
-  "featureDiscovery": {"completed": 0}
+  "ordinaryCount": 8,
+  "completed": {
+    "architecture": 0,
+    "test-health": 5,
+    "performance": 0
+  },
+  "template": {
+    "id": "shared-repository-maintenance",
+    "version": 1
+  },
+  "lastDeliveredRevision": "3929f5645fa48db02526efd06a3c466943fff8e9",
+  "lastItem": {
+    "id": "fr/000180-remove-account-ccost-partial-pricing-prefix.md",
+    "kind": "ordinary"
+  },
+  "featureDiscovery": {
+    "completed": 0
+  }
 }
