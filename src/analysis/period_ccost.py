@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from bisect import bisect_left
 from dataclasses import dataclass, replace
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Iterable
 
@@ -43,9 +44,34 @@ def quota_window(component: QuotaComponent, now_ms: int) -> tuple[int, int, str]
     return None
 
 
-def history_start(accounts: Iterable[AccountSnapshot], today_start_ms: int, now_ms: int) -> int:
-    return min([today_start_ms] + [window[0] for account in accounts for component in account.quotas
-                                 if (window := quota_window(component, now_ms)) is not None])
+def monthly_quota_window(component: QuotaComponent, now_ms: int) -> tuple[int, int] | None:
+    """Support native fixed UTC calendar months only; never guess from a percentage."""
+    if (component.period != "fixed" or component.scope != "account" or component.model_id
+            or component.window_active is False or component.origin != "provider_native"
+            or component.label.casefold() not in {"monthly", "month"} or not component.reset_at_ms):
+        return None
+    try:
+        end = datetime.fromtimestamp(component.reset_at_ms / 1000, timezone.utc)
+        if (end.day, end.hour, end.minute, end.second, end.microsecond) != (1, 0, 0, 0, 0):
+            return None
+        start = end.replace(year=end.year - 1, month=12) if end.month == 1 else end.replace(month=end.month - 1)
+        start_ms = int(start.timestamp() * 1000)
+    except (ValueError, OverflowError, OSError):
+        return None
+    return (start_ms, now_ms + 1) if start_ms <= now_ms < component.reset_at_ms else None
+
+
+def history_start(accounts: Iterable[AccountSnapshot], today_start_ms: int, now_ms: int, *,
+                  include_copilot_month: bool = False) -> int:
+    starts = [today_start_ms]
+    for account in accounts:
+        for component in account.quotas:
+            if (window := quota_window(component, now_ms)) is not None:
+                starts.append(window[0])
+            if include_copilot_month and usage_provider(account.ref.provider_id) == "github-copilot":
+                if (window := monthly_quota_window(component, now_ms)) is not None:
+                    starts.append(window[0])
+    return min(starts)
 
 
 @dataclass

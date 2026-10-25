@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "epochRevision": "df44c06a97244278abd8d0dc9ed90ea12c368e47",
-  "ordinaryCount": 8,
+  "ordinaryCount": 9,
   "completed": {
     "architecture": 0,
     "test-health": 5,
@@ -11,9 +11,9 @@
     "id": "shared-repository-maintenance",
     "version": 1
   },
-  "lastDeliveredRevision": "3929f5645fa48db02526efd06a3c466943fff8e9",
+  "lastDeliveredRevision": "0ffa690670b20b1fd7eec72a7afe10ac6ef42468",
   "lastItem": {
-    "id": "fr/000180-remove-account-ccost-partial-pricing-prefix.md",
+    "id": "fr/000190-unaccounted-copilot-usage.md",
     "kind": "ordinary"
   },
   "featureDiscovery": {

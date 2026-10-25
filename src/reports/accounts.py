@@ -6,7 +6,7 @@ from dataclasses import replace
 from typing import Sequence
 
 from src.analysis.models import TraceEntry
-from src.analysis.period_ccost import PeriodCCostIndex, usage_provider, quota_window
+from src.analysis.period_ccost import PeriodCCostIndex, usage_provider, quota_window, monthly_quota_window
 from src.analysis.quota_pace import quota_pace
 from src.analysis.valuation import billed_spend, comparison_cost, unique_usage
 from src.domain import AccountSnapshot, CostDisposition
@@ -62,8 +62,31 @@ def account_projections(
         projections.append(AccountProjection(
             account, label, tuple(scopes),
             actual_billing(today_start_ms), actual_billing(month_start_ms), pace, notes, account_unknown,
+            unaccounted_usage=None if watch else _unaccounted_usage(account, index, providers, now_ms, observed_start_ms),
         ))
     return tuple(projections)
+
+
+def _unaccounted_usage(account, index, providers, now_ms, observed_start_ms):
+    """A fully comparable residual, never a partial subtotal or billed usage claim."""
+    provider = usage_provider(account.ref.provider_id)
+    if provider != "github-copilot" or account.availability not in {"available", "partial"}:
+        return None
+    components = [item for item in account.quotas
+                  if item.unit and item.unit.casefold() == "ai credits"
+                  and item.label.casefold() in {"month", "monthly"} and item.scope == "account"]
+    if len(components) != 1:
+        return None
+    component = components[0]
+    window = monthly_quota_window(component, now_ms)
+    if component.used is None or window is None or observed_start_ms is None or observed_start_ms > window[0]:
+        return None
+    start, end = window
+    proven = index.cost(provider, account.key, start, end)
+    unknown = index.cost(provider, None, start, end)
+    if not proven.complete or (unknown.observed_requests and (providers[provider] != 1 or not unknown.complete)):
+        return None
+    return component.used - proven.known_ccost - unknown.known_ccost
 
 
 def _period_scopes(account, index, providers, explained, today_start_ms, month_start_ms, now_ms, *, watch,

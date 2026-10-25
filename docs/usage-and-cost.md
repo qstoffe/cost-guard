@@ -28,6 +28,16 @@ Native reset plus duration defines a rolling accounting interval only while its 
 
 Watch acquires necessary daily/rolling history after its first useful dashboard in bounded slices and reuses revision-proven analysis. Unchanged quota refreshes query a cached period index rather than initiating history scans or repricing a month. Observed requests survive source deletion within the process-local retained scope; restart can use only then-available history.
 
+### Copilot Unaccounted usage
+
+Each detected GitHub Copilot account in the normal `Accounts Overview` has one `Unaccounted usage` row: **GitHub-reported native AI credits used − canonical deduplicated OpenCode Copilot CCost in the same native period**. This signed reconciliation residual is an **estimate in AI-credit-equivalent units**, not independently metered external usage, verified credits charged, billed cost or an invoice adjustment. Positive values have `+`, negative values are retained, and exact zero is `0`. Only presentation rounds the absolute magnitude upward using ordinary CCost rules (for example `+37.2` → `+38`, `-0.15` → `-0.2`).
+
+The comparison supports a provider-reported fixed monthly reset at the first day, 00:00 UTC; its start is the preceding calendar-month boundary, not a fixed 30-day lookback. Unknown, expired or unsupported reset evidence leaves `—`. History is independently acquired through that start using the existing report scope/index, without a new provider endpoint or polling path. The existing `CCost this month` still uses the configured **local** month, so it can differ from the CCost used internally for this row, including near UTC/local month boundaries and DST.
+
+Missing native used credits, incomplete acquisition through the required start, any unpriceable relevant request or ambiguous multi-account attribution yields `—`, never a fabricated zero or a partial residual. A completely acquired, priced empty period can reconcile to `0`. Native percentages, balances, budgets and limits never substitute for used credits. Copilot aliases and model publishers follow existing provider/account attribution: a sole compatible account may include a non-verified provider-attributed estimate; proven foreign-account requests stay foreign, and unassigned requests are not duplicated among multiple accounts. Existing account CCost can still show its known partial subtotal independently.
+
+Positive or negative residuals can reflect Copilot Code Review or other non-OpenCode consumption, deleted or previously unobserved OpenCode sessions, discounts/reference-price mismatch, or upstream reporting lag. Neither positive nor zero proves whether a review was free. No row is added to Watch, other providers, prompt/session reports or Token Mix.
+
 ## Model comparison
 
 Normal reports show Publisher, Model, Relative CCost and Release date. `--all-models` retains the full GitHub catalog and adds `GitHub USD/M I/C/W/O`: original USD per million input/cache-read/cache-write/output tokens, with exact numeric precision, all tiers and current promotions. `→` separates exact tiers; context boundaries remain visible even without an observed comparison mix. `-` means a category has no published rate. This reference column does not change CCost, Watch or quotas.

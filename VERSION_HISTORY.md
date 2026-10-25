@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.78 — 2026-10-26
+
+- Normal Copilot Accounts Overview adds signed `Unaccounted usage`: native used AI credits minus canonical OpenCode reference CCost aligned to the supported native UTC billing month. Missing native usage/boundaries, incomplete history/pricing or ambiguous accounts show `—`; acquired priced zero is `0`. Local-month CCost, Watch, quotas and billing remain unchanged. The residual is an estimate, not metered external consumption or proof of free reviews; no new provider endpoint or credentials.
+
 ## v80.77 — 2026-10-25
 
 - Account CCost displays the known priced subtotal without a partial marker, using standard upward rounding in reports and Watch. Unknown/empty distinctions, internal priceability evidence and global partial markers are unchanged; documented that missing prices may understate complete reference valuation.
