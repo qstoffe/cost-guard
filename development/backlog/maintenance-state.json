@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "epochRevision": "df44c06a97244278abd8d0dc9ed90ea12c368e47",
-  "ordinaryCount": 0,
+  "ordinaryCount": 1,
   "completed": {"architecture": 0, "test-health": 0, "performance": 0},
   "template": {"id": "shared-repository-maintenance", "version": 1},
-  "lastDeliveredRevision": "df44c06a97244278abd8d0dc9ed90ea12c368e47",
+  "lastDeliveredRevision": "1d8613b02aa62d8fa8d606cd1370d5119b8bdb2c",
   "lastItem": {
-    "id": "contract-sync/2/df44c06a97244278abd8d0dc9ed90ea12c368e47",
-    "kind": "contract-sync"
+    "id": "fr/000090-bootstrap-toolkit-contract-sync.md",
+    "kind": "ordinary"
   }
 }
