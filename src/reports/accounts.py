@@ -6,11 +6,12 @@ from dataclasses import replace
 from typing import Sequence
 
 from src.analysis.models import TraceEntry
+from src.analysis.period_ccost import PeriodCCostIndex, usage_provider, quota_window
 from src.analysis.quota_pace import quota_pace
 from src.analysis.valuation import billed_spend, comparison_cost, unique_usage
 from src.domain import AccountSnapshot, CostDisposition
 from src.domain.acquisition import AcquisitionMetrics
-from src.pricing.catalog import PricingCatalog, canonical_model_name
+from src.pricing.catalog import PricingCatalog
 
 from .models import AccountProjection, AccountsQuotasProjection
 
@@ -19,8 +20,12 @@ def account_projections(
     accounts: Sequence[AccountSnapshot], entries: Sequence[TraceEntry],
     catalog: PricingCatalog, *, now_ms: int, today_start_ms: int, month_start_ms: int,
     timezone_id: str = "UTC", workday_calendar: str = "",
+    period_index: PeriodCCostIndex | None = None, watch: bool = False,
 ) -> tuple[AccountProjection, ...]:
     counts = Counter((item.ref.provider_id, item.plan) for item in accounts)
+    providers = Counter(usage_provider(item.ref.provider_id) for item in accounts)
+    index = period_index or PeriodCCostIndex(entries, catalog.reference_valuation)
+    explained = set()
     labels: dict[str, int] = {}
     projections = []
     # Stable capacity/name/identity ordering, never balance, percentage or timing.
@@ -38,24 +43,8 @@ def account_projections(
             label += f" · account {labels[label]}"
         attributed = tuple(entry for entry in entries if entry.account_ref and entry.account_ref.key == account.key
                            and entry.model.provider == account.ref.provider_id)
-        scopes = []
-        rolling = [component for component in account.quotas if component.duration_seconds]
-        ranges = [(component.label, (component.reset_at_ms or now_ms + 1) - component.duration_seconds * 1000,
-                   min(component.reset_at_ms or now_ms + 1, now_ms + 1), component.model_id, component.scope) for component in rolling]
-        if not ranges:
-            ranges = [("today", today_start_ms, now_ms + 1, None, "account")]
-        for name, start, end, model_id, scope in ranges:
-            selected = [entry for entry in attributed if start <= entry.completed_at_ms < end
-                        and (model_id is None or canonical_model_name(entry.model.model) == canonical_model_name(model_id))]
-            # Visible attributable calls prove that subset, not completeness of a
-            # rolling window containing other unassigned calls from this provider.
-            unknown = any(entry.model.provider == account.ref.provider_id and entry.account_ref is None
-                          and start <= entry.completed_at_ms < end
-                          and (model_id is None or canonical_model_name(entry.model.model) == canonical_model_name(model_id)) for entry in entries)
-            value = comparison_cost(selected, catalog.reference_valuation) if (
-                (selected or account.usage_attribution_complete) and not unknown and (scope != "model" or model_id is not None)
-            ) else None
-            scopes.append((name, value))
+        scopes, notes, account_unknown = _period_scopes(account, index, providers, explained, today_start_ms,
+                                       month_start_ms, now_ms, watch=watch)
         unassigned = any(entry.model.provider == account.ref.provider_id and entry.account_ref is None
                          and month_start_ms <= entry.completed_at_ms <= now_ms for entry in entries)
         billing_known = not unassigned
@@ -71,18 +60,49 @@ def account_projections(
             component, now_ms=now_ms, timezone_id=timezone_id, workday_calendar=workday_calendar)) is not None)
         projections.append(AccountProjection(
             account, label, tuple(scopes),
-            actual_billing(today_start_ms), actual_billing(month_start_ms), pace,
+            actual_billing(today_start_ms), actual_billing(month_start_ms), pace, notes, account_unknown,
         ))
     return tuple(projections)
 
 
-def native_watch_accounts(accounts: Sequence[AccountSnapshot], catalog: PricingCatalog, *, now_ms: int,
-                          timezone_id: str, workday_calendar: str) -> tuple[AccountProjection, ...]:
-    """Visible Watch capacity/status/Pace has no historical attribution dependency."""
-    projections = account_projections(accounts, (), catalog, now_ms=now_ms, today_start_ms=0, month_start_ms=0,
-                                      timezone_id=timezone_id, workday_calendar=workday_calendar)
-    return tuple(replace(item, ccost_scopes=tuple((label, None) for label, _value in item.ccost_scopes),
-                         billed_today=None, billed_month=None) for item in projections)
+def _period_scopes(account, index, providers, explained, today_start_ms, month_start_ms, now_ms, *, watch):
+    provider = usage_provider(account.ref.provider_id)
+    ranges = [("today", (today_start_ms, now_ms + 1, "configured local calendar day"), None)]
+    if not watch:
+        ranges.append(("this month", (month_start_ms, now_ms + 1, "configured local calendar month to date"), None))
+    ranges.extend((component.label, quota_window(component, now_ms), component.model_id)
+                  for component in account.quotas if component.duration_seconds)
+    scopes, notes = [], []
+    account_unknown = False
+    for name, window, model in ranges:
+        if window is None:
+            scopes.append((name, None))
+            notes.append(f"CCost {name}: period boundary unknown.")
+            continue
+        start, end, basis = window
+        proven = index.cost(provider, account.key, start, end, model)
+        unknown = index.cost(provider, None, start, end, model)
+        if unknown.observed_requests and providers[provider] == 1:
+            # Include proven requests only for this account, never another account's history.
+            value = replace(proven, known_ccost=proven.known_ccost + unknown.known_ccost,
+                            observed_requests=proven.observed_requests + unknown.observed_requests,
+                            priced_requests=proven.priced_requests + unknown.priced_requests)
+            attribution = "provider-attributed estimate; not verified account/billing attribution"
+        elif unknown.observed_requests:
+            value = None
+            account_unknown = True
+            attribution = "account unknown / not attributable among multiple compatible accounts"
+            if (provider, name) not in explained:
+                total = index.cost(provider, "provider", start, end, model)
+                number = str(total.known_ccost) if total.priced_requests else "N/A"
+                notes.append(f"Provider-only CCost {name}: {number}{' (partial pricing)' if not total.complete else ''}; not allocated to accounts.")
+                explained.add((provider, name))
+        else:
+            value = proven if proven.observed_requests or account.usage_attribution_complete else None
+            attribution = "verified request account references" if proven.observed_requests else "no attributable observed requests"
+        scopes.append((name, value))
+        notes.append(f"CCost {name}: {basis}; {attribution}.")
+    return tuple(scopes), tuple(notes), account_unknown
 
 
 class WatchAccountProjection:
@@ -94,19 +114,28 @@ class WatchAccountProjection:
         self._catalog: PricingCatalog | None = None
         self._boundaries: tuple[int, int] | None = None
         self._local: tuple[AccountsQuotasProjection, tuple[TraceEntry, ...]] | None = None
+        self._period_index: PeriodCCostIndex | None = None
+        self._period_entries: tuple[TraceEntry, ...] | None = None
+        self._period_catalog: PricingCatalog | None = None
 
     def project(self, accounts: Sequence[AccountSnapshot], entries: tuple[TraceEntry, ...], catalog: PricingCatalog, *,
                 now_ms: int, day_start_ms: int, month_start_ms: int, timezone_id: str,
-                workday_calendar: str) -> tuple[AccountsQuotasProjection, tuple[TraceEntry, ...]]:
+                workday_calendar: str, period_entries: tuple[TraceEntry, ...] | None = None) -> tuple[AccountsQuotasProjection, tuple[TraceEntry, ...]]:
         boundaries = (day_start_ms, month_start_ms)
         if self._entries is not entries or self._catalog is not catalog or self._boundaries != boundaries:
             self._local = accounts_quota_projection_with_today_entries(
                 (), entries, catalog, now_ms=now_ms, today_start_ms=day_start_ms, month_start_ms=month_start_ms)
             self._entries, self._catalog, self._boundaries = entries, catalog, boundaries
             self.metrics.add("daily_usage_projections")
+        period_entries = entries if period_entries is None else period_entries
+        if self._period_entries is not period_entries or self._period_index is None or self._period_catalog is not catalog:
+            self._period_index = PeriodCCostIndex(period_entries, catalog.reference_valuation)
+            self._period_entries, self._period_catalog = period_entries, catalog
         assert self._local is not None
         projection, today = self._local
-        native = native_watch_accounts(accounts, catalog, now_ms=now_ms, timezone_id=timezone_id, workday_calendar=workday_calendar)
+        native = account_projections(accounts, (), catalog, now_ms=now_ms, today_start_ms=day_start_ms,
+                                     month_start_ms=month_start_ms, timezone_id=timezone_id,
+                                     workday_calendar=workday_calendar, period_index=self._period_index, watch=True)
         return replace(projection, accounts=native, now_ms=now_ms), today
 
 

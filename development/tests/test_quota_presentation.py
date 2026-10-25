@@ -141,7 +141,7 @@ class VisibilityTests(unittest.TestCase):
         self.assertIn("Billed month: $48.20", text)
         row = replace(row, ccost_scopes=(("today", ComparisonCost(D("3.41"), 1, 1)),), billed_today=None)
         text = report_text(quotas(row))
-        self.assertNotIn("CCost today:", text)
+        self.assertIn("CCost today: 4", text)
         self.assertNotIn("Billed today:", text)
 
     def test_subscription_inclusion_is_not_account_billing_evidence(self):

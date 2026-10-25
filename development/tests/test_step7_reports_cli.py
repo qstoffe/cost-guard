@@ -105,7 +105,7 @@ class ReportProjectionTests(unittest.TestCase):
             now_ms=now_ms,
         )
 
-    def test_normal_report_projects_only_models_and_native_quotas(self) -> None:
+    def test_normal_report_projects_models_and_independent_account_periods(self) -> None:
         report = self.service.build(ReportRequest())
         self.assertEqual(ReportKind.NORMAL, report.kind)
         self.assertTrue(report.model_comparison)
@@ -113,7 +113,7 @@ class ReportProjectionTests(unittest.TestCase):
         self.assertFalse(report.prompt_blocks)
         self.assertIsNotNone(report.accounts_quotas)
         self.assertEqual(Decimal("30"), report.accounts_quotas.accounts[0].account.quotas[0].used)
-        self.assertEqual(0, report.accounts_quotas.comparison_month.observed_requests)
+        self.assertEqual(5, report.accounts_quotas.comparison_month.observed_requests)
 
     def test_v2_openai_provider_usage_is_included_in_local_cost_and_prompt_attribution(self) -> None:
         snapshot = make_snapshot()
@@ -300,7 +300,7 @@ class ReportProjectionTests(unittest.TestCase):
             "Relative CCost", "GitHub Copilot", "Pricing/cache metadata",
         ):
             self.assertIn(expected, text)
-        for excluded in ("## Model comparison", "Monthly usage", "Today's user prompts", "Daily CCost", "## Accounts & quotas", "CCost today", "CCost month", "Sample:"):
+        for excluded in ("## Model comparison", "Monthly usage", "Today's user prompts", "Daily CCost", "## Accounts & quotas", "CCost month", "Sample:"):
             self.assertNotIn(excluded, text)
         self.assertNotIn("\x1b[", text)
         self.assertNotIn("GitHub USD/M I/C/W/O", text)
@@ -341,7 +341,9 @@ class ReportProjectionTests(unittest.TestCase):
         ReportRenderer(self.config, stream=stream, color_enabled=False, terminal_width=160).render(report)
         section = stream.getvalue().split("GitHub Copilot", 1)[1]
         self.assertNotIn("Billed today:", section)
-        self.assertNotIn("CCost today:", section)
+        self.assertIn("CCost today:", section)
+        self.assertIn("CCost this month:", section)
+        self.assertIn("provider-attributed estimate", section)
         self.assertNotIn("configured monthly CCost budget", section)
         self.assertIn("70/100 AI credits", section)
         self.assertNotIn("Native", section)

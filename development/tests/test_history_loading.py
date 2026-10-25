@@ -79,7 +79,7 @@ class WatchHistoryLoadingTests(unittest.TestCase):
             self.assertTrue(initial.today_pending)
             output = io.StringIO()
             WatchRenderer(watch.config, stream=output, interactive=False).render(initial)
-            self.assertIn("Today: Pending", output.getvalue())
+            self.assertIn("Total today: Pending", output.getvalue())
             result = finish_history(watch)
             service = watch.report_service
             traces = [entry for snapshot in source.snapshots.values()

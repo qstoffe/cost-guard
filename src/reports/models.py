@@ -161,6 +161,8 @@ class AccountProjection:
     billed_today: Decimal | None = None
     billed_month: Decimal | None = None
     pace: tuple[QuotaPace, ...] = ()
+    ccost_notes: tuple[str, ...] = ()
+    ccost_account_unknown: bool = False
 
 
 @dataclass(frozen=True, slots=True)

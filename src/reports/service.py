@@ -1,7 +1,7 @@
 """One-shot Cost Guard report orchestration over abstract runtime boundaries."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import Decimal
 from typing import Callable, Mapping, Sequence
 
@@ -17,7 +17,7 @@ from src.analysis import (
     dependency_signature,
     local_day_start_ms,
     local_report_range,
-    utc_month_start_ms,
+    local_month_start_ms,
 )
 from src.analysis.comparisons import model_comparison_rows, threshold_cost_multiplier
 from src.analysis.models import PromptRecord, RootAnalysisBundle, TraceEntry
@@ -357,7 +357,7 @@ class ReportService:
         entries = tuple(entry for item in roots for entry in item.bundle.trace_entries)
         return accounts_quota_projection(
             quotas or (), entries, self._load_comparison_catalog(), now_ms=self.now_ms,
-            today_start_ms=today_start_ms, month_start_ms=utc_month_start_ms(now_ms=self.now_ms),
+            today_start_ms=today_start_ms, month_start_ms=local_month_start_ms(self.timezone_id, now_ms=self.now_ms),
             today_prompt_count=today_prompt_count,
             today_session_count=today_session_count,
             timezone_id=self.timezone_id, workday_calendar=str(self.config.get("workdayCalendar") or ""),
@@ -476,7 +476,8 @@ class ReportService:
         """Daily accounting, independent of display scope, comparison sampling and quotas."""
         self._watch_history_active = set(live_root_ids) - set(fresh_root_ids)
         roots, revisions = self._watch_history.candidates(self.source, sessions, timezone_id=self.timezone_id,
-                                                         now_ms=self.now_ms, active_root_ids=active_root_ids)
+                                                         now_ms=self.now_ms, active_root_ids=active_root_ids,
+                                                         start_ms=getattr(self, "_watch_period_start_ms", None))
         self.metrics.add("history_candidate_roots", len(roots))
         for root in roots:
             item = self._analyzed.get(root.session_id)
@@ -500,13 +501,36 @@ class ReportService:
     def publish_watch_history(self) -> None:
         self._watch_quota_entries = self._watch_history.entries()
 
+    def watch_period_history_due(self) -> bool:
+        start = self._watch_history.scope_start_ms
+        return start is not None and start > getattr(self, "_watch_period_start_ms", start)
+
     def project_watch_accounts(self, quotas: Sequence[AccountSnapshot]) -> tuple[AccountsQuotasProjection, tuple[TraceEntry, ...]]:
         """Publish new quota evidence over cached local usage, without source I/O."""
-        return self._watch_account_projection.project(
+        from src.analysis.period_ccost import history_start
+        day = local_day_start_ms(self.timezone_id, now_ms=self.now_ms)
+        self._watch_period_start_ms = history_start(quotas, day, self.now_ms)
+        projection, today = self._watch_account_projection.project(
             quotas, self._watch_quota_entries, self._load_comparison_catalog(), now_ms=self.now_ms,
-            day_start_ms=local_day_start_ms(self.timezone_id, now_ms=self.now_ms),
-            month_start_ms=utc_month_start_ms(now_ms=self.now_ms), timezone_id=self.timezone_id,
-            workday_calendar=str(self.config.get("workdayCalendar") or ""))
+            day_start_ms=day,
+            month_start_ms=local_month_start_ms(self.timezone_id, now_ms=self.now_ms), timezone_id=self.timezone_id,
+            workday_calendar=str(self.config.get("workdayCalendar") or ""),
+            period_entries=self._watch_history.retained_entries())
+        if self._watch_history.published_start_ms is None or self._watch_history.published_start_ms > self._watch_period_start_ms:
+            projection = replace(projection, accounts=tuple(replace(account, ccost_scopes=tuple(
+                (name, None) for name, _cost in account.ccost_scopes)) for account in projection.accounts))
+        return projection, today
+
+    def _account_history(self, quotas, roots, root_activity):
+        from src.analysis.period_ccost import history_start
+        if not quotas:
+            return self._accounts_quotas(())
+        day = local_day_start_ms(self.timezone_id, now_ms=self.now_ms)
+        month = local_month_start_ms(self.timezone_id, now_ms=self.now_ms)
+        cutoff = min(month, history_start(quotas, day, self.now_ms))
+        selected = HistoryRequirements("account-periods", start_ms=cutoff).select(roots, root_activity)
+        self.prepare_roots(selected)
+        return self._accounts_quotas(quotas, roots=tuple(self._analyze(root) for root in selected), today_start_ms=day)
 
     def build(self, request: ReportRequest) -> ReportProjection:
         self.metrics.mode = request.kind.value
@@ -599,9 +623,8 @@ class ReportService:
         comparisons, sample, promo_notes, recent, recent_highlight_spans, availability_warnings = self._model_comparison(
             analyzed, all_models=request.kind is ReportKind.ALL_MODELS,
         )
-        # Dashboard quotas use provider observations only. A bounded Relative CCost
-        # sample cannot establish complete day/month spend or account attribution.
-        quota_projection = self._accounts_quotas(self._quotas()) if request.kind is ReportKind.NORMAL else None
+        # Account periods have their own history scope, never the comparison sample.
+        quota_projection = self._account_history(self._quotas(), roots, root_activity) if request.kind is ReportKind.NORMAL else None
         sample_prompts = latest_prompts(analyzed, priceable)
         entries = unique_usage(entry for prompt in sample_prompts for entry in prompt.entries)
         reference = self._load_comparison_catalog()
