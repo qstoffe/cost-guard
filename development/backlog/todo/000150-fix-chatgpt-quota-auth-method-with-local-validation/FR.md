@@ -8,7 +8,7 @@ The user expressly confirms that the implementation workflow runs **on the Windo
 
 ## Earlier FR0120: delivered fixes and unresolved boundary
 
-See [FR0120 specification](../../complete/000120-fix-openai-subscription-switch-watch-identity-and-quota/FR.md), [completion report](../../complete/000120-fix-openai-subscription-switch-watch-identity-and-quota/COMPLETION.md) and [OpenAI identity journal](../../../journal/openai-identity.md). Implemented and published in Cost Guard **v80.72 (2026-10-25)**:
+See [FR0120 specification](https://github.com/qstoffe/cost-guard/blob/8df17802bd58c9150b87b32570b5cb927b4022de/development/backlog/complete/000120-fix-openai-subscription-switch-watch-identity-and-quota/FR.md), [completion report](https://github.com/qstoffe/cost-guard/blob/8df17802bd58c9150b87b32570b5cb927b4022de/development/backlog/complete/000120-fix-openai-subscription-switch-watch-identity-and-quota/COMPLETION.md) and [OpenAI identity journal](https://github.com/qstoffe/cost-guard/blob/8df17802bd58c9150b87b32570b5cb927b4022de/development/journal/openai-identity.md). Implemented and published in Cost Guard **v80.72 (2026-10-25)**:
 
 - V2 account inventory suppresses stale legacy `codex` / `openai-codex` aliases; genuinely separate configured accounts remain distinct.
 - When an account is removed/replaced, Watch drops removed OpenAI rows. Acquisition is pinned to credential generations and discards old in-flight responses.
