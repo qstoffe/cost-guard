@@ -52,7 +52,7 @@ def generate(output, baseline):
     output.mkdir(parents=True, exist_ok=True)
     assets = ROOT / "src/web/assets"
     for name, value in synthetic_reports().items():
-        (output / f"{name}.js").write_text("const " + name.upper() + " = " + json.dumps(value, ensure_ascii=True) + ";\n", encoding="utf-8")
+        (output / f"{name}.js").write_text("const " + name.upper() + " = " + json.dumps(value, ensure_ascii=True) + ";\n", encoding="utf-8", newline="\n")
     for stage in ("before", "after"):
         def asset(name):
             if stage == "after":
@@ -60,14 +60,14 @@ def generate(output, baseline):
             return subprocess.check_output(["git", "show", baseline + ":src/web/assets/" + name], cwd=ROOT).decode("utf-8")
 
         for name in ("app.css", "render.js"):
-            (output / f"{stage}-{name}").write_text(asset(name), encoding="utf-8")
+            (output / f"{stage}-{name}").write_text(asset(name), encoding="utf-8", newline="\n")
         shell = re.sub(r"<script.*?</script>", "", asset("index.html"))
         shell = shell.replace('/app.css', f'{stage}-app.css')
         scripts = ''.join(f'<script src="{name}.js"></script>' for name in ("normal", "sessions", "watch"))
         shell = shell.replace('</body>', f'<script src="{stage}-render.js"></script>{scripts}<script src="preview.js"></script></body>')
-        (output / f"{stage}.html").write_text(shell, encoding="utf-8")
-    (output / "preview.js").write_text(PREVIEW, encoding="utf-8")
-    (output / "index.html").write_text(GALLERY.replace("BASELINE", baseline), encoding="utf-8")
+        (output / f"{stage}.html").write_text(shell, encoding="utf-8", newline="\n")
+    (output / "preview.js").write_text(PREVIEW, encoding="utf-8", newline="\n")
+    (output / "index.html").write_text(GALLERY.replace("BASELINE", baseline), encoding="utf-8", newline="\n")
 
 
 PREVIEW = """'use strict';

@@ -4,6 +4,7 @@ This optional evidence tool grants no UI authority. Supply an installed browser
 and an isolated current-owned scratch profile; no downloads or user profiles.
 """
 import argparse
+import hashlib
 import html
 import json
 from pathlib import Path
@@ -45,4 +46,13 @@ for view in ('overview', 'watch', 'sessions', 'models', 'accounts'):
             assert facts['facts'][1]['width'] <= 360, (name, facts)
         evidence.append(dict(view=view, theme=theme, facts=facts))
         print(name, 'PASS', flush=True)
-(output / 'rendered-facts.json').write_text(json.dumps(evidence, indent=2) + '\n', encoding='utf-8')
+(output / 'rendered-facts.json').write_text(json.dumps(evidence, indent=2) + '\n', encoding='utf-8', newline='\n')
+manifest = {}
+for path in sorted(output.iterdir()):
+    if not path.is_file() or path.name == 'sha256.json':
+        continue
+    data = path.read_bytes()
+    if path.suffix != '.png':
+        data = data.replace(b'\r\n', b'\n')
+    manifest[path.name] = hashlib.sha256(data).hexdigest()
+(output / 'sha256.json').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8', newline='\n')
