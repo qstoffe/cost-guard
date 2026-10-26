@@ -1,5 +1,7 @@
 # FR 000330 — experimental macOS Web launcher implementation
 
+Delivery PR: [#63](https://github.com/qstoffe/cost-guard/pull/63).
+
 Delivered as v80.84 on 2026-10-26. The owner explicitly requested best-effort implementation despite this session having only Windows, after the initial native-platform limitation was reported. **This is implementation delivery, not native macOS acceptance.** The immutable FR is preserved; its real-Mac checks remain outstanding and are not represented as PASS.
 
 ## Implemented
