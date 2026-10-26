@@ -389,7 +389,7 @@ class RuntimeErrorTests(unittest.TestCase):
         self.assertEqual(sorted(["src/accounts/acquisition.py", "src/accounts/claude_transport.py",
                              "src/accounts/claude_transport.py", "src/accounts/refresh_loop.py", "src/presentation/progress.py",
                                  "src/reports/model_comparison.py", "src/watch/model_discovery.py",
-                                 "src/watch/observers.py", "src/web/host.py"]), sorted(roots))
+                                 "src/watch/observers.py", "src/web/host.py", "src/web/jobs.py"]), sorted(roots))
 
     def test_retention_30_days_only_owned_files_and_no_log_on_cleanup_failure(self):
         directory = self.root / "logs/errors"

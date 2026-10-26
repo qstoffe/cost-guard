@@ -248,6 +248,35 @@ class LifecycleTests(unittest.TestCase):
         else:
             self.assertTrue(options["start_new_session"])
 
+    def test_force_stopped_parent_does_not_orphan_a_blocked_owned_report(self):
+        code = ("from src.web.jobs import ReportJobs; from src.reports import ReportRequest,ReportKind; "
+                "from development.tests.fixtures.web_reports import finite_report; import time; "
+                "jobs=ReportJobs(target=finite_report); jobs.submit(ReportRequest(ReportKind.TOKEN_MIX)); "
+                "jobs.tick(); print(jobs._active[1].pid,flush=True); time.sleep(30)")
+        parent = subprocess.Popen([sys.executable, "-c", code], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        worker_pid = birth = None
+        deadline = threading.Timer(8, parent.kill)
+        deadline.start()
+        try:
+            worker_pid = int(parent.stdout.readline())
+            birth = process_identity(worker_pid)
+            self.assertIsNotNone(birth)
+            parent.kill()  # Only our own Popen process; simulate host crash/force-stop.
+            parent.wait(timeout=5)
+            until = time.monotonic() + 5
+            while process_identity(worker_pid) == birth and time.monotonic() < until:
+                time.sleep(0.05)
+            self.assertNotEqual(process_identity(worker_pid), birth)
+        finally:
+            deadline.cancel()
+            deadline.join()
+            if parent.poll() is None:
+                parent.kill()
+            parent.wait(timeout=5)
+            parent.stdout.close()
+            if worker_pid and birth and process_identity(worker_pid) == birth:
+                terminate_owned(worker_pid, birth)
+
     def test_overlapping_launch_coalesces_and_failed_browser_is_not_server_failure(self):
         store = self.store()
         state = self.state(store, ready_ns=time.time_ns() + 10**12)
