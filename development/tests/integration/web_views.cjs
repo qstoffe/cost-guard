@@ -23,7 +23,7 @@ async function until(condition) {
 }
 async function main() {
   const input = JSON.parse(fs.readFileSync(0, 'utf8'));
-  const ids = Object.fromEntries(['status', 'result', 'notice', 'refresh', 'cancel', 'heading', 'skip', 'content'].map(id => [id, new Node('div')]));
+  const ids = Object.fromEntries(['status', 'result', 'notice', 'refresh', 'cancel', 'heading', 'skip', 'content', 'scope-controls', 'search'].map(id => [id, new Node('div')]));
   const nav = ['overview', 'sessions', 'live', 'models', 'accounts', 'reports', 'token-mix'].map(key => {
     const node = new Node('a'); node.setAttribute('href', '#/' + key); return node;
   });
@@ -43,7 +43,7 @@ async function main() {
   const context = vm.createContext({document: {createElement: tag => new Node(tag),
     getElementById: id => ids[id], querySelectorAll: () => nav}, window: {addEventListener: (key, fn) => { handlers[key] = fn; }},
     location, history, URLSearchParams, fetch: wire, setTimeout, Date, console});
-  for (const path of ['/render.js', '/app.js']) {
+  for (const path of ['/render.js', '/reports.js', '/app.js']) {
     const response = await fetch(input.origin + path);
     assert.equal(response.status, 200);
     vm.runInContext(await response.text(), context);
@@ -98,6 +98,59 @@ async function main() {
   navigate('live');
   assert.match(ids.notice.textContent, /Live acquisition/);
   assert.equal(ids.refresh.disabled, true);
+  navigate('overview');
+  const overviewTime = ids.result.textContent.match(/Snapshot: ([^·]+)/)[1];
+  const beforePresentation = requests;
+  navigate('models');
+  assert.match(ids.result.textContent, /Reference models/);
+  assert.equal(ids.result.textContent.match(/Snapshot: ([^·]+)/)[1], overviewTime);
+  navigate('accounts');
+  assert.match(ids.result.textContent, /Accounts · independent/);
+  assert.equal(requests, beforePresentation, 'normal subviews reuse one frozen acquisition');
+  navigate('models/all');
+  await until(() => ids.notice.textContent.includes('Snapshot captured'));
+  assert.match(ids.result.textContent, /GitHub USD\/M I\/C\/W\/O/);
+  navigate('reports');
+  const beforeDate = requests;
+  assert.equal(all(ids['scope-controls'], 'form').length, 1);
+  assert.equal(requests, beforeDate);
+  navigate('reports?date=2026-03-29');
+  await until(() => ids.notice.textContent.includes('Snapshot captured'));
+  assert.match(ids.result.textContent, /Inclusive local range 2026-03-29/);
+  assert.match(ids.result.textContent, /No prompt rows/);
+  navigate('reports?date=2026-02-30');
+  await until(() => ids.notice.textContent.includes('Invalid report scope'));
+  navigate('sessions?limit=3');
+  await until(() => ids.notice.textContent.includes('Snapshot captured'));
+  assert.match(ids.result.textContent, /1–3 of 3/);
+  navigate('token-mix');
+  const beforeDeep = requests;
+  await delay(650);
+  assert.equal(requests, beforeDeep, 'deep history never starts from navigation');
+  assert.equal(ids.refresh.disabled, false);
+  ids.refresh.click();
+  await until(() => ids.notice.textContent.includes('Snapshot captured'));
+  assert.match(ids.result.textContent, /Historical models/);
+  assert.match(ids.result.textContent, /Full-report I\/C\/W\/O tokens/);
+  const deep = ids.result.textContent;
+  navigate('overview'); navigate('token-mix');
+  assert.equal(ids.result.textContent, deep, 'history result retained as a frozen immutable observation');
+  // Exact sorting of Decimal wire values, even where Number would collapse them.
+  const cmp = (a, b) => { context.a = a; context.b = b; return vm.runInContext('ReportView.compare(a, b)', context); };
+  assert.equal(cmp('1.00000000000000000001', '1.00000000000000000002'), -1);
+  assert.equal(cmp('1E+20', '100000000000000000001'), -1);
+  assert.equal(cmp('-0.010', '-0.009'), -1);
+  assert.equal(cmp('1.00', '1'), 0);
+  navigate('sessions');
+  await until(() => ids.notice.textContent.includes('Snapshot captured'));
+  const beforeFilter = requests;
+  ids.search.events.input({target: {value: 'root-0000'}});
+  assert.match(ids.result.textContent, /1–1 of 1 · 55 full-report rows/);
+  assert.equal(requests, beforeFilter, 'presentation filter does not change acquisition');
+  ids.search.events.input({target: {value: ''}});
+  const column = all(ids.result, 'button').find(node => node.textContent === 'CCost');
+  column.click();
+  assert.equal(all(ids.result, 'th')[2].attrs['aria-sort'], 'ascending');
   // Actual canonical DTOs exercise compaction, linked-child, running and hostile text.
   for (const [index, result] of input.examples.entries()) {
     context.example = result;
@@ -118,16 +171,36 @@ async function main() {
   assert.match(ids.result.textContent, /Å日本語/);
   context.example = input.overview;
   vm.runInContext('ReportView.render(output, example, {pages: {}})', context);
+  assert.match(ids.result.textContent, /Model availability unverified/);
   for (const account of input.overview.view.accounts_quotas.accounts) {
     assert.ok(ids.result.textContent.includes(account.observation.label));
     assert.ok(ids.result.textContent.includes(account.observation.availability));
     assert.ok(ids.result.textContent.includes('Billed today'));
   }
+  context.example = input.tier_report;
+  vm.runInContext('ReportView.render(output, example, {pages: {}, section: "models"})', context);
+  assert.match(ids.result.textContent, /100000/);
+  assert.match(ids.result.textContent, /GitHub USD\/M I\/C\/W\/O/);
+  for (const row of input.tier_report.view.model_comparison) {
+    assert.ok(ids.result.textContent.includes(row.price_summary));
+    for (const level of row.relative_levels.slice(1)) {
+      assert.ok(ids.result.textContent.includes(level.threshold_operator + level.threshold_tokens));
+      if (level.relative_cost != null) assert.ok(ids.result.textContent.includes(level.relative_cost));
+    }
+  }
+  context.example = input.account_report;
+  vm.runInContext('ReportView.render(output, example, {pages: {}, section: "accounts"})', context);
+  assert.match(ids.result.textContent, /First/);
+  assert.match(ids.result.textContent, /Second/);
+  assert.match(ids.result.textContent, /unsupported_auth_method/);
+  assert.match(ids.result.textContent, /Unaccounted usage \(estimate\): Unknown/);
+  assert.match(ids.result.textContent, /Remaining fraction 0.75/);
   // Reload with an ordinary deep link must not erase it or require the bootstrap again.
   location.hash = '#/sessions/root-0000';
   const reloaded = vm.createContext({document: context.document, window: context.window, location, history,
     URLSearchParams, fetch: wire, setTimeout, Date, console});
   vm.runInContext(await (await fetch(input.origin + '/render.js')).text(), reloaded);
+  vm.runInContext(await (await fetch(input.origin + '/reports.js')).text(), reloaded);
   ids.notice.textContent = 'reload pending';
   vm.runInContext(await (await fetch(input.origin + '/app.js')).text(), reloaded);
   await until(() => ids.notice.textContent.includes('Snapshot captured'));

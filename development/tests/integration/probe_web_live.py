@@ -18,6 +18,7 @@ from src.web.jobs import ReportJobs
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--detail", action="store_true", help="Also probe complete session capture/pages/freeze.")
+    parser.add_argument("--reports", action="store_true", help="Also capture finite reports beside Live and cancel deep history.")
     args = parser.parse_args()
     owners = []
     csrf = None
@@ -47,7 +48,7 @@ def main():
             response = connection.getresponse()
             data = json.loads(response.read())
             connection.close()
-            if response.status != 200:
+            if response.status not in {200, 202}:
                 raise RuntimeError('probe_http_failed')
             return data, response
 
@@ -112,6 +113,47 @@ def main():
             print(json.dumps(dict(detail='ok', available_rows=page['total'],
                 page_rows=len(page['result']['view']['prompt_blocks'][0]['rows']),
                 first_latest_access=True, frozen_consistent=True, account_owners=len(owners))))
+        if args.reports:
+            # Do not emit session IDs, account details, report content or bootstrap values.
+            def submit(value):
+                return get('/api/reports', value=value, cookie=cookie)[0]['id']
+
+            def job(key):
+                return get('/api/jobs/' + key, cookie=cookie)[0]
+
+            for request in ({'kind': 'normal'}, {'kind': 'all-models'},
+                            {'kind': 'sessions', 'session_limit': 1},
+                            {'kind': 'date', 'date_text': '2026-10-25'}):
+                key = submit(request)
+                deadline = time.monotonic() + 125
+                while time.monotonic() < deadline:
+                    value = job(key)
+                    if value['status'] not in {'queued', 'running'}:
+                        break
+                    time.sleep(.25)
+                if value['status'] != 'complete' or value['result']['error']:
+                    print(json.dumps(dict(report=request['kind'], status=value['status'],
+                                          error=value.get('error'), progress=value.get('progress'))))
+                    raise RuntimeError('probe_finite_report_failed_' + str(value.get('error') or value['status']))
+                current, _ = get('/api/live', cookie=cookie)
+                if len(owners) != 1 or current['values']['live']['view']['started_at_ms'] != start:
+                    raise RuntimeError('probe_report_changed_live_owner')
+                print(json.dumps(dict(report=request['kind'], status='complete', live_owner_preserved=True)))
+            key = submit({'kind': 'token-mix'})
+            deadline = time.monotonic() + 10
+            while time.monotonic() < deadline:
+                value = job(key)
+                if value['status'] not in {'queued', 'running'} or value['progress']['phase'] == 'history':
+                    break
+                time.sleep(.05)
+            get('/api/jobs/' + key + '/cancel', value={}, cookie=cookie)
+            value = job(key)
+            if value['status'] not in {'cancelled', 'complete'}:
+                raise RuntimeError('probe_history_cancellation_failed')
+            latest, _ = get('/api/live', cookie=cookie)
+            if len(owners) != 1 or latest['values']['live']['view']['started_at_ms'] != start:
+                raise RuntimeError('probe_cancel_changed_live_owner')
+            print(json.dumps(dict(history=value['status'], live_owner_preserved=True)))
     finally:
         host.stop('menu')
         for connection, response in streams:

@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.88 — 2026-10-26
+
+- Completed Web Models/selectable and all-catalog views (including exact native rates/tiers), Accounts, configured-local inclusive date/range reports, Sessions N/all and explicit cancellable historical Token Mix. Views reuse canonical report projections and frozen observations; filters/paging never recalculate totals, and exact Decimal sorting avoids JavaScript floating-point ranking.
+- Preserved native quota windows/Pace, account attribution/freshness/errors, unknown pricing/history and independent sample scopes. Deep scans reuse dependency-bound analysis caches, never start another account scheduler or stop Live. Bounded progress-message coalescing prevents finite-job IPC backpressure from consuming the report deadline. CLI/launchers remain independent; visual browser and native macOS acceptance remain unclaimed.
+
 ## v80.87 — 2026-10-26
 
 - Session details explicitly switch between frozen Snapshot and persistent Live, sharing the established eight-column report semantics, provisional running metrics, child costs and whole-session totals. Revision-aware 50-row pages expose all observed history without Watch's row cap; idle and abort do not end Live. Source omissions retain last-observed evidence without a durable ledger; missing/archive/outage states retain readable results.

@@ -4,6 +4,8 @@ from __future__ import annotations
 from hashlib import sha256
 import json
 
+from src.analysis.model_supersession import superseded_rows
+
 from .contracts import ObjectValue, record
 
 
@@ -110,14 +112,21 @@ def accounts(value):
 
 def project(report):
     models = []
-    for item in report.model_comparison:
+    faded = superseded_rows([(item.publisher, item.model) for item in report.model_comparison])
+    for index, item in enumerate(report.model_comparison):
         base = fields(item, "publisher model relative_cost price_summary release_date promotional recent promotion_marker")
-        models.append(ObjectValue(base.fields + (("relative_levels", tuple(
+        models.append(ObjectValue(base.fields + (("superseded", index in faded), ("relative_levels", tuple(
             fields(level, "relative_cost threshold_tokens threshold_operator") for level in item.relative_levels)),)))
     return record(
         kind=report.kind, title=report.title, source_label=report.source_label,
         # Source messages can contain transport/private details. Preserve status, not raw prose.
         source_warning_count=len(report.source_warnings),
+        model_availability_unverified=any(warning in {
+            "⚠ Could not determine available OpenCode models; showing full pricing catalog.",
+            "ERROR: Model availability lookup failed internally; showing full pricing catalog.",
+            "⚠ Could not verify currently selectable OpenCode models; showing all historically used models.",
+            "ERROR: Model availability lookup failed internally; showing all historically used models.",
+        } for warning in report.source_warnings),
         model_comparison=tuple(models), model_comparison_sample_size=report.model_comparison_sample_size,
         pricing_retrieved_at_ms=report.pricing_retrieved_at_ms,
         model_comparison_promotion_notes=report.model_comparison_promotion_notes,

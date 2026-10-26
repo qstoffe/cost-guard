@@ -364,7 +364,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.87 (2026-10-26):** Complete session Snapshot/Live detail, revision-aware history pages and stable row identities over shared report metrics. Remaining dedicated views and native macOS proof remain pending.
+**v80.88 (2026-10-26):** Complete Web report navigation, cancellable historical Token Mix, exact sorting and presentation-only filters over shared CLI semantics. Native macOS and visual browser proof remain pending. See [Web Beta](docs/web-beta.md).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

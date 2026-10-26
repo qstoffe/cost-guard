@@ -87,7 +87,7 @@ class ReportApplication:
             if request.kind is ReportKind.DATE:
                 try:
                     period = local_report_range(request.date_text, service.timezone_id)
-                except ValueError:
+                except (ValueError, OverflowError):
                     return ReportResult(self._instance_id, sequence, now, scope, unknown,
                                         error=ReportError("invalid_request"))
                 scope = ObjectValue(scope.fields + (("start_ms", period.start_ms), ("end_ms", period.end_ms)))

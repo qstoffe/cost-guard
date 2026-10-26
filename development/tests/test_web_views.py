@@ -14,6 +14,8 @@ import unittest
 from development.tests.fixtures.report_runtime import FakeAccountProvider, FakePricingProvider, FakeSource
 from development.tests.fixtures.session_snapshots import make_snapshot, make_uncompacted_snapshot
 from development.tests.fixtures.synthetic_month import SyntheticMonthSource, make_root_snapshot
+from development.tests.fixtures.pricing_catalog import threshold_catalog
+from development.tests.fixtures.accounts import account, NormalizedProvider
 from src.application import ReportApplication
 from src.cache import CacheDatabase, CacheRepository
 from src.config import load_configuration
@@ -78,6 +80,31 @@ class WebViewTests(unittest.TestCase):
             overview = application.execute(ReportRequest()).to_json()
             self.assertIsNone(overview["error"])
             self.assertTrue(overview["view"]["accounts_quotas"]["accounts"])
+
+            def tier_factory(clock, progress):
+                service = factory(clock, progress)
+                pricing = FakePricingProvider()
+                pricing.catalog = threshold_catalog()
+                service.pricing_provider = pricing
+                service.comparison_pricing_provider = pricing
+                return service
+
+            tier_report = ReportApplication(tier_factory, clock=lambda: now).execute(
+                ReportRequest(ReportKind.ALL_MODELS)).to_json()
+            self.assertIsNone(tier_report["error"])
+
+            def account_factory(clock, progress):
+                service = factory(clock, progress)
+                service.account_providers = (
+                    NormalizedProvider(account("github-copilot", "first", label="First")),
+                    NormalizedProvider(replace(account("github-copilot", "second", label="Second"),
+                        availability="error", observations={"parser_reason": "unsupported_auth_method"})),
+                )
+                return service
+
+            account_report = ReportApplication(account_factory, clock=lambda: now).execute(ReportRequest()).to_json()
+            self.assertIsNone(account_report["error"])
+            self.assertEqual(2, len(account_report["view"]["accounts_quotas"]["accounts"]))
             provider = None
             source = SyntheticMonthSource(55, 151, month_start_ms=1000, running_roots=1)
             # Existing empty session differs from missing catalog entry.
@@ -117,7 +144,8 @@ class WebViewTests(unittest.TestCase):
             thread = Thread(target=serve)
             thread.start()
             try:
-                payload = dict(origin=server.origin, credential=server.session.bootstrap(), examples=examples, overview=overview)
+                payload = dict(origin=server.origin, credential=server.session.bootstrap(), examples=examples,
+                               overview=overview, tier_report=tier_report, account_report=account_report)
                 result = subprocess.run([shutil.which("node"), "development/tests/integration/web_views.cjs"],
                     cwd=ROOT, input=json.dumps(payload), text=True, capture_output=True, timeout=60)
                 self.assertEqual(0, result.returncode, result.stdout + result.stderr)
