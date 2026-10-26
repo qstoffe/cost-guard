@@ -384,11 +384,12 @@ class RuntimeErrorTests(unittest.TestCase):
                 if isinstance(node, ast.Call) and ((isinstance(node.func, ast.Attribute) and node.func.attr == "Thread")
                         or (isinstance(node.func, ast.Name) and node.func.id == "Thread")):
                     roots.append(path.relative_to(ROOT).as_posix())
-        # Reviewed in development/runtime-failures.md; claude_transport owns reader + bounded cleanup.
+        # Owned roots: architecture/governance/policies/runtime-failures.md.
+        # Web's fatal worker handoff/shutdown is covered by test_web_lifecycle.py.
         self.assertEqual(sorted(["src/accounts/acquisition.py", "src/accounts/claude_transport.py",
                              "src/accounts/claude_transport.py", "src/accounts/refresh_loop.py", "src/presentation/progress.py",
                                  "src/reports/model_comparison.py", "src/watch/model_discovery.py",
-                                 "src/watch/observers.py"]), sorted(roots))
+                                 "src/watch/observers.py", "src/web/host.py"]), sorted(roots))
 
     def test_retention_30_days_only_owned_files_and_no_log_on_cleanup_failure(self):
         directory = self.root / "logs/errors"

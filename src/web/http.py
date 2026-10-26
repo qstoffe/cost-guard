@@ -51,8 +51,9 @@ class LoopbackServer(HTTPServer):
     request_queue_size = 8
     allow_reuse_address = False
 
-    def __init__(self, jobs):
+    def __init__(self, jobs, lifecycle=None):
         self.jobs = jobs
+        self.lifecycle = lifecycle
         self.session = BrowserSession()
         self.assets = {}
         root = Path(__file__).parent / "assets"
@@ -190,12 +191,31 @@ class RequestHandler(BaseHTTPRequestHandler):
         if self.command == "GET" and int(length):
             self.reply(400, {"error": "invalid_request"})
             return
+        if self.path.startswith("/control/"):
+            owner = self.server.lifecycle
+            # Private launcher protocol: never accepts browser-origin requests/cookies.
+            if (owner is None or headers.get("Origin") is not None
+                    or headers.get("Cookie") is not None or int(length)
+                    or not owner.authorized(headers.get("X-CG-Control", ""))):
+                self.reply(403, {"error": "request_denied"})
+                return
+            if self.command == "GET" and self.path == "/control/status":
+                self.reply(200, owner.identity())
+            elif self.command == "POST" and self.path == "/control/stop":
+                owner.stop("launcher")
+                self.reply(200, owner.identity())
+            elif self.command == "POST" and self.path == "/control/open" and owner.ready:
+                self.reply(200, {**owner.identity(), "url": owner.browser_url()})
+            else:
+                self.reply(404, {"error": "not_found"})
+            return
         if self.command == "GET" and self.path in ASSETS:
             data, content_type = self.server.assets[ASSETS[self.path][0]]
             self.reply(200, data, content_type=content_type)
             return
         if self.path == "/health" and self.command == "GET":
-            self.reply(200, {"http": "ready"})
+            self.reply(200, {"http": "stopping" if self.server.lifecycle and
+                             self.server.lifecycle.stopping.is_set() else "ready"})
             return
         if self.command == "POST" and (headers.get("Origin") != self.server.origin
                 or headers.get("Content-Type") != "application/json"):
@@ -203,6 +223,9 @@ class RequestHandler(BaseHTTPRequestHandler):
             return
         if self.path != "/api/bootstrap" and not self.server.session.authenticated(headers.get("Cookie")):
             self.reply(401, {"error": "authentication_required"})
+            return
+        if self.server.lifecycle and self.server.lifecycle.stopping.is_set() and self.path != "/api/status":
+            self.reply(503, {"error": "instance_stopping"})
             return
         if self.command == "POST":
             if self.path != "/api/bootstrap" and not self.server.session.csrf(headers.get("X-CG-CSRF", "")):
@@ -245,7 +268,10 @@ class RequestHandler(BaseHTTPRequestHandler):
                 return
         else:
             if self.path == "/api/status":
-                self.reply(200, self.server.jobs.readiness())
+                value = self.server.jobs.readiness()
+                if self.server.lifecycle:
+                    value["lifecycle"] = self.server.lifecycle.public_status()
+                self.reply(200, value)
                 return
             if self.path == "/api/session":
                 self.reply(200, {"csrf": self.server.session.csrf()})

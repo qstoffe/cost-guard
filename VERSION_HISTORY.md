@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.82 — 2026-10-26
+
+- Added checkout/user-scoped OS locks, private atomic instance records, process-birth validation, authenticated restart/readiness/Open controls and standard-library detached launch plumbing for upcoming native GUI launchers. Overlapping launches coalesce; deliberate later invocations restart even the same version. Unknown processes/ports are not kill authority; Windows force-stop uses a revalidated kernel handle, Linux uses pidfd, and platforms without an atomic process handle refuse unsafe force-stop. Native Windows/macOS launchers and icons remain separate FRs, not claims of native GUI success.
+- Explicit `--foreground` developer Web mode and the shared managed host use one idempotent shutdown owner. A cheap five-second allowlisted runtime metadata guard stops Web on proven changes, never reloads/restarts it, excludes configuration/state/development writes and retries transient inspection failures. This is best-effort, not atomic updating; indistinguishable metadata can be missed. CLI launchers and shared OpenCode are untouched.
+
 ## v80.81 — 2026-10-26
 
 - Added optional foreground Web Beta (`python cost-guard-web.py`) with fixed local assets and authenticated, read-only finite report APIs. Exact-host/origin checks, one-use short-lived bootstrap, HttpOnly SameSite sessions, CSRF, restrictive CSP, request/concurrency/result bounds and cancellable isolated report processes protect the loopback surface. No dependencies, browser auto-launch, native icons or background instance lifecycle; CLI and Diagnostics stay independent.
