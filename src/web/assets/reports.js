@@ -7,7 +7,7 @@ const ReportRoutes = (() => {
     const session = /^sessions\/([A-Za-z0-9_-]{1,200})(\/live)?$/.exec(path);
     if (session) return {title: 'Session ' + session[1], section: 'sessions', session,
       request: {kind: 'session', session_id: session[1]}};
-    const routes = {overview: ['Overview', 'normal'], live: ['Live', null],
+    const routes = {overview: ['Overview', 'normal'], watch: ['Watch', null], live: ['Watch', null],
       models: ['Models · selectable catalog', 'normal'], 'models/all': ['Models · all catalog', 'all-models'],
       accounts: ['Accounts', 'normal'], sessions: ['Sessions', 'sessions'],
       reports: ['Date reports', null], 'token-mix': ['Token Mix · deep history', 'token-mix']};
@@ -20,7 +20,7 @@ const ReportRoutes = (() => {
       request.session_limit = n === 'all' ? null : Number(n);
     }
     if (path === 'reports' && params.has('date')) request = {kind: 'date', date_text: params.get('date')};
-    return {title, section: path.split('/')[0], request, live: path === 'live',
+    return {title, section: path === 'live' ? 'watch' : path.split('/')[0], request, live: path === 'live' || path === 'watch',
       explicit: path === 'token-mix' || path === 'reports' && !request, params};
   }
   function controls(parent, route) {

@@ -362,7 +362,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.92 (2026-10-27):** Web Beta shares CLI-owned numeric display semantics while retaining exact raw values for sorting. Tier multipliers, CCost, money, quota amounts and durations use server display tokens. See [Web Beta](docs/web-beta.md); page-specific parity and visual/native acceptance remain separate.
+**v80.93 (2026-10-27):** Web Beta has a responsive light/dark visual system, clearer navigation, rounded controls and scrollable table panels. Global Watch replaces the Live label; old Live links still work, and session Snapshot/Live modes are unchanged. See [Web Beta](docs/web-beta.md); page-specific parity and physical/assistive-technology acceptance remain separate.
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

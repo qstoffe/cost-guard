@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "epochRevision": "df44c06a97244278abd8d0dc9ed90ea12c368e47",
-  "ordinaryCount": 23,
+  "ordinaryCount": 24,
   "completed": {
     "architecture": 20,
     "test-health": 20,
@@ -11,9 +11,9 @@
     "id": "shared-repository-maintenance",
     "version": 1
   },
-  "lastDeliveredRevision": "20d0a90a5943b72d5ab241a97bffaaf6e2236313",
+  "lastDeliveredRevision": "71a2e9094cc8769bb24064ee1391cffc6385525b",
   "lastItem": {
-    "id": "fr/000430-web-cli-display-parity-and-numeric-formatting-contract.md",
+    "id": "fr/000440-modern-web-beta-design-system-and-navigation.md",
     "kind": "ordinary"
   },
   "featureDiscovery": {

@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.93 — 2026-10-27
+
+- Modernized Web Beta's shared light/dark surfaces, typography, controls, focus, table panels, sticky headings, sort indicators and narrow-screen layout, respecting reduced motion. Supplemental semantic colors retain textual status and exact numeric content; explanatory definitions fold into native details.
+- Renamed global Live navigation to Watch with a history-preserving legacy URL replacement; session Snapshot/Live modes, acquisition, security and independent CLI remain unchanged. Recorded a synthetic before/after review gallery and actual Edge captures for Overview, Watch, Sessions, Models and Accounts.
+
 ## v80.92 — 2026-10-27
 
 - Established shared CLI/Web numeric display primitives and additive server display tokens, retaining canonical Decimal strings independently for exact sorting. CCost keeps conservative rounding/partial markers, USD fixed decimals, tier multipliers one decimal with compact thresholds, native reference-rate precision, quota direction/units and compact durations.
