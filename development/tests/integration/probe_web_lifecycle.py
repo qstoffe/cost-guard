@@ -6,6 +6,7 @@ may be populated. Output is bounded status/count evidence, never history or secr
 import http.client
 import json
 from pathlib import Path
+import subprocess
 import sys
 import time
 
@@ -58,6 +59,33 @@ def probe():
             time.sleep(0.1)
         if result["status"] != "complete" or result["result"]["source"]["status"] != "acquired":
             raise RuntimeError("probe_source_unavailable")
+        detail_status = "no_available_session"
+        cli_status = "not_run"
+        rows = result["result"]["view"]["session_usage"]
+        if rows:
+            session_id = rows[0]["session_id"]
+            detail_job, _ = request("POST", "/api/reports", {"kind": "session", "session_id": session_id})
+            deadline = time.monotonic() + 125
+            while True:
+                detail, _ = request("GET", "/api/jobs/" + detail_job["id"])
+                if detail["status"] not in {"queued", "running"}:
+                    break
+                if time.monotonic() > deadline:
+                    raise RuntimeError("probe_detail_timeout")
+                time.sleep(0.1)
+            if detail["status"] != "complete" or not detail["result"]["view"]["prompt_blocks"]:
+                raise RuntimeError("probe_detail_unavailable")
+            time.sleep(0.2)
+            frozen, _ = request("GET", "/api/jobs/" + detail_job["id"])
+            if frozen != detail:
+                raise RuntimeError("probe_snapshot_changed")
+            detail_status = "acquired_frozen"
+            # Capture private report text, emit only the exit outcome, never prompts/IDs.
+            cli = subprocess.run([sys.executable, "cost-guard.py", session_id], cwd=ROOT,
+                capture_output=True, timeout=125)
+            if cli.returncode:
+                raise RuntimeError("probe_cli_failed")
+            cli_status = "passed"
         state = {"port": owner.server.server_port, "control": owner.control,
                  "nonce": owner.nonce, "build": owner.identity()["build"]}
         control(state, "stop")
@@ -66,6 +94,7 @@ def probe():
         if owner.failure:
             raise RuntimeError("probe_host_failed")
         return {"http": "ready", "source": "acquired", "job": result["status"],
+                "static_detail": detail_status, "cli_one_shot": cli_status,
                 "authenticated_stop": "passed", "owned_thread_stopped": owner.stopped.is_set(),
                 "source_guard": owner.guard.status, "native_gui": "not_run", "model_requests": 0}
     finally:

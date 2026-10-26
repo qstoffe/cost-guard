@@ -10,7 +10,7 @@ from weakref import WeakSet
 
 from src.analysis import local_report_range, local_day_start_ms, local_month_start_ms
 from src.reports import ReportKind, ReportRequest, ReportService
-from src.reports.service import ReportRequestError
+from src.reports.service import ReportRequestError, SessionNotFoundError
 from src.pricing.base import PricingUnavailableError
 from src.runtime_errors import recoverable, recovered
 from src.sources.errors import SourceError
@@ -115,6 +115,9 @@ class ReportApplication:
         except PricingUnavailableError:
             return ReportResult(self._instance_id, sequence, now, scope, unknown,
                                 error=ReportError("pricing_unavailable", True))
+        except SessionNotFoundError:
+            return ReportResult(self._instance_id, sequence, now, scope, unknown,
+                                error=ReportError("session_not_found"))
         except ReportRequestError:
             # Never leak interpolated targets/paths.
             return ReportResult(self._instance_id, sequence, now, scope, unknown,

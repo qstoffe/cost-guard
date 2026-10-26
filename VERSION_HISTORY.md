@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.85 — 2026-10-26
+
+- Web Beta now has local, accessible navigation, overview, all-session listing and static session detail with the established eight prompt columns, full-session totals, linked-child contributions and snapshot-time running evidence. Deep links, reload and Back/Forward use fragment routes; prompt text is never interpreted as HTML. No frontend build or runtime dependency.
+- Reports remain frozen across navigation and source changes until explicit Refresh; failed refresh retains a visibly stale snapshot. Paging uses the same immutable full result, not fresh source offsets or Watch caps. Missing sessions, acquired empty sessions, partial source and independent account failures remain distinct. Finite API size/time bounds still apply; live acquisition and remaining dedicated report views are not yet available. CLI/Watch are unchanged.
+
 ## v80.84 — 2026-10-26
 
 - Added experimental `macos/Beta/Cost Guard Web.command`, a same-process main-thread AppKit status menu through the Python standard-library ctypes bridge, bounded asynchronous browser Open, and the existing shared detached restart/stop owner. No packages, downloaded tools, service or login item; stable CLI/Watch/Diagnostics launchers are unchanged.

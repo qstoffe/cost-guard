@@ -152,8 +152,10 @@ class WebRuntimeTests(unittest.TestCase):
         self.assertIsNone(block["rows"][0]["incoming_context_ccost"])
         self.assertIn("source", dto)
         js = (Path(__file__).resolve().parents[2] / "src/web/assets/app.js").read_text()
-        self.assertIn("output.textContent", js)
+        renderer = (Path(__file__).resolve().parents[2] / "src/web/assets/render.js").read_text()
+        self.assertIn("node.textContent", renderer)
         self.assertNotIn("innerHTML", js)
+        self.assertNotIn("innerHTML", renderer)
         self.assertLess(js.index("history.replaceState"), js.index("fetch("))
 
     def test_empty_and_offline_are_distinct_with_secret_free_errors_and_logs(self):

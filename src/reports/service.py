@@ -67,6 +67,10 @@ class ReportRequestError(ValueError):
     """Expected invalid/unavailable report target, not an analysis defect."""
 
 
+class SessionNotFoundError(ReportRequestError):
+    """No matching catalog session; distinct from an acquired empty session."""
+
+
 @dataclass(frozen=True, slots=True)
 class ReportRequest:
     kind: ReportKind = ReportKind.NORMAL
@@ -601,7 +605,7 @@ class ReportService:
             raise ReportRequestError("Session report requires a session id")
         root = root_for_session(sessions, request.session_id)
         if root is None:
-            raise ReportRequestError(f"OpenCode session '{request.session_id}' was not found.")
+            raise SessionNotFoundError(f"OpenCode session '{request.session_id}' was not found.")
         item = self._analyze(root, detail=True)
         self.progress(WorkProgress("Building prompt analytics", "projection"))
         block = self._prompt_block(item, snapshot_running_metrics=True)
