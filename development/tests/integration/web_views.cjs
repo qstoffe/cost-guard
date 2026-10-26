@@ -201,7 +201,9 @@ async function main() {
   for (const account of input.overview.view.accounts_quotas.accounts) {
     assert.ok(ids.result.textContent.includes(account.observation.label));
     assert.ok(ids.result.textContent.includes(account.observation.availability));
-    assert.ok(ids.result.textContent.includes('Billed today'));
+    if (account.billed_today != null) {
+      assert.ok(ids.result.textContent.includes('Billed today: ' + account.display.billed_today));
+    }
   }
   context.example = input.tier_report;
   vm.runInContext('ReportView.render(output, example, {pages: {}, section: "models"})', context);

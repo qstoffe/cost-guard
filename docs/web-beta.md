@@ -5,6 +5,11 @@ The theme follows the operating-system preference, with no saved browser setting
 Rounded controls, visible keyboard focus, sticky table headings, exact numeric alignment and
 local table scrolling keep data selectable at narrow widths; reduced-motion preferences disable transitions.
 The native “Reading this report” disclosure contains definitions, never report rows or totals.
+In v80.94, Overview instead follows CLI Normal order: CCost, Token Mix %, Relative CCost,
+pricing metadata, reference models, promotion/new-model notices, Accounts Overview and final notes.
+Definition help is expandable beside each metric. Account cards show native quotas/remaining/reset,
+Pace and known bills without duplicate quota tables or whole-report account totals. Independent
+attribution/source/account warnings remain visible; observation/native billing detail is expandable.
 See the [synthetic before/after gallery](../development/architecture/governance/verification/web-design/index.html)
 and [visual evidence/limits](../development/architecture/governance/verification/web-design.md).
 
@@ -36,7 +41,7 @@ The Beta shell provides global Watch, Overview, Models (selectable or full catal
 | Date / inclusive range | `/#/reports?date=2026-10-25`, `/#/reports?date=2026-10-24:2026-10-25` | Configured-local boundaries/DST; canonical range valuation and union duration; impossible/reversed dates fail explicitly |
 | Historical Token Mix | `/#/token-mix` | Explicit Capture/Refresh only, never navigation/prefetch; canonical per-model prompts/calls, token/cost/mix vectors, price coverage and total over the same shown requests |
 
-Search above the report filters all finite/live tables; each table also has its own filter and sortable column buttons. Filters/sorts are presentation-only and show filtered/page counts alongside full-report row counts; totals and source queries never change. Decimal strings are compared exactly, vector columns lexicographically I/C/W/O, and unknown scalar values sort last. Default model order remains the shared server ranking, not rounded display values. Complete revision-paged session detail has its own browsing controls rather than pretending a filter covers unloaded rows; the global search is disabled there.
+Search above the report filters all finite/live tables; each table also has its own filter and sortable column buttons. Column clicks cycle ascending, descending, then original server order; model tables also offer **CLI default order**. Filters/sorts are presentation-only and show filtered/page counts alongside full-report row counts; totals and source queries never change. Decimal strings are compared exactly, vector columns lexicographically I/C/W/O, and unknown scalar values sort last. Default model order remains the shared server ranking, including exact tier/boundary and no-sample fallback rules, not rounded display values. Overview uses one-decimal `x` multipliers with arrows/compact K/M thresholds; without completed priced prompts it leaves multipliers blank, as Normal does. Complete revision-paged session detail has its own browsing controls rather than pretending a filter covers unloaded rows; the global search is disabled there.
 
 Token Mix shows actual phase/completed/total progress and Cancel terminates only that finite scan. Reopening a retained view reuses its timestamped result; explicit recapture checks the real source/config/pricing dependencies through the existing derived-analysis cache (`src/reports/acquisition.py`, `src/analysis/cache.py`), not a browser ledger or request-name-only cache. Deleted/pruned history stays unavailable. Timeout/cancellation/empty history are distinct; Live and its account scheduler continue independently. Date prompt links open full session detail; Back restores the retained range. URL fragments contain only scope/locators, never prompt content.
 

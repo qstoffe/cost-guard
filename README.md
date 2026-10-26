@@ -362,7 +362,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.93 (2026-10-27):** Web Beta has a responsive light/dark visual system, clearer navigation, rounded controls and scrollable table panels. Global Watch replaces the Live label; old Live links still work, and session Snapshot/Live modes are unchanged. See [Web Beta](docs/web-beta.md); page-specific parity and physical/assistive-technology acceptance remain separate.
+**v80.94 (2026-10-27):** Web Overview follows the compact CLI Normal report: definition/metric groups, correctly formatted model tiers and exact default ranking, contextual notices and compact account cards. Column sorting can restore CLI order; account observation detail is expandable, with warnings still visible. See [Web Beta](docs/web-beta.md); physical/assistive-technology acceptance remains separate.
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

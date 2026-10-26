@@ -1,5 +1,11 @@
 # Cost Guard version history
 
+## v80.94 — 2026-10-27
+
+- Rebuilt Web Overview around Normal report's CCost / Token Mix % / Relative CCost definitions, reference model table, contextual notices and Accounts Overview. Compact account cards retain native remaining/used/reset/Pace and attribution warnings; observation/billing detail is expandable rather than a DTO prose dump. Missing bills are not fabricated as zero.
+- Preserved exact CLI default model/tier ranking and shared one-decimal multiplier/threshold formatting; empty comparison samples show no synthetic multipliers. Column sorting cycles ascending, descending, default; a CLI default order button restores server order. Added rendered CLI/Overview regression fixtures. No valuation, sample, quota-cadence or CLI changes.
+- Compacted finite-report JSON without dropping provenance or raising the 8 MiB ceiling, repairing a real-installation Normal report that crossed the limit solely because of serialization whitespace.
+
 ## v80.93 — 2026-10-27
 
 - Modernized Web Beta's shared light/dark surfaces, typography, controls, focus, table panels, sticky headings, sort indicators and narrow-screen layout, respecting reduced motion. Supplemental semantic colors retain textual status and exact numeric content; explanatory definitions fold into native details.

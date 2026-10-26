@@ -108,6 +108,14 @@ p.warning { border-left: 3px solid var(--warn); padding: .65rem .85rem; backgrou
 .threshold { font-weight: 650; text-decoration: underline dotted; text-underline-offset: .2em; }
 .compaction { background: var(--surface); }
 .superseded { color: var(--muted); }
+.report-concepts, .account-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr)); gap: var(--space-4); }
+.report-concepts { margin-block: var(--space-5); }
+.report-concepts > div { padding: var(--space-4); border-left: 3px solid var(--accent); background: var(--surface); border-radius: .5rem; min-width: 0; }
+.report-concepts h3, .account-card h4 { margin: 0; }
+.metric-value { font-weight: 650; font-variant-numeric: tabular-nums; }
+.account-card { margin: 0; }
+.quota-summary { padding-block: var(--space-3); border-top: 1px solid var(--line); }
+.quota-summary > span, .quota-summary > strong { display: block; overflow-wrap: anywhere; }
 footer { border-top: 1px solid var(--line); color: var(--muted); font-size: .8rem; }
 @media (max-width: 40rem) {
   header, main, footer { padding: var(--space-4); }
