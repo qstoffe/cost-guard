@@ -8,5 +8,6 @@ Installed [OpenCode Toolkit shared repository skills](https://github.com/qstoffe
 - [Architecture and owners](../architecture/OVERVIEW.md): current module contracts and source/test routes.
 - [Architecture assessment](architecture.md): milestone-10 whole-tree inventory, runtime ownership decisions, source/test sampling and unmeasured risks.
 - [Test system health](test-health.md): milestone-10 source audit, runner registration, critical risks and execution limits.
+- [Feature opportunities](feature-discovery.md): milestone-10 no-suggestion assessment, existing Web scope and external feasibility limits.
 
 Contract Sync assessment (2026-10-25): navigation/fixture/Diagnostics relocation changes no analysis or account boundary. Preserve existing knowledge and its limitations; no new runtime or performance conclusion is claimed.
