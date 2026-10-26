@@ -6,7 +6,7 @@ Installed [OpenCode Toolkit shared repository skills](https://github.com/qstoffe
 - [History acquisition and startup evidence](../architecture/modules/history-loading.md): bounded scopes, measurements and unresolved terminal/live checks.
 - [OpenAI identity and quota evidence](openai-identity.md): canonical aliases, removed generations, deterministic recovery and historical 401 limits.
 - [Architecture and owners](../architecture/OVERVIEW.md): current module contracts and source/test routes.
-- [Architecture assessment](architecture.md): milestone-10 whole-tree inventory, runtime ownership decisions, source/test sampling and unmeasured risks.
+- [Architecture assessment](architecture.md): milestone-20 whole-tree inventory, Web/report/live/detail ownership, retired stale hypotheses and unmeasured risks.
 - [Test system health](test-health.md): milestone-15 source audit, Web/lifecycle risk mapping, runner registration and execution limits.
 - [Feature opportunities](feature-discovery.md): milestone-10 no-suggestion assessment, existing Web scope and external feasibility limits.
 
