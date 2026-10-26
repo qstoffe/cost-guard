@@ -89,8 +89,10 @@ class WindowsLauncherTests(unittest.TestCase):
 
 class LauncherPlacementTests(unittest.TestCase):
     def test_public_folders_hold_only_everyday_launchers(self) -> None:
-        self.assertEqual({"Cost Guard.cmd", "Cost Guard Watch.cmd"},
+        self.assertEqual({"Cost Guard.cmd", "Cost Guard Watch.cmd", "Beta"},
                          {path.name for path in (ROOT / "windows").iterdir()})
+        self.assertEqual({"Cost Guard Web.cmd"},
+                         {path.name for path in (ROOT / "windows/Beta").iterdir()})
         self.assertEqual({"Cost Guard.command", "Cost Guard Watch.command"},
                          {path.name for path in (ROOT / "macos").iterdir()})
 

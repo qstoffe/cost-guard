@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.83 — 2026-10-26
+
+- Added opt-in `windows/Beta/Cost Guard Web.cmd`: Python 3.11+ discovery, native tray/configuration preflight before verified restart, detached host and automatic authenticated browser handoff. Native same-process Win32 notification icon has exactly Open Cost Guard and Exit Cost Guard; no packages, compiler, downloads, service or startup registration. Stable CLI/Watch/Diagnostics launchers are unchanged.
+- Open is asynchronous and never restarts the instance; browser failures retain a usable tray. Native tray/startup/timeout/conflict failures have actionable feedback and private allowlisted records. HTTP faults, Exit and source-change shutdown remove the icon. Native Windows menu/message, detached-console, restart and shell-association probes are separate opt-in checks; physical double-click and visual light/dark review are not automated acceptance claims. macOS native UI remains pending.
+
 ## v80.82 — 2026-10-26
 
 - Added checkout/user-scoped OS locks, private atomic instance records, process-birth validation, authenticated restart/readiness/Open controls and standard-library detached launch plumbing for upcoming native GUI launchers. Overlapping launches coalesce; deliberate later invocations restart even the same version. Unknown processes/ports are not kill authority; Windows force-stop uses a revalidated kernel handle, Linux uses pidfd, and platforms without an atomic process handle refuse unsafe force-stop. Native Windows/macOS launchers and icons remain separate FRs, not claims of native GUI success.
