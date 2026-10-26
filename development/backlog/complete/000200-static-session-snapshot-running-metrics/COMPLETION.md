@@ -4,7 +4,7 @@
 
 Implemented in v80.79 (2026-10-26). Plain session detail prints the existing eight-column report once and exits without constructing Watch, even while work remains active. Supported running token mix and incoming/extra reference CCost use the completed-report definitions; missing telemetry, attribution or prices remain unknown. Totals include the same observations. Running duration uses the existing frozen observation clock, never a synthetic completion time.
 
-[Implementation candidate](https://github.com/qstoffe/cost-guard/commit/4fd38283e052e46a3403697492964da5bbb03b3f).
+[Delivery PR #55](https://github.com/qstoffe/cost-guard/pull/55) · [Implementation candidate](https://github.com/qstoffe/cost-guard/commit/4fd38283e052e46a3403697492964da5bbb03b3f).
 
 ## Changes and choices
 
