@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.79 — 2026-10-26
+
+- Plain session reports always print one snapshot and exit, even with active work. `[RUNNING]` rows show supported provisional token mix and incoming/extra reference CCost from observed requests; incomplete telemetry, attribution or pricing stays unknown. Totals share that snapshot and running duration stays frozen at observation time. Explicit session/global Watch and date modes retain their behavior.
+
 ## v80.78 — 2026-10-26
 
 - Normal Copilot Accounts Overview adds signed `Unaccounted usage`: native used AI credits minus canonical OpenCode reference CCost aligned to the supported native UTC billing month. Missing native usage/boundaries, incomplete history/pricing or ambiguous accounts show `—`; acquired priced zero is `0`. Local-month CCost, Watch, quotas and billing remain unchanged. The residual is an estimate, not metered external consumption or proof of free reviews; no new provider endpoint or credentials.

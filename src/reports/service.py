@@ -277,6 +277,7 @@ class ReportService:
         start_ms: int | None = None,
         end_ms: int | None = None,
         watch_duration: bool = False,
+        snapshot_running_metrics: bool = False,
     ) -> SessionPromptBlock:
         catalog = self._load_comparison_catalog()
         snapshot = item.snapshot or self.source.load_session_snapshot(item.session.session_id)
@@ -286,6 +287,7 @@ class ReportService:
                 bundle=item.bundle, snapshot=snapshot, catalog=catalog, config=self.config,
                 start_ms=start_ms, end_ms=end_ms, threshold_multiplier=self._threshold_multiplier,
                 watch_duration=watch_duration,
+                snapshot_running_metrics=snapshot_running_metrics,
             )
 
     def _ordered_roots(self, sessions: Sequence[NormalizedSession]) -> tuple[tuple[NormalizedSession, ...], dict[str, int]]:
@@ -589,7 +591,7 @@ class ReportService:
             raise ValueError(f"OpenCode session '{request.session_id}' was not found.")
         item = self._analyze(root, detail=True)
         self.progress(WorkProgress("Building prompt analytics", "projection"))
-        block = self._prompt_block(item)
+        block = self._prompt_block(item, snapshot_running_metrics=True)
         return ReportProjection(
             ReportKind.SESSION, f"Session {request.session_id}", self.selection.selected.upper(), tuple(self.selection.warnings),
             prompt_blocks=(block,),
