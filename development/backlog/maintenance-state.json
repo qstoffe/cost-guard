@@ -4,17 +4,17 @@
   "ordinaryCount": 10,
   "completed": {
     "architecture": 10,
-    "test-health": 5,
+    "test-health": 10,
     "performance": 0
   },
   "template": {
     "id": "shared-repository-maintenance",
     "version": 1
   },
-  "lastDeliveredRevision": "b2850feffd227ee5e502bd40d9a0266fdd49ba86",
+  "lastDeliveredRevision": "6eaa1b17090b96abcfded483d2f84f00d43da661",
   "lastItem": {
-    "id": "architecture/10",
-    "kind": "architecture"
+    "id": "test-health/10",
+    "kind": "test-health"
   },
   "featureDiscovery": {
     "completed": 0
