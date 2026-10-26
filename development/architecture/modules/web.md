@@ -43,6 +43,8 @@ v80.89 stabilization: `security.py` names cookies by canonical checkout (not por
 
 `development/tests/test_web_views.py` / `development/tests/integration/web_views.cjs` exercise served assets/facade: navigation, exact sorting, filters, tiers, independent accounts, deferred history, long lists and frozen/stale/empty/missing/hostile-text states. Node is optional VM tooling, not visual/assistive-technology proof.
 
+The shared numeric display seam is `src/display.py` / `src/numbers.py` → terminal and `src/application/display.py` → immutable DTO `display` / `display_roles` → `render.js`. Raw exact values remain separate sort keys. Application never imports terminal presentation; formatting never acquires or values usage. `development/tests/test_web_display.py` and `development/tests/integration/web_display.cjs` pin CLI-derived goldens. The [per-view display baseline](../governance/verification/web-display-parity.md) distinguishes formatting coverage, browser-only interactions and page-specific remaining work; it is not visual acceptance.
+
 ## Allowed dependencies
 
 HTTP/security/assets and lifecycle/process/state/guard depend on standard library and their Web owners. Jobs consume shared application/report contracts. Composition alone wires concrete source/config/cache/pricing/providers and the Watch acquisition driver, never CLI dispatch/source wake. LiveRuntime consumes that supplied driver and exports immutable values; application/reports never import Web. CLI and Diagnostics do not import Web.

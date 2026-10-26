@@ -7,6 +7,7 @@ import json
 from src.analysis.model_supersession import superseded_rows
 
 from .contracts import ObjectValue, record
+from .display import with_display
 
 
 def identity(parts) -> str:
@@ -110,14 +111,14 @@ def accounts(value):
     ))
 
 
-def project(report):
+def project(report, timezone_id="UTC"):
     models = []
     faded = superseded_rows([(item.publisher, item.model) for item in report.model_comparison])
     for index, item in enumerate(report.model_comparison):
         base = fields(item, "publisher model relative_cost price_summary release_date promotional recent promotion_marker")
         models.append(ObjectValue(base.fields + (("superseded", index in faded), ("relative_levels", tuple(
             fields(level, "relative_cost threshold_tokens threshold_operator") for level in item.relative_levels)),)))
-    return record(
+    return with_display(record(
         kind=report.kind, title=report.title, source_label=report.source_label,
         # Source messages can contain transport/private details. Preserve status, not raw prose.
         source_warning_count=len(report.source_warnings),
@@ -139,4 +140,4 @@ def project(report):
         token_mix=token_mix(report.token_mix),
         model_token_mix=tuple(record(model=item.model, prompts=item.prompts, calls=item.calls, mix=token_mix(item.mix))
             for item in report.model_token_mix),
-    )
+    ), timezone_id)

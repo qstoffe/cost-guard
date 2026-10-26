@@ -7,17 +7,10 @@ from typing import Sequence
 from src.analysis.token_mix import TokenMix
 from src.analysis.valuation import ComparisonCost
 from src.numbers import balanced_share_percents, ccost_amount
+from src.display import compact_tokens
 
 MIX_LABELS = ("Input", "Cache", "Write", "Output")
 MIX_TERM = "Token Mix %"
-
-
-def compact_tokens(value: int) -> str:
-    for size, suffix in ((1_000_000_000, "B"), (1_000_000, "M"), (1_000, "K")):
-        if value >= size:
-            text = f"{Decimal(value) / size:.1f}".removesuffix(".0")
-            return text + suffix
-    return str(value)
 
 
 def mix_cost_text(mix: TokenMix, value: Decimal) -> str:

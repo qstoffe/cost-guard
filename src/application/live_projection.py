@@ -1,6 +1,7 @@
 """Explicit immutable Watch export. No raw provider/source observations."""
 from .contracts import ObjectValue, record
 from .projection import account, comparison, fields, prompt, token_mix
+from .display import with_display
 
 
 def watch_accounts(value):
@@ -12,7 +13,7 @@ def watch_accounts(value):
         for item in value.accounts))
 
 
-def project_live(value):
+def project_live(value, timezone_id="UTC"):
     rows = []
     for row in value.rows:
         tool = row.tool
@@ -30,7 +31,7 @@ def project_live(value):
             next_context_warning_severity=row.next_context_warning_severity,
             live_context=fields(row.prompt, """watch_next_context_tokens watch_next_context_warning
                 watch_next_context_cached_ccost watch_next_context_fresh_ccost watch_delta_context_tokens""")))
-    return record(source_label=value.source_label, source_warning_count=len(value.source_warnings),
+    return with_display(record(source_label=value.source_label, source_warning_count=len(value.source_warnings),
         rows=tuple(rows), active_count=value.active_count, status=value.status,
         now_ms=value.now_ms, started_at_ms=value.watch_started_at_ms,
         run_origin="Web live engine start (not tab open)",
@@ -42,4 +43,4 @@ def project_live(value):
         recent_model_notice=value.recent_model_notice,
         recent_promotion_notices=value.recent_promotion_notices,
         session_subtotals=tuple(record(session_id=key, ccost=item.ccost,
-            unresolved_cost=item.unresolved_cost) for key, item in value.session_subtotals.items()))
+            unresolved_cost=item.unresolved_cost) for key, item in value.session_subtotals.items())), timezone_id)
