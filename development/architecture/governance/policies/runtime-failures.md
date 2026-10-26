@@ -12,6 +12,7 @@ Expected product conditions use local domain handling. Unexpected software fault
 | --- | --- | --- |
 | Main report/Watch | Final fatal boundary after specific product handling | `COST GUARD FAILED`, status 1, log and crash report |
 | Explicit Diagnostics | Same final boundary before integration imports; isolated acquisition sections may return ERROR metadata | Fatal main workflow errors are non-zero; failed sections are visible in the bundle |
+| Optional ReportApplication job | A fresh one-shot context isolates the entire failed result; account work closes on every exit | Expected source/pricing/target errors use typed DTOs; unexpected faults log through the installed reporter and return `internal_error` with no view; cleanup faults propagate |
 | `cost-guard-v2-events` / `LiveEventPump._run` | SourceError uses existing resync; software Exception is logged and hints discarded | Watch status ERROR until authoritative resync; failed rebuild propagates |
 | `cost-guard-startup-progress` / `_animation_root` | Disable transient animation; no ownership of calculated report state | ERROR through startup sink or independent plain stderr |
 | `claude-metadata` / `_ControlReader._read` | Expected OSError/JSON/queue/end become transport state; software faults discard reader output | Typed reader failure → optional provider ERROR, never default thread traceback |
