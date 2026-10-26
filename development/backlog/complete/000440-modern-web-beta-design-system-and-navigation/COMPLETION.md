@@ -5,6 +5,7 @@
 Implemented in v80.93 (2026-10-27): a shared, local-only responsive light/dark design system, clearer main navigation and modern table/control surfaces. Global **Watch** uses `/#/watch`; legacy `/#/live` is replaced in its current history entry. Session Snapshot/Live remains distinct. Original FR bytes are unchanged.
 
 Implementation candidate: [0f1734ba43829b2092a0177673f42d3843e399b7](https://github.com/qstoffe/cost-guard/commit/0f1734ba43829b2092a0177673f42d3843e399b7).
+Delivery PR: [#77](https://github.com/qstoffe/cost-guard/pull/77).
 
 ## Changes and alternatives
 
