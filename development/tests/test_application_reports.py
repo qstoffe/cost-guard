@@ -16,6 +16,7 @@ from development.tests.fixtures.opencode_v1_database import create_v1_database
 from development.tests.fixtures.opencode_v2_service import source_with_current_service
 from development.tests.fixtures.report_runtime import FakeSource, FakePricingProvider, FakeAccountProvider
 from development.tests.fixtures.session_snapshots import make_snapshot
+from development.tests.fixtures.synthetic_month import SyntheticMonthSource
 from src.analysis.token_mix import TokenMix
 from src.analysis.valuation import ComparisonCost
 from src.application import ReportApplication
@@ -25,6 +26,7 @@ from src.cache import CacheDatabase, CacheRepository
 from src.config import load_configuration
 from src.domain import AccountRef, ModelRef, TokenUsage
 from src.reports import ReportKind, ReportRequest, ReportService
+from src.pricing.base import PricingUnavailableError
 from src.sources.errors import FailureCode, SourceUnavailableError
 from src.sources.opencode_v1 import OpenCodeV1Source
 from src.sources.selection import SourceSelection
@@ -123,6 +125,25 @@ class ApplicationReportTests(unittest.TestCase):
         with source_with_current_service() as (source, _server, _registration):
             self.source = source
             self.assert_parity(ReportRequest(ReportKind.SESSION, session_id="ses_current"), now=10_000)
+
+    def test_complete_detail_history_and_clone_dedup_are_not_watch_samples(self):
+        self.source = SyntheticMonthSource(2, 151, month_start_ms=1000)
+        first, second = self.source.snapshots.values()
+        clone_id = second.root.session_id
+        cloned_root = replace(first.root, session_id=clone_id)
+        self.source.snapshots[clone_id] = replace(
+            first, root=cloned_root, sessions=(cloned_root,),
+            messages=tuple(replace(item, session_id=clone_id) for item in first.messages),
+            parts=tuple(replace(item, session_id=clone_id) for item in first.parts),
+            events=tuple(replace(item, session_id=clone_id) for item in first.events),
+            invocations=tuple(replace(item, session_id=clone_id) for item in first.invocations),
+            source_revision="cloned-history",
+        )
+        result = self.assert_parity(ReportRequest(ReportKind.SESSION, session_id=first.root.session_id), now=300_000)
+        self.assertEqual(151, len(result.to_json()["view"]["prompt_blocks"][0]["rows"]))
+        history = self.assert_parity(ReportRequest(ReportKind.TOKEN_MIX), now=300_000)
+        # The available history contains 302 copied records but 151 distinct requests.
+        self.assertEqual(151, history.to_json()["view"]["token_mix"]["request_count"])
 
     def test_missing_prices_and_telemetry_are_not_zero_or_success(self):
         snapshot = make_snapshot(running=True)
@@ -245,6 +266,24 @@ class ApplicationReportTests(unittest.TestCase):
         reused = ReportApplication(lambda _now, _progress: service)
         self.assertIsNone(reused.execute(ReportRequest()).error)
         self.assertEqual("service_ownership", reused.execute(ReportRequest()).error.code)
+
+    def test_expected_pricing_and_target_failures_are_distinct_from_software_faults(self):
+        app = ReportApplication(self.factory, clock=lambda: 4000)
+        with patch.object(self.pricing, "get_catalog", side_effect=PricingUnavailableError("PRIVATE")):
+            result = app.execute(ReportRequest())
+        self.assertEqual("pricing_unavailable", result.error.code)
+        self.assertIsNone(self.services[-1]._account_work)
+        self.assertEqual("report_unavailable", app.execute(
+            ReportRequest(ReportKind.SESSION, session_id="absent")).error.code)
+        self.assertEqual("invalid_request", app.execute(
+            ReportRequest(ReportKind.DATE, date_text="not-a-date")).error.code)
+        with patch.object(self.pricing, "get_catalog", side_effect=ValueError("PRIVATE")), \
+                patch("src.application.service.recoverable") as log:
+            result = app.execute(ReportRequest())
+        self.assertEqual("internal_error", result.error.code)
+        log.assert_called_once()
+        self.assertIsNone(result.view)
+        self.assertIsNone(self.services[-1]._account_work)
 
     def test_cli_startup_never_imports_optional_application_or_web_modules(self):
         code = """

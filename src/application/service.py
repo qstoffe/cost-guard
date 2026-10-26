@@ -10,6 +10,9 @@ from weakref import WeakSet
 
 from src.analysis import local_report_range, local_day_start_ms, local_month_start_ms
 from src.reports import ReportKind, ReportRequest, ReportService
+from src.reports.service import ReportRequestError
+from src.pricing.base import PricingUnavailableError
+from src.runtime_errors import recoverable, recovered
 from src.sources.errors import SourceError
 
 from .contracts import ObjectValue, ProgressEvent, ReportError, ReportResult, record
@@ -82,7 +85,11 @@ class ReportApplication:
                 ("local_month_start_ms", local_month_start_ms(service.timezone_id, now_ms=now)),
             ))
             if request.kind is ReportKind.DATE:
-                period = local_report_range(request.date_text, service.timezone_id)
+                try:
+                    period = local_report_range(request.date_text, service.timezone_id)
+                except ValueError:
+                    return ReportResult(self._instance_id, sequence, now, scope, unknown,
+                                        error=ReportError("invalid_request"))
                 scope = ObjectValue(scope.fields + (("start_ms", period.start_ms), ("end_ms", period.end_ms)))
             report = (service.build_token_mix_history(lambda label, _percent: observe(label))
                       if request.kind is ReportKind.TOKEN_MIX else service.build(request))
@@ -98,18 +105,23 @@ class ReportApplication:
                              for parts in service.report_request_identities())
             view = project(report)
             view = ObjectValue(view.fields + (("request_identities", requests),))
+            recovered("application-report")
             return ReportResult(self._instance_id, sequence, now, scope, source, view)
         except SourceError as exc:
             return ReportResult(self._instance_id, sequence, now, scope,
                                 record(status="error", observed_at_ms=now, revisions=(),
                                        atomicity="per_root_snapshot"),
                                 error=ReportError(exc.code.value, exc.readiness_retryable))
-        except ValueError:
-            # Includes absent session/invalid date; never leak interpolated targets/paths.
+        except PricingUnavailableError:
+            return ReportResult(self._instance_id, sequence, now, scope, unknown,
+                                error=ReportError("pricing_unavailable", True))
+        except ReportRequestError:
+            # Never leak interpolated targets/paths.
             return ReportResult(self._instance_id, sequence, now, scope, unknown,
                                 error=ReportError("report_unavailable"))
-        except Exception:
+        except Exception as exc:
             # An adapter can contain arbitrary transport text in its exception.
+            recoverable(exc, "application-report")
             return ReportResult(self._instance_id, sequence, now, scope, unknown,
                                 error=ReportError("internal_error"))
         finally:

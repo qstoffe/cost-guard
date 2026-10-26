@@ -23,6 +23,7 @@ from src.runtime_errors import recoverable, recovered
 from src.version import DISPLAY_VERSION
 
 from .catalog import PricingCatalog, canonical_model_name
+from .base import PricingUnavailableError
 from .metadata_health import COMPONENT as METADATA_COMPONENT, MetadataHealthStore, default_root
 from .release_metadata import (
     INTERNAL, MetadataAttempt, SourceResult,
@@ -466,10 +467,6 @@ def _preserve_known_promotions(
                 meta[key] = value
         result.append(replace(model, metadata=meta))
     return tuple(result)
-
-
-class PricingUnavailableError(RuntimeError):
-    """External pricing document no longer satisfies the supported schema."""
 
 
 class GitHubCopilotPricingProvider:

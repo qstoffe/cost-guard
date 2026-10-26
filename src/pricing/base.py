@@ -8,6 +8,10 @@ from src.domain import IntegrationHealth, ModelPricing, ProviderCapabilities
 from .catalog import PricingCatalog
 
 
+class PricingUnavailableError(RuntimeError):
+    """External pricing cannot satisfy the supported catalog contract."""
+
+
 class PricingProvider(Protocol):
     @property
     def provider_id(self) -> str: ...
