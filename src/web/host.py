@@ -13,6 +13,7 @@ from .instance_state import SCHEMA
 from .jobs import ReportJobs
 from .events import EventHub
 from .process_identity import process_identity
+from .observations import WebObservations
 
 
 class WebHost:
@@ -30,6 +31,7 @@ class WebHost:
         self.guard = SourceGuard(root)
         self.jobs = jobs or ReportJobs()
         self.events = EventHub(self.nonce)
+        self.observations = WebObservations()
         if live_factory is None and jobs is None:
             from .composition import live_acquisition
             live_factory = live_acquisition
@@ -50,7 +52,9 @@ class WebHost:
 
     def public_status(self):
         return {"instance": self.nonce, "state": self.reason or "running",
-                "source_guard": self.guard.status}
+                "source_guard": self.guard.status,
+                "diagnostics": ("not_recorded" if not self.store else
+                                "unavailable" if self.observations.write_failed else "available")}
 
     def stop(self, reason="menu"):
         if reason not in {"menu", "launcher", "source_changed", "runtime_fault", "gui_unavailable"}:
@@ -102,6 +106,7 @@ class WebHost:
                     self.stop("source_changed")
                 elif status == "source_check_unavailable" and previous != status and self.store:
                     self.store.log(status)
+                self.observations.persist(self)
                 if not self.stopping.is_set():
                     self.jobs.tick()
                     self.events.publish("progress", self.jobs.updates() if hasattr(self.jobs, "updates")
@@ -145,6 +150,7 @@ class WebHost:
             if self.live:
                 self.live.close()
         if self.store:
+            self.observations.persist(self, final=True)
             self.store.remove(self.nonce)
             self.store.log(self.reason if self.reason in {"source_changed", "runtime_fault"} else "stopped")
 

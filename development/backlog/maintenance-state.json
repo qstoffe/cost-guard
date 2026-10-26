@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "epochRevision": "df44c06a97244278abd8d0dc9ed90ea12c368e47",
-  "ordinaryCount": 19,
+  "ordinaryCount": 20,
   "completed": {
     "architecture": 10,
     "test-health": 15,
@@ -11,9 +11,9 @@
     "id": "shared-repository-maintenance",
     "version": 1
   },
-  "lastDeliveredRevision": "2a8765df1841ac3f6b0f8218c2dac0c829aa2936",
+  "lastDeliveredRevision": "99b0fc78f19da2d40bd74d3405a47d492153bf29",
   "lastItem": {
-    "id": "fr/000370-complete-web-report-coverage.md",
+    "id": "fr/000380-web-beta-stabilization-and-parity.md",
     "kind": "ordinary"
   },
   "featureDiscovery": {

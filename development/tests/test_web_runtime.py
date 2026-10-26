@@ -153,6 +153,28 @@ class WebRuntimeTests(unittest.TestCase):
         for headers in ({"Origin": ""}, {"X-CG-CSRF": ""}, {"Content-Type": "text/plain"}):
             self.assertEqual(403, self.request("/api/reports", {"kind": "sessions"}, headers=headers)[0])
 
+    def test_checkout_cookies_coexist_and_replacement_rejects_old_credentials(self):
+        first = BrowserSession("a" * 32)
+        second = BrowserSession("b" * 32)
+        replacement = BrowserSession("a" * 32)
+        jar = {}
+        for session in (first, second):
+            token, _ = session.exchange(session.bootstrap())
+            jar[session.cookie_name] = token
+        # Model a browser: both port-independent cookies are sent to both hosts.
+        cookies = "; ".join(f"{name}={value}" for name, value in jar.items())
+        self.assertEqual(2, len(jar))
+        self.assertTrue(first.authenticated(cookies))
+        self.assertTrue(second.authenticated(cookies))
+        self.assertFalse(replacement.authenticated(cookies))
+        token, _ = replacement.exchange(replacement.bootstrap())
+        jar[replacement.cookie_name] = token
+        cookies = "; ".join(f"{name}={value}" for name, value in jar.items())
+        self.assertEqual(2, len(jar))
+        self.assertFalse(first.authenticated(cookies))
+        self.assertTrue(second.authenticated(cookies))
+        self.assertTrue(replacement.authenticated(cookies))
+
     def test_routes_methods_parameters_traversal_and_wire_limits(self):
         self.login()
         for path in ("/../config/user-config.jsonc", "/%2e%2e/README.md", "/api/status?x=secret", "/a\\b"):

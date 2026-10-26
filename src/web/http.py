@@ -10,6 +10,7 @@ from threading import BoundedSemaphore, Timer
 
 from .jobs import parse_report
 from .security import BrowserSession
+from .instance_state import checkout_identity
 
 ASSETS = {"/": ("index.html", "text/html; charset=utf-8"),
            "/app.js": ("app.js", "text/javascript; charset=utf-8"),
@@ -59,7 +60,7 @@ class LoopbackServer(HTTPServer):
     def __init__(self, jobs, lifecycle=None):
         self.jobs = jobs
         self.lifecycle = lifecycle
-        self.session = BrowserSession()
+        self.session = BrowserSession(checkout_identity(lifecycle.root)[:32] if lifecycle else None)
         self.assets = {}
         root = Path(__file__).parent / "assets"
         for name, content_type in ASSETS.values():
@@ -165,6 +166,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             return
 
     def reply(self, status, value, *, content_type="application/json; charset=utf-8", cookie=None):
+        if self.server.lifecycle:
+            self.server.lifecycle.observations.response(status)
         data = value if isinstance(value, bytes) else json.dumps(value, allow_nan=False).encode("utf-8")
         self.send_response_only(status)
         for key, val in {"Content-Type": content_type, "Content-Length": str(len(data)),
@@ -174,7 +177,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                          "Permissions-Policy": "camera=(), microphone=(), geolocation=()"}.items():
             self.send_header(key, val)
         if cookie:
-            self.send_header("Set-Cookie", f"cg_session={cookie}; HttpOnly; SameSite=Strict; Path=/; Max-Age=28800")
+            name = self.server.session.cookie_name
+            self.send_header("Set-Cookie", f"{name}={cookie}; HttpOnly; SameSite=Strict; Path=/; Max-Age=28800")
         self.end_headers()
         self.wfile.write(data)
 

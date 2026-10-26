@@ -72,6 +72,7 @@ from development.tools.diagnostic_metadata import model_metadata_section  # noqa
 from development.tools.diagnostic_screen import render_result  # noqa: E402
 from development.tools.diagnostic_watch import terminal_facts, watch_evidence  # noqa: E402
 from src.config import ConfigError, read_jsonc  # noqa: E402
+from development.tools.diagnostic_web import web_evidence
 
 
 
@@ -417,6 +418,7 @@ def _text_summary(data: dict[str, Any]) -> str:
         f"recovered sources: {', '.join(summary.get('recovered_sources') or ()) or 'none'}",
         f"Watch source recovery transitions (30 days, max 24): {len(data.get('watch_source_recovery_events') or ())}",
         f"Watch observations (30 days, max 24): {len(data.get('watch_observation_events') or ())}",
+        f"Web lifecycle/API evidence: {(data.get('web') or {}).get('status', 'not_observed')} (recorded facts, not a readiness probe)",
         f"Configured source: {data.get('config', {}).get('open_code_source')}",
         f"Selected source: {(data.get('selection') or {}).get('selected')}",
     ]
@@ -499,6 +501,7 @@ def collect(*, network: bool, snapshots: int, test_service_start: bool = False) 
     data["watch_source_recovery_events"] = recent_events()
     data["watch_observation_events"] = watch_observations()
     data["watch_account_refresh"] = read_refresh_state(ROOT)
+    data["web"] = web_evidence(ROOT)
     # Includes failures that happened (and possibly self-healed) during earlier Watch runs.
     metadata, metadata_timing = _timed(lambda: model_metadata_section(
         ROOT, cfg, network=network, database_factory=CacheDatabase))

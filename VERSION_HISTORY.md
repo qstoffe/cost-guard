@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.89 — 2026-10-26
+
+- Stabilized concurrent Web checkouts: checkout-scoped browser cookie names no longer overwrite each other across loopback ports; replacement hosts still reject old instance credentials. No security boundary against same-user code is claimed.
+- Added bounded, allowlisted Web lifecycle/source/API failure facts to existing Diagnostics, retaining shutdown evidence outside disposable checkout caches without prompts, paths, raw instance IDs or credentials. Completed the Beta parity/evidence inventory; CLI/Watch remain independent. Native macOS, physical suspend/resume and visual/assistive-technology proof remain unverified; Beta completion does not promote Web or retire CLI.
+
 ## v80.88 — 2026-10-26
 
 - Completed Web Models/selectable and all-catalog views (including exact native rates/tiers), Accounts, configured-local inclusive date/range reports, Sessions N/all and explicit cancellable historical Token Mix. Views reuse canonical report projections and frozen observations; filters/paging never recalculate totals, and exact Decimal sorting avoids JavaScript floating-point ranking.

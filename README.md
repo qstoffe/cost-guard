@@ -364,7 +364,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.88 (2026-10-26):** Complete Web report navigation, cancellable historical Token Mix, exact sorting and presentation-only filters over shared CLI semantics. Native macOS and visual browser proof remain pending. See [Web Beta](docs/web-beta.md).
+**v80.89 (2026-10-26):** Web Beta stabilization: concurrent-checkout browser sessions, privacy-safe Web Diagnostics and completed parity/evidence inventory. CLI remains independent; native macOS and visual browser proof remain pending. See [Web Beta](docs/web-beta.md).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 
