@@ -2,7 +2,7 @@
 
 ## Outcome
 
-Implemented in Cost Guard v80.86 (2026-10-26). One host-lifetime acquisition owner supplies the global Live page across tabs; CLI Watch remains independent. Original FR bytes are preserved. Candidate implementation: [2827029](https://github.com/qstoffe/cost-guard/commit/282702930cb65362996a20ef4852c41b11c23bc0); the eventual merge is recorded by native delivery.
+Implemented in Cost Guard v80.86 (2026-10-26). One host-lifetime acquisition owner supplies the global Live page across tabs; CLI Watch remains independent. Original FR bytes are preserved. Delivery PR: [#66](https://github.com/qstoffe/cost-guard/pull/66). Candidate implementation: [2827029](https://github.com/qstoffe/cost-guard/commit/282702930cb65362996a20ef4852c41b11c23bc0); the eventual merge is recorded by native delivery.
 
 ## Changes and decisions
 
