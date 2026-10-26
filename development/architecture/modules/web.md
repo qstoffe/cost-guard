@@ -1,7 +1,7 @@
 # Optional Web runtime
 
-Source revision: 1f2dee7603df95bbed6cb893126c65ed5a336799
-Checked revision: 1f2dee7603df95bbed6cb893126c65ed5a336799
+Source revision: 969207df1a6a7f3f2489be5388863bc582f822ff
+Checked revision: 969207df1a6a7f3f2489be5388863bc582f822ff
 Last checked: 2026-10-26
 Status: current
 
@@ -15,11 +15,13 @@ Status: current
 
 `src/web/native_windows.py` owns same-process main-thread GUI integration and one asynchronous registered-browser handoff. `src/web/win32_tray.py` owns typed in-box Win32 resources/message dispatch and Explorer taskbar recovery; `src/web/tray_icon.py` owns the original source-rendered artwork. `src/web/windows_launch.py` and `src/web/windows_launch.ps1` own Beta-only Python/configuration/native preflight and sanitized failure feedback; stable terminal launchers do not import them.
 
+`src/web/native_macos.py` owns the experimental same-process main-thread adapter and bounded asynchronous `/usr/bin/open` handoff. `src/web/macos_status.py` owns NSStatusItem, default/tracking-mode event pumping and timer-driven menu dismissal on host loss. `src/web/objc_bridge.py` owns typed 64-bit Objective-C dispatch, retained IMP callbacks and fatal callback-fault handoff. `src/web/macos_launch.py` preflights native resources in a bounded child before restart; `src/web/macos_app.py` locally compiles/cache-verifies the optional Finder app from committed AppleScript through in-box osacompile. No new server, dependency or service owner.
+
 ## Public contract
 
 `cost-guard-web.py --foreground` is explicit icon-free developer mode, independent of managed discovery and CLI. Only 127.0.0.1 with an assigned port is supported; exact Host/Origin and authenticated sensitive reads are mandatory. Standard-library only, no installation, updater, generic proxy/shell/filesystem routes or browser-side calculator. Accounts/source/analysis readiness remain independent of HTTP-shell readiness.
 
-`windows/Beta/Cost Guard Web.cmd` launches the managed Windows adapter; macOS is not yet shipped. Managed launch accepts only fixed approved adapters. Readiness follows usable icon/event loop, and stopping/stopped removes the icon; missing/failed GUI cannot leave an advertised unmanaged host. Windows preflight exercises the real native resources before shared lifecycle restart. Open hands off to the registered URL association without restart; Exit stops only the matching host. Popen detaches console/standard handles and uses private cwd. No packages, compiler, downloads, service or autostart; mocked flags alone are not native proof.
+`windows/Beta/Cost Guard Web.cmd` launches the managed Windows adapter. Experimental `macos/Beta/Cost Guard Web.command` launches the macOS adapter; native macOS/Finder/Gatekeeper behavior is explicitly unverified. Managed launch accepts only fixed approved adapters. Readiness follows usable icon/event loop, and stopping/stopped removes the icon; missing/failed GUI cannot leave an advertised unmanaged host. Windows preflight exercises the real native resources before shared lifecycle restart. Open hands off to the registered URL association without restart; Exit stops only the matching host. Popen detaches console/standard handles and uses private cwd. No packages, downloaded compilers, service or autostart; macOS optionally uses its already-present osacompile, never an SDK/tool install. Mocked flags alone are not native proof.
 
 Overlapping clicks reuse a ready winner; later deliberate clicks restart even the same version. A lifetime lock prevents duplicates after launcher failure. Private records bind nonce, PID/birth/image, port, startup build/schema and a control secret. Wrong/corrupt identity is a conflict; stale/reused PIDs grant no kill authority. Graceful deadline is ten seconds. Windows force-stop uses a revalidated kernel handle, Linux pidfd; macOS currently refuses unsafe forced termination. No other checkout, CLI, browser, unknown port occupant or OpenCode process is stopped.
 
@@ -39,11 +41,15 @@ HTTP/security/assets and lifecycle/process/state/guard depend on standard librar
 
 `windows/Beta/Cost Guard Web.cmd`, `src/web/windows_launch.ps1`, `src/web/windows_launch.py`, `src/web/native_windows.py`, `src/web/win32_tray.py`, `src/web/tray_icon.py`, `cost-guard-web.py`, `src/web/main.py`, `src/web/host.py`, `src/web/lifecycle.py`, `src/web/instance_state.py`, `src/web/process_identity.py`, `src/web/change_guard.py`, `src/web/http.py`, `src/web/jobs.py`, `src/web/security.py`, `src/web/composition.py`, `src/web/assets/index.html`, `src/web/assets/app.js`, `src/web/assets/app.css`.
 
+macOS entry/source: `macos/Beta/Cost Guard Web.command`, `macos/Beta/launcher.applescript`, `src/web/macos_launch.py`, `src/web/macos_app.py`, `src/web/native_macos.py`, `src/web/macos_status.py`, `src/web/objc_bridge.py`. Generated applets live only in private app data outside Git, fingerprinted to source/product/OS/architecture/Python and hash-checked before reuse; compile failures preserve the command fallback.
+
 ## Tests
 
 `development/tests/test_web_lifecycle.py` covers synthetic source changes/exclusions/stat errors/metadata misses, private records/logs, OS locks and crash release, process birth/reuse/termination, different/Unicode/case-normalized checkouts, concurrent launch coalescing, same-build restart, failed startup/browser, control/browser separation, old sessions, GUI-main-thread contracts, fatal cleanup and a real force-stopped parent with a blocked child. `development/tests/test_runtime_errors.py` retains the execution-root inventory guard. Native Windows process handles/locks are exercised locally; GUI/detachment assertions are not native tray/macOS proof.
 
 `development/tests/test_web_runtime.py` owns synthetic wire/security/DTO/bounds/cancellation tests with `development/tests/fixtures/web_reports.py`; `development/tests/test_application_reports.py` owns broader calculator parity. All are included in Full. Opt-in `development/tests/integration/probe_web_lifecycle.py` probes real read-only source/session acquisition and authenticated stop of only its own host, with no browser/model inference. Diagnostics is separate from default-denied live-model tests. `development/tests/test_windows_web.py` covers synthetic adapter readiness, asynchronous Open/Exit, worker faults, native preflight failure preserving the old host, and real PowerShell 5.1 Python discovery/argument and private-log contracts without UI. Opt-in `development/tests/integration/probe_windows_web.py` requires UI approval: native menu labels/WM_COMMAND delivery, failed browser notification, Exit/fault cleanup, offline shell, transient-console survival, overlap/restart, injected tray failure retaining a healthy instance, source-change exit, independent real CLI Watch and ShellExecute source-ZIP paths with spaces/Unicode. Windows 11/Python 3.14 native checks were observed on 2026-10-26; physical mouse double-click, visual light/dark review and macOS remain untested. No model inference or new permanent release gate.
+
+`development/tests/test_macos_web.py` and `development/tests/test_macos_app.py` cover synthetic typed dispatch/callback retention and faults, main-thread enforcement, tracking-mode timer wiring, preflight failure preserving the old instance, readiness, partial cleanup, asynchronous Open/Exit and cache/quoting/rebuild failures. They never load AppKit or start UI. The explicitly approved best-effort Windows implementation is not native macOS acceptance. Approval-only `development/tests/integration/probe_macos_web.py` is available for real AppKit callbacks, labels, HTTP-owner shutdown and cleanup; it was not run here. `docs/web-beta.md` lists pending Finder/Gatekeeper, clone/ZIP, executable bits, no-Terminal, browser, tracking responsiveness, source-change/orphan and CPU-architecture checks.
 
 ## Native launcher maintenance notes
 

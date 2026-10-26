@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "epochRevision": "df44c06a97244278abd8d0dc9ed90ea12c368e47",
-  "ordinaryCount": 14,
+  "ordinaryCount": 15,
   "completed": {
     "architecture": 10,
     "test-health": 10,
@@ -11,9 +11,9 @@
     "id": "shared-repository-maintenance",
     "version": 1
   },
-  "lastDeliveredRevision": "191f0e007bbe23a3cf560a62c72b5ce5b103fa70",
+  "lastDeliveredRevision": "54c4554b36d4297ecc0cee4836a8585ebfda5c34",
   "lastItem": {
-    "id": "fr/000320-windows-web-beta-launcher-and-tray.md",
+    "id": "fr/000330-macos-web-beta-launcher-and-statusbar.md",
     "kind": "ordinary"
   },
   "featureDiscovery": {
