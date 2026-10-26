@@ -11,7 +11,8 @@ from .jobs import parse_report
 from .security import BrowserSession
 
 ASSETS = {"/": ("index.html", "text/html; charset=utf-8"),
-          "/app.js": ("app.js", "text/javascript; charset=utf-8"),
+           "/app.js": ("app.js", "text/javascript; charset=utf-8"),
+           "/render.js": ("render.js", "text/javascript; charset=utf-8"),
           "/app.css": ("app.css", "text/css; charset=utf-8")}
 JOB_PATH = re.compile(r"/api/jobs/([a-f0-9]{32})(/cancel)?\Z")
 CSP = ("default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; "

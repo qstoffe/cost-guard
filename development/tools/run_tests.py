@@ -26,6 +26,7 @@ QUICK_PATTERNS: tuple[str, ...] = (
     "test_windows_web.py",
     "test_web_lifecycle.py",
     "test_web_runtime.py",
+    "test_web_views.py",
     "test_application_reports.py",
     "test_history_loading.py",
     "test_source_history_loading.py",

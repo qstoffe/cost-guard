@@ -2,6 +2,22 @@
 
 Run `python cost-guard-web.py --foreground` using already installed Python 3.11+. It binds **127.0.0.1 only**, on an OS-assigned port. There is no LAN/proxy mode, install step, frontend build or automatic browser launch in this explicit developer mode. Leave the console open. Ctrl+C or a detected runtime-source change stops only this host and its owned finite reports; it does not stop OpenCode. Foreground instances are intentionally separate from managed launcher discovery.
 
+## Navigation and static reports
+
+The Beta shell provides Overview (the normal shared model/account report), Sessions (all available roots), and selected session details. Overview model/account summaries are available now; the dedicated Live, Models, Accounts, Reports/date and Token Mix routes explicitly say unavailable and retain their CLI equivalents. They are not fabricated empty dashboards. Existing finite API modes remain callable.
+
+Session-ID links open `/#/sessions/<id>`. Fragment routes support direct links, reload and browser Back/Forward without expanding the HTTP path allowlist. The one-use bootstrap fragment is removed before requests; ordinary session routes are preserved on reload. Names/prompts are text, never links or tooltips containing source paths. Navigation and paging never put prompt/history payloads in browser storage or history state.
+
+Every successful result has a visible observation time, source status and per-root revision evidence from the shared facade. A running prompt is **running at that snapshot**, with canonical provisional values and frozen duration. Only **Refresh snapshot** reacquires a viewed result. Source events, elapsed wall time, navigation and paging cannot update it; no Watch starts. Failed refresh preserves the last known result with **STALE** status. Missing sessions, existing sessions without prompts, partial source, independent unavailable accounts and source failures are distinct from acquired zero.
+
+The session table retains Prompt, CCost, Calls, Duration, ~Ictx, ~Ictx CCost, ~Extra CCost and I/C/W/O %. Full-session totals and main/linked-child breakdown come from the canonical result, never from the visible page. Unknown, incomplete and estimated amounts are labeled; CCost is not billing. The browser performs no valuation or token attribution.
+
+Tables show 50 rows per page from **one complete immutable API result**, including the all-roots session list (`session_limit: null`). All returned rows are reachable; there are no source-offset cursors or cross-revision page requests. Existing 8 MiB/120-second finite-job limits still apply: oversized/slow results fail explicitly, never pretend to be complete truncated history. Streaming/live history is future work. Page positions and up to twelve report views are retained only in page memory; reload or eviction requires a new, visibly loading capture. Navigating back to a retained result does not refresh it.
+
+Layout choices: wrapping top navigation; system light/dark palette; source/readiness separate from snapshot health; text-selectable overflow tables with sticky column headings; independently paged tables and complete totals below rows; keyboard focus outlines and a skip-to-report button. Refresh/status messages do not take focus. No user-side frontend build, Node installation, CDN, analytics, account login or editing.
+
+`test_web_views.py` exercises the shipped JavaScript and real HTTP/facade with deterministic sources through an optional developer-only Node DOM harness. It tests navigation/hash events, reload, safe hostile/Unicode text, long/running/aborted/compacted/empty/missing/partial reports, complete totals and frozen/explicit-refresh/stale behavior. It is not visual browser, CSS layout or native macOS acceptance. Owner checks: open the Beta, try narrow/wide windows and light/dark mode, tab through navigation and page controls, select prompt text, follow a session link, use Back/Forward and reload, and Refresh a running session. No new permanent release gate is added.
+
 ## Windows detached launcher and tray
 
 Double-click `windows/Beta/Cost Guard Web.cmd`, or invoke it from an existing console. It locates Python 3.11+ through available `py.exe -3` / `python.exe` installations, resolves its checkout relative to the script, validates configuration and briefly exercises the in-box tray API before stopping a healthy old instance. No packages, virtual environment, Node, compiler, downloads, administrator access or global execution-policy change is needed. The `.cmd` uses Windows PowerShell 5.1; only that child process has an execution-policy override. Source ZIPs work with the preserved directory structure, including spaces and Unicode.
@@ -52,7 +68,7 @@ This is loopback HTTP, not a public server or protection against malware/other c
 
 | Route | Method | Meaning |
 | --- | --- | --- |
-| `/`, `/app.js`, `/app.css` | GET | Fixed public Beta shell/assets, no history |
+| `/`, `/app.js`, `/render.js`, `/app.css` | GET | Fixed public Beta shell/assets, no history |
 | `/health` | GET | Public HTTP-shell readiness only |
 | `/api/bootstrap` | POST | One-use `{"credential":"…"}` exchange with exact Origin |
 | `/api/session` | GET | Authenticated CSRF recovery, no control credential |

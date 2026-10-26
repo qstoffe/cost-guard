@@ -1,17 +1,23 @@
 <!doctype html>
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Cost Guard Web Beta</title><link rel="stylesheet" href="/app.css"><script src="/app.js" defer></script></head>
-<body><main><h1>Cost Guard Web <small>Beta</small></h1>
-<p>Local, read-only reports. This early shell is not the complete Web dashboard.</p>
-<p id="status" role="status">HTTP ready. Establishing browser session…</p>
-<label>Finite report <select id="kind"><option value="normal">Overview</option>
-<option value="sessions">Session list</option><option value="session">Session detail</option>
-<option value="all-models">Model catalog</option><option value="date">Date range</option>
-<option value="token-mix">Historical Token Mix</option></select></label>
-<label>Session ID or date (when required) <input id="target" maxlength="200"></label>
-<button id="run" disabled>Run report</button><button id="cancel" disabled>Cancel</button>
-<pre id="result" aria-live="polite">No report requested. Empty data and unknown values are not zero.</pre>
-<p>Navigation, live updates, tray icons and background lifecycle are unavailable in this delivery.</p>
-<p>Closing this tab does not stop the foreground host. Stop it with Ctrl+C in its console.</p>
-</main></body></html>
+<title>Cost Guard Web Beta</title><link rel="stylesheet" href="/app.css">
+<script src="/render.js" defer></script><script src="/app.js" defer></script></head>
+<body>
+<button class="skip" id="skip">Skip to report</button>
+<header><h1>Cost Guard <small>Web Beta</small></h1>
+<p>Local, read-only · CCost is reference valuation, not billing</p>
+<p id="status" role="status">HTTP ready. Establishing browser session…</p></header>
+<nav aria-label="Main navigation">
+<a href="#/overview">Overview</a><a href="#/live">Live</a><a href="#/sessions">Sessions</a>
+<a href="#/models">Models</a><a href="#/accounts">Accounts</a><a href="#/reports">Reports</a>
+<a href="#/token-mix">Token Mix</a></nav>
+<main id="content" tabindex="-1">
+<div class="toolbar"><h2 id="heading">Overview</h2>
+<button id="refresh" disabled>Refresh snapshot</button><button id="cancel" disabled>Cancel</button></div>
+<p id="notice" role="status">No report requested. Unknown values are not zero.</p>
+<div id="result" aria-busy="false"></div>
+</main>
+<footer>Reports stay frozen until Refresh. Closing this tab does not stop Cost Guard.
+Live acquisition and remaining report views are unavailable in this delivery. CLI remains available.</footer>
+</body></html>

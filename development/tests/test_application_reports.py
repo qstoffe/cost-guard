@@ -273,7 +273,7 @@ class ApplicationReportTests(unittest.TestCase):
             result = app.execute(ReportRequest())
         self.assertEqual("pricing_unavailable", result.error.code)
         self.assertIsNone(self.services[-1]._account_work)
-        self.assertEqual("report_unavailable", app.execute(
+        self.assertEqual("session_not_found", app.execute(
             ReportRequest(ReportKind.SESSION, session_id="absent")).error.code)
         self.assertEqual("invalid_request", app.execute(
             ReportRequest(ReportKind.DATE, date_text="not-a-date")).error.code)
