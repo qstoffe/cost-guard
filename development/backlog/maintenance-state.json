@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "epochRevision": "df44c06a97244278abd8d0dc9ed90ea12c368e47",
-  "ordinaryCount": 24,
+  "ordinaryCount": 25,
   "completed": {
     "architecture": 20,
     "test-health": 20,
@@ -11,9 +11,9 @@
     "id": "shared-repository-maintenance",
     "version": 1
   },
-  "lastDeliveredRevision": "71a2e9094cc8769bb24064ee1391cffc6385525b",
+  "lastDeliveredRevision": "be6c8511b26a71030628fe0d7e8202961ad2582e",
   "lastItem": {
-    "id": "fr/000440-modern-web-beta-design-system-and-navigation.md",
+    "id": "fr/000450-overview-cli-parity-and-correct-model-comparison.md",
     "kind": "ordinary"
   },
   "featureDiscovery": {
