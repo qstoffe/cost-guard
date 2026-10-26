@@ -2,7 +2,7 @@
 
 ## Outcome
 
-Implemented in v80.85 (2026-10-26). Overview, all-session listing and selected static session detail are working routes over the existing shared application API. The original specification is preserved byte-for-byte. Implementation candidate: [40326d2](https://github.com/qstoffe/cost-guard/commit/40326d2d2d58de76d3a5c54166478d5b73a7efb9).
+Implemented in v80.85 (2026-10-26). Overview, all-session listing and selected static session detail are working routes over the existing shared application API. The original specification is preserved byte-for-byte. Delivery: [PR #65](https://github.com/qstoffe/cost-guard/pull/65). Implementation candidate: [40326d2](https://github.com/qstoffe/cost-guard/commit/40326d2d2d58de76d3a5c54166478d5b73a7efb9).
 
 ## Changes and choices
 
