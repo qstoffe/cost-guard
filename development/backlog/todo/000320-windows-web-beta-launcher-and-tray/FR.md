@@ -1,0 +1,22 @@
+# FR 000320 — Windows Web Beta launcher and tray Open/Exit
+
+## Outcome and dependency
+
+After FR000310, add `windows/Beta/Cost Guard Web.cmd` as an opt-in way to launch the detached Web application. Keep `windows/Cost Guard.cmd`, `windows/Cost Guard Watch.cmd`, Diagnostics and their current console behavior working unchanged. Follow FR000290/PLAN.md and reuse the shared lifecycle, not a Windows-specific second server manager.
+
+## Required behavior
+
+- Resolve repository paths relative to the launcher, independent of the working directory, including spaces, Unicode and source ZIP extraction. Reuse the intent of existing Python 3.11+ discovery without altering the stable PowerShell/CLI launchers. Web setup is isolated: a first-run helper explains the pinned optional downloads and requests consent; no global pip, administrator elevation, execution-policy changes outside the launched process, Node installation or repeated online dependency check on normal startup. Prepare a usable environment before stopping an existing healthy server; setup failure leaves the old instance alone where feasible.
+- Double-click performs FR000310's verified restart, starts the host detached from its transient console and waits for shell readiness, then opens the default registered browser at the instance's authenticated bootstrap route. Exit the launcher automatically on success; do not inherit the stable launcher's `-NoExit` behavior. When invoked inside an existing user terminal, return control rather than closing that terminal. Do not bind the background process to the transient console's Ctrl+C or standard handles.
+- The same application instance owns a Windows notification-area icon with exactly two initial actions: **Open Cost Guard** and **Exit Cost Guard**. Open opens the existing server without restarting or creating another one. Exit performs bounded clean shutdown of that instance and removes the icon; the browser is not forcibly closed. Tooltip can identify Beta/version/checkout when necessary without disclosing private session data. Use a bundled original icon with sensible light/dark readability.
+- Prefer a thin pystray/Pillow adapter from the isolated environment; native implementation is acceptable only with equal lifecycle and installation simplicity. The cross-platform host must leave the GUI main-thread requirement available for macOS. Tray callbacks signal owned work rather than blocking the UI on network/history operations.
+- No persistent console window is required after a successful Explorer launch. Startup failure is not silently hidden: show a concise actionable error, preserve a privacy-safe diagnostic record and provide the existing Diagnostics route. Missing Python, package download failure, occupied/unverifiable instance, server startup timeout and browser-open failure must be distinguishable. Browser failure must leave a valid tray Open action when the server is healthy.
+- Source-change shutdown from FR000310 removes the tray icon too. Server crash must not leave an independently running icon claiming that it is healthy. Do not register an OS service, startup task, scheduled task, login auto-launch or firewall exception.
+
+## Acceptance
+
+Exercise first setup/consent/decline, installed offline startup, existing-instance restart, rapid double-click, Open without restart, Exit, failed browser open and code-change exit. Verify a detached process survives launcher-window closure and the original CLI Watch still runs independently, including when Web exits or restarts. Test command invocation from an existing console, Explorer launch, paths with spaces/Unicode, supported Python discovery and stale state.
+
+Native Windows evidence is required to claim the shell/tray interaction works; synthetic tests cover failure/ownership logic but cannot prove visual native behavior. Record untested environments honestly, without new permanent release gates. This FR can ship with the minimal Beta/status page from FR000300; it does not wait for a polished UI and does not move anything to Legacy.
+
+Implementation pointers: `src/windows_launcher.ps1`, `windows/` and `src/launcher_feedback.py` describe existing protected behavior. Put new host/launcher code in a narrow Beta-owned seam rather than widening the stable launcher unnecessarily. Primary API references: https://docs.python.org/3.11/library/webbrowser.html and https://pystray.readthedocs.io/en/latest/usage.html .
