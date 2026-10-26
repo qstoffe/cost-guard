@@ -1,5 +1,12 @@
 # Web Beta
 
+v80.92 shares CLI-owned numeric display primitives through server-provided display
+tokens while retaining exact raw values for sorting. CCost, USD, quotas/Pace,
+multiplier tiers and durations no longer expose incidental Decimal precision;
+all-model native reference rates intentionally retain every meaningful digit.
+See the [display parity baseline](../development/architecture/governance/verification/web-display-parity.md)
+for per-view mapping, role/notice semantics and explicit page-specific remaining work.
+
 ## Hosted revalidation
 
 The optional **Web Beta revalidation** Actions workflow tests the delivered Beta on standard Windows x64 and macOS Apple Silicon/Intel runners, with manual dispatch and relevant PR/main triggers. See the [coverage matrix, cost boundaries and remaining manual checklist](../development/architecture/governance/verification/web-beta-ci.md). CI-only Python/Node/Chromium tooling adds no product dependency. Native API execution is not physical desktop/Finder/Gatekeeper or accessibility acceptance; macOS remains experimental. This is not a mandatory release gate or automatic promotion.

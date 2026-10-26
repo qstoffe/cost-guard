@@ -32,7 +32,7 @@ class SessionDetails:
             if len(self.leases) >= 32 or (session_id not in self.histories and len(self.histories) >= 16):
                 raise RuntimeError("detail_busy")
             entry = self.histories.setdefault(session_id, dict(history=SessionHistory(), result=None,
-                revision=None, due=0, state="loading", observed_at_ms=None, generation=0,
+                revision=None, due=0, state="loading", observed_at_ms=None, generation=0, timezone_id="UTC",
                 row_observations={}, omitted_ids=frozenset()))
             entry["due"] = 0
             token = uuid4().hex
@@ -58,7 +58,7 @@ class SessionDetails:
     @staticmethod
     def _capture(entry):
         return {name: entry[name] for name in ("result", "revision", "state", "observed_at_ms",
-                                              "row_observations", "omitted_ids")}
+                                              "row_observations", "omitted_ids", "timezone_id")}
 
     def page(self, token, offset, revision=None, anchor=None):
         with self.lock:
@@ -83,7 +83,7 @@ class SessionDetails:
         offset = (max(0, len(rows) - 50) if offset >= 2**52 else
                   max(0, min(offset, max(0, len(rows) - 1))))
         page = replace(report, prompt_blocks=(replace(block, rows=rows[offset:offset + 50]),))
-        view = project(page).to_json()
+        view = project(page, capture["timezone_id"]).to_json()
         for row in view["prompt_blocks"][0]["rows"]:
             row["id"] = identity((block.session_id, row["event_id"], row["is_compaction"]))
             row["last_observed_at_ms"] = capture["row_observations"].get(row["event_id"])
@@ -118,6 +118,7 @@ class SessionDetails:
                 entry["result"] = report
                 entry["revision"] = uuid4().hex
             if report is not None:
+                entry["timezone_id"] = service.timezone_id
                 entry["observed_at_ms"] = service.now_ms
                 entry["row_observations"] = entry["history"].row_observations
                 entry["omitted_ids"] = entry["history"].omitted_ids

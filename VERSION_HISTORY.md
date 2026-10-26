@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.92 — 2026-10-27
+
+- Established shared CLI/Web numeric display primitives and additive server display tokens, retaining canonical Decimal strings independently for exact sorting. CCost keeps conservative rounding/partial markers, USD fixed decimals, tier multipliers one decimal with compact thresholds, native reference-rate precision, quota direction/units and compact durations.
+- Preserved display role labels for running, estimated/partial, thresholds and new/promotional/superseded data; model notices follow their table and report notes remain last. Published the per-view parity baseline and deterministic CLI/DTO/DOM goldens. No frontend dependencies, new acquisition or valuation; individual page layout work remains separate.
+
 ## v80.91 — 2026-10-26
 
 - Web Beta streams timed startup stages through the Windows launcher instead of buffering them until completion. Native preflight, verified restart, detached tray/host readiness and authenticated browser handoff retain their safety checks; macOS command startup also explains optional first-launch helper preparation.

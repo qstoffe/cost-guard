@@ -6,20 +6,12 @@ columns are never terminal-shrunk; only Publisher/Model are flexible.
 from __future__ import annotations
 
 import re
-from decimal import Decimal
 from typing import Iterable, Sequence
 
 from src.reports.models import ModelComparisonProjection
+from src.display import compact_threshold, relative_cost
 
 from .terminal import visible_len
-
-
-def compact_threshold(value: int) -> str:
-    divisor, suffix = (1_000_000, "M") if value >= 1_000_000 else (1000, "K") if value >= 1000 else (1, "")
-    text = format(Decimal(value) / divisor, "f")
-    if "." in text:
-        text = text.rstrip("0").rstrip(".")
-    return text + suffix
 
 
 def aligned_relative_costs(items: Sequence[ModelComparisonProjection]) -> list[str]:
@@ -29,9 +21,9 @@ def aligned_relative_costs(items: Sequence[ModelComparisonProjection]) -> list[s
     for item in items:
         values = []
         if item.relative_cost is not None:
-            values.append(f"{item.relative_cost:.1f}x")
+            values.append(relative_cost(item.relative_cost))
             for level in item.relative_levels[1:]:
-                values.extend(("→", "N/A" if level.relative_cost is None else f"{level.relative_cost:.1f}x",
+                values.extend(("→", relative_cost(level.relative_cost),
                                f"({level.threshold_operator}{compact_threshold(level.threshold_tokens)})"
                                if level.threshold_tokens is not None else ""))
         fields.append(values)

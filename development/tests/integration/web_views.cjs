@@ -175,7 +175,7 @@ async function main() {
     context.example = result;
     vm.runInContext('ReportView.render(output, example, {pages: {}})', context);
     const block = result.view.prompt_blocks[0];
-    assert.ok(ids.result.textContent.includes('Full-session CCost ' + block.total_ccost));
+    assert.ok(ids.result.textContent.includes('Full-session CCost ' + block.display.total_ccost));
     assert.ok(ids.result.textContent.includes(block.title));
     assert.equal(all(ids.result, 'img').length, 0);
     assert.equal(all(ids.result, 'script').length, 0);
@@ -184,7 +184,7 @@ async function main() {
     if (index === 2) assert.match(ids.result.textContent, /Aborted|Error/);
     if (index === 3) {
       assert.match(ids.result.textContent, /Partial source data/);
-      assert.match(ids.result.textContent, /incomplete|Unknown/);
+      assert.match(ids.result.textContent, /N\/A|\?/);
     }
   }
   assert.match(ids.result.textContent, /Å日本語/);
@@ -198,22 +198,20 @@ async function main() {
   }
   context.example = input.tier_report;
   vm.runInContext('ReportView.render(output, example, {pages: {}, section: "models"})', context);
-  assert.match(ids.result.textContent, /100000/);
+  assert.match(ids.result.textContent, /100K/);
   assert.match(ids.result.textContent, /GitHub USD\/M I\/C\/W\/O/);
   for (const row of input.tier_report.view.model_comparison) {
-    assert.ok(ids.result.textContent.includes(row.price_summary));
-    for (const level of row.relative_levels.slice(1)) {
-      assert.ok(ids.result.textContent.includes(level.threshold_operator + level.threshold_tokens));
-      if (level.relative_cost != null) assert.ok(ids.result.textContent.includes(level.relative_cost));
-    }
+    assert.ok(ids.result.textContent.includes(row.display.price_summary));
+    assert.ok(ids.result.textContent.includes(row.display.relative_cost));
+    assert.match(row.display.relative_cost, /\d+\.\dx/);
   }
   context.example = input.account_report;
   vm.runInContext('ReportView.render(output, example, {pages: {}, section: "accounts"})', context);
   assert.match(ids.result.textContent, /First/);
   assert.match(ids.result.textContent, /Second/);
   assert.match(ids.result.textContent, /unsupported_auth_method/);
-  assert.match(ids.result.textContent, /Unaccounted usage \(estimate\): Unknown/);
-  assert.match(ids.result.textContent, /Remaining fraction 0.75/);
+  assert.match(ids.result.textContent, /Unaccounted usage \(estimate\): —/);
+  assert.match(ids.result.textContent, /Remaining 75%/);
   // Reload with an ordinary deep link must not erase it or require the bootstrap again.
   location.hash = '#/sessions/root-0000';
   const reloaded = vm.createContext({document: context.document, window: context.window, location, history,

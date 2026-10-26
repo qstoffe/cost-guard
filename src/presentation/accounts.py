@@ -12,7 +12,8 @@ from src.analysis.valuation import ComparisonCost
 from src.analysis.timezones import resolve_timezone
 from src.domain import AccountSnapshot, AccountUsageStatus, BillingComponent, QuotaComponent
 from src.reports.models import AccountProjection
-from src.numbers import consumed_capacity, remaining_capacity, exact_number
+from src.numbers import consumed_capacity, remaining_capacity
+from src.display import money, native_amount as _native_amount, unaccounted_usage
 from .terminal import AnsiStyler, StyledText
 
 QUOTA_BAR_WIDTH = 10
@@ -57,26 +58,11 @@ def quota_label(label: str) -> str:
     return {"5-hour": "5h", "weekly": "Week", "monthly": "Month", "Monthly": "Month"}.get(label, label)
 
 
-def money(value: Decimal | None) -> str:
-    return "N/A" if value is None else f"${value:.2f}"
-
-
 def account_ccost_text(value: ComparisonCost | None) -> str:
     """Show the known account subtotal; global partial markers stay intact."""
     if value is None or (value.observed_requests and not value.priced_requests):
         return "—"
     return consumed_capacity(value.known_ccost)
-
-
-def _native_amount(value: Decimal, unit: str | None, *, kind: str = "exact") -> str:
-    if unit == "USD":
-        return money(value)
-    if (unit or "").casefold() == "ai credits":
-        if kind == "remaining":
-            return remaining_capacity(value)
-        if kind == "consumed":
-            return consumed_capacity(value)
-    return exact_number(value)
 
 
 def quota_parts(component: QuotaComponent, timezone_id: str, *, now_ms: int,
@@ -267,8 +253,7 @@ def account_ccost_lines(account: AccountProjection) -> tuple[str, ...]:
             lines.append("CCost " + name + ": " + account_ccost_text(value))
     if account.account.ref.provider_id in {"github-copilot", "github-copilot-enterprise"}:
         value = account.unaccounted_usage
-        text = "—" if value is None else "0" if value == 0 else (
-            ("+" if value > 0 else "-") + consumed_capacity(abs(value)))
+        text = unaccounted_usage(value)
         lines.append("Unaccounted usage: " + text)
     return tuple(lines)
 

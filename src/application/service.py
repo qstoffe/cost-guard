@@ -103,7 +103,7 @@ class ReportApplication:
             requests = tuple(record(id=identity(parts), session_id=parts[0], event_id=parts[1],
                                     message_id=parts[2], step_part_id=parts[3])
                              for parts in service.report_request_identities())
-            view = project(report)
+            view = project(report, service.timezone_id)
             view = ObjectValue(view.fields + (("request_identities", requests),))
             recovered("application-report")
             return ReportResult(self._instance_id, sequence, now, scope, source, view)

@@ -1,7 +1,7 @@
 """Render one-shot report projections to human-readable terminal text."""
 from __future__ import annotations
 
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal
 from typing import Iterable, Mapping, TextIO
 import sys
 
@@ -10,6 +10,7 @@ from src.analysis.context import PriceWarningSeverity
 from src.reports.models import PromptProjection, ReportKind, ReportProjection, SessionPromptBlock
 from src.version import DISPLAY_VERSION, PRODUCT_NAME, RELEASE_DATE
 from src.numbers import ccost_amount
+from src.display import context_tokens as _context_k, context_delta as _context_delta_k
 
 from .terminal import AnsiStyler, Column, StyledText, fit, render_table, single_line, terminal_content_width, wrap_prose
 from .accounts import capacity_lines, money, quota_label, account_ccost_lines
@@ -20,24 +21,6 @@ from .pricing_notices import pricing_notice_lines
 from .model_comparison import aligned_price_summaries as _aligned_price_summaries, aligned_relative_costs
 from .model_supersession import superseded_rows
 from .duration import duration_text as _duration
-
-
-def _context_k(value: int | None) -> str:
-    if value is None:
-        return "N/A"
-    if value <= 0:
-        return "0k"
-    rounded = int((Decimal(value) / Decimal(1_000)).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
-    return f"{max(1, rounded)}k"
-
-
-def _context_delta_k(value: int | None) -> str:
-    if value is None:
-        return "N/A"
-    if abs(value) < 500:
-        return "0k"
-    magnitude = _context_k(abs(value))
-    return ("+" if value > 0 else "-") + magnitude
 
 
 def _percentile(values: list[Decimal], percentile: Decimal) -> Decimal:
