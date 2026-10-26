@@ -185,7 +185,8 @@ class ReportRenderer:
         if any(item.multiple_models for item in report.session_usage):
             self._prose("A trailing * in Model means more than one model contributed; the dominant model is selected by CCost.", prefix="* ")
 
-    def _render_prompt_block(self, block: SessionPromptBlock, *, warning_number: int | None = None) -> None:
+    def _render_prompt_block(self, block: SessionPromptBlock, *, warning_number: int | None = None,
+                             snapshot_running_metrics: bool = False) -> None:
         thresholds = self.config.get("thresholds") if isinstance(self.config.get("thresholds"), Mapping) else {}
         prompt_rows = [row for row in block.rows if not row.is_compaction]
         cost_profile = _MetricProfile((row.ccost for row in prompt_rows), thresholds)
@@ -227,13 +228,15 @@ class ReportRenderer:
                 styles.append((None,) * 8)
                 last_model = current_model
                 table_has_additional = table_has_additional or item.has_additional_model
-            if item.is_compaction:
-                prompt = f"{clock} #{item.prompt_number} {item.label}{' [RUNNING]' if item.in_progress else ''}"
-            else:
-                prompt = f"{clock} #{item.prompt_number} {single_line(item.preview)}" + (" [RUNNING]" if item.in_progress else "")
+            prefix = f"{clock} #{item.prompt_number}"
+            suffix = " [RUNNING]" if item.in_progress else ""
+            if item.in_progress and snapshot_running_metrics:
+                prefix, suffix = f"{clock} [RUNNING] #{item.prompt_number}", ""
+            preview = item.label if item.is_compaction else single_line(item.preview)
+            prompt = f"{prefix} {preview}{suffix}"
 
             native_compaction_without_billing = item.is_compaction and item.calls == 0
-            if item.in_progress:
+            if item.in_progress and (not snapshot_running_metrics or item.token_mix_percent is None):
                 mix_text: object = "running - consider ABORT" if item.running_cost_warning else "running"
             elif item.token_mix_percent is not None:
                 mix_parts: list[tuple[str, str | None]] = []
@@ -304,6 +307,10 @@ class ReportRenderer:
             self._write(line)
         if table_has_additional:
             self._prose("Additional model(s) were used by linked subagent/child requests; displayed model is the root request model.", prefix="* ")
+        if snapshot_running_metrics and any(row.in_progress for row in block.rows):
+            self._prose("[RUNNING] metrics are provisional observed usage at this snapshot; no automatic refresh.", prefix="* ")
+            if any(row.running_cost_warning for row in block.rows):
+                self._prose("Running CCost warning: consider ABORT.", prefix="* ", role=WARNING_ROLE)
         warning_role = WARNING_ROLE if block.next_context_warning_severity != PriceWarningSeverity.NONE else None
         if block.next_context_tokens is not None:
             next_line = f"Next Ictx: ~{_context_k(block.next_context_tokens)} " + (
@@ -330,7 +337,8 @@ class ReportRenderer:
         for index, block in enumerate(report.prompt_blocks):
             if index:
                 self._write()
-            self._render_prompt_block(block, warning_number=warning_numbers.get(block.session_id))
+            self._render_prompt_block(block, warning_number=warning_numbers.get(block.session_id),
+                                      snapshot_running_metrics=report.kind is ReportKind.SESSION)
         for explanation in (
             "CCost: reference token valuation including linked child work, not actual billing; ? marks partial pricing.",
             "Calls: causal model requests. I/C/W/O %: input/cache-read/cache-write/output (including reasoning) token shares.",

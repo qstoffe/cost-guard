@@ -218,7 +218,7 @@ Shows only a session table and legend, newest causal-tree activity first (not co
 
 ## Session and date detail reports
 
-Passing a session ID shows only that session/root's prompt analysis and explanations. Explicit date/date-range modes use the same table against their selected scope, limited to data still available from OpenCode. Neither fetches model availability or account quotas.
+Passing a session ID prints one snapshot and exits, even with active work; use `--watch` for tracking. `[RUNNING]` metrics are provisional observed usage; unsupported values stay unknown. Date/date-range modes use the same table against their selected scope. Neither fetches model availability or account quotas.
 
 | Column | Meaning |
 | --- | --- |
@@ -229,7 +229,7 @@ Passing a session ID shows only that session/root's prompt analysis and explanat
 | `~Ictx` | Incoming context or `Δctx -> Next Ictx` when the chronological context state is available. |
 | `~Ictx CCost` | Incoming-context reference valuation, not billing. |
 | `~Extra CCost` | Additional causal usage reference valuation beyond incoming context, not billing. |
-| `I/C/W/O %` | Token-category mix, or running-state text while a prompt is still active. |
+| `I/C/W/O %` | Observed token mix, including supported running session usage; otherwise unknown/running. |
 
 Known causal splits show **Main / Subagents / Total**; running prompts may show `running - consider ABORT`. `(Next Ictx CCost 0.3–3)` is the next input's cached–fresh CCost range; price-threshold warnings show `(1.9x more expensive)`, the model table's Relative CCost ratio across that threshold. Amber `nextIctxWarning`: approaching highlights the marker; exceeded the full explanation.
 
@@ -360,7 +360,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.78 (2026-10-26):** Copilot reports add signed `Unaccounted usage` for comparable native-month evidence, otherwise `—`. It is an estimate, not billing. Watch is unchanged. [Details](docs/usage-and-cost.md#copilot-unaccounted-usage).
+**v80.79 (2026-10-26):** Session reports print one snapshot and exit, with supported provisional `[RUNNING]` metrics. Explicit Watch is unchanged.
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

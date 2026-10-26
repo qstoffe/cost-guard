@@ -67,7 +67,8 @@ def _diagnostic_cost_shares(parts: Sequence[tuple[Decimal | None, Decimal | None
 
 def _session_block(*, session_id: str, title: str, rows: list[PromptProjection],
                    projector: PromptRowProjector, mix_values: tuple[int, int, int, int],
-                   diagnostic_parts: Sequence[tuple[Decimal | None, Decimal | None]]) -> SessionPromptBlock:
+                    diagnostic_parts: Sequence[tuple[Decimal | None, Decimal | None]],
+                    mix_complete: bool = True) -> SessionPromptBlock:
     total_ccost = sum((row.ccost for row in rows), Decimal(0))
     prompt_rows = [row for row in rows if not row.is_compaction]
     total_subagent = sum((row.subagent_ccost for row in prompt_rows), Decimal(0))
@@ -91,7 +92,7 @@ def _session_block(*, session_id: str, title: str, rows: list[PromptProjection],
         duration_ms=accumulated_duration((row.at_ms, row.duration_ms) for row in rows),
         total_ictx_cost_text=ictx_text,
         total_extra_cost_text=extra_text,
-        total_mix_text="" if mix is None else "/".join(str(value) for value in mix),
+        total_mix_text=("" if mix is None else "/".join(str(value) for value in mix)) if mix_complete else "N/A",
         current_context_tokens=composition.target_tokens if composition else None,
         current_context_sources=composition.category_totals if composition else {},
         next_context_tokens=estimate.tokens if estimate else None,
@@ -117,10 +118,11 @@ def build_prompt_block(
     *, session_id: str, title: str, bundle: RootAnalysisBundle, snapshot: SessionSnapshot,
     catalog: PricingCatalog, config: Mapping[str, object], start_ms: int | None = None,
     end_ms: int | None = None, threshold_multiplier: ThresholdMultiplier | None = None,
-    watch_duration: bool = False,
+    watch_duration: bool = False, snapshot_running_metrics: bool = False,
 ) -> SessionPromptBlock:
     projector = PromptRowProjector(snapshot=snapshot, bundle=bundle, catalog=catalog, config=config,
-                                   threshold_multiplier=threshold_multiplier, watch_duration=watch_duration)
+                                   threshold_multiplier=threshold_multiplier, watch_duration=watch_duration,
+                                   snapshot_running_metrics=snapshot_running_metrics)
     event_numbers = {
         event.event_id: index + 1 for index, event in enumerate(sorted(
             (event for event in snapshot.events if event.session_id == session_id
@@ -131,6 +133,7 @@ def build_prompt_block(
     rows: list[PromptProjection] = []
     mix_values = [0, 0, 0, 0]
     diagnostic_parts: list[tuple[Decimal | None, Decimal | None]] = []
+    mix_complete = True
     for record in bundle.prompts:
         if start_ms is not None and record.prompt_time_ms < start_ms:
             continue
@@ -142,6 +145,9 @@ def build_prompt_block(
             for index, value in enumerate((record.input_tokens, record.cache_read_tokens, record.cache_write_tokens, record.output_tokens)):
                 mix_values[index] += value
             diagnostic_parts.append((row.incoming_context_ccost, row.extra_ccost))
+        elif snapshot_running_metrics and record.in_progress:
+            mix_complete = False
+            diagnostic_parts.append((None, None))
     for record in bundle.compactions:
         if start_ms is not None and record.created_at_ms < start_ms:
             continue
@@ -158,4 +164,4 @@ def build_prompt_block(
     rows = _coherent_watch_deltas(rows, epochs=projector.epochs, session_id=session_id,
                                  subtask_ids=frozenset(record.prompt_id for record in bundle.prompts if record.prompt_kind == "subtask"))
     return _session_block(session_id=session_id, title=title, rows=rows, projector=projector,
-                          mix_values=tuple(mix_values), diagnostic_parts=diagnostic_parts)
+                          mix_values=tuple(mix_values), diagnostic_parts=diagnostic_parts, mix_complete=mix_complete)

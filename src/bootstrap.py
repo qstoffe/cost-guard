@@ -291,18 +291,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         progress.stop(complete=True)
         context(phase="report presentation")
         ReportRenderer(config).render(projection)
-        if command.kind is CommandKind.SESSION and any(
-            row.in_progress for block in projection.prompt_blocks for row in block.rows
-        ):
-            watch_renderer = WatchRenderer(config)
-            coordinator = WatchCoordinator(
-                selection=selection,
-                report_service=service,
-                config=config,
-                session_id=command.target,
-                started_at_ms=watch_renderer.started_at_ms,
-            )
-            coordinator.run_until_inactive(watch_renderer)
         return 0
     except KeyboardInterrupt:
         check_pending()

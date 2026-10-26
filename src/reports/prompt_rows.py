@@ -11,6 +11,7 @@ from src.analysis.context import (
 )
 from src.analysis.effort import prompt_effort, prompt_replies
 from src.analysis.models import CompactionRecord, PromptRecord, RootAnalysisBundle
+from src.analysis.token_mix import MIX_FIELDS
 from src.analysis.valuation import billed_spend, comparison_cost
 from src.domain import SessionSnapshot
 from src.pricing.catalog import PricingCatalog
@@ -59,12 +60,28 @@ def _extra_ccost(catalog: PricingCatalog, record: PromptRecord | CompactionRecor
     return max(Decimal(0), total - ictx)
 
 
+def _prompt_metrics(catalog: PricingCatalog, record: PromptRecord, provisional: bool
+                    ) -> tuple[tuple[int, int, int, int] | None, Decimal | None, Decimal | None]:
+    """Use completed-report definitions, withholding unsupported active estimates."""
+    mix_known = all(all(name in entry.tokens.known_fields for name in MIX_FIELDS) for entry in record.entries)
+    active = record.in_progress
+    supported = provisional and record.breakdown_known
+    mix = (mix_percent((record.input_tokens, record.cache_read_tokens, record.cache_write_tokens, record.output_tokens))
+           if not active or supported and mix_known else None)
+    context_known = bool(record.entries) and all(
+        name in record.entries[0].tokens.known_fields for name in MIX_FIELDS[:3])
+    ictx = _context_ccost(catalog, record) if not active or supported and context_known else None
+    extra = _extra_ccost(catalog, record) if not active or supported and mix_known else None
+    return mix, ictx, extra
+
+
 class PromptRowProjector:
     """Share one timeline/epoch/config scope across every row and session summary."""
 
     def __init__(self, *, snapshot: SessionSnapshot, bundle: RootAnalysisBundle,
                  catalog: PricingCatalog, config: Mapping[str, object],
-                 threshold_multiplier: ThresholdMultiplier | None = None, watch_duration: bool = False) -> None:
+                  threshold_multiplier: ThresholdMultiplier | None = None, watch_duration: bool = False,
+                  snapshot_running_metrics: bool = False) -> None:
         self.snapshot = snapshot
         self.bundle = bundle
         self.catalog = catalog
@@ -77,6 +94,7 @@ class PromptRowProjector:
         self.running_warning_ccost = Decimal(str(config.get("runningPromptWarningCCost", 1800)))
         self.threshold_multiplier = threshold_multiplier
         self.watch_duration = watch_duration
+        self.snapshot_running_metrics = snapshot_running_metrics
 
     def multiplier(self, state: NextContextWarningState, model_id: str) -> Decimal | None:
         if self.threshold_multiplier is None or not state.price_threshold or not model_id:
@@ -99,10 +117,7 @@ class PromptRowProjector:
         warning = self.warning(current.tokens, model_id)
         live_tokens = watch_state.next_tokens if not self.epochs.retired(record.session_id, watch_state.last_activity_ms) else None
         watch_warning = self.warning(live_tokens, watch_state.model_id)
-        mix = None if record.in_progress else mix_percent(
-            (record.input_tokens, record.cache_read_tokens, record.cache_write_tokens, record.output_tokens))
-        ictx_ccost = None if record.in_progress else _context_ccost(catalog, record)
-        extra_ccost = None if record.in_progress else _extra_ccost(catalog, record)
+        mix, ictx_ccost, extra_ccost = _prompt_metrics(catalog, record, self.snapshot_running_metrics)
         valuation = comparison_cost(record.entries, catalog.reference_valuation)
         main = comparison_cost(record.entries[:record.root_entry_count], catalog.reference_valuation)
         subagent = comparison_cost(record.entries[record.root_entry_count:], catalog.reference_valuation)
