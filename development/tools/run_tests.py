@@ -233,6 +233,7 @@ def main(argv: list[str] | None = None) -> int:
                 tests=int(count.group(1)) if count else None,
                 failures=int(counts.get("failures", 0)), errors=int(counts.get("errors", 0)),
                 skipped=int(counts.get("skipped", 0)), skips=[dict(test=t, reason=r) for t, r in skips],
+                failed_tests=re.findall(r"^(?:FAIL|ERROR): (.+)$", output, re.MULTILINE),
                 outcome="PASS" if code == 0 else "FAIL"))
         args.json_report.parent.mkdir(parents=True, exist_ok=True)
         args.json_report.write_text(json.dumps(dict(suite=suite_label, files=files), indent=2), encoding="utf-8")

@@ -56,13 +56,17 @@ def probe(root=ROOT, jobs_factory=None):
     tray = ProbeItem()
     adapter = MacHost(tray)
     owner = WebHost(root, **({"jobs": jobs_factory()} if jobs_factory else {}))
-    with patch.object(owner, "open_browser", return_value=False) as browser:
-        owner.run_gui(adapter)
-        assert owner.ready and owner.reason == "menu" and owner.stopped.is_set()
-        assert tray.failed_browser and tray.item is None and tray.timer is None
-        assert browser.call_count == 1
-        assert not owner.thread.is_alive()
-        assert adapter.open_thread is not None and not adapter.open_thread.is_alive()
+    try:
+        with patch.object(owner, "open_browser", return_value=False) as browser:
+            owner.run_gui(adapter)
+            assert owner.ready and owner.reason == "menu" and owner.stopped.is_set()
+            assert tray.failed_browser and tray.item is None and tray.timer is None
+            assert browser.call_count == 1
+            assert not owner.thread.is_alive()
+            assert adapter.open_thread is not None and not adapter.open_thread.is_alive()
+    finally:
+        adapter.close()
+        owner.close()
     return {"native_macos_execution": True,
             "checks": ["AppKit typed ABI", "menu labels and Objective-C Open/Exit callbacks",
                        "HTTP owner readiness/shutdown", "browser-failure menu retention", "native cleanup"],

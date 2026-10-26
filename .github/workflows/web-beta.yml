@@ -28,13 +28,13 @@ jobs:
       PYTHONIOENCODING: utf-8
       COST_GUARD_TEST_MODE: '1'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: '22'
       - name: Full registered suite and package validation
@@ -53,7 +53,7 @@ jobs:
       - name: Coverage summary (includes missing/not-run phases)
         if: always()
         run: python development/tools/ci_web_beta.py summary
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         if: always()
         with:
           name: web-beta-${{ matrix.os }}

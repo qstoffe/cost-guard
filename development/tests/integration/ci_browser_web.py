@@ -78,6 +78,8 @@ def main():
     except Exception as error:
         evidence.update(outcome="FAIL", reason=type(error).__name__)
         import traceback
+        evidence["failure_locations"] = [dict(file=Path(frame.filename).name, line=frame.lineno, function=frame.name)
+                                         for frame in traceback.extract_tb(error.__traceback__)]
         traceback.print_exc()
     finally:
         if owner:

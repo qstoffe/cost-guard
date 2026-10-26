@@ -16,6 +16,18 @@ class CiEvidenceTests(unittest.TestCase):
             with self.assertRaisesRegex(SystemExit, "not authorized on a workstation"):
                 ci_web_beta.hosted_only()
 
+    def test_provisioning_blocked_is_not_relabelled_as_test_failure(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            results = Path(temporary)
+            (results / "browser.json").write_text(json.dumps(dict(outcome="BLOCKED", reason="tool unavailable")))
+            with patch.object(ci_web_beta, "RESULTS", results), patch.object(ci_web_beta, "hosted_only"), \
+                    patch.object(ci_web_beta, "facts", return_value={}), patch.object(ci_web_beta, "save"), \
+                    patch.object(ci_web_beta, "run", return_value=1), patch("sys.argv", ["ci", "browser"]), \
+                    contextlib.redirect_stdout(io.StringIO()) as output:
+                result = ci_web_beta.main()
+        self.assertEqual(1, result)
+        self.assertEqual("BLOCKED", json.loads(output.getvalue())["outcome"])
+
     def test_report_preserves_named_skips_failures_and_missing_counts(self):
         outputs = [
             ("test_a.py", 0, 0.1, "test_a (example.Tests.test_a) ... ok\ntest_b (example.Tests.test_b) ... skipped 'Windows only'\nRan 2 tests in 0.1s\n\nOK (skipped=1)"),

@@ -19,11 +19,13 @@ sys.path.insert(0, str(ROOT))
 
 from development.tools.ci_web_beta import hosted_only, save
 from src.web.instance_state import InstanceStore
+from src.web.host import WebHost
 from src.web.jobs import ReportJobs
 from src.web.lifecycle import control, launch, stop_existing
 from src.web.process_identity import process_identity
 
 SHIM = '''import os, sys
+import socket
 from pathlib import Path
 from unittest.mock import patch
 from src.web.host import WebHost
@@ -32,6 +34,12 @@ from src.web.instance_state import InstanceStore
 from src.web.lifecycle import launch
 from src.web.main import main
 root = Path(__file__).resolve().parent
+real_connect = socket.socket.connect
+def offline_connect(stream, address):
+    if address[0] != '127.0.0.1':
+        raise OSError('offline_ci_probe')
+    return real_connect(stream, address)
+socket.socket.connect = offline_connect
 original = WebHost.__init__
 def isolated(self, *args, **kwargs):
     kwargs['jobs'] = ReportJobs()
@@ -92,7 +100,10 @@ def detached(root, home):
                                         capture_output=True, timeout=45)
                 assert result.returncode == 0
             else:
-                launch(root, module, opener=lambda url: False)
+                entry = root / "windows/Beta/Cost Guard Web.cmd"
+                result = subprocess.run(["cmd.exe", "/d", "/c", str(entry)], cwd=home,
+                                        env=environment, capture_output=True, timeout=45)
+                assert result.returncode == 0
             state = store.read()
             assert state and control(state, "status")["ready"]
             (root / "src/ci_owned_change.py").write_text("# synthetic source change\n")
@@ -105,7 +116,7 @@ def detached(root, home):
     return dict(outcome="PASS", checks=["detached native host / private OS locks / HTTP ownership",
         "Open retains instance", "deliberate restart retires original PID", "owned Exit/stop",
         "spaces and Unicode source path", "source change removes native host and private record"],
-        command="PASS (real .command; offline entry shim)" if sys.platform == "darwin" else "NOT VERIFIED (.cmd/UI handoff)")
+        command="PASS (real .command; offline entry shim)" if sys.platform == "darwin" else "PASS (real .cmd/PowerShell; offline entry shim)")
 
 
 def macos_cache(root, home):
@@ -120,6 +131,25 @@ def macos_cache(root, home):
     assert prepare_app(root, store) != first
     return dict(outcome="PASS", checks=["in-box osacompile", "verified cache reuse", "source fingerprint rebuild"],
                 osacompile="/usr/bin/osacompile (OS-bundled; no SDK/package download)")
+
+
+def macos_fault(root):
+    from src.web.native_macos import MacHost
+    adapter = MacHost()
+    owner = WebHost(root, jobs=ReportJobs())
+    start = owner.start
+
+    def fail_http():
+        start()
+        def fault():
+            raise RuntimeError("synthetic_http_fault")
+        owner.server.handle_request = fault
+
+    with patch.object(owner, "start", side_effect=fail_http):
+        owner.run_gui(adapter)
+    assert owner.failure and owner.stopped.is_set() and not owner.thread.is_alive()
+    assert adapter.tray.item is None and adapter.tray.timer is None
+    return dict(outcome="PASS", checks=["actual AppKit item removed after HTTP-owner fault"])
 
 
 def main():
@@ -142,6 +172,7 @@ def main():
             elif sys.platform == "darwin":
                 from development.tests.integration.probe_macos_web import probe
                 evidence["checks"]["adapter"] = probe(root, ReportJobs)
+                evidence["checks"]["http_fault"] = macos_fault(root)
                 evidence["checks"]["osacompile"] = macos_cache(root, home)
             else:
                 raise RuntimeError("unsupported_native_platform")
@@ -152,6 +183,8 @@ def main():
         # Tracebacks contain only disposable synthetic data, but stay in Actions log,
         # never the retained artifacts; bootstrap/control credentials are not printed.
         import traceback
+        evidence["failure_locations"] = [dict(file=Path(frame.filename).name, line=frame.lineno, function=frame.name)
+                                         for frame in traceback.extract_tb(error.__traceback__)]
         traceback.print_exc()
     save("native", evidence)
     return int(evidence["outcome"] == "FAIL")
