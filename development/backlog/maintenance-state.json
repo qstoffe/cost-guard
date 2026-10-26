@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "epochRevision": "df44c06a97244278abd8d0dc9ed90ea12c368e47",
-  "ordinaryCount": 12,
+  "ordinaryCount": 13,
   "completed": {
     "architecture": 10,
     "test-health": 10,
@@ -11,9 +11,9 @@
     "id": "shared-repository-maintenance",
     "version": 1
   },
-  "lastDeliveredRevision": "def4daea1501b1093188e5e25589536d9faa067f",
+  "lastDeliveredRevision": "ade4d0da19600c0f34b08d17436a3f4a11d964dc",
   "lastItem": {
-    "id": "fr/000300-secure-local-web-runtime.md",
+    "id": "fr/000310-web-instance-lifecycle-and-change-guard.md",
     "kind": "ordinary"
   },
   "featureDiscovery": {
