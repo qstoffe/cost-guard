@@ -3,7 +3,7 @@
   "epochRevision": "df44c06a97244278abd8d0dc9ed90ea12c368e47",
   "ordinaryCount": 10,
   "completed": {
-    "architecture": 0,
+    "architecture": 10,
     "test-health": 5,
     "performance": 0
   },
@@ -11,10 +11,10 @@
     "id": "shared-repository-maintenance",
     "version": 1
   },
-  "lastDeliveredRevision": "2ab885270c867c15de456b494ca1b0a0651534df",
+  "lastDeliveredRevision": "b2850feffd227ee5e502bd40d9a0266fdd49ba86",
   "lastItem": {
-    "id": "fr/000200-static-session-snapshot-running-metrics.md",
-    "kind": "ordinary"
+    "id": "architecture/10",
+    "kind": "architecture"
   },
   "featureDiscovery": {
     "completed": 0
