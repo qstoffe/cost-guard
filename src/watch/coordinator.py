@@ -419,12 +419,25 @@ class WatchCoordinator:
     def initialize_with_recovery(self, renderer, *, before_recovery: Callable[[], None] | None = None) -> WatchCycle:
         """Recover unfinished startup with the same selected-source lifecycle."""
         try:
-            return self.initialize(defer_history=True)
+            return self.acquire_cycle()
         except SourceError as error:
             if before_recovery is not None:
                 before_recovery()
             self._discard_initialization()
             return self._recover_source(renderer, error, initializing=True)
+
+    def acquire_cycle(self, *, enrich: bool = False, force_resync: bool = False,
+                      hinted_session_ids: Sequence[str] = ()) -> WatchCycle:
+        """Shared presentation-independent acquisition seam; exactly one caller owns it.
+
+        CLI waits/renders separately; the application scheduler publishes detached
+        projections. Neither a tab nor a report may borrow this mutable service.
+        """
+        if self.observation is None:
+            return self.initialize(defer_history=True)
+        if enrich:
+            return self.enrich_once()
+        return self.poll_once(force_resync=force_resync, hinted_session_ids=hinted_session_ids)
 
     def _discard_initialization(self) -> None:
         self.observation = None
@@ -627,7 +640,7 @@ class WatchCoordinator:
         previous_projection = self._rendered_projection or cycle.projection
         renderer.render_status(self.activity_projection("Refreshing..."))
         try:
-            cycle = self.poll_once(force_resync=resync, hinted_session_ids=hints)
+            cycle = self.acquire_cycle(force_resync=resync, hinted_session_ids=hints)
         except SourceError as exc:
             cycle = self._recover_source(renderer, exc)
         else:
@@ -643,7 +656,7 @@ class WatchCoordinator:
     def _enrich_history(self, renderer) -> WatchCycle:
         """Enrich only after a usable dashboard is drawn, yielding between bounded batches."""
         try:
-            cycle = self.enrich_once()
+            cycle = self.acquire_cycle(enrich=True)
         except SourceError as error:
             cycle = self._recover_source(renderer, error)
         previous = self._rendered_projection

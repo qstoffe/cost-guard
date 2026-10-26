@@ -135,6 +135,12 @@ class ReportJobs:
         with self._lock:
             return dict(http="ready", analysis=self.analysis, source=self.source, accounts=self.accounts)
 
+    def updates(self):
+        with self._lock:
+            return {"readiness": self.readiness(), "jobs": [
+                dict(id=key, status=job["status"], progress=job["progress"])
+                for key, job in self._jobs.items()]}
+
     def _stop(self):
         if self._active is None:
             return

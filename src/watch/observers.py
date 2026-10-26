@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from queue import Empty, Queue
-from threading import Event, Thread
+from queue import Empty, Full, Queue
+from threading import Event, Lock, Thread
 from typing import Mapping, Sequence
 
 from src.domain import NormalizedSession
@@ -78,7 +78,9 @@ class LiveEventPump:
 
     def __init__(self, source: LiveSessionSource) -> None:
         self.source = source
-        self._queue: Queue[PumpResult] = Queue()
+        self._queue: Queue[PumpResult] = Queue(maxsize=1024)
+        self._overflow: PumpResult | None = None
+        self._overflow_lock = Lock()
         self._stop = Event()
         self._thread: Thread | None = None
 
@@ -99,23 +101,36 @@ class LiveEventPump:
                 if self._stop.is_set():
                     return
                 recovered("watch-event-observer")
-                self._queue.put(PumpResult(change=change))
+                self._put(PumpResult(change=change))
         except SourceResyncRequiredError as exc:
             if not self._stop.is_set():
-                self._queue.put(PumpResult(resync_required=True, error=str(exc)))
+                self._put(PumpResult(resync_required=True, error=str(exc)))
         except SourceError as exc:
             if not self._stop.is_set():
-                self._queue.put(PumpResult(resync_required=True, error=str(exc)))
+                self._put(PumpResult(resync_required=True, error=str(exc)))
         except Exception as exc:
             if self._stop.is_set():
                 raise  # Retired pump has no ERROR surface: use the fatal hook.
             # Hints are disposable; only an authoritative snapshot may
             # restore correctness. The coordinator shows ERROR until resync.
             recoverable(exc, "watch-event-observer")
-            self._queue.put(PumpResult(resync_required=True, software_fault=True,
+            self._put(PumpResult(resync_required=True, software_fault=True,
                 error="ERROR: Watch event observer failed · resynchronizing"))
 
+    def _put(self, result: PumpResult) -> None:
+        try:
+            self._queue.put_nowait(result)
+        except Full:
+            with self._overflow_lock:
+                # Dropping hints is safe only when the owner resnapshots.
+                if self._overflow is None or result.resync_required:
+                    self._overflow = (result if result.resync_required else PumpResult(resync_required=True))
+
     def get(self, timeout: float) -> PumpResult | None:
+        with self._overflow_lock:
+            if self._overflow is not None:
+                result, self._overflow = self._overflow, None
+                return result
         try:
             return self._queue.get(timeout=max(0.0, timeout))
         except Empty:

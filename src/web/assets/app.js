@@ -11,6 +11,8 @@ const heading = document.getElementById('heading');
 const views = new Map(); // Bounded page-memory only; never browser storage/history payloads.
 let csrf = null;
 let current = null;
+let liveConnection = null;
+let liveValue = null;
 const routes = {overview: ['Overview', 'normal'], sessions: ['Sessions', 'sessions'],
   live: ['Live', null], models: ['Models', null], accounts: ['Accounts', null],
   reports: ['Reports', null], 'token-mix': ['Token Mix', null]};
@@ -29,7 +31,10 @@ function show(state) {
   cancel.disabled = !state.active;
   output.setAttribute('aria-busy', state.loading ? 'true' : 'false');
   notice.textContent = state.message;
-  if (state.result) ReportView.render(output, state.result, state);
+  if (state.live) {
+    if (liveValue?.view) ReportView.renderLive(output, liveValue, state);
+    else output.replaceChildren(ReportView.element('p', liveValue?.state || 'Live acquisition starting…'));
+  } else if (state.result) ReportView.render(output, state.result, state);
   else output.replaceChildren(ReportView.element('p', state.loading ? 'Loading snapshot…' : state.message));
 }
 function failure(code) {
@@ -85,8 +90,8 @@ function navigate() {
     const request = route?.[1] ? {kind: route[1]} : null;
     if (match) request.session_id = match[1];
     if (key === 'sessions') request.session_limit = null; // All roots, not Watch's row cap.
-    views.set(key, {request, result: null, pages: {}, loading: false, active: null,
-      message: route ? 'Unavailable in this Beta step. Use the corresponding CLI report; overview includes current model/account summaries.' : 'Unknown route.'});
+    views.set(key, {request, live: key === 'live', result: null, pages: {}, loading: false, active: null,
+      message: key === 'live' ? 'Live acquisition starting; one runtime shared across tabs.' : route ? 'Unavailable in this Beta step. Use the corresponding CLI report; overview includes current model/account summaries.' : 'Unknown route.'});
   }
   current = views.get(key);
   show(current);
@@ -101,6 +106,15 @@ async function connect() {
     csrf = session.csrf;
     const state = await api('/api/status');
     statusLine.textContent = `HTTP ${state.http}; analysis ${state.analysis}; source ${state.source}; accounts ${state.accounts}. Snapshot health is shown below.`;
+    if (!liveConnection && typeof LiveConnection !== 'undefined') {
+      liveConnection = LiveConnection.connect(api, (value, progress) => {
+        liveValue = value;
+        if (current?.live) { current.message = 'Live observation; source/account freshness shown below.'; show(current); }
+        for (const job of progress?.jobs || []) {
+          if (current?.active === job.id) notice.textContent = `${job.status}: ${job.progress?.phase || job.status}`;
+        }
+      }, message => { statusLine.textContent = message; });
+    }
     navigate();
   } catch (_) {
     statusLine.textContent = 'Browser session unavailable. Use a fresh one-use link from this host; restart it if expired.';

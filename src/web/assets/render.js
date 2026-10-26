@@ -140,5 +140,46 @@ const ReportView = (() => {
       parent.append(element('p', `I/C/W/O tokens: ${view.token_mix.totals.join('/')} · Requests: ${view.token_mix.request_count}`));
     }
   }
-  return {render, element};
+  function renderLive(parent, result, state) {
+    parent.replaceChildren();
+    const view = result.view;
+    parent.append(element('p', `${result.state} · ${view.source_label} · ${view.status} · Source observation ${new Date(result.source_observed_at_ms ?? view.now_ms).toLocaleString()} · Published ${new Date(view.now_ms).toLocaleString()}`, 'snapshot'));
+    parent.append(element('p', `Run origin: ${view.run_origin}, ${new Date(view.started_at_ms).toLocaleString()}. CCost is reference valuation, not billing.`));
+    parent.append(element('p', `Run CCost ${ccost(view.run_ccost, !view.run_total.cost_complete)} · Requests ${view.run_total.request_count} · I/C/W/O tokens ${view.run_total.totals.map(known).join('/')}`));
+    parent.append(element('p', `Run I/C/W/O CCost ${view.run_total.costs?.map(known).join('/') || 'Unknown'} · Token Mix % ${view.token_mix.percentages.map(known).join('/')}`));
+    parent.append(element('p', `${view.today_label} CCost ${ccost(view.today_total?.known_ccost, !view.today_total?.complete)}${view.today_pending ? ' · History pending' : ''}`));
+    for (const message of [view.recent_model_notice, ...view.recent_promotion_notices].filter(Boolean)) parent.append(element('p', message, 'warning'));
+    const groups = new Map();
+    for (const row of view.rows) {
+      if (!groups.has(row.session_id)) groups.set(row.session_id, []);
+      groups.get(row.session_id).push(row);
+    }
+    for (const [id, rows] of groups) {
+      const first = rows[0];
+      parent.append(element('h3', `${first.session_title} · ${rows.some(r => r.session_active) ? 'Active / recent' : first.earlier ? 'Earlier' : 'Retained'}`), link(id));
+      const subtotal = view.session_subtotals.find(item => item.session_id === id);
+      parent.append(element('p', `Displayed rows CCost ${ccost(subtotal?.ccost, subtotal?.unresolved_cost)} (not full session)`));
+      table(parent, 'Live prompts', ['Prompt / lifecycle', 'CCost', 'Calls', 'Duration', '~Ictx', '~Ictx CCost', '~Extra CCost', 'I/C/W/O %', 'Live context / tools'], rows,
+        row => {
+          const p = row.prompt, tool = row.tool;
+          const label = promptLabel({...p, next_context_warning: row.next_context_warning}); label.append(element('span', row.marker, 'detail'));
+          const detail = element('span', row.next_context_warning || '');
+          detail.append(element('span', `Next context ${known(row.live_context.watch_next_context_tokens)} · delta ${known(row.live_context.watch_delta_context_tokens)} · cached/fresh CCost ${ccost(row.live_context.watch_next_context_cached_ccost)}/${ccost(row.live_context.watch_next_context_fresh_ccost)}`, 'detail'));
+          if (tool) detail.append(element('span', `${tool.running_tool} ${duration(tool.running_ms)} · Calls ${tool.counts.map(pair => pair.join(': ')).join(', ')} · Failed ${tool.failed_count} · TODO ${tool.todo_completed}/${tool.todo_total} ${tool.active_todo} · Background ${tool.background_kinds.join(', ')} ${duration(tool.background_ms)} · Skills ${tool.skills.map(s => s.skill_id + (s.failed_count ? ' (failed ' + s.failed_count + ')' : '')).join(', ')}`, 'detail'));
+          return [label, ccost(p.ccost, p.unresolved_cost, p.cost_estimated), known(p.calls), duration(p.duration_ms), known(p.incoming_context_tokens), ccost(p.incoming_context_ccost), ccost(p.extra_ccost), p.token_mix_percent?.join('/') || 'Unknown', detail];
+        }, null, state, 'live-' + id);
+    }
+    if (!view.rows.length) parent.append(element('p', 'No retained prompt rows. Idle is not evidence of completion.'));
+    parent.append(element('h3', `Watch accounts · ${view.quota_stale ? 'stale' : 'independent observations'} · recovering ${view.quota_recovering_count}`));
+    for (const account of view.accounts?.accounts || []) {
+      const obs = account.observation;
+      parent.append(element('h4', `${obs.label} · ${obs.provider_label} · ${obs.plan || ''}`));
+      parent.append(element('p', `${obs.availability} · ${obs.status} · ${obs.error_code || ''} · Observed ${obs.observed_at_ms == null ? 'unknown' : new Date(obs.observed_at_ms).toLocaleString()}`));
+      for (const scope of account.ccost_scopes) parent.append(element('p', `${scope.name} CCost ${ccost(scope.cost?.known_ccost)}`));
+      for (const pace of account.pace) parent.append(element('p', `${pace.label} Pace ${known(pace.per_day)} ${pace.unit}/day`));
+      table(parent, 'Watch quota: ' + obs.label, ['Period', 'Used', 'Limit', 'Remaining', 'Reset', 'Status'], obs.quotas,
+        q => [q.label, `${known(q.used)} ${q.unit}`, q.unlimited ? 'Unlimited' : known(q.limit), known(q.remaining), q.reset_at_ms == null ? 'Unknown' : new Date(q.reset_at_ms).toLocaleString(), q.status], null, state, 'live-account-' + obs.id);
+    }
+  }
+  return {render, renderLive, element};
 })();

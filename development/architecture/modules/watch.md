@@ -1,8 +1,8 @@
 # Watch source contracts
 
-Source revision: a97a6c8a13a845bda25624acd9fefbea27761373
-Checked revision: a97a6c8a13a845bda25624acd9fefbea27761373
-Last checked: 2026-10-25
+Source revision: 282702930cb65362996a20ef4852c41b11c23bc0
+Checked revision: 282702930cb65362996a20ef4852c41b11c23bc0
+Last checked: 2026-10-26
 Status: current
 
 [Architecture overview](../OVERVIEW.md) · [Owner/test routes](CODE_MAP.md). Source remains authoritative.
@@ -12,6 +12,8 @@ Status: current
 The coordinator owns lifecycle, cadence/rendering and provider refreshes over abstract source/report contracts; lower layers never import Watch. Watch shares `ReportService` analysis/cache/context, never a second billing implementation or recurring subprocess. New Models shares the 12-hour first-sighting accent; existing seven-day eligibility is unchanged.
 
 ## Public contract
+
+`WatchCoordinator.acquire_cycle` is the shared renderer-independent initialize/poll/history-slice seam. CLI keeps its terminal wait/render adapter; `src/watch/acquisition.py:LiveAcquisition` supplies headless cadence, hint buffering, selected-source recovery and source-free account wakes to one application-owned Web runtime. Both reuse the same tracker, valuation, retention, Today and account mechanisms. Web run origin is engine start, never tab open; live/account mutable state is not shared with finite report cleanup. The source hint pump bounds its queue to 1024, converting overflow to authoritative resync rather than blocking acquisition or inventing usage. Browser disconnect is independent of source state and never a terminal prompt event.
 
 `watch/token_mix.py` owns run CCost and priced-only Token Mix keyed by source/session/message/step; completed pre-Watch requests stay excluded. `today_ccost.py` reconciles exact local-day requests with shared clone de-duplication, retaining deleted observations without a ledger. Interactive startup renders `Total today: Pending` (or the overnight date) before daily revision/history work. Once published, same-day CCost remains visible throughout subsequent enrichment/failure/recovery until atomic replacement; corrections may lower it. Midnight never relabels yesterday's publication. Main-thread slices acquire at most four necessary roots, reuse unchanged stable analysis and publish only after reconciliation. Midnight/DST resets the plan/day; native account publication reuses unchanged local totals. `Total YYYY-MM-DD` replaces `Total today` from 00:00–03:00, with idle redraws. [History acquisition](history-loading.md) owns scopes/evidence.
 
@@ -40,7 +42,7 @@ Watch depends on shared reports/analysis/domain and abstract source contracts; r
 
 ## Entrypoints
 
-`src/watch/coordinator.py`, `src/watch/today_ccost.py`, `src/reports/history.py`, `src/reports/accounts.py`, `src/presentation/token_mix.py`, `src/presentation/accounts.py`.
+`src/watch/coordinator.py`, `src/watch/acquisition.py`, `src/watch/today_ccost.py`, `src/reports/history.py`, `src/reports/accounts.py`, `src/presentation/token_mix.py`, `src/presentation/accounts.py`.
 
 ## Tests
 

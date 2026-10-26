@@ -89,7 +89,8 @@ class WebRuntimeTests(unittest.TestCase):
     def test_shell_is_fixed_offline_and_honest_not_sensitive(self):
         status, headers, body = self.request("/")
         self.assertEqual(200, status)
-        self.assertIn(b"unavailable in this delivery", body)
+        self.assertIn(b"Live shares one host-owned engine", body)
+        self.assertIn(b"Remaining report views are not yet available", body)
         self.assertIn("default-src 'none'", headers["Content-Security-Policy"])
         self.assertIn("worker-src 'none'", headers["Content-Security-Policy"])
         self.assertEqual("no-store", headers["Cache-Control"])
@@ -193,7 +194,7 @@ class WebRuntimeTests(unittest.TestCase):
 
     def test_connection_admission_is_bounded_and_shutdown_closes_slow_clients(self):
         connections = [socket.create_connection(("127.0.0.1", self.server.server_port), timeout=8)
-                       for _ in range(8)]
+                       for _ in range(12)]
         try:
             for conn in connections:
                 conn.sendall(b"G")

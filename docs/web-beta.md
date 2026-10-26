@@ -4,7 +4,7 @@ Run `python cost-guard-web.py --foreground` using already installed Python 3.11+
 
 ## Navigation and static reports
 
-The Beta shell provides Overview (the normal shared model/account report), Sessions (all available roots), and selected session details. Overview model/account summaries are available now; the dedicated Live, Models, Accounts, Reports/date and Token Mix routes explicitly say unavailable and retain their CLI equivalents. They are not fabricated empty dashboards. Existing finite API modes remain callable.
+The Beta shell provides global Live, Overview (the normal shared model/account report), Sessions (all available roots), and frozen selected session details. Dedicated Models, Accounts, Reports/date and Token Mix routes explicitly say unavailable and retain their CLI equivalents. They are not fabricated empty dashboards. Existing finite API modes remain callable. Session live detail remains separate work; navigation from Live to a session currently opens a frozen report.
 
 Session-ID links open `/#/sessions/<id>`. Fragment routes support direct links, reload and browser Back/Forward without expanding the HTTP path allowlist. The one-use bootstrap fragment is removed before requests; ordinary session routes are preserved on reload. Names/prompts are text, never links or tooltips containing source paths. Navigation and paging never put prompt/history payloads in browser storage or history state.
 
@@ -17,6 +17,16 @@ Tables show 50 rows per page from **one complete immutable API result**, includi
 Layout choices: wrapping top navigation; system light/dark palette; source/readiness separate from snapshot health; text-selectable overflow tables with sticky column headings; independently paged tables and complete totals below rows; keyboard focus outlines and a skip-to-report button. Refresh/status messages do not take focus. No user-side frontend build, Node installation, CDN, analytics, account login or editing.
 
 `test_web_views.py` exercises the shipped JavaScript and real HTTP/facade with deterministic sources through an optional developer-only Node DOM harness. It tests navigation/hash events, reload, safe hostile/Unicode text, long/running/aborted/compacted/empty/missing/partial reports, complete totals and frozen/explicit-refresh/stale behavior. It is not visual browser, CSS layout or native macOS acceptance. Owner checks: open the Beta, try narrow/wide windows and light/dark mode, tab through navigation and page controls, select prompt text, follow a session link, use Back/Forward and reload, and Refresh a running session. No new permanent release gate is added.
+
+## Global Live and reconnect
+
+Live uses one process-lifetime acquisition engine, starting with the host rather than a tab. Closing all tabs does not stop acquisition; reopening observes the same run origin and totals. The independent CLI Watch still starts its own run. Both use the shared Watch acquisition seam, revision gating, authoritative V2 resync, bounded history enrichment, account lanes, configured global retention, lifecycle/compaction/abort/error evidence, tool/skill activity and context warnings. Source hints, idle and connection loss never prove completion. Displayed session subtotals cover retained rows, not uncapped session history. Today and rolling account figures retain Watch scopes; normal-report calendar-month comparisons are not inserted into Live.
+
+Each authorized tab owns one same-origin SSE connection for live, finite-job progress and terminal runtime updates. The HttpOnly session authenticates it; no control secret/query credential is used. Instance-bound ordered IDs and full coherent publications reject duplicates/older/foreign-instance updates. Replay is bounded to 32 events and 8 MiB (2 MiB per publication); overflow or an uncovered gap requires a fresh authenticated `/api/live` snapshot, never inferred continuation. Oversized publications fail visibly rather than displaying truncated totals. Four streams are admitted; excess tabs can retry after capacity is available.
+
+Stream writes retain a two-second timeout, ten-second heartbeats and a sixty-second connection lifetime, then ordinary EventSource reconnect at three seconds. Offline is visible with last known values retained. A received source-change/shutdown notification closes automatic retry and asks for a manual launcher run; an unknown disconnect never starts a server or assumes an update. A different instance requires a fresh authorized launcher link; expired sessions stop retry. Snapshot/job commands remain normal authenticated HTTP. Finite reports run in one isolated, deadline-bounded process while live acquisition, account publication, HTTP/control and source-change checks retain separate scheduling.
+
+`test_web_live.py` covers canonical live/CLI parity, lifecycle/source recovery, hints/overflow, account-only publication, midnight/DST/partial pricing, detached exports, replay/gap/instance handling, actual HTTP stream admission/terminal delivery, fatal fault ownership and stop beside an occupied finite-report process. Its optional JavaScript VM checks safe presentation and ordering without automating a browser. `development/tests/integration/probe_web_live.py` is an opt-in, read-only real-source check (no UI/model calls): two streams, one acquisition owner, retained run origin and owned shutdown. Native visual/browser/macOS acceptance is not claimed by these probes.
 
 ## Windows detached launcher and tray
 
@@ -68,11 +78,13 @@ This is loopback HTTP, not a public server or protection against malware/other c
 
 | Route | Method | Meaning |
 | --- | --- | --- |
-| `/`, `/app.js`, `/render.js`, `/app.css` | GET | Fixed public Beta shell/assets, no history |
+| `/`, `/app.js`, `/render.js`, `/live.js`, `/app.css` | GET | Fixed public Beta shell/assets, no history |
 | `/health` | GET | Public HTTP-shell readiness only |
 | `/api/bootstrap` | POST | One-use `{"credential":"…"}` exchange with exact Origin |
 | `/api/session` | GET | Authenticated CSRF recovery, no control credential |
 | `/api/status` | GET | Separate HTTP, analysis, source and account acquisition states |
+| `/api/live` | GET | Authenticated coherent live/progress snapshot and instance/sequence; retained terminal state while stopping |
+| `/api/events` | GET | Authenticated multiplexed SSE, bounded replay with Last-Event-ID; no query strings |
 | `/api/reports` | POST | Enqueue/coalesce a finite report; return job ID (202) |
 | `/api/jobs/<id>` | GET | Authenticated status/progress/result |
 | `/api/jobs/<id>/cancel` | POST | Cancel owned queued/running work with `{}` |
@@ -81,14 +93,14 @@ Reports select `kind`: `normal` (overview), `all-models` (catalog), `sessions`, 
 
 ## Resource and failure boundaries
 
-- Eight HTTP workers/admitted sockets, bounded listen backlog; two-second socket timeouts and an absolute five-second request deadline, including dripping clients. Connections always close after one request.
+- Twelve HTTP workers/admitted sockets, with at most four authenticated streams so eight ordinary/control slots remain; bounded listen backlog. Two-second socket timeouts and an absolute five-second ordinary request/header deadline, including dripping clients. Only fully authenticated SSE cancels that deadline and receives the bounded lifetime described above. Connections close after one request.
 - Request line <=2048 bytes, aggregate headers <=16 KiB, individual header lines <4096 bytes, JSON body <=4096 bytes. Duplicate headers/JSON keys, transfer encoding, non-JSON controls and unsupported methods are denied. No autoreload or directory listing.
 - At most four queued/running reports and one spawned analysis process. Identical in-flight requests coalesce. Sixteen jobs retained; old completed/cancelled entries are evicted, so a missing ID is not an empty report.
 - A fresh ReportApplication/ReportService owns each job's mutable integrations and one-shot account cleanup. Existing integration request timeouts apply; a 120-second hard process deadline bounds whole-job work. Cancellation/shutdown terminate and join only that owned process. No live scheduler is shared or cleaned by these one-shot jobs.
 - Each finite report child monitors multiprocessing's exact parent kernel sentinel. A crashed/force-stopped Web parent or lost ownership proof exits that child nonzero, including a blocked scan; PID reuse is not a liveness signal. This child-only safety monitor stops/joins on ordinary completion.
 - Results are limited to 8 MiB per job. Oversize results return `result_too_large`; scope the request instead. Long historical Token Mix may time out; it never requires waiting for the scan to finish before shutdown. Job progress contains only approved phase/count values, not source text.
 
-The shell remains reachable with offline/loading sources. It is intentionally an early report/API surface: no live dashboard or autostart. Tests use synthetic read-only sources; local read-only source probes are separate from paid/live-model tests.
+The shell remains reachable with offline/loading sources. There is no autostart. Tests use synthetic read-only sources; local read-only source probes are separate from paid/live-model tests.
 
 ## Shared managed lifecycle (native launcher integration contract)
 
@@ -99,7 +111,7 @@ The shell remains reachable with offline/loading sources. It is intentionally an
 - Restart requests authenticated graceful shutdown and waits up to ten seconds. Owned finite report jobs are cancelled/joined; HTTP sockets have a five-second hard deadline. Forced termination revalidates exact process birth/image using a retained Windows kernel handle or Linux pidfd. Platforms without an atomic process handle (currently macOS) refuse force-stop and report a conflict if graceful shutdown fails, rather than race PID reuse. A changed/dead PID is stale, not authority over its replacement. A responding wrong-nonce/auth/schema/build endpoint is a conflict, not authority to kill a port occupant.
 - Corrupt/incompatible state is an explicit conflict: it cannot establish that no host exists. Do not blindly delete it and relaunch; first establish the old host has stopped. Stale valid records recover automatically. No scan/kill by process name, port, Python executable or OpenCode identity is used.
 - Child stdin/stdout/stderr are detached to the null device, inherited handles are closed, and cwd is private app data, not the checkout. Windows uses `DETACHED_PROCESS|CREATE_NEW_PROCESS_GROUP`; Unix uses a new session. Owned lifecycle diagnostics contain only timestamp/allowlisted codes in a roughly 32 KiB rotating log; no URLs, bootstrap/control secrets, raw exceptions or account/source data. Browser failure is returned separately from server startup failure; native Open can retry without restarting.
-- `WebHost.run_gui(gui)` stays on the main thread. The adapter's `run(owner)` must create the required native icon/event loop, call `owner.publish_ready()` only once usable, route Open to `owner.open_browser()`, route Exit to `owner.stop()`, and observe `owner.stopped` so a dead HTTP worker removes the icon. `gui.close()` is idempotent and runs on the main thread in all exit paths. HTTP/jobs run on the owned worker thread. A missing/failed/returned GUI stops the server, never silently falling back to an unmanaged background host. Future source/SSE/account workers must join this same stop owner; no live workers exist yet.
+- `WebHost.run_gui(gui)` stays on the main thread. The adapter's `run(owner)` must create the required native icon/event loop, call `owner.publish_ready()` only once usable, route Open to `owner.open_browser()`, route Exit to `owner.stop()`, and observe `owner.stopped` so a dead HTTP worker removes the icon. `gui.close()` is idempotent and runs on the main thread in all exit paths. HTTP/jobs and the live acquisition thread share this stop owner. A missing/failed/returned GUI stops the server, never silently falling back to an unmanaged background host. Live closes account/event workers and joins before the host reports stopped; unexpected live/cleanup faults retain the original exception for the fatal main boundary.
 - Readiness means shell plus required GUI only, not account/history loading. A browser Open handoff receives a fresh 120-second one-use fragment via authenticated control; existing same-instance sessions stay valid. New instances have independent cookies, CSRF, nonce and control secrets, so old clients cannot control a replacement.
 
 Private `/control/status` (GET), `/control/stop` and `/control/open` (POST) require `X-CG-Control`, exact Host, no Origin, no Cookie and empty bodies. They are not browser APIs and never use browser CSRF/session credentials. Public `/health` is not an ownership/readiness proof. Authenticated `/api/status` additionally exposes sanitized lifecycle instance/state/guard status, never the control secret.

@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import re
 import socket
+import time
 from threading import BoundedSemaphore, Timer
 
 from .jobs import parse_report
@@ -12,7 +13,8 @@ from .security import BrowserSession
 
 ASSETS = {"/": ("index.html", "text/html; charset=utf-8"),
            "/app.js": ("app.js", "text/javascript; charset=utf-8"),
-           "/render.js": ("render.js", "text/javascript; charset=utf-8"),
+            "/render.js": ("render.js", "text/javascript; charset=utf-8"),
+            "/live.js": ("live.js", "text/javascript; charset=utf-8"),
           "/app.css": ("app.css", "text/css; charset=utf-8")}
 JOB_PATH = re.compile(r"/api/jobs/([a-f0-9]{32})(/cancel)?\Z")
 CSP = ("default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; "
@@ -64,8 +66,10 @@ class LoopbackServer(HTTPServer):
                    for p in (path, root, root.parent, root.parent.parent)):
                 raise ValueError("unsafe_assets")
             self.assets[name] = path.read_bytes(), content_type
-        self._slots = BoundedSemaphore(8)
-        self._pool = ThreadPoolExecutor(max_workers=8, thread_name_prefix="cost-guard-http")
+        # At most four streams; eight slots remain for control/snapshots/jobs.
+        self._streams = BoundedSemaphore(4)
+        self._slots = BoundedSemaphore(12)
+        self._pool = ThreadPoolExecutor(max_workers=12, thread_name_prefix="cost-guard-http")
         try:
             super().__init__(("127.0.0.1", 0), RequestHandler)
         except BaseException:
@@ -97,7 +101,7 @@ class LoopbackServer(HTTPServer):
         deadline = Timer(5, expire)
         deadline.start()
         try:
-            self.finish_request(request, address)
+            RequestHandler(request, address, self, deadline=deadline)
         except (OSError, ValueError):
             pass  # Invalid/abandoned wire request; never log request text or secrets.
         finally:
@@ -118,6 +122,10 @@ class RequestHandler(BaseHTTPRequestHandler):
     server_version = "CostGuard"
     sys_version = ""
     protocol_version = "HTTP/1.0"
+
+    def __init__(self, *args, deadline=None):
+        self.deadline = deadline
+        super().__init__(*args)
 
     def setup(self):
         super().setup()
@@ -225,7 +233,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         if self.path != "/api/bootstrap" and not self.server.session.authenticated(headers.get("Cookie")):
             self.reply(401, {"error": "authentication_required"})
             return
-        if self.server.lifecycle and self.server.lifecycle.stopping.is_set() and self.path != "/api/status":
+        if self.server.lifecycle and self.server.lifecycle.stopping.is_set() and self.path not in {"/api/status", "/api/live"}:
             self.reply(503, {"error": "instance_stopping"})
             return
         if self.command == "POST":
@@ -268,6 +276,12 @@ class RequestHandler(BaseHTTPRequestHandler):
                 self.reply(200 if found else 404, {"status": "cancel_requested" if found else "not_found"})
                 return
         else:
+            if self.path == "/api/live" and self.server.lifecycle:
+                self.reply(200, self.server.lifecycle.events.snapshot())
+                return
+            if self.path == "/api/events" and self.server.lifecycle:
+                self.stream_events()
+                return
             if self.path == "/api/status":
                 value = self.server.jobs.readiness()
                 if self.server.lifecycle:
@@ -283,3 +297,47 @@ class RequestHandler(BaseHTTPRequestHandler):
                 self.reply(200 if result else 404, result or {"error": "not_found"})
                 return
         self.reply(404, {"error": "not_found"})
+
+    def stream_events(self):
+        if not self.server._streams.acquire(blocking=False):
+            self.reply(429, {"error": "stream_limit"})
+            return
+        try:
+            # Cancel the header/slowloris deadline only after full authorization.
+            if self.deadline:
+                self.deadline.cancel()
+            self.send_response_only(200)
+            for key, value in {"Content-Type": "text/event-stream; charset=utf-8",
+                               "Cache-Control": "no-store", "Connection": "close",
+                               "X-Content-Type-Options": "nosniff",
+                               "Content-Security-Policy": CSP}.items():
+                self.send_header(key, value)
+            self.end_headers()
+            self.wfile.write(b"retry: 3000\n\n")
+            self.wfile.flush()
+            hub = self.server.lifecycle.events
+            cursor = self.headers.get("Last-Event-ID", "")
+            deadline = time.monotonic() + 60
+            heartbeat = time.monotonic()
+            while time.monotonic() < deadline:
+                if not self.server.session.authenticated(self.headers.get("Cookie")):
+                    self.wfile.write(b"event: authorization_required\ndata: {}\n\n")
+                    self.wfile.flush()
+                    return
+                number, frames = hub.read(cursor)
+                for frame in frames:
+                    if hub.closed:
+                        snapshot = hub.snapshot()
+                        self.wfile.write(hub._encode("terminal", snapshot["values"]["terminal"], snapshot["sequence"]))
+                        self.wfile.flush()
+                        return
+                    self.wfile.write(frame)
+                cursor = f"{hub.instance}:{number}"
+                if time.monotonic() - heartbeat >= 10:
+                    self.wfile.write(b": heartbeat\n\n")
+                    heartbeat = time.monotonic()
+                self.wfile.flush()
+                if hub.closed:
+                    return
+        finally:
+            self.server._streams.release()

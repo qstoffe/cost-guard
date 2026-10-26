@@ -6,15 +6,17 @@ import time
 import webbrowser
 
 from src.version import VERSION
+from src.application.live import LiveRuntime
 from .change_guard import SourceGuard
 from .http import LoopbackServer
 from .instance_state import SCHEMA
 from .jobs import ReportJobs
+from .events import EventHub
 from .process_identity import process_identity
 
 
 class WebHost:
-    def __init__(self, root, *, store=None, nonce=None, jobs=None):
+    def __init__(self, root, *, store=None, nonce=None, jobs=None, live_factory=None):
         self.root = root
         self.store = store
         self.nonce = nonce or secrets.token_hex(16)
@@ -27,8 +29,17 @@ class WebHost:
         self.failure = None
         self.guard = SourceGuard(root)
         self.jobs = jobs or ReportJobs()
+        self.events = EventHub(self.nonce)
+        if live_factory is None and jobs is None:
+            from .composition import live_acquisition
+            live_factory = live_acquisition
+        self.live = LiveRuntime(live_factory, self.events.publish, self._live_failed) if live_factory else None
         self.server = None
         self.thread = None
+
+    def _live_failed(self, error):
+        self.failure = self.failure or error
+        self.stop("runtime_fault")
 
     def authorized(self, token):
         return isinstance(token, str) and token.isascii() and secrets.compare_digest(token, self.control)
@@ -48,6 +59,9 @@ class WebHost:
             if not self.stopping.is_set():
                 self.reason = reason
                 self.stopping.set()
+                self.events.close(reason)
+                if self.live:
+                    self.live.stopping.set()
 
     def browser_url(self):
         if self.stopping.is_set() or not self.ready:
@@ -90,6 +104,8 @@ class WebHost:
                     self.store.log(status)
                 if not self.stopping.is_set():
                     self.jobs.tick()
+                    self.events.publish("progress", self.jobs.updates() if hasattr(self.jobs, "updates")
+                                        else self.jobs.readiness())
         except BaseException as error:
             self.failure = error
             self.stop("runtime_fault")
@@ -99,7 +115,12 @@ class WebHost:
                 try:
                     self.jobs.close()
                 finally:
-                    self.server.server_close()
+                    try:
+                        if self.live:
+                            self.live.close()
+                    finally:
+                        self.events.close(self.reason or "runtime_fault")
+                        self.server.server_close()
             except BaseException as error:
                 self.failure = self.failure or error
                 self.stop("runtime_fault")
@@ -108,6 +129,8 @@ class WebHost:
 
     def start(self):
         self.server = LoopbackServer(self.jobs, self)
+        if self.live:
+            self.live.start()
         self.thread = Thread(target=self._serve, name="cost-guard-web")
         self.thread.start()
 
@@ -119,6 +142,8 @@ class WebHost:
                 raise RuntimeError("web_shutdown_timeout")
         else:
             self.jobs.close()
+            if self.live:
+                self.live.close()
         if self.store:
             self.store.remove(self.nonce)
             self.store.log(self.reason if self.reason in {"source_changed", "runtime_fault"} else "stopped")

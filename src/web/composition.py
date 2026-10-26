@@ -1,5 +1,6 @@
 """One-shot Web composition, no CLI wake, Watch, browser or model inference."""
 from pathlib import Path
+import time
 
 from src.application import ReportApplication
 from src.cache import CacheDatabase, CacheRepository
@@ -30,3 +31,25 @@ def application(request):
             cache_repository=cache, config=config, now_ms=now, progress=progress)
 
     return ReportApplication(factory)
+
+
+def live_acquisition():
+    """Transfer one fresh service to the process-lifetime live owner."""
+    from src.bootstrap import _account_providers, _model_availability_source
+    from src.watch.coordinator import WatchCoordinator
+    from src.watch.acquisition import LiveAcquisition
+
+    root = Path(__file__).resolve().parents[2]
+    config = load_configuration(root).values
+    selection = SourceSelector().select(str(config["openCode"]["source"]))
+    database = CacheDatabase(root)
+    database.initialize()
+    cache = CacheRepository(database)
+    accounts = _account_providers(config, selection.selected)
+    service = ReportService(selection=selection,
+        pricing_provider=GitHubCopilotPricingProvider(cache=cache,
+            max_age_hours=float(config.get("pricingMaxAgeHours", 1))),
+        account_provider=accounts[0] if accounts else None, account_providers=accounts,
+        model_availability_source=_model_availability_source(selection),
+        cache_repository=cache, config=config, now_ms=int(time.time() * 1000))
+    return LiveAcquisition(WatchCoordinator(selection=selection, report_service=service, config=config))

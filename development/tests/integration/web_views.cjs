@@ -96,7 +96,7 @@ async function main() {
   await until(() => ids.notice.textContent.includes('Snapshot captured'));
   assert.match(ids.result.textContent, /exists but has no prompt rows/);
   navigate('live');
-  assert.match(ids.notice.textContent, /Unavailable/);
+  assert.match(ids.notice.textContent, /Live acquisition/);
   assert.equal(ids.refresh.disabled, true);
   // Actual canonical DTOs exercise compaction, linked-child, running and hostile text.
   for (const [index, result] of input.examples.entries()) {
