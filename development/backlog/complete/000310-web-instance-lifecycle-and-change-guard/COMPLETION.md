@@ -4,6 +4,8 @@ Implemented in Cost Guard v80.82: shared checkout/user-scoped restart and detach
 
 Runtime source: [06520e102043dad097df82e05ca8a50478b051b0](https://github.com/qstoffe/cost-guard/commit/06520e102043dad097df82e05ca8a50478b051b0). This report/state/navigation follow-up changes no shipped runtime source.
 
+Delivery PR: [#61](https://github.com/qstoffe/cost-guard/pull/61). GitHub/native delivery truth, not this pre-merge report, records the eventual squash merge.
+
 ## Changes and decisions
 
 - `instance_state.py` canonicalizes checkout identity, uses user-local private app data, protected inherited Windows owner DACLs / Unix modes, atomic records, and separate OS-held transition/lifetime locks. The child lifetime lock prevents duplicates even if the launcher crashes before readiness. Records bind nonce, PID and birth/image, loopback endpoint, startup schema/build, readiness timestamp and control authentication.
