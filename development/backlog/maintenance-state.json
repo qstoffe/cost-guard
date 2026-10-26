@@ -5,16 +5,16 @@
   "completed": {
     "architecture": 20,
     "test-health": 20,
-    "performance": 0
+    "performance": 20
   },
   "template": {
     "id": "shared-repository-maintenance",
     "version": 1
   },
-  "lastDeliveredRevision": "269b570b79ff8f4639f325f952ffe49a4f266ba0",
+  "lastDeliveredRevision": "07c14d21fcbc32ab5b194a5afc85c8cb4ae25cbd",
   "lastItem": {
-    "id": "test-health/20",
-    "kind": "test-health"
+    "id": "performance/20",
+    "kind": "performance"
   },
   "featureDiscovery": {
     "completed": 10
