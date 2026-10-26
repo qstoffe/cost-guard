@@ -144,6 +144,12 @@ class InstanceStore:
             raise InstanceConflict("corrupt_instance_state") from None
 
     def write(self, value):
+        self._write_json(self.state_path, value)
+
+    def write_diagnostics(self, value):
+        self._write_json(self.directory / "diagnostics.json", value)
+
+    def _write_json(self, destination, value):
         path = self.directory / (uuid.uuid4().hex + ".tmp")
         try:
             with open(path, "xb") as stream:
@@ -151,9 +157,9 @@ class InstanceStore:
                 stream.write(json.dumps(value, allow_nan=False).encode("utf-8"))
                 stream.flush()
                 os.fsync(stream.fileno())
-            if self.state_path.exists() or self.state_path.is_symlink():
-                _safe(self.state_path)
-            os.replace(path, self.state_path)
+            if destination.exists() or destination.is_symlink():
+                _safe(destination)
+            os.replace(path, destination)
         finally:
             path.unlink(missing_ok=True)
 

@@ -6,7 +6,10 @@ import time
 
 
 class BrowserSession:
-    def __init__(self):
+    def __init__(self, cookie_scope=None):
+        # Cookies are host/path scoped, NOT port scoped. A stable checkout name
+        # prevents another checkout's bootstrap from replacing this credential.
+        self.cookie_name = "cg_session_" + (cookie_scope or secrets.token_hex(16))
         self._lock = Lock()
         self._bootstrap = secrets.token_urlsafe(32)
         self._bootstrap_until = time.monotonic() + 120
@@ -38,7 +41,7 @@ class BrowserSession:
         try:
             values = SimpleCookie()
             values.load(cookie or "")
-            supplied = values["cg_session"].value if "cg_session" in values else ""
+            supplied = values[self.cookie_name].value if self.cookie_name in values else ""
         except CookieError:
             return False
         with self._lock:

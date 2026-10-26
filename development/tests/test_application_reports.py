@@ -99,6 +99,7 @@ class ApplicationReportTests(unittest.TestCase):
                 self.assertEqual(row.next_context_warning_severity.value, dto["next_context_warning_severity"])
                 self.assertEqual(row.token_mix_percent, tuple(dto["token_mix_percent"])
                                  if dto["token_mix_percent"] is not None else None)
+                self.assert_detail_metrics(row, dto)
         if report.accounts_quotas is not None:
             quotas = view["accounts_quotas"]
             self.assertEqual(report.accounts_quotas.comparison_month.known_ccost,
@@ -108,6 +109,9 @@ class ApplicationReportTests(unittest.TestCase):
                 self.assertEqual(expected.account.status.value, actual["observation"]["status"])
                 self.assertEqual(expected.billed_month, Decimal(actual["billed_month"])
                                   if actual["billed_month"] is not None else None)
+                self.assertEqual([(name, cost.known_ccost, cost.complete) for name, cost in expected.ccost_scopes],
+                                 [(scope["name"], Decimal(scope["cost"]["known_ccost"]), scope["cost"]["complete"])
+                                  for scope in actual["ccost_scopes"]])
                 for quota, exported in zip(expected.account.quotas, actual["observation"]["quotas"], strict=True):
                     self.assertEqual((quota.unit, quota.period, quota.reset_at_ms),
                                      (exported["unit"], exported["period"], exported["reset_at_ms"]))
@@ -119,6 +123,14 @@ class ApplicationReportTests(unittest.TestCase):
         self.assertTrue(all(service._account_work is None for service in self.services))
         json.dumps(result.to_json(), allow_nan=False)
         return result
+
+    def assert_detail_metrics(self, row, dto):
+        for name in ("model_effort", "incoming_context_tokens", "delta_context_tokens", "next_context_tokens",
+                     "cost_estimated", "unresolved_cost", "main_estimated", "subagent_estimated",
+                     "breakdown_known", "has_cost_breakdown", "completed_successfully", "completed_at_ms"):
+            self.assertEqual(getattr(row, name), dto[name], name)
+        for name in ("main_ccost", "subagent_ccost", "next_context_cached_ccost", "next_context_fresh_ccost"):
+            self.assertEqual(getattr(row, name), Decimal(dto[name]) if dto[name] is not None else None, name)
 
     def test_all_modes_share_existing_semantics_in_both_canonical_generations(self):
         for generation in ("v1", "v2"):

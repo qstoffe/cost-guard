@@ -159,8 +159,11 @@ class SessionDetailTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_authenticated_http_detail_admission_paging_and_freeze(self):
+        from src.web.observations import WebObservations
+
         service = self.service(SyntheticMonthSource(1, 100, month_start_ms=1000))
-        lifecycle = SimpleNamespace(live=SimpleNamespace(details=self.details), stopping=Event())
+        lifecycle = SimpleNamespace(root=ROOT, observations=WebObservations(),
+                                    live=SimpleNamespace(details=self.details), stopping=Event())
         server = LoopbackServer(SimpleNamespace(), lifecycle)
         thread = Thread(target=server.serve_forever)
         thread.start()
