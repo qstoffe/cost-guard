@@ -37,7 +37,7 @@ Install **Python 3.11+**; standard supported OpenCode installations need no conf
 
 ### Optional Web Beta
 
-Windows: `windows/Beta/Cost Guard Web.cmd`; experimental macOS: `macos/Beta/Cost Guard Web.command` (unverified). Session Snapshot/Live provides complete paged history. No packages; independent CLI. [Beta guide](docs/web-beta.md). Foreground: `python cost-guard-web.py --foreground`.
+Windows: `windows/Beta/Cost Guard Web.cmd`; experimental macOS: `macos/Beta/Cost Guard Web.command` (hosted checks passed; desktop acceptance pending). Session Snapshot/Live provides complete paged history. No packages; independent CLI. [Beta guide](docs/web-beta.md). Foreground: `python cost-guard-web.py --foreground`.
 
 ### Windows
 
@@ -327,9 +327,7 @@ Useful settings include:
 - `thresholds`: running-cost, context, percentile and quota warning thresholds.
 - `colorScheme`, `colorSchemes`, `colors`: terminal palette selection and per-role overrides.
 
-`modelComparisonNew` colors new names/dates/notice labels; `modelComparisonPromotion` colors active rates/Relative CCost/notice labels. Classic: lime 118/gold 214; light: green 28/ochre 130. Definition roles use Yellow; release date stays last.
-
-Superseded cells fade their resolved/custom hues in dark/light themes. Gold stays gold; borders/plain output/width stay unchanged, with no new settings.
+`modelComparisonNew` colors new names/dates; `modelComparisonPromotion` colors active rates/Relative CCost. Superseded colors fade; plain output is unchanged.
 
 Invalid configuration fails at startup; legacy `monthlyAiCredits` is ignored.
 
@@ -354,9 +352,9 @@ For troubleshooting, use `Cost Guard Diagnostics` under `development/user-tools/
 python development/tools/collect_diagnostics.py
 ```
 
-Creates `diagnostics/cost-guard-diagnostics.zip`: **Full/local** tests, validation/failures, environment/terminal/source statistics, report and headless Watch timings/geometry, and provider/metadata errors. `--no-network` skips pricing/quotas; `--skip-validation` is emergency/recursive-only.
+Creates `diagnostics/cost-guard-diagnostics.zip`: Full/local tests, validation, environment/source facts, report/headless Watch timings and provider errors. `--no-network` skips pricing/quotas; `--skip-validation` is emergency/recursive-only.
 
-Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; source IDs are hashed. Sanitized evidence covers discovery, plan/status, numeric/HTTP/schema outcomes, malformed counts and acquisition timing; inventory needs no live accounts.
+Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; source IDs are hashed. Inventory needs no live accounts.
 
 ### Internal software faults
 
@@ -364,7 +362,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.89 (2026-10-26):** Web Beta stabilization: concurrent-checkout browser sessions, privacy-safe Web Diagnostics and completed parity/evidence inventory. CLI remains independent; native macOS and visual browser proof remain pending. See [Web Beta](docs/web-beta.md).
+**v80.90 (2026-10-26):** Isolated Windows/macOS Web Beta CI revalidation, native API and rendered-browser smoke. CLI/Watch installation is unchanged; physical desktop/Finder/Gatekeeper acceptance remains separate. See [Web Beta](docs/web-beta.md).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 
@@ -374,7 +372,7 @@ Versions identify code, not tags, ZIPs or GitHub Releases. Packaged Releases rem
 
 Development workflow and Feature Request guidelines: [development/README.md](development/README.md).
 
-The installed OpenCode Toolkit `/repo-backlog` command and its actively loaded skills exclusively govern development workflow. Verify the actual working tree, not ZIPs. Development-only changes follow actively loaded Toolkit skills without Cost Guard product tests, package validation or product versioning.
+Installed OpenCode Toolkit skills own `/repo-backlog` workflow. Verify the working tree, not ZIPs; development-only changes require no product tests, validator or versioning.
 
 [Code/test map and inventory review](development/architecture/modules/CODE_MAP.md); refresh with `python development/tools/code_inventory.py --json`.
 

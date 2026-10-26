@@ -5,6 +5,7 @@ from contextlib import closing
 from dataclasses import replace
 from decimal import Decimal
 import json
+import os
 from pathlib import Path
 import sqlite3
 import tempfile
@@ -162,8 +163,15 @@ class DiscoveryTests(unittest.TestCase):
                     gate.wait(2)
                 return (AccountSnapshot(record.ref, 1000, "OpenAI"),)
 
+        generation = [0]
+
         def write(identity):
             self.auth.write_text(json.dumps({"openai": {"type": "api", "key": "fixture", "accountId": identity}}))
+            # Same-length replacements must be distinct file versions even on
+            # Windows clocks that stamp both writes in the same scheduler tick.
+            generation[0] += 1
+            stamp = generation[0] * 1_000_000_000
+            os.utime(self.auth, ns=(stamp, stamp))
 
         write("old")
         engine = AccountAcquisition((PinnedProvider(auth_json_path=str(self.auth)),), "fixture", continuous=continuous)

@@ -1,0 +1,12 @@
+# FR 000410 completion evidence
+
+Implemented as v80.90 (2026-10-26), with successful hosted evidence in [PR 74](https://github.com/qstoffe/cost-guard/pull/74). Final delivery requires its verified merge.
+
+- Added the bounded public-hosted Windows/macOS ARM64/Intel workflow, existing full suite with per-file counts/named skips, package validation, offline native API/lifecycle probes and actual Chromium smoke. No owner-workstation UI, account/provider/model use or product dependency is introduced.
+- Local Windows full suite after runtime repairs: 106 registered files PASS (49.7 s); working-tree validator PASS with four existing design-budget warnings.
+- [Hosted run 40407897072](https://github.com/qstoffe/cost-guard/actions/runs/40407897072): Windows x64 1,346 passed / zero skips; macOS ARM64 and Intel each 1,343 passed / three named Windows-only skips; all 106 files, validator, actual native API/offline lifecycle and rendered Chromium checks PASS on each platform. Tested head `034b54e3921a0be9fcd5e53080fc30913d7265a5`; PR merge checkout `15afa826d2e7d9c66c2cccf180ce2a4f78a5811b`.
+- CI failures were repaired causally: numeric-loopback DNS no longer consumes startup; ready-child identity retains birth/PID while allowing a verified live interpreter image transition; coarse file timestamps and VM/platform fixture races are explicit. No product readiness or suite timeout weakening. Mac same-birth/changed-image observations support the exec transition; denial canaries remain.
+- Hosted results and remaining manual acceptance: [verification note](../../../architecture/governance/verification/web-beta-ci.md).
+- Selected FR.md bytes preserved; no attachments or new bundle evidence. Native maintenance transaction advances ordinary count to 21; retention prunes nothing. Ten concurrently published FRs remain unchanged; identity high watermark reconciled to 510.
+- Architecture assessment: no runtime dependency-boundary change; add only verification routes to the Web owner. Journal assessment: consolidate new cross-platform evidence/causes in Test Health, not duplicate release history.
+- Physical consumer-desktop clicks/appearance, Finder/Gatekeeper/quarantine, generated-app no-Terminal behavior, default browser, accessibility and suspend/soak remain NOT VERIFIED. Offline entry shims are not end-to-end real-account launcher proof. No ZIP/tag/Release, paid runner, workstation UI, model call or shared OpenCode mutation.

@@ -17,9 +17,9 @@ class WebDiagnosticsTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.root = Path(self.tmp.name) / "checkout"
+        self.root = Path(self.tmp.name).resolve() / "checkout"
         self.root.mkdir()
-        self.home = Path(self.tmp.name) / "data"
+        self.home = Path(self.tmp.name).resolve() / "data"
         self.store = InstanceStore(self.root, data_home=self.home)
         self.host = WebHost(self.root, store=self.store, jobs=ReportJobs())
         self.addCleanup(self.host.close)

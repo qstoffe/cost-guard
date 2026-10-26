@@ -71,9 +71,9 @@ def command(pid, identifier):
         raise RuntimeError("native_command_failed")
 
 
-def adapter_probe():
+def adapter_probe(root=ROOT, jobs_factory=None):
     """Real native menu handles/message delivery, failed Open and owner-loss cleanup."""
-    owner = WebHost(ROOT)
+    owner = WebHost(root, **({"jobs": jobs_factory()} if jobs_factory else {}))
     adapter = WindowsHost()
     tray = adapter.tray
     count = _bind(tray.user, "GetMenuItemCount", c.c_int, [w.HMENU])
@@ -120,7 +120,7 @@ def adapter_probe():
         adapter.close()
         owner.close()
     # A failed HTTP worker must unwind a real icon, not leave a GUI-only application.
-    owner = WebHost(ROOT)
+    owner = WebHost(root, **({"jobs": jobs_factory()} if jobs_factory else {}))
     adapter = WindowsHost()
     with patch.object(owner, "_serve", wraps=owner._serve):
         original_start = owner.start
