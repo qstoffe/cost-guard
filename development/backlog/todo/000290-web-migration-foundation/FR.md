@@ -2,7 +2,7 @@
 
 ## Outcome and scope
 
-Introduce the smallest additive application boundary needed for Web Beta to consume Cost Guard's existing analysis and report projections. This is not a rewrite of the calculation engine or a mandatory conversion of CLI into an HTTP client. The delivery map and cross-cutting owner decisions are in [PLAN.md](PLAN.md) in this bundle; later FRs refer to it by FR identity when the bundle moves.
+Introduce the smallest additive application boundary needed for Web Beta to consume Cost Guard's existing analysis and report projections. This is not a rewrite of the calculation engine or a mandatory conversion of CLI into an HTTP client. The delivery map and cross-cutting owner decisions are in [PLAN.md](attachments/PLAN.md) in this bundle; later FRs refer to it by FR identity when the bundle moves.
 
 Normal priority. No web prerequisite. Coordinate with the separately approved FR000200: its running-metric improvements must be inherited, not reimplemented or overwritten. Do not alter another selected/in-progress FR, including FR000210, or reserve a product release version.
 
