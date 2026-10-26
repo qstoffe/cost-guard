@@ -10,6 +10,8 @@ Native tray failure, startup timeout, unverifiable instance, configuration and b
 
 Candidate source: [1f2dee7](https://github.com/qstoffe/cost-guard/commit/1f2dee7603df95bbed6cb893126c65ed5a336799). Native ownership, test routes and reusable PowerShell findings are consolidated in the current [Web contract](../../../architecture/modules/web.md) and [user guide](../../../../docs/web-beta.md).
 
+Delivery PR: [#62](https://github.com/qstoffe/cost-guard/pull/62); merge status is owned by the verified native delivery receipt, not a predicted SHA in this report.
+
 ## Verification
 
 Observed on Windows 11 10.0.26300, Python 3.14.7, Windows PowerShell 5.1:
