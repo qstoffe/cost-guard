@@ -37,7 +37,7 @@ Install **Python 3.11+**; standard supported OpenCode installations need no conf
 
 ### Optional Web Beta
 
-Windows: double-click `windows/Beta/Cost Guard Web.cmd` for detached Web and tray Open/Exit. No packages required. Developer mode: `python cost-guard-web.py --foreground`. Runtime-source changes stop Web; CLI stays independent. See [Beta lifecycle and API](docs/web-beta.md).
+Windows: `windows/Beta/Cost Guard Web.cmd`. Experimental macOS: `macos/Beta/Cost Guard Web.command` (native checks pending). No packages required; CLI stays independent. Developer mode: `python cost-guard-web.py --foreground`. See [Beta lifecycle and API](docs/web-beta.md).
 
 ### Windows
 
@@ -364,7 +364,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.83 (2026-10-26):** Opt-in detached Windows Web Beta launcher and native tray Open/Exit, using in-box APIs without installs. CLI remains independent; macOS launcher follows separately.
+**v80.84 (2026-10-26):** Experimental macOS Web launcher, AppKit menu and locally generated Finder app without packages. Native macOS/Finder/Gatekeeper verification remains pending.
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

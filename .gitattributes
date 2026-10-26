@@ -1,0 +1,3 @@
+# Preserve executable script shebangs across Windows authoring and macOS clones.
+macos/Beta/*.command text eol=lf
+macos/Beta/*.applescript text eol=lf

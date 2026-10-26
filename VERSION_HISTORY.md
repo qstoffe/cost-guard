@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.84 — 2026-10-26
+
+- Added experimental `macos/Beta/Cost Guard Web.command`, a same-process main-thread AppKit status menu through the Python standard-library ctypes bridge, bounded asynchronous browser Open, and the existing shared detached restart/stop owner. No packages, downloaded tools, service or login item; stable CLI/Watch/Diagnostics launchers are unchanged.
+- First launch optionally compiles a Finder app with in-box `/usr/bin/osacompile`, stores it outside Git in private checkout-specific app data, and verifies source/version/OS/Python fingerprints and artifact hashes before reuse. Preparation failures retain the `.command` route. Implemented and tested on Windows at the owner's request: real macOS AppKit event-loop, Finder, Gatekeeper, executable metadata and browser behavior remain unverified, not platform acceptance claims.
+
 ## v80.83 — 2026-10-26
 
 - Added opt-in `windows/Beta/Cost Guard Web.cmd`: Python 3.11+ discovery, native tray/configuration preflight before verified restart, detached host and automatic authenticated browser handoff. Native same-process Win32 notification icon has exactly Open Cost Guard and Exit Cost Guard; no packages, compiler, downloads, service or startup registration. Stable CLI/Watch/Diagnostics launchers are unchanged.

@@ -66,6 +66,8 @@ REQUIRED_FILES = {
     "windows/Beta/Cost Guard Web.cmd",
     "macos/Cost Guard.command",
     "macos/Cost Guard Watch.command",
+    "macos/Beta/Cost Guard Web.command",
+    "macos/Beta/launcher.applescript",
     "src/cache/database.py",
     "src/cache/repository.py",
 }
@@ -74,12 +76,13 @@ REQUIRED_FILES = {
 PUBLIC_LAUNCHERS = {
     "windows": {"Cost Guard.cmd", "Cost Guard Watch.cmd", "Beta"},
     "windows/Beta": {"Cost Guard Web.cmd"},
-    "macos": {"Cost Guard.command", "Cost Guard Watch.command"},
+    "macos": {"Cost Guard.command", "Cost Guard Watch.command", "Beta"},
+    "macos/Beta": {"Cost Guard Web.command", "launcher.applescript"},
 }
 
 FORBIDDEN_TOP_LEVEL = {"cache", "diagnostics", "logs", ".git", "data"}
 FORBIDDEN_NAMES = {"auth.json", ".env", "credentials.json"}
-TEXT_SUFFIXES = {".md", ".txt", ".json", ".jsonc", ".py", ".cmd", ".command", ".ps1", ".sh", ".toml", ".yaml", ".yml"}
+TEXT_SUFFIXES = {".md", ".txt", ".json", ".jsonc", ".py", ".cmd", ".command", ".applescript", ".ps1", ".sh", ".toml", ".yaml", ".yml"}
 
 
 @dataclass
@@ -186,7 +189,7 @@ def check_lowercase_directories(root: Path, results: Results) -> None:
         if not path.is_dir():
             continue
         relative = path.relative_to(root)
-        if relative.as_posix() == "windows/Beta":
+        if relative.as_posix() in {"windows/Beta", "macos/Beta"}:
             continue  # Explicit opt-in launcher boundary; no general casing exemption.
         if any(part in {".git", "__pycache__"} for part in relative.parts):
             continue

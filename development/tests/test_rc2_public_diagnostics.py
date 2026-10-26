@@ -93,8 +93,10 @@ class LauncherPlacementTests(unittest.TestCase):
                          {path.name for path in (ROOT / "windows").iterdir()})
         self.assertEqual({"Cost Guard Web.cmd"},
                          {path.name for path in (ROOT / "windows/Beta").iterdir()})
-        self.assertEqual({"Cost Guard.command", "Cost Guard Watch.command"},
+        self.assertEqual({"Cost Guard.command", "Cost Guard Watch.command", "Beta"},
                          {path.name for path in (ROOT / "macos").iterdir()})
+        self.assertEqual({"Cost Guard Web.command", "launcher.applescript"},
+                         {path.name for path in (ROOT / "macos/Beta").iterdir()})
 
     def test_validator_rejects_diagnostics_launcher_in_public_folder(self) -> None:
         from development.tools.validate_package import check_required_layout
