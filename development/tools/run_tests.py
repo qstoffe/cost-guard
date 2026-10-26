@@ -238,6 +238,7 @@ def main(argv: list[str] | None = None) -> int:
                     diagnostics.append(text[:400])
             files.append(dict(file=pattern, exit_code=code, seconds=round(duration, 2),
                 tests=int(count.group(1)) if count else None,
+                passed=(int(count.group(1)) - int(counts.get("skipped", 0)) - int(counts.get("expected failures", 0))) if count and code == 0 else None,
                 failures=int(counts.get("failures", 0)), errors=int(counts.get("errors", 0)),
                 skipped=int(counts.get("skipped", 0)), skips=[dict(test=t, reason=r) for t, r in skips],
                 failed_tests=re.findall(r"^(?:FAIL|ERROR): (.+)$", output, re.MULTILINE),

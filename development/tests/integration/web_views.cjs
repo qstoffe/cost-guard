@@ -18,8 +18,9 @@ class Node {
 const all = (node, tag) => [...(node.tag === tag ? [node] : []), ...node.children.flatMap(child => all(child, tag))];
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function until(condition) {
+  const caller = new Error().stack.split('\n')[2].match(/web_views\.cjs:(\d+)/)?.[1];
   for (let i = 0; i < 500; i++) { if (condition()) return; await delay(10); }
-  assert.fail('bounded UI condition timed out');
+  assert.fail('bounded UI condition timed out (web_views.cjs:' + caller + ')');
 }
 async function main() {
   const input = JSON.parse(fs.readFileSync(0, 'utf8'));

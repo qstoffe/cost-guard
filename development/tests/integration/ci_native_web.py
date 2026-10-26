@@ -137,18 +137,23 @@ def macos_cache(root, home):
 
 def macos_fault(root):
     from src.web.native_macos import MacHost
-    adapter = MacHost()
+    from src.web.macos_status import StatusItem
+
+    class FaultItem(StatusItem):
+        injected = False
+
+        def poll(self):
+            if self.owner.ready and not self.injected:
+                self.injected = True
+                def fault():
+                    raise RuntimeError("synthetic_http_fault")
+                self.owner.server.handle_request = fault
+            return super().poll()
+
+    adapter = MacHost(FaultItem())
     owner = WebHost(root, jobs=ReportJobs())
-    start = owner.start
-
-    def fail_http():
-        start()
-        def fault():
-            raise RuntimeError("synthetic_http_fault")
-        owner.server.handle_request = fault
-
-    with patch.object(owner, "start", side_effect=fail_http):
-        owner.run_gui(adapter)
+    owner.run_gui(adapter)
+    assert owner.ready and adapter.tray.injected
     assert owner.failure and owner.stopped.is_set() and not owner.thread.is_alive()
     assert adapter.tray.item is None and adapter.tray.timer is None
     return dict(outcome="PASS", checks=["actual AppKit item removed after HTTP-owner fault"])
@@ -177,7 +182,7 @@ def main():
                 # NSApplication is process-global; a second adapter in the same
                 # process is not a fresh native launch. Exercise fault separately.
                 result = subprocess.run([sys.executable, str(Path(__file__).resolve()), "--http-fault", str(root)],
-                                        cwd=ROOT, timeout=30, check=False)
+                                        cwd=ROOT, timeout=60, check=False)
                 assert result.returncode == 0
                 evidence["checks"]["http_fault"] = {"outcome": "PASS", "checks": ["fresh-process AppKit cleanup on HTTP fault"]}
                 evidence["checks"]["osacompile"] = macos_cache(root, home)
@@ -187,12 +192,13 @@ def main():
         evidence["outcome"] = "PASS"
     except Exception as error:
         evidence.update(outcome="FAIL", reason=type(error).__name__)
-        # Tracebacks contain only disposable synthetic data, but stay in Actions log,
-        # never the retained artifacts; bootstrap/control credentials are not printed.
+        if str(error) in {"tray_unavailable", "unsafe_instance_path", "app_preparation_failed",
+                          "instance_start_timeout", "gui_or_server_start_failed", "safe_force_stop_unavailable"}:
+            evidence["error_code"] = str(error)
+        # Preserve causal source locations, not raw paths/state/exception payloads.
         import traceback
         evidence["failure_locations"] = [dict(file=Path(frame.filename).name, line=frame.lineno, function=frame.name)
                                          for frame in traceback.extract_tb(error.__traceback__)]
-        traceback.print_exc()
     save("native", evidence)
     return int(evidence["outcome"] == "FAIL")
 

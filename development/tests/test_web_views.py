@@ -111,6 +111,10 @@ class WebViewTests(unittest.TestCase):
             # Existing empty session differs from missing catalog entry.
             empty = source.snapshots["root-0001"]
             source.snapshots["root-0001"] = replace(empty, messages=(), parts=(), events=(), invocations=())
+            # Analysis cold-start belongs to the report/performance tests. Warm
+            # this large fixture's dependency cache before the VM's fixed 5s UI
+            # assertions, without changing its 55-session/151-row input or totals.
+            self.assertIsNone(application.execute(ReportRequest()).error)
 
             class Jobs:
                 def __init__(self):

@@ -105,7 +105,8 @@ def main():
         import traceback
         evidence["failure_locations"] = [dict(file=Path(frame.filename).name, line=frame.lineno, function=frame.name)
                                          for frame in traceback.extract_tb(error.__traceback__)]
-        traceback.print_exc()
+        # Playwright exception text can contain a one-use bootstrap URL.
+        # Retain only source locations and type, never its raw call log.
     finally:
         stream_patch.stop()
         if owner:

@@ -67,8 +67,9 @@ def main():
         report = RESULTS / "full.json"
         if report.exists():
             files = json.loads(report.read_text())["files"]
-            totals = {key: sum(row.get(key) or 0 for row in files) for key in ("tests", "failures", "errors", "skipped")}
+            totals = {key: sum(row.get(key) or 0 for row in files) for key in ("tests", "passed", "failures", "errors", "skipped")}
             notice("suite", dict(files=len(files), totals=totals,
+                passed_count_complete=all(row["passed"] is not None for row in files),
                 failed_files=[row["file"] for row in files if row["exit_code"]]))
             for row in files:
                 if row["exit_code"]:

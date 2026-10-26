@@ -31,7 +31,7 @@ class CiEvidenceTests(unittest.TestCase):
     def test_report_preserves_named_skips_failures_and_missing_counts(self):
         outputs = [
             ("test_a.py", 0, 0.1, "test_a (example.Tests.test_a) ... ok\ntest_b (example.Tests.test_b) ... skipped 'Windows only'\nRan 2 tests in 0.1s\n\nOK (skipped=1)"),
-            ("test_b.py", 1, 0.1, "Ran 3 tests in 0.1s\n\nFAILED (failures=1, errors=1, skipped=1)"),
+            ("test_b.py", 1, 0.1, "AssertionError: C:\\Users\\synthetic\\file http://127.0.0.1/#bootstrap=secret\nRan 3 tests in 0.1s\n\nFAILED (failures=1, errors=1, skipped=1)"),
             ("test_c.py", 124, 1, "TIMEOUT after 1s"),
         ]
         with tempfile.TemporaryDirectory() as temporary:
@@ -42,9 +42,12 @@ class CiEvidenceTests(unittest.TestCase):
             report = json.loads(path.read_text())["files"]
         self.assertEqual(1, result)
         self.assertEqual(1, report[0]["skipped"])
+        self.assertEqual(1, report[0]["passed"])
         self.assertEqual("'Windows only'", report[0]["skips"][0]["reason"])
         self.assertEqual(1, report[1]["failures"])
         self.assertEqual(1, report[1]["errors"])
+        self.assertIsNone(report[1]["passed"])
+        self.assertEqual(["AssertionError: <path> <url>"], report[1]["diagnostics"])
         self.assertIsNone(report[2]["tests"])
         self.assertEqual("FAIL", report[2]["outcome"])
 
