@@ -165,6 +165,7 @@ class WindowsWebTests(unittest.TestCase):
             probe.write_text(r'''
 param($Source, $OldPython, $Python)
 $ErrorActionPreference = 'Stop'
+Write-Output 'STAGE:parse'
 $tokens = $null; $errors = $null
 $ast = [Management.Automation.Language.Parser]::ParseFile($Source, [ref]$tokens, [ref]$errors)
 if ($errors.Count) { throw 'Invalid production PowerShell syntax' }
@@ -173,6 +174,7 @@ $function = $ast.Find({param($node) $node -is [Management.Automation.Language.Fu
 Invoke-Expression $function.Extent.Text
 function Get-Command { return @() }
 if (Find-BetaPython) { throw 'Missing Python must not succeed' }
+Write-Output 'STAGE:direct-python'
 function Get-Command {
     param($Name, [switch]$All, $CommandType, $ErrorAction)
     if ($Name -eq 'py.exe') { return @([pscustomobject]@{Source=$OldPython}) }
@@ -181,6 +183,7 @@ function Get-Command {
 $found = Find-BetaPython
 if ($found.Executable -ne $Python -or $found.Arguments.Count -ne 0) { throw 'PATH fallback failed' }
 if ($realLauncher) {
+    Write-Output 'STAGE:py-launcher'
     function Get-Command { return @([pscustomobject]@{Source=$realLauncher}) }
     $found = Find-BetaPython
     $python = $found.Executable
@@ -190,6 +193,7 @@ if ($realLauncher) {
     if ($result -ne '1234567') { throw 'Single py -3 argument lost native command' }
 }
 $logging = $ast.Find({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Write-BetaStartupRecord'}, $true)
+Write-Output 'STAGE:private-log'
 Invoke-Expression $logging.Extent.Text
 $directory = Join-Path (Split-Path -Parent $OldPython) 'private log'
 Write-BetaStartupRecord -Directory $directory -Failure python_unavailable
@@ -199,9 +203,18 @@ $text = [IO.File]::ReadAllText((Join-Path $directory 'startup.log'))
 if ($text -notmatch '^\d{4}-\d{2}-\d{2}T[\d:]+ python_unavailable$') { throw 'Non-allowlisted log' }
 Write-Output 'DISCOVERY_PASS'
 ''', encoding="utf-8")
-            result = subprocess.run(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass",
-                                     "-File", str(probe), str(ROOT / "src/web/windows_launch.ps1"),
-                                     str(old), sys.executable], input="", capture_output=True, text=True, timeout=15)
+            # This harness includes shell/AST startup, several real Python
+            # processes and private DACL I/O, not the product's 15s host wait.
+            try:
+                result = subprocess.run(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                                         "-File", str(probe), str(ROOT / "src/web/windows_launch.ps1"),
+                                         str(old), sys.executable], input="", capture_output=True, text=True, timeout=30)
+            except subprocess.TimeoutExpired as error:
+                output = error.stdout or b""
+                if isinstance(output, bytes):
+                    output = output.decode('utf-8', errors='replace')
+                stages = [line for line in output.splitlines() if line.startswith('STAGE:')]
+                self.fail('Bounded PowerShell discovery harness timeout; ' + ', '.join(stages))
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("DISCOVERY_PASS", result.stdout)
 
