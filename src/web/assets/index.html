@@ -2,7 +2,7 @@
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Cost Guard Web Beta</title><link rel="stylesheet" href="/app.css">
-<script src="/render.js" defer></script><script src="/live.js" defer></script><script src="/session.js" defer></script><script src="/app.js" defer></script></head>
+<script src="/render.js" defer></script><script src="/reports.js" defer></script><script src="/live.js" defer></script><script src="/session.js" defer></script><script src="/app.js" defer></script></head>
 <body>
 <button class="skip" id="skip">Skip to report</button>
 <header><h1>Cost Guard <small>Web Beta</small></h1>
@@ -16,8 +16,10 @@
 <div class="toolbar"><h2 id="heading">Overview</h2>
 <button id="refresh" disabled>Refresh snapshot</button><button id="cancel" disabled>Cancel</button></div>
 <p id="notice" role="status">No report requested. Unknown values are not zero.</p>
+<div id="scope-controls"></div>
+<label>Search displayed report tables <input id="search" type="search" placeholder="Presentation filter only"></label>
 <div id="result" aria-busy="false"></div>
 </main>
 <footer>Reports stay frozen until Refresh. Closing this tab does not stop Cost Guard.
-Live shares one host-owned engine across tabs; its run begins at engine start. Remaining report views are not yet available. CLI remains independent.</footer>
+Live shares one host-owned engine across tabs; its run begins at engine start. Search/sort/page controls never change report scope or totals. CLI remains independent.</footer>
 </body></html>

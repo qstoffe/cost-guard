@@ -72,7 +72,15 @@ class ApplicationReportTests(unittest.TestCase):
                              (actual["session_id"], Decimal(actual["ccost"]), actual["duration_ms"], actual["complete"]))
         for expected, actual in zip(report.model_comparison, view["model_comparison"], strict=True):
             self.assertEqual(expected.relative_cost,
-                             Decimal(actual["relative_cost"]) if actual["relative_cost"] is not None else None)
+                              Decimal(actual["relative_cost"]) if actual["relative_cost"] is not None else None)
+            self.assertEqual((expected.publisher, expected.model, expected.price_summary, expected.release_date,
+                              expected.promotional, expected.recent, expected.promotion_marker),
+                             tuple(actual[name] for name in ("publisher", "model", "price_summary", "release_date",
+                                   "promotional", "recent", "promotion_marker")))
+            self.assertEqual([(str(level.relative_cost) if level.relative_cost is not None else None,
+                               level.threshold_tokens, level.threshold_operator) for level in expected.relative_levels],
+                             [(level["relative_cost"], level["threshold_tokens"], level["threshold_operator"])
+                              for level in actual["relative_levels"]])
         for expected, actual in zip(report.model_token_mix, view["model_token_mix"], strict=True):
             self.assertEqual((expected.model, expected.calls, expected.prompts),
                              (actual["model"], actual["calls"], actual["prompts"]))
@@ -99,7 +107,15 @@ class ApplicationReportTests(unittest.TestCase):
                 self.assertEqual(expected.account.fetched_at_ms, actual["observation"]["observed_at_ms"])
                 self.assertEqual(expected.account.status.value, actual["observation"]["status"])
                 self.assertEqual(expected.billed_month, Decimal(actual["billed_month"])
-                                 if actual["billed_month"] is not None else None)
+                                  if actual["billed_month"] is not None else None)
+                for quota, exported in zip(expected.account.quotas, actual["observation"]["quotas"], strict=True):
+                    self.assertEqual((quota.unit, quota.period, quota.reset_at_ms),
+                                     (exported["unit"], exported["period"], exported["reset_at_ms"]))
+                    self.assertEqual(quota.remaining, Decimal(exported["remaining"])
+                                     if exported["remaining"] is not None else None)
+                self.assertEqual([(pace.label, pace.per_day) for pace in expected.pace],
+                                 [(pace["label"], Decimal(pace["per_day"]) if pace["per_day"] is not None else None)
+                                  for pace in actual["pace"]])
         self.assertTrue(all(service._account_work is None for service in self.services))
         json.dumps(result.to_json(), allow_nan=False)
         return result
@@ -157,6 +173,28 @@ class ApplicationReportTests(unittest.TestCase):
         self.assertIsNone(row["extra_ccost"])
         self.assertIsNone(row["token_mix_percent"])
         self.assertTrue(row["unresolved_cost"])
+
+    def test_deep_history_reuses_only_source_config_and_price_bound_analysis(self):
+        app = ReportApplication(self.factory, clock=lambda: 4000)
+        request = ReportRequest(ReportKind.TOKEN_MIX)
+        with patch.object(self.source, "load_session_snapshot", wraps=self.source.load_session_snapshot) as load:
+            first = app.execute(request)
+            second = app.execute(request)
+            self.assertIsNone(first.error)
+            self.assertEqual(first.to_json()["view"], second.to_json()["view"])
+            self.assertEqual(1, load.call_count)
+            self.source.snapshot = replace(self.source.snapshot, source_revision="history-changed")
+            self.assertIsNone(app.execute(request).error)
+            self.assertEqual(2, load.call_count)
+            self.config["timezone"] = "Europe/Stockholm"
+            self.assertIsNone(app.execute(request).error)
+            self.assertEqual(3, load.call_count)
+            models = self.pricing.catalog.models
+            changed = replace(models[0], tiers=tuple(replace(tier, per_million_input=Decimal("123.456"))
+                                                     for tier in models[0].tiers))
+            self.pricing.catalog = replace(self.pricing.catalog, models=(changed, *models[1:]))
+            self.assertIsNone(app.execute(request).error)
+            self.assertEqual(4, load.call_count)
 
     def test_aborted_compaction_child_and_subscription_evidence_stay_shared(self):
         snapshot = make_snapshot()

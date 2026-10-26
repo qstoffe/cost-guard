@@ -36,7 +36,12 @@ def parse_report(value):
         raise ValueError("invalid_request")
     if date:
         from src.analysis import local_report_range
-        local_report_range(date, "UTC")
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}(?::\d{4}-\d{2}-\d{2})?", date):
+            raise ValueError("invalid_request")
+        try:
+            local_report_range(date, "UTC")
+        except (ValueError, OverflowError) as exc:
+            raise ValueError("invalid_request") from exc
     return ReportRequest(kind, session_id=session or None, date_text=date or None, session_limit=limit)
 
 
@@ -180,9 +185,18 @@ class ReportJobs:
                     self._stop()
                 elif receiver.poll():
                     try:
-                        kind, payload = receiver.recv()
-                        if kind == "progress":
+                        # Coalesce bounded bursts. One message per host turn can
+                        # backpressure a deep scan until its hard deadline even
+                        # when analysis itself is fast. Never unbound this drain:
+                        # HTTP/control/cancellation must retain scheduling turns.
+                        for _ in range(64):
+                            kind, payload = receiver.recv()
+                            if kind != "progress":
+                                break
                             job["progress"] = payload
+                            if not receiver.poll():
+                                return
+                        else:
                             return
                         if kind == "result":
                             job["result"] = json.loads(payload)

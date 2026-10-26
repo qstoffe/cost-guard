@@ -14,9 +14,6 @@ let current = null;
 let liveConnection = null;
 let liveValue = null;
 let sessionDetailAvailable = false;
-const routes = {overview: ['Overview', 'normal'], sessions: ['Sessions', 'sessions'],
-  live: ['Live', null], models: ['Models', null], accounts: ['Accounts', null],
-  reports: ['Reports', null], 'token-mix': ['Token Mix', null]};
 async function api(path, value) {
   const options = {credentials: 'same-origin', cache: 'no-store'};
   if (value !== undefined) Object.assign(options, {method: 'POST',
@@ -44,6 +41,7 @@ function failure(code) {
   const errors = {session_not_found: 'No matching session. It may have been removed or is unavailable in this source.',
     result_too_large: 'Report exceeds the finite result size limit; no truncated totals are shown. Use a specific session or the CLI.',
     report_timeout: 'Report timed out; no empty result was substituted.', cancelled: 'Report cancelled.',
+    invalid_request: 'Invalid report scope. Check dates/limits; no alternate range was substituted.',
     pricing_unavailable: 'Reference pricing unavailable.', busy: 'Report service busy. Retry Refresh.'};
   return errors[code] || 'Source/report unavailable. Check the local source and retry Refresh.';
 }
@@ -66,7 +64,7 @@ async function acquire(state) {
         state.message = 'Snapshot captured. Navigation and source activity do not update it.';
         break;
       }
-      state.message = `${job.status}: ${job.progress.phase}. ${state.result ? 'Last known snapshot retained.' : ''}`;
+      state.message = `${job.status}: ${job.progress.phase} · ${job.progress.completed ?? 0}${job.progress.total == null ? '' : '/' + job.progress.total}. ${state.result ? 'Last known snapshot retained.' : ''}`;
       // Do not redraw a retained report while polling: keep selection and scroll useful.
       if (state === current) notice.textContent = state.message;
       await new Promise(resolve => setTimeout(resolve, 500));
@@ -76,12 +74,12 @@ async function acquire(state) {
   } finally { state.loading = false; state.active = null; show(state); }
 }
 function navigate() {
-  const match = /^#\/sessions\/([A-Za-z0-9_-]{1,200})(\/live)?$/.exec(location.hash);
-  const key = match ? 'session/' + match[1] : location.hash.replace(/^#\//, '') || 'overview';
-  const route = match ? ['Session ' + match[1], 'session'] : routes[key];
-  heading.textContent = route ? route[0] : 'Page not found';
+  const route = ReportRoutes.resolve(location.hash), match = route.session;
+  const key = match ? 'session/' + match[1] : location.hash || '#/overview';
+  heading.textContent = route.title;
+  ReportRoutes.controls(document.getElementById('scope-controls'), route);
   for (const item of document.querySelectorAll('nav a')) {
-    if (item.getAttribute('href') === '#/' + (match ? 'sessions' : key)) item.setAttribute('aria-current', 'page');
+    if (item.getAttribute('href') === '#/' + route.section) item.setAttribute('aria-current', 'page');
     else item.removeAttribute('aria-current');
   }
   if (!views.has(key)) {
@@ -90,20 +88,24 @@ function navigate() {
       const victim = [...views].find(([, value]) => !value.loading);
       if (victim) views.delete(victim[0]);
     }
-    const request = route?.[1] ? {kind: route[1]} : null;
-    if (match) request.session_id = match[1];
-    if (key === 'sessions') request.session_limit = null; // All roots, not Watch's row cap.
-    views.set(key, {request, live: key === 'live', result: null, pages: {}, loading: false, active: null,
-      message: key === 'live' ? 'Live acquisition starting; one runtime shared across tabs.' : route ? 'Unavailable in this Beta step. Use the corresponding CLI report; overview includes current model/account summaries.' : 'Unknown route.'});
+    const request = route.request;
+    // Overview, selectable Models and Accounts are projections of one finite normal report.
+    // Reuse its timestamp, never silently reacquire accounts just to change presentation.
+    const cached = request && [...views.values()].find(value => value.result && JSON.stringify(value.request) === JSON.stringify(request));
+    views.set(key, {request, live: route.live, section: route.section, result: cached?.result || null,
+      pages: {}, loading: false, active: null, explicit: route.explicit,
+      message: route.live ? 'Live acquisition starting; one runtime shared across tabs.' : cached ? 'Snapshot captured. Reused frozen observation.' : request ? 'Capture/Refresh to acquire this report.' : 'Choose a report scope.'});
   }
   if (current?.detail) current.detail.detach();
   current = views.get(key);
+  document.getElementById('search').value = current.search || '';
   if (match && csrf && sessionDetailAvailable && !current.detail) {
     current.detail = new SessionDetail.View(api, match[1], match[2] ? 'live' : 'snapshot');
     current.message = 'Complete session history; explicit Snapshot/Live. Acquisition is shared across tabs.';
   }
+  document.getElementById('search').disabled = !!current.detail;
   show(current);
-  if (csrf && current.request && !current.detail && !current.result && !current.attempted) {
+  if (csrf && current.request && !current.explicit && !current.detail && !current.result && !current.attempted) {
     current.attempted = true;
     acquire(current);
   }
@@ -120,7 +122,7 @@ async function connect() {
         liveValue = value;
         if (current?.live) { current.message = 'Live observation; source/account freshness shown below.'; show(current); }
         for (const job of progress?.jobs || []) {
-          if (current?.active === job.id) notice.textContent = `${job.status}: ${job.progress?.phase || job.status}`;
+          if (current?.active === job.id) notice.textContent = `${job.status}: ${job.progress?.phase || job.status} · ${job.progress?.completed ?? 0}${job.progress?.total == null ? '' : '/' + job.progress.total}`;
         }
       }, message => { statusLine.textContent = message; });
     }
@@ -141,6 +143,9 @@ cancel.addEventListener('click', async () => {
   }
 });
 window.addEventListener('hashchange', navigate);
+document.getElementById('search').addEventListener('input', event => {
+  if (current) { current.search = event.target.value; current.pages = {}; show(current); }
+});
 document.getElementById('skip').addEventListener('click', () => document.getElementById('content').focus());
 navigate();
 connect();

@@ -4,7 +4,21 @@ Run `python cost-guard-web.py --foreground` using already installed Python 3.11+
 
 ## Navigation and static reports
 
-The Beta shell provides global Live, Overview (the normal shared model/account report), Sessions (all available roots), and selected session details with explicit Snapshot/Live modes. Dedicated Models, Accounts, Reports/date and Token Mix routes explicitly say unavailable and retain their CLI equivalents. They are not fabricated empty dashboards. Existing finite API modes remain callable.
+The Beta shell provides global Live, Overview, Models (selectable or full catalog), Accounts, Sessions N/all, local date/range Reports, explicit historical Token Mix, and session details with Snapshot/Live modes. Overview, selectable Models and Accounts reuse the same normal-report observation when retained; changing presentation does not multiply account acquisition. Explicit Refresh creates a new observation for that view, not a silent cross-view update.
+
+| CLI use case | Discoverable fragment route | Protected scope |
+| --- | --- | --- |
+| Normal overview | `/#/overview` | Independent comparison/token samples and account-period history |
+| Models / all models | `/#/models`, `/#/models/all` | Selectable availability versus full catalog; default exact server ranking, tiers, promotion/release facts and conservative older-stable fading; all catalog adds native USD/M I/C/W/O rates |
+| Accounts | `/#/accounts` | Native units/windows, Remaining/Pace, independent observations and method errors, report local-month/Today CCost and Copilot Unaccounted usage; never Watch rolling substitution |
+| Sessions N/all | `/#/sessions?limit=20`, `/#/sessions` | Available roots including archived history; form accepts 1–10000 or all; paging exposes every returned row |
+| Session report | `/#/sessions/<id>` | Complete report Snapshot/Live detail; links from session lists and global Live |
+| Date / inclusive range | `/#/reports?date=2026-10-25`, `/#/reports?date=2026-10-24:2026-10-25` | Configured-local boundaries/DST; canonical range valuation and union duration; impossible/reversed dates fail explicitly |
+| Historical Token Mix | `/#/token-mix` | Explicit Capture/Refresh only, never navigation/prefetch; canonical per-model prompts/calls, token/cost/mix vectors, price coverage and total over the same shown requests |
+
+Search above the report filters all finite/live tables; each table also has its own filter and sortable column buttons. Filters/sorts are presentation-only and show filtered/page counts alongside full-report row counts; totals and source queries never change. Decimal strings are compared exactly, vector columns lexicographically I/C/W/O, and unknown scalar values sort last. Default model order remains the shared server ranking, not rounded display values. Complete revision-paged session detail has its own browsing controls rather than pretending a filter covers unloaded rows; the global search is disabled there.
+
+Token Mix shows actual phase/completed/total progress and Cancel terminates only that finite scan. Reopening a retained view reuses its timestamped result; explicit recapture checks the real source/config/pricing dependencies through the existing derived-analysis cache (`src/reports/acquisition.py`, `src/analysis/cache.py`), not a browser ledger or request-name-only cache. Deleted/pruned history stays unavailable. Timeout/cancellation/empty history are distinct; Live and its account scheduler continue independently. Date prompt links open full session detail; Back restores the retained range. URL fragments contain only scope/locators, never prompt content.
 
 Session-ID links open `/#/sessions/<id>`. Fragment routes support direct links, reload and browser Back/Forward without expanding the HTTP path allowlist. The one-use bootstrap fragment is removed before requests; ordinary session routes are preserved on reload. Names/prompts are text, never links or tooltips containing source paths. Navigation and paging never put prompt/history payloads in browser storage or history state.
 
@@ -26,7 +40,7 @@ Authenticated, CSRF-protected `/api/detail` POST actions: `open` (`session_id`, 
 
 Resource admission allows 16 distinct observed session trees per host and 32 transport handles. Abandoned handles expire after five minutes, but history does not; expiration is explicit (410), not an empty report or row eviction. Busy admission is explicit (429). Repeated refresh/mode changes release their old handle. Restarting the host discards observed history. Synthetic 100/1,000/10,000-row probes test complete first/middle/latest access, totals, page bounds, source omission/reconnect and unchanged work. `test_web_session_detail.py` also exercises real HTTP authorization and shipped assets in an optional Node VM, not a browser or model runner.
 
-Layout choices: wrapping top navigation; system light/dark palette; source/readiness separate from snapshot health; text-selectable overflow tables with sticky column headings; independently paged tables and complete totals below rows; keyboard focus outlines and a skip-to-report button. Refresh/status messages do not take focus. No user-side frontend build, Node installation, CDN, analytics, account login or editing.
+Layout choices: wrapping top navigation; system light/dark palette; source/readiness separate from snapshot health; text-selectable overflow tables with sticky column headings; independently paged tables and complete totals below rows; keyboard focus outlines and a skip-to-report button. Scope forms and selectable/all catalog links sit above tables; searchable dense tables are preferred over optional charts to avoid new metric interpretations. Older stable variants remain readable with modest fading and explicit text. Refresh/status messages do not take focus. These are implementation decisions for later owner feedback, not visual approval. No user-side frontend build, Node installation, CDN, analytics, account login or editing.
 
 `test_web_views.py` exercises the shipped JavaScript and real HTTP/facade with deterministic sources through an optional developer-only Node DOM harness. It tests navigation/hash events, reload, safe hostile/Unicode text, long/running/aborted/compacted/empty/missing/partial reports, complete totals and frozen/explicit-refresh/stale behavior. It is not visual browser, CSS layout or native macOS acceptance. Owner checks: open the Beta, try narrow/wide windows and light/dark mode, tab through navigation and page controls, select prompt text, follow a session link, use Back/Forward and reload, and Refresh a running session. No new permanent release gate is added.
 
@@ -90,7 +104,7 @@ This is loopback HTTP, not a public server or protection against malware/other c
 
 | Route | Method | Meaning |
 | --- | --- | --- |
-| `/`, `/app.js`, `/render.js`, `/live.js`, `/session.js`, `/app.css` | GET | Fixed public Beta shell/assets, no history |
+| `/`, `/app.js`, `/render.js`, `/reports.js`, `/live.js`, `/session.js`, `/app.css` | GET | Fixed public Beta shell/assets, no history |
 | `/health` | GET | Public HTTP-shell readiness only |
 | `/api/bootstrap` | POST | One-use `{"credential":"…"}` exchange with exact Origin |
 | `/api/session` | GET | Authenticated CSRF recovery, no control credential |
@@ -102,7 +116,7 @@ This is loopback HTTP, not a public server or protection against malware/other c
 | `/api/jobs/<id>` | GET | Authenticated status/progress/result |
 | `/api/jobs/<id>/cancel` | POST | Cancel owned queued/running work with `{}` |
 
-Reports select `kind`: `normal` (overview), `all-models` (catalog), `sessions`, `session`, `date` or `token-mix`. `session` requires an alphanumeric/underscore/hyphen `session_id` (max 200); `date` requires the existing CLI `date_text` syntax (max 32). `sessions` accepts `session_limit`: 1–10000 or null for all, default 20. Other fields are rejected. There are no query-string or arbitrary path parameters. Reports export the shared application's explicit DTOs, retaining exact decimal **strings**, null unknowns, provisional flags and CLI-projected labels; the page does not calculate costs. Empty acquired lists, acquisition errors, partial source evidence and genuine priced zero remain distinct. Account `reported` means inspect the report's independent observation statuses, not that all accounts are healthy or atomic with history.
+Reports select `kind`: `normal` (overview/Models/Accounts), `all-models` (catalog), `sessions`, `session`, `date` or `token-mix`. `session` requires an alphanumeric/underscore/hyphen `session_id` (max 200); `date` requires `YYYY-MM-DD` or `YYYY-MM-DD:YYYY-MM-DD` (max 32), with impossible/reversed/overflow dates rejected. `sessions` accepts `session_limit`: 1–10000 or null for all, default 20. Other fields are rejected. There are no HTTP query-string or arbitrary path parameters; client scope fragments become validated POST bodies. Reports export the shared application's explicit DTOs, retaining exact decimal **strings**, null unknowns, provisional flags and CLI-projected labels; the page does not calculate costs. Empty acquired lists, acquisition errors, partial source evidence and genuine priced zero remain distinct. Account `reported` means inspect the report's independent observation statuses, not that all accounts are healthy or atomic with history.
 
 ## Resource and failure boundaries
 

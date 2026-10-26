@@ -90,7 +90,8 @@ class WebRuntimeTests(unittest.TestCase):
         status, headers, body = self.request("/")
         self.assertEqual(200, status)
         self.assertIn(b"Live shares one host-owned engine", body)
-        self.assertIn(b"Remaining report views are not yet available", body)
+        self.assertIn(b"Search/sort/page controls never change report scope or totals", body)
+        self.assertIn(b'/reports.js', body)
         self.assertIn("default-src 'none'", headers["Content-Security-Policy"])
         self.assertIn("worker-src 'none'", headers["Content-Security-Policy"])
         self.assertEqual("no-store", headers["Cache-Control"])
@@ -99,6 +100,36 @@ class WebRuntimeTests(unittest.TestCase):
         self.assertEqual({"http": "ready"}, json.loads(self.request("/health")[2]))
         self.assertEqual(401, self.request("/api/status")[0])
         self.assertEqual(401, self.request("/api/reports", {"kind": "sessions"})[0])
+
+    def test_progress_bursts_are_coalesced_without_starving_host_turns(self):
+        from collections import deque
+        from unittest.mock import Mock
+
+        messages = deque(("progress", {"phase": "history", "completed": n, "total": 130})
+                         for n in range(130))
+        messages.append(("result", json.dumps({"error": None, "source": {"status": "acquired"}}).encode()))
+        receiver = Mock()
+        receiver.poll.side_effect = lambda: bool(messages)
+        receiver.recv.side_effect = messages.popleft
+        process = Mock()
+        process.is_alive.return_value = False
+        jobs = ReportJobs()
+        key = jobs.submit(ReportRequest(ReportKind.TOKEN_MIX))
+        jobs._jobs[key]["status"] = "running"
+        jobs._active = key, process, receiver, time.monotonic()
+        self.addCleanup(jobs.close)
+
+        jobs.tick()
+
+        self.assertEqual(64, receiver.recv.call_count)
+        self.assertEqual(63, jobs.snapshot(key)["progress"]["completed"])
+        self.assertEqual("running", jobs.snapshot(key)["status"])
+        jobs.tick()
+        self.assertEqual(128, receiver.recv.call_count)
+        jobs.tick()
+        self.assertEqual("complete", jobs.snapshot(key)["status"])
+        self.assertEqual(129, jobs.snapshot(key)["progress"]["completed"])
+        receiver.close.assert_called_once()
 
     def test_bootstrap_is_one_use_expiring_and_session_is_instance_scoped(self):
         token = self.server.session.bootstrap()
@@ -131,6 +162,10 @@ class WebRuntimeTests(unittest.TestCase):
         self.assertEqual(413, self.request("/api/reports", {"kind": "a" * 5000})[0])
         for value in ({}, {"kind": "unknown"}, {"kind": "session", "session_id": ""},
                       {"kind": "sessions", "session_limit": True}, {"kind": "date", "date_text": "bad"},
+                      {"kind": "date", "date_text": "2026-02-30"},
+                      {"kind": "date", "date_text": "2026-10-26:2026-10-25"},
+                      {"kind": "date", "date_text": "9999-12-31"},
+                      {"kind": "date", "date_text": "2026-W01-1"},
                       {"kind": "sessions", "path": "PRIVATE"}, {"kind": "normal", "session_id": "x"}):
             self.assertEqual(400, self.request("/api/reports", value)[0])
         prefix = f"GET /health HTTP/1.1\r\nHost: {self.server.host}\r\n".encode()

@@ -1,7 +1,7 @@
 # Reports source contracts
 
-Source revision: 76cd4cb7fbada74de2b37cd926891b802533b507
-Checked revision: 76cd4cb7fbada74de2b37cd926891b802533b507
+Source revision: c982393f29dacdf41560cc3f7c845cab739fdfe6
+Checked revision: c982393f29dacdf41560cc3f7c845cab739fdfe6
 Last checked: 2026-10-26
 Status: current
 
@@ -21,7 +21,7 @@ Immutable projections cover dashboard/catalog, lists and detail/date modes. Dash
 
 Dashboard mix includes running/interrupted usage; Relative CCost keeps completed eligibility/count. Both samples admit only prompts with a priceable request (evaluated live against the current catalog, never cached) and use only those requests, so unpriceable history never fills a sample; scans respect both cutoffs. `reports/token_mix_history.py` scans without a ledger, with fail-open filtering and shown-request totals. `presentation/definitions.py` owns definitions; `presentation/model_comparison.py` aligns fields before color. Normal tables have four columns; full-catalog tables add exact USD tiers/boundaries even under fallback. Presentation never recomputes valuation.
 
-`presentation/model_supersession.py`/`AnsiStyler` own conservative displayed-row classification/hue fading, never pricing, sorting, selection, notices or geometry.
+`src/analysis/model_supersession.py` owns shared conservative table-local classification; `presentation/model_supersession.py` retains compatibility exports. CLI hue fading and Web older-stable text/fading consume the same classification, never pricing, sorting, selection or notices.
 
 V2 availability uses settled global `/api/model` selectable `id`, not `modelID`; empty/partial location boot is not settled. `sources/model_availability.py` rejects controls/malformed shapes and owns CLI compatibility, independently of quotas. Pricing identities are exact or bounded verified dated/context aliases: explicit variant rates/input tiers win, ambiguity stays unknown; no fuzzy Claude suffixes. Failed lookups visibly fail open to the catalog; settled empty stays empty. Highlights follow selection; `--all-models` bypasses availability.
 
@@ -49,7 +49,7 @@ Schema version and application instance UUID are separate from per-request-view 
 | Date/range | DATE / prompt_blocks | Configured-local inclusive date target mapped to exclusive end; DST, context and duration remain existing semantics |
 | Historical Token Mix | TOKEN_MIX / model_token_mix and total | Separate deep all-available-history method, not build's dashboard fallback; existing availability fail-open behavior; no request rows or promise to recover pruned history |
 
-The inventory is the starting parity map for FR000380, not proof of a Web UI. `development/tests/test_application_reports.py` compares numerical/status/identity fields to the existing service using shared canonical fixtures (running/completed/aborted, child work, compaction, missing telemetry/prices, subscription evidence), native V1/current V2, DST and independent account errors/freshness. It covers 151-prompt uncapped detail and cloned-request deduplication, immutable exact export, typed source failures, fresh-job/reentrancy ownership, repeated cleanup, and CLI help/version plus Diagnostics import with application/web dependencies blocked. Existing report/Watch tests remain the semantic owners. No new permanent release gate, server, browser, launcher or dependency is added.
+The [Web route inventory](../../../docs/web-beta.md#navigation-and-static-reports) maps every mode to a delivered view; native/visual acceptance remains separate. Deep-history cache regression proves source/config/pricing invalidation and immutable reuse. `development/tests/test_application_reports.py` compares numerical/status/identity fields to the existing service using shared canonical fixtures (running/completed/aborted, child work, compaction, missing telemetry/prices, subscription evidence), native V1/current V2, DST and independent account errors/freshness. It covers 151-prompt uncapped detail and cloned-request deduplication, immutable exact export, typed source failures, fresh-job/reentrancy ownership, repeated cleanup, and CLI help/version plus Diagnostics import with application/web dependencies blocked. Existing report/Watch tests remain the semantic owners. No new permanent release gate, server, browser, launcher or dependency is added.
 
 ## Allowed dependencies
 

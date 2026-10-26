@@ -1,15 +1,15 @@
 # Optional Web runtime
 
-Source revision: f493998fdf1278af2ede23f63d5f97ccb96170bc
-Checked revision: f493998fdf1278af2ede23f63d5f97ccb96170bc
+Source revision: c982393f29dacdf41560cc3f7c845cab739fdfe6
+Checked revision: c982393f29dacdf41560cc3f7c845cab739fdfe6
 Last checked: 2026-10-26
 Status: current
 
 ## Responsibility and ownership
 
-`src/web/http.py` owns bounded loopback HTTP, fixed assets and routing; `src/web/security.py` owns one-use bootstrap/HttpOnly sessions/CSRF; `src/web/jobs.py` owns finite admission, process isolation, progress, cancellation and retention. `src/web/composition.py` creates fresh canonical ReportApplication integrations.
+`src/web/http.py` owns bounded loopback HTTP, fixed assets and routing; `src/web/security.py` owns one-use bootstrap/HttpOnly sessions/CSRF; `src/web/jobs.py` owns finite admission, process isolation, progress, cancellation and retention; at most 64 progress messages drain per host turn to prevent scan backpressure without starving control/Live. `src/web/composition.py` creates fresh canonical ReportApplication integrations.
 
-`src/web/assets/app.js` owns fragment navigation, memory-only views and finite job refresh/stale/cancel state. `render.js` presents allowlisted DTOs as text-only tables. All-roots listing requests null session_limit; finite job limits fail explicitly. `session.js` owns explicit Snapshot/Live detail, one fetched 50-row page, canonical DOM identities, anchored paging, selection/focus protection and follow-latest. `src/application/session_detail.py` admits shared captures on the existing live thread, round-robins due sessions, freezes immutable report revisions and returns anchor-aware pages with complete totals. `src/reports/session_history.py` retains canonical observations outside persistent caches and reuses detailed report metrics; omissions freeze lifecycle/time, not falsely complete rows. Unchanged running evidence reuses attribution/valuation and updates only shared execution timing. No browser calculator, prompt cap or ledger. Remaining dedicated views stay honestly unavailable. Direction remains Web→application→reports; missing/archived/outage is not empty success.
+`src/web/assets/app.js` owns finite refresh/stale/cancel state and memory-only observations; Overview/selectable Models/Accounts reuse one frozen normal report. `src/web/assets/reports.js` owns scope forms/catalog links and explicit-only deep-history admission. `render.js` presents DTOs with exact Decimal/vector sorting, presentation-only search and 50-row paging; totals never come from cells. `session.js` owns Snapshot/Live detail, canonical DOM identities, anchored paging, selection/focus protection and follow-latest. `src/application/session_detail.py` round-robins captures on the live thread and returns frozen revision-aware pages/full totals. `src/reports/session_history.py` retains canonical evidence outside durable caches; omissions freeze lifecycle/time rather than falsely complete rows. Unchanged running evidence reuses attribution/valuation. Web?application?reports is unchanged; missing/archive/outage is not empty success. Scope/cache/route inventory: `docs/web-beta.md`.
 
 `src/web/host.py` owns shutdown of HTTP/jobs and one `src/application/live.py` thread; GUI run/close stays on main. Composition transfers the Watch service to `src/watch/acquisition.py`; tabs only read detached values. Live persists without tabs, preserving engine-start origin and independent account cadence. Finite reports never borrow/close that context. Unexpected faults reach main RuntimeErrors (managed logs outside checkout); children monitor their exact parent sentinel. OpenCode is never stopped.
 
@@ -37,7 +37,7 @@ Guard membership/mtime_ns/size covers shipped Python/assets/Beta launchers/root 
 
 Wire/adapter/resource details: `docs/web-beta.md`. No new permanent gate.
 
-`development/tests/test_web_views.py` / `development/tests/integration/web_views.cjs` exercise served assets/HTTP/shared facade: long lists, full totals, snapshot isolation, lifecycle/partial/hostile text, missing versus empty and hash/deep-link navigation. Optional installed Node is a VM test tool, not a runtime/build dependency. Real browser layout/light-dark/resize/assistive technology remain owner validation.
+`development/tests/test_web_views.py` / `development/tests/integration/web_views.cjs` exercise served assets/facade: navigation, exact sorting, filters, tiers, independent accounts, deferred history, long lists and frozen/stale/empty/missing/hostile-text states. Node is optional VM tooling, not visual/assistive-technology proof.
 
 ## Allowed dependencies
 
@@ -59,7 +59,7 @@ Native entries: `windows/Beta/Cost Guard Web.cmd`, `src/web/windows_launch.ps1`,
 
 `development/tests/test_macos_web.py` / `development/tests/test_macos_app.py` cover typed callbacks/faults, main-thread/tracking timers, preflight/readiness/cleanup, asynchronous actions and cache/quoting/rebuild failures without AppKit/UI. Approval-only `development/tests/integration/probe_macos_web.py` was not run here. Finder/Gatekeeper/clone/ZIP/executable-bit/no-Terminal/browser/tracking/source-change/orphan/CPU-architecture checks remain pending as documented in `docs/web-beta.md`.
 
-`development/tests/test_web_session_detail.py` / `development/tests/integration/web_session.cjs` cover 100/1,000/10,000-prompt first/middle/latest access, full totals, bounded pages/DOM, strict timestamp windows, unchanged work, row identity/anchor/focus/selection, transitions, omissions/outages/reconnect and late children/partial prices. `development/tests/integration/probe_web_live.py --detail` observed real V2 complete detail/freeze, one owner/two streams and joined shutdown on 2026-10-26. No browser or model was invoked. Copy/selection covers the fetched page; physical layout and screen-reader proof remain unclaimed.
+`development/tests/test_web_session_detail.py` / `development/tests/integration/web_session.cjs` cover 100/1,000/10,000-prompt first/middle/latest access, full totals, bounded pages/DOM, strict timestamp windows, unchanged work, row identity/anchor/focus/selection, transitions, omissions/outages/reconnect and late children/partial prices. `development/tests/integration/probe_web_live.py` with --detail --reports observed V2 detail/freeze, normal/all-models/sessions/date completion and cancelled deep history, preserving one owner/two streams/run origin and joined shutdown on 2026-10-26. No browser or model was invoked. Copy/selection covers the fetched page; physical layout and screen-reader proof remain unclaimed.
 
 ## Native launcher maintenance notes
 
