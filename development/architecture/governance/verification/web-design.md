@@ -39,7 +39,7 @@ python development/tests/integration/render_web_design.py --baseline 71a2e9094cc
 
 ## Privacy, ownership and limits
 
-[SHA-256 manifest](web-design/sha256.json) fingerprints every generated evidence file except the manifest itself. Evidence was reviewed as synthetic-only: fixture names/prompts, test account labels, canonical costs and artificial 1970 timestamps; no installed account IDs, source paths, cookies, session/bootstrap/control secrets or real history. Browser profiles remain outside the repository and are not retained in evidence. All new evidence is outside the immutable completed FR bundle.
+[SHA-256 manifest](web-design/sha256.json) fingerprints every generated evidence file except the manifest itself: exact PNG bytes and Git-blob text bytes (UTF-8/LF; normalize Windows checkout CRLF before comparison). Evidence was reviewed as synthetic-only: fixture names/prompts, test account labels, canonical costs and artificial 1970 timestamps; no installed account IDs, source paths, cookies, session/bootstrap/control secrets or real history. Browser profiles remain outside the repository and are not retained in evidence. All new evidence is outside the immutable completed FR bundle.
 
 CLI/HTTP authentication, one-use bootstrap, session Snapshot/Live and shared-engine acquisition boundaries are unchanged. Journal assessment: **no-update** (no new reusable debugging conclusion). Architecture-boundary assessment: **no-update** (same asset/router/render owners and dependencies); current user docs and this evidence route describe the presentation change.
 
