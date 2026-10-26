@@ -32,7 +32,7 @@ class CiEvidenceTests(unittest.TestCase):
         outputs = [
             ("test_a.py", 0, 0.1, "test_a (example.Tests.test_a) ... ok\ntest_b (example.Tests.test_b) ... skipped 'Windows only'\nRan 2 tests in 0.1s\n\nOK (skipped=1)"),
             ("test_b.py", 1, 0.1, "AssertionError: C:\\Users\\synthetic\\file http://127.0.0.1/#bootstrap=secret\nRan 3 tests in 0.1s\n\nFAILED (failures=1, errors=1, skipped=1)"),
-            ("test_c.py", 124, 1, "TIMEOUT after 1s"),
+            ("test_c.py", 124, 1, "subprocess.TimeoutExpired: Command ['private-token', 'C:\\Users\\synthetic\\file'] timed out after 20 seconds\nTIMEOUT after 1s"),
         ]
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "report.json"
@@ -50,6 +50,7 @@ class CiEvidenceTests(unittest.TestCase):
         self.assertEqual(["AssertionError: <path> <url>"], report[1]["diagnostics"])
         self.assertIsNone(report[2]["tests"])
         self.assertEqual("FAIL", report[2]["outcome"])
+        self.assertEqual(["subprocess.TimeoutExpired: child deadline exceeded"], report[2]["diagnostics"])
 
 
 if __name__ == "__main__":

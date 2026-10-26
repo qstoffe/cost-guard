@@ -231,6 +231,10 @@ def main(argv: list[str] | None = None) -> int:
                                      failed.group(1) if failed else output.splitlines()[-1] if output else ""))
             diagnostics = []
             for line in output.splitlines():
+                if line.startswith("subprocess.TimeoutExpired:"):
+                    # The exception embeds the complete argv; publish no command.
+                    diagnostics.append("subprocess.TimeoutExpired: child deadline exceeded")
+                    continue
                 if re.match(r"^[A-Za-z][A-Za-z0-9_.]*(?:Error|Exception|Conflict):", line):
                     text = re.sub(r"https?://\S+", "<url>", line)
                     text = re.sub(r"(?:[A-Za-z]:[\\/]|/(?:Users|home|private|var|tmp)/)[^\s'\"]+", "<path>", text)
