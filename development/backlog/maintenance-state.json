@@ -4,17 +4,17 @@
   "ordinaryCount": 25,
   "completed": {
     "architecture": 20,
-    "test-health": 20,
+    "test-health": 25,
     "performance": 20
   },
   "template": {
     "id": "shared-repository-maintenance",
     "version": 1
   },
-  "lastDeliveredRevision": "be6c8511b26a71030628fe0d7e8202961ad2582e",
+  "lastDeliveredRevision": "94de154a6c3f15a97d3a03980bc090505cd2f2e7",
   "lastItem": {
-    "id": "fr/000450-overview-cli-parity-and-correct-model-comparison.md",
-    "kind": "ordinary"
+    "id": "test-health/25",
+    "kind": "test-health"
   },
   "featureDiscovery": {
     "completed": 20

@@ -1,15 +1,13 @@
 # Test system health
 
-Source revision: 034b54e3921a0be9fcd5e53080fc30913d7265a5
-Checked revision: 34e750af0329f2f30e5852354c277481271daaa0
-Last checked: 2026-10-26
+Source revision: 94de154a6c3f15a97d3a03980bc090505cd2f2e7
+Checked revision: 94de154a6c3f15a97d3a03980bc090505cd2f2e7
+Last checked: 2026-10-27
 Status: current
 
 ## Summary
 
-Retain isolated per-file tests, responsibility-owned fixtures and hard deadlines. FR 000410 adds real public-hosted Windows x64 and macOS ARM64/Intel execution, bounded offline native probes and rendered Chromium smoke, not a new mandatory release gate or product dependency. Final platform outcomes and manual limits live in development/architecture/governance/verification/web-beta-ci.md; historical or local green tests do not imply native consumer-desktop acceptance.
-
-Local Windows Full at the startup-identity repair passed all 106 registered files in 49.7 seconds; validator passed with four existing design-budget warnings. This is Python 3.14 workstation evidence, not a substitute for CI Python 3.11. No local native/browser UI or model/provider calls were made.
+Milestone-25 audit retains isolated files, responsibility-owned fixtures and hard deadlines: no source-backed harness rewrite justified. Whole-tree inventory and sampled source/tests, fresh CI job outcomes and limitations are in development/architecture/governance/verification/test-health-25.md. No product tests, validator, live/model calls or version work ran for this development-only delivery. Earlier local/hosted results remain revision-specific evidence, never consumer-desktop acceptance.
 
 ## Evidence
 
@@ -17,7 +15,7 @@ Local Windows Full at the startup-identity repair passed all 106 registered file
 
 `development/tools/run_tests.py` keeps four isolated workers, Quick's 25-second and Full's 240-second per-file bounds. Its JSON report now distinguishes named skips, failures/errors and incomplete known-passed counts for failed files. A test-method inventory is not an executed count. CI supplies Node so optional VM tests actually execute; Chromium smoke remains separate from DOM substitutes. `test_ci_web_beta.py` covers hosted-only admission and sanitized reporting.
 
-Milestone-20 source audit at 269b570b79ff8f4639f325f952ffe49a4f266ba0 found 105 registered files and ten legacy test-to-test import edges, not grounds for a broad rewrite. New coverage uses responsibility-owned fixtures, not sibling test modules. No fresh whole-tree duplication/performance audit is claimed here. Finite navigation, live replay and keyed-selection VM fixtures protect different interfaces; textual similarity is not proof they need one framework.
+At 94de154a6c3f15a97d3a03980bc090505cd2f2e7, AST inventory found 108 registered files (104 Quick, four Full-only), no registration gaps, and 1,358 syntactic test methods, not executed tests. Eleven sibling-import statements are ten distinct importer/module edges; repeated runtime_errors imports explain the difference. Keep localized fixture debt visible, not a fabricated growth finding. Inventory found no exact-byte duplicate groups; this does not prove semantic uniqueness. Retain distinct fixed-value, CLI parity, VM and real-browser risks rather than a generic merged harness. Prior-main run 40421018674 passed three hosted jobs; current-main run 40422673710 was still in progress at initial query. Step timestamps are not per-file performance or paid-cost measurements.
 
 Tests below are under `development/tests/`; mappings establish intended contracts, not coverage percentages:
 
