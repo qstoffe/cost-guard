@@ -33,9 +33,9 @@ Private /control/status, /control/stop and /control/open require a separate secr
 
 Twelve HTTP slots admit four streams; ordinary requests have five-second absolute deadlines. Streams use sixty-second lifetimes, two-second writes, ten-second heartbeats/three-second reconnect. Finite work: four outstanding jobs, one process, sixteen results, 8 MiB/result, 120 seconds. Detail admission: sixteen observed trees, thirty-two handles; abandoned handles expire after five minutes, never rows/history. Stop publishes terminal state and joins owned work; retained `/api/live` stays readable while stopping. DTOs retain decimal strings/null/provisional values, not raw errors. No same-user-malware boundary.
 
-Guard membership/mtime_ns/size checks cover shipped Python/assets, Web Beta runtime launcher trees, root entries and manifests. Development/docs/user configuration/cache/log/bytecode/environment writes are excluded; links are never traversed. Stat errors retry honestly against the original baseline. Proven change immediately enters terminal source_changed and invokes the same shutdown without browser acknowledgement. Identical metadata can be missed; this is not atomic updating or a guarantee against Windows file locks. Manual launch alone starts changed code.
+Guard membership/mtime_ns/size covers shipped Python/assets/Beta launchers/root entries/manifests, excluding development/docs/user config/cache/log/bytecode/environment. No links are followed; stat errors retry the original baseline. Proven change triggers terminal source_changed/shutdown without browser acknowledgement. Identical metadata can be missed; no atomic-update/file-lock guarantee. Changed code needs manual launch.
 
-API fields, private adapter protocol, limits and recovery constraints: `docs/web-beta.md`. No permanent release gate is introduced.
+Wire/adapter/resource details: `docs/web-beta.md`. No new permanent gate.
 
 `development/tests/test_web_views.py` / `development/tests/integration/web_views.cjs` exercise served assets/HTTP/shared facade: long lists, full totals, snapshot isolation, lifecycle/partial/hostile text, missing versus empty and hash/deep-link navigation. Optional installed Node is a VM test tool, not a runtime/build dependency. Real browser layout/light-dark/resize/assistive technology remain owner validation.
 
@@ -63,4 +63,4 @@ Native entries: `windows/Beta/Cost Guard Web.cmd`, `src/web/windows_launch.ps1`,
 
 ## Native launcher maintenance notes
 
-PowerShell 5.1 requires preserving `[array]$pythonArgs` after function return: a scalar single `-3` splat lost the intended native command in a real probe. Use DirectoryInfo.SetAccessControl with the private DACL, not Set-Acl: the latter required SeSecurityPrivilege on the tested workstation. Regression tests extract the actual production function/assignment with the PowerShell AST and verify a real py.exe handoff and private-log writes. Do not request elevation or modify global policy to repair either failure. These current owner facts replace a redundant journal/test log; existing journal history is unchanged.
+PowerShell 5.1: preserve `[array]$pythonArgs` (scalar `-3` splatting lost the command in a real probe). Use DirectoryInfo.SetAccessControl/private DACL, not Set-Acl requiring SeSecurityPrivilege. AST-extracted production functions/assignments test real py.exe handoff/private logs. Never elevate or change global policy. These owner facts replace a redundant journal log; historical evidence is unchanged.
