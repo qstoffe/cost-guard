@@ -9,6 +9,7 @@ from src.runtime_errors import RuntimeErrors
 from .host import WebHost
 from .instance_state import InstanceStore
 from .lifecycle import GUI_MODULES
+from .process_identity import InstanceConflict
 
 
 def managed(root, nonce, module):
@@ -19,9 +20,15 @@ def managed(root, nonce, module):
 
             def run():
                 # Missing native host fails before HTTP startup. No icon-free fallback.
-                gui = importlib.import_module(module).create_host()
-                owner = WebHost(root, store=store, nonce=nonce)
-                owner.run_gui(gui)
+                try:
+                    gui = importlib.import_module(module).create_host()
+                    owner = WebHost(root, store=store, nonce=nonce)
+                    owner.run_gui(gui)
+                except InstanceConflict as error:
+                    if str(error) != "tray_unavailable":
+                        raise
+                    store.log("tray_unavailable")
+                    return 3
                 if owner.failure:
                     raise owner.failure
                 return 0 if owner.ready else 1
@@ -35,10 +42,14 @@ def managed(root, nonce, module):
 
 def main():
     arguments = sys.argv[1:]
+    if arguments == ["--launch-windows"]:
+        from .windows_launch import launch_windows
+        return launch_windows(Path(__file__).resolve().parents[2])
     if arguments == ["--help"]:
         print("Usage: python cost-guard-web.py --foreground\n"
               "Developer loopback Web Beta. Ctrl+C or runtime changes stop owned work.\n"
-              "Native detached launchers are supplied separately; no browser opens here.")
+              "Windows: windows/Beta/Cost Guard Web.cmd for detached tray mode.\n"
+              "No browser opens in --foreground developer mode.")
         return 0
     is_managed = (len(arguments) == 3 and arguments[0] == "--managed"
                   and re.fullmatch(r"[a-f0-9]{32}", arguments[1]) and arguments[2] in GUI_MODULES)

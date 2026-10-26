@@ -1,4 +1,4 @@
-"""Serialized detached launch/restart protocol for the forthcoming native launchers."""
+"""Serialized detached launch/restart protocol shared by native launchers."""
 from dataclasses import dataclass
 import http.client
 import json
@@ -92,8 +92,8 @@ class LaunchResult:
 def launch(root, gui_module, *, opener=webbrowser.open):
     """Intentional invocation restarts; overlapping clicks reuse the ready winner.
 
-    No native module ships in this FR. The OS FRs supply an approved adapter and
-    launcher; a missing GUI can never leave a successfully advertised background host.
+    Only approved native adapters are accepted; a missing GUI can never leave a
+    successfully advertised background host. OS entrypoints own native preflight.
     """
     invoked_ns = time.time_ns()
     store = InstanceStore(root)
@@ -113,7 +113,10 @@ def launch(root, gui_module, *, opener=webbrowser.open):
             deadline = time.monotonic() + START_SECONDS
             try:
                 while True:
-                    if child.poll() is not None:
+                    status = child.poll()
+                    if status == 3:
+                        raise InstanceConflict("tray_unavailable")
+                    if status is not None:
                         raise InstanceConflict("gui_or_server_start_failed")
                     state = store.read()
                     if state and state["nonce"] == nonce:

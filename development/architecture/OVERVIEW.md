@@ -1,7 +1,7 @@
 # Cost Guard v80 architecture
 
-Source revision: 06520e102043dad097df82e05ca8a50478b051b0
-Checked revision: 06520e102043dad097df82e05ca8a50478b051b0
+Source revision: 1f2dee7603df95bbed6cb893126c65ed5a336799
+Checked revision: 1f2dee7603df95bbed6cb893126c65ed5a336799
 Last checked: 2026-10-26
 Status: current
 
@@ -36,7 +36,7 @@ flowchart TD
     diagnostics["Development Diagnostics: independent observations"] --> sources
 ```
 
-Arrows show calls/consumption, not a single linear execution pipeline. The optional `src/application/` owner serializes isolated report jobs for the optional Web adapter; CLI and Diagnostics do not import it. `src/web/` owns loopback HTTP/security/assets, finite report processes, private instance/restart locks and best-effort source-change stop. Native GUI adapters follow separately; CLI stays independent and Web never starts Watch. Bootstrap dispatches CLI one-shot reports or Watch directly; Watch reuses ReportService rather than receiving a completed one-shot report. Source normalization establishes evidence, not cost. Analysis consumes provider-neutral pricing contracts as well as domain values; the cache never replaces source authority. The recovery edge belongs to the coordinator, not the renderer. The compact map groups auxiliary account/model workers under their owning areas; see the module routes below for exact contracts.
+Arrows show calls/consumption, not a single linear execution pipeline. The optional `src/application/` owner serializes isolated report jobs for the optional Web adapter; CLI and Diagnostics do not import it. `src/web/` owns loopback HTTP/security/assets, finite report processes, private instance/restart locks and best-effort source-change stop. The Windows native tray stays in the Web process; macOS follows separately. CLI stays independent and Web never starts Watch. Bootstrap dispatches CLI one-shot reports or Watch directly; Watch reuses ReportService rather than receiving a completed one-shot report. Source normalization establishes evidence, not cost. Analysis consumes provider-neutral pricing contracts as well as domain values; the cache never replaces source authority. The recovery edge belongs to the coordinator, not the renderer. The compact map groups auxiliary account/model workers under their owning areas; see the module routes below for exact contracts.
 
 Owner/test routes (`modules/CODE_MAP.md`) and the module contracts below route history acquisition, provider integrations, launchers and failure/privacy facts; journal knowledge (`development/journal/INDEX.md`) routes historical performance evidence. These are source contracts/navigation, not measured current test coverage. Installed Toolkit owns development procedure. Account-period CCost stays inside existing analysis/report/Watch boundaries; the Reports and Watch contracts name the period index and regressions.
 
@@ -154,4 +154,4 @@ flowchart TD
 | PR / merge | Authorized delivery | Required Git safety; self-review not a gate | Installed `/repo-backlog` and actual GitHub default/protection/check state | No force/protection bypass; uncertain merge requires read-back, not replay |
 | Delivery / cleanup | Confirmed merge on fresh default | Required native receipt/owned cleanup | Installed native `repo_backlog` operations | Preserve recovery evidence; cleanup failure permits idempotent cleanup only |
 
-Architecture assessment and source/test sampling: `development/journal/architecture.md` (routed through journal INDEX). FR000310 adds shared private lifecycle ownership and fatal Web-thread handoff; native GUI proof follows in OS FRs. CLI/Watch acquisition is unchanged.
+Architecture assessment and source/test sampling: `development/journal/architecture.md` (routed through journal INDEX). Windows Beta now adds a same-process main-thread tray and asynchronous browser handoff within shared Web lifecycle ownership. Opt-in native Windows proof and remaining visual/macOS limits are routed through the Web module; CLI/Watch acquisition is unchanged.

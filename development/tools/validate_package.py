@@ -63,6 +63,7 @@ REQUIRED_FILES = {
     "src/windows_launcher.ps1",
     "windows/Cost Guard.cmd",
     "windows/Cost Guard Watch.cmd",
+    "windows/Beta/Cost Guard Web.cmd",
     "macos/Cost Guard.command",
     "macos/Cost Guard Watch.command",
     "src/cache/database.py",
@@ -71,7 +72,8 @@ REQUIRED_FILES = {
 
 # User-facing launcher folders hold only everyday modes; Diagnostics lives under development/.
 PUBLIC_LAUNCHERS = {
-    "windows": {"Cost Guard.cmd", "Cost Guard Watch.cmd"},
+    "windows": {"Cost Guard.cmd", "Cost Guard Watch.cmd", "Beta"},
+    "windows/Beta": {"Cost Guard Web.cmd"},
     "macos": {"Cost Guard.command", "Cost Guard Watch.command"},
 }
 
@@ -184,6 +186,8 @@ def check_lowercase_directories(root: Path, results: Results) -> None:
         if not path.is_dir():
             continue
         relative = path.relative_to(root)
+        if relative.as_posix() == "windows/Beta":
+            continue  # Explicit opt-in launcher boundary; no general casing exemption.
         if any(part in {".git", "__pycache__"} for part in relative.parts):
             continue
         for part in relative.parts:
