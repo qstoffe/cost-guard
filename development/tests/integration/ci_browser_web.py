@@ -1,7 +1,9 @@
 """Actual rendered Chromium against shipped HTTP/assets, synthetic report worker only."""
 from pathlib import Path
 import re
+import socket
 import sys
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
@@ -10,15 +12,25 @@ from development.tools.ci_web_beta import hosted_only, save
 from development.tests.fixtures.web_reports import finite_report
 from src.web.host import WebHost
 from src.web.jobs import ReportJobs
+from src.web.http import RequestHandler
 
 
 def main():
     hosted_only()
     evidence = dict(outcome="NOT RUN", checks=[], limitations=["Chromium headless only; no screen-reader, physical input or system-browser proof"])
     owner = None
+    streams = []
+    original_stream = RequestHandler.stream_events
+
+    def record_stream(handler):
+        streams.append(handler.connection)
+        return original_stream(handler)
+
+    stream_patch = patch.object(RequestHandler, "stream_events", record_stream)
     try:
         from playwright.sync_api import sync_playwright, expect
         owner = WebHost(ROOT, jobs=ReportJobs(target=finite_report))
+        stream_patch.start()
         owner.start()
         owner.publish_ready()
         with sync_playwright() as playwright:
@@ -59,7 +71,20 @@ def main():
                 expect(page.locator("#content")).to_be_focused()
                 assert page.locator("#refresh").is_visible()
                 evidence["checks"].append("narrow viewport and keyboard skip-to-content focus")
+                owner.events.publish("live", {"state": "CI synthetic Live observation"})
+                page.get_by_role("link", name="Live", exact=True).click()
+                expect(page.locator("#result")).to_contain_text("CI synthetic Live observation", timeout=15000)
+                page.go_back()
+                expect(page.locator("#result")).to_contain_text("<script>PRIVATE_TEXT</script>")
+                evidence["checks"].append("rendered Live state from actual synthetic SSE publication")
                 context.set_offline(True)
+                # Browser offline emulation does not necessarily drop an already
+                # open SSE TCP socket. Inject actual loss of our owned connection.
+                for connection in tuple(streams):
+                    try:
+                        connection.shutdown(socket.SHUT_RDWR)
+                    except OSError:
+                        pass
                 expect(page.locator("#status")).to_contain_text(re.compile("offline|reconnecting"), timeout=45000)
                 expect(page.locator("#result")).to_contain_text("<script>PRIVATE_TEXT</script>")
                 context.set_offline(False)
@@ -82,6 +107,7 @@ def main():
                                          for frame in traceback.extract_tb(error.__traceback__)]
         traceback.print_exc()
     finally:
+        stream_patch.stop()
         if owner:
             owner.close()
             assert owner.thread is None or not owner.thread.is_alive()

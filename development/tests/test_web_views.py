@@ -3,6 +3,7 @@
 Node is optional developer tooling, never a product or build dependency.
 """
 from dataclasses import replace
+from concurrent.futures import ThreadPoolExecutor
 import json
 from pathlib import Path
 import shutil
@@ -112,12 +113,22 @@ class WebViewTests(unittest.TestCase):
             source.snapshots["root-0001"] = replace(empty, messages=(), parts=(), events=(), invocations=())
 
             class Jobs:
-                results = {}
+                def __init__(self):
+                    self.results = {}
+                    self.work = ThreadPoolExecutor(max_workers=1)
+                    self.futures = []
 
                 def readiness(self):
                     return dict(http="ready", source="not_acquired", accounts="not_acquired", analysis="not_requested")
 
                 def submit(self, request):
+                    key = f"{len(self.results) + 1:032x}"
+                    self.results[key] = dict(id=key, status="running", result=None,
+                                            error=None, progress={"phase": "fixture"})
+                    self.futures.append(self.work.submit(self.execute, key, request))
+                    return key
+
+                def execute(self, key, request):
                     nonlocal now, source
                     now += 1000
                     result = application.execute(request).to_json()
@@ -125,10 +136,8 @@ class WebViewTests(unittest.TestCase):
                         # New events arrive after capture. Already-published result must stay frozen.
                         source.snapshots["root-0000"] = replace(make_root_snapshot(0, 152, month_start_ms=1000),
                             source_revision="inserted-after-snapshot")
-                    key = f"{len(self.results) + 1:032x}"
                     self.results[key] = dict(id=key, status="failed" if result["error"] else "complete",
                         result=result, error=None, progress={"phase": "finalizing"})
-                    return key
 
                 def snapshot(self, key):
                     return self.results.get(key)
@@ -155,6 +164,9 @@ class WebViewTests(unittest.TestCase):
                 stopped.set()
                 thread.join(3)
                 server.server_close()
+                jobs.work.shutdown(wait=True)
+                for future in jobs.futures:
+                    future.result()
                 self.assertFalse(thread.is_alive())
 
     def test_missing_and_empty_sessions_have_distinct_application_results(self):

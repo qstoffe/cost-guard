@@ -229,11 +229,19 @@ def main(argv: list[str] | None = None) -> int:
             failed = re.search(r"FAILED \(([^\n]+)\)", output)
             counts = dict(re.findall(r"(failures|errors|skipped|expected failures|unexpected successes)=(\d+)",
                                      failed.group(1) if failed else output.splitlines()[-1] if output else ""))
+            diagnostics = []
+            for line in output.splitlines():
+                if re.match(r"^[A-Za-z][A-Za-z0-9_.]*(?:Error|Exception|Conflict):", line):
+                    text = re.sub(r"https?://\S+", "<url>", line)
+                    text = re.sub(r"(?:[A-Za-z]:[\\/]|/(?:Users|home|private|var|tmp)/)[^\s'\"]+", "<path>", text)
+                    text = re.sub(r"[a-fA-F0-9]{32,}", "<opaque>", text)
+                    diagnostics.append(text[:400])
             files.append(dict(file=pattern, exit_code=code, seconds=round(duration, 2),
                 tests=int(count.group(1)) if count else None,
                 failures=int(counts.get("failures", 0)), errors=int(counts.get("errors", 0)),
                 skipped=int(counts.get("skipped", 0)), skips=[dict(test=t, reason=r) for t, r in skips],
                 failed_tests=re.findall(r"^(?:FAIL|ERROR): (.+)$", output, re.MULTILINE),
+                diagnostics=diagnostics[:4],
                 outcome="PASS" if code == 0 else "FAIL"))
         args.json_report.parent.mkdir(parents=True, exist_ok=True)
         args.json_report.write_text(json.dumps(dict(suite=suite_label, files=files), indent=2), encoding="utf-8")

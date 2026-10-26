@@ -91,7 +91,9 @@ def detached(root, home):
                 command(state["pid"], EXIT)
             else:
                 control(state, "stop")
-            until(lambda: store.read() is None)
+            # Do not hold read handles against Windows' delete-on-close cleanup.
+            until(lambda: process_identity(state["pid"]) != state["process"])
+            assert store.read() is None
             # Actual executable .command plumbing, but shim suppresses Finder/browser.
             if sys.platform == "darwin":
                 entry = root / "macos/Beta/Cost Guard Web.command"
@@ -107,8 +109,8 @@ def detached(root, home):
             state = store.read()
             assert state and control(state, "status")["ready"]
             (root / "src/ci_owned_change.py").write_text("# synthetic source change\n")
-            until(lambda: store.read() is None, seconds=20)
             until(lambda: process_identity(state["pid"]) != state["process"])
+            assert store.read() is None
     finally:
         current = store.read()
         if current:
@@ -158,7 +160,7 @@ def main():
         "Synthetic entry bypasses real source/provider acquisition and OS default-browser launch; not an end-to-end consumer launcher proof"])
     try:
         with tempfile.TemporaryDirectory(prefix="cg-ci-native-") as temporary:
-            base = Path(temporary)
+            base = Path(temporary).resolve()
             root = base / "Source space å 日本語"
             root.mkdir()
             for name in ("src", "macos", "windows", "config"):
@@ -172,7 +174,12 @@ def main():
             elif sys.platform == "darwin":
                 from development.tests.integration.probe_macos_web import probe
                 evidence["checks"]["adapter"] = probe(root, ReportJobs)
-                evidence["checks"]["http_fault"] = macos_fault(root)
+                # NSApplication is process-global; a second adapter in the same
+                # process is not a fresh native launch. Exercise fault separately.
+                result = subprocess.run([sys.executable, str(Path(__file__).resolve()), "--http-fault", str(root)],
+                                        cwd=ROOT, timeout=30, check=False)
+                assert result.returncode == 0
+                evidence["checks"]["http_fault"] = {"outcome": "PASS", "checks": ["fresh-process AppKit cleanup on HTTP fault"]}
                 evidence["checks"]["osacompile"] = macos_cache(root, home)
             else:
                 raise RuntimeError("unsupported_native_platform")
@@ -191,4 +198,8 @@ def main():
 
 
 if __name__ == "__main__":
+    if len(sys.argv) == 3 and sys.argv[1] == "--http-fault":
+        hosted_only()
+        macos_fault(Path(sys.argv[2]))
+        raise SystemExit(0)
     raise SystemExit(main())

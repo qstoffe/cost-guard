@@ -35,7 +35,7 @@ class LifecycleTests(unittest.TestCase):
         self.addCleanup(acquisition.stop)
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
-        self.base = Path(self.temporary.name)
+        self.base = Path(self.temporary.name).resolve()
         self.root = self.base / "checkout space å"
         (self.root / "src/web/assets").mkdir(parents=True)
         self.source = self.root / "src/code.py"

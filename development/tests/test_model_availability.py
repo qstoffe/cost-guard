@@ -104,7 +104,15 @@ class V2ModelAvailabilityTests(unittest.TestCase):
         with source_with_service(payload) as (source, server, _):
             self.assertTrue(source.probe().healthy)
             availability = _model_availability_source(SimpleNamespace(source=source))
-            with patch.object(OpenCodeModelAvailabilitySource, "available_model_ids",
+            clock = [0.0]
+
+            def settle(fetch):
+                def sleep(seconds):
+                    clock[0] += seconds
+                return settled_v2_model_ids(fetch, clock=lambda: clock[0], sleep=sleep)
+
+            with patch("src.sources.opencode_v2.settled_v2_model_ids", side_effect=settle), \
+                    patch.object(OpenCodeModelAvailabilitySource, "available_model_ids",
                               side_effect=AssertionError("CLI must not run")) as cli:
                 selected, warnings = selectable_catalog(
                     FakePricingProvider().catalog, availability_source=availability)

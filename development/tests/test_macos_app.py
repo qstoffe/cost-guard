@@ -20,7 +20,14 @@ class MacAppTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
-        self.base = Path(self.temporary.name)
+        self.base = Path(self.temporary.name).resolve()
+        # Fingerprint metadata is synthetic here. Python 3.11 may implement OS
+        # discovery via subprocess.run, which these compiler tests replace.
+        for name, value in (("mac_ver", ("test-macos", ("", "", ""), "")),
+                            ("release", "test-kernel"), ("machine", "test-arch")):
+            metadata = patch.object(macos_app.platform, name, return_value=value)
+            metadata.start()
+            self.addCleanup(metadata.stop)
         self.root = self.base / "clone space ü ' quote"
         self.root.mkdir()
         for name in macos_app.SOURCES:

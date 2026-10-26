@@ -69,8 +69,14 @@ def main():
             files = json.loads(report.read_text())["files"]
             totals = {key: sum(row.get(key) or 0 for row in files) for key in ("tests", "failures", "errors", "skipped")}
             notice("suite", dict(files=len(files), totals=totals,
-                failed_files=[dict(file=row["file"], tests=row["failed_tests"], exit_code=row["exit_code"]) for row in files if row["exit_code"]],
-                skips=[dict(file=row["file"], **skip) for row in files for skip in row["skips"]]))
+                failed_files=[row["file"] for row in files if row["exit_code"]]))
+            for row in files:
+                if row["exit_code"]:
+                    notice("failure " + row["file"], dict(exit_code=row["exit_code"], diagnostics=row["diagnostics"]))
+                    for test in row["failed_tests"]:
+                        notice("failed test", dict(file=row["file"], test=test))
+                for skip in row["skips"]:
+                    notice("skip", dict(file=row["file"], **skip))
             lines.append(f"- Full suite: {len(files)} files; {totals}. Named skips in full.json.")
         text = "\n".join(lines) + "\n"
         print(text)
@@ -83,8 +89,12 @@ def main():
         if phase == "regression":
             suite = run([sys.executable, "development/tools/run_tests.py", "--suite", "full",
                          "--json-report", "ci-results/full.json"], 900)
-            validator = run([sys.executable, "development/tools/validate_package.py", "--working-tree"], 180)
-            value = dict(outcome="FAIL" if suite or validator else "PASS", suite_exit=suite, validator_exit=validator)
+            validation = subprocess.run([sys.executable, "development/tools/validate_package.py", "--working-tree"],
+                cwd=ROOT, timeout=180, capture_output=True, text=True, encoding="utf-8")
+            print(validation.stdout)
+            validator = validation.returncode
+            value = dict(outcome="FAIL" if suite or validator else "PASS", suite_exit=suite, validator_exit=validator,
+                         validator_failures=[line[:512] for line in validation.stdout.splitlines() if line.startswith("FAIL  ")][:8])
         elif phase in {"native", "browser"}:
             target = "ci_native_web.py" if phase == "native" else "ci_browser_web.py"
             code = run([sys.executable, "development/tests/integration/" + target], 180)
