@@ -10,6 +10,12 @@ def start():
 
 
 def run():
+    if sys.argv[1:2] == ["--managed"]:
+        # Managed diagnostics are bounded/allowlisted in private app data, not checkout.
+        try:
+            return start()
+        except Exception:
+            return 1
     from src.runtime_errors import RuntimeErrors
     return RuntimeErrors(Path(__file__).resolve().parent, mode="Web Beta").run(start)
 

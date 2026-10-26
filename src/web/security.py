@@ -14,8 +14,11 @@ class BrowserSession:
         self._csrf = None
         self._until = 0
 
-    def bootstrap(self):
+    def bootstrap(self, *, renew=False):
         with self._lock:
+            if renew:
+                self._bootstrap = secrets.token_urlsafe(32)
+                self._bootstrap_until = time.monotonic() + 120
             return self._bootstrap
 
     def exchange(self, token):
@@ -25,8 +28,9 @@ class BrowserSession:
                     or not secrets.compare_digest(token, self._bootstrap)):
                 return None
             self._bootstrap = None
-            self._session = secrets.token_urlsafe(32)
-            self._csrf = secrets.token_urlsafe(32)
+            if self._session is None or time.monotonic() >= self._until:
+                self._session = secrets.token_urlsafe(32)
+                self._csrf = secrets.token_urlsafe(32)
             self._until = time.monotonic() + 8 * 60 * 60
             return self._session, self._csrf
 

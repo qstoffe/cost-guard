@@ -4,8 +4,10 @@ from __future__ import annotations
 from collections import OrderedDict
 import json
 import multiprocessing
+from multiprocessing.connection import wait
+import os
 import re
-from threading import RLock
+from threading import Event, RLock, Thread
 import time
 from uuid import uuid4
 
@@ -54,6 +56,34 @@ def run_report(sender, request):
         sender.send(("error", "report_unavailable"))
     finally:
         sender.close()
+
+
+def run_owned_report(target, sender, request):
+    """Even a crashed/force-stopped Web parent must not orphan a blocked report.
+
+    multiprocessing's exact parent sentinel is a kernel handle/pipe, not a PID
+    lookup. This safety thread owns no analysis and exits this child only.
+    """
+    parent = multiprocessing.parent_process()
+    if parent is None:
+        raise RuntimeError("report_parent_unavailable")
+    finished = Event()
+
+    def watch_parent():
+        try:
+            while not finished.is_set():
+                if wait([parent.sentinel], timeout=0.25):
+                    os._exit(1)  # Parent is gone: never continue orphaned acquisition.
+        except BaseException:
+            os._exit(1)  # Lost ownership proof cannot mean keep running.
+
+    monitor = Thread(target=watch_parent, name="cost-guard-report-parent", daemon=True)
+    monitor.start()
+    try:
+        target(sender, request)
+    finally:
+        finished.set()
+        monitor.join(timeout=1)
 
 
 class ReportJobs:
@@ -170,7 +200,8 @@ class ReportJobs:
                     if job["status"] != "queued":
                         continue
                     receiver, sender = self._context.Pipe(duplex=False)
-                    process = self._context.Process(target=self._target, args=(sender, job["request"]),
+                    process = self._context.Process(target=run_owned_report,
+                                                    args=(self._target, sender, job["request"]),
                                                     name="cost-guard-report", daemon=True)
                     try:
                         process.start()

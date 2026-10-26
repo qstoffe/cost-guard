@@ -37,7 +37,7 @@ Install **Python 3.11+**; standard supported OpenCode installations need no conf
 
 ### Optional foreground Web Beta
 
-Run `python cost-guard-web.py`; open its private one-use link within 120 seconds. No extra packages or auto-browser. Ctrl+C stops Web. CLI stays independent. See [Beta security, limits and API](docs/web-beta.md).
+Run `python cost-guard-web.py --foreground`; open its private one-use link within 120 seconds. Ctrl+C or runtime-source changes stop Web. No extra packages or auto-browser; CLI stays independent. Native launchers/icons follow separately. See [Beta lifecycle and API](docs/web-beta.md).
 
 ### Windows
 
@@ -364,7 +364,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.81 (2026-10-26):** Optional secure loopback Web Beta with authenticated, cancellable report jobs. No new packages or background launcher; CLI remains independent.
+**v80.82 (2026-10-26):** Restart-safe shared Web lifecycle, private instance control and best-effort runtime-change shutdown. Native OS launchers/icons follow separately; CLI remains independent.
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 
