@@ -11,12 +11,12 @@
     "id": "shared-repository-maintenance",
     "version": 1
   },
-  "lastDeliveredRevision": "07c14d21fcbc32ab5b194a5afc85c8cb4ae25cbd",
+  "lastDeliveredRevision": "ee628f64dce0244c4b8fe33f0b0d54e4e7e492b8",
   "lastItem": {
-    "id": "performance/20",
-    "kind": "performance"
+    "id": "feature-discovery/20",
+    "kind": "feature-discovery"
   },
   "featureDiscovery": {
-    "completed": 10
+    "completed": 20
   }
 }
