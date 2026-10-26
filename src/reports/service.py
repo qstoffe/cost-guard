@@ -552,6 +552,15 @@ class ReportService:
             self._availability = None
             self.close_accounts()
 
+    def report_source_revisions(self) -> tuple[tuple[str, str], ...]:
+        """Per-root evidence, not a claim of one cross-root/provider transaction."""
+        return tuple(sorted(self._acquisition.revisions.items()))
+
+    def report_request_identities(self) -> tuple[tuple[str, str | None, str | None, str | None], ...]:
+        """Canonical request references for retained report detail, never raw payloads."""
+        return tuple((entry.session_id, entry.parent_event_id, entry.message_id, entry.step_part_id)
+                     for item in self._analyzed.values() for entry in item.bundle.trace_entries)
+
     def _build(self, request: ReportRequest) -> ReportProjection:
         catalog = self._load_catalog()
         self.progress(WorkProgress("Listing OpenCode sessions", "catalog"))

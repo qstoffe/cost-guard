@@ -24,6 +24,8 @@ class RootAcquisition:
         self.metrics = metrics
         self.analyzed: dict[str, AnalyzedRoot] = {}
         self.analyzed_at_ms: dict[str, int] = {}
+        # Retain revision evidence even when a deep scan releases hydrated roots.
+        self.revisions: dict[str, str] = {}
 
     def analyze(self, root: NormalizedSession, *, now_ms: int, detail: bool = False, force_fresh: bool = False,
                 snapshot: SessionSnapshot | None = None, report_progress: bool = True) -> AnalyzedRoot:
@@ -48,6 +50,7 @@ class RootAcquisition:
                     result = analyze_with_cache(self.source, root, self.cache, self.dependencies(), self.analyzer, snapshot=snapshot)
             analyzed = AnalyzedRoot(root, result.bundle, result.cache_hit, snapshot)
         self.analyzed[root.session_id] = analyzed
+        self.revisions[root.session_id] = analyzed.bundle.source_revision
         self.analyzed_at_ms[root.session_id] = now_ms
         return analyzed
 
@@ -67,6 +70,7 @@ class RootAcquisition:
                 if bundle is not None:
                     existing = AnalyzedRoot(root, bundle, True)
                     self.analyzed[root.session_id] = existing
+                    self.revisions[root.session_id] = bundle.source_revision
             if root.session_id in force or existing is None or (detail and existing.snapshot is None):
                 pending.append(root)
         if not pending:
