@@ -1,6 +1,6 @@
 # FR 000450 — Completed
 
-Implemented in v80.94 (2026-10-27). Candidate implementation: [d6dec5c](https://github.com/qstoffe/cost-guard/commit/d6dec5ce2559ca4872f21e548791e7bf18ec1ad2). Original FR bytes are preserved; no selected attachments were added or modified.
+Implemented in v80.94 (2026-10-27), delivered through [PR #78](https://github.com/qstoffe/cost-guard/pull/78). Candidate implementation: [d6dec5c](https://github.com/qstoffe/cost-guard/commit/d6dec5ce2559ca4872f21e548791e7bf18ec1ad2). Original FR bytes are preserved; no selected attachments were added or modified.
 
 ## Outcome and decisions
 
