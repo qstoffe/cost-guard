@@ -37,7 +37,7 @@ Install **Python 3.11+**; standard supported OpenCode installations need no conf
 
 ### Optional Web Beta
 
-Windows: `windows/Beta/Cost Guard Web.cmd`; experimental macOS: `macos/Beta/Cost Guard Web.command` (native proof pending). Global Live shares engine-start totals. Overview/Sessions/details stay frozen until Refresh. No packages; independent CLI. [Beta guide](docs/web-beta.md). Foreground: `python cost-guard-web.py --foreground`.
+Windows: `windows/Beta/Cost Guard Web.cmd`; experimental macOS: `macos/Beta/Cost Guard Web.command` (unverified). Session Snapshot/Live provides complete paged history. No packages; independent CLI. [Beta guide](docs/web-beta.md). Foreground: `python cost-guard-web.py --foreground`.
 
 ### Windows
 
@@ -364,7 +364,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.86 (2026-10-26):** Shared global Live with bounded authenticated SSE/replay/resync. Live session detail, remaining views and native macOS proof remain pending.
+**v80.87 (2026-10-26):** Complete session Snapshot/Live detail, revision-aware history pages and stable row identities over shared report metrics. Remaining dedicated views and native macOS proof remain pending.
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

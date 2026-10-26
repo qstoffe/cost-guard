@@ -181,5 +181,16 @@ const ReportView = (() => {
         q => [q.label, `${known(q.used)} ${q.unit}`, q.unlimited ? 'Unlimited' : known(q.limit), known(q.remaining), q.reset_at_ms == null ? 'Unknown' : new Date(q.reset_at_ms).toLocaleString(), q.status], null, state, 'live-account-' + obs.id);
     }
   }
-  return {render, renderLive, element};
+  function detailCells(row) {
+    const label = promptLabel(row);
+    if (row.retained) label.append(element('span', `Last observed ${new Date(row.last_observed_at_ms).toLocaleString()}; source history omitted this row`, 'detail'));
+    return [label, ccost(row.ccost, row.unresolved_cost, row.cost_estimated), known(row.calls),
+      duration(row.duration_ms), known(row.incoming_context_tokens), ccost(row.incoming_context_ccost),
+      ccost(row.extra_ccost), row.token_mix_percent?.join('/') || 'Unknown'];
+  }
+  function detailTotals(block) {
+    return ['Complete session', ccost(block.total_ccost, !block.comparison_cost_complete), known(block.total_calls),
+      duration(block.duration_ms), '—', known(block.total_ictx_cost_text), known(block.total_extra_cost_text), known(block.total_mix_text)];
+  }
+  return {render, renderLive, element, detailCells, detailTotals};
 })();

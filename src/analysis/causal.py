@@ -15,6 +15,7 @@ from src.domain import (
 from .billing import CostEstimator, ProviderScope, measure_prompt_billing, provider_matches
 from .models import PromptRecord, PromptReference, TraceEntry
 from .duration import prompt_duration
+from .prompt_index import PromptIndex
 
 TRACKED_PROVIDER_DEFAULT = "github-copilot"
 TOOL_CALLS_CONTINUATION_GRACE_MS = 60_000
@@ -106,16 +107,21 @@ class _RootTimeline:
     visible_events: tuple[NormalizedEvent, ...]
     compacting: NormalizedEvent | None
     messages: Mapping[str, NormalizedMessage]
+    index: PromptIndex
 
 
 def _root_timeline(
-    snapshot: SessionSnapshot, subscription_providers: frozenset[str] = frozenset()
+    snapshot: SessionSnapshot, subscription_providers: frozenset[str] = frozenset(),
+    tracked_provider: ProviderScope = TRACKED_PROVIDER_DEFAULT,
 ) -> _RootTimeline:
+    entries = trace_entries(snapshot, subscription_providers=subscription_providers)
+    visible = tuple(_visible_prompt_events(snapshot))
     return _RootTimeline(
-        entries=trace_entries(snapshot, subscription_providers=subscription_providers),
-        visible_events=tuple(_visible_prompt_events(snapshot)),
+        entries=entries,
+        visible_events=visible,
         compacting=active_compaction_event(snapshot),
         messages={message.message_id: message for message in snapshot.messages},
+        index=PromptIndex(snapshot, entries, visible, tracked_provider),
     )
 
 
@@ -139,15 +145,9 @@ def prompt_references(
         if event.created_at_ms < since_ms:
             continue
         message = messages.get(event.event_id)
-        assistant_messages = [
-            item for item in snapshot.messages
-            if item.session_id == snapshot.root.session_id
-            and item.role is MessageRole.ASSISTANT
-            and item.parent_message_id == event.event_id
-        ]
+        assistant_messages = timeline.index.assistants.get(event.event_id, ())
         latest_visible = event is visible_events[-1]
-        window = prompt_parent_ids(snapshot, event.event_id, event.created_at_ms,
-                                   subtask=event.kind is EventKind.SUBTASK, visible_events=visible_events)
+        window = timeline.index.windows[event.event_id]
         has_error_or_live = (
             any(item.termination or item.error_name or item.completed_at_ms is None for item in assistant_messages)
             or bool(snapshot.root.active is True and latest_visible)
@@ -195,8 +195,7 @@ def prompt_parent_ids(
 
 
 def _synthetic_parent_ids(snapshot: SessionSnapshot, ref: PromptReference, timeline: _RootTimeline) -> set[str]:
-    return prompt_parent_ids(snapshot, ref.prompt_id, ref.prompt_time_ms, subtask=ref.prompt_kind == "subtask",
-                             visible_events=timeline.visible_events)
+    return timeline.index.windows.get(ref.prompt_id, {ref.prompt_id})
 
 
 def _outstanding_background(
@@ -484,21 +483,18 @@ def build_prompt_record(
 ) -> PromptRecord | None:
     """``timeline`` must derive from the same snapshot and subscription providers."""
     now_ms = int(time.time() * 1000) if now_ms is None else now_ms
-    timeline = timeline or _root_timeline(snapshot, subscription_providers)
+    timeline = timeline or _root_timeline(snapshot, subscription_providers, tracked_provider)
     parent_ids = _synthetic_parent_ids(snapshot, ref, timeline)
-    assistant_messages = [
-        message for message in snapshot.messages
-        if message.session_id == ref.session_id
-        and message.role is MessageRole.ASSISTANT
-        and message.parent_message_id in parent_ids
-    ]
+    assistant_messages = sorted((message for parent in parent_ids
+        for message in timeline.index.assistants.get(parent, ())),
+        key=lambda message: timeline.index.message_order[message.message_id])
     # Earlier failed attempts remain in the same prompt's history. Only the
     # terminal assistant outcome determines whether the logical prompt aborted.
     latest = _latest_assistant(assistant_messages)
     evidence = latest.termination if latest else None
     explicitly_aborted = bool(evidence.outcome is TerminalOutcome.CANCELLATION if evidence
                               else latest and _is_aborted_message(latest))
-    superseded = any(event.created_at_ms > ref.prompt_time_ms for event in timeline.visible_events)
+    superseded = bool(timeline.visible_events and timeline.visible_events[-1].created_at_ms > ref.prompt_time_ms)
     compacting = timeline.compacting
     superseded = superseded or bool(compacting and compacting.created_at_ms > ref.prompt_time_ms)
     foreground_work = _prompt_has_active_work(
@@ -525,24 +521,13 @@ def build_prompt_record(
                                     and latest and latest.finish_reason == "tool-calls"),
     )
 
-    all_entries = [
-        entry for entry in timeline.entries
-        if entry.session_id == ref.session_id and provider_matches(entry.model.provider, tracked_provider)
-    ]
     root_entries = sorted(
-        (entry for entry in all_entries if entry.parent_event_id in parent_ids),
+        (entry for parent in parent_ids for entry in timeline.index.entries.get(parent, ())),
         key=lambda entry: (entry.completed_at_ms, entry.sort_order),
     )
-    prompt_message = next((message for message in snapshot.messages if message.message_id == ref.prompt_id), None)
+    prompt_message = timeline.messages.get(ref.prompt_id)
     prompt_context_approx = _message_approx_context_tokens(prompt_message) or math.ceil(len(ref.prompt_text) / 4)
-    previous_before_prompt = None
-    for entry in all_entries:
-        if entry.request_input_approx <= 0:
-            continue
-        if entry.completed_at_ms <= ref.prompt_time_ms:
-            previous_before_prompt = entry
-        else:
-            break
+    previous_before_prompt = timeline.index.before_prompt(ref.prompt_time_ms)
 
     zero_usage_abort = bool(root_entries) and not in_progress and ref.prompt_kind != "subtask" and not any(
         entry.tokens.total > 0 or entry.reported_cost > 0 for entry in root_entries
@@ -596,14 +581,7 @@ def build_prompt_record(
         )
 
     first, last = root_entries[0], root_entries[-1]
-    previous = None
-    for entry in all_entries:
-        if entry.request_input_approx <= 0:
-            continue
-        if (entry.completed_at_ms, entry.sort_order) < (first.completed_at_ms, first.sort_order):
-            previous = entry
-        else:
-            break
+    previous = timeline.index.before_entry(first)
 
     prompt_start = ref.prompt_time_ms
     prompt_end = last.completed_at_ms
@@ -674,7 +652,7 @@ def build_prompt_records(
     now_ms: int | None = None,
     subscription_providers: frozenset[str] = frozenset(),
 ) -> tuple[PromptRecord, ...]:
-    timeline = _root_timeline(snapshot, subscription_providers)
+    timeline = _root_timeline(snapshot, subscription_providers, tracked_provider)
     records = [
         record
         for ref in prompt_references(snapshot, since_ms=since_ms, timeline=timeline)

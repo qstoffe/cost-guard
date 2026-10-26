@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.87 — 2026-10-26
+
+- Session details explicitly switch between frozen Snapshot and persistent Live, sharing the established eight-column report semantics, provisional running metrics, child costs and whole-session totals. Revision-aware 50-row pages expose all observed history without Watch's row cap; idle and abort do not end Live. Source omissions retain last-observed evidence without a durable ledger; missing/archive/outage states retain readable results.
+- Canonical DOM row identities, anchored paging, follow-latest and explicit Jump to latest preserve browsing and text selection. Shared session subscriptions reuse the existing acquisition/account owner; timer-only ticks do not reload or revalue history. Snapshot-local causal indexes remove repeated full-history scans. Remaining dedicated Web views and native macOS acceptance remain pending.
+
 ## v80.86 — 2026-10-26
 
 - Web Beta Live now shares one host-lifetime Watch acquisition/account owner across tabs, with canonical retained prompts, lifecycle/tool/skill/context evidence, Today and engine-start run totals. CLI remains independent. Finite reports retain isolated bounded workers and cannot monopolize live/control scheduling.
