@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "epochRevision": "df44c06a97244278abd8d0dc9ed90ea12c368e47",
-  "ordinaryCount": 9,
+  "ordinaryCount": 10,
   "completed": {
     "architecture": 0,
     "test-health": 5,
@@ -11,9 +11,9 @@
     "id": "shared-repository-maintenance",
     "version": 1
   },
-  "lastDeliveredRevision": "0ffa690670b20b1fd7eec72a7afe10ac6ef42468",
+  "lastDeliveredRevision": "2ab885270c867c15de456b494ca1b0a0651534df",
   "lastItem": {
-    "id": "fr/000190-unaccounted-copilot-usage.md",
+    "id": "fr/000200-static-session-snapshot-running-metrics.md",
     "kind": "ordinary"
   },
   "featureDiscovery": {
