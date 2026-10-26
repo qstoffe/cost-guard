@@ -45,10 +45,21 @@ def main():
     if arguments == ["--launch-windows"]:
         from .windows_launch import launch_windows
         return launch_windows(Path(__file__).resolve().parents[2])
+    if arguments == ["--launch-macos"]:
+        from .macos_launch import launch_macos
+        return launch_macos(Path(__file__).resolve().parents[2])
+    if arguments == ["--preflight-macos"]:
+        from .native_macos import preflight
+        try:
+            preflight()
+            return 0
+        except Exception:
+            return 3
     if arguments == ["--help"]:
         print("Usage: python cost-guard-web.py --foreground\n"
               "Developer loopback Web Beta. Ctrl+C or runtime changes stop owned work.\n"
               "Windows: windows/Beta/Cost Guard Web.cmd for detached tray mode.\n"
+              "macOS: macos/Beta/Cost Guard Web.command (native validation pending).\n"
               "No browser opens in --foreground developer mode.")
         return 0
     is_managed = (len(arguments) == 3 and arguments[0] == "--managed"

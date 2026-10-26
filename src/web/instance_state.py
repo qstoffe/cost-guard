@@ -167,7 +167,8 @@ class InstanceStore:
         if code not in {"starting", "ready", "stopped", "source_changed",
                         "source_check_unavailable", "runtime_fault", "gui_unavailable",
                         "tray_unavailable", "instance_start_timeout", "browser_open_failed",
-                        "configuration_unavailable", "instance_conflict", "gui_or_server_start_failed"}:
+                        "configuration_unavailable", "instance_conflict", "gui_or_server_start_failed",
+                        "app_preparation_failed"}:
             code = "runtime_fault"
         path = self.directory / "lifecycle.log"
         if path.exists():
