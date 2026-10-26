@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import contextlib
+import errno
 import http.client
 import io
 import json
@@ -82,11 +83,32 @@ class WebRuntimeTests(unittest.TestCase):
     def raw(self, data):
         with socket.create_connection(("127.0.0.1", self.server.server_port), timeout=8) as conn:
             conn.sendall(data)
-            conn.shutdown(socket.SHUT_WR)
+            try:
+                conn.shutdown(socket.SHUT_WR)
+            except OSError as error:
+                # Darwin can finish the peer's rejection before our half-close.
+                # Still read/assert actual response bytes; other errors must fail.
+                if error.errno != errno.ENOTCONN:
+                    raise
             parts = []
             while chunk := conn.recv(65536):
                 parts.append(chunk)
             return b"".join(parts)
+
+    def test_raw_peer_close_race_keeps_response_and_does_not_hide_other_errors(self):
+        connection = Mock()
+        connection.shutdown.side_effect = OSError(errno.ENOTCONN, 'peer already closed')
+        connection.recv.side_effect = [b'HTTP/1.1 403 Forbidden\r\n\r\n', b'']
+        with patch.object(socket, 'create_connection') as create:
+            create.return_value.__enter__.return_value = connection
+            response = self.raw(b'GET /health HTTP/1.1\r\nHost: wrong\r\n\r\n')
+        self.assertEqual(b'HTTP/1.1 403 Forbidden\r\n\r\n', response)
+        connection.shutdown.side_effect = OSError(errno.EPERM, 'unexpected failure')
+        with patch.object(socket, 'create_connection') as create:
+            create.return_value.__enter__.return_value = connection
+            with self.assertRaises(OSError) as caught:
+                self.raw(b'request')
+        self.assertEqual(errno.EPERM, caught.exception.errno)
 
     def wait_job(self, key):
         until = time.monotonic() + 10
