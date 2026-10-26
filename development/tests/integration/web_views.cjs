@@ -25,7 +25,7 @@ async function until(condition) {
 async function main() {
   const input = JSON.parse(fs.readFileSync(0, 'utf8'));
   const ids = Object.fromEntries(['status', 'result', 'notice', 'refresh', 'cancel', 'heading', 'skip', 'content', 'scope-controls', 'search'].map(id => [id, new Node('div')]));
-  const nav = ['overview', 'sessions', 'live', 'models', 'accounts', 'reports', 'token-mix'].map(key => {
+  const nav = ['overview', 'sessions', 'watch', 'models', 'accounts', 'reports', 'token-mix'].map(key => {
     const node = new Node('a'); node.setAttribute('href', '#/' + key); return node;
   });
   const handlers = {};
@@ -115,8 +115,15 @@ async function main() {
   await until(() => ids.notice.textContent.includes('Snapshot captured'));
   assert.match(ids.result.textContent, /exists but has no prompt rows/);
   navigate('live');
+  assert.equal(location.hash, '#/watch', 'legacy global Live is replaced, not pushed');
+  assert.equal(ids.heading.textContent, 'Watch');
+  assert.equal(nav.find(node => node.getAttribute('href') === '#/watch').attrs['aria-current'], 'page');
   assert.match(ids.notice.textContent, /Live acquisition/);
   assert.equal(ids.refresh.disabled, true);
+  navigate('watch');
+  assert.equal(ids.heading.textContent, 'Watch');
+  assert.match(vm.runInContext("ReportRoutes.resolve('#/sessions/root-0000/live').title", context), /Session root-0000/);
+  assert.equal(vm.runInContext("ReportRoutes.resolve('#/sessions/root-0000/live').section", context), 'sessions');
   navigate('overview');
   const overviewTime = ids.result.textContent.match(/Snapshot: ([^·]+)/)[1];
   const beforePresentation = requests;
@@ -223,6 +230,18 @@ async function main() {
   await until(() => ids.notice.textContent.includes('Snapshot captured'));
   assert.equal(location.hash, '#/sessions/root-0000');
   assert.match(ids.heading.textContent, /Session root-0000/);
+  // Legacy deep-link reload canonicalizes once. Back/Forward revisit the same entry.
+  location.hash = '#/live';
+  const watchReload = vm.createContext({document: context.document, window: context.window, location, history,
+    URLSearchParams, fetch: wire, setTimeout, Date, console});
+  for (const script of ['/render.js', '/reports.js', '/app.js']) {
+    vm.runInContext(await (await fetch(input.origin + script)).text(), watchReload);
+  }
+  await until(() => ids.heading.textContent === 'Watch');
+  assert.equal(location.hash, '#/watch');
+  navigate('models');
+  navigate('watch');
+  assert.equal(ids.heading.textContent, 'Watch');
   offline = true;
   ids.result.textContent = 'Starting Cost Guard';
   const unavailable = vm.createContext({document: context.document, window: context.window, location, history,

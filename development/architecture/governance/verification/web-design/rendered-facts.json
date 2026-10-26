@@ -1,0 +1,622 @@
+[
+  {
+    "view": "overview",
+    "theme": "light",
+    "facts": {
+      "tableParity": true,
+      "facts": [
+        {
+          "width": 1425,
+          "scrollWidth": 1425,
+          "tables": 2,
+          "rows": 3,
+          "focusVisible": true,
+          "reducedMotion": true,
+          "transition": "0s",
+          "stickyHeading": "sticky",
+          "background": "#f5f7fa"
+        },
+        {
+          "width": 1425,
+          "scrollWidth": 1425,
+          "tables": 2,
+          "rows": 3,
+          "focusVisible": true,
+          "reducedMotion": true,
+          "transition": "0s",
+          "stickyHeading": "sticky",
+          "background": "#eef2f8"
+        }
+      ]
+    }
+  },
+  {
+    "view": "overview",
+    "theme": "dark",
+    "facts": {
+      "tableParity": true,
+      "facts": [
+        {
+          "width": 1425,
+          "scrollWidth": 1425,
+          "tables": 2,
+          "rows": 3,
+          "focusVisible": true,
+          "reducedMotion": true,
+          "transition": "0s",
+          "stickyHeading": "sticky",
+          "background": "#111923"
+        },
+        {
+          "width": 1425,
+          "scrollWidth": 1425,
+          "tables": 2,
+          "rows": 3,
+          "focusVisible": true,
+          "reducedMotion": true,
+          "transition": "0s",
+          "stickyHeading": "sticky",
+          "background": "#0c1422"
+        }
+      ]
+    }
+  },
+  {
+    "view": "overview",
+    "theme": "light",
+    "facts": {
+      "tableParity": true,
+      "facts": [
+        {
+          "width": 345,
+          "scrollWidth": 345,
+          "tables": 2,
+          "rows": 3,
+          "focusVisible": true,
+          "reducedMotion": true,
+          "transition": "0s",
+          "stickyHeading": "sticky",
+          "background": "#f5f7fa"
+        },
+        {
+          "width": 345,
+          "scrollWidth": 345,
+          "tables": 2,
+          "rows": 3,
+          "focusVisible": true,
+          "reducedMotion": true,
+          "transition": "0s",
+          "stickyHeading": "sticky",
+          "background": "#eef2f8"
+        }
+      ]
+    }
+  },
+  {
+    "view": "overview",
+    "theme": "dark",
+    "facts": {
+      "tableParity": true,
+      "facts": [
+        {
+          "width": 345,
+          "scrollWidth": 345,
+          "tables": 2,
+          "rows": 3,
+          "focusVisible": true,
+          "reducedMotion": true,
+          "transition": "0s",
+          "stickyHeading": "sticky",
+          "background": "#111923"
+        },
+        {
+          "width": 345,
+          "scrollWidth": 345,
+          "tables": 2,
+          "rows": 3,
+          "focusVisible": true,
+          "reducedMotion": true,
+          "transition": "0s",
+          "stickyHeading": "sticky",
+          "background": "#0c1422"
+        }
+      ]
+    }
+  },
+  {
+    "view": "watch",
+    "theme": "light",
+    "facts": {
+      "tableParity": true,
+      "facts": [
+        {
+          "width": 1425,
+          "scrollWidth": 1425,
+          "tables": 2,
+          "rows": 2,
+          "focusVisible": true,
+          "reducedMotion": true,
+          "transition": "0s",
+          "stickyHeading": "sticky",
+          "background": "#f5f7fa"
+        },
+        {
+          "width": 1425,
+          "scrollWidth": 1425,
+          "tables": 2,
+          "rows": 2,
+          "focusVisible": true,
+          "reducedMotion": true,
+          "transition": "0s",
+          "stickyHeading": "sticky",
+          "background": "#eef2f8"
+        }
+      ]
+    }
+  },
+  {
+    "view": "watch",
+    "theme": "dark",
+    "facts": {
+      "tableParity": true,
+      "facts": [
+        {
+          "width": 1425,
+          "scrollWidth": 1425,
+          "tables": 2,
+          "rows": 2,
+          "focusVisible": true,
+          "reducedMotion": true,
+          "transition": "0s",
+          "stickyHeading": "sticky",
+          "background": "#111923"
+        },
+        {
+          "width": 1425,
+          "scrollWidth": 1425,
+          "tables": 2,
+          "rows": 2,
+          "focusVisible": true,
+          "reducedMotion": true,
+          "transition": "0s",
+          "stickyHeading": "sticky",
+          "background": "#0c1422"
+        }
+      ]
+    }
+  },
+  {
+    "view": "watch",
+    "theme": "light",
+    "facts": {
+      "tableParity": true,
+      "facts": [
+        {
+          "width": 345,
+          "scrollWidth": 345,
+          "tables": 2,
+          "rows": 2,
+          "focusVisible": true,
+          "reducedMotion": true,
+          "transition": "0s",
+          "stickyHeading": "sticky",
+          "background": "#f5f7fa"
+        },
+        {
+          "width": 345,
+          "scrollWidth": 345,
+          "tables": 2,
+          "rows": 2,
+          "focusVisible": true,
+          "reducedMotion": true,
+          "transition": "0s",
+          "stickyHeading": "sticky",
+          "background": "#eef2f8"
+        }
+      ]
+    }
+  },
+  {
+    "view": "watch",
+    "theme": "dark",
+    "facts": {
+      "tableParity": true,
+      "facts": [
+        {
+          "width": 345,
+          "scrollWidth": 345,
+          "tables": 2,
+          "rows": 2,
+          "focusVisible": true,
+          "reducedMotion": true,
+          "transition": "0s",
+          "stickyHeading": "sticky",
+          "background": "#111923"
+        },
+        {
+          "width": 345,
+          "scrollWidth": 345,
+          "tables": 2,
+          "rows": 2,
+          "focusVisible": true,
+          "reducedMotion": true,
+          "transition": "0s",
+          "stickyHeading": "sticky",
+          "background": "#0c1422"
+        }
+      ]
+    }
+  },
+  {
+    "view": "sessions",
+    "theme": "light",
+    "facts": {
+      "tableParity": true,
+      "facts": [
+        {
+          "width": 1440,
+          "scrollWidth": 1440,
+          "tables": 1,
+          "rows": 1,
+          "focusVisible": true,
+          "reducedMotion": true,
+          "transition": "0s",
+          "stickyHeading": "sticky",
+          "background": "#f5f7fa"
+        },
+        {
+          "width": 1440,
+          "scrollWidth": 1440,
+          "tables": 1,
+          "rows": 1,
+          "focusVisible": true,
+          "reducedMotion": true,
+          "transition": "0s",
+          "stickyHeading": "sticky",
+          "background": "#eef2f8"
+        }
+      ]
+    }
+  },
+  {
+    "view": "sessions",
+    "theme": "dark",
+    "facts": {
+      "tableParity": true,
+      "facts": [
+        {
+          "width": 1440,
+          "scrollWidth": 1440,
+          "tables": 1,
+          "rows": 1,
+          "focusVisible": true,
+          "reducedMotion": true,
+          "transition": "0s",
+          "stickyHeading": "sticky",
+          "background": "#111923"
+        },
+        {
+          "width": 1440,
+          "scrollWidth": 1440,
+          "tables": 1,
+          "rows": 1,
+          "focusVisible": true,
+          "reducedMotion": true,
+          "transition": "0s",
+          "stickyHeading": "sticky",
+          "background": "#0c1422"
+        }
+      ]
+    }
+  },
+  {
+    "view": "sessions",
+    "theme": "light",
+    "facts": {
+      "tableParity": true,
+      "facts": [
+        {
+          "width": 345,
+          "scrollWidth": 345,
+          "tables": 1,
+          "rows": 1,
+          "focusVisible": true,
+          "reducedMotion": true,
+          "transition": "0s",
+          "stickyHeading": "sticky",
+          "background": "#f5f7fa"
+        },
+        {
+          "width": 345,
+          "scrollWidth": 345,
+          "tables": 1,
+          "rows": 1,
+          "focusVisible": true,
+          "reducedMotion": true,
+          "transition": "0s",
+          "stickyHeading": "sticky",
+          "background": "#eef2f8"
+        }
+      ]
+    }
+  },
+  {
+    "view": "sessions",
+    "theme": "dark",
+    "facts": {
+      "tableParity": true,
+      "facts": [
+        {
+          "width": 345,
+          "scrollWidth": 345,
+          "tables": 1,
+          "rows": 1,
+          "focusVisible": true,
+          "reducedMotion": true,
+          "transition": "0s",
+          "stickyHeading": "sticky",
+          "background": "#111923"
+        },
+        {
+          "width": 345,
+          "scrollWidth": 345,
+          "tables": 1,
+          "rows": 1,
+          "focusVisible": true,
+          "reducedMotion": true,
+          "transition": "0s",
+          "stickyHeading": "sticky",
+          "background": "#0c1422"
+        }
+      ]
+    }
+  },
+  {
+    "view": "models",
+    "theme": "light",
+    "facts": {
+      "tableParity": true,
+      "facts": [
+        {
+          "width": 1425,
+          "scrollWidth": 1425,
+          "tables": 1,
+          "rows": 2,
+          "focusVisible": true,
+          "reducedMotion": true,
+          "transition": "0s",
+          "stickyHeading": "sticky",
+          "background": "#f5f7fa"
+        },
+        {
+          "width": 1425,
+          "scrollWidth": 1425,
+          "tables": 1,
+          "rows": 2,
+          "focusVisible": true,
+          "reducedMotion": true,
+          "transition": "0s",
+          "stickyHeading": "sticky",
+          "background": "#eef2f8"
+        }
+      ]
+    }
+  },
+  {
+    "view": "models",
+    "theme": "dark",
+    "facts": {
+      "tableParity": true,
+      "facts": [
+        {
+          "width": 1425,
+          "scrollWidth": 1425,
+          "tables": 1,
+          "rows": 2,
+          "focusVisible": true,
+          "reducedMotion": true,
+          "transition": "0s",
+          "stickyHeading": "sticky",
+          "background": "#111923"
+        },
+        {
+          "width": 1425,
+          "scrollWidth": 1425,
+          "tables": 1,
+          "rows": 2,
+          "focusVisible": true,
+          "reducedMotion": true,
+          "transition": "0s",
+          "stickyHeading": "sticky",
+          "background": "#0c1422"
+        }
+      ]
+    }
+  },
+  {
+    "view": "models",
+    "theme": "light",
+    "facts": {
+      "tableParity": true,
+      "facts": [
+        {
+          "width": 345,
+          "scrollWidth": 345,
+          "tables": 1,
+          "rows": 2,
+          "focusVisible": true,
+          "reducedMotion": true,
+          "transition": "0s",
+          "stickyHeading": "sticky",
+          "background": "#f5f7fa"
+        },
+        {
+          "width": 345,
+          "scrollWidth": 345,
+          "tables": 1,
+          "rows": 2,
+          "focusVisible": true,
+          "reducedMotion": true,
+          "transition": "0s",
+          "stickyHeading": "sticky",
+          "background": "#eef2f8"
+        }
+      ]
+    }
+  },
+  {
+    "view": "models",
+    "theme": "dark",
+    "facts": {
+      "tableParity": true,
+      "facts": [
+        {
+          "width": 345,
+          "scrollWidth": 345,
+          "tables": 1,
+          "rows": 2,
+          "focusVisible": true,
+          "reducedMotion": true,
+          "transition": "0s",
+          "stickyHeading": "sticky",
+          "background": "#111923"
+        },
+        {
+          "width": 345,
+          "scrollWidth": 345,
+          "tables": 1,
+          "rows": 2,
+          "focusVisible": true,
+          "reducedMotion": true,
+          "transition": "0s",
+          "stickyHeading": "sticky",
+          "background": "#0c1422"
+        }
+      ]
+    }
+  },
+  {
+    "view": "accounts",
+    "theme": "light",
+    "facts": {
+      "tableParity": true,
+      "facts": [
+        {
+          "width": 1425,
+          "scrollWidth": 1425,
+          "tables": 1,
+          "rows": 1,
+          "focusVisible": true,
+          "reducedMotion": true,
+          "transition": "0s",
+          "stickyHeading": "sticky",
+          "background": "#f5f7fa"
+        },
+        {
+          "width": 1425,
+          "scrollWidth": 1425,
+          "tables": 1,
+          "rows": 1,
+          "focusVisible": true,
+          "reducedMotion": true,
+          "transition": "0s",
+          "stickyHeading": "sticky",
+          "background": "#eef2f8"
+        }
+      ]
+    }
+  },
+  {
+    "view": "accounts",
+    "theme": "dark",
+    "facts": {
+      "tableParity": true,
+      "facts": [
+        {
+          "width": 1425,
+          "scrollWidth": 1425,
+          "tables": 1,
+          "rows": 1,
+          "focusVisible": true,
+          "reducedMotion": true,
+          "transition": "0s",
+          "stickyHeading": "sticky",
+          "background": "#111923"
+        },
+        {
+          "width": 1425,
+          "scrollWidth": 1425,
+          "tables": 1,
+          "rows": 1,
+          "focusVisible": true,
+          "reducedMotion": true,
+          "transition": "0s",
+          "stickyHeading": "sticky",
+          "background": "#0c1422"
+        }
+      ]
+    }
+  },
+  {
+    "view": "accounts",
+    "theme": "light",
+    "facts": {
+      "tableParity": true,
+      "facts": [
+        {
+          "width": 345,
+          "scrollWidth": 345,
+          "tables": 1,
+          "rows": 1,
+          "focusVisible": true,
+          "reducedMotion": true,
+          "transition": "0s",
+          "stickyHeading": "sticky",
+          "background": "#f5f7fa"
+        },
+        {
+          "width": 345,
+          "scrollWidth": 345,
+          "tables": 1,
+          "rows": 1,
+          "focusVisible": true,
+          "reducedMotion": true,
+          "transition": "0s",
+          "stickyHeading": "sticky",
+          "background": "#eef2f8"
+        }
+      ]
+    }
+  },
+  {
+    "view": "accounts",
+    "theme": "dark",
+    "facts": {
+      "tableParity": true,
+      "facts": [
+        {
+          "width": 345,
+          "scrollWidth": 345,
+          "tables": 1,
+          "rows": 1,
+          "focusVisible": true,
+          "reducedMotion": true,
+          "transition": "0s",
+          "stickyHeading": "sticky",
+          "background": "#111923"
+        },
+        {
+          "width": 345,
+          "scrollWidth": 345,
+          "tables": 1,
+          "rows": 1,
+          "focusVisible": true,
+          "reducedMotion": true,
+          "transition": "0s",
+          "stickyHeading": "sticky",
+          "background": "#0c1422"
+        }
+      ]
+    }
+  }
+]

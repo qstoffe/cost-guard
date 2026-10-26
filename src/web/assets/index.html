@@ -5,21 +5,21 @@
 <script src="/render.js" defer></script><script src="/reports.js" defer></script><script src="/live.js" defer></script><script src="/session.js" defer></script><script src="/app.js" defer></script></head>
 <body>
 <button class="skip" id="skip">Skip to report</button>
-<header><h1>Cost Guard <small>Web Beta</small></h1>
+<header><div class="brand"><span class="brand-mark" aria-hidden="true">CG</span><h1>Cost Guard <small>Web Beta</small></h1></div>
 <p>Local, read-only · CCost is reference valuation, not billing</p>
 <p id="status" role="status">HTTP ready. Establishing browser session…</p></header>
 <nav aria-label="Main navigation">
-<a href="#/overview">Overview</a><a href="#/live">Live</a><a href="#/sessions">Sessions</a>
+<a href="#/overview">Overview</a><a href="#/watch">Watch</a><a href="#/sessions">Sessions</a>
 <a href="#/models">Models</a><a href="#/accounts">Accounts</a><a href="#/reports">Reports</a>
 <a href="#/token-mix">Token Mix</a></nav>
 <main id="content" tabindex="-1">
 <div class="toolbar"><h2 id="heading">Overview</h2>
-<button id="refresh" disabled>Refresh snapshot</button><button id="cancel" disabled>Cancel</button></div>
+<button id="refresh" class="primary" disabled>Refresh snapshot</button><button id="cancel" disabled>Cancel</button></div>
 <p id="notice" role="status">Cost Guard is starting. Establishing your private browser session before requesting data…</p>
 <div id="scope-controls"></div>
-<label>Search displayed report tables <input id="search" type="search" placeholder="Presentation filter only"></label>
+<label class="report-search">Search displayed report tables <input id="search" type="search" placeholder="Presentation filter only"></label>
 <div id="result" aria-busy="true"><h2>Starting Cost Guard</h2><progress aria-label="Establishing private browser session"></progress><p>The local HTTP shell is ready. Source, accounts and initial report readiness are checked separately. If this view does not advance, reload; if authorization has expired, use tray Open Cost Guard for a fresh link.</p></div>
 </main>
 <footer>Reports stay frozen until Refresh. Closing this tab does not stop Cost Guard.
-Live shares one host-owned engine across tabs; its run begins at engine start. Search/sort/page controls never change report scope or totals. CLI remains independent.</footer>
+Watch shares one host-owned engine across tabs; its run begins at engine start. Search/sort/page controls never change report scope or totals. CLI remains independent.</footer>
 </body></html>

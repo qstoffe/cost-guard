@@ -1,6 +1,14 @@
 # Web Beta
 
-v80.92 shares CLI-owned numeric display primitives through server-provided display
+v80.93 adds a shared responsive light/dark visual system and global **Watch** navigation.
+The theme follows the operating-system preference, with no saved browser settings or external fonts.
+Rounded controls, visible keyboard focus, sticky table headings, exact numeric alignment and
+local table scrolling keep data selectable at narrow widths; reduced-motion preferences disable transitions.
+The native “Reading this report” disclosure contains definitions, never report rows or totals.
+See the [synthetic before/after gallery](../development/architecture/governance/verification/web-design/index.html)
+and [visual evidence/limits](../development/architecture/governance/verification/web-design.md).
+
+The Web shares CLI-owned numeric display primitives through server-provided display
 tokens while retaining exact raw values for sorting. CCost, USD, quotas/Pace,
 multiplier tiers and durations no longer expose incidental Decimal precision;
 all-model native reference rates intentionally retain every meaningful digit.
@@ -15,15 +23,16 @@ Run `python cost-guard-web.py --foreground` using already installed Python 3.11+
 
 ## Navigation and static reports
 
-The Beta shell provides global Live, Overview, Models (selectable or full catalog), Accounts, Sessions N/all, local date/range Reports, explicit historical Token Mix, and session details with Snapshot/Live modes. Overview, selectable Models and Accounts reuse the same normal-report observation when retained; changing presentation does not multiply account acquisition. Explicit Refresh creates a new observation for that view, not a silent cross-view update.
+The Beta shell provides global Watch, Overview, Models (selectable or full catalog), Accounts, Sessions N/all, local date/range Reports, explicit historical Token Mix, and session details with Snapshot/Live modes. Global `/#/watch` is canonical; legacy `/#/live` links are replaced in the same browser-history entry, preserving Back/Forward. This does not rename a session's Live mode. Overview, selectable Models and Accounts reuse the same normal-report observation when retained; changing presentation does not multiply account acquisition. Explicit Refresh creates a new observation for that view, not a silent cross-view update.
 
 | CLI use case | Discoverable fragment route | Protected scope |
 | --- | --- | --- |
 | Normal overview | `/#/overview` | Independent comparison/token samples and account-period history |
+| Global Watch | `/#/watch` (legacy `/#/live` alias) | One host-owned live engine; source/account freshness and retained rows |
 | Models / all models | `/#/models`, `/#/models/all` | Selectable availability versus full catalog; default exact server ranking, tiers, promotion/release facts and conservative older-stable fading; all catalog adds native USD/M I/C/W/O rates |
 | Accounts | `/#/accounts` | Native units/windows, Remaining/Pace, independent observations and method errors, report local-month/Today CCost and Copilot Unaccounted usage; never Watch rolling substitution |
 | Sessions N/all | `/#/sessions?limit=20`, `/#/sessions` | Available roots including archived history; form accepts 1–10000 or all; paging exposes every returned row |
-| Session report | `/#/sessions/<id>` | Complete report Snapshot/Live detail; links from session lists and global Live |
+| Session report | `/#/sessions/<id>` | Complete report Snapshot/Live detail; links from session lists and global Watch |
 | Date / inclusive range | `/#/reports?date=2026-10-25`, `/#/reports?date=2026-10-24:2026-10-25` | Configured-local boundaries/DST; canonical range valuation and union duration; impossible/reversed dates fail explicitly |
 | Historical Token Mix | `/#/token-mix` | Explicit Capture/Refresh only, never navigation/prefetch; canonical per-model prompts/calls, token/cost/mix vectors, price coverage and total over the same shown requests |
 
@@ -55,7 +64,7 @@ Layout choices: wrapping top navigation; system light/dark palette; source/readi
 
 `test_web_views.py` exercises the shipped JavaScript and real HTTP/facade with deterministic sources through an optional developer-only Node DOM harness. It tests navigation/hash events, reload, safe hostile/Unicode text, long/running/aborted/compacted/empty/missing/partial reports, complete totals and frozen/explicit-refresh/stale behavior. It is not visual browser, CSS layout or native macOS acceptance. Owner checks: open the Beta, try narrow/wide windows and light/dark mode, tab through navigation and page controls, select prompt text, follow a session link, use Back/Forward and reload, and Refresh a running session. No new permanent release gate is added.
 
-## Global Live and reconnect
+## Global Watch and reconnect
 
 Live uses one process-lifetime acquisition engine, starting with the host rather than a tab. Closing all tabs does not stop acquisition; reopening observes the same run origin and totals. The independent CLI Watch still starts its own run. Both use the shared Watch acquisition seam, revision gating, authoritative V2 resync, bounded history enrichment, account lanes, configured global retention, lifecycle/compaction/abort/error evidence, tool/skill activity and context warnings. Source hints, idle and connection loss never prove completion. Displayed session subtotals cover retained rows, not uncapped session history. Today and rolling account figures retain Watch scopes; normal-report calendar-month comparisons are not inserted into Live.
 

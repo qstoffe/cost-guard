@@ -78,6 +78,8 @@ async function acquire(state) {
   } finally { state.loading = false; state.active = null; show(state); }
 }
 function navigate() {
+  // Replace, never push: legacy bookmarks keep their place in Back/Forward history.
+  if (/^#\/live(?:\?|$)/.test(location.hash)) history.replaceState(null, '', '/#/watch' + location.hash.slice(6));
   const route = ReportRoutes.resolve(location.hash), match = route.session;
   const key = match ? 'session/' + match[1] : location.hash || '#/overview';
   heading.textContent = route.title;

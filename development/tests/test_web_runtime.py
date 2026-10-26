@@ -124,7 +124,9 @@ class WebRuntimeTests(unittest.TestCase):
     def test_shell_is_fixed_offline_and_honest_not_sensitive(self):
         status, headers, body = self.request("/")
         self.assertEqual(200, status)
-        self.assertIn(b"Live shares one host-owned engine", body)
+        self.assertIn(b"Watch shares one host-owned engine", body)
+        self.assertIn(b'href="#/watch">Watch</a>', body)
+        self.assertNotIn(b'href="#/live">Live</a>', body)
         self.assertIn(b"Search/sort/page controls never change report scope or totals", body)
         self.assertIn(b'/reports.js', body)
         self.assertIn("default-src 'none'", headers["Content-Security-Policy"])
