@@ -1,5 +1,9 @@
 # Web Beta
 
+## Hosted revalidation
+
+The optional **Web Beta revalidation** Actions workflow tests the delivered Beta on standard Windows x64 and macOS Apple Silicon/Intel runners, with manual dispatch and relevant PR/main triggers. See the [coverage matrix, cost boundaries and remaining manual checklist](../development/architecture/governance/verification/web-beta-ci.md). CI-only Python/Node/Chromium tooling adds no product dependency. Native API execution is not physical desktop/Finder/Gatekeeper or accessibility acceptance; macOS remains experimental. This is not a mandatory release gate or automatic promotion.
+
 Run `python cost-guard-web.py --foreground` using already installed Python 3.11+. It binds **127.0.0.1 only**, on an OS-assigned port. There is no LAN/proxy mode, install step, frontend build or automatic browser launch in this explicit developer mode. Leave the console open. Ctrl+C or a detected runtime-source change stops only this host and its owned finite reports; it does not stop OpenCode. Foreground instances are intentionally separate from managed launcher discovery.
 
 ## Navigation and static reports

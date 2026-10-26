@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
 
 
-def probe():
+def probe(root=ROOT, jobs_factory=None):
     from src.web.host import WebHost
     from src.web.macos_status import StatusItem
     from src.web.native_macos import MacHost
@@ -55,7 +55,7 @@ def probe():
 
     tray = ProbeItem()
     adapter = MacHost(tray)
-    owner = WebHost(ROOT)
+    owner = WebHost(root, **({"jobs": jobs_factory()} if jobs_factory else {}))
     with patch.object(owner, "open_browser", return_value=False) as browser:
         owner.run_gui(adapter)
         assert owner.ready and owner.reason == "menu" and owner.stopped.is_set()

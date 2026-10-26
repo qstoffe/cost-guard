@@ -10,6 +10,8 @@ slowest (full-only) files start first so they overlap the many quick files.
 from __future__ import annotations
 
 import argparse
+import json
+import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import os
 import subprocess
@@ -21,6 +23,7 @@ ROOT = Path(__file__).resolve().parents[2]
 TESTS = ROOT / "development/tests"
 
 QUICK_PATTERNS: tuple[str, ...] = (
+    "test_ci_web_beta.py",
     "test_web_diagnostics.py",
     "test_web_live.py",
     "test_macos_web.py",
@@ -171,6 +174,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--file-timeout", type=float, help="Hard timeout per test file/process.")
     parser.add_argument("--jobs", type=int, help="Concurrent test files (suite default 4; profile/pattern 1).")
     parser.add_argument("--verbosity", type=int, default=2)
+    parser.add_argument("--json-report", type=Path, help="Bounded per-file counts and named skips; no raw output.")
     args = parser.parse_args(argv)
     for stream in (sys.stdout, sys.stderr):  # failure text may contain non-console characters
         if hasattr(stream, "reconfigure"):
@@ -216,6 +220,22 @@ def main(argv: list[str] | None = None) -> int:
                 record(future.result())
 
     failures = [pattern for pattern in patterns if results[pattern][0] != 0]
+    if args.json_report:
+        files = []
+        for pattern in patterns:
+            code, duration, output = results[pattern]
+            count = re.search(r"Ran (\d+) tests? in", output)
+            skips = re.findall(r"^(.+?) \.\.\. skipped (.+)$", output, re.MULTILINE)
+            failed = re.search(r"FAILED \(([^\n]+)\)", output)
+            counts = dict(re.findall(r"(failures|errors|skipped|expected failures|unexpected successes)=(\d+)",
+                                     failed.group(1) if failed else output.splitlines()[-1] if output else ""))
+            files.append(dict(file=pattern, exit_code=code, seconds=round(duration, 2),
+                tests=int(count.group(1)) if count else None,
+                failures=int(counts.get("failures", 0)), errors=int(counts.get("errors", 0)),
+                skipped=int(counts.get("skipped", 0)), skips=[dict(test=t, reason=r) for t, r in skips],
+                outcome="PASS" if code == 0 else "FAIL"))
+        args.json_report.parent.mkdir(parents=True, exist_ok=True)
+        args.json_report.write_text(json.dumps(dict(suite=suite_label, files=files), indent=2), encoding="utf-8")
     elapsed = time.monotonic() - started
     print(f"TEST SUMMARY suite={suite_label} failures={len(failures)} files={len(patterns)} jobs={jobs} elapsed={elapsed:.1f}s")
     return 1 if failures else 0
