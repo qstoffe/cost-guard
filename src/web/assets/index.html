@@ -15,10 +15,10 @@
 <main id="content" tabindex="-1">
 <div class="toolbar"><h2 id="heading">Overview</h2>
 <button id="refresh" disabled>Refresh snapshot</button><button id="cancel" disabled>Cancel</button></div>
-<p id="notice" role="status">No report requested. Unknown values are not zero.</p>
+<p id="notice" role="status">Cost Guard is starting. Establishing your private browser session before requesting data…</p>
 <div id="scope-controls"></div>
 <label>Search displayed report tables <input id="search" type="search" placeholder="Presentation filter only"></label>
-<div id="result" aria-busy="false"></div>
+<div id="result" aria-busy="true"><h2>Starting Cost Guard</h2><progress aria-label="Establishing private browser session"></progress><p>The local HTTP shell is ready. Source, accounts and initial report readiness are checked separately. If this view does not advance, reload; if authorization has expired, use tray Open Cost Guard for a fresh link.</p></div>
 </main>
 <footer>Reports stay frozen until Refresh. Closing this tab does not stop Cost Guard.
 Live shares one host-owned engine across tabs; its run begins at engine start. Search/sort/page controls never change report scope or totals. CLI remains independent.</footer>

@@ -362,7 +362,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.90 (2026-10-26):** Isolated Windows/macOS Web Beta CI revalidation, native API and rendered-browser smoke. CLI/Watch installation is unchanged; physical desktop/Finder/Gatekeeper acceptance remains separate. See [Web Beta](docs/web-beta.md).
+**v80.91 (2026-10-26):** Visible timed Web Beta startup and browser loading/recovery states. CLI/Watch remain independent; physical desktop and native macOS acceptance remain separate. See [Web Beta](docs/web-beta.md).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

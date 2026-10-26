@@ -305,6 +305,7 @@ class LifecycleTests(unittest.TestCase):
             self.assertEqual(store.read(), state)
 
     def test_same_build_deliberate_launch_restarts_and_waits_for_verified_shell(self):
+        stages = []
         store = self.store()
         old = self.state(store)
         store.write(old)
@@ -318,6 +319,8 @@ class LifecycleTests(unittest.TestCase):
             return child
 
         def request(state, action):
+            if action == "open":
+                self.assertEqual(stages, ["arbitration", "restart", "host", "browser"])
             return {"ready": True, "url": f"http://127.0.0.1:{state['port']}/#bootstrap=short"}
 
         with patch.object(lifecycle, "InstanceStore", return_value=store), \
@@ -325,7 +328,8 @@ class LifecycleTests(unittest.TestCase):
                 patch.object(lifecycle, "spawn_detached", side_effect=spawn), \
                 patch.object(lifecycle, "process_identity", return_value=new["process"]), \
                 patch.object(lifecycle, "control", side_effect=request):
-            result = lifecycle.launch(self.root, "src.web.native_windows", opener=lambda url: True)
+            result = lifecycle.launch(self.root, "src.web.native_windows", opener=lambda url: True,
+                                      progress=stages.append)
         stop.assert_called_once_with(store, old)
         self.assertFalse(result.coalesced)
         self.assertTrue(result.browser_opened)

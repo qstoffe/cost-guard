@@ -15,11 +15,35 @@ from src.web.native_windows import WindowsHost, preflight
 from src.web.process_identity import InstanceConflict
 from src.web.tray_icon import icon_bits
 from src.web.win32_tray import OPEN, EXIT
+from src.web.startup import StartupProgress
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
 class WindowsWebTests(unittest.TestCase):
+    def test_startup_progress_is_flushed_timed_and_allowlisted(self):
+        with patch('src.web.startup.time.monotonic', side_effect=[10, 12.5]), \
+                patch('builtins.print') as output:
+            progress = StartupProgress()
+            progress('config')
+        output.assert_called_once_with(
+            'Cost Guard startup: Checking safe configuration (2.5s elapsed)', flush=True)
+        with self.assertRaises(KeyError):
+            progress('http://private/#bootstrap=secret')
+
+    def test_configuration_failure_stops_before_native_or_browser_work(self):
+        output = io.StringIO()
+        with patch.object(windows_launch, 'InstanceStore'), \
+                patch.object(windows_launch, 'load_configuration', side_effect=windows_launch.ConfigError('private')), \
+                patch('src.web.native_windows.preflight') as preflight, \
+                patch.object(windows_launch, 'launch') as launch, contextlib.redirect_stdout(output):
+            self.assertEqual(windows_launch.launch_windows(ROOT), 1)
+        preflight.assert_not_called()
+        launch.assert_not_called()
+        self.assertIn('Checking safe configuration', output.getvalue())
+        self.assertIn('Check config/user-config.jsonc', output.getvalue())
+        self.assertNotIn('private', output.getvalue())
+
     def owner(self):
         return Mock(stopping=Event(), stopped=Event())
 

@@ -32,8 +32,14 @@ async function main() {
   const location = {hash: '#bootstrap=' + input.credential};
   const history = {replaceState: (_, __, value) => { location.hash = value.slice(value.indexOf('#')); }};
   let cookie = '', requests = 0, offline = false;
+  let releaseBootstrap, releaseReport;
+  const bootstrapGate = new Promise(resolve => { releaseBootstrap = resolve; });
+  const reportGate = new Promise(resolve => { releaseReport = resolve; });
+  ids.result.textContent = 'Starting Cost Guard'; // Server-rendered startup shell.
   const wire = async (path, options = {}) => {
     if (offline) throw new Error('offline');
+    if (path === '/api/bootstrap') await bootstrapGate;
+    if (path === '/api/reports') await reportGate;
     const headers = {...options.headers, Origin: input.origin};
     if (cookie) headers.Cookie = cookie;
     requests++;
@@ -49,6 +55,13 @@ async function main() {
     assert.equal(response.status, 200);
     vm.runInContext(await response.text(), context);
   }
+  assert.equal(ids.result.textContent, 'Starting Cost Guard', 'slow authorization retains branded shell');
+  assert.equal(location.hash, '#/overview', 'credential erased before waiting');
+  releaseBootstrap();
+  await until(() => all(ids.result, 'progress').length === 1);
+  assert.equal(ids.result.getAttribute('aria-busy'), 'true');
+  assert.equal(all(ids.result, 'progress')[0].getAttribute('value'), undefined, 'no invented percentage');
+  releaseReport();
   await until(() => ids.notice.textContent.includes('Snapshot captured'));
   assert.equal(location.hash, '#/overview');
   assert.match(ids.result.textContent, /CCost = reference valuation/);
@@ -90,6 +103,11 @@ async function main() {
   ids.refresh.click();
   await until(() => ids.notice.textContent.includes('STALE'));
   assert.equal(ids.result.textContent, last);
+  navigate('sessions/unavailable');
+  await until(() => ids.notice.textContent.includes('Source/report unavailable'));
+  assert.equal(ids.result.getAttribute('aria-busy'), 'false');
+  assert.equal(ids.refresh.disabled, false, 'initial report outage remains retryable');
+  assert.equal(all(ids.result, 'progress').length, 0);
   offline = false;
   navigate('sessions/missing');
   await until(() => ids.notice.textContent.includes('No matching session'));
@@ -207,6 +225,17 @@ async function main() {
   await until(() => ids.notice.textContent.includes('Snapshot captured'));
   assert.equal(location.hash, '#/sessions/root-0000');
   assert.match(ids.heading.textContent, /Session root-0000/);
+  offline = true;
+  ids.result.textContent = 'Starting Cost Guard';
+  const unavailable = vm.createContext({document: context.document, window: context.window, location, history,
+    URLSearchParams, fetch: wire, setTimeout, Date, console});
+  for (const script of ['/render.js', '/reports.js', '/app.js']) {
+    vm.runInContext(await (await fetch(input.origin + script)).text(), unavailable);
+  }
+  await until(() => ids.result.textContent.includes('Unable to establish'));
+  assert.equal(ids.result.getAttribute('aria-busy'), 'false');
+  assert.match(ids.result.textContent, /tray Open Cost Guard/);
+  assert.equal(all(ids.result, 'progress').length, 0, 'failed startup is not an endless activity indicator');
   console.log('web views passed: real HTTP, facade, pagination, frozen/refresh/stale, missing/empty, deep links, safe text');
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
