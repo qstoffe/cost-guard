@@ -325,6 +325,19 @@ class WebRuntimeTests(unittest.TestCase):
 
 
 class JobBoundaryTests(unittest.TestCase):
+    def test_worker_compacts_json_without_dropping_provenance_or_raising_limit(self):
+        values = {"rows": [{"a": 1, "b": 2}] * 4}
+        self.assertGreater(len(json.dumps(values).encode("ascii")), 70)
+        sender, app = Mock(), Mock()
+        app.execute.return_value.to_json.return_value = values
+        with patch("src.web.composition.application", return_value=app), patch("src.web.jobs.MAX_RESULT_BYTES", 70):
+            run_report(sender, ReportRequest())
+        (kind, payload), = sender.send.call_args.args
+        self.assertEqual("result", kind)
+        self.assertLessEqual(len(payload), 70)
+        self.assertEqual(values, json.loads(payload))
+        sender.close.assert_called_once()
+
     def test_worker_result_limit_and_unexpected_error_are_sanitized(self):
         sender = Mock()
         result = Mock()

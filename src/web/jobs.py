@@ -51,7 +51,7 @@ def run_report(sender, request):
         from .composition import application
         result = application(request).execute(request,
             progress=lambda event: sender.send(("progress", event.to_json()))).to_json()
-        payload = json.dumps(result, ensure_ascii=True, allow_nan=False).encode("ascii")
+        payload = json.dumps(result, ensure_ascii=True, allow_nan=False, separators=(",", ":")).encode("ascii")
         if len(payload) > MAX_RESULT_BYTES:
             sender.send(("error", "result_too_large"))
         else:

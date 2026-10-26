@@ -62,7 +62,9 @@ const ReportView = (() => {
     columns.forEach((column, index) => {
       const th = element('th'), button = element('button', column); th.scope = 'col';
       button.addEventListener('click', () => {
-        const old = state.sorts[key]; state.sorts[key] = {index, direction: old?.index === index ? -old.direction : 1};
+        const old = state.sorts[key];
+        if (old?.index === index && old.direction === -1) delete state.sorts[key];
+        else state.sorts[key] = {index, direction: old?.index === index ? -old.direction : 1};
         state.pages[key] = 0; draw();
       });
       th.append(button); header.append(th); headers.push(th);
@@ -115,7 +117,66 @@ const ReportView = (() => {
     filter.addEventListener('input', () => { state.filters[key] = filter.value; state.pages[key] = 0; draw(); });
     previous.addEventListener('click', () => { state.pages[key]--; draw(); });
     next.addEventListener('click', () => { state.pages[key]++; draw(); });
+    if (key === 'models') {
+      const reset = element('button', 'CLI default order');
+      reset.addEventListener('click', () => { delete state.sorts[key]; state.pages[key] = 0; draw(); });
+      pager.append(reset);
+    }
     draw();
+  }
+  function overviewConcepts(parent, view) {
+    const concepts = element('div', undefined, 'report-concepts');
+    function concept(label, value, explanation) {
+      const card = element('div');
+      card.append(element('h3', label), element('p', value, 'metric-value'));
+      const help = element('details');
+      help.append(element('summary', 'About ' + label), element('p', explanation));
+      card.append(help); concepts.append(card);
+      return card;
+    }
+    const costCard = concept('CCost', '1 CCost = 1 Copilot AI credit',
+      'Reference token valuation, not actual billing. Flat-rate accounts use Copilot’s published token rates. Unlabeled cost figures are CCost; unknown pricing is not zero.');
+    costCard.append(element('p', 'CCost = reference valuation, not provider billing. Unknown pricing is not zero.', 'detail'));
+    const mix = view.token_mix;
+    const mixCard = concept('Token Mix %', mix ? display(mix, 'percentages') + ' · I/C/W/O' : 'N/A',
+      'Observed input/cache-read/cache-write/output token shares. Output includes reasoning. The report sample is independent of account-period usage.');
+    if (mix) mixCard.append(element('p',
+      `${mix.sample_size} priced prompts · ${display(mix, 'totals')} tokens · CCost ${display(mix, 'costs')}`,
+      mix.cost_complete ? 'detail' : 'detail partial'));
+    concept('Relative CCost', view.model_comparison_sample_size ? `${view.model_comparison_sample_size} completed ${view.model_comparison_sample_size === 1 ? 'prompt' : 'prompts'}` : 'No completed priced prompts',
+      view.model_comparison_sample_size ? 'Applies the completed-prompt Token Mix % to every model and tier, with the same cheapest comparable base as 1.0x. Arrows show context-tier prices; > or ≥ marks the published input-token boundary.' :
+        'Relative CCost stays blank; a hidden 2/96/1/1 mix orders published prices. No synthetic multipliers are shown.');
+    parent.append(concepts);
+  }
+  function overviewAccounts(parent, accounts) {
+    parent.append(element('h3', 'Accounts Overview'));
+    if (!accounts?.accounts.length) { parent.append(element('p', 'No configured accounts detected.')); return; }
+    const group = element('div', undefined, 'account-grid');
+    for (const account of accounts.accounts) {
+      const obs = account.observation, card = element('section', undefined, 'account-card');
+      card.append(element('h4', obs.label), element('p', [obs.provider_label, obs.plan].filter(Boolean).join(' · '), 'detail'));
+      for (const scope of account.ccost_scopes) card.append(element('p', `CCost ${scope.name}: ${display(scope.cost, 'account_ccost')}`, 'metric-value'));
+      if (account.billed_today != null) card.append(element('p', 'Billed today: ' + display(account, 'billed_today')));
+      if (account.billed_month != null) card.append(element('p', 'Billed month: ' + display(account, 'billed_month')));
+      for (const quota of obs.quotas) {
+        const row = element('div', undefined, 'quota-summary');
+        row.append(element('strong', quota.label), element('span',
+          `${display(quota, 'remaining')} ${quota.unit} remaining / ${quota.unlimited ? 'Unlimited' : display(quota, 'limit')} · ${display(quota, 'remaining_fraction')}`));
+        row.append(element('span', `Used ${display(quota, 'used')} · Reset ${display(quota, 'reset_at_ms')} · ${quota.status}${quota.window_active === false ? ' · Inactive window' : ''}`, 'detail'));
+        card.append(row);
+      }
+      for (const pace of account.pace) card.append(element('p', `${pace.label} Pace: ${display(pace, 'per_day')} ${pace.unit}/day · ${pace.days} days · ${pace.per_workday == null ? 'no workdays left' : display(pace, 'per_workday') + ' per workday'}`, 'detail'));
+      if (['github-copilot', 'github-copilot-enterprise'].includes(obs.provider_id) || account.unaccounted_usage != null) card.append(element('p', 'Unaccounted usage (estimate): ' + display(account, 'unaccounted_usage')));
+      if (obs.has_error || obs.has_warning || ['stale', 'unavailable', 'error', 'paused', 'blocked'].includes(obs.status)) card.append(element('p', `${obs.availability} · ${obs.status} · ${obs.error_code || 'Account warning'}`, 'warning'));
+      if (account.ccost_account_unknown) card.append(element('p', 'CCost account attribution unknown.', 'warning'));
+      for (const note of account.ccost_notes || []) card.append(element('p', note, 'warning'));
+      const details = element('details');
+      details.append(element('summary', 'Observation details'), element('p', `${obs.availability} · ${obs.status} · Observed ${display(obs, 'observed_at_ms')}`));
+      for (const bill of obs.billing || []) details.append(element('p', `${bill.label} · ${bill.period} · ${bill.kind} · ${display(bill, 'amount')} ${bill.currency} · ${bill.status}`));
+      for (const quota of obs.quotas) details.append(element('p', `${quota.label} · ${quota.period} · ${known(quota.duration_seconds)} s · ${quota.scope || ''} · Native money remaining/limit ${display(quota, 'remaining_money')}/${display(quota, 'limit_money')}`));
+      card.append(details); group.append(card);
+    }
+    parent.append(group);
   }
   function promptLabel(row) {
     const node = element('span', `${row.label || 'Prompt'} ${row.prompt_number == null ? '' : '#' + row.prompt_number} ${row.preview || ''}`.trim());
@@ -150,13 +211,15 @@ const ReportView = (() => {
     parent.replaceChildren();
     const view = result.view;
     const section = state.section || 'overview';
+    const overview = section === 'overview' && view.kind === 'normal';
     parent.append(element('p', `Snapshot: ${new Date(result.observed_at_ms).toLocaleString()} · ${view.source_label} · ${result.source.status} · ${result.source.atomicity}. Frozen; Refresh explicitly to reacquire.`, 'snapshot'));
     if (result.source.status === 'partial') parent.append(element('p', `Partial source data (${view.source_warning_count} warnings). Values may be incomplete.`, 'warning'));
     if (view.model_availability_unverified) parent.append(element('p', 'Model availability unverified: showing the full catalog or all historically used models, not a verified selectable list.', 'warning'));
     if (view.kind === 'date') parent.append(element('p', `Inclusive local range ${result.scope.date_text} · ${result.scope.timezone_id} · [${result.scope.start_ms}, ${result.scope.end_ms}) milliseconds. Prompt links open complete sessions; use Back to return to this frozen range.`));
     const definitions = element('details');
     definitions.append(element('summary', 'Reading this report'), element('p', 'CCost = reference valuation, not provider billing. Unknown pricing is not zero. I/C/W/O = input/cache read/cache write/output. Durations are report execution durations, frozen at observation time.'));
-    parent.append(definitions);
+    if (!overview) parent.append(definitions);
+    if (overview) overviewConcepts(parent, view);
     if (view.session_usage.length || view.kind === 'sessions') {
       if (!view.session_usage.length) parent.append(element('p', 'Source acquired: no available sessions.'));
       table(parent, 'Sessions', ['Session / name', 'Model / effort', 'CCost', 'Prompts', 'Duration'], view.session_usage,
@@ -167,13 +230,13 @@ const ReportView = (() => {
     view.prompt_blocks.forEach((block, index) => prompts(parent, block, state, index, view.kind === 'date'));
     if (view.kind === 'date' && !view.prompt_blocks.length) parent.append(element('p', 'No prompt rows in this local date range.'));
     if (['overview', 'models'].includes(section) && view.model_comparison.length) {
-      if (view.token_mix) mixSummary(parent, view.token_mix);
-      parent.append(element('p', `Model comparison sample: ${known(view.model_comparison_sample_size)} · Pricing retrieved ${display(view, 'pricing_retrieved_at_ms')}`));
+      if (view.token_mix && !overview) mixSummary(parent, view.token_mix);
+      parent.append(element('p', `Pricing/cache metadata: ${display(view, 'pricing_retrieved_at_ms')}`, 'detail'));
       const all = view.kind === 'all-models';
-      table(parent, 'Reference models · shared CLI sample · default exact server ranking',
+      table(parent, overview ? 'Reference models' : 'Reference models · shared CLI sample · default exact server ranking',
         ['Publisher', 'Model', 'Relative CCost', ...(all ? ['GitHub USD/M I/C/W/O'] : []), 'Release date'], view.model_comparison,
         row => [row.publisher || 'N/A', element('span', row.model + (row.recent ? ' · recent' : '') + (row.superseded ? ' · older stable variant' : ''), row.recent ? 'new' : ''),
-          element('span', (row.promotion_marker ? `*${row.promotion_marker} ` : '') + display(row, 'relative_cost'), row.promotional ? 'promotion' : ''),
+          element('span', (row.promotion_marker ? `*${row.promotion_marker} ` : '') + (overview && !view.model_comparison_sample_size ? '' : display(row, 'relative_cost')), row.promotional ? 'promotion' : ''),
           ...(all ? [display(row, 'price_summary')] : []), row.release_date || 'N/A'], null, state, 'models',
         row => [row.publisher, row.model, row.relative_cost, ...(all ? [row.price_summary] : []), row.release_date]);
       for (const note of view.model_comparison_promotion_notes || []) parent.append(element('p', note, 'promotion'));
@@ -181,7 +244,8 @@ const ReportView = (() => {
     }
     if (section === 'models' && !view.model_comparison.length) parent.append(element('p', 'No matching reference models. Availability warnings, if any, are shown above.'));
     const accounts = view.accounts_quotas;
-    if (view.kind === 'normal' && ['overview', 'accounts'].includes(section)) {
+    if (overview) overviewAccounts(parent, accounts);
+    if (view.kind === 'normal' && section === 'accounts') {
       parent.append(element('h3', 'Accounts · independent observations'));
       if (!accounts || !accounts.accounts.length) parent.append(element('p', 'Account data unavailable or no accounts discovered. Session data remains independent.'));
       if (accounts) {
