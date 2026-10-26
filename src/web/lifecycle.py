@@ -120,7 +120,13 @@ def launch(root, gui_module, *, opener=webbrowser.open):
                         raise InstanceConflict("gui_or_server_start_failed")
                     state = store.read()
                     if state and state["nonce"] == nonce:
-                        if state["pid"] != child.pid or state["process"] != birth:
+                        # A framework Python launcher may exec its interpreter
+                        # during startup. Birth must stay owned, but compare the
+                        # published image with live identity, not the early image.
+                        actual = process_identity(child.pid)
+                        if (state["pid"] != child.pid or not birth or not actual
+                                or actual["birth"] != birth["birth"]
+                                or state["process"] != actual or child.poll() is not None):
                             raise InstanceConflict("instance_start_conflict")
                         try:
                             if control(state, "status").get("ready"):

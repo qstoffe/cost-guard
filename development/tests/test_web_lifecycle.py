@@ -330,6 +330,40 @@ class LifecycleTests(unittest.TestCase):
         self.assertFalse(result.coalesced)
         self.assertTrue(result.browser_opened)
 
+    def test_startup_exec_keeps_birth_and_requires_current_recorded_image(self):
+        initial = {"birth": "owned-start", "image": "launcher"}
+        for current, recorded, accepted in (
+            ({"birth": "owned-start", "image": "interpreter"}, {"birth": "owned-start", "image": "interpreter"}, True),
+            ({"birth": "foreign-start", "image": "interpreter"}, {"birth": "foreign-start", "image": "interpreter"}, False),
+            ({"birth": "owned-start", "image": "interpreter"}, {"birth": "owned-start", "image": "forged"}, False),
+        ):
+            with self.subTest(current=current, recorded=recorded):
+                store = self.store()
+                child = Mock(pid=9876)
+                child.poll.return_value = None
+                state = self.state(store, pid=child.pid, process=recorded, ready_ns=time.time_ns())
+
+                def spawn(root, private_store, nonce, module):
+                    state["nonce"] = nonce
+                    store.write(state)
+                    return child
+
+                reply = {"ready": True, "url": f"http://127.0.0.1:{state['port']}/#bootstrap=synthetic"}
+                with patch.object(lifecycle, "InstanceStore", return_value=store), \
+                        patch.object(lifecycle, "spawn_detached", side_effect=spawn), \
+                        patch.object(lifecycle, "process_identity", side_effect=[initial, current]), \
+                        patch.object(lifecycle, "control", return_value=reply):
+                    try:
+                        if accepted:
+                            self.assertTrue(lifecycle.launch(self.root, "src.web.native_macos", opener=lambda url: True).browser_opened)
+                            child.terminate.assert_not_called()
+                        else:
+                            with self.assertRaisesRegex(InstanceConflict, "instance_start_conflict"):
+                                lifecycle.launch(self.root, "src.web.native_macos", opener=lambda url: True)
+                            child.terminate.assert_called_once()
+                    finally:
+                        store.remove(state["nonce"])
+
     def test_two_simultaneous_launches_have_one_winner_and_do_not_kill_it(self):
         store = self.store()
         child = Mock(pid=9876)

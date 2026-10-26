@@ -86,12 +86,23 @@ def detached(root, home):
     module = "src.web.native_windows" if os.name == "nt" else "src.web.native_macos"
     environment = dict(os.environ, CG_CI_STATE=str(home))
     original_spawn = subprocess.Popen
+    identities = {}
+    identity_checks = []
+
+    def observed_identity(pid):
+        current = process_identity(pid)
+        if current:
+            initial = identities.setdefault(pid, current)
+            identity_checks.append(dict(same_birth=current['birth'] == initial['birth'],
+                                        same_image=current['image'] == initial['image']))
+        return current
 
     def spawn(*args, **kwargs):
         return original_spawn(*args, **dict(kwargs, env=environment))
 
     try:
-        with patch("src.web.lifecycle.InstanceStore", return_value=store), patch("src.web.lifecycle.subprocess.Popen", side_effect=spawn):
+        with patch("src.web.lifecycle.InstanceStore", return_value=store), patch("src.web.lifecycle.subprocess.Popen", side_effect=spawn), \
+                patch("src.web.lifecycle.process_identity", side_effect=observed_identity):
             first = launch(root, module, opener=lambda url: False)
             state = store.read()
             assert state and control(state, "status")["ready"] and not first.browser_opened
@@ -136,7 +147,7 @@ def detached(root, home):
         current = store.read()
         if current:
             stop_existing(store, current)
-    return dict(outcome="PASS", checks=["detached native host / private OS locks / HTTP ownership",
+    return dict(outcome="PASS", startup_identity_checks=identity_checks, checks=["detached native host / private OS locks / HTTP ownership",
         "Open retains instance", "deliberate restart retires original PID", "owned Exit/stop",
         "spaces and Unicode source path", "source change removes native host and private record"],
         command="PASS (real .command; offline entry shim)" if sys.platform == "darwin" else "PASS (real .cmd/PowerShell; offline entry shim)")
