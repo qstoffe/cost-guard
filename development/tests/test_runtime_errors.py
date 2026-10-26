@@ -387,7 +387,7 @@ class RuntimeErrorTests(unittest.TestCase):
         # Owned roots: architecture/governance/policies/runtime-failures.md.
         # Web's fatal handoffs: test_web_lifecycle.py, test_windows_web.py, test_macos_web.py.
         self.assertEqual(sorted(["src/accounts/acquisition.py", "src/accounts/claude_transport.py",
-                             "src/accounts/claude_transport.py", "src/accounts/refresh_loop.py", "src/presentation/progress.py",
+                         "src/accounts/claude_transport.py", "src/accounts/refresh_loop.py", "src/application/live.py", "src/presentation/progress.py",
                                  "src/reports/model_comparison.py", "src/watch/model_discovery.py",
                                  "src/watch/observers.py", "src/web/host.py", "src/web/jobs.py",
                                   "src/web/native_windows.py", "src/web/native_macos.py"]), sorted(roots))

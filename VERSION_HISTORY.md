@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.86 — 2026-10-26
+
+- Web Beta Live now shares one host-lifetime Watch acquisition/account owner across tabs, with canonical retained prompts, lifecycle/tool/skill/context evidence, Today and engine-start run totals. CLI remains independent. Finite reports retain isolated bounded workers and cannot monopolize live/control scheduling.
+- Same-origin authenticated SSE multiplexes immutable live, progress and runtime publications with instance-bound ordered IDs, bounded replay and authoritative gap resync. Disconnects remain visibly offline; received shutdown/source-change notifications stop retry and request a manual launcher run. No packages, model inference, browser storage or control secrets in stream URLs. Session live detail and remaining dedicated reports remain separate work.
+
 ## v80.85 — 2026-10-26
 
 - Web Beta now has local, accessible navigation, overview, all-session listing and static session detail with the established eight prompt columns, full-session totals, linked-child contributions and snapshot-time running evidence. Deep links, reload and Back/Forward use fragment routes; prompt text is never interpreted as HTML. No frontend build or runtime dependency.
