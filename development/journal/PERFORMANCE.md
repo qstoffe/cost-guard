@@ -1,10 +1,23 @@
-# v80.34 performance and structure review
+# Performance investigations
 
-## Scope and authority
+Source revision: f493998fdf1278af2ede23f63d5f97ccb96170bc
+Checked revision: f493998fdf1278af2ede23f63d5f97ccb96170bc
+Last checked: 2026-10-26
+Status: current
+
+## Summary
+
+FR 000360 scale work supersedes the old "quadratic but not dominant" causal-scan conclusion for long session detail. `src/analysis/prompt_index.py` now indexes assistant parents, synthetic prompt windows and provider-filtered prior entries once per snapshot. Strict timestamp windows and source ordering are preserved. Shared detail acquisition reuses unchanged analysis/valuation and advances only report execution time for identical running evidence. The older measurements below retain their original revisions/scopes, not current performance guarantees.
 
 The authoritative baseline was the locally delivered v80.33 filesystem, including all earlier uncommitted work, copied before editing. No Git restore, dependency, cache-generation change or remote operation was used. v80.32/v80.33 ownership splits, growth ratchets and the code map remain; this pass targets execution speed, Watch robustness, Diagnostics relevance and test cost without a second analysis path.
 
-## Measured hot spots and fixes
+## Evidence
+
+On Windows/Python 3.14, `py -3 development/tools/run_tests.py --pattern test_web_session_detail.py --file-timeout 300` initially took 191.4 seconds; its scale test passed but a fixture-revision collision failed parity. Profiling the scale method (`py -3 -m cProfile -s cumulative -m unittest development.tests.test_web_session_detail.SessionDetailTests.test_scale_all_rows_totals_bounded_pages_and_unchanged_work`) showed 724M calls/292.5 seconds instrumented: causal record construction, prompt-parent windows and repeated root entry scans dominated. After indexing, the same scale workload plus repaired parity/retention tests took 5.9 seconds uninstrumented. Expanded HTTP/asset/provenance tests later took 7–8 seconds. These are single-run workload observations, not universal timing guarantees or an isolated microbenchmark; profile overhead and later fixture additions prevent a precise speedup ratio.
+
+Reproduce with `development/tests/test_web_session_detail.py` against the checked source. It constructs 100/1,000/10,000-prompt histories, appends one prompt, checks first/middle/latest identities/full totals/bounded payloads and asserts timer-only/stable-revision work counters. A running-evidence test rejects calls to full analysis/projection on unchanged normalized evidence. Strict same-timestamp window equivalence is checked against the existing public algorithm. Full (104 files) and a real read-only V2 `development/tests/integration/probe_web_live.py --detail` passed; the latter observed one acquisition/account owner, two streams, complete pages and consistent freeze. No UI, model or shared-service stop.
+
+### Historical hot spots and fixes
 
 | Hot spot (live V2 data, 60 roots) | Owner and fix | Effect |
 | --- | --- | --- |
@@ -31,20 +44,24 @@ Post-v80.46 cleanup (captured live month, 6,279 requests, min of 40 runs, three 
 
 Post-v80.53 cleanup (synthetic active-context root, median of 5): `prompt_effort` rescanned every session message per prompt, and `PromptRowProjector` built `ContextEpochs`/`ContextHistory` twice. One `prompt_replies` index and one shared epochs instance cut `build_prompt_block` 0.76 → 0.26 s at 2,000 prompts (1,000: 0.25 → 0.12 s; 250: 39 → 33 ms) with identical projection hashes.
 
-## Behavioral evidence
+### Historical behavioral evidence
 
 Baseline (v80.33 copy) and current trees rendered the same live data against one shared cache: Watch initial frame and token mix, and normal, all-models, sessions, session-detail and date reports were byte-identical. New regressions cover pooled transport reuse/retry/bounded idle sockets, overlapping discovery checks, the stuck Claude helper not delaying answers, Watch resync scope, and the numbers-only Diagnostics Watch smoke.
 
-## Tests and tools
+### Historical tests and tools
 
 Full runs concurrently with its slowest files first (151 s → 32 s). Validator-negative checks call their owning check on a package copy instead of the whole validator subprocess; the dedicated release-builder module was retired with local archive generation in v80.51. The validator parses each file once per run. Fake V2 services, the V1 database and package copies are fixtures; test-to-test edges fell from 43 to 33. Fake services now drop keep-alive sockets on stop, matching a real process exit.
 
 Post-v80.40 cleanup: report-service, availability/rendering, quota-rendering, account and config-package setup moved into responsibility-owned fixtures, so tests no longer borrow `CompactReportTests.service` as an unbound method; test-to-test edges fell from 33 to 18, and post-v80.46 snapshot/threshold/warning fixtures to 10. Measured, unchanged: 80 live roots (largest 34 prompt events/487 messages) analyze in 54 ms total, 9.7 ms worst root; Watch tool observation runs only for the latest running prompt (~0.3 ms average per call). Per-prompt causal scans are quadratic only on synthetic 500+-prompt roots (500: 0.22 s, 1,000: 0.88 s), far beyond observed live sizes.
 
-## Remaining bounded opportunities
+## Next investigations
 
-Server-side message serialization now dominates hydration. `collect_diagnostics.collect` (159 lines) is a notable tool cost. Causal attribution still scans messages/events linearly per prompt inside the legacy `build_prompt_record`; with snapshot-wide inputs shared it is no longer dominant. It and prompt rendering remain behavior-sensitive legacy routines; characterize before splitting. Watch startup builds the local quota projection before starting account/model-discovery work and again in its forced refresh (~0.15 s live); removing the second build first needs proof that discovery cannot change the comparison catalog in between. Keep this review current in place.
+The former repeated causal-scan hot spot is resolved for root prompts; child/task traversal and source hydration remain workload-sensitive and were not made incremental here. Measure real long-history acquisition under account load before adding concurrency. Earlier Watch quota projection duplication (~0.15 s in its historical live sample) still needs proof that discovery cannot change comparison pricing between projections before removal. Real browser resize/scroll/selection and assistive-technology checks remain separate from VM results.
 
-## Live-proof limits
+## Rejected hypotheses
+
+Do not solve long detail by imposing Watch's row cap, rebuilding all prices on display ticks or introducing per-tab account/Watch workers. The scale profile identified shared causal lookups, not a browser billing problem. Preserve the historically rejected parallel hydration experiment above: its measured local-service benefit did not justify complexity. No durable history ledger or source mutation is needed for process-local observed retention.
+
+### Live-proof limits
 
 Live checks were read-only: headless report/Watch probes and Diagnostics against the shared V2 service, never stopping it. No interactive terminal/UI, native macOS, sleep/wake or Ctrl+C session was exercised.
