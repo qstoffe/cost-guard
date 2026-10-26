@@ -1,7 +1,7 @@
 # Optional Web runtime
 
-Source revision: 969207df1a6a7f3f2489be5388863bc582f822ff
-Checked revision: 969207df1a6a7f3f2489be5388863bc582f822ff
+Source revision: 282702930cb65362996a20ef4852c41b11c23bc0
+Checked revision: 282702930cb65362996a20ef4852c41b11c23bc0
 Last checked: 2026-10-26
 Status: current
 
@@ -11,7 +11,9 @@ Status: current
 
 `src/web/assets/app.js` owns fragment navigation, memory-only per-view frozen results, finite job polling and explicit refresh/stale/cancel state. `render.js` presents allowlisted shared DTO values as text-only accessible tables; its 50-row pages all slice one immutable full result, with canonical full totals unchanged. No source-offset cursors, cost engine, storage persistence or Watch owner. All-roots listing requests null session_limit; existing finite result/deadline bounds fail explicitly. Overview, Sessions and static details are implemented; dedicated remaining views are honestly unavailable. `SessionNotFoundError` remains a ReportRequestError for CLI and gains a classified `session_not_found` application code, distinct from empty acquired detail. These additions stay within the existing Web→application→reports direction.
 
-`src/web/host.py` is the single stop owner: HTTP/jobs run on its owned worker; native adapter run/close remain on the main thread. A failed worker signals the GUI, closes jobs/sockets and hands its original software fault to the main RuntimeErrors boundary. Managed faults use private app-data logs; foreground retains the normal reporter. Finite report children monitor multiprocessing's exact parent sentinel and exit nonzero if the host dies, even during blocked scans. No shared OpenCode service or Watch scheduler is owned here. Future live workers must join this same lifecycle, not create independent stop owners.
+`src/web/host.py` is the single stop owner: HTTP/jobs and one `src/application/live.py` acquisition thread join its lifecycle; native adapter run/close remain on the main thread. Composition transfers a fresh Watch coordinator/service to `src/watch/acquisition.py`; tabs/routes only read detached publications. Live continues without tabs, with one engine-start run origin, bounded history slices and independent account cadence. Finite report services never borrow or close that live context. Unexpected live/HTTP/cleanup faults retain the original exception for the fatal main RuntimeErrors boundary; managed faults use private app data. Finite children monitor the exact parent sentinel. No shared OpenCode service is stopped.
+
+`src/web/events.py` publishes full immutable live/progress/terminal updates with instance-bound monotonic IDs, 32-event/8 MiB replay and 2 MiB publications. `src/application/live_projection.py` allowlists exact Watch values, tool/skill/context evidence, row subtotals and run/Today scopes; normal month/billing fields are excluded. `src/web/assets/live.js` owns exactly one same-origin-cookie EventSource per tab. Gaps/overflow require authoritative HTTP resync; duplicates/older events cannot revalue/reset state, and old instances require fresh authorization. Received terminal notices stop retry even across gaps. Lost connections stay offline with retained evidence, not invented completion or a server launch.
 
 `src/web/lifecycle.py` owns deliberate launcher restart, overlap coalescing, bounded readiness/stop and detached spawn. `src/web/instance_state.py` owns canonical checkout/user identity, transition and lifetime OS locks, private atomic records and bounded allowlisted lifecycle diagnostics. `src/web/process_identity.py` owns native birth/image proof and safe termination handles. `src/web/change_guard.py` owns the allowlisted five-second runtime metadata baseline and terminal source_changed state; it never reloads/restarts code.
 
@@ -29,7 +31,7 @@ Overlapping clicks reuse a ready winner; later deliberate clicks restart even th
 
 Private /control/status, /control/stop and /control/open require a separate secret header, exact Host, empty body and no Origin/Cookie. No control secret reaches browser storage or normal logs. Open issues a fresh one-use fragment without invalidating same-instance browser sessions; old-instance cookies/control fail against replacements. Browser-open failure is distinct from server failure and retryable via native Open.
 
-Eight HTTP slots, five-second absolute wire deadlines, four outstanding jobs, one report process, sixteen retained results, 8 MiB/result and 120-second whole-job deadline bound work. Stop rejects new APIs and closes owned work only. Result DTOs retain decimal strings/null/provisional fields, never raw errors. This is not a same-user-malware boundary.
+Twelve HTTP slots admit at most four streams, preserving eight ordinary/control slots. Ordinary/header deadlines are five seconds; authenticated streams alone use a sixty-second lifetime, two-second writes, ten-second heartbeats and three-second reconnect. Four outstanding jobs, one report process, sixteen retained results, 8 MiB/result and a 120-second deadline bound finite work. Stop publishes terminal state, cancels reports and joins live/accounts/events/HTTP; retained `/api/live` remains readable during stopping. DTOs retain decimal strings/null/provisional fields, never raw errors. This is not a same-user-malware boundary.
 
 Guard membership/mtime_ns/size checks cover shipped Python/assets, Web Beta runtime launcher trees, root entries and manifests. Development/docs/user configuration/cache/log/bytecode/environment writes are excluded; links are never traversed. Stat errors retry honestly against the original baseline. Proven change immediately enters terminal source_changed and invokes the same shutdown without browser acknowledgement. Identical metadata can be missed; this is not atomic updating or a guarantee against Windows file locks. Manual launch alone starts changed code.
 
@@ -39,7 +41,7 @@ Static-view regression evidence: `development/tests/test_web_views.py` / `integr
 
 ## Allowed dependencies
 
-HTTP/security/assets and lifecycle/process/state/guard depend on standard library and their Web owners. Jobs consume shared application/report contracts. Composition alone wires concrete source/config/cache/pricing/providers and reuses bootstrap integration wiring, never CLI dispatch/source wake or Watch. CLI and Diagnostics do not import Web. Application/reports never import Web.
+HTTP/security/assets and lifecycle/process/state/guard depend on standard library and their Web owners. Jobs consume shared application/report contracts. Composition alone wires concrete source/config/cache/pricing/providers and the Watch acquisition driver, never CLI dispatch/source wake. LiveRuntime consumes that supplied driver and exports immutable values; application/reports never import Web. CLI and Diagnostics do not import Web.
 
 ## Entrypoints
 
@@ -48,6 +50,8 @@ HTTP/security/assets and lifecycle/process/state/guard depend on standard librar
 macOS entry/source: `macos/Beta/Cost Guard Web.command`, `macos/Beta/launcher.applescript`, `src/web/macos_launch.py`, `src/web/macos_app.py`, `src/web/native_macos.py`, `src/web/macos_status.py`, `src/web/objc_bridge.py`. Generated applets live only in private app data outside Git, fingerprinted to source/product/OS/architecture/Python and hash-checked before reuse; compile failures preserve the command fallback.
 
 ## Tests
+
+`development/tests/test_web_live.py` covers shared CLI/global projections, terminal transitions, partial pricing, midnight/DST, source recovery and hint resync, account-only publication, detached exports, replay/overflow/old instances, actual HTTP stream bounds/terminal delivery and stop beside a slow finite report. `development/tests/integration/web_live.cjs` exercises client ordering/offline/terminal/safe rendering in an optional Node VM, not a browser. Read-only `development/tests/integration/probe_web_live.py` observed V2, one owner/two streams, preserved run origin and joined shutdown on Windows/Python 3.14 on 2026-10-26. No inference, shared-service stop or native/visual/macOS acceptance is implied.
 
 `development/tests/test_web_lifecycle.py` covers synthetic source changes/exclusions/stat errors/metadata misses, private records/logs, OS locks and crash release, process birth/reuse/termination, different/Unicode/case-normalized checkouts, concurrent launch coalescing, same-build restart, failed startup/browser, control/browser separation, old sessions, GUI-main-thread contracts, fatal cleanup and a real force-stopped parent with a blocked child. `development/tests/test_runtime_errors.py` retains the execution-root inventory guard. Native Windows process handles/locks are exercised locally; GUI/detachment assertions are not native tray/macOS proof.
 

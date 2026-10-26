@@ -1,7 +1,7 @@
 # Cost Guard v80 architecture
 
-Source revision: 969207df1a6a7f3f2489be5388863bc582f822ff
-Checked revision: 969207df1a6a7f3f2489be5388863bc582f822ff
+Source revision: 282702930cb65362996a20ef4852c41b11c23bc0
+Checked revision: 282702930cb65362996a20ef4852c41b11c23bc0
 Last checked: 2026-10-26
 Status: current
 
@@ -18,9 +18,10 @@ Repository-relative owners: deterministic `development/tests/`, synthetic `devel
 ```mermaid
 flowchart TD
     entry["CLI / Web composition: validate config, select source"] --> reports["ReportService: scopes, acquisition, projections"]
-    entry --> application["Application: isolated immutable report jobs"]
+    entry --> application["Application: isolated reports / one live owner"]
     application --> reports
     entry --> watch["WatchCoordinator: cadence, retained rows / totals"]
+    application -->|"live acquisition seam"| watch
     watch --> reports
     reports --> sources["Sources: V1 read-only SQLite / V2 loopback HTTP"]
     reports --> providers["Accounts / pricing: bounded acquisition, normalized capacity / prices"]
@@ -36,7 +37,7 @@ flowchart TD
     diagnostics["Development Diagnostics: independent observations"] --> sources
 ```
 
-Arrows show calls/consumption, not a single linear execution pipeline. The optional `src/application/` owner serializes isolated report jobs for the optional Web adapter; CLI and Diagnostics do not import it. `src/web/` owns loopback HTTP/security/assets, finite report processes, private instance/restart locks and best-effort source-change stop. Windows and experimental macOS menus share the Web process; macOS native proof is pending. CLI stays independent and Web never starts Watch. Bootstrap dispatches CLI one-shot reports or Watch directly; Watch reuses ReportService rather than receiving a completed one-shot report. Source normalization establishes evidence, not cost. Analysis consumes provider-neutral pricing contracts as well as domain values; the cache never replaces source authority. The recovery edge belongs to the coordinator, not the renderer. The compact map groups auxiliary account/model workers under their owning areas; see the module routes below for exact contracts.
+Arrows show calls/consumption, not a single linear execution pipeline. The optional `src/application/` owner serializes isolated reports and schedules one host-lifetime live acquisition driver supplied by Web composition; CLI/Diagnostics remain independent. `src/web/` owns loopback HTTP/security/assets, bounded SSE/replay, finite report processes, private instance/restart locks and best-effort source-change stop. Windows and experimental macOS menus share this host; macOS native proof is pending. Web reuses Watch's renderer-independent acquisition seam, not a CLI process or per-tab coordinator. Bootstrap dispatches CLI reports/Watch directly. Source normalization establishes evidence, not cost; analysis consumes provider-neutral pricing contracts. The cache never replaces source authority. Recovery belongs to acquisition, not rendering. Module routes name exact auxiliary worker ownership.
 
 Owner/test routes (`modules/CODE_MAP.md`) and the module contracts below route history acquisition, provider integrations, launchers and failure/privacy facts; journal knowledge (`development/journal/INDEX.md`) routes historical performance evidence. These are source contracts/navigation, not measured current test coverage. Installed Toolkit owns development procedure. Account-period CCost stays inside existing analysis/report/Watch boundaries; the Reports and Watch contracts name the period index and regressions.
 
