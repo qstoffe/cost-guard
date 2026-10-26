@@ -26,13 +26,29 @@ from src.web.process_identity import process_identity
 
 SHIM = '''import os, sys
 import socket
+import time, json
 from pathlib import Path
+started = time.monotonic()
+trace = Path(os.environ['CG_CI_STATE']) / 'ci-startup.json'
+def mark(stage):
+    trace.write_text(json.dumps(dict(stage=stage, seconds=round(time.monotonic()-started, 3))))
+mark('imports')
 from unittest.mock import patch
 from src.web.host import WebHost
 from src.web.jobs import ReportJobs
 from src.web.instance_state import InstanceStore
 from src.web.lifecycle import launch
 from src.web.main import main
+mark('imports_complete')
+if sys.platform == 'darwin':
+    from src.web.objc_bridge import ObjC
+    original_send = ObjC.send
+    def traced_send(api, receiver, selector, *args):
+        mark(selector)
+        result = original_send(api, receiver, selector, *args)
+        mark(selector + ':returned')
+        return result
+    ObjC.send = traced_send
 root = Path(__file__).resolve().parent
 real_connect = socket.socket.connect
 def offline_connect(stream, address):
@@ -111,6 +127,11 @@ def detached(root, home):
             (root / "src/ci_owned_change.py").write_text("# synthetic source change\n")
             until(lambda: process_identity(state["pid"]) != state["process"])
             assert store.read() is None
+    except Exception as error:
+        trace = home / "ci-startup.json"
+        if trace.is_file():
+            error.ci_trace = json.loads(trace.read_text())
+        raise
     finally:
         current = store.read()
         if current:
@@ -178,7 +199,29 @@ def main():
                 evidence["checks"]["adapter"] = adapter_probe(root, ReportJobs)
             elif sys.platform == "darwin":
                 from development.tests.integration.probe_macos_web import probe
-                evidence["checks"]["adapter"] = probe(root, ReportJobs)
+                from src.web.objc_bridge import ObjC
+                timings = {}
+                send = ObjC.send
+
+                def timed_send(api, receiver, selector, *args):
+                    started = time.monotonic()
+                    try:
+                        return send(api, receiver, selector, *args)
+                    finally:
+                        timings[selector] = round(timings.get(selector, 0) + time.monotonic() - started, 4)
+
+                initialize = ObjC.__init__
+
+                def timed_initialize(api):
+                    started = time.monotonic()
+                    try:
+                        initialize(api)
+                    finally:
+                        timings["framework_load"] = round(time.monotonic() - started, 4)
+
+                with patch.object(ObjC, "send", timed_send), patch.object(ObjC, "__init__", timed_initialize):
+                    evidence["checks"]["adapter"] = probe(root, ReportJobs)
+                evidence["native_api_seconds"] = {key: value for key, value in timings.items() if value >= 0.05}
                 # NSApplication is process-global; a second adapter in the same
                 # process is not a fresh native launch. Exercise fault separately.
                 result = subprocess.run([sys.executable, str(Path(__file__).resolve()), "--http-fault", str(root)],
@@ -195,6 +238,8 @@ def main():
         if str(error) in {"tray_unavailable", "unsafe_instance_path", "app_preparation_failed",
                           "instance_start_timeout", "gui_or_server_start_failed", "safe_force_stop_unavailable"}:
             evidence["error_code"] = str(error)
+        if hasattr(error, "ci_trace"):
+            evidence["last_child_stage"] = error.ci_trace
         # Preserve causal source locations, not raw paths/state/exception payloads.
         import traceback
         evidence["failure_locations"] = [dict(file=Path(frame.filename).name, line=frame.lineno, function=frame.name)

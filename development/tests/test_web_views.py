@@ -114,7 +114,9 @@ class WebViewTests(unittest.TestCase):
             # Analysis cold-start belongs to the report/performance tests. Warm
             # this large fixture's dependency cache before the VM's fixed 5s UI
             # assertions, without changing its 55-session/151-row input or totals.
-            self.assertIsNone(application.execute(ReportRequest()).error)
+            for warm in (ReportRequest(), ReportRequest(ReportKind.SESSIONS, session_limit=None),
+                         ReportRequest(ReportKind.ALL_MODELS), ReportRequest(ReportKind.TOKEN_MIX)):
+                self.assertIsNone(application.execute(warm).error)
 
             class Jobs:
                 def __init__(self):
