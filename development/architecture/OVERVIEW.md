@@ -1,7 +1,7 @@
 # Cost Guard v80 architecture
 
-Source revision: 282702930cb65362996a20ef4852c41b11c23bc0
-Checked revision: 282702930cb65362996a20ef4852c41b11c23bc0
+Source revision: 033cf10b4b787cc446eb12b6763de7c24393bef2
+Checked revision: 033cf10b4b787cc446eb12b6763de7c24393bef2
 Last checked: 2026-10-26
 Status: current
 
@@ -17,11 +17,11 @@ Repository-relative owners: deterministic `development/tests/`, synthetic `devel
 
 ```mermaid
 flowchart TD
-    entry["CLI / Web composition: validate config, select source"] --> reports["ReportService: scopes, acquisition, projections"]
-    entry --> application["Application: isolated reports / one live owner"]
-    application --> reports
+    entry["CLI / WebHost: config, source, isolated report jobs"] --> reports["ReportService: scopes, acquisition, projections"]
+    entry --> application["Application: isolated reports / one live and detail owner"]
+    application -->|"finite report / observed detail history"| reports
     entry --> watch["WatchCoordinator: cadence, retained rows / totals"]
-    application -->|"live acquisition seam"| watch
+    application -->|"one LiveAcquisition driver; no per-tab service"| watch
     watch --> reports
     reports --> sources["Sources: V1 read-only SQLite / V2 loopback HTTP"]
     reports --> providers["Accounts / pricing: bounded acquisition, normalized capacity / prices"]
@@ -33,11 +33,11 @@ flowchart TD
     entry --> presentation["Presentation: report / Watch projections to terminal"]
     watch --> presentation
     watch -->|"outage: retain frame; retry same source; fresh snapshots"| sources
-    entry -->|"unexpected fault"| faults["RuntimeErrors: sanitized fatal / isolated recoverable evidence"]
+    entry -->|"unexpected fault: sanitized stop / close owned work"| faults["RuntimeErrors: sanitized fatal / isolated recoverable evidence"]
     diagnostics["Development Diagnostics: independent observations"] --> sources
 ```
 
-Arrows show calls/consumption, not a single linear execution pipeline. The optional `src/application/` owner serializes isolated reports and schedules one host-lifetime live acquisition driver supplied by Web composition; CLI/Diagnostics remain independent. `src/web/` owns loopback HTTP/security/assets, bounded SSE/replay, finite report processes, private instance/restart locks and best-effort source-change stop. Windows and experimental macOS menus share this host; macOS native proof is pending. Web reuses Watch's renderer-independent acquisition seam, not a CLI process or per-tab coordinator. Bootstrap dispatches CLI reports/Watch directly. Source normalization establishes evidence, not cost; analysis consumes provider-neutral pricing contracts. The cache never replaces source authority. Recovery belongs to acquisition, not rendering. Module routes name exact auxiliary worker ownership.
+Arrows show calls/consumption, not a single linear execution pipeline. `src/web/host.py` owns HTTP/jobs and one `src/application/live.py` thread. `src/web/jobs.py` isolates finite report processes with parent-loss cleanup. The live thread ticks Watch and `src/application/session_detail.py`; `src/reports/session_history.py` retains observed evidence outside cache. HTTP leases/pages never acquire source data. Source-change stops, never reloads; CLI/Diagnostics remain independent. `src/web/` owns loopback HTTP/security/assets, bounded SSE/replay, finite report processes, private instance/restart locks and best-effort source-change stop. Windows and experimental macOS menus share this host; macOS native proof is pending. Web reuses Watch's renderer-independent acquisition seam, not a CLI process or per-tab coordinator. Bootstrap dispatches CLI reports/Watch directly. Source normalization establishes evidence, not cost; analysis consumes provider-neutral pricing contracts. The cache never replaces source authority. Recovery belongs to acquisition, not rendering.
 
 Owner/test routes (`modules/CODE_MAP.md`) and the module contracts below route history acquisition, provider integrations, launchers and failure/privacy facts; journal knowledge (`development/journal/INDEX.md`) routes historical performance evidence. These are source contracts/navigation, not measured current test coverage. Installed Toolkit owns development procedure. Account-period CCost stays inside existing analysis/report/Watch boundaries; the Reports and Watch contracts name the period index and regressions.
 

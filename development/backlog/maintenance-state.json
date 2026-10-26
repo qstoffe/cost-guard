@@ -3,7 +3,7 @@
   "epochRevision": "df44c06a97244278abd8d0dc9ed90ea12c368e47",
   "ordinaryCount": 20,
   "completed": {
-    "architecture": 10,
+    "architecture": 20,
     "test-health": 15,
     "performance": 0
   },
@@ -11,10 +11,10 @@
     "id": "shared-repository-maintenance",
     "version": 1
   },
-  "lastDeliveredRevision": "99b0fc78f19da2d40bd74d3405a47d492153bf29",
+  "lastDeliveredRevision": "033cf10b4b787cc446eb12b6763de7c24393bef2",
   "lastItem": {
-    "id": "fr/000380-web-beta-stabilization-and-parity.md",
-    "kind": "ordinary"
+    "id": "architecture/20",
+    "kind": "architecture"
   },
   "featureDiscovery": {
     "completed": 10
