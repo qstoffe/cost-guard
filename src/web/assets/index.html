@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cost Guard Web Beta</title><link rel="stylesheet" href="/app.css"><script src="/app.js" defer></script></head>
+<body><main><h1>Cost Guard Web <small>Beta</small></h1>
+<p>Local, read-only reports. This early shell is not the complete Web dashboard.</p>
+<p id="status" role="status">HTTP ready. Establishing browser session…</p>
+<label>Finite report <select id="kind"><option value="normal">Overview</option>
+<option value="sessions">Session list</option><option value="session">Session detail</option>
+<option value="all-models">Model catalog</option><option value="date">Date range</option>
+<option value="token-mix">Historical Token Mix</option></select></label>
+<label>Session ID or date (when required) <input id="target" maxlength="200"></label>
+<button id="run" disabled>Run report</button><button id="cancel" disabled>Cancel</button>
+<pre id="result" aria-live="polite">No report requested. Empty data and unknown values are not zero.</pre>
+<p>Navigation, live updates, tray icons and background lifecycle are unavailable in this delivery.</p>
+<p>Closing this tab does not stop the foreground host. Stop it with Ctrl+C in its console.</p>
+</main></body></html>

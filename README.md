@@ -35,6 +35,10 @@ git pull --ff-only
 
 Install **Python 3.11+**; standard supported OpenCode installations need no configuration.
 
+### Optional foreground Web Beta
+
+Run `python cost-guard-web.py`; open its private one-use link within 120 seconds. No extra packages or auto-browser. Ctrl+C stops Web. CLI stays independent. See [Beta security, limits and API](docs/web-beta.md).
+
 ### Windows
 
 Double-click the `.cmd` launchers under `windows/`:
@@ -360,7 +364,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.80 (2026-10-26):** Added an internal transport-neutral report application boundary for the incremental Web Beta. CLI reports, Watch and launchers remain unchanged; no web server or browser launcher is included yet.
+**v80.81 (2026-10-26):** Optional secure loopback Web Beta with authenticated, cancellable report jobs. No new packages or background launcher; CLI remains independent.
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

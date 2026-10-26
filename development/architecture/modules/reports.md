@@ -1,7 +1,7 @@
 # Reports source contracts
 
-Source revision: 8dcca3989780983ab1507424a616f9d2a0dba9e4
-Checked revision: 8dcca3989780983ab1507424a616f9d2a0dba9e4
+Source revision: 76cd4cb7fbada74de2b37cd926891b802533b507
+Checked revision: 76cd4cb7fbada74de2b37cd926891b802533b507
 Last checked: 2026-10-26
 Status: current
 
@@ -38,7 +38,7 @@ Normal Copilot reports additionally reconcile native used AI credits against the
 
 `src/application/contracts.py` defines frozen result/error/progress DTOs and detached JSON export. `src/application/projection.py` explicitly selects known fields, never introspects/dumps arbitrary dataclasses. Decimal amounts/ratios are exact strings; null, zero, incomplete coverage, provisional status and existing precomputed shares/warnings stay distinct. Consumers sort/display values without revaluing usage. Scope includes configured timezone, local day/month starts, resolved date bounds, history policy and **report execution** duration, not Watch duration.
 
-Schema version and application instance UUID are separate from per-request-view sequence and hashed per-root source revisions. A result is immutable; source acquisition ensures each root snapshot, **not a transaction across roots/accounts/providers**. Account observations retain their own timestamp/status/availability and safe classified error facts. Source errors return a typed code/retryability and no empty-success view. Only safe progress phase/counts cross the boundary, not labels containing identifiers or exception text. Expected pricing unavailability and missing targets are distinct from logged unexpected defects; internal errors discard the whole view as `internal_error`, never raw transport messages. Cleanup faults propagate. Account locators and revisions use opaque hashes; raw provider observations, arbitrary reasons/warnings and pricing diagnostics are not exported. Session titles/previews remain intentional user content, so this is not a public/anonymous data feed. An HTTP adapter still needs authorization/security.
+Schema version and application instance UUID are separate from per-request-view sequence and hashed per-root source revisions. A result is immutable; source acquisition ensures each root snapshot, **not a transaction across roots/accounts/providers**. Account observations retain their own timestamp/status/availability and safe classified error facts. Source errors return a typed code/retryability and no empty-success view. Only safe progress phase/counts cross the boundary, not labels containing identifiers or exception text. Expected pricing unavailability and missing targets are distinct from logged unexpected defects; internal errors discard the whole view as `internal_error`, never raw transport messages. Cleanup faults propagate. Account locators and revisions use opaque hashes; raw provider observations, arbitrary reasons/warnings and pricing diagnostics are not exported. Session titles/previews remain intentional user content, so this is not a public/anonymous data feed. The optional `src/web/` adapter now owns HTTP authorization/security and process-level finite-job admission; see [Web](web.md).
 
 | Existing mode | Application request / published view | Scope and protected parity |
 | --- | --- | --- |
