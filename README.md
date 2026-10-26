@@ -37,7 +37,7 @@ Install **Python 3.11+**; standard supported OpenCode installations need no conf
 
 ### Optional Web Beta
 
-Windows: `windows/Beta/Cost Guard Web.cmd`; experimental macOS: `macos/Beta/Cost Guard Web.command` (unverified). Session Snapshot/Live provides complete paged history. No packages; independent CLI. [Beta guide](docs/web-beta.md). Foreground: `python cost-guard-web.py --foreground`.
+Windows: `windows/Beta/Cost Guard Web.cmd`; experimental macOS: `macos/Beta/Cost Guard Web.command` (hosted checks passed; desktop acceptance pending). Session Snapshot/Live provides complete paged history. No packages; independent CLI. [Beta guide](docs/web-beta.md). Foreground: `python cost-guard-web.py --foreground`.
 
 ### Windows
 

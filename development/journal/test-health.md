@@ -1,69 +1,73 @@
 # Test system health
 
-Source revision: 269b570b79ff8f4639f325f952ffe49a4f266ba0
-Checked revision: 269b570b79ff8f4639f325f952ffe49a4f266ba0
+Source revision: 034b54e3921a0be9fcd5e53080fc30913d7265a5
+Checked revision: 34e750af0329f2f30e5852354c277481271daaa0
 Last checked: 2026-10-26
 Status: current
 
 ## Summary
 
-Scheduled Test Health assessment at ordinary milestone 20, replacing milestone 15. **Retain the existing tests, fixtures and runner.** Current source and the five intervening FR reports do not demonstrate disproportionate orchestration, repeated setup failures or new test-to-test coupling warranting replacement. This is a source-backed no-change decision, not proof of optimality or current green execution.
+Retain isolated per-file tests, responsibility-owned fixtures and hard deadlines. FR 000410 adds real public-hosted Windows x64 and macOS ARM64/Intel execution, bounded offline native probes and rendered Chromium smoke, not a new mandatory release gate or product dependency. Final platform outcomes and manual limits live in development/architecture/governance/verification/web-beta-ci.md; historical or local green tests do not imply native consumer-desktop acceptance.
 
-Development-only delivery: journal/navigation and exact native maintenance state only. Product suites, validator, Diagnostics, live/native/UI probes, release gates and version updates were deliberately NOT RUN. No inference or private session-history access occurred. Current elapsed time, flakiness, executed/skipped counts and paid-test cost remain unknown. Historical outcomes below are not fresh PASS receipts.
+Local Windows Full at the startup-identity repair passed all 106 registered files in 49.7 seconds; validator passed with four existing design-budget warnings. This is Python 3.14 workstation evidence, not a substitute for CI Python 3.11. No local native/browser UI or model/provider calls were made.
 
 ## Evidence
 
-### Whole-repository inventory and runner
+### Runner and retained critical risks
 
-Read-only installed `maintenance_evidence.py inventory --repo-root .`: 412 tracked/nonignored text/config files (198 source/config, 136 test-related, 78 documentation); 26 binary/over-1-MiB files excluded. Git internals and ignored runtime artifacts are outside scope. Zero exact-byte duplicate groups does not establish semantic uniqueness. `python development/tools/code_inventory.py --json` reports 171 runtime modules, 13 development tools and 128 test-tree Python modules, including the 17 fixture modules counted once (not an additive subtree).
+`development/tools/run_tests.py` keeps four isolated workers, Quick's 25-second and Full's 240-second per-file bounds. Its JSON report now distinguishes named skips, failures/errors and incomplete known-passed counts for failed files. A test-method inventory is not an executed count. CI supplies Node so optional VM tests actually execute; Chromium smoke remains separate from DOM substitutes. `test_ci_web_beta.py` covers hosted-only admission and sanitized reporting.
 
-AST-only evaluation of runner declarations against top-level `development/tests/test_*.py`: 101 Quick + 4 Full-only = all 105 files, no missing/stale/duplicate entries. AST finds 1,341 syntactically named test methods, not an executed count. Since milestone 15, four files were registered: Web views, Live and Diagnostics in Quick, session-detail scale coverage in Full-only. Four workers, isolated per-file unittest subprocesses, test-mode/UTF-8 environment, 25-second Quick and 240-second Full deadlines remain. Full-only files start first; profile/pattern default is one worker. Profiles remain startup 6, sources 8, analysis 4, runtime 25, not exhaustive coverage promises.
+Milestone-20 source audit at 269b570b79ff8f4639f325f952ffe49a4f266ba0 found 105 registered files and ten legacy test-to-test import edges, not grounds for a broad rewrite. New coverage uses responsibility-owned fixtures, not sibling test modules. No fresh whole-tree duplication/performance audit is claimed here. Finite navigation, live replay and keyed-selection VM fixtures protect different interfaces; textual similarity is not proof they need one framework.
 
-Ten static test-to-test source/target import edges remain unchanged: model-pricing presentation; runtime-errors (two); token-mix economics; V2 synthetic attribution; v784 regressions; Watch lifecycle; Watch subtotals (two); Watch tool activity. New tests reuse responsibility-owned fixtures, not sibling test modules. These are bounded legacy coupling, not new permanent exceptions. The Node VM scripts use the optional installed runtime with skip conditions, no package installation, browser or product/build dependency. Three small DOM substitutes serve different contracts (finite navigation, live replay, keyed selection); textual similarity alone does not justify a shared framework.
+Tests below are under `development/tests/`; mappings establish intended contracts, not coverage percentages:
 
-### Critical outcomes and source/test mapping
-
-Test paths below are under `development/tests/`. Inspection establishes intended protection, not measured coverage.
-
-| Unique risk / outcome | Source owner | Evidence inspected or retained route |
+| Risk | Source owner | Protection |
 | --- | --- | --- |
-| Readiness budget never becomes auth retry/repeated CLI wake | `src/sources/read_recovery.py` | `test_connectivity_reliability.py`: virtual deadlines, exact attempts/waits, forbidden cache/CLI calls, fake V2 service |
-| Credential replacement cannot resurrect stale quotas or mutate credentials | `src/accounts/openai_subscription.py`, acquisition | `test_openai_account_switch.py`: unchanged synthetic SQLite/auth bytes, stale-alias denial, gated late-response replacement |
-| Unknown valuation differs from zero and actual billing | `src/analysis/valuation.py`, report projection | `test_application_reports.py`: independent Decimal/null expectations alongside shared-report parity across modes/generations; parity alone is not an independent formula oracle |
-| Concurrent disposable cache remains rebuildable | `src/cache/database.py`, repository | `test_cache.py`: generations, WAL/busy timeout, bounded readers/writers, insert-only first sightings |
-| Tabs share canonical Watch acquisition, source loss is not completion | `src/watch/acquisition.py`, `src/application/live.py`, `src/web/events.py` | `test_web_live.py`: CLI parity, detached exports, outage/schema distinction, replay/gap/foreign-instance bounds; optional `integration/web_live.cjs` checks actual assets |
-| Complete detail is not a page total; omitted running rows gain no evidence | `src/application/session_detail.py`, `src/reports/session_history.py` | `test_web_session_detail.py`: 100/1,000/10,000-row pages, totals, no unchanged reanalysis, freeze, retained omissions/time, late child, unknown pricing, auth/cursor errors; `integration/web_session.cjs` covers keyed focus/selection |
-| Navigation cannot silently refresh/deep-scan or reinterpret costs/text | `src/web/assets/app.js`, `reports.js`, `render.js` | `test_web_views.py` / `integration/web_views.cjs`: real HTTP/facade/assets, 55 roots/151 rows, frozen/refresh/stale/missing/empty, account/tier data, explicit-only history, exact Decimal sorting, hostile Unicode text |
-| Progress cannot starve host control/backpressure into deadline | `src/web/jobs.py` | `test_web_runtime.py`: deterministic 130-message fixture checks 64-message drain boundaries/completion; separate finite process tests retain cancellation/deadline/orphan evidence |
-| Two-checkout auth stays isolated; diagnostics omit private content | `src/web/security.py`, observations, `development/tools/diagnostic_web.py` | `test_web_runtime.py`: old credentials rejected; `test_web_diagnostics.py`: actual CookieJar/two hosts, allowlisted counters, private canaries, malformed/oversized state, persistence failure |
-| HTTP framing, process ownership, platform and package-negative risks remain distinct | Web HTTP/lifecycle/platform owners; validator/Diagnostics | Existing runtime/lifecycle/Windows/macOS tests and Full-only foundation/Diagnostics/parity files retained; fake platform evidence is not native acceptance |
+| Readiness never becomes repeated auth/CLI wake | sources/read_recovery | test_connectivity_reliability: virtual deadlines, exact waits, forbidden cache/CLI calls |
+| Replacement cannot resurrect old quotas or mutate credentials | accounts acquisition/subscription | test_openai_account_switch, test_account_acquisition: gated late response, generation replacement, synthetic bytes |
+| Unknown value is not zero or actual billing | analysis/valuation, report projection | test_application_reports: independent Decimal/null expectations alongside parity |
+| Disposable concurrent cache remains rebuildable | cache/database | test_cache: generations, WAL, bounded readers/writers, first sightings |
+| Tabs share one acquisition; source loss is not completion | application/live, web/events | test_web_live: parity, outage/schema distinction, replay/gap/foreign bounds; integration/web_live.cjs |
+| Detail totals/history are not page totals or fabricated evidence | application/session_detail, reports/session_history | test_web_session_detail: 100/1,000/10,000 rows, totals, freeze/retained omissions, late child, auth/cursors; integration/web_session.cjs |
+| Navigation never silently refreshes or reinterprets costs/text | web/assets | test_web_views and integration/web_views.cjs: 55 roots/151 rows, stale/frozen/missing, exact sorting, hostile Unicode |
+| Progress cannot starve control | web/jobs | test_web_runtime: deterministic 130-message fixture, 64-message drain; separate process cancellation/deadline/orphan tests |
+| HTTP auth/framing and private observations stay isolated | web/security, observations, diagnostic_web | test_web_runtime, test_web_diagnostics: actual CookieJar/two hosts, CSRF/rebinding, malformed/oversized state, private canaries |
+| Owned process identity/native cleanup/package negatives | web lifecycle/platform owners, validator | test_web_lifecycle, test_windows_web, test_macos_web, test_macos_app and Full-only foundation/Diagnostics tests |
 
-Watch Today rollover remains owned by `src/watch/today_ccost.py` / `test_watch_today_ccost.py`; HTTP CSRF/rebinding/framing/privacy denies remain in `test_web_runtime.py`. Native lock/crash/orphan protection remains in `test_web_lifecycle.py`; platform tests retain ABI/resource ownership rather than generic shared setup. The reserved `integration/live/` remains a placeholder, not a live-model runner. Real-source/native probes are explicit opt-in evidence routes, not automatic unit selection.
+Watch Today rollover remains in watch/today_ccost and test_watch_today_ccost. Reserved integration/live is not an implemented live-model runner. Real-source/desktop probes remain opt-in.
 
-### Recent outcomes and causal classification
+### Cross-platform causal findings
 
-Bounded committed sample since milestone 15: completion reports for FRs 000340–000380 and current test/runner diff. FR 000340 records 102 files / 39.6 s; 000350 records 103 / 42.3 s; 000360 delegates final outcomes to its PR and supplies no final elapsed total in its report; 000370 records 104 / 41.1 s; 000380 records 105 / 41.4 s. Different revisions/conditions are not a controlled speed comparison. No historical failed run counts as PASS. Each report records real-source checks; only 000380 additionally records native Windows checks. Native macOS, physical suspend/soak and visual/assistive-technology acceptance remain unverified.
+Reproduce with the committed `.github/workflows/web-beta.yml`: real hosted full suite/validator, then `ci_web_beta.py native`, then CI-only Playwright/Chromium and browser phase. Direct smoke refuses non-GitHub-hosted execution. Temporary offline entries suppress real acquisition and system browser but retain shipped HTTP/native adapters, OS locks and lifecycle. Public standard runners are the cost boundary; no paid/self-hosted fallback.
 
-Classify failures against current source: 000340's missing-session expectation changed intentionally and an indentation error was repaired. 000350 repaired stale HTTP/thread inventory assertions, fixture scope and a real composition-clock omission. 000360 isolates lifecycle fixtures from unintended real integration access. 000370's real report timeout exposed **product IPC backpressure**, not a bad test: `ReportJobs.tick` now drains at most 64 messages, with a deterministic regression instead of needing a real history scan to catch recurrence. 000380 repaired the HTTP-detail fixture's newly required lifecycle dependencies; overlapping source-change/live probes interfered and sequential rerun passed. That is probe coordination friction, not evidence that dropping isolation/deadlines is safe. README-cap repairs are documentation friction, not authority to weaken test/product limits.
+- Hosted macOS exposed reverse DNS in HTTPServer.server_bind on numeric loopback. A deterministic canary failed before the TCPServer binding repair. Real startup then reached the native polling/record stage instead of exhausting readiness. No product deadline was increased.
+- The subsequent Mac startup conflict exposed comparing the published image with an immediately spawned Python launcher. Ready validation now retains original PID/birth, compares published identity to the current live image and checks child liveness. Regression accepts same-birth exec and denies foreign birth/forged image. Hosted identity comparisons report booleans only, never PIDs/paths/state.
+- Resolve temporary roots before safe-path expectations: macOS /var aliases and Windows short paths otherwise misclassify fixtures. Do not weaken product symlink checks.
+- Mock compiler tests pin synthetic platform metadata: Python 3.11 platform discovery can invoke subprocess.run and accidentally enter a compiler mock.
+- A real authenticated model-availability HTTP test uses a virtual settling clock; wall-clock resolution must not decide the number of confirming polls. Synthetic credential replacements use distinct mtimes so same-length rapid writes cannot become the same file-version fixture.
+- Finite report work runs on an owned fixture worker and warms canonical scopes before fixed VM UI assertions; HTTP handlers do not perform synchronous expensive report work. Data and UI/suite deadlines stay intact.
+- Browser offline mode alone leaves existing SSE sockets open. The smoke closes its own recorded TCP stream while offline and verifies actual EventSource reconnect and terminal stop, not a mocked EventSource.
+- NSApplication is process-global: test a second HTTP-fault case in a fresh bounded process after native readiness, not another adapter or a pre-install HTTP fault.
+- Wait for owned identity retirement before reading a Windows record being removed, avoiding fixture read handles during unlink.
+- Validate README's hard byte budget under CRLF too; shorten prose, never raise the cap to admit a checkout-conversion failure.
 
-A fresh fully paginated GitHub Actions runs query returned one page, total_count 0; no tracked `.github` files exist. CI timing/flakiness evidence is unavailable. Private transcripts and other owners' scratch were not accessed. Prior fixture/scheduling measurements remain attributed in `PERFORMANCE.md`, not remeasured here. Earlier Windows socket-close and Beta-folder expectation repairs remain historical, not current failures; quota 401 never establishes model-login failure.
+Actions raw-log download through the installed transport returned HTTP 401; it was not bypassed with another identity. Supported Checks annotations supply sanitized totals/failure/skip notices, with bounded JSON artifacts. Keep notices below GitHub's observed truncation boundary by splitting totals and failures. Failed/cancelled runs are never PASS. Consumer Windows, physical clicks/status visibility, Finder/Gatekeeper, default-browser integration and accessibility remain separate manual acceptance.
 
-### Simpler alternatives considered before editing
+### Historical causes retained
 
-Monolithic discovery loses hard per-file isolation; automatic glob registration changes Quick admission without a current registration defect. Mock-only transport tests lose framing/cookie/process evidence. Replacing parity with copied arithmetic creates another metric engine; parity must still coexist with independent semantic expectations. A universal DOM fixture couples different asset interfaces without demonstrated repeated failures/savings. Removing Full discards package-negative/Diagnostics/scale risks. None is justified by the available evidence.
+FR 000370's real report timeout was product IPC backpressure, not permission to delete a test: ReportJobs.tick now drains at most 64 messages with a deterministic regression. FR 000380's overlapping source-change/live probes interfered; sequential rerun passed, a coordination issue rather than evidence against isolation. Earlier composition-clock omissions, stale HTTP/thread expectations and fixture dependencies were repaired in their owning deliveries. Different revisions' elapsed times are not a controlled speed comparison.
 
-Exact thread-root/source-text guards and ten legacy import edges remain refactor-sensitive debt. Move a legacy edge into its responsibility-owned fixture when that area changes; characterize outcome-equivalent wiring protection before replacing static checks. Do not preserve an internal shape merely because it is tested, or erase its only safety evidence. No tested mechanism changed, so no seeded-failure experiment or before/after execution improvement is claimed. Gate dependencies, fixture layers and orchestration are unchanged; registration grew with distinct delivered risks.
+## Next investigations
 
-## Next investigations and delivery integrity
+Inspect per-file durations/skips before changing Quick deadlines, especially Node/HTTP/spawn/PowerShell. The VM child permits 60 seconds while Quick bounds its whole file at 25 seconds: a known tighter outer limit, not authority to loosen it. Reproduce probe interference sequentially. Legacy static shape guards/import edges remain refactor-sensitive debt; move coupling into its responsibility-owned fixture when that area changes, preserving behavioral canaries. Hosted API success does not close desktop/Finder/Gatekeeper/accessibility/suspend/soak acceptance.
 
-When shipped changes authorize execution, inspect per-file durations/skips before adjusting Quick deadlines, particularly optional Node, HTTP and spawn/PowerShell tests. The Web-view child permits 60 seconds while Quick bounds its whole file at 25 seconds: a tighter outer ceiling, not observed flakiness; measure before changing either. Keep hard cleanup bounds. Reproduce probe interference sequentially before attributing failures to the product. Native macOS/browser accessibility remains outstanding; this audit neither closes acceptance limits nor authorizes UI.
-
-Architecture assessment: **no-update** to diagrams/module contracts; no responsibility/dependency boundary changed. Journal assessment: consolidate this baseline and its INDEX route in place. Exact native maintenance state advances Test Health to 20; identity high watermark stays 400, retention prunes nothing, todo is empty at the inspected base. Completed prerequisites/reports and native limitations remain intact. No foreign stash/unfamiliar work was found in the isolated clone; no dependency/recovery evidence relies on disposable exports. No raw inventory, credential, private payload or machine path is published.
+Architecture assessment: no-update to diagrams or dependency contracts; existing Web/HTTP/lifecycle owners remain. The workflow is additive evidence, not a permanent all-project gate. Final native delivery preserves immutable selected specifications, new concurrent FRs and the identity high watermark; no evidence depends on disposable private exports.
 
 ## Rejected hypotheses
 
-- Test growth or zero byte duplicates proves excess/health: unique risks and measured burden must support that judgment.
-- Historical green suites prove current runtime/native readiness: revision/platform/NOT RUN limits remain binding.
-- Quota 401 proves model login failed: resource/method compatibility differs from model authentication.
-- Development-only audits require Full, validator or version bumps: the active workflow deliberately excludes them.
-- Legacy coupling/similar DOM substitutes justify a broad rewrite without a demonstrated cause: retain focused follow-up instead of another framework.
+- Historical/local green or mock platform tests prove current native/desktop readiness. Platform, revision and NOT VERIFIED limits remain binding.
+- Slow AppKit initialization explained the Mac readiness timeout: measured native phases were subsecond; numeric-loopback DNS was the identified blocker.
+- Browser offline mode necessarily closes SSE TCP connections. Verify real disconnection/reconnect.
+- Fixing timing means raising product/suite deadlines or weakening ownership. Keep causal fixtures and PID/birth/current-image guards.
+- Monolithic discovery, automatic glob admission or a generic DOM framework is simpler without measured benefit. Retain distinct risks and per-file cleanup bounds.
+- Quota 401 proves model login failed, or development-only audits require product gates. Neither follows from the evidence.

@@ -1,6 +1,6 @@
 # Web Beta hosted revalidation
 
-FR 000410 re-tests the implementation delivered through FR 000380; it does not rewrite historical completion reports or promote Beta. Results below must be populated from retrievable Actions evidence before delivery.
+FR 000410 re-tests the implementation delivered through FR 000380; it does not rewrite historical completion reports or promote Beta. Verified 2026-10-26 from the successful hosted run below.
 
 ## Execution and cost boundary
 
@@ -12,7 +12,19 @@ Python 3.11 and Node 22 are CI developer tools. Playwright 1.56.0 plus its headl
 
 ## Evidence matrix
 
-Pending first CI execution; no platform PASS is claimed yet.
+[Successful run 40407897072](https://github.com/qstoffe/cost-guard/actions/runs/40407897072), PR head `034b54e3921a0be9fcd5e53080fc30913d7265a5`, executed the PR merge checkout `15afa826d2e7d9c66c2cccf180ce2a4f78a5811b`. All three jobs completed successfully. Each ran 106 registered Full files and Python 3.11.9; no failed/error cases. Later completion/journal/identity bookkeeping does not change this tested runtime.
+
+| Actual platform / image | Full passed / skipped | Validator | Native APIs / offline lifecycle | Chromium |
+| --- | --- | --- | --- | --- |
+| [Windows x64](https://github.com/qstoffe/cost-guard/actions/runs/40407897072/job/121870285351), build 10.0.26100; win25-vs2026 20261021.278.1 | 1,346 / 0 | PASS | PASS; real Win32 menu/message dispatch, detached restart/Exit/source-change, real .cmd/PowerShell | PASS |
+| [macOS ARM64](https://github.com/qstoffe/cost-guard/actions/runs/40407897072/job/121870285753), 15.7.9 / 24G830; macos15 20260907.0337.1 | 1,343 / 3 | PASS | PASS; actual AppKit ABI/callbacks/pump, HTTP-fault cleanup, detached restart/source-change, .command and osacompile cache/rebuild | PASS |
+| [macOS Intel](https://github.com/qstoffe/cost-guard/actions/runs/40407897072/job/121870285059), 15.7.9 / 24G830; macos15 20260824.0482.1 | 1,343 / 3 | PASS | PASS; same real native/offline scope as ARM64 | PASS |
+
+The three Mac skips are explicitly Windows-only: two shell-boundary cases in `test_launcher_feedback.py` (missing Python; skip duplicate failed candidates/preserve mode exit) and real PowerShell discovery in `test_windows_web.py`. Node VM cases executed. Node was 22.23.4 on Windows, 22.23.2 on Mac; Chromium was 141.0.7390.37 everywhere. macOS used in-box zsh 5.9 and osacompile SHA-256 `3b685aa1f98552482f51ee3d95879ebccb99d818ed96d976543efbcf9f57f697`.
+
+Checks annotations retain sanitized platform/suite/regression/native/browser notices and named skips; bounded artifacts last seven days. Raw Actions log download through the installed API transport returned HTTP 401 and was not bypassed. Conclusions here use the independently retrievable Checks evidence, not inaccessible raw logs. `upload-artifact@v5` emits a Node-20-deprecation warning but succeeded under runner Node 24; it is not a failed test.
+
+Earlier runs failed and are not PASS evidence: [40404404891](https://github.com/qstoffe/cost-guard/actions/runs/40404404891) exposed Mac readiness delay, then [40405973252](https://github.com/qstoffe/cost-guard/actions/runs/40405973252) reached a startup identity conflict and a Windows synthetic credential-generation flake. Narrow repairs removed numeric-loopback reverse DNS, retained original PID/birth while checking the ready child's current image, and gave synthetic credential replacements distinct mtimes. The successful native probes recorded same birth with changed image on both Mac architectures, supporting the interpreter-exec cause; foreign-birth/forged-image regression denials remain. No readiness/suite deadline was raised. Local Windows Full passed all 106 files in 49.7 seconds; validator passed with four existing design-budget warnings.
 
 `full.json` retains per-file executed/failure/error/skipped counts and named skip reasons. The registered full runner still isolates each file, four workers, 240-second deadline. No timeout weakening. `regression.json` separately records validator exit. Actions logs hold normal synthetic test failure output; uploaded JSON excludes raw output, paths, URLs/credentials, prompts and instance state. Missing phases report NOT RUN, provisioning failure BLOCKED, test/assertion errors FAIL. Skips are never native proof.
 
