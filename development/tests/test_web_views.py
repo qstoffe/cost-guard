@@ -107,13 +107,17 @@ class WebViewTests(unittest.TestCase):
             self.assertIsNone(account_report["error"])
             self.assertEqual(2, len(account_report["view"]["accounts_quotas"]["accounts"]))
             provider = None
-            source = SyntheticMonthSource(55, 151, month_start_ms=1000, running_roots=1)
+            source = SyntheticMonthSource(55, 1, month_start_ms=1000)
+            # Pagination needs 55 roots and one 151-row running detail, not
+            # 8,305 prompt analyses behind every UI wait on hosted Intel.
+            source.snapshots['root-0000'] = SyntheticMonthSource(
+                1, 151, month_start_ms=1000, running_roots=1).snapshots['root-0000']
             # Existing empty session differs from missing catalog entry.
             empty = source.snapshots["root-0001"]
             source.snapshots["root-0001"] = replace(empty, messages=(), parts=(), events=(), invocations=())
             # Analysis cold-start belongs to the report/performance tests. Warm
-            # this large fixture's dependency cache before the VM's fixed 5s UI
-            # assertions, without changing its 55-session/151-row input or totals.
+            # the dependency cache before the VM's fixed 5s UI assertions.
+            # Full large-month analysis remains in the performance owner tests.
             for warm in (ReportRequest(), ReportRequest(ReportKind.SESSIONS, session_limit=None),
                          ReportRequest(ReportKind.ALL_MODELS), ReportRequest(ReportKind.TOKEN_MIX)):
                 self.assertIsNone(application.execute(warm).error)

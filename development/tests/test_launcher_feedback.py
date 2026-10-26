@@ -14,6 +14,13 @@ from src.presentation.progress import StartupProgress
 
 ROOT = Path(__file__).resolve().parents[2]
 
+# Discovery/argument tests do not own cold Roslyn compilation or Win32 Ctrl+C.
+# The real console boundary is exercised by the native launcher/Watch probe.
+CONSOLE_STUB = (
+    "class CostGuardLauncherConsole { static [bool] SetConsoleCtrlHandler("
+    "[IntPtr]$handler, [bool]$add) { return $true } }\n"
+)
+
 
 class LauncherFeedbackTests(unittest.TestCase):
     def test_windows_wrappers_write_before_shell_detection_without_new_process(self):
@@ -73,7 +80,7 @@ class LauncherFeedbackTests(unittest.TestCase):
             with self.subTest(shell=executable), tempfile.TemporaryDirectory() as temporary:
                 script = Path(temporary) / "probe.ps1"
                 driver = str(ROOT / "src/windows_launcher.ps1").replace("'", "''")
-                script.write_text("function Get-Command { return @() }\n"
+                script.write_text(CONSOLE_STUB + "function Get-Command { return @() }\n"
                                   f". '{driver}' -Mode report\n"
                                   "exit $LASTEXITCODE\n", encoding="utf-8")
                 result = subprocess.run([shell, "-NoLogo", "-NoProfile", "-NonInteractive", "-File", str(script)],
@@ -101,7 +108,7 @@ class LauncherFeedbackTests(unittest.TestCase):
                     driver = str(ROOT / "src/windows_launcher.ps1").replace("'", "''")
                     sources = [str(path).replace("'", "''") for path in (bad, bad, good)]
                     choices = ",".join("[pscustomobject]@{Source='" + path + "'}" for path in sources)
-                    script.write_text(f"$global:Probes=0\nfunction Get-Command {{ return @({choices}) }}\n"
+                    script.write_text(CONSOLE_STUB + f"$global:Probes=0\nfunction Get-Command {{ return @({choices}) }}\n"
                                       f". '{driver}' -Mode {mode}\n"
                                       "Write-Output ('PROBES:' + $global:Probes)\nexit $LASTEXITCODE\n", encoding="utf-8")
                     result = subprocess.run([shell, "-NoLogo", "-NoProfile", "-NonInteractive", "-File", str(script)],

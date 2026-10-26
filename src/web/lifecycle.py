@@ -89,7 +89,7 @@ class LaunchResult:
     coalesced: bool
 
 
-def launch(root, gui_module, *, opener=webbrowser.open):
+def launch(root, gui_module, *, opener=webbrowser.open, progress=lambda stage: None):
     """Intentional invocation restarts; overlapping clicks reuse the ready winner.
 
     Only approved native adapters are accepted; a missing GUI can never leave a
@@ -97,6 +97,7 @@ def launch(root, gui_module, *, opener=webbrowser.open):
     """
     invoked_ns = time.time_ns()
     store = InstanceStore(root)
+    progress("arbitration")
     with store.lock(timeout=35):
         state = store.read()
         coalesced = bool(state and state["ready_ns"] >= invoked_ns)
@@ -105,8 +106,10 @@ def launch(root, gui_module, *, opener=webbrowser.open):
                 raise InstanceConflict("instance_not_ready")
         else:
             if state:
+                progress("restart")
                 stop_existing(store, state)
             nonce = secrets.token_hex(16)
+            progress("host")
             child = spawn_detached(root, store, nonce, gui_module)
             # Retain exact child's handle/identity for failed-start cleanup only.
             birth = process_identity(child.pid)
@@ -147,6 +150,7 @@ def launch(root, gui_module, *, opener=webbrowser.open):
                         child.wait(timeout=3)
                 store.remove(nonce)
                 raise
+        progress("browser")
         opened = control(state, "open")
         url = opened.get("url", "")
         prefix = f"http://127.0.0.1:{state['port']}/#bootstrap="

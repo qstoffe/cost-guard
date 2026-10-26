@@ -35,7 +35,11 @@ function show(state) {
     if (liveValue?.view) ReportView.renderLive(output, liveValue, state);
     else output.replaceChildren(ReportView.element('p', liveValue?.state || 'Live acquisition starting…'));
   } else if (state.result) ReportView.render(output, state.result, state);
-  else output.replaceChildren(ReportView.element('p', state.loading ? 'Loading snapshot…' : state.message));
+  else if (state.loading) {
+    const activity = ReportView.element('progress');
+    activity.setAttribute('aria-label', 'Acquiring initial report');
+    output.replaceChildren(activity, ReportView.element('p', state.message));
+  } else output.replaceChildren(ReportView.element('p', state.message));
 }
 function failure(code) {
   const errors = {session_not_found: 'No matching session. It may have been removed or is unavailable in this source.',
@@ -104,7 +108,7 @@ function navigate() {
     current.message = 'Complete session history; explicit Snapshot/Live. Acquisition is shared across tabs.';
   }
   document.getElementById('search').disabled = !!current.detail;
-  show(current);
+  if (csrf) show(current);
   if (csrf && current.request && !current.explicit && !current.detail && !current.result && !current.attempted) {
     current.attempted = true;
     acquire(current);
@@ -129,6 +133,8 @@ async function connect() {
     navigate();
   } catch (_) {
     statusLine.textContent = 'Browser session unavailable. Use a fresh one-use link from this host; restart it if expired.';
+    output.setAttribute('aria-busy', 'false');
+    output.replaceChildren(ReportView.element('p', 'Unable to establish the private browser session. Use tray Open Cost Guard for a fresh link, or relaunch Cost Guard Web Beta. No source data has been assumed ready.'));
   } finally { credential = null; }
 }
 refresh.addEventListener('click', () => {

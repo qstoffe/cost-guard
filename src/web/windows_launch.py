@@ -3,6 +3,7 @@ from src.config import load_configuration, ConfigError
 from .instance_state import InstanceStore
 from .lifecycle import launch
 from .process_identity import InstanceConflict
+from .startup import StartupProgress
 
 MESSAGES = {
     "tray_unavailable": "Windows notification-area API is unavailable. Check Explorer and retry.",
@@ -16,16 +17,20 @@ MESSAGES = {
 
 def launch_windows(root):
     store = None
+    progress = StartupProgress()
     try:
+        progress("config")
         store = InstanceStore(root)
         load_configuration(root)
         from .native_windows import open_registered_browser, preflight
+        progress("preflight")
         preflight()
-        result = launch(root, "src.web.native_windows", opener=open_registered_browser)
+        result = launch(root, "src.web.native_windows", opener=open_registered_browser, progress=progress)
         if not result.browser_opened:
             store.log("browser_open_failed")
             print("Cost Guard Web Beta: " + MESSAGES["browser_open_failed"])
             return 4
+        progress("handoff")
         return 0
     except ConfigError:
         code = "configuration_unavailable"

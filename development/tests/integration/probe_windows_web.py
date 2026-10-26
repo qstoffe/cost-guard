@@ -15,7 +15,7 @@ import socket
 import subprocess
 import sys
 import tempfile
-from threading import Thread
+from threading import Thread, Timer
 import time
 from unittest.mock import patch
 
@@ -234,6 +234,47 @@ def source_zip_probe():
     return {"shell_execute_source_zip_unicode_space": "passed"}
 
 
+def startup_timing_probe():
+    """Actual batch/PowerShell/Python chain; no raw URL or source data is retained."""
+    store = InstanceStore(ROOT)
+    if store.read():
+        raise RuntimeError("timing_requires_no_existing_instance")
+    observations = {}
+    try:
+        for mode in ("cold_host", "warm_restart"):
+            started = time.monotonic()
+            child = subprocess.Popen(["cmd.exe", "/d", "/c", str(ROOT / "windows/Beta/Cost Guard Web.cmd")],
+                                     cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                     text=True)
+            deadline = Timer(40, child.kill)
+            deadline.start()
+            stages = []
+            try:
+                for line in child.stdout:
+                    if line.startswith("Cost Guard startup:"):
+                        stages.append({"seconds": round(time.monotonic() - started, 3),
+                                       "stage": line.strip()})
+                assert child.wait(timeout=3) == 0
+            finally:
+                deadline.cancel()
+                deadline.join()
+                if child.poll() is None:
+                    child.kill()
+                child.wait(timeout=3)
+                child.stdout.close()
+            assert stages and "Checking Python" in stages[0]["stage"]
+            assert any("Opening authenticated browser" in item["stage"] for item in stages)
+            assert "handoff complete" in stages[-1]["stage"]
+            assert control(store.read(), "status")["ready"]
+            observations[mode] = {"launcher_seconds": round(time.monotonic() - started, 3),
+                                  "streamed_stages": stages}
+    finally:
+        state = store.read()
+        if state:
+            stop_existing(store, state)
+    return {"startup_timings": observations}
+
+
 def watch_and_detached_probe():
     """Keep the real, redirected CLI Watch alive across Web restart and exit."""
     with tempfile.TemporaryFile() as output:
@@ -276,6 +317,7 @@ if __name__ == "__main__":
     evidence.update(watch_and_detached_probe())
     evidence["injected_tray_api_failure_preserves_existing_host"] = "passed"
     evidence.update(source_zip_probe())
+    evidence.update(startup_timing_probe())
     evidence.update({"model_requests": 0, "physical_explorer_double_click": "not_run",
                      "visual_light_dark_review": "not_run"})
     print(json.dumps(evidence))

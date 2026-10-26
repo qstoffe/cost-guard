@@ -20,22 +20,37 @@ function Find-BetaPython {
 }
 $code = 1
 try {
+    $timer = [Diagnostics.Stopwatch]::StartNew()
+    Write-Host 'Cost Guard startup: Checking Python 3.11+...'
+    Write-Progress -Activity 'Cost Guard Web Beta startup' -Status 'Checking Python' -PercentComplete -1
     $found = Find-BetaPython
     $python = if ($found) { $found.Executable } else { $null }
     [array]$pythonArgs = if ($found) { $found.Arguments } else { @() }
     if (-not $python) {
         $message = 'Python 3.11 or newer was not found. Install Python, then retry Cost Guard Web Beta.'
     } else {
-        $output = & $python @pythonArgs (Join-Path $root 'cost-guard-web.py') --launch-windows 2>$null
+        Write-Host ('Cost Guard startup: Python ready ({0:N1}s elapsed)' -f $timer.Elapsed.TotalSeconds)
+        # Stream flushed, fixed progress instead of buffering the entire launch.
+        # Keep only allowlisted failure text; raw subprocess exceptions stay private.
+        $safe = @()
+        & $python @pythonArgs -u (Join-Path $root 'cost-guard-web.py') --launch-windows 2>$null | ForEach-Object {
+            if ($_ -match '^Cost Guard startup: [A-Za-z0-9 ;,+().-]+$') {
+                Write-Host $_
+                Write-Progress -Activity 'Cost Guard Web Beta startup' -Status $_ -PercentComplete -1
+            } elseif ($_ -like 'Cost Guard Web Beta: *') {
+                $safe += $_
+            }
+        }
         $code = $LASTEXITCODE
+        Write-Progress -Activity 'Cost Guard Web Beta startup' -Completed
         if ($code -eq 0) { exit 0 }
         # Python emits only fixed allowlisted failure text; never display raw exceptions.
-        $safe = @($output | Where-Object { $_ -like 'Cost Guard Web Beta: *' })
         if ($safe.Count -gt 0) { $message = $safe[-1] }
     }
 } catch {
     $code = 1
 }
+Write-Progress -Activity 'Cost Guard Web Beta startup' -Completed
 
 function Write-BetaStartupRecord {
     param([string]$Directory, [ValidateSet('python_unavailable', 'launcher_failed')][string]$Failure)

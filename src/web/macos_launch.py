@@ -8,6 +8,7 @@ from .instance_state import InstanceStore
 from .lifecycle import launch
 from .macos_app import prepare_app
 from .process_identity import InstanceConflict
+from .startup import StartupProgress
 
 MESSAGES = {
     "tray_unavailable": "The native macOS menu could not start. Use a logged-in desktop and retry; CLI remains available.",
@@ -37,12 +38,16 @@ def launch_macos(root):
         print("Cost Guard Web Beta requires macOS and already-installed Python 3.11+.")
         return 1
     store = None
+    progress = StartupProgress()
     try:
+        progress("config")
         store = InstanceStore(root)
         load_configuration(root)
+        progress("preflight")
         native_preflight(root)
         # Finder wrapper failure must not disable the direct .command fallback.
         try:
+            progress("helper")
             app = prepare_app(root, store)
             print(f"Cost Guard: Optional Finder app (native validation pending): {app}", flush=True)
         except (InstanceConflict, OSError, ValueError):
@@ -50,11 +55,12 @@ def launch_macos(root):
             print("Cost Guard: Finder app preparation failed. Check /usr/bin/osacompile and "
                   "private app-data permissions; continuing with .command. No tools installed.", flush=True)
         from .native_macos import open_registered_browser
-        result = launch(root, "src.web.native_macos", opener=open_registered_browser)
+        result = launch(root, "src.web.native_macos", opener=open_registered_browser, progress=progress)
         if not result.browser_opened:
             store.log("browser_open_failed")
             print("Cost Guard Web Beta: " + MESSAGES["browser_open_failed"])
             return 4
+        progress("handoff")
         print("Cost Guard Web Beta: Running; use the CG menu to Open or Exit.")
         return 0
     except ConfigError:

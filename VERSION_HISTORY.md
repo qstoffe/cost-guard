@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.91 — 2026-10-26
+
+- Web Beta streams timed startup stages through the Windows launcher instead of buffering them until completion. Native preflight, verified restart, detached tray/host readiness and authenticated browser handoff retain their safety checks; macOS command startup also explains optional first-launch helper preparation.
+- The browser retains a branded, indeterminate loading view through authorization and initial report acquisition, with explicit retry directions rather than an empty report area. HTTP readiness does not assert source/account readiness. Console-progress fallback is intentional; physical desktop and native macOS acceptance remain separate.
+
 ## v80.90 — 2026-10-26
 
 - Added bounded, read-only GitHub-hosted Web Beta revalidation on Windows x64 and macOS Apple Silicon/Intel, including the existing isolated full suite, package checks, native API/offline lifecycle probes and CI-only rendered Chromium smoke. This is additive verification, not a mandatory release gate or Beta promotion; normal installation and CLI/Watch dependencies are unchanged.

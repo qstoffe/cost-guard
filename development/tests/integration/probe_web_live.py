@@ -28,10 +28,12 @@ def main():
         owners.append(driver)
         return driver
 
+    started = time.monotonic()
     host = WebHost(ROOT, jobs=ReportJobs(), live_factory=factory)
     streams = []
     try:
         host.start()
+        shell_seconds = time.monotonic() - started
         server = host.server
 
         def get(path, *, value=None, cookie=None):
@@ -67,6 +69,7 @@ def main():
         else:
             raise RuntimeError('probe_live_timeout')
         start = live['view']['started_at_ms']
+        source_seconds = time.monotonic() - started
         for _ in range(2):
             connection = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=3)
             connection.request('GET', '/api/events', headers={'Cookie': cookie,
@@ -83,7 +86,8 @@ def main():
         print(json.dumps({'status': 'ok', 'source': view['source_label'], 'owners': len(owners),
             'streams': len(streams), 'rows': len(view['rows']),
             'accounts': len((view['accounts'] or {}).get('accounts', [])),
-            'run_origin_preserved': True, 'sequence_advanced': latest['sequence'] > state['sequence']}))
+            'run_origin_preserved': True, 'sequence_advanced': latest['sequence'] > state['sequence'],
+            'shell_seconds': round(shell_seconds, 3), 'source_view_seconds': round(source_seconds, 3)}))
         if args.detail:
             if not view['rows']:
                 raise RuntimeError('probe_no_session_evidence')
@@ -124,6 +128,7 @@ def main():
             for request in ({'kind': 'normal'}, {'kind': 'all-models'},
                             {'kind': 'sessions', 'session_limit': 1},
                             {'kind': 'date', 'date_text': '2026-10-25'}):
+                report_started = time.monotonic()
                 key = submit(request)
                 deadline = time.monotonic() + 125
                 while time.monotonic() < deadline:
@@ -138,7 +143,8 @@ def main():
                 current, _ = get('/api/live', cookie=cookie)
                 if len(owners) != 1 or current['values']['live']['view']['started_at_ms'] != start:
                     raise RuntimeError('probe_report_changed_live_owner')
-                print(json.dumps(dict(report=request['kind'], status='complete', live_owner_preserved=True)))
+                print(json.dumps(dict(report=request['kind'], status='complete', live_owner_preserved=True,
+                                      seconds=round(time.monotonic() - report_started, 3))))
             key = submit({'kind': 'token-mix'})
             deadline = time.monotonic() + 10
             while time.monotonic() < deadline:

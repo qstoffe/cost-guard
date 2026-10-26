@@ -15,11 +15,35 @@ from src.web.native_windows import WindowsHost, preflight
 from src.web.process_identity import InstanceConflict
 from src.web.tray_icon import icon_bits
 from src.web.win32_tray import OPEN, EXIT
+from src.web.startup import StartupProgress
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
 class WindowsWebTests(unittest.TestCase):
+    def test_startup_progress_is_flushed_timed_and_allowlisted(self):
+        with patch('src.web.startup.time.monotonic', side_effect=[10, 12.5]), \
+                patch('builtins.print') as output:
+            progress = StartupProgress()
+            progress('config')
+        output.assert_called_once_with(
+            'Cost Guard startup: Checking safe configuration (2.5s elapsed)', flush=True)
+        with self.assertRaises(KeyError):
+            progress('http://private/#bootstrap=secret')
+
+    def test_configuration_failure_stops_before_native_or_browser_work(self):
+        output = io.StringIO()
+        with patch.object(windows_launch, 'InstanceStore'), \
+                patch.object(windows_launch, 'load_configuration', side_effect=windows_launch.ConfigError('private')), \
+                patch('src.web.native_windows.preflight') as preflight, \
+                patch.object(windows_launch, 'launch') as launch, contextlib.redirect_stdout(output):
+            self.assertEqual(windows_launch.launch_windows(ROOT), 1)
+        preflight.assert_not_called()
+        launch.assert_not_called()
+        self.assertIn('Checking safe configuration', output.getvalue())
+        self.assertIn('Check config/user-config.jsonc', output.getvalue())
+        self.assertNotIn('private', output.getvalue())
+
     def owner(self):
         return Mock(stopping=Event(), stopped=Event())
 
@@ -141,6 +165,7 @@ class WindowsWebTests(unittest.TestCase):
             probe.write_text(r'''
 param($Source, $OldPython, $Python)
 $ErrorActionPreference = 'Stop'
+Write-Output 'STAGE:parse'
 $tokens = $null; $errors = $null
 $ast = [Management.Automation.Language.Parser]::ParseFile($Source, [ref]$tokens, [ref]$errors)
 if ($errors.Count) { throw 'Invalid production PowerShell syntax' }
@@ -149,6 +174,7 @@ $function = $ast.Find({param($node) $node -is [Management.Automation.Language.Fu
 Invoke-Expression $function.Extent.Text
 function Get-Command { return @() }
 if (Find-BetaPython) { throw 'Missing Python must not succeed' }
+Write-Output 'STAGE:direct-python'
 function Get-Command {
     param($Name, [switch]$All, $CommandType, $ErrorAction)
     if ($Name -eq 'py.exe') { return @([pscustomobject]@{Source=$OldPython}) }
@@ -157,6 +183,7 @@ function Get-Command {
 $found = Find-BetaPython
 if ($found.Executable -ne $Python -or $found.Arguments.Count -ne 0) { throw 'PATH fallback failed' }
 if ($realLauncher) {
+    Write-Output 'STAGE:py-launcher'
     function Get-Command { return @([pscustomobject]@{Source=$realLauncher}) }
     $found = Find-BetaPython
     $python = $found.Executable
@@ -166,6 +193,7 @@ if ($realLauncher) {
     if ($result -ne '1234567') { throw 'Single py -3 argument lost native command' }
 }
 $logging = $ast.Find({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Write-BetaStartupRecord'}, $true)
+Write-Output 'STAGE:private-log'
 Invoke-Expression $logging.Extent.Text
 $directory = Join-Path (Split-Path -Parent $OldPython) 'private log'
 Write-BetaStartupRecord -Directory $directory -Failure python_unavailable
@@ -175,9 +203,18 @@ $text = [IO.File]::ReadAllText((Join-Path $directory 'startup.log'))
 if ($text -notmatch '^\d{4}-\d{2}-\d{2}T[\d:]+ python_unavailable$') { throw 'Non-allowlisted log' }
 Write-Output 'DISCOVERY_PASS'
 ''', encoding="utf-8")
-            result = subprocess.run(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass",
-                                     "-File", str(probe), str(ROOT / "src/web/windows_launch.ps1"),
-                                     str(old), sys.executable], input="", capture_output=True, text=True, timeout=15)
+            # This harness includes shell/AST startup, several real Python
+            # processes and private DACL I/O, not the product's 15s host wait.
+            try:
+                result = subprocess.run(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                                         "-File", str(probe), str(ROOT / "src/web/windows_launch.ps1"),
+                                         str(old), sys.executable], input="", capture_output=True, text=True, timeout=30)
+            except subprocess.TimeoutExpired as error:
+                output = error.stdout or b""
+                if isinstance(output, bytes):
+                    output = output.decode('utf-8', errors='replace')
+                stages = [line for line in output.splitlines() if line.startswith('STAGE:')]
+                self.fail('Bounded PowerShell discovery harness timeout; ' + ', '.join(stages))
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("DISCOVERY_PASS", result.stdout)
 
