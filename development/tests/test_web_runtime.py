@@ -220,7 +220,10 @@ class WebRuntimeTests(unittest.TestCase):
                 except OSError:
                     break
                 time.sleep(.05)
-            self.assertEqual(b"", conn.recv(1))
+            try:
+                self.assertEqual(b"", conn.recv(1))
+            except (ConnectionAbortedError, ConnectionResetError):
+                pass  # Windows may report enforced closure as abort/reset, not EOF.
         self.assertLess(time.monotonic() - started, 6.5)
 
 

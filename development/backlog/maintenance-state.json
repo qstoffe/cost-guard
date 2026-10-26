@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "epochRevision": "df44c06a97244278abd8d0dc9ed90ea12c368e47",
-  "ordinaryCount": 11,
+  "ordinaryCount": 12,
   "completed": {
     "architecture": 10,
     "test-health": 10,
@@ -11,9 +11,9 @@
     "id": "shared-repository-maintenance",
     "version": 1
   },
-  "lastDeliveredRevision": "d97e2666356f8f072f85bf529a2f3705a11bdaf2",
+  "lastDeliveredRevision": "def4daea1501b1093188e5e25589536d9faa067f",
   "lastItem": {
-    "id": "fr/000290-web-migration-foundation.md",
+    "id": "fr/000300-secure-local-web-runtime.md",
     "kind": "ordinary"
   },
   "featureDiscovery": {
