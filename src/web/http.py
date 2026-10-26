@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import re
 import socket
+from socketserver import TCPServer
 import time
 from threading import BoundedSemaphore, Timer
 
@@ -56,6 +57,14 @@ class HeaderReader:
 class LoopbackServer(HTTPServer):
     request_queue_size = 8
     allow_reuse_address = False
+
+    def server_bind(self):
+        # HTTPServer reverse-resolves its bound address for server_name. This
+        # numeric-loopback-only service needs no DNS; a slow resolver must never
+        # consume native launcher readiness or make offline startup depend on it.
+        TCPServer.server_bind(self)
+        self.server_name = "127.0.0.1"
+        self.server_port = self.server_address[1]
 
     def __init__(self, jobs, lifecycle=None):
         self.jobs = jobs

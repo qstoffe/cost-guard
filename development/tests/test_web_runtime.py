@@ -20,6 +20,19 @@ from src.web.jobs import MAX_RESULT_BYTES, ReportJobs, parse_report, run_report
 from src.web.security import BrowserSession
 
 
+class LoopbackBindingTests(unittest.TestCase):
+    def test_binding_uses_numeric_loopback_without_hostname_resolution(self):
+        with patch.object(socket, "getfqdn", side_effect=AssertionError("loopback must never reverse-resolve")) as resolve:
+            server = LoopbackServer(Mock())
+        try:
+            self.assertEqual("127.0.0.1", server.server_name)
+            self.assertEqual(("127.0.0.1", server.server_port), server.server_address)
+            self.assertEqual(f"http://127.0.0.1:{server.server_port}", server.origin)
+            resolve.assert_not_called()
+        finally:
+            server.server_close()
+
+
 class WebRuntimeTests(unittest.TestCase):
     def setUp(self):
         self.jobs = ReportJobs(target=finite_report)

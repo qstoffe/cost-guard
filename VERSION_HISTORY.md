@@ -3,6 +3,7 @@
 ## v80.90 — 2026-10-26
 
 - Added bounded, read-only GitHub-hosted Web Beta revalidation on Windows x64 and macOS Apple Silicon/Intel, including the existing isolated full suite, package checks, native API/offline lifecycle probes and CI-only rendered Chromium smoke. This is additive verification, not a mandatory release gate or Beta promotion; normal installation and CLI/Watch dependencies are unchanged.
+- Removed unnecessary reverse-DNS lookup when binding the numeric-loopback Web host, preventing resolver delays from consuming native launcher readiness. Loopback/security boundaries and startup deadlines are unchanged.
 
 ## v80.89 — 2026-10-26
 
