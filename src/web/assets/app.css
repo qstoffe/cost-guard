@@ -1,0 +1,6 @@
+:root { color-scheme: light dark; font: 16px system-ui, sans-serif; }
+body { margin: 2rem auto; padding: 0 1rem; max-width: 70rem; }
+small { font-size: .6em; }
+label { display: block; margin: 1rem 0; }
+input, select, button { font: inherit; padding: .5rem; max-width: 100%; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; padding: 1rem; border: 1px solid #888; }

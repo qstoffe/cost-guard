@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.81 — 2026-10-26
+
+- Added optional foreground Web Beta (`python cost-guard-web.py`) with fixed local assets and authenticated, read-only finite report APIs. Exact-host/origin checks, one-use short-lived bootstrap, HttpOnly SameSite sessions, CSRF, restrictive CSP, request/concurrency/result bounds and cancellable isolated report processes protect the loopback surface. No dependencies, browser auto-launch, native icons or background instance lifecycle; CLI and Diagnostics stay independent.
+
 ## v80.80 — 2026-10-26
 
 - Added an optional transport-neutral application facade over existing report modes, including all-history Token Mix. Immutable JSON-ready results preserve exact decimal strings, unknown values, report duration/context/valuation semantics and stable detail identities. Isolated serialized one-shot jobs close their account work without sharing a live scheduler. Per-root revision evidence and independent account observations do not claim cross-provider atomicity; raw source/provider diagnostics and private account locators are excluded. No HTTP server, UI, dependencies or CLI/launcher changes.
