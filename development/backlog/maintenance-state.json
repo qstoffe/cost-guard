@@ -4,17 +4,17 @@
   "ordinaryCount": 15,
   "completed": {
     "architecture": 10,
-    "test-health": 10,
+    "test-health": 15,
     "performance": 0
   },
   "template": {
     "id": "shared-repository-maintenance",
     "version": 1
   },
-  "lastDeliveredRevision": "54c4554b36d4297ecc0cee4836a8585ebfda5c34",
+  "lastDeliveredRevision": "17e6810c620ac007a11bec823e437ba58c2eb295",
   "lastItem": {
-    "id": "fr/000330-macos-web-beta-launcher-and-statusbar.md",
-    "kind": "ordinary"
+    "id": "test-health/15",
+    "kind": "test-health"
   },
   "featureDiscovery": {
     "completed": 10
