@@ -4,7 +4,7 @@
 
 Implemented for v80.88, 2026-10-26. Every existing finite report kind now has a discoverable Web route alongside global Live and complete session Snapshot/Live. The selected FR bytes are preserved; no attachments were changed or added.
 
-Implementation candidate: [c982393](https://github.com/qstoffe/cost-guard/commit/c982393f29dacdf41560cc3f7c845cab739fdfe6).
+Delivery PR: [#68](https://github.com/qstoffe/cost-guard/pull/68). Implementation candidate: [c982393](https://github.com/qstoffe/cost-guard/commit/c982393f29dacdf41560cc3f7c845cab739fdfe6).
 
 ## Changes and decisions
 
