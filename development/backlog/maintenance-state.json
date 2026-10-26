@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "epochRevision": "df44c06a97244278abd8d0dc9ed90ea12c368e47",
-  "ordinaryCount": 13,
+  "ordinaryCount": 14,
   "completed": {
     "architecture": 10,
     "test-health": 10,
@@ -11,9 +11,9 @@
     "id": "shared-repository-maintenance",
     "version": 1
   },
-  "lastDeliveredRevision": "ade4d0da19600c0f34b08d17436a3f4a11d964dc",
+  "lastDeliveredRevision": "191f0e007bbe23a3cf560a62c72b5ce5b103fa70",
   "lastItem": {
-    "id": "fr/000310-web-instance-lifecycle-and-change-guard.md",
+    "id": "fr/000320-windows-web-beta-launcher-and-tray.md",
     "kind": "ordinary"
   },
   "featureDiscovery": {
