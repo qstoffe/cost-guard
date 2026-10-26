@@ -13,6 +13,7 @@ let csrf = null;
 let current = null;
 let liveConnection = null;
 let liveValue = null;
+let sessionDetailAvailable = false;
 const routes = {overview: ['Overview', 'normal'], sessions: ['Sessions', 'sessions'],
   live: ['Live', null], models: ['Models', null], accounts: ['Accounts', null],
   reports: ['Reports', null], 'token-mix': ['Token Mix', null]};
@@ -31,7 +32,9 @@ function show(state) {
   cancel.disabled = !state.active;
   output.setAttribute('aria-busy', state.loading ? 'true' : 'false');
   notice.textContent = state.message;
-  if (state.live) {
+  if (state.detail) {
+    state.detail.attach(output);
+  } else if (state.live) {
     if (liveValue?.view) ReportView.renderLive(output, liveValue, state);
     else output.replaceChildren(ReportView.element('p', liveValue?.state || 'Live acquisition starting…'));
   } else if (state.result) ReportView.render(output, state.result, state);
@@ -73,7 +76,7 @@ async function acquire(state) {
   } finally { state.loading = false; state.active = null; show(state); }
 }
 function navigate() {
-  const match = /^#\/sessions\/([A-Za-z0-9_-]{1,200})$/.exec(location.hash);
+  const match = /^#\/sessions\/([A-Za-z0-9_-]{1,200})(\/live)?$/.exec(location.hash);
   const key = match ? 'session/' + match[1] : location.hash.replace(/^#\//, '') || 'overview';
   const route = match ? ['Session ' + match[1], 'session'] : routes[key];
   heading.textContent = route ? route[0] : 'Page not found';
@@ -93,9 +96,14 @@ function navigate() {
     views.set(key, {request, live: key === 'live', result: null, pages: {}, loading: false, active: null,
       message: key === 'live' ? 'Live acquisition starting; one runtime shared across tabs.' : route ? 'Unavailable in this Beta step. Use the corresponding CLI report; overview includes current model/account summaries.' : 'Unknown route.'});
   }
+  if (current?.detail) current.detail.detach();
   current = views.get(key);
+  if (match && csrf && sessionDetailAvailable && !current.detail) {
+    current.detail = new SessionDetail.View(api, match[1], match[2] ? 'live' : 'snapshot');
+    current.message = 'Complete session history; explicit Snapshot/Live. Acquisition is shared across tabs.';
+  }
   show(current);
-  if (csrf && current.request && !current.result && !current.attempted) {
+  if (csrf && current.request && !current.detail && !current.result && !current.attempted) {
     current.attempted = true;
     acquire(current);
   }
@@ -105,6 +113,7 @@ async function connect() {
     const session = credential ? await api('/api/bootstrap', {credential}) : await api('/api/session');
     csrf = session.csrf;
     const state = await api('/api/status');
+    sessionDetailAvailable = state.session_detail === true && typeof SessionDetail !== 'undefined';
     statusLine.textContent = `HTTP ${state.http}; analysis ${state.analysis}; source ${state.source}; accounts ${state.accounts}. Snapshot health is shown below.`;
     if (!liveConnection && typeof LiveConnection !== 'undefined') {
       liveConnection = LiveConnection.connect(api, (value, progress) => {
@@ -120,7 +129,10 @@ async function connect() {
     statusLine.textContent = 'Browser session unavailable. Use a fresh one-use link from this host; restart it if expired.';
   } finally { credential = null; }
 }
-refresh.addEventListener('click', () => { if (current?.request) acquire(current); });
+refresh.addEventListener('click', () => {
+  if (current?.detail) current.detail.refresh();
+  else if (current?.request) acquire(current);
+});
 cancel.addEventListener('click', async () => {
   const state = current;
   if (state?.active) {

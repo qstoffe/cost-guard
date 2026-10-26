@@ -1,5 +1,6 @@
 """Bounded read-only real-installation probe; no UI, inference or service stop."""
 import http.client
+import argparse
 import json
 from pathlib import Path
 import sys
@@ -15,7 +16,11 @@ from src.web.jobs import ReportJobs
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--detail", action="store_true", help="Also probe complete session capture/pages/freeze.")
+    args = parser.parse_args()
     owners = []
+    csrf = None
 
     def factory():
         driver = live_acquisition()
@@ -35,6 +40,8 @@ def main():
                 headers['Cookie'] = cookie
             if value is not None:
                 headers.update(Origin=server.origin, **{'Content-Type': 'application/json'})
+                if csrf:
+                    headers['X-CG-CSRF'] = csrf
             connection.request('POST' if value is not None else 'GET', path,
                                json.dumps(value) if value is not None else None, headers)
             response = connection.getresponse()
@@ -44,7 +51,8 @@ def main():
                 raise RuntimeError('probe_http_failed')
             return data, response
 
-        _, response = get('/api/bootstrap', value={'credential': server.session.bootstrap()})
+        auth, response = get('/api/bootstrap', value={'credential': server.session.bootstrap()})
+        csrf = auth['csrf']
         cookie = response.getheader('Set-Cookie').split(';')[0]
         deadline = time.monotonic() + 60
         while time.monotonic() < deadline:
@@ -75,6 +83,35 @@ def main():
             'streams': len(streams), 'rows': len(view['rows']),
             'accounts': len((view['accounts'] or {}).get('accounts', [])),
             'run_origin_preserved': True, 'sequence_advanced': latest['sequence'] > state['sequence']}))
+        if args.detail:
+            if not view['rows']:
+                raise RuntimeError('probe_no_session_evidence')
+            session_id = view['rows'][0]['session_id']
+
+            def detail(value):
+                return get('/api/detail', value=value, cookie=cookie)[0]
+
+            token = detail(dict(action='open', session_id=session_id, mode='live'))['token']
+            deadline = time.monotonic() + 60
+            while time.monotonic() < deadline:
+                page = detail(dict(action='page', token=token, offset=0))
+                if page.get('result'):
+                    break
+                time.sleep(0.25)
+            else:
+                raise RuntimeError('probe_detail_timeout')
+            last = detail(dict(action='page', token=token, offset=2**52))
+            if last['total'] != page['total'] or len(last['result']['view']['prompt_blocks'][0]['rows']) > 50:
+                raise RuntimeError('probe_detail_page_contract')
+            detail(dict(action='freeze', token=token))
+            frozen = detail(dict(action='page', token=token, offset=0))
+            time.sleep(1)
+            if detail(dict(action='page', token=token, offset=0)) != frozen:
+                raise RuntimeError('probe_detail_freeze_changed')
+            detail(dict(action='close', token=token))
+            print(json.dumps(dict(detail='ok', available_rows=page['total'],
+                page_rows=len(page['result']['view']['prompt_blocks'][0]['rows']),
+                first_latest_access=True, frozen_consistent=True, account_owners=len(owners))))
     finally:
         host.stop('menu')
         for connection, response in streams:

@@ -5,6 +5,7 @@ from src.sources.errors import SourceError
 
 from .contracts import record
 from .live_projection import project_live
+from .session_detail import SessionDetails
 
 
 class LiveRuntime:
@@ -15,6 +16,7 @@ class LiveRuntime:
         self.stopping = Event()
         self.thread = None
         self.failure = None
+        self.details = SessionDetails()
 
     def start(self):
         if self.thread is not None:
@@ -37,6 +39,7 @@ class LiveRuntime:
                 return
             while not self.stopping.is_set():
                 frame = driver.tick()
+                self.details.tick(driver.coordinator.report_service, unavailable=driver.error is not None)
                 self.publish("live", record(state="failed" if driver.terminal else
                     "recovering" if driver.error else "running",
                     source_observed_at_ms=driver.observed_at_ms,

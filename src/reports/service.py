@@ -609,8 +609,12 @@ class ReportService:
         item = self._analyze(root, detail=True)
         self.progress(WorkProgress("Building prompt analytics", "projection"))
         block = self._prompt_block(item, snapshot_running_metrics=True)
+        return self.session_detail_projection(request.session_id, root, block)
+
+    def session_detail_projection(self, session_id, root, block) -> ReportProjection:
+        """Shared snapshot/live report semantics, never Watch display metrics."""
         return ReportProjection(
-            ReportKind.SESSION, f"Session {request.session_id}", self.selection.selected.upper(), tuple(self.selection.warnings),
+            ReportKind.SESSION, f"Session {session_id}", self.selection.selected.upper(), tuple(self.selection.warnings),
             prompt_blocks=(block,),
             notes=(("WARNING: CCost totals are incomplete because some reference pricing is unavailable.",)
                    if not block.comparison_cost_complete else ())

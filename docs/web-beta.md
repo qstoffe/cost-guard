@@ -4,7 +4,7 @@ Run `python cost-guard-web.py --foreground` using already installed Python 3.11+
 
 ## Navigation and static reports
 
-The Beta shell provides global Live, Overview (the normal shared model/account report), Sessions (all available roots), and frozen selected session details. Dedicated Models, Accounts, Reports/date and Token Mix routes explicitly say unavailable and retain their CLI equivalents. They are not fabricated empty dashboards. Existing finite API modes remain callable. Session live detail remains separate work; navigation from Live to a session currently opens a frozen report.
+The Beta shell provides global Live, Overview (the normal shared model/account report), Sessions (all available roots), and selected session details with explicit Snapshot/Live modes. Dedicated Models, Accounts, Reports/date and Token Mix routes explicitly say unavailable and retain their CLI equivalents. They are not fabricated empty dashboards. Existing finite API modes remain callable.
 
 Session-ID links open `/#/sessions/<id>`. Fragment routes support direct links, reload and browser Back/Forward without expanding the HTTP path allowlist. The one-use bootstrap fragment is removed before requests; ordinary session routes are preserved on reload. Names/prompts are text, never links or tooltips containing source paths. Navigation and paging never put prompt/history payloads in browser storage or history state.
 
@@ -12,7 +12,19 @@ Every successful result has a visible observation time, source status and per-ro
 
 The session table retains Prompt, CCost, Calls, Duration, ~Ictx, ~Ictx CCost, ~Extra CCost and I/C/W/O %. Full-session totals and main/linked-child breakdown come from the canonical result, never from the visible page. Unknown, incomplete and estimated amounts are labeled; CCost is not billing. The browser performs no valuation or token attribution.
 
-Tables show 50 rows per page from **one complete immutable API result**, including the all-roots session list (`session_limit: null`). All returned rows are reachable; there are no source-offset cursors or cross-revision page requests. Existing 8 MiB/120-second finite-job limits still apply: oversized/slow results fail explicitly, never pretend to be complete truncated history. Streaming/live history is future work. Page positions and up to twelve report views are retained only in page memory; reload or eviction requires a new, visibly loading capture. Navigating back to a retained result does not refresh it.
+Finite report tables show 50 rows per page from **one complete immutable API result**, including the all-roots session list (`session_limit: null`). Their existing 8 MiB/120-second job limits still apply: oversized/slow results fail explicitly, never pretend to be complete truncated history. Session detail instead uses bounded revision-aware pages described below. Page positions and up to twelve views are retained only in page memory; reload or eviction visibly requests a new capture. Navigating back to a retained Snapshot does not refresh it.
+
+## Complete session Snapshot/Live
+
+Normal `/#/sessions/<id>` links default to Snapshot; `/#/sessions/<id>/live` explicitly requests Live. The mode button switches without stopping the shared server. Entering Live queues an authoritative source observation, not event-only continuation of an old snapshot. Snapshot freezes the whole report, including running durations and totals; Refresh requests a new capture. Leaving Live freezes one consistent current revision. Idle, abort and prompt completion never end Live.
+
+Session history reuses Python's detailed report projection, not Watch-only context/duration fields or browser calculations. All root-tree rows remain available, without a prompt count, Watch row cap, history TTL or durable ledger. First/Previous/Next and Jump to latest traverse 50-row pages; totals always cover the full observed report. Loading, observation time, missing/archive/outage and partial pricing remain explicit. A catalog absence is not proof of deletion: the last report remains readable. Rows omitted by source compaction/gaps retain canonical evidence, last-observed provenance and frozen lifecycle/time until observed again; source history deleted before observation cannot be reconstructed. No completion is inferred from connection loss.
+
+Pages carry a revision and canonical row identities. A stale cursor rebases to the existing anchor, never silently combines pages into a report. The client caches only its current 50-row page and retains keyed DOM nodes on updates. Scrolling up or focusing controls disables follow; Jump to latest re-enables it. Background updates preserve row anchors/pixel offset and defer row replacement during text selection. Copy/selection covers the current page, not unloaded pages; use paging to reach other rows. Real-browser layout, resize and assistive-technology behavior still require owner validation; VM checks are not visual acceptance.
+
+Authenticated, CSRF-protected `/api/detail` POST actions: `open` (`session_id`, `mode: snapshot|live`) returns an opaque token; `page` takes token, nonnegative offset, optional revision/anchor and returns up to 50 rows plus full totals; `freeze` captures the live revision; `close` releases a handle. Detail polling is independent of SSE replay: every response is authoritative, so stream gaps cannot drop rows. One host-owned round-robin detail queue shares the existing source/service and account owner across tabs, with at most one due session per engine turn and five-second acquisition cadence. Stable revisions reuse analysis; timer-only ticks do no detail acquisition/valuation. The session-local retained snapshot never enters persistent source/cache state.
+
+Resource admission allows 16 distinct observed session trees per host and 32 transport handles. Abandoned handles expire after five minutes, but history does not; expiration is explicit (410), not an empty report or row eviction. Busy admission is explicit (429). Repeated refresh/mode changes release their old handle. Restarting the host discards observed history. Synthetic 100/1,000/10,000-row probes test complete first/middle/latest access, totals, page bounds, source omission/reconnect and unchanged work. `test_web_session_detail.py` also exercises real HTTP authorization and shipped assets in an optional Node VM, not a browser or model runner.
 
 Layout choices: wrapping top navigation; system light/dark palette; source/readiness separate from snapshot health; text-selectable overflow tables with sticky column headings; independently paged tables and complete totals below rows; keyboard focus outlines and a skip-to-report button. Refresh/status messages do not take focus. No user-side frontend build, Node installation, CDN, analytics, account login or editing.
 
@@ -78,7 +90,7 @@ This is loopback HTTP, not a public server or protection against malware/other c
 
 | Route | Method | Meaning |
 | --- | --- | --- |
-| `/`, `/app.js`, `/render.js`, `/live.js`, `/app.css` | GET | Fixed public Beta shell/assets, no history |
+| `/`, `/app.js`, `/render.js`, `/live.js`, `/session.js`, `/app.css` | GET | Fixed public Beta shell/assets, no history |
 | `/health` | GET | Public HTTP-shell readiness only |
 | `/api/bootstrap` | POST | One-use `{"credential":"…"}` exchange with exact Origin |
 | `/api/session` | GET | Authenticated CSRF recovery, no control credential |
@@ -86,6 +98,7 @@ This is loopback HTTP, not a public server or protection against malware/other c
 | `/api/live` | GET | Authenticated coherent live/progress snapshot and instance/sequence; retained terminal state while stopping |
 | `/api/events` | GET | Authenticated multiplexed SSE, bounded replay with Last-Event-ID; no query strings |
 | `/api/reports` | POST | Enqueue/coalesce a finite report; return job ID (202) |
+| `/api/detail` | POST | Shared complete session capture, revision-aware pages, freeze and handle release |
 | `/api/jobs/<id>` | GET | Authenticated status/progress/result |
 | `/api/jobs/<id>/cancel` | POST | Cancel owned queued/running work with `{}` |
 

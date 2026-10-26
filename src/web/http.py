@@ -15,6 +15,7 @@ ASSETS = {"/": ("index.html", "text/html; charset=utf-8"),
            "/app.js": ("app.js", "text/javascript; charset=utf-8"),
             "/render.js": ("render.js", "text/javascript; charset=utf-8"),
             "/live.js": ("live.js", "text/javascript; charset=utf-8"),
+            "/session.js": ("session.js", "text/javascript; charset=utf-8"),
           "/app.css": ("app.css", "text/css; charset=utf-8")}
 JOB_PATH = re.compile(r"/api/jobs/([a-f0-9]{32})(/cancel)?\Z")
 CSP = ("default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; "
@@ -270,6 +271,9 @@ class RequestHandler(BaseHTTPRequestHandler):
                     return
                 self.reply(202, {"id": key})
                 return
+            if self.path == "/api/detail" and self.server.lifecycle and self.server.lifecycle.live:
+                self.session_detail(value)
+                return
             match = JOB_PATH.fullmatch(self.path)
             if match and match[2] and not value:
                 found = self.server.jobs.cancel(match[1])
@@ -286,6 +290,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 value = self.server.jobs.readiness()
                 if self.server.lifecycle:
                     value["lifecycle"] = self.server.lifecycle.public_status()
+                    value["session_detail"] = self.server.lifecycle.live is not None
                 self.reply(200, value)
                 return
             if self.path == "/api/session":
@@ -297,6 +302,42 @@ class RequestHandler(BaseHTTPRequestHandler):
                 self.reply(200 if result else 404, result or {"error": "not_found"})
                 return
         self.reply(404, {"error": "not_found"})
+
+    def session_detail(self, value):
+        owner = self.server.lifecycle.live.details
+        try:
+            action = value.get("action")
+            if action == "open" and set(value) == {"action", "session_id", "mode"}:
+                if (not isinstance(value["session_id"], str) or
+                        not re.fullmatch(r"[A-Za-z0-9_-]{1,200}", value["session_id"]) or
+                        value["mode"] not in ("snapshot", "live")):
+                    raise ValueError()
+                result = {"token": owner.open(value["session_id"], value["mode"])}
+            elif action in ("page", "freeze", "close") and isinstance(value.get("token"), str):
+                if action in ("freeze", "close") and set(value) == {"action", "token"}:
+                    if action == "freeze":
+                        owner.freeze(value["token"])
+                    else:
+                        owner.close(value["token"])
+                    result = {"state": action}
+                elif action == "page" and set(value) <= {"action", "token", "offset", "revision", "anchor"}:
+                    offset = value.get("offset", 0)
+                    if (type(offset) is not int or offset < 0 or offset > 2**53 or
+                            any(value.get(k) is not None and (not isinstance(value[k], str) or len(value[k]) > 64)
+                                for k in ("revision", "anchor"))):
+                        raise ValueError()
+                    result = owner.page(value["token"], offset, value.get("revision"), value.get("anchor"))
+                else:
+                    raise ValueError()
+            else:
+                raise ValueError()
+            self.reply(200, result)
+        except ValueError:
+            self.reply(400, {"error": "invalid_request"})
+        except KeyError:
+            self.reply(410, {"error": "detail_expired"})
+        except RuntimeError:
+            self.reply(429, {"error": "detail_busy"})
 
     def stream_events(self):
         if not self.server._streams.acquire(blocking=False):

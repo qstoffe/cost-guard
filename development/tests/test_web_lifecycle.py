@@ -11,6 +11,7 @@ import tempfile
 import threading
 import time
 import unittest
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from src.web.change_guard import SourceGuard
@@ -22,6 +23,16 @@ from src.web.process_identity import InstanceConflict, process_identity, termina
 
 class LifecycleTests(unittest.TestCase):
     def setUp(self):
+        # Lifecycle tests must not start real source/pricing/account acquisition.
+        def idle_acquisition():
+            return SimpleNamespace(tick=lambda: None, close=lambda: None,
+                error=None, terminal=False, observed_at_ms=None,
+                coordinator=SimpleNamespace(report_service=None,
+                    today_ccost=SimpleNamespace(history_pending=False)))
+
+        acquisition = patch("src.web.composition.live_acquisition", side_effect=idle_acquisition)
+        acquisition.start()
+        self.addCleanup(acquisition.stop)
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.base = Path(self.temporary.name)

@@ -123,6 +123,7 @@ QUICK_PATTERNS: tuple[str, ...] = (
     "test_claude_transport.py",
 )
 FULL_ONLY_PATTERNS: tuple[str, ...] = (
+    "test_web_session_detail.py",
     # Slowest first: Full starts these before the quick files.
     "test_foundation.py",
     "test_rc2_public_diagnostics.py",
