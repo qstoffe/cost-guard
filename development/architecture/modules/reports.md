@@ -1,7 +1,7 @@
 # Reports source contracts
 
-Source revision: e87f56d8768d056e0cd5e54ec06612033111e842
-Checked revision: e87f56d8768d056e0cd5e54ec06612033111e842
+Source revision: 8dcca3989780983ab1507424a616f9d2a0dba9e4
+Checked revision: 8dcca3989780983ab1507424a616f9d2a0dba9e4
 Last checked: 2026-10-26
 Status: current
 
@@ -32,14 +32,33 @@ V2 availability uses settled global `/api/model` selectable `id`, not `modelID`;
 
 Normal Copilot reports additionally reconcile native used AI credits against the same indexed valuation for a supported fixed UTC calendar month, validated from the provider reset. The normal account history scope extends through that native start when earlier than the local month; Watch acquisition is unchanged. `AccountProjection.unaccounted_usage` remains unknown unless native usage, current monthly bounds, full acquisition, pricing and account attribution are sufficient. This signed residual is an estimate, not external-use attribution or billing. Existing partial account subtotals remain independent. Presentation adds exactly one normal-report row per Copilot account, including unknown values.
 
+## Transport-neutral application boundary and parity inventory
+
+`src/application/service.py` owns isolated one-shot jobs: `ReportApplication(factory, clock=...)`, then `execute(ReportRequest, progress=...)`. The composition root must transfer a **fresh** `ReportService` per call using canonical sources, validated config, pricing/cache and account providers. It must not pass the live scheduler or share mutable source/provider context with another owner. No CLI subprocess, web import, alternate analysis or account scheduler is involved. A nonblocking serialized owner rejects concurrent/reentrant requests with `busy`; the host owns admission bounds/retry. The factory owns any extra resources outside ReportService. Every admitted job closes its accounts, including acquisition/projection failures; live/already-owned services are rejected without closing foreign work. Services cannot be reused across jobs. A future live host must retain its own scheduler and publish immutable snapshots rather than passing it here.
+
+`src/application/contracts.py` defines frozen result/error/progress DTOs and detached JSON export. `src/application/projection.py` explicitly selects known fields, never introspects/dumps arbitrary dataclasses. Decimal amounts/ratios are exact strings; null, zero, incomplete coverage, provisional status and existing precomputed shares/warnings stay distinct. Consumers sort/display values without revaluing usage. Scope includes configured timezone, local day/month starts, resolved date bounds, history policy and **report execution** duration, not Watch duration.
+
+Schema version and application instance UUID are separate from per-request-view sequence and hashed per-root source revisions. A result is immutable; source acquisition ensures each root snapshot, **not a transaction across roots/accounts/providers**. Account observations retain their own timestamp/status/availability and safe classified error facts. Source errors return a typed code/retryability and no empty-success view. Only safe progress phase/counts cross the boundary, not labels containing identifiers or exception text. Expected pricing unavailability and missing targets are distinct from logged unexpected defects; internal errors discard the whole view as `internal_error`, never raw transport messages. Cleanup faults propagate. Account locators and revisions use opaque hashes; raw provider observations, arbitrary reasons/warnings and pricing diagnostics are not exported. Session titles/previews remain intentional user content, so this is not a public/anonymous data feed. An HTTP adapter still needs authorization/security.
+
+| Existing mode | Application request / published view | Scope and protected parity |
+| --- | --- | --- |
+| Normal | NORMAL / model comparison, Token Mix, accounts/quotas | Existing two 100-priceable-prompt samples; account-period acquisition independent; CCost is reference value, not billing |
+| All models | ALL_MODELS / model comparison, Token Mix | Same comparison eligibility, no selectable filter or accounts |
+| Session list | SESSIONS / session_usage | Requested root limit or all; whole-tree cost, completeness and report duration; archived history retained |
+| Session detail | SESSION / prompt_blocks, request_identities | Complete requested root/child tree, stable event/message/part references and opaque request key; no global Watch cap; inherited FR000200 running metrics |
+| Date/range | DATE / prompt_blocks | Configured-local inclusive date target mapped to exclusive end; DST, context and duration remain existing semantics |
+| Historical Token Mix | TOKEN_MIX / model_token_mix and total | Separate deep all-available-history method, not build's dashboard fallback; existing availability fail-open behavior; no request rows or promise to recover pruned history |
+
+The inventory is the starting parity map for FR000380, not proof of a Web UI. `development/tests/test_application_reports.py` compares numerical/status/identity fields to the existing service using shared canonical fixtures (running/completed/aborted, child work, compaction, missing telemetry/prices, subscription evidence), native V1/current V2, DST and independent account errors/freshness. It covers 151-prompt uncapped detail and cloned-request deduplication, immutable exact export, typed source failures, fresh-job/reentrancy ownership, repeated cleanup, and CLI help/version plus Diagnostics import with application/web dependencies blocked. Existing report/Watch tests remain the semantic owners. No new permanent release gate, server, browser, launcher or dependency is added.
+
 ## Allowed dependencies
 
 Reports depend on canonical domain, analysis, cache and abstract source/account/pricing contracts, never Watch, presentation or concrete adapters. Period analysis depends on domain and provider-neutral pricing/valuation only.
 
 ## Entrypoints
 
-`src/reports/service.py`, `src/reports/accounts.py`, `src/reports/history.py`, `src/analysis/period_ccost.py`; account rendering: `src/presentation/accounts.py`.
+`src/application/service.py`, `src/application/contracts.py`, `src/application/projection.py`; `src/reports/service.py`, `src/reports/accounts.py`, `src/reports/history.py`, `src/analysis/period_ccost.py`; account rendering: `src/presentation/accounts.py`.
 
 ## Tests
 
-`development/tests/test_account_period_ccost.py`, `development/tests/test_copilot_unaccounted_usage.py`, `development/tests/test_accounts_ccost.py`, `development/tests/test_report_sampling.py`, `development/tests/test_history_loading.py`, `development/tests/test_step7_reports_cli.py`, `development/tests/test_quota_presentation.py`.
+`development/tests/test_application_reports.py`, `development/tests/test_account_period_ccost.py`, `development/tests/test_copilot_unaccounted_usage.py`, `development/tests/test_accounts_ccost.py`, `development/tests/test_report_sampling.py`, `development/tests/test_history_loading.py`, `development/tests/test_step7_reports_cli.py`, `development/tests/test_quota_presentation.py`.

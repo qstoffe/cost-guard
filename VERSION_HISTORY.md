@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.80 — 2026-10-26
+
+- Added an optional transport-neutral application facade over existing report modes, including all-history Token Mix. Immutable JSON-ready results preserve exact decimal strings, unknown values, report duration/context/valuation semantics and stable detail identities. Isolated serialized one-shot jobs close their account work without sharing a live scheduler. Per-root revision evidence and independent account observations do not claim cross-provider atomicity; raw source/provider diagnostics and private account locators are excluded. No HTTP server, UI, dependencies or CLI/launcher changes.
+
 ## v80.79 — 2026-10-26
 
 - Plain session reports always print one snapshot and exit, even with active work. `[RUNNING]` rows show supported provisional token mix and incoming/extra reference CCost from observed requests; incomplete telemetry, attribution or pricing stays unknown. Totals share that snapshot and running duration stays frozen at observation time. Explicit session/global Watch and date modes retain their behavior.

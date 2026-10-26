@@ -360,7 +360,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.79 (2026-10-26):** Session reports print one snapshot and exit, with supported provisional `[RUNNING]` metrics. Explicit Watch is unchanged.
+**v80.80 (2026-10-26):** Added an internal transport-neutral report application boundary for the incremental Web Beta. CLI reports, Watch and launchers remain unchanged; no web server or browser launcher is included yet.
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

@@ -63,6 +63,10 @@ from .models import (
 _TRACKED_PROVIDER: str | None = None
 
 
+class ReportRequestError(ValueError):
+    """Expected invalid/unavailable report target, not an analysis defect."""
+
+
 @dataclass(frozen=True, slots=True)
 class ReportRequest:
     kind: ReportKind = ReportKind.NORMAL
@@ -552,6 +556,15 @@ class ReportService:
             self._availability = None
             self.close_accounts()
 
+    def report_source_revisions(self) -> tuple[tuple[str, str], ...]:
+        """Per-root evidence, not a claim of one cross-root/provider transaction."""
+        return tuple(sorted(self._acquisition.revisions.items()))
+
+    def report_request_identities(self) -> tuple[tuple[str, str | None, str | None, str | None], ...]:
+        """Canonical request references for retained report detail, never raw payloads."""
+        return tuple((entry.session_id, entry.parent_event_id, entry.message_id, entry.step_part_id)
+                     for item in self._analyzed.values() for entry in item.bundle.trace_entries)
+
     def _build(self, request: ReportRequest) -> ReportProjection:
         catalog = self._load_catalog()
         self.progress(WorkProgress("Listing OpenCode sessions", "catalog"))
@@ -569,7 +582,7 @@ class ReportService:
     def _build_session_list(self, request: ReportRequest, roots: Sequence[NormalizedSession],
                             root_activity: Mapping[str, int]) -> ReportProjection:
         if request.session_limit is not None and request.session_limit < 1:
-            raise ValueError("Session limit must be positive or all")
+            raise ReportRequestError("Session limit must be positive or all")
         selected = HistoryRequirements("session-list", limit=request.session_limit).select(roots, root_activity)
         self.prepare_roots(selected)
         analyzed = tuple(self._analyze(root) for root in selected)
@@ -585,10 +598,10 @@ class ReportService:
 
     def _build_session_detail(self, request: ReportRequest, sessions: Sequence[NormalizedSession]) -> ReportProjection:
         if not request.session_id:
-            raise ValueError("Session report requires a session id")
+            raise ReportRequestError("Session report requires a session id")
         root = root_for_session(sessions, request.session_id)
         if root is None:
-            raise ValueError(f"OpenCode session '{request.session_id}' was not found.")
+            raise ReportRequestError(f"OpenCode session '{request.session_id}' was not found.")
         item = self._analyze(root, detail=True)
         self.progress(WorkProgress("Building prompt analytics", "projection"))
         block = self._prompt_block(item, snapshot_running_metrics=True)
@@ -603,7 +616,7 @@ class ReportService:
     def _build_date_detail(self, request: ReportRequest, roots: Sequence[NormalizedSession],
                            root_activity: Mapping[str, int]) -> ReportProjection:
         if not request.date_text:
-            raise ValueError("Date report requires a date target")
+            raise ReportRequestError("Date report requires a date target")
         date_range = local_report_range(request.date_text, self.timezone_id)
         candidates = HistoryRequirements("date", start_ms=date_range.start_ms).select(roots, root_activity)
         self.prepare_roots(candidates, detail=True)

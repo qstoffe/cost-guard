@@ -1,7 +1,7 @@
 # Cost Guard v80 architecture
 
-Source revision: b2850feffd227ee5e502bd40d9a0266fdd49ba86
-Checked revision: b2850feffd227ee5e502bd40d9a0266fdd49ba86
+Source revision: 8dcca3989780983ab1507424a616f9d2a0dba9e4
+Checked revision: 8dcca3989780983ab1507424a616f9d2a0dba9e4
 Last checked: 2026-10-26
 Status: current
 
@@ -18,6 +18,7 @@ Repository-relative owners: deterministic `development/tests/`, synthetic `devel
 ```mermaid
 flowchart TD
     entry["Entry / bootstrap: validate config, select source"] --> reports["ReportService: scopes, acquisition, projections"]
+    application["Application: isolated immutable report jobs"] --> reports
     entry --> watch["WatchCoordinator: cadence, retained rows / totals"]
     watch --> reports
     reports --> sources["Sources: V1 read-only SQLite / V2 loopback HTTP"]
@@ -34,7 +35,7 @@ flowchart TD
     diagnostics["Development Diagnostics: independent observations"] --> sources
 ```
 
-Arrows show calls/consumption, not a single linear execution pipeline. Bootstrap dispatches one-shot reports or Watch directly; Watch reuses ReportService rather than receiving a completed one-shot report. Source normalization establishes evidence, not cost. Analysis consumes provider-neutral pricing contracts as well as domain values; the cache never replaces source authority. The recovery edge belongs to the coordinator, not the renderer. The compact map groups auxiliary account/model workers under their owning areas; see the module routes below for exact contracts.
+Arrows show calls/consumption, not a single linear execution pipeline. The optional `src/application/` owner serializes isolated report jobs for future adapters; CLI and Diagnostics do not import it. Bootstrap dispatches one-shot reports or Watch directly; Watch reuses ReportService rather than receiving a completed one-shot report. Source normalization establishes evidence, not cost. Analysis consumes provider-neutral pricing contracts as well as domain values; the cache never replaces source authority. The recovery edge belongs to the coordinator, not the renderer. The compact map groups auxiliary account/model workers under their owning areas; see the module routes below for exact contracts.
 
 Owner/test routes (`modules/CODE_MAP.md`) and the module contracts below route history acquisition, provider integrations, launchers and failure/privacy facts; journal knowledge (`development/journal/INDEX.md`) routes historical performance evidence. These are source contracts/navigation, not measured current test coverage. Installed Toolkit owns development procedure. Account-period CCost stays inside existing analysis/report/Watch boundaries; the Reports and Watch contracts name the period index and regressions.
 
@@ -81,7 +82,7 @@ Configuration must be validated before any OpenCode/provider/network/runtime-cac
 | Session Sources | [sources.md](modules/sources.md) |
 | Account and Pricing Providers | [providers.md](modules/providers.md) |
 | Canonical domain / Analysis / Cache | [analysis.md](modules/analysis.md) |
-| Reports | [reports.md](modules/reports.md) |
+| Reports / optional application boundary | [reports.md](modules/reports.md) |
 | Watch | [watch.md](modules/watch.md) |
 | Presentation and CLI / Software-failure boundaries / Diagnostics boundary | [presentation-diagnostics.md](modules/presentation-diagnostics.md) |
 
@@ -98,6 +99,8 @@ analysis
   -> domain + provider-neutral pricing contracts, never reports/presentation
 reports
   -> domain + abstract source/account/pricing + analysis/cache, never concrete integrations/presentation/watch
+application
+  -> reports/domain/analysis, never bootstrap/presentation/watch or web
 presentation
   -> report projection/domain display types, never concrete integrations
 domain
