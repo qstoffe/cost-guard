@@ -1,7 +1,7 @@
 # Reports source contracts
 
 Source revision: 8b4b0c1377f57d78a1508f92f330550d743687a5
-Checked revision: 8b4b0c1377f57d78a1508f92f330550d743687a5
+Checked revision: d72d78ba9896095c506a54778cecee77f6db87cc
 Last checked: 2026-10-27
 Status: current
 
@@ -49,7 +49,7 @@ Schema version and application instance UUID are separate from per-request-view 
 | Date/range | DATE / prompt_blocks | Configured-local inclusive date target mapped to exclusive end; DST, context and duration remain existing semantics |
 | Historical Token Mix | TOKEN_MIX / model_token_mix and total | Separate deep all-available-history method, not build's dashboard fallback; existing availability fail-open behavior; no request rows or promise to recover pruned history |
 
-The [Web route inventory](../../../docs/web-beta.md#navigation-and-static-reports) maps every mode to a delivered view; native/visual acceptance remains separate. Deep-history cache regression proves source/config/pricing invalidation and immutable reuse. `development/tests/test_application_reports.py` compares numerical/status/identity fields to the existing service using shared canonical fixtures (running/completed/aborted, child work, compaction, missing telemetry/prices, subscription evidence), native V1/current V2, DST and independent account errors/freshness. It covers 151-prompt uncapped detail and cloned-request deduplication, immutable exact export, typed source failures, fresh-job/reentrancy ownership, repeated cleanup, and CLI help/version plus Diagnostics import with application/web dependencies blocked. Existing report/Watch tests remain the semantic owners. No new permanent release gate, server, browser, launcher or dependency is added.
+The [Web route inventory](../../../docs/web-beta.md#navigation-and-static-reports) maps delivered views; native/visual acceptance is separate. Deep-history tests cover source/config/pricing invalidation and immutable reuse. `development/tests/test_application_reports.py` pins numerical/status/identity parity for canonical lifecycle/child/compaction/partial fixtures, V1/V2, DST and account errors. It covers uncapped 151-prompt detail, deduplication, exact immutable export, typed failures, fresh ownership/reentrancy, cleanup and blocked application/Web imports in CLI/Diagnostics. Report/Watch tests remain semantic owners; no new dependency or permanent gate.
 
 ## Allowed dependencies
 
