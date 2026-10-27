@@ -89,6 +89,19 @@ Native entries: `windows/Beta/Cost Guard Web.cmd`, `src/web/windows_launch.ps1`,
 
 `development/tests/test_web_session_detail.py` / `development/tests/integration/web_session.cjs` cover 100/1,000/10,000-prompt first/middle/latest access, full totals, bounded pages/DOM, strict timestamp windows, unchanged work, row identity/anchor/focus/selection, transitions, omissions/outages/reconnect and late children/partial prices. `development/tests/integration/probe_web_live.py` with --detail --reports observed V2 detail/freeze, normal/all-models/sessions/date completion and cancelled deep history, preserving one owner/two streams/run origin and joined shutdown on 2026-10-26. No browser or model was invoked. Copy/selection covers the fetched page; physical layout and screen-reader proof remain unclaimed.
 
+Remaining report presentation shares `display.history_tokens` for configured prompt clocks,
+Next Ictx guidance and CLI historical mix category cells. `projection.token_mix` exports the
+exact aggregate cost separately for sorting; JavaScript never totals displayed cells.
+Session summary/footer use the same frozen block tokens; Freeze/Follow forces a mode-aware
+redraw without changing canonical row IDs or page ownership. Date range prose omits raw
+epoch boundaries. `test_web_remaining.py` / `integration/web_remaining.cjs` compare the same
+CLI fixtures, including partial/unknown mix coverage. Approval-only
+`integration/serve_web_remaining.py` serves the actual app over synthetic HTTP fixtures,
+never a product host or provider. The [owner matrix](../governance/verification/remaining-web-parity.md)
+records Windows built-in-browser inspection and remaining native/assistive limitations.
+Architecture boundaries are unchanged; journal assessment: no-update, these owner facts
+and the focused evidence are sufficient.
+
 ## Native launcher maintenance notes
 
 PowerShell 5.1: preserve `[array]$pythonArgs` (scalar `-3` splatting lost the command in a real probe). Use DirectoryInfo.SetAccessControl/private DACL, not Set-Acl requiring SeSecurityPrivilege. AST-extracted production functions/assignments test real py.exe handoff/private logs. Never elevate or change global policy. These owner facts replace a redundant journal log; historical evidence is unchanged.

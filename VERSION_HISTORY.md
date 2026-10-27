@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.100 — 2026-10-28
+
+- Finished remaining Web report presentation: configured-local prompt clocks and Next Ictx guidance, inclusive human-readable date ranges, and CLI-aligned historical Token Mix Input/Cache/Write/Output share-and-cost columns with full-report totals above the table. Exact backend values remain separate sort keys; historical capture stays explicit and cancellable.
+- Session Snapshot/Live summaries use shared CCost/money/duration formatting and child breakdowns, contextual warnings, clear Freeze/Follow actions and optional source/reading details. Complete revision-aware 50-row history, whole-session totals, stable anchors and selection/focus protection remain intact. No acquisition, valuation, authentication, browser persistence or CLI behavior changes.
+
 ## v80.99 — 2026-10-28
 
 - Added a persistent Web host-state banner distinguishing starting, connected, source unavailable, reconnecting, offline, expired authorization and intentional stop. Retained reports/Watch stay visibly frozen with last authenticated check/source timestamps; terminal pages disable acquisition controls and require the OS launcher.

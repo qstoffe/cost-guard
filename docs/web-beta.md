@@ -41,7 +41,7 @@ Accounts uses the shared provider/account cards with native quota windows, known
 | Sessions | `/#/sessions`, optional `/#/sessions?limit=20` | Immediate recent-first 50-root page, including available archived history; Previous/Next links carry offset/catalog revision. Optional N/all scope is collapsed under Advanced. |
 | Session report | `/#/sessions/<id>` | Complete report Snapshot/Live detail; links from session lists and global Watch |
 | Date / inclusive range | `/#/reports?date=2026-10-25`, `/#/reports?date=2026-10-24:2026-10-25` | Configured-local boundaries/DST; canonical range valuation and union duration; impossible/reversed dates fail explicitly |
-| Historical Token Mix | `/#/token-mix` | Explicit Capture/Refresh only, never navigation/prefetch; canonical per-model prompts/calls, token/cost/mix vectors, price coverage and total over the same shown requests |
+| Historical Token Mix | `/#/token-mix` | Explicit Capture/Refresh only, never navigation/prefetch; CLI Input/Cache/Write/Output share-and-CCost cells, model Prompts/Calls/CCost, full-report total above the table and optional sample/price coverage |
 
 Search above the report filters all finite/live tables; each table also has its own filter and sortable column buttons. Column clicks cycle ascending, descending, then original server order; model tables also offer **CLI default order**. Filters/sorts are presentation-only and show filtered/page counts alongside full-report row counts; totals and source queries never change. Decimal strings are compared exactly, vector columns lexicographically I/C/W/O, and unknown scalar values sort last. Default model order remains the shared server ranking, including exact tier/boundary and no-sample fallback rules, not rounded display values. Overview uses one-decimal `x` multipliers with arrows/compact K/M thresholds; without completed priced prompts it leaves multipliers blank, as Normal does. Complete revision-paged session detail has its own browsing controls rather than pretending a filter covers unloaded rows; the global search is disabled there.
 
@@ -60,6 +60,16 @@ Most finite report tables show 50 rows per page from **one complete immutable AP
 Normal `/#/sessions/<id>` links default to Snapshot; `/#/sessions/<id>/live` explicitly requests Live. The mode button switches without stopping the shared server. Entering Live queues an authoritative source observation, not event-only continuation of an old snapshot. Snapshot freezes the whole report, including running durations and totals; Refresh requests a new capture. Leaving Live freezes one consistent current revision. Idle, abort and prompt completion never end Live.
 
 Session history reuses Python's detailed report projection, not Watch-only context/duration fields or browser calculations. All root-tree rows remain available, without a prompt count, Watch row cap, history TTL or durable ledger. First/Previous/Next and Jump to latest traverse 50-row pages; totals always cover the full observed report. Loading, observation time, missing/archive/outage and partial pricing remain explicit. A catalog absence is not proof of deletion: the last report remains readable. Rows omitted by source compaction/gaps retain canonical evidence, last-observed provenance and frozen lifecycle/time until observed again; source history deleted before observation cannot be reconstructed. No completion is inferred from connection loss.
+
+Session controls say **Follow live** / **Freeze snapshot**; Refresh captures a new observation.
+Summaries use the shared CLI CCost, money and duration tokens, never raw Decimal strings.
+Prompt clocks use the configured timezone; Next Ictx and context warnings stay beside the
+history. Whole-session child-cost breakdowns remain distinct from page totals. Technical
+source/provenance and reading guidance are optional. Date/range explanations show inclusive
+configured-local calendar dates, with links to full detail and browser Back to the frozen range.
+The [owner-facing review matrix](../development/architecture/governance/verification/remaining-web-parity.md)
+distinguishes deterministic/browser evidence and intentional CLI differences; it is scoped
+Beta evidence, not a permanent gate or native macOS acceptance.
 
 Pages carry a revision and canonical row identities. A stale cursor rebases to the existing anchor, never silently combines pages into a report. The client caches only its current 50-row page and retains keyed DOM nodes on updates. Scrolling up or focusing controls disables follow; Jump to latest re-enables it. Background updates preserve row anchors/pixel offset and defer row replacement during text selection. Copy/selection covers the current page, not unloaded pages; use paging to reach other rows. Real-browser layout, resize and assistive-technology behavior still require owner validation; VM checks are not visual acceptance.
 

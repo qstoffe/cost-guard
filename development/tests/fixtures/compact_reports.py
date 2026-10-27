@@ -35,14 +35,14 @@ def rendered(report, config=None, *, width=180, color=False):
     return stream.getvalue()
 
 
-def report_service(test, source=None, *, availability=None, accounts=(), now_ms=NOW):
+def report_service(test, source=None, *, availability=None, accounts=(), now_ms=NOW, timezone_id="UTC"):
     """Fresh V2-labelled service over a disposable cache that ``test`` cleans up."""
     tmp = tempfile.TemporaryDirectory()
     test.addCleanup(tmp.cleanup)
     db = CacheDatabase(Path(tmp.name)); db.initialize()
     source = source or FakeSource()
     config = dict(load_configuration(ROOT).values)
-    config["timezone"] = "UTC"
+    config["timezone"] = timezone_id
     return ReportService(
         selection=SourceSelection(source, "v2", ("Source-wide warning",), source.probe()),
         pricing_provider=FakePricingProvider(), account_provider=None,

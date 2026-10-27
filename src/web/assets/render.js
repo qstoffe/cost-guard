@@ -255,7 +255,7 @@ const ReportView = (() => {
         if (detailed) { accountQuota(card, quota); continue; }
         const row = element('div', undefined, 'quota-summary ' + (quota.display_roles || []).join(' '));
         row.append(element('strong', quota.label), element('span',
-          `${display(quota, 'remaining')} ${quota.unit} remaining / ${quota.unlimited ? 'Unlimited' : display(quota, 'limit')} · ${display(quota, 'remaining_fraction')}`));
+          `${display(quota, 'remaining')} ${quota.unit || 'units'} remaining / ${quota.unlimited ? 'Unlimited' : display(quota, 'limit')} · ${display(quota, 'remaining_fraction')}`));
         row.append(element('span', `Used ${display(quota, 'used')} · Reset ${display(quota, 'reset_at_ms')} · ${quota.status}${quota.window_active === false ? ' · Inactive window' : ''}`, 'detail'));
         card.append(row);
       }
@@ -270,22 +270,23 @@ const ReportView = (() => {
       for (const bill of obs.billing || []) (detailed ? card : details).append(element('p', `${bill.label} · ${bill.period} · ${bill.kind} · ${display(bill, 'amount')} ${bill.currency} · ${bill.status}`));
       for (const quota of obs.quotas) details.append(element('p', detailed ?
         `${quota.label} · Used ${display(quota, 'used')} ${quota.unit || 'units'} · ${quota.status}` :
-        `${quota.label} · ${quota.period} · ${known(quota.duration_seconds)} s · ${quota.scope || ''} · Native money remaining/limit ${display(quota, 'remaining_money')}/${display(quota, 'limit_money')}`));
+        `${quota.label} · ${quota.period} · ${display(quota, 'window') || 'N/A'} window · ${quota.scope || ''} · Native money remaining/limit ${display(quota, 'remaining_money')}/${display(quota, 'limit_money')}`));
       card.append(details); group.append(card);
     }
     parent.append(group);
   }
   function promptLabel(row, live = false) {
-    const node = element('span', `${row.label || 'Prompt'} ${row.prompt_number == null ? '' : '#' + row.prompt_number} ${row.preview || ''}`.trim());
+    const text = [row.is_compaction && row.label, row.preview || (!row.is_compaction && row.label)].filter(Boolean);
+    const node = element('span', `${row.display?.clock || ''} ${row.prompt_number == null ? '' : '#' + row.prompt_number} ${[...new Set(text)].join(' ') || 'Prompt'}`.trim());
     const flags = [row.model_effort, row.is_compaction && 'Compaction',
       row.in_progress && (live ? 'Running · provisional' : 'Running at snapshot · provisional'), row.aborted && 'Aborted',
       row.has_error && 'Error', row.background_only && 'Background activity',
       row.has_additional_model && 'Additional model contribution',
-      row.completed_successfully && 'Completed', row.abort_reason,
+      row.completed_successfully && 'Completed', row.aborted && row.display?.abort_clock, row.abort_reason,
       row.ended_after_tool_calls && 'Ended after tool calls', row.running_cost_warning,
       row.next_context_warning].filter(Boolean);
     node.append(element('span', flags.join(' · '), 'detail ' + (row.display_roles || []).join(' ')));
-    if (row.has_cost_breakdown) node.append(element('span',
+    if (row.has_cost_breakdown && row.breakdown_known) node.append(element('span',
       `Main CCost ${ccost(row, 'main_ccost')} · Linked child CCost ${ccost(row, 'subagent_ccost')}`, 'detail'));
     return node;
   }
@@ -293,7 +294,8 @@ const ReportView = (() => {
     const title = element('h3', block.title || 'Session'); parent.append(title, link(block.session_id));
     parent.append(element('p', `${ranged ? 'Selected-range' : 'Full-session'} CCost ${ccost(block, 'total_ccost')} · Billing ${display(block, 'billed_cost')} · Duration ${display(block, 'duration_ms')}`));
     if (block.total_has_cost_breakdown) parent.append(element('p',
-      `Main CCost ${ccost(block, 'total_main_ccost')} · Linked child CCost ${ccost(block, 'total_subagent_ccost')}`));
+      block.total_breakdown_known ? `Main CCost ${ccost(block, 'total_main_ccost')} · Linked child CCost ${ccost(block, 'total_subagent_ccost')}` : 'Linked child breakdown unavailable.'));
+    contextSummary(parent, block);
     if (!block.rows.length) parent.append(element('p', 'This session exists but has no prompt rows.'));
     table(parent, `Prompts · ${ranged ? 'selected range' : 'complete session'} totals, independent of page`,
       ['Prompt', 'CCost', 'Calls', 'Duration', '~Ictx', '~Ictx CCost', '~Extra CCost', 'I/C/W/O %'], block.rows,
@@ -313,7 +315,7 @@ const ReportView = (() => {
     if (result.source.status === 'partial') parent.append(element('p', `Partial source data (${view.source_warning_count} warnings). Values may be incomplete.`, 'warning'));
     if (view.model_availability_unverified) parent.append(element('p', 'Model availability unverified: showing the full catalog or all historically used models, not a verified selectable list.', 'warning'));
     if (view.model_availability_empty) parent.append(element('p', 'No available OpenCode models match the pricing catalog.', 'warning'));
-    if (view.kind === 'date') parent.append(element('p', `Inclusive local range ${result.scope.date_text} · ${result.scope.timezone_id} · [${result.scope.start_ms}, ${result.scope.end_ms}) milliseconds. Prompt links open complete sessions; use Back to return to this frozen range.`));
+    if (view.kind === 'date') parent.append(element('p', `Inclusive local range ${result.scope.date_text} · ${result.scope.timezone_id} · inclusive local calendar dates. Session links open complete history; Back returns to this frozen range.`, 'snapshot'));
     const definitions = element('details');
     definitions.append(element('summary', 'Reading this report'), element('p', 'CCost = reference valuation, not provider billing. Unknown pricing is not zero. I/C/W/O = input/cache read/cache write/output. Durations are report execution durations, frozen at observation time.'));
     if (!overview) parent.append(definitions);
@@ -360,15 +362,22 @@ const ReportView = (() => {
       if (view.kind === 'token-mix') {
         if (!view.model_token_mix.length) parent.append(element('p', 'No available historical model rows. Missing history is not reconstructed.'));
         table(parent, 'Historical models · canonical totals above, independent of filters',
-          ['Model', 'Prompts', 'Calls', 'I/C/W/O tokens', 'I/C/W/O CCost', 'I/C/W/O %', 'Price coverage'], view.model_token_mix,
-          row => [row.model, known(row.prompts), known(row.calls), display(row.mix, 'totals'), display(row.mix, 'costs'), display(row.mix, 'percentages'), `${row.mix.priced_requests}/${row.mix.request_count} ${row.mix.cost_complete ? 'complete' : 'incomplete'}`], null, state, 'history',
-          row => [row.model, row.prompts, row.calls, row.mix.totals, row.mix.costs, row.mix.percentages, row.mix.priced_requests]);
+          ['Model', 'Prompts', 'Calls', 'Input', 'Cache', 'Write', 'Output', 'CCost'], view.model_token_mix,
+          row => [row.model, known(row.prompts), known(row.calls), ...['input', 'cache', 'write', 'output', 'total_cost'].map(key => display(row.mix, key))], null, state, 'history',
+          row => [row.model, row.prompts, row.calls, ...row.mix.shares, row.mix.total_cost]);
       }
     }
     for (const note of view.notes || []) parent.append(element('p', note, 'warning'));
   }
   function mixSummary(parent, mix) {
-    parent.append(element('p', `Full-report I/C/W/O tokens: ${display(mix, 'totals')} · CCost ${display(mix, 'costs')} · Mix % ${display(mix, 'percentages')} · Requests ${mix.request_count} · Prompts ${mix.sample_size} · Priced requests ${mix.priced_requests} · ${mix.cost_complete ? 'Complete prices' : 'Incomplete prices'}`, mix.cost_complete ? '' : 'partial'));
+    parent.append(element('p', `Total Token Mix % · ${display(mix, 'total_tokens')} tokens · ` +
+      ['Input', 'Cache', 'Write', 'Output'].map(name => name + ': ' + display(mix, name.toLowerCase())).join(' · '), mix.cost_complete ? 'metric-value' : 'metric-value partial'));
+    const details = element('details'); details.append(element('summary', 'Sample and price coverage'), element('p',
+      `Full-report I/C/W/O tokens: ${display(mix, 'totals')} · Requests ${mix.request_count} · Prompts ${mix.sample_size} · Priced requests ${mix.priced_requests} · ${mix.cost_complete ? 'Complete prices' : 'Incomplete prices'}. Output includes reasoning; one prompt can contribute to several model rows.`)); parent.append(details);
+  }
+  function contextSummary(parent, block) {
+    parent.append(element('p', display(block, 'next_context'), block.next_context_warning ? 'threshold' : 'detail'));
+    if (block.next_context_warning) parent.append(element('p', 'Context: ' + block.next_context_warning.replace(/^\[|\]$/g, ''), 'warning'));
   }
   function renderLive(parent, result, state) {
     state.watch ||= new WatchView.View(state);
@@ -386,5 +395,5 @@ const ReportView = (() => {
     return ['Complete session', ccost(block, 'total_ccost'), known(block.total_calls),
       display(block, 'duration_ms'), '—', known(block.total_ictx_cost_text), known(block.total_extra_cost_text), known(block.total_mix_text)];
   }
-  return {render, renderLive, element, detailCells, detailTotals, compare, overviewAccounts};
+  return {render, renderLive, element, detailCells, detailTotals, compare, overviewAccounts, display, contextSummary};
 })();

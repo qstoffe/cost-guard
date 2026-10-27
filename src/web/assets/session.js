@@ -6,9 +6,9 @@ const SessionDetail = (() => {
     constructor(api, id, mode) {
       Object.assign(this, {api, id, mode, offset: 0, revision: null, anchor: null,
         token: null, data: null, follow: mode === 'live', busy: false, attached: false});
-      this.root = el('section');
+      this.root = el('section', undefined, 'session-detail');
       this.controls = el('div', undefined, 'pager');
-      this.toggle = el('button', mode === 'live' ? 'Snapshot' : 'Live');
+      this.toggle = el('button', mode === 'live' ? 'Freeze snapshot' : 'Follow live');
       this.latest = el('button', 'Jump to latest');
       this.first = el('button', 'First'); this.previous = el('button', 'Previous');
       this.next = el('button', 'Next'); this.label = el('span');
@@ -24,6 +24,11 @@ const SessionDetail = (() => {
       });
       this.status = el('p'); this.status.setAttribute('role', 'status');
       this.summary = el('p'); this.warning = el('p', undefined, 'warning');
+      this.context = el('div'); this.heading = el('h3', 'Session history');
+      this.provenance = el('details'); this.provenance.append(el('summary', 'Source and reading guide'));
+      this.source = el('p'); this.provenance.append(this.source, el('p',
+        'CCost is reference valuation, not billing. Unknown is not zero. Duration unions execution intervals, excluding idle gaps. Totals cover all history, not this page. Refresh captures a new observation; Freeze snapshot keeps the current one. Copy and selection cover this page.'));
+      const back = el('a', 'All sessions'); back.href = '#/sessions';
       const scroll = el('div', undefined, 'table-scroll'); scroll.tabIndex = 0;
       scroll.setAttribute('role', 'region'); scroll.setAttribute('aria-label', 'Session prompt history');
       const table = el('table'); table.append(el('caption', 'Complete session history — 50 rows per page'));
@@ -33,8 +38,7 @@ const SessionDetail = (() => {
       }
       head.append(header); this.body = el('tbody'); this.footer = el('tr');
       const foot = el('tfoot'); foot.append(this.footer); table.append(head, this.body, foot); scroll.append(table);
-      this.root.append(this.controls, this.status, this.summary, this.warning, scroll,
-        el('p', 'CCost is reference valuation, not billing. Unknown is not zero. Durations are report execution durations at observation. Copy and selection cover this page; use First/Next for other history.'));
+      this.root.append(back, this.heading, this.controls, this.status, this.summary, this.warning, this.context, scroll, this.provenance);
       this.first.addEventListener('click', () => this.page(0));
       this.previous.addEventListener('click', () => this.page(Math.max(0, this.offset - 50)));
       this.next.addEventListener('click', () => this.page(this.offset + 50));
@@ -87,8 +91,8 @@ const SessionDetail = (() => {
           await this.api('/api/detail', {action: 'close', token: this.token});
           this.mode = 'live'; this.token = null;
         }
-        this.toggle.textContent = this.mode === 'live' ? 'Snapshot' : 'Live';
-        await this.load();
+        this.toggle.textContent = this.mode === 'live' ? 'Freeze snapshot' : 'Follow live';
+        await this.load(true);
       } catch (_) { this.status.textContent = 'Mode switch unavailable; last known result retained.'; }
     }
     async refresh() {
@@ -111,10 +115,9 @@ const SessionDetail = (() => {
           offset: latest || this.follow ? 2 ** 52 : this.offset,
           revision: this.revision, anchor: this.follow ? null : this.anchor});
         if (!this.attached) return;
-        this.status.textContent = `${this.mode === 'live' ? 'Live' : 'Snapshot'} — ${data.state}${data.result ?
-          ' — observed ' + new Date(data.result.observed_at_ms).toLocaleString() : ' — waiting for authoritative observation'}`;
+        this.status.textContent = `${this.mode === 'live' ? 'Live · updates automatically' : 'Snapshot · frozen until Refresh'}${data.result ? '' : ' · waiting for source observation'}`;
         if (!data.result) return;
-        if (this.mode === 'live' && data.revision !== this.revision && !this.follow) {
+        if (this.mode === 'live' && this.revision !== null && data.revision !== this.revision && !this.follow) {
           this.latest.textContent = 'New/changed activity — Jump to latest';
         }
         if (!navigation && (this.protectedSelection() || this.body.contains(document.activeElement))) return;
@@ -143,22 +146,26 @@ const SessionDetail = (() => {
       block.rows.forEach((value, index) => {
         let row = existing.get(value.id);
         if (!row) { row = el('tr'); row.dataset.id = value.id; }
-        row.className = value.is_compaction ? 'compaction' : '';
-        const signature = JSON.stringify(value);
+        row.className = [...(value.display_roles || []), ...(value.is_compaction ? ['compaction'] : [])].join(' ');
+        const signature = this.mode + JSON.stringify(value);
         if (row.dataset.value !== signature) {
-          row.replaceChildren(...ReportView.detailCells(value).map(value => {
+          row.replaceChildren(...ReportView.detailCells(value, this.mode === 'live').map(value => {
             const cell = el('td'); cell.append(typeof value === 'object' ? value : el('span', value)); return cell;
           })); row.dataset.value = signature;
         }
         if (this.body.children[index] !== row) this.body.insertBefore(row, this.body.children[index] || null);
       });
       this.footer.replaceChildren(...ReportView.detailTotals(block).map(value => el('td', value)));
-      this.summary.textContent = `Whole session: ${data.total} rows; CCost ${block.total_ccost}${!block.comparison_cost_complete ? ' (incomplete)' : ''}; billed ${block.billed_cost ?? 'Unknown'}. Totals are not page subtotals.`;
+      this.heading.textContent = block.title || 'Session history';
+      this.summary.textContent = `Whole session: ${data.total} rows · CCost ${ReportView.display(block, 'total_ccost')}${!block.comparison_cost_complete ? ' (incomplete)' : ''} · Billed ${ReportView.display(block, 'billed_cost')} · Duration ${ReportView.display(block, 'duration_ms')}` +
+        (block.total_has_cost_breakdown ? block.total_breakdown_known ? ` · Main CCost ${ReportView.display(block, 'total_main_ccost')} · Linked child CCost ${ReportView.display(block, 'total_subagent_ccost')}` : ' · Linked child breakdown unavailable' : '');
+      this.context.replaceChildren(); ReportView.contextSummary(this.context, block);
+      this.source.textContent = `${data.result.view.source_label} · ${data.state} · Observed ${new Date(data.result.observed_at_ms).toLocaleString()} · ${this.id}. Complete history, 50 rows per page; totals are not page subtotals.`;
       this.warning.textContent = (data.state === 'history_retained' ?
         'Source history omitted previously observed evidence. Retained last observations are included, not newly completed. Deleted-before-observation history cannot be reconstructed. ' : '') +
         (data.state === 'session_missing' || data.state === 'archived' ? 'Session missing or archived; last known report retained. Return via Sessions. ' : '') +
         data.result.view.notes.join(' ');
-      if (!this.follow && data.revision !== this.revision) this.latest.textContent = 'New/changed activity — Jump to latest';
+      if (this.mode === 'live' && this.revision !== null && !this.follow && data.revision !== this.revision) this.latest.textContent = 'New/changed activity — Jump to latest';
       else this.latest.textContent = 'Jump to latest';
       Object.assign(this, {data, offset: data.offset, revision: data.revision, anchor: block.rows[0]?.id || null});
       this.label.textContent = data.total ? `${data.offset + 1}–${data.offset + block.rows.length} of ${data.total}` : 'No rows';

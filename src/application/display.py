@@ -3,12 +3,12 @@
 Only already-exported fields are inspected; no source/provider access, valuation,
 ranking or arbitrary object introspection. CLI and Web consume shared primitives.
 """
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 from src.analysis.timezones import format_local_timestamp
 from src.display import (compact_threshold, compact_tokens, context_delta, context_tokens,
                          duration_text, format_reset, money, native_amount, price_summary, relative_cost, unaccounted_usage)
-from src.numbers import balanced_share_percents, ccost_amount, consumed_capacity, remaining_capacity
+from src.numbers import balanced_share_percents, ccost_amount, ccost_range, consumed_capacity, remaining_capacity
 
 from .contracts import ObjectValue, record
 
@@ -130,6 +130,37 @@ def roles(values):
     return tuple(result)
 
 
+def history_tokens(values, timezone_id):
+    """CLI prompt clocks/context guidance and historical mix cells from frozen facts."""
+    tokens = {}
+    if "at_ms" in values:
+        tokens["clock"] = format_local_timestamp(values["at_ms"], timezone_id, "%H:%M")
+    if values.get("aborted") and values.get("abort_at_ms"):
+        tokens["abort_clock"] = format_local_timestamp(values["abort_at_ms"], timezone_id, "%H:%M")
+    if "next_context_tokens" in values:
+        context = values["next_context_tokens"]
+        tokens["next_context"] = "Next Ictx: N/A" if context is None else "Next Ictx: ~" + context_tokens(context)
+        if context is not None:
+            multiplier = decimal(values.get("next_context_cost_multiplier"))
+            if multiplier is not None and values.get("next_context_warning_severity") not in (None, "none"):
+                ratio = f"{multiplier.quantize(Decimal('0.1'), rounding=ROUND_HALF_UP):f}".removesuffix(".0")
+                tokens["next_context"] += f" ({ratio}x more expensive)"
+            else:
+                tokens["next_context"] += " (Next Ictx CCost " + ccost_range(
+                    decimal(values.get("next_context_cached_ccost")), decimal(values.get("next_context_fresh_ccost"))) + ")"
+    if "totals" in values and "shares" in values:
+        shares = balanced_share_percents(values["totals"]) if all(item is not None for item in values["shares"]) else ("--",) * 4
+        costs = values.get("costs")
+        priced = costs is not None and not (values["request_count"] and not values["priced_requests"])
+        prefix = "" if values["cost_complete"] else "?"
+        for index, name in enumerate(("input", "cache", "write", "output")):
+            cost = "N/A" if not priced else prefix + ccost_amount(decimal(costs[index]))
+            tokens[name] = shares[index] + ("" if costs is None else f" ({cost})")
+        tokens["total_cost"] = prefix + ccost_amount(sum((decimal(item) for item in costs), Decimal(0))) if priced else "N/A"
+        tokens["total_tokens"] = "N/A" if values.get("total_tokens") is None else compact_tokens(values["total_tokens"])
+    return tokens
+
+
 def with_display(value, timezone_id="UTC", now_ms=None):
     """Traverse only frozen allowlisted records; preserve field and row ordering."""
     if isinstance(value, tuple):
@@ -140,6 +171,7 @@ def with_display(value, timezone_id="UTC", now_ms=None):
     now_ms = values.get("now_ms", now_ms)
     tokens = amount_tokens(values)
     tokens.update(metric_tokens(values, timezone_id, now_ms))
+    tokens.update(history_tokens(values, timezone_id))
     # These are opaque maps keyed by external model/source labels, not DTO schemas.
     opaque = {"by_model", "by_day_utc", "current_context_sources"}
     fields = tuple((key, item if key in opaque else with_display(item, timezone_id, now_ms)) for key, item in value.fields)
