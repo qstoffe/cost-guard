@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "epochRevision": "df44c06a97244278abd8d0dc9ed90ea12c368e47",
-  "ordinaryCount": 28,
+  "ordinaryCount": 29,
   "completed": {
     "architecture": 20,
     "test-health": 25,
@@ -11,13 +11,13 @@
     "id": "shared-repository-maintenance",
     "version": 1
   },
-  "lastDeliveredRevision": "9040d27bcf4c807e0ca74f3f75a7644aee5c36c9",
+  "lastDeliveredRevision": "cfd07a8ee1247dd147e7bb94a8a0e9fc3727f568",
   "lastItem": {
-    "id": "contract-sync/4/9040d27bcf4c807e0ca74f3f75a7644aee5c36c9",
-    "kind": "contract-sync"
+    "id": "fr/000490",
+    "kind": "ordinary"
   },
   "featureDiscovery": {
     "completed": 20
   },
-  "completionHighWatermark": 28
+  "completionHighWatermark": 29
 }

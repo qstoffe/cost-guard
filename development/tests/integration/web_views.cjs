@@ -222,9 +222,10 @@ async function main() {
   vm.runInContext('ReportView.render(output, example, {pages: {}, section: "accounts"})', context);
   assert.match(ids.result.textContent, /First/);
   assert.match(ids.result.textContent, /Second/);
-  assert.match(ids.result.textContent, /unsupported_auth_method/);
+  assert.match(ids.result.textContent, /Unsupported authentication method/);
+  assert.doesNotMatch(ids.result.textContent, /unsupported_auth_method/);
   assert.match(ids.result.textContent, /Unaccounted usage \(estimate\): —/);
-  assert.match(ids.result.textContent, /Remaining 75%/);
+  assert.match(ids.result.textContent, /75% remaining/);
   // Reload with an ordinary deep link must not erase it or require the bootstrap again.
   location.hash = '#/sessions/root-0000';
   const reloaded = vm.createContext({document: context.document, window: context.window, location, history,

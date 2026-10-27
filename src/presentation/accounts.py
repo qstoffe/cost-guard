@@ -1,19 +1,16 @@
 """Shared account/quota formatting for report and responsive Watch layouts."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from decimal import Decimal
-import math
 import textwrap
 import time
 
 from src.analysis.quota_pace import QuotaPace
 from src.analysis.valuation import ComparisonCost
-from src.analysis.timezones import resolve_timezone
 from src.domain import AccountSnapshot, AccountUsageStatus, BillingComponent, QuotaComponent
 from src.reports.models import AccountProjection
 from src.numbers import consumed_capacity, remaining_capacity
-from src.display import money, native_amount as _native_amount, unaccounted_usage
+from src.display import format_reset, money, native_amount as _native_amount, unaccounted_usage
 from .terminal import AnsiStyler, StyledText
 
 QUOTA_BAR_WIDTH = 10
@@ -22,29 +19,6 @@ _FAILURE_CAUSES = {"timeout": "timed out", "transport_failure": "connection fail
                    "network_failure": "network unavailable", "http_failure": "service unavailable",
                    "format_changed": "format changed", "parser_failure": "unreadable response",
                    "discovery_failure": "account metadata unavailable"}
-_WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
-
-
-def format_reset(reset_at_ms: object, timezone_id: str, *, now_ms: int, compact: bool = False) -> str:
-    """Choose a tier by elapsed UTC time; render its target in the configured zone."""
-    if isinstance(reset_at_ms, bool) or not isinstance(reset_at_ms, (int, float)):
-        return "Reset unknown"
-    try:
-        if not math.isfinite(reset_at_ms) or reset_at_ms <= 0:
-            return "Reset unknown"
-        target = datetime.fromtimestamp(reset_at_ms / 1000, timezone.utc).astimezone(resolve_timezone(timezone_id))
-        remaining = reset_at_ms - now_ms
-    except (OverflowError, OSError, ValueError):
-        return "Reset unknown"
-    if remaining <= 0:
-        return "Reset expired"
-    clock = target.strftime("%H:%M")
-    if remaining < 86_400_000:
-        return f"Reset@{clock}" if compact else f"Reset in {int(remaining // 60_000)}min, {clock}"
-    if remaining < 604_800_000:
-        when = _WEEKDAYS[target.weekday()] + " " + clock
-        return "Reset@" + when if compact else f"Reset in {int(remaining // 3_600_000)}h, {when}"
-    return ("Reset@" if compact else "Reset at ") + target.strftime("%Y-%m-%d %H:%M")
 
 
 def format_quota_bar(fraction: Decimal) -> StyledText:

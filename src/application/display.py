@@ -7,7 +7,7 @@ from decimal import Decimal
 
 from src.analysis.timezones import format_local_timestamp
 from src.display import (compact_threshold, compact_tokens, context_delta, context_tokens,
-                         duration_text, money, native_amount, price_summary, relative_cost, unaccounted_usage)
+                         duration_text, format_reset, money, native_amount, price_summary, relative_cost, unaccounted_usage)
 from src.numbers import balanced_share_percents, ccost_amount, consumed_capacity, remaining_capacity
 
 from .contracts import ObjectValue, record
@@ -65,7 +65,7 @@ def amount_tokens(values):
     return tokens
 
 
-def metric_tokens(values, timezone_id):
+def metric_tokens(values, timezone_id, now_ms=None):
     tokens = {}
     for key in ("duration_ms", "watch_duration_ms", "running_ms", "background_ms"):
         if key in values:
@@ -79,6 +79,11 @@ def metric_tokens(values, timezone_id):
     for key in ("pricing_retrieved_at_ms", "observed_at_ms", "now_ms", "started_at_ms", "reset_at_ms"):
         if key in values:
             tokens[key] = "unknown" if values[key] is None else format_local_timestamp(values[key], timezone_id)
+    if "reset_at_ms" in values and now_ms is not None:
+        tokens["reset"] = ("Window not started" if values.get("window_active") is False and values["reset_at_ms"] is None
+                           else format_reset(values["reset_at_ms"], timezone_id, now_ms=now_ms))
+    if "duration_seconds" in values:
+        tokens["window"] = "" if values["duration_seconds"] is None else duration_text(values["duration_seconds"] * 1000)
     if "relative_cost" in values:
         parts = [relative_cost(decimal(values["relative_cost"]))]
         for level in values.get("relative_levels", ())[1:]:
@@ -125,18 +130,19 @@ def roles(values):
     return tuple(result)
 
 
-def with_display(value, timezone_id="UTC"):
+def with_display(value, timezone_id="UTC", now_ms=None):
     """Traverse only frozen allowlisted records; preserve field and row ordering."""
     if isinstance(value, tuple):
-        return tuple(with_display(item, timezone_id) for item in value)
+        return tuple(with_display(item, timezone_id, now_ms) for item in value)
     if not isinstance(value, ObjectValue):
         return value
     values = dict(value.fields)
+    now_ms = values.get("now_ms", now_ms)
     tokens = amount_tokens(values)
-    tokens.update(metric_tokens(values, timezone_id))
+    tokens.update(metric_tokens(values, timezone_id, now_ms))
     # These are opaque maps keyed by external model/source labels, not DTO schemas.
     opaque = {"by_model", "by_day_utc", "current_context_sources"}
-    fields = tuple((key, item if key in opaque else with_display(item, timezone_id)) for key, item in value.fields)
+    fields = tuple((key, item if key in opaque else with_display(item, timezone_id, now_ms)) for key, item in value.fields)
     role_tokens = roles(values)
     return ObjectValue(fields + ((("display", record(**tokens)),) if tokens else ()) +
                        ((("display_roles", role_tokens),) if role_tokens else ()))

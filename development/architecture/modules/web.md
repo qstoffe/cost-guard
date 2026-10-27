@@ -51,6 +51,8 @@ Models retains that canonical order and independent priced-completed sample in b
 
 ## Allowed dependencies
 
+Accounts' Normal-only detailed mode reuses `overviewAccounts` and shared card/semantic styles, not a new acquisition owner. `src/display.py` now owns the unchanged CLI `format_reset`, re-exported by terminal accounts; `with_display` propagates frozen `now_ms` to quota reset tokens in the configured timezone. Exact raw fields remain untouched. `test_web_accounts.py`, `fixtures/account_views.py` and `integration/web_accounts.cjs` cover equivalent CLI/DTO/DOM states, native amounts, periods, Pace and private-field exclusions. Explicit synthetic browser/keyboard evidence and its limits: [Accounts parity](../governance/verification/accounts-display-parity.md). No application/presentation import, report scope, formula, freshness or source/privacy boundary change; journal assessment: no-update, these durable owner facts suffice.
+
 Web Watch's persistent table owner is `src/web/assets/watch.js`, delegated by `render.js`.
 It retains one canonical-order 50-row table, inline session dividers, controls/row identities,
 selection/focus protection and a visible-row scroll anchor. Account cards reuse the shared
