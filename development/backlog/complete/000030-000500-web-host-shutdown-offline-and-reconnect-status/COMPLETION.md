@@ -3,6 +3,7 @@
 ## Outcome
 
 Implemented in Cost Guard v80.99 (2026-10-28).
+[Delivery PR](https://github.com/qstoffe/cost-guard/pull/85).
 [Tested source candidate](https://github.com/qstoffe/cost-guard/commit/7cf5f37d6df1bd83d173a63db0aa13220dc9820a).
 The original FR and selected bundle payload are preserved byte-for-byte; no attachments
 were added. Native transaction advances ordinary/completion count to 30; retention prunes none.
