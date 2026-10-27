@@ -31,4 +31,7 @@ remain unclaimed; real-source HTTP and synthetic browser evidence are separate.
 No architecture-boundary changes. Updated affected module/code-map/display-parity
 routes. Journal no-update: no new durable analysis/provider finding. Remaining Accounts,
 host-status and report/detail FRs stay pending and intact; no new cross-FR dependencies
-or external recovery artifacts are required. Selected FR bytes are preserved unchanged.
+or external recovery artifacts are required. Concurrently authored FR 000520 was
+merged from fresh main unchanged; the installed read-only retention planner supplied
+the reconciled identity watermark 520 with no pruning. The selected transaction
+remained immutable. Selected FR bytes are preserved unchanged.
