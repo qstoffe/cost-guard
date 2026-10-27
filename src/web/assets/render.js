@@ -48,8 +48,9 @@ const ReportView = (() => {
   }
   function table(parent, title, columns, rows, cells, totals, state, key, values = cells) {
     const section = element('section');
+    const remote = key === 'sessions' ? state.result?.view?.session_page : null;
     state.filters ||= {}; state.sorts ||= {};
-    const filterLabel = element('label', 'Filter ' + title + ' '), filter = element('input');
+    const filterLabel = element('label', 'Filter ' + title + (remote ? ' (this page only) ' : ' ')), filter = element('input');
     filter.type = 'search'; filter.value = state.filters[key] || ''; filterLabel.append(filter); section.append(filterLabel);
     const scroll = element('div', undefined, 'table-scroll');
     scroll.tabIndex = 0;
@@ -78,7 +79,7 @@ const ReportView = (() => {
     }
     scroll.append(grid); section.append(scroll); parent.append(section);
     const pager = element('div', undefined, 'pager');
-    const previous = element('button', 'Previous'), next = element('button', 'Next');
+     const previous = element(remote ? 'a' : 'button', 'Previous'), next = element(remote ? 'a' : 'button', 'Next');
     const label = element('span'); label.setAttribute('aria-live', 'polite');
     previous.setAttribute('aria-label', 'Previous page: ' + title);
     next.setAttribute('aria-label', 'Next page: ' + title);
@@ -113,10 +114,26 @@ const ReportView = (() => {
       label.textContent = (shown.length ? `${page * size + 1}–${Math.min((page + 1) * size, shown.length)} of ${shown.length}` : 'No rows') + ` · ${rows.length} full-report rows; filters/pages do not change totals`;
       previous.disabled = page === 0;
       next.disabled = (page + 1) * size >= shown.length;
+      if (remote) {
+        label.textContent = (rows.length ? `${remote.offset + 1}–${remote.offset + rows.length} of ${remote.total}` : 'No rows') +
+          ` · Page ${Math.floor(remote.offset / remote.size) + 1} · ${shown.length} matches on this page only · catalog order frozen; row values observed per page`;
+        function destination(node, offset, enabled) {
+          node.setAttribute('aria-disabled', enabled ? 'false' : 'true');
+          if (enabled) {
+            const params = new URLSearchParams({offset: String(offset), revision: remote.catalog_revision});
+            if (state.request.session_limit != null) params.set('limit', state.request.session_limit);
+            node.href = '#/sessions?' + params;
+          } else node.removeAttribute('href');
+        }
+        destination(previous, Math.max(0, remote.offset - remote.size), remote.offset > 0);
+        destination(next, remote.offset + remote.size, remote.offset + rows.length < remote.total);
+      }
     }
     filter.addEventListener('input', () => { state.filters[key] = filter.value; state.pages[key] = 0; draw(); });
-    previous.addEventListener('click', () => { state.pages[key]--; draw(); });
-    next.addEventListener('click', () => { state.pages[key]++; draw(); });
+    if (!remote) {
+      previous.addEventListener('click', () => { state.pages[key]--; draw(); });
+      next.addEventListener('click', () => { state.pages[key]++; draw(); });
+    }
     if (key === 'models') {
       const reset = element('button', 'CLI default order');
       reset.addEventListener('click', () => { delete state.sorts[key]; state.pages[key] = 0; draw(); });
@@ -221,9 +238,10 @@ const ReportView = (() => {
     if (!overview) parent.append(definitions);
     if (overview) overviewConcepts(parent, view);
     if (view.session_usage.length || view.kind === 'sessions') {
-      if (!view.session_usage.length) parent.append(element('p', 'Source acquired: no available sessions.'));
+      if (!view.session_usage.length) parent.append(element('p', result.source.status === 'partial' ? 'Partial source: no sessions returned; unavailable history is not empty success.' : 'Source acquired: no available sessions.'));
       table(parent, 'Sessions', ['Session / name', 'Model / effort', 'CCost', 'Prompts', 'Duration'], view.session_usage,
-        row => { const name = element('span'); name.append(link(row.session_id), element('span', row.title, 'detail'));
+        row => { const name = element('span'); name.append(link(row.session_id), element('span', row.title, 'detail'),
+            element('span', [!row.complete && 'Incomplete pricing', row.archived && 'Archived', row.running && 'Running at snapshot'].filter(Boolean).join(' · '), 'detail'));
           return [name, row.model + (row.multiple_models ? ' · multiple models' : ''), ccost(row), known(row.prompt_count), display(row, 'duration_ms')]; },
         null, state, 'sessions', row => [row.title + ' ' + row.session_id, row.model, row.ccost, row.prompt_count, row.duration_ms]);
     }

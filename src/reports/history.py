@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from hashlib import sha256
+import json
 from typing import Mapping, Sequence
 
 from src.domain import NormalizedSession
@@ -18,12 +20,24 @@ class HistoryRequirements:
     start_ms: int | None = None
     root_ids: frozenset[str] | None = None
     limit: int | None = None
+    offset: int = 0
 
     def select(self, roots: Sequence[NormalizedSession], activity: Mapping[str, int]) -> tuple[NormalizedSession, ...]:
         candidates = tuple(root for root in roots
                            if (self.root_ids is None or root.session_id in self.root_ids)
                            and (self.start_ms is None or activity.get(root.session_id, root.updated_at_ms) >= self.start_ms))
-        return candidates if self.limit is None else candidates[:self.limit]
+        return candidates[self.offset:] if self.limit is None else candidates[self.offset:self.offset + self.limit]
+
+
+def session_catalog_revision(generation, sessions) -> str:
+    """Order/membership revision, not an atomic snapshot of hydrated prompt data.
+
+    Include children: child activity participates in the CLI's root ordering.
+    No per-root hydration/revision requests are needed to validate a page turn.
+    """
+    rows = sorted((s.session_id, s.parent_session_id, s.created_at_ms, s.updated_at_ms,
+                   s.archived_at_ms, s.title, s.provenance.source_instance, s.active) for s in sessions)
+    return sha256(json.dumps((generation, rows), separators=(",", ":")).encode()).hexdigest()
 
 
 def daily_roots(sessions: Sequence[NormalizedSession], start_ms: int) -> tuple[NormalizedSession, ...]:

@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.96 — 2026-10-27
+
+- Sessions opens immediately on the 50 most recent available roots, with bounded older-page requests, truthful catalog totals and URL-based Previous/Next/Back/reload. Catalog membership/order revisions reject drift rather than skipping or repeating roots. Search and column sorting explicitly cover only the fetched page; optional all/N scope is collapsed. CLI order, numeric formatting, archived/running/incomplete indicators and same-Web detail links are preserved.
+- Managed Windows Web hosts now use the paired pythonw.exe so isolated finite-report children do not create unwanted consoles. A detached-host probe reproduced a console for python.exe report workers and none for pythonw.exe; the tray remains a legitimate host UI. No CLI, isolation or shared OpenCode service changes.
+
 ## v80.95 — 2026-10-27
 
 - Consolidated Web Watch into one persistent, canonically ordered prompt table with inline session markers and explicitly retained-row subtotals. Run/Today scopes, context/tool/skill warnings and session-detail navigation remain server-owned; compact supporting account cards preserve independent observations and failure evidence.

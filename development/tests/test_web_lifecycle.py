@@ -22,6 +22,23 @@ from src.web.process_identity import InstanceConflict, process_identity, termina
 
 
 class LifecycleTests(unittest.TestCase):
+    @unittest.skipUnless(os.name == 'nt', 'Windows paired GUI interpreter')
+    def test_managed_host_uses_gui_interpreter_for_console_free_report_children(self):
+        (self.root / 'cost-guard-web.py').write_text('pass\n')
+        with patch.object(lifecycle.subprocess, 'Popen') as spawn:
+            lifecycle.spawn_detached(self.root, self.store(), 'a' * 32, 'src.web.native_windows')
+        args, options = spawn.call_args
+        self.assertEqual(str(Path(sys.executable).with_name('pythonw.exe')), args[0][0])
+        self.assertEqual(subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP, options['creationflags'])
+
+    @unittest.skipUnless(os.name == 'nt', 'Windows paired GUI interpreter')
+    def test_missing_gui_interpreter_fails_without_spawning_console_host(self):
+        (self.root / 'cost-guard-web.py').write_text('pass\n')
+        with patch.object(Path, 'is_file', return_value=False), patch.object(lifecycle.subprocess, 'Popen') as spawn:
+            with self.assertRaises(InstanceConflict):
+                lifecycle.spawn_detached(self.root, self.store(), 'a' * 32, 'src.web.native_windows')
+        spawn.assert_not_called()
+
     def setUp(self):
         # Lifecycle tests must not start real source/pricing/account acquisition.
         def idle_acquisition():

@@ -48,6 +48,7 @@ function failure(code) {
     result_too_large: 'Report exceeds the finite result size limit; no truncated totals are shown. Use a specific session or the CLI.',
     report_timeout: 'Report timed out; no empty result was substituted.', cancelled: 'Report cancelled.',
     invalid_request: 'Invalid report scope. Check dates/limits; no alternate range was substituted.',
+    session_catalog_changed: 'Session catalog changed. Use Latest sessions / restart browsing to avoid skipped or duplicate rows.',
     pricing_unavailable: 'Reference pricing unavailable.', busy: 'Report service busy. Retry Refresh.'};
   return errors[code] || 'Source/report unavailable. Check the local source and retry Refresh.';
 }
@@ -85,7 +86,17 @@ function navigate() {
   const route = ReportRoutes.resolve(location.hash), match = route.session;
   const key = match ? 'session/' + match[1] : location.hash || '#/overview';
   heading.textContent = route.title;
-  ReportRoutes.controls(document.getElementById('scope-controls'), route);
+  ReportRoutes.controls(document.getElementById('scope-controls'), route, event => {
+    event.preventDefault();
+    // Restart must not reuse a stale first-page revision from page-memory.
+    for (const state of views.values()) {
+      if (state.request?.kind === 'sessions' && !state.loading) {
+        state.result = null; state.attempted = false;
+      }
+    }
+    if (location.hash === '#/sessions') navigate();
+    else location.hash = '#/sessions';
+  });
   for (const item of document.querySelectorAll('nav a')) {
     if (item.getAttribute('href') === '#/' + route.section) item.setAttribute('aria-current', 'page');
     else item.removeAttribute('aria-current');

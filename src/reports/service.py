@@ -71,12 +71,19 @@ class SessionNotFoundError(ReportRequestError):
     """No matching catalog session; distinct from an acquired empty session."""
 
 
+class SessionCatalogChangedError(ReportRequestError):
+    """A page cannot be positioned safely in a changed catalog."""
+
+
 @dataclass(frozen=True, slots=True)
 class ReportRequest:
     kind: ReportKind = ReportKind.NORMAL
     session_id: str | None = None
     date_text: str | None = None
     session_limit: int | None = None
+    session_page_size: int | None = None
+    session_offset: int = 0
+    session_catalog_revision: str | None = None
 
 
 ProgressCallback = Callable[[str], None]
@@ -275,6 +282,8 @@ class ReportService:
                 duration_ms=accumulated_duration(
                     [(record.prompt_time_ms, record.execution_duration_ms) for record in item.bundle.prompts]
                     + [(record.created_at_ms, record.duration_ms) for record in item.bundle.compactions]),
+                archived=item.session.archived_at_ms is not None,
+                running=any(record.in_progress for record in item.bundle.prompts),
             ))
         return tuple(rows)
 
@@ -576,7 +585,9 @@ class ReportService:
         roots, root_activity = self._ordered_roots(all_sessions)
         self.metrics.counts.update(catalog_sessions=len(all_sessions), catalog_roots=len(roots))
         if request.kind is ReportKind.SESSIONS:
-            return self._build_session_list(request, roots, root_activity)
+            from .history import session_catalog_revision
+            revision = session_catalog_revision(self.selection.selected, all_sessions)
+            return self._build_session_list(request, roots, root_activity, revision)
         if request.kind is ReportKind.SESSION:
             return self._build_session_detail(request, all_sessions)
         if request.kind is ReportKind.DATE:
@@ -584,10 +595,22 @@ class ReportService:
         return self._build_dashboard(request, catalog, roots, root_activity)
 
     def _build_session_list(self, request: ReportRequest, roots: Sequence[NormalizedSession],
-                            root_activity: Mapping[str, int]) -> ReportProjection:
+                            root_activity: Mapping[str, int], revision: str) -> ReportProjection:
+        from .models import SessionListPage
+        if request.session_catalog_revision is not None and request.session_catalog_revision != revision:
+            raise SessionCatalogChangedError("Session catalog changed; restart from the recent page")
+        size = request.session_page_size
+        if (size is not None and (type(size) is not int or not 1 <= size <= 100)
+                or type(request.session_offset) is not int or request.session_offset < 0
+                or request.session_offset and (size is None or not request.session_catalog_revision)
+                or request.session_offset >= len(roots) and request.session_offset != 0):
+            raise ReportRequestError("Invalid session page")
         if request.session_limit is not None and request.session_limit < 1:
             raise ReportRequestError("Session limit must be positive or all")
-        selected = HistoryRequirements("session-list", limit=request.session_limit).select(roots, root_activity)
+        available = roots if request.session_limit is None else roots[:request.session_limit]
+        if request.session_offset and request.session_offset >= len(available):
+            raise ReportRequestError("Session page is outside the requested scope")
+        selected = HistoryRequirements("session-list", limit=size, offset=request.session_offset).select(available, root_activity)
         self.prepare_roots(selected)
         analyzed = tuple(self._analyze(root) for root in selected)
         self.progress(WorkProgress("Building session summaries", "projection"))
@@ -598,6 +621,7 @@ class ReportService:
             ReportKind.SESSIONS, "Available sessions", self.selection.selected.upper(), tuple(self.selection.warnings),
             session_usage=self._session_rows(analyzed),
             notes=migration_gap_notes(self.selection.migration_gap, start_ms=cutoff),
+            session_page=SessionListPage(request.session_offset, size, len(available), revision) if size else None,
         )
 
     def _build_session_detail(self, request: ReportRequest, sessions: Sequence[NormalizedSession]) -> ReportProjection:

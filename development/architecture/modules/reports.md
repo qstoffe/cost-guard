@@ -1,8 +1,8 @@
 # Reports source contracts
 
-Source revision: c982393f29dacdf41560cc3f7c845cab739fdfe6
-Checked revision: c982393f29dacdf41560cc3f7c845cab739fdfe6
-Last checked: 2026-10-26
+Source revision: 8b4b0c1377f57d78a1508f92f330550d743687a5
+Checked revision: d72d78ba9896095c506a54778cecee77f6db87cc
+Last checked: 2026-10-27
 Status: current
 
 [Architecture overview](../OVERVIEW.md) · [Owner/test routes](CODE_MAP.md). Source remains authoritative.
@@ -15,7 +15,7 @@ Candidate roots are ordered by whole-tree activity, so newly updated child work 
 
 ## Public contract
 
-Immutable projections cover dashboard/catalog, lists and detail/date modes. Dashboard/catalog sample 100 eligible prompts by newest tree activity, stopping only below the cutoff (ties qualify); hydration is authoritative. Native quotas use provider observations, never history. Normal account CCost independently acquires relevant local-day/rolling and configured-local calendar-month history; other report modes fetch no accounts. Lists analyze requested roots; detail/date project prompts.
+Immutable projections cover dashboard/catalog, lists and detail/date modes. Dashboard/catalog sample 100 eligible prompts by newest tree activity, stopping only below the cutoff (ties qualify); hydration is authoritative. Native quotas use provider observations, never history. Normal account CCost independently acquires relevant local-day/rolling and configured-local calendar-month history; other report modes fetch no accounts. Lists hydrate only requested roots; detail/date project prompts. Web list pages use catalog membership/order revisions (including child activity/source identity), reject drift and export truthful available-root totals. Row values are observed per page, not atomically across pages; filtering/sorting is page-local.
 
 `reports/sampling.py` owns both eligibility/cutoff rules; `history.py` owns explicit root/range/limit scopes and incremental Watch-day/rolling-window acquisition. `acquisition.py` coordinates source batches/exact cache proofs; `ReportService` dispatches modes and account/availability overlap. `prompt_rows.py`/`prompts.py` own shared timeline/epoch projection, range/order and totals. No second analyzer or worker.
 
@@ -34,7 +34,7 @@ Normal Copilot reports additionally reconcile native used AI credits against the
 
 ## Transport-neutral application boundary and parity inventory
 
-`src/application/service.py` owns isolated one-shot jobs: `ReportApplication(factory, clock=...)`, then `execute(ReportRequest, progress=...)`. The composition root must transfer a **fresh** `ReportService` per call using canonical sources, validated config, pricing/cache and account providers. It must not pass the live scheduler or share mutable source/provider context with another owner. No CLI subprocess, web import, alternate analysis or account scheduler is involved. A nonblocking serialized owner rejects concurrent/reentrant requests with `busy`; the host owns admission bounds/retry. The factory owns any extra resources outside ReportService. Every admitted job closes its accounts, including acquisition/projection failures; live/already-owned services are rejected without closing foreign work. Services cannot be reused across jobs. A future live host must retain its own scheduler and publish immutable snapshots rather than passing it here.
+`src/application/service.py` owns isolated one-shot jobs: `ReportApplication(factory, clock=...)`, then `execute(ReportRequest, progress=...)`. The composition root must transfer a **fresh** `ReportService` per call using canonical sources, validated config, pricing/cache and account providers. It must not pass the live scheduler or share mutable source/provider context with another owner. No CLI subprocess, web import, alternate analysis or account scheduler is involved. A nonblocking serialized owner rejects concurrent/reentrant requests with `busy`; the host owns admission bounds/retry. The factory owns any extra resources outside ReportService. Every admitted job closes its accounts, including acquisition/projection failures; live/already-owned services are rejected without closing foreign work. Services cannot be reused across jobs. Live retains its own scheduler and exports immutable snapshots.
 
 `src/application/contracts.py` defines frozen result/error/progress DTOs and detached JSON export. `src/application/projection.py` explicitly selects known fields, never introspects/dumps arbitrary dataclasses. Decimal amounts/ratios are exact strings; null, zero, incomplete coverage, provisional status and existing precomputed shares/warnings stay distinct. Consumers sort/display values without revaluing usage. Scope includes configured timezone, local day/month starts, resolved date bounds, history policy and **report execution** duration, not Watch duration.
 
@@ -44,12 +44,12 @@ Schema version and application instance UUID are separate from per-request-view 
 | --- | --- | --- |
 | Normal | NORMAL / model comparison, Token Mix, accounts/quotas | Existing two 100-priceable-prompt samples; account-period acquisition independent; CCost is reference value, not billing |
 | All models | ALL_MODELS / model comparison, Token Mix | Same comparison eligibility, no selectable filter or accounts |
-| Session list | SESSIONS / session_usage | Requested root limit or all; whole-tree cost, completeness and report duration; archived history retained |
+| Session list | SESSIONS / session_usage | Limit/all or bounded revision-checked page; whole-tree cost, completeness, archived/running flags and report duration |
 | Session detail | SESSION / prompt_blocks, request_identities | Complete requested root/child tree, stable event/message/part references and opaque request key; no global Watch cap; inherited FR000200 running metrics |
 | Date/range | DATE / prompt_blocks | Configured-local inclusive date target mapped to exclusive end; DST, context and duration remain existing semantics |
 | Historical Token Mix | TOKEN_MIX / model_token_mix and total | Separate deep all-available-history method, not build's dashboard fallback; existing availability fail-open behavior; no request rows or promise to recover pruned history |
 
-The [Web route inventory](../../../docs/web-beta.md#navigation-and-static-reports) maps every mode to a delivered view; native/visual acceptance remains separate. Deep-history cache regression proves source/config/pricing invalidation and immutable reuse. `development/tests/test_application_reports.py` compares numerical/status/identity fields to the existing service using shared canonical fixtures (running/completed/aborted, child work, compaction, missing telemetry/prices, subscription evidence), native V1/current V2, DST and independent account errors/freshness. It covers 151-prompt uncapped detail and cloned-request deduplication, immutable exact export, typed source failures, fresh-job/reentrancy ownership, repeated cleanup, and CLI help/version plus Diagnostics import with application/web dependencies blocked. Existing report/Watch tests remain the semantic owners. No new permanent release gate, server, browser, launcher or dependency is added.
+The [Web route inventory](../../../docs/web-beta.md#navigation-and-static-reports) maps delivered views; native/visual acceptance is separate. Deep-history tests cover source/config/pricing invalidation and immutable reuse. `development/tests/test_application_reports.py` pins numerical/status/identity parity for canonical lifecycle/child/compaction/partial fixtures, V1/V2, DST and account errors. It covers uncapped 151-prompt detail, deduplication, exact immutable export, typed failures, fresh ownership/reentrancy, cleanup and blocked application/Web imports in CLI/Diagnostics. Report/Watch tests remain semantic owners; no new dependency or permanent gate.
 
 ## Allowed dependencies
 
@@ -61,4 +61,4 @@ Reports depend on canonical domain, analysis, cache and abstract source/account/
 
 ## Tests
 
-`development/tests/test_application_reports.py`, `development/tests/test_account_period_ccost.py`, `development/tests/test_copilot_unaccounted_usage.py`, `development/tests/test_accounts_ccost.py`, `development/tests/test_report_sampling.py`, `development/tests/test_history_loading.py`, `development/tests/test_step7_reports_cli.py`, `development/tests/test_quota_presentation.py`.
+`development/tests/test_application_reports.py`, `development/tests/test_account_period_ccost.py`, `development/tests/test_copilot_unaccounted_usage.py`, `development/tests/test_accounts_ccost.py`, `development/tests/test_report_sampling.py`, `development/tests/test_history_loading.py`, `development/tests/test_step7_reports_cli.py`, `development/tests/test_quota_presentation.py`, `development/tests/test_session_list_pages.py`. Page/browser/native evidence: `development/architecture/governance/verification/sessions-pagination.md`.

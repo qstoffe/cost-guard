@@ -10,7 +10,7 @@ from weakref import WeakSet
 
 from src.analysis import local_report_range, local_day_start_ms, local_month_start_ms
 from src.reports import ReportKind, ReportRequest, ReportService
-from src.reports.service import ReportRequestError, SessionNotFoundError
+from src.reports.service import ReportRequestError, SessionNotFoundError, SessionCatalogChangedError
 from src.pricing.base import PricingUnavailableError
 from src.runtime_errors import recoverable, recovered
 from src.sources.errors import SourceError
@@ -102,7 +102,7 @@ class ReportApplication:
             )
             requests = tuple(record(id=identity(parts), session_id=parts[0], event_id=parts[1],
                                     message_id=parts[2], step_part_id=parts[3])
-                             for parts in service.report_request_identities())
+                             for parts in (() if request.session_page_size else service.report_request_identities()))
             view = project(report, service.timezone_id)
             view = ObjectValue(view.fields + (("request_identities", requests),))
             recovered("application-report")
@@ -115,6 +115,9 @@ class ReportApplication:
         except PricingUnavailableError:
             return ReportResult(self._instance_id, sequence, now, scope, unknown,
                                 error=ReportError("pricing_unavailable", True))
+        except SessionCatalogChangedError:
+            return ReportResult(self._instance_id, sequence, now, scope, unknown,
+                                error=ReportError("session_catalog_changed", True))
         except SessionNotFoundError:
             return ReportResult(self._instance_id, sequence, now, scope, unknown,
                                 error=ReportError("session_not_found"))

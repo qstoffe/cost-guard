@@ -70,8 +70,11 @@ async function main() {
   await until(() => ids.notice.textContent.includes('Snapshot captured'));
   assert.match(ids.result.textContent, /1–50 of 55/);
   assert.equal(all(ids.result, 'tbody')[0].children.length, 50);
-  const next = all(ids.result, 'button').find(node => node.textContent === 'Next');
-  next.click();
+   const next = all(ids.result, 'a').find(node => node.textContent === 'Next');
+   const olderPage = next.href;
+   assert.equal(all(ids['scope-controls'], 'details').length, 1, 'scope is optional/advanced');
+   navigate(olderPage.slice(2));
+   await until(() => ids.notice.textContent.includes('Snapshot captured'));
   assert.match(ids.result.textContent, /51–55 of 55/);
   const sessionLink = all(ids.result, 'a').find(node => node.href === '#/sessions/root-0000');
   assert.ok(sessionLink, 'session locator links are reachable on the last page');
@@ -90,7 +93,7 @@ async function main() {
   await delay(650);
   assert.equal(ids.result.textContent, frozen);
   assert.equal(requests, count, 'no global Watch or silent refresh');
-  navigate('sessions'); // Back-equivalent hash event restores the same list page.
+   navigate(olderPage.slice(2)); // Back-equivalent hash event restores the same list page.
   assert.match(ids.result.textContent, /51–55 of 55/);
   navigate('sessions/root-0000');
   assert.equal(ids.result.textContent, frozen);
@@ -171,7 +174,8 @@ async function main() {
   await until(() => ids.notice.textContent.includes('Snapshot captured'));
   const beforeFilter = requests;
   ids.search.events.input({target: {value: 'root-0000'}});
-  assert.match(ids.result.textContent, /1–1 of 1 · 55 full-report rows/);
+   assert.match(ids.result.textContent, /1–50 of 55.*0 matches on this page only/);
+   assert.equal(all(ids.result, 'tbody')[0].children.length, 0, 'older root is not in the loaded slice');
   assert.equal(requests, beforeFilter, 'presentation filter does not change acquisition');
   ids.search.events.input({target: {value: ''}});
   const column = all(ids.result, 'button').find(node => node.textContent === 'CCost');
