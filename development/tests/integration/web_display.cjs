@@ -25,7 +25,7 @@ assert.ok(output.textContent.indexOf('Promo notice') > output.textContent.indexO
 assert.ok(output.textContent.indexOf('New notice') > output.textContent.indexOf('Promo notice'));
 assert.ok(output.textContent.indexOf('Tail note') > output.textContent.indexOf('New notice'));
 assert.deepEqual(all(output, 'th').map(n => n.textContent), ['Publisher', 'Model', 'Relative CCost', 'GitHub USD/M I/C/W/O', 'Release date']);
-assert.ok(all(output, 'span').some(n => n.className === 'promotion' && n.textContent.includes('0.1x')));
+assert.ok(all(output, 'span').some(n => n.className?.split(' ').includes('promotion') && n.textContent.includes('0.1x')));
 assert.ok(all(output, 'span').some(n => n.className === 'new' && n.textContent.includes('M')));
 // Equal display strings cannot decide ordering; raw decimal strings still do.
 const first = view.model_comparison[0];

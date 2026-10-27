@@ -122,6 +122,7 @@ def project(report, timezone_id="UTC"):
         kind=report.kind, title=report.title, source_label=report.source_label,
         # Source messages can contain transport/private details. Preserve status, not raw prose.
         source_warning_count=len(report.source_warnings),
+        model_availability_empty="⚠ No available OpenCode models match the pricing catalog." in report.source_warnings,
         model_availability_unverified=any(warning in {
             "⚠ Could not determine available OpenCode models; showing full pricing catalog.",
             "ERROR: Model availability lookup failed internally; showing full pricing catalog.",
