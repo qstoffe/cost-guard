@@ -38,6 +38,12 @@ h1 small { display: inline-block; margin-left: .4rem; padding: .2rem .55rem; ver
   text-transform: uppercase; color: var(--muted); font-weight: 650; }
 header p { margin: var(--space-2) 0 0; font-size: .85rem; color: var(--muted); }
 #status { color: var(--ink); overflow-wrap: anywhere; }
+.host-state { position: sticky; top: 0; z-index: 4; padding: 1rem clamp(.85rem, 3vw, 2.5rem);
+  border: 3px solid var(--warn); background: var(--warn-bg); color: var(--warn); font-weight: 700;
+  overflow-wrap: anywhere; }
+.host-state[data-kind="connected"] { border-color: var(--success); color: var(--ink); background: var(--panel); }
+.host-state[data-kind="stopped"], .host-state[data-kind="offline"],
+.host-state[data-kind="authorization_required"], .host-state[data-kind="identity_changed"] { border-color: var(--error); }
 nav { display: flex; flex-wrap: wrap; gap: var(--space-1); padding: .65rem clamp(.85rem, 3vw, 2.5rem);
   border-block: 1px solid var(--line); background: var(--panel); }
 a { color: var(--accent); text-underline-offset: .2em; overflow-wrap: anywhere; }

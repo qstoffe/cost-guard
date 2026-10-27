@@ -162,7 +162,7 @@ class SessionDetailTests(unittest.TestCase):
         from src.web.observations import WebObservations
 
         service = self.service(SyntheticMonthSource(1, 100, month_start_ms=1000))
-        lifecycle = SimpleNamespace(root=ROOT, observations=WebObservations(),
+        lifecycle = SimpleNamespace(root=ROOT, nonce='detail-fixture', observations=WebObservations(),
                                     live=SimpleNamespace(details=self.details), stopping=Event())
         server = LoopbackServer(SimpleNamespace(), lifecycle)
         thread = Thread(target=server.serve_forever)

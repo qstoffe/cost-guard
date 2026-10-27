@@ -189,6 +189,9 @@ class RequestHandler(BaseHTTPRequestHandler):
         if cookie:
             name = self.server.session.cookie_name
             self.send_header("Set-Cookie", f"{name}={cookie}; HttpOnly; SameSite=Strict; Path=/; Max-Age=28800")
+        if (getattr(self, 'path', '').startswith('/api/') and self.server.lifecycle and
+                (cookie or self.server.session.authenticated(self.headers.get('Cookie')))):
+            self.send_header('X-CG-Instance', self.server.lifecycle.nonce)
         self.end_headers()
         self.wfile.write(data)
 
@@ -394,6 +397,10 @@ class RequestHandler(BaseHTTPRequestHandler):
                     heartbeat = time.monotonic()
                 self.wfile.flush()
                 if hub.closed:
+                    # Close may race the read/flush even when it returned no frames.
+                    snapshot = hub.snapshot()
+                    self.wfile.write(hub._encode("terminal", snapshot["values"]["terminal"], snapshot["sequence"]))
+                    self.wfile.flush()
                     return
         finally:
             self.server._streams.release()

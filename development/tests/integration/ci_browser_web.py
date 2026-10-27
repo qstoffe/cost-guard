@@ -48,7 +48,11 @@ def main():
                 assert "bootstrap" not in page.url
                 assert any(cookie["httpOnly"] for cookie in context.cookies())
                 assert page.locator("#result table").count() > 0
-                expect(page.locator("#status")).to_contain_text("Live connected", timeout=15000)
+                # This finite-report fixture has no live acquisition owner. An
+                # authenticated SSE socket must not claim source readiness.
+                expect(page.locator("#status")).to_contain_text("STARTING", timeout=15000)
+                assert streams, "authenticated real SSE connection was not established"
+                expect(page.locator("#host-state")).to_contain_text("source observation pending")
                 evidence["checks"].append("one-use bootstrap, HttpOnly auth cookie, actual report table, real SSE connection")
                 page.get_by_role("link", name="Models", exact=True).click()
                 expect(page.locator("#heading")).to_contain_text("Models")
@@ -109,7 +113,8 @@ def main():
                 expect(page.locator("#status")).to_contain_text(re.compile("offline|reconnecting"), timeout=45000)
                 expect(page.locator("#result")).to_contain_text("<script>PRIVATE_TEXT</script>")
                 context.set_offline(False)
-                expect(page.locator("#status")).to_contain_text("Live connected", timeout=30000)
+                expect(page.locator("#status")).to_contain_text("SOURCE UNAVAILABLE", timeout=30000)
+                expect(page.locator("#host-state")).to_contain_text("HTTP connected")
                 evidence["checks"].append("real browser network loss/reconnect retains report")
                 owner.stop("menu")
                 expect(page.locator("#status")).to_contain_text("host stopped", timeout=15000)

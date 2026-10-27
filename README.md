@@ -362,7 +362,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.98 (2026-10-27):** Web Accounts presents Normal-report quota, remaining, reset, Pace, billing and CCost in shared account cards, with explicit unknown/unlimited/blocked/stale states and configured-timezone CLI reset formatting. No acquisition or scope changes. See [Web Beta](docs/web-beta.md); physical/assistive-technology acceptance remains separate.
+**v80.99 (2026-10-28):** Web shows unmistakable stopped/offline/source-unavailable status, retains time-stamped stale reports and Watch, and revalidates the authorized host after interruption or idle. Terminal/expired/different-host pages cannot silently resume acquisition. See [Web Beta](docs/web-beta.md); physical tray and assistive-technology acceptance remain separate.
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 
