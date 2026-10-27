@@ -1,8 +1,8 @@
 # Cost Guard v80 architecture
 
-Source revision: 033cf10b4b787cc446eb12b6763de7c24393bef2
-Checked revision: 033cf10b4b787cc446eb12b6763de7c24393bef2
-Last checked: 2026-10-26
+Source revision: e25cf3b63a5ffe73e20787a96c9c1ee38f356c1a
+Checked revision: e25cf3b63a5ffe73e20787a96c9c1ee38f356c1a
+Last checked: 2026-10-28
 Status: current
 
 ## Development data and authority
@@ -18,8 +18,8 @@ Repository-relative owners: deterministic `development/tests/`, synthetic `devel
 ```mermaid
 flowchart TD
     entry["CLI / WebHost: config, source, isolated report jobs"] --> reports["ReportService: scopes, acquisition, projections"]
-    entry --> application["Application: isolated reports / one live and detail owner"]
-    application -->|"finite report / observed detail history"| reports
+    entry --> application["Application: finite job services / one shared Live-detail thread"]
+    application -->|"isolated finite reports / retained detail"| reports
     entry --> watch["WatchCoordinator: cadence, retained rows / totals"]
     application -->|"one LiveAcquisition driver; no per-tab service"| watch
     watch --> reports
@@ -32,7 +32,7 @@ flowchart TD
     reports --> cache["Cache: disposable revision-keyed acceleration"]
     entry --> presentation["Presentation: report / Watch projections to terminal"]
     watch --> presentation
-    watch -->|"outage: retain frame; retry same source; fresh snapshots"| sources
+    watch -->|"outage: retain frame; same-source retry / terminal schema stop"| sources
     entry -->|"unexpected fault: sanitized stop / close owned work"| faults["RuntimeErrors: sanitized fatal / isolated recoverable evidence"]
     diagnostics["Development Diagnostics: independent observations"] --> sources
 ```
@@ -116,7 +116,7 @@ The product validator resolves absolute/relative/nested layer imports, rejects r
 
 ## Validation, review and delivery flow
 
-Observed 2026-10-26: this is a descriptive route, not a new gate or local scheduling policy. Installed Toolkit owns selection/transactions and remote lifecycle; repository scripts own product checks. No repository live-model runner or automatic PR self-review is introduced.
+Observed 2026-10-28: this is a descriptive route, not a new gate or local scheduling policy. Installed Toolkit owns selection/transactions and remote lifecycle; repository scripts own product checks. No repository live-model runner or automatic PR self-review is introduced.
 
 ```mermaid
 flowchart TD
@@ -155,4 +155,4 @@ flowchart TD
 | PR / merge | Authorized delivery | Required Git safety; self-review not a gate | Installed `/repo-backlog` and actual GitHub default/protection/check state | No force/protection bypass; uncertain merge requires read-back, not replay |
 | Delivery / cleanup | Confirmed merge on fresh default | Required native receipt/owned cleanup | Installed native `repo_backlog` operations | Preserve recovery evidence; cleanup failure permits idempotent cleanup only |
 
-Architecture assessment: `development/journal/architecture.md`. Windows/macOS adapters share main-thread GUI/asynchronous browser ownership. The Web module routes native proof limits; CLI/Watch acquisition is unchanged.
+Milestone-30 source assessment (runtime no-change): `development/journal/architecture.md`. Windows/macOS adapters share main-thread GUI/asynchronous browser ownership. The Web module routes native proof limits; CLI/Watch acquisition is unchanged.

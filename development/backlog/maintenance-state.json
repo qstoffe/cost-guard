@@ -3,7 +3,7 @@
   "epochRevision": "df44c06a97244278abd8d0dc9ed90ea12c368e47",
   "ordinaryCount": 30,
   "completed": {
-    "architecture": 20,
+    "architecture": 30,
     "test-health": 25,
     "performance": 20
   },
@@ -11,10 +11,10 @@
     "id": "shared-repository-maintenance",
     "version": 1
   },
-  "lastDeliveredRevision": "8a4fcccc6a9567ab430f7115fc6e924e7ee91e71",
+  "lastDeliveredRevision": "e25cf3b63a5ffe73e20787a96c9c1ee38f356c1a",
   "lastItem": {
-    "id": "fr/000500",
-    "kind": "ordinary"
+    "id": "architecture/30",
+    "kind": "architecture"
   },
   "featureDiscovery": {
     "completed": 20
