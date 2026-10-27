@@ -33,10 +33,13 @@ const ReportRoutes = (() => {
     parent.replaceChildren();
     const e = ReportView.element;
     if (route.section === 'models') {
+      parent.className = 'catalog-controls';
       for (const [href, text] of [['#/models', 'Selectable catalog'], ['#/models/all', 'All catalog + native rates']]) {
-        const a = e('a', text); a.href = href; parent.append(a, e('span', ' '));
+        const a = e('a', text); a.href = href;
+        if ((route.request?.kind === 'all-models') === (href === '#/models/all')) a.setAttribute('aria-current', 'page');
+        parent.append(a, e('span', ' '));
       }
-    }
+    } else parent.className = '';
     if (route.section === 'sessions' && !route.session) {
       const advanced = e('details'); advanced.append(e('summary', 'Advanced session scope'));
       const form = e('form'), label = e('label', 'Available sessions: N (1–10000) or all '), input = e('input');

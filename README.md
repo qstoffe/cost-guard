@@ -362,7 +362,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.96 (2026-10-27):** Web Sessions opens immediately on recent history, with bounded 50-root pages, truthful totals, URL-based Previous/Next and catalog-change protection. Managed Windows report children remain console-free via the paired GUI interpreter. See [Web Beta](docs/web-beta.md); physical/assistive-technology acceptance remains separate.
+**v80.97 (2026-10-27):** Web Models keeps CLI ranking, aligned multiplier tiers, exact native reference prices and selectable/full-catalog controls, with exact numeric sorting and explicit empty-sample/availability states. See [Web Beta](docs/web-beta.md); physical/assistive-technology acceptance remains separate.
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

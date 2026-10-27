@@ -34,7 +34,7 @@ The Beta shell provides global Watch, Overview, Models (selectable or full catal
 | --- | --- | --- |
 | Normal overview | `/#/overview` | Independent comparison/token samples and account-period history |
 | Global Watch | `/#/watch` (legacy `/#/live` alias) | One host-owned live engine; source/account freshness and retained rows |
-| Models / all models | `/#/models`, `/#/models/all` | Selectable availability versus full catalog; default exact server ranking, tiers, promotion/release facts and conservative older-stable fading; all catalog adds native USD/M I/C/W/O rates |
+| Models / all models | `/#/models`, `/#/models/all` | Active selectable/full-catalog control; exact CLI default ranking, aligned one-decimal `x` tiers with > / ≥ K/M boundaries, promotion/release facts and conservative older-stable fading. No priced completed sample means blank relative cells, not invented multipliers. Full catalog adds exact native USD/M I/C/W/O reference rates, not billed spend; column sorting uses unrounded numeric keys, stable ties and unknowns last. Long names wrap; narrow views scroll inside the table. |
 | Accounts | `/#/accounts` | Native units/windows, Remaining/Pace, independent observations and method errors, report local-month/Today CCost and Copilot Unaccounted usage; never Watch rolling substitution |
 | Sessions | `/#/sessions`, optional `/#/sessions?limit=20` | Immediate recent-first 50-root page, including available archived history; Previous/Next links carry offset/catalog revision. Optional N/all scope is collapsed under Advanced. |
 | Session report | `/#/sessions/<id>` | Complete report Snapshot/Live detail; links from session lists and global Watch |

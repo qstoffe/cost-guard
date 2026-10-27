@@ -114,6 +114,17 @@ p.warning { border-left: 3px solid var(--warn); padding: .65rem .85rem; backgrou
 .watch-view td:nth-child(2), .watch-view td:nth-child(6), .watch-view td:nth-child(7) { text-align: left; }
 .watch-view td:nth-child(7) { min-width: 18rem; max-width: 30rem; white-space: normal; }
 .superseded { color: var(--muted); }
+.catalog-controls { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+#scope-controls a[aria-current="page"] { background: var(--accent-soft); outline: 1px solid var(--accent); font-weight: 650; }
+.models-table th:nth-child(2), .models-table td:nth-child(2) { text-align: left; min-width: 15rem; max-width: 30rem; white-space: normal; overflow-wrap: anywhere; }
+.models-table th:first-child, .models-table td:first-child { min-width: 8rem; max-width: 14rem; }
+.models-table tr.promotion, .models-table tr.new { color: inherit; font-weight: inherit; }
+.models-table tr.superseded { color: var(--muted); }
+.model-relative { display: grid; grid-template-columns: 2.5ch 6ch 1fr; align-items: baseline; gap: .5ch; text-align: right; }
+.model-marker { text-align: left; }
+.model-tiers { text-align: left; }
+.model-tier { display: inline-block; white-space: pre; }
+.model-prices { display: block; font-family: ui-monospace, monospace; }
 .report-concepts, .account-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr)); gap: var(--space-4); }
 .report-concepts { margin-block: var(--space-5); }
 .report-concepts > div { padding: var(--space-4); border-left: 3px solid var(--accent); background: var(--surface); border-radius: .5rem; min-width: 0; }

@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.97 — 2026-10-27
+
+- Aligned Web Models multipliers and context tiers with CLI, preserving exact default ranking, promotional/recent/older-stable roles, native USD/M precision and explicit selectable/full-catalog controls. Empty priced samples show blank relative cells rather than synthetic multipliers or N/A tiers; verified-empty availability and unverified fallback remain distinct.
+- User sorting uses exact numeric native-rate keys rather than formatted strings, with stable ties and unknowns last. Long names wrap inside horizontally scrollable tables; reference prices are explicitly distinguished from billing. No pricing, sampling, acquisition or CLI changes.
+
 ## v80.96 — 2026-10-27
 
 - Sessions opens immediately on the 50 most recent available roots, with bounded older-page requests, truthful catalog totals and URL-based Previous/Next/Back/reload. Catalog membership/order revisions reject drift rather than skipping or repeating roots. Search and column sorting explicitly cover only the fetched page; optional all/N scope is collapsed. CLI order, numeric formatting, archived/running/incomplete indicators and same-Web detail links are preserved.
