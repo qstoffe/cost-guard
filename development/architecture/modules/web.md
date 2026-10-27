@@ -49,6 +49,20 @@ Overview's Normal layout is presentation-only: three concept/metric groups, refe
 
 ## Allowed dependencies
 
+Web Watch's persistent table owner is `src/web/assets/watch.js`, delegated by `render.js`.
+It retains one canonical-order 50-row table, inline session dividers, controls/row identities,
+selection/focus protection and a visible-row scroll anchor. Account cards reuse the shared
+Overview presenter without report month/billing scope substitution. `app.js` retains valid rows
+across viewless source failures and feeds transport status into Watch. `live_projection.py`
+exports latest Watch model and observation-time running duration separately from frozen prompt
+metrics, matching CLI Watch without browser lifecycle/valuation calculations. No acquisition,
+security or architecture-boundary change. `test_web_live.py` compares the same projection's CLI
+cost/calls/duration/context cells with the DOM; `test_web_display.py` pins latest-progress values.
+Optional `integration/probe_web_watch.py --browser <explicit executable> --output <owned JSON>`
+checks real headless Chromium DOM/layout/selection at desktop/light and 360px/dark sizes using
+synthetic canonical data and fixture transport. This is not real-source browser SSE, physical
+input, screen-reader or macOS acceptance; independent HTTP/real-source probes retain those limits.
+
 HTTP/security/assets and lifecycle/process/state/guard depend on standard library and their Web owners. Jobs consume shared application/report contracts. Composition alone wires concrete source/config/cache/pricing/providers and the Watch acquisition driver, never CLI dispatch/source wake. LiveRuntime consumes that supplied driver and exports immutable values; application/reports never import Web. CLI and Diagnostics do not import Web.
 
 ## Entrypoints

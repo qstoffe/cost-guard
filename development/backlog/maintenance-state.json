@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "epochRevision": "df44c06a97244278abd8d0dc9ed90ea12c368e47",
-  "ordinaryCount": 25,
+  "ordinaryCount": 26,
   "completed": {
     "architecture": 20,
     "test-health": 25,
@@ -11,10 +11,10 @@
     "id": "shared-repository-maintenance",
     "version": 1
   },
-  "lastDeliveredRevision": "94de154a6c3f15a97d3a03980bc090505cd2f2e7",
+  "lastDeliveredRevision": "a532e032ec6bac5275deb8c1bbe256a0fc46d1ab",
   "lastItem": {
-    "id": "test-health/25",
-    "kind": "test-health"
+    "id": "fr/000460-watch-web-live-cli-parity-single-live-table.md",
+    "kind": "ordinary"
   },
   "featureDiscovery": {
     "completed": 20

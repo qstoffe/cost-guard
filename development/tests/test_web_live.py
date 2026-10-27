@@ -3,6 +3,7 @@ from dataclasses import replace
 from datetime import datetime, timezone
 from decimal import Decimal
 import http.client
+import io
 import json
 from pathlib import Path
 import shutil
@@ -26,6 +27,7 @@ from src.watch.coordinator import WatchCoordinator
 from src.watch.observers import LiveEventPump, PumpResult
 from src.sources.base import SourceChange
 from src.reports import ReportRequest
+from src.presentation import WatchRenderer
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -228,6 +230,11 @@ class LiveTests(unittest.TestCase):
             _, owner = self.owner(tmp, snapshot)
             frame = owner.acquire_cycle().projection
             payload = {'state': 'running', 'view': project_live(frame).to_json()}
+            # Identical projection, not asynchronously acquired console/browser runs.
+            renderer = WatchRenderer({'timezone': 'UTC', 'colors': {}}, stream=io.StringIO(), interactive=False)
+            rows, _, activities, headers = renderer._table_rows(frame)
+            payload['cli_cells'] = [[str(cell).strip() for cell in row[2:6]]
+                for index, row in enumerate(rows) if index not in activities and index not in headers]
             result = subprocess.run([shutil.which('node'), 'development/tests/integration/web_live.cjs'],
                 cwd=ROOT, input=json.dumps(payload), text=True, capture_output=True, timeout=15)
             self.assertEqual(0, result.returncode, result.stdout + result.stderr)

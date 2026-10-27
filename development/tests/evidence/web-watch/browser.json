@@ -1,0 +1,61 @@
+{
+  "outcome": "PASS",
+  "cases": [
+    {
+      "theme": "light",
+      "requested_width": 1200,
+      "outcome": "PASS",
+      "checks": [
+        "one table, multiple inline sessions, no quota tables",
+        "canonical row order and shared display values",
+        "selected text survives a changed publication",
+        "latest pending values apply after selection",
+        "keyboard focus and controls persist",
+        "one stable session-aware filter",
+        "bounded pagination and scroll anchor persist",
+        "aborted lifecycle remains explicit",
+        "compaction role remains visible",
+        "idle is not completion",
+        "slow/unavailable source is not fresh",
+        "duplicate events cannot duplicate rows",
+        "replay gap resync retains one connection owner",
+        "offline retains accumulated rows",
+        "reconnect restores transport status",
+        "terminal stop preserves rows and ends retry",
+        "no page overflow at measured viewport"
+      ],
+      "width": 1200,
+      "background": "#eef2f8"
+    },
+    {
+      "theme": "dark",
+      "requested_width": 360,
+      "outcome": "PASS",
+      "checks": [
+        "one table, multiple inline sessions, no quota tables",
+        "canonical row order and shared display values",
+        "selected text survives a changed publication",
+        "latest pending values apply after selection",
+        "keyboard focus and controls persist",
+        "one stable session-aware filter",
+        "bounded pagination and scroll anchor persist",
+        "aborted lifecycle remains explicit",
+        "compaction role remains visible",
+        "idle is not completion",
+        "slow/unavailable source is not fresh",
+        "duplicate events cannot duplicate rows",
+        "replay gap resync retains one connection owner",
+        "offline retains accumulated rows",
+        "reconnect restores transport status",
+        "terminal stop preserves rows and ends retry",
+        "no page overflow at measured viewport"
+      ],
+      "width": 360,
+      "background": "#0c1422"
+    }
+  ],
+  "limitations": [
+    "Synthetic canonical projections and fixture transport, not live-source/browser SSE integration.",
+    "Headless Edge; no physical input, screen-reader, native macOS or desktop-pane proof."
+  ]
+}

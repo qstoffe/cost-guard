@@ -119,6 +119,19 @@ class WebDisplayTests(unittest.TestCase):
         self.assertEqual("N/A", dto["accounts"][0]["display"]["known_ccost"])
         self.assertEqual("-2", dto["display"]["unaccounted_usage"])
 
+    def test_watch_uses_latest_progress_model_and_observation_duration_not_snapshot_duration(self):
+        prompt = replace(warning_prompt(PriceWarningSeverity.NONE), in_progress=True, at_ms=1000, duration_ms=1000,
+                         watch_model_effort="latest-model (high)")
+        frame = replace(warning_watch_projection(prompt), now_ms=4500)
+        row = project_live(frame).to_json()["rows"][0]
+        self.assertEqual("latest-model (high)", row["watch_model_effort"])
+        self.assertEqual(3500, row["watch_duration_ms"])
+        self.assertEqual("4s", row["display"]["watch_duration_ms"])
+        self.assertEqual(1000, row["prompt"]["duration_ms"], "snapshot evidence stays unchanged")
+        # Native compaction sparsity must never hide an observed nonzero charge.
+        charged = with_display(record(is_compaction=True, calls=0, ccost=Decimal("2"))).to_json()
+        self.assertEqual("2", charged["display"]["ccost"])
+
     @unittest.skipUnless(shutil.which("node"), "optional JS VM unavailable")
     def test_browser_uses_tokens_not_raw_values_and_places_notices_after_models(self):
         dto = with_display(record(kind="all-models", source_label="V2", source_warning_count=0,

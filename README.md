@@ -362,7 +362,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.94 (2026-10-27):** Web Overview follows the compact CLI Normal report: definition/metric groups, correctly formatted model tiers and exact default ranking, contextual notices and compact account cards. Column sorting can restore CLI order; account observation detail is expandable, with warnings still visible. See [Web Beta](docs/web-beta.md); physical/assistive-technology acceptance remains separate.
+**v80.95 (2026-10-27):** Web Watch uses one persistent prompt table with inline session groups, retained-row subtotals, compact account cards and explicit connection/source freshness. Updates preserve filtering, paging, unchanged rows and selected text. See [Web Beta](docs/web-beta.md); physical/assistive-technology acceptance remains separate.
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 
