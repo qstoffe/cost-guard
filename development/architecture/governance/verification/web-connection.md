@@ -56,6 +56,13 @@ Fallback OFFLINE remained visible even when the old client missed the notificati
 
 ## Limits and assessment
 
+The first hosted browser run failed an obsolete readiness assertion: its finite-report-only
+host has no Live owner, yet expected Live connected. The probe now independently requires
+the actual authenticated SSE socket and STARTING/source-pending status. After its synthetic
+source-unavailable publication, network recovery must show SOURCE UNAVAILABLE/HTTP connected,
+not healthy acquisition. This changes fixture expectations to the FR contract without
+weakening the real socket, retained-report, offline/reconnect or terminal assertions.
+
 No physical tray click, OS suspension/long-idle soak, screen-reader, dark/narrow viewport,
 real launcher restart/new-cookie browser combination or native macOS proof is claimed.
 Menu/source-change checks call the same production stop owner without native UI automation;

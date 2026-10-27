@@ -49,6 +49,10 @@ parsed path state, the lifecycle test double carries its real nonce contract, an
 test contexts await their own authorization/result rather than stale shared DOM. A failed
 browser fixture report used the wrong Jobs method; corrected to the production snapshot API
 and reran the browser cases. No assertions, budgets or protections were weakened.
+Hosted browser CI also exposed an obsolete expectation that its finite-report-only host
+should say Live connected without any live source. Its revised checks independently require
+the actual SSE socket and STARTING/source-pending state, then SOURCE UNAVAILABLE/HTTP connected
+after the synthetic source publication and network recovery. Retention/terminal checks remain.
 
 ## Exclusions, limits and knowledge assessment
 
