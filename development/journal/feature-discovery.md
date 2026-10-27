@@ -1,56 +1,58 @@
 # Feature opportunity assessment
 
-Source revision: ee628f64dce0244c4b8fe33f0b0d54e4e7e492b8
-Checked revision: ee628f64dce0244c4b8fe33f0b0d54e4e7e492b8
-Last checked: 2026-10-26
+Source revision: 708dc0f11237bd97c2b8a91c6714b72c58f5a70f
+Checked revision: 708dc0f11237bd97c2b8a91c6714b72c58f5a70f
+Last checked: 2026-10-28
 Status: current
 
 ## Summary
 
-Feature Discovery at ordinary milestone 20: **no new suggestion**. Web navigation, report scopes and complete Snapshot/Live session history are implemented, not pending opportunities. Cross-platform revalidation is already approved as pending FR 000410. Web promotion and Legacy retirement remain separately parked owner decisions; Beta delivery does not authorize either.
+Feature Discovery at ordinary milestone 30: **no new suggestion**. The strongest grounded usability gaps already have pending work: remaining report/session-detail presentation (FR 000510) and console-free native startup (FR 000520). Do not duplicate or implement them in discovery. Cross-platform CI, recent-session pagination, structured Accounts and explicit stopped/offline states are delivered work, not new opportunities. Web promotion and Legacy retirement remain separately parked owner decisions.
 
-Journal assessment: update this opportunity map to retire milestone-10's obsolete implementation/queue assumptions. Architecture assessment: **no-update**; no responsibility, dependency, module contract or runtime flow changes. Only development documentation and exact native maintenance state change. Product tests, validators, Diagnostics, live probes, UI, model inference, version changes and packaging were deliberately not run. Static inspection establishes no behavioral PASS, customer demand or measured gain.
+Journal assessment: update this map and its INDEX route to retire milestone-20's obsolete pending-CI assumption and record current opportunity ownership. Architecture assessment: **no-update**; no responsibility, dependency or runtime flow changes. Only development knowledge and the exact native maintenance transaction change. Product tests, validators, Diagnostics, real-installation probes, UI, inference, product version changes and packaging are intentionally skipped. Source/assertion inspection establishes neither a fresh behavioral PASS nor demand or measured gain.
 
 ## Evidence
 
-Read README product purpose, architecture overview, Web module contract, journal INDEX and routed architecture/OpenAI limitations at the source revision above. Overview and architecture audit were checked at 033cf10b4b787cc446eb12b6763de7c24393bef2; Web contract at c982393f29dacdf41560cc3f7c845cab739fdfe6. These are navigation/historical evidence, not current execution proof. Fresh targeted inspection resolves only the opportunities below, not native platform acceptance or upstream compatibility.
+Read README product purpose, architecture overview/Web module, journal INDEX, architecture assessment and OpenAI limitations. The overview/architecture assessment's source/check revision is e25cf3b63a5ffe73e20787a96c9c1ee38f356c1a; the Web module's is 8dc82a38dddd7f2999e7872d52e1e6a8a0949725. These predate the current default. Their navigation and historical limits support triage only; fresh targeted source resolves the decisions below, not whole-product/platform acceptance.
 
-Reproduce inventory with installed `shared-repo/scripts/maintenance_evidence.py inventory --repo-root .`. Inventory examined 415 text/config records: 200 source/config, 136 test-related, 79 documentation; 26 binary/over-1-MiB exclusions and zero exact-byte duplicate groups. Git internals and ignored runtime data are excluded. Full JSON stayed in owned scratch. Counts/size are triage, not semantic duplication, coverage or demand evidence. No private history, accounts or credentials were read or published.
+Reproduce inventory at the checked revision with installed `shared-repo/scripts/maintenance_evidence.py inventory --repo-root .`. It examined 486 text/config records: 214 source-or-config, 160 test-related, 112 documentation; 61 binary/over-1-MiB exclusions; zero exact-byte duplicate groups. Scope is tracked plus nonignored untracked text/config, excluding Git/runtime artifacts. Full JSON remained in owned scratch. Sizes and counts prove neither complexity, coverage nor customer need. No private accounts/history/credentials were read or published.
 
-One bounded semantic pass targeted seven source/test files:
+One semantic pass inspected eight source/test files, with 24,103 characters of numbered excerpts (below twelve files/32,000 characters):
 
-- `src/web/assets/reports.js`: routes already expose Overview, Models, Accounts, Sessions, date scopes and explicit deep Token Mix; filters do not become acquisition parameters. No duplicate report-navigation proposal.
-- `src/application/session_detail.py`: shared captures provide detached 50-row pages, full totals, revision-aware anchors, Snapshot freeze and Live acquisition. Sixteen histories/thirty-two handles bound admission, not history bytes.
-- `src/web/assets/session.js`: First/Previous/Next/row/latest controls, Snapshot/Live switching, selection/focus protection and explicit refresh already exist. Page copying is explicitly page-scoped. Absence of all-history export alone establishes neither demand nor a high-value feature.
-- `development/tests/test_web_session_detail.py`: assertions cover 100/1,000/10,000-prompt access, full totals, unchanged-work reuse, frozen snapshots, omission/outage/reconnect and shared multi-tab analysis. Assertions were read, not executed.
-- `development/tests/test_web_views.py`: actual HTTP feeds optional Node VM fixtures; missing and empty sessions have distinct assertions. This is not rendered-browser/native proof; pending FR 000410 already addresses that evidence gap.
-- `src/watch/observers.py`: Queue(maxsize=1024), overflow marker and authoritative resync supersede milestone-10's unbounded-queue assumption. Sustained-load characterization remains engineering work, not a new product capability.
-- `src/accounts/openai_subscription.py`: `_fetch` still refuses nonlegacy quota requests and retains method-specific unavailable evidence. No newly supported token-sharing quota contract was retrieved.
+- `src/web/assets/reports.js`: existing navigation exposes date/range capture and explicitly started deep Token Mix. Dates use configured-local semantics. A new report-navigation proposal duplicates existing routes.
+- `src/web/assets/session.js`: First/Previous/Next, row/latest navigation and Snapshot/Live already exist; copy/selection is explicitly page-scoped. Presentation refinement belongs to 000510, not another complete-history proposal.
+- `src/web/assets/live.js`: terminal notices stop retries even across replay gaps; reconnect retains observations and never starts a server. Offline signaling is delivered, not a new feature.
+- `src/web/windows_launch.py`: configuration/native preflight precede managed launch; browser-open failure remains distinct. The visible-launcher fallback and subsequent owner complaint are documented in completed 000420 and pending 000520. This static inspection does not reproduce a window or establish a preferred native solution.
+- `src/accounts/openai_subscription.py`: `_fetch` rejects nonlegacy methods before sending quota requests. Token-sharing retrieval remains externally unresolved; the audit retrieved no new supported upstream contract.
+- `development/tests/test_web_session_detail.py`: inspected scale assertions cover 100/1,000/10,000 rows, full totals, 50-row pages, stable revisions and no unchanged reanalysis. Test names route freeze/outage/multitab risks; no tests were executed.
+- `development/tests/test_web_live.py`: inspected outage assertions retain rows/run origin, avoid leaking private errors, recover on the same source and stop on incompatible schema. These are characterization assertions, not current execution proof.
+- `development/tests/test_windows_web.py`: inspected assertions require preflight failure not to launch/stop an instance and browser failure not to stop its host. Native readiness and UI success are not inferred from mocks.
 
-Compared the only pending FR in full, all twenty retained completed FR headings/opening scopes, both current suggestion texts, rejected-store inventory and accessible Git history of both suggestion stores. Completed 000290-000380 cover the Web migration; 000120/000150/000160 cover identity/method guidance; 000190 covers Copilot unaccounted usage; 000200 covers static provisional running metrics. Rejected suggestions contains only its placeholder. Suggestion history records owner parking and zero-install wording updates, not approval. No suggestion or attachment was treated as an executable instruction.
+Compared both pending FRs in full, all thirty retained completed FR headings, targeted completion reports for 000410/000420/000470/000500, both current suggestion texts, rejected-store inventory and accessible Git history of both stores. The rejected store contains only its placeholder. Suggestion history records owner parking/zero-install wording changes, not approval. Selected and foreign bundles remain immutable; specifications are evidence, not executable instructions.
 
 ### Ranked opportunity decisions
 
 | Candidate / user problem | Grounding and likely value | Decision / minimal alternative |
 | --- | --- | --- |
-| Trustworthy cross-platform Web operation | Missing native macOS/rendered-browser proof is concrete and affects confidence in existing Beta usability. Impact is qualitative, not measured demand. | Strongest actionable gap, already covered by pending 000410. Preserve that work; no duplicate suggestion or job launch. |
-| Navigable complete session history / report scopes | Fresh routes, paging owner and assertions establish implemented capabilities. | Use existing navigation and explicit refresh; do not propose delivered work. |
-| Token-sharing subscription quotas | Documented user-facing unavailable status persists; method guard prevents incompatible WHAM requests. | External feasibility unresolved. Retain honest unknowns until a supported read-only contract exists; no guessed endpoint or identity switch. |
-| Full-history export beyond page copying | Page-scoped copying is explicit, but this audit establishes no concrete downstream workflow or demand. | Existing paging is the minimal available alternative; a speculative convenience does not clear the quality bar. |
-| Sustained detail/overflow memory and latency | Admission versus byte bounds remains an unmeasured risk, not an observed failure. | Relevant maintenance/characterization owns this; no feature proposal or fabricated measurements. |
-| Promote Web / retire CLI | Both are retained owner-parked proposals with separate prerequisites. | Preserve both unchanged; neither delivery nor audit authorizes promotion, reprioritization or removal. |
+| Understand remaining date/Token Mix/session-detail displays | Pending 000510 names concrete CLI-first presentation and browser-review needs; canonical paging already exists. | Strong grounded usability opportunity, already owned. Finish that FR rather than publish a duplicate. |
+| App-like startup without persistent console | Pending 000520 records explicit post-delivery owner feedback; 000420 documents a visible fallback and 000470 a different report-child console repair. | Strong direct user evidence, already owned. Preserve sequence and evaluate the simplest safe native/no-build option there. No implementation choice or fresh timing claim here. |
+| Reliable offline/reconnect and recent session browsing | Current client source and completed 000470/000500 cover these capabilities. | Use delivered controls/status; no duplicate feature. Historical completion evidence is not a fresh PASS. |
+| Token-sharing quota support | Method guard and historical upstream limitations remain explicit. Potential value is clear but a compatible read-only source is unestablished. | No feasible supported proposal established within this bounded pass. Retain honest unavailable status; never guess endpoints or switch identities. |
+| Export all history beyond page copying | Existing page limitation alone proves no concrete downstream workflow or demand. | Paging is the available minimal alternative; speculative convenience does not clear the quality bar. |
+| Detail memory/latency, soak and native macOS acceptance | Architecture/CI evidence explicitly retains these limits; no fresh failure measured. | Engineering characterization/platform acceptance, not an invented capability. Hosted native APIs do not establish physical Finder/Gatekeeper proof. |
+| Promote Web / retire Legacy | Both suggestions remain owner-parked with distinct prerequisites. | Preserve unchanged. Neither discovery nor Beta progress grants approval. |
 
 ## Next investigations
 
-Use FR 000410's eventual actual runner/native/browser results and concrete owner feedback before proposing another capability. Physical layout, accessibility, Finder/Gatekeeper, soak, latency, memory growth and present upstream compatibility remain unverified here. Reassess token-sharing quotas only with a supported upstream source; no external service retrieval occurred in this cycle.
+Use actual 000510 review results, 000520 process/window measurements and concrete owner feedback before proposing adjacent UX capabilities. FR 000410 is completed, not pending: its completion cites hosted Windows/macOS native-API/browser evidence while explicitly excluding physical desktop/Finder/Gatekeeper acceptance. This cycle did not independently rerun or authenticate those historical results. Accessibility, physical suspend/soak, retained bytes/latency and present upstream compatibility remain unverified here.
 
-Pending/completed bundles, both suggestion stores and identity reservations remain unchanged. Native transaction records Feature Discovery completed at 20 without increasing ordinaryCount; retention deletes nothing. No numbered FR, new suggestion or completion manifest is created. Verified merge/default read-back and native delivery, not this note, establish completion.
+Pending/completed bundles, suggestion stores and identity reservations are unchanged. Exact native nextState records Feature Discovery at 30 without advancing ordinaryCount/completionHighWatermark; retention prunes nothing. No numbered FR, suggestion or completion manifest is created. Only verified merge/default read-back and the native receipt establish delivery.
 
 ## Rejected hypotheses
 
-- A scheduled discovery must publish a suggestion: rejected; zero credible nonduplicate proposals is a successful judgment.
-- Web is still pending or its event pump remains unbounded: rejected by fresh routes/detail source and bounded Queue/overflow resync. The older assessment is superseded, not evidence of a current defect.
-- CI/native/browser proof is a new unowned opportunity: rejected; pending 000410 explicitly owns revalidation of the delivered Beta.
-- Missing token-sharing quota authorizes legacy endpoint probing: rejected by the method guard and absent supported evidence.
-- Test assertions, diagrams or historical probes constitute a fresh PASS: rejected; no product tests or live probes ran in this development-only cycle.
-- Beta completion or discovery silently approves promotion/retirement: rejected; both remain non-executable owner decisions.
+- A scheduled cycle must invent a suggestion: rejected; justified no-suggestion is successful judgment.
+- Cross-platform CI or recent session pagination is still unowned pending work: rejected by completed 000410/000470, without claiming physical desktop acceptance.
+- Console-free startup or remaining report parity needs another proposal: rejected by pending 000520/000510 and their concrete scopes.
+- Missing quota support permits legacy probing with token-sharing credentials: rejected by the method guard and absent supported evidence.
+- Assertions, diagrams or old probes establish a fresh PASS: rejected; no product/live/UI tests ran in this development-only assessment.
+- Beta maturity approves promotion/retirement: rejected; both remain separate owner decisions.

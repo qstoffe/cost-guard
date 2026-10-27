@@ -11,13 +11,13 @@
     "id": "shared-repository-maintenance",
     "version": 1
   },
-  "lastDeliveredRevision": "ebacf2cde20a2ee1db2168569e00fa43c87f27bb",
+  "lastDeliveredRevision": "708dc0f11237bd97c2b8a91c6714b72c58f5a70f",
   "lastItem": {
-    "id": "test-health/30",
-    "kind": "test-health"
+    "id": "feature-discovery/30",
+    "kind": "feature-discovery"
   },
   "featureDiscovery": {
-    "completed": 20
+    "completed": 30
   },
   "completionHighWatermark": 30
 }
