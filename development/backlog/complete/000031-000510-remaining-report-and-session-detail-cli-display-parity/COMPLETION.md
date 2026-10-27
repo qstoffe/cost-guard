@@ -3,7 +3,8 @@
 ## Outcome
 
 Implemented in v80.100 (2026-10-28); protected PR delivery is required before this
-candidate is considered delivered. [Implementation candidate](https://github.com/qstoffe/cost-guard/commit/d6694ba67a5c1fd9ad1c9444150b5b2673906da0).
+candidate is considered delivered. [Delivery PR #89](https://github.com/qstoffe/cost-guard/pull/89).
+[Implementation candidate](https://github.com/qstoffe/cost-guard/commit/d6694ba67a5c1fd9ad1c9444150b5b2673906da0).
 
 - Shared display tokens now supply configured-local prompt clocks, Next Ictx
   guidance, CLI historical mix category cells and exact aggregate-cost sort keys.
