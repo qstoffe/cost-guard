@@ -67,7 +67,7 @@ def amount_tokens(values):
 
 def metric_tokens(values, timezone_id):
     tokens = {}
-    for key in ("duration_ms", "running_ms", "background_ms"):
+    for key in ("duration_ms", "watch_duration_ms", "running_ms", "background_ms"):
         if key in values:
             tokens[key] = duration_text(values[key])
     for key in ("incoming_context_tokens", "next_context_tokens", "watch_next_context_tokens"):
@@ -97,7 +97,7 @@ def metric_tokens(values, timezone_id):
         tokens["incoming_context_tokens"] = context_delta(values["delta_context_tokens"]) + " → " + context_tokens(values["next_context_tokens"])
     if values.get("in_progress") and values.get("token_mix_percent") is None:
         tokens["token_mix_percent"] = "running - consider ABORT" if values.get("running_cost_warning") else "running"
-    if values.get("is_compaction") and values.get("calls") == 0:
+    if values.get("is_compaction") and values.get("calls") == 0 and decimal(values.get("ccost")) == 0:
         tokens.update({key: "" for key in ("ccost", "calls", "incoming_context_ccost", "extra_ccost", "token_mix_percent")})
     if "totals" in values and "shares" in values:
         tokens["totals"] = "/".join("--" if item is None else compact_tokens(item) for item in values["totals"])

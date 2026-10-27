@@ -13,6 +13,7 @@ let csrf = null;
 let current = null;
 let liveConnection = null;
 let liveValue = null;
+let liveStatus = 'Connecting';
 let sessionDetailAvailable = false;
 async function api(path, value) {
   const options = {credentials: 'same-origin', cache: 'no-store'};
@@ -32,6 +33,7 @@ function show(state) {
   if (state.detail) {
     state.detail.attach(output);
   } else if (state.live) {
+    state.connection = liveStatus;
     if (liveValue?.view) ReportView.renderLive(output, liveValue, state);
     else output.replaceChildren(ReportView.element('p', liveValue?.state || 'Live acquisition starting…'));
   } else if (state.result) ReportView.render(output, state.result, state);
@@ -125,12 +127,17 @@ async function connect() {
     statusLine.textContent = `HTTP ${state.http}; analysis ${state.analysis}; source ${state.source}; accounts ${state.accounts}. Snapshot health is shown below.`;
     if (!liveConnection && typeof LiveConnection !== 'undefined') {
       liveConnection = LiveConnection.connect(api, (value, progress) => {
-        liveValue = value;
+        liveValue = value?.view || !liveValue?.view ? value : {...value,
+          view: liveValue.view, source_observed_at_ms: liveValue.source_observed_at_ms};
         if (current?.live) { current.message = 'Live observation; source/account freshness shown below.'; show(current); }
         for (const job of progress?.jobs || []) {
           if (current?.active === job.id) notice.textContent = `${job.status}: ${job.progress?.phase || job.status} · ${job.progress?.completed ?? 0}${job.progress?.total == null ? '' : '/' + job.progress.total}`;
         }
-      }, message => { statusLine.textContent = message; });
+      }, message => {
+        liveStatus = message;
+        statusLine.textContent = message;
+        if (current?.live) show(current);
+      });
     }
     navigate();
   } catch (_) {

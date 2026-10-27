@@ -61,10 +61,14 @@ def generate(output, baseline):
 
         for name in ("app.css", "render.js"):
             (output / f"{stage}-{name}").write_text(asset(name), encoding="utf-8", newline="\n")
+        watch_script = ''
+        if stage == 'after':
+            (output / 'after-watch.js').write_text(asset('watch.js'), encoding='utf-8', newline='\n')
+            watch_script = '<script src="after-watch.js"></script>'
         shell = re.sub(r"<script.*?</script>", "", asset("index.html"))
         shell = shell.replace('/app.css', f'{stage}-app.css')
         scripts = ''.join(f'<script src="{name}.js"></script>' for name in ("normal", "sessions", "watch"))
-        shell = shell.replace('</body>', f'<script src="{stage}-render.js"></script>{scripts}<script src="preview.js"></script></body>')
+        shell = shell.replace('</body>', f'<script src="{stage}-render.js"></script>{watch_script}{scripts}<script src="preview.js"></script></body>')
         (output / f"{stage}.html").write_text(shell, encoding="utf-8", newline="\n")
     (output / "preview.js").write_text(PREVIEW, encoding="utf-8", newline="\n")
     (output / "index.html").write_text(GALLERY.replace("BASELINE", baseline), encoding="utf-8", newline="\n")

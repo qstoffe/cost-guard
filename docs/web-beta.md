@@ -71,6 +71,16 @@ Layout choices: wrapping top navigation; system light/dark palette; source/readi
 
 ## Global Watch and reconnect
 
+v80.95 presents one primary prompt table in CLI Watch order: Session / prompt,
+Model / effort, CCost, Calls, Duration and Δctx → Next Ictx, plus supporting activity/context details.
+Inline session dividers link to complete session detail and label subtotals as retained rows,
+not full history. Additional incoming-context costs and token mix remain expandable per row.
+Run/Today totals never follow filters/pages; account observations use compact supporting cards,
+with warnings visible and observation detail expandable. Stable filtering/paging controls,
+unchanged row identities and scroll anchors survive publications. Selected/focused prompt content
+defers replacement until a later publication after interaction ends. Connection, source observation,
+publication and stopped/stale status remain explicit; retained running values are not current proof.
+
 Live uses one process-lifetime acquisition engine, starting with the host rather than a tab. Closing all tabs does not stop acquisition; reopening observes the same run origin and totals. The independent CLI Watch still starts its own run. Both use the shared Watch acquisition seam, revision gating, authoritative V2 resync, bounded history enrichment, account lanes, configured global retention, lifecycle/compaction/abort/error evidence, tool/skill activity and context warnings. Source hints, idle and connection loss never prove completion. Displayed session subtotals cover retained rows, not uncapped session history. Today and rolling account figures retain Watch scopes; normal-report calendar-month comparisons are not inserted into Live.
 
 Each authorized tab owns one same-origin SSE connection for live, finite-job progress and terminal runtime updates. The HttpOnly session authenticates it; no control secret/query credential is used. Instance-bound ordered IDs and full coherent publications reject duplicates/older/foreign-instance updates. Replay is bounded to 32 events and 8 MiB (2 MiB per publication); overflow or an uncovered gap requires a fresh authenticated `/api/live` snapshot, never inferred continuation. Oversized publications fail visibly rather than displaying truncated totals. Four streams are admitted; excess tabs can retry after capacity is available.
@@ -143,7 +153,7 @@ The historical synthetic parity and bounded integration inventory is [Beta stabi
 
 | Route | Method | Meaning |
 | --- | --- | --- |
-| `/`, `/app.js`, `/render.js`, `/reports.js`, `/live.js`, `/session.js`, `/app.css` | GET | Fixed public Beta shell/assets, no history |
+| `/`, `/app.js`, `/render.js`, `/watch.js`, `/reports.js`, `/live.js`, `/session.js`, `/app.css` | GET | Fixed public Beta shell/assets, no history |
 | `/health` | GET | Public HTTP-shell readiness only |
 | `/api/bootstrap` | POST | One-use `{"credential":"…"}` exchange with exact Origin |
 | `/api/session` | GET | Authenticated CSRF recovery, no control credential |

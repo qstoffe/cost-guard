@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.95 — 2026-10-27
+
+- Consolidated Web Watch into one persistent, canonically ordered prompt table with inline session markers and explicitly retained-row subtotals. Run/Today scopes, context/tool/skill warnings and session-detail navigation remain server-owned; compact supporting account cards preserve independent observations and failure evidence.
+- Retained table controls, page, unchanged row identities, scroll anchor and selected text during updates. Connection/offline/terminal and source freshness stay visible without treating retained running rows as current lifecycle proof. No extra acquisition, valuation, polling or CLI changes.
+
 ## v80.94 — 2026-10-27
 
 - Rebuilt Web Overview around Normal report's CCost / Token Mix % / Relative CCost definitions, reference model table, contextual notices and Accounts Overview. Compact account cards retain native remaining/used/reset/Pace and attribution warnings; observation/billing detail is expandable rather than a DTO prose dump. Missing bills are not fabricated as zero.

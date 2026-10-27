@@ -107,6 +107,12 @@ p.warning { border-left: 3px solid var(--warn); padding: .65rem .85rem; backgrou
 .running, .new { color: var(--accent); font-weight: 650; }
 .threshold { font-weight: 650; text-decoration: underline dotted; text-underline-offset: .2em; }
 .compaction { background: var(--surface); }
+.watch-session th { position: static; text-align: left; white-space: normal; background: var(--accent-soft); font-weight: 600; }
+.watch-view .account-card { box-shadow: none; font-size: .85rem; }
+.watch-view .account-card p { margin-block: var(--space-2); }
+.watch-view .quota-summary { padding-block: var(--space-2); }
+.watch-view td:nth-child(2), .watch-view td:nth-child(6), .watch-view td:nth-child(7) { text-align: left; }
+.watch-view td:nth-child(7) { min-width: 18rem; max-width: 30rem; white-space: normal; }
 .superseded { color: var(--muted); }
 .report-concepts, .account-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr)); gap: var(--space-4); }
 .report-concepts { margin-block: var(--space-5); }

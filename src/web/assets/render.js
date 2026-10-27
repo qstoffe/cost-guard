@@ -148,8 +148,8 @@ const ReportView = (() => {
         'Relative CCost stays blank; a hidden 2/96/1/1 mix orders published prices. No synthetic multipliers are shown.');
     parent.append(concepts);
   }
-  function overviewAccounts(parent, accounts) {
-    parent.append(element('h3', 'Accounts Overview'));
+  function overviewAccounts(parent, accounts, title = 'Accounts Overview') {
+    parent.append(element('h3', title));
     if (!accounts?.accounts.length) { parent.append(element('p', 'No configured accounts detected.')); return; }
     const group = element('div', undefined, 'account-grid');
     for (const account of accounts.accounts) {
@@ -159,7 +159,7 @@ const ReportView = (() => {
       if (account.billed_today != null) card.append(element('p', 'Billed today: ' + display(account, 'billed_today')));
       if (account.billed_month != null) card.append(element('p', 'Billed month: ' + display(account, 'billed_month')));
       for (const quota of obs.quotas) {
-        const row = element('div', undefined, 'quota-summary');
+        const row = element('div', undefined, 'quota-summary ' + (quota.display_roles || []).join(' '));
         row.append(element('strong', quota.label), element('span',
           `${display(quota, 'remaining')} ${quota.unit} remaining / ${quota.unlimited ? 'Unlimited' : display(quota, 'limit')} · ${display(quota, 'remaining_fraction')}`));
         row.append(element('span', `Used ${display(quota, 'used')} · Reset ${display(quota, 'reset_at_ms')} · ${quota.status}${quota.window_active === false ? ' · Inactive window' : ''}`, 'detail'));
@@ -178,10 +178,10 @@ const ReportView = (() => {
     }
     parent.append(group);
   }
-  function promptLabel(row) {
+  function promptLabel(row, live = false) {
     const node = element('span', `${row.label || 'Prompt'} ${row.prompt_number == null ? '' : '#' + row.prompt_number} ${row.preview || ''}`.trim());
     const flags = [row.model_effort, row.is_compaction && 'Compaction',
-      row.in_progress && 'Running at snapshot · provisional', row.aborted && 'Aborted',
+      row.in_progress && (live ? 'Running · provisional' : 'Running at snapshot · provisional'), row.aborted && 'Aborted',
       row.has_error && 'Error', row.background_only && 'Background activity',
       row.has_additional_model && 'Additional model contribution',
       row.completed_successfully && 'Completed', row.abort_reason,
@@ -286,51 +286,12 @@ const ReportView = (() => {
     parent.append(element('p', `Full-report I/C/W/O tokens: ${display(mix, 'totals')} · CCost ${display(mix, 'costs')} · Mix % ${display(mix, 'percentages')} · Requests ${mix.request_count} · Prompts ${mix.sample_size} · Priced requests ${mix.priced_requests} · ${mix.cost_complete ? 'Complete prices' : 'Incomplete prices'}`, mix.cost_complete ? '' : 'partial'));
   }
   function renderLive(parent, result, state) {
-    parent.replaceChildren();
-    const view = result.view;
-    parent.append(element('p', `${result.state} · ${view.source_label} · ${view.status} · Source observation ${new Date(result.source_observed_at_ms ?? view.now_ms).toLocaleString()} · Published ${new Date(view.now_ms).toLocaleString()}`, 'snapshot'));
-    parent.append(element('p', `Run origin: ${view.run_origin}, ${new Date(view.started_at_ms).toLocaleString()}. CCost is reference valuation, not billing.`));
-    parent.append(element('p', `Run CCost ${ccost(view, 'run_ccost')} · Requests ${view.run_total.request_count} · I/C/W/O tokens ${display(view.run_total, 'totals')}`));
-    parent.append(element('p', `Run I/C/W/O CCost ${display(view.run_total, 'costs')} · Token Mix % ${display(view.token_mix, 'percentages')}`));
-    parent.append(element('p', `${view.today_label} CCost ${ccost(view.today_total, 'known_ccost')}${view.today_pending ? ' · History pending' : ''}`));
-    for (const message of [view.recent_model_notice, ...view.recent_promotion_notices].filter(Boolean)) parent.append(element('p', message, 'warning'));
-    const groups = new Map();
-    for (const row of view.rows) {
-      if (!groups.has(row.session_id)) groups.set(row.session_id, []);
-      groups.get(row.session_id).push(row);
-    }
-    for (const [id, rows] of groups) {
-      const first = rows[0];
-      parent.append(element('h3', `${first.session_title} · ${rows.some(r => r.session_active) ? 'Active / recent' : first.earlier ? 'Earlier' : 'Retained'}`), link(id));
-      const subtotal = view.session_subtotals.find(item => item.session_id === id);
-      parent.append(element('p', `Displayed rows CCost ${ccost(subtotal)} (not full session)`));
-      table(parent, 'Live prompts', ['Prompt / lifecycle', 'CCost', 'Calls', 'Duration', '~Ictx', '~Ictx CCost', '~Extra CCost', 'I/C/W/O %', 'Live context / tools'], rows,
-        row => {
-          const p = row.prompt, tool = row.tool;
-          const label = promptLabel({...p, next_context_warning: row.next_context_warning}); label.append(element('span', row.marker, 'detail'));
-          const detail = element('span', row.next_context_warning || '', row.next_context_warning ? 'threshold' : '');
-          detail.append(element('span', `Next context ${display(row.live_context, 'watch_next_context_tokens')} · delta ${display(row.live_context, 'watch_delta_context_tokens')} · cached/fresh CCost ${ccost(row.live_context, 'watch_next_context_cached_ccost')}/${ccost(row.live_context, 'watch_next_context_fresh_ccost')}`, 'detail'));
-          if (tool) detail.append(element('span', `${tool.running_tool} ${display(tool, 'running_ms')} · Calls ${tool.counts.map(pair => pair.join(': ')).join(', ')} · Failed ${tool.failed_count} · TODO ${tool.todo_completed}/${tool.todo_total} ${tool.active_todo} · Background ${tool.background_kinds.join(', ')} ${display(tool, 'background_ms')} · Skills ${tool.skills.map(s => s.skill_id + (s.failed_count ? ' (failed ' + s.failed_count + ')' : '')).join(', ')}`, 'detail'));
-          return [label, ccost(p), known(p.calls), display(p, 'duration_ms'), display(p, 'incoming_context_tokens'), ccost(p, 'incoming_context_ccost'), ccost(p, 'extra_ccost'), display(p, 'token_mix_percent'), detail];
-        }, null, state, 'live-' + id, row => [row.prompt.prompt_number, row.prompt.ccost, row.prompt.calls,
-          row.prompt.duration_ms, row.prompt.incoming_context_tokens, row.prompt.incoming_context_ccost,
-          row.prompt.extra_ccost, row.prompt.token_mix_percent, row.tool?.running_tool]);
-    }
-    if (!view.rows.length) parent.append(element('p', 'No retained prompt rows. Idle is not evidence of completion.'));
-    parent.append(element('h3', `Watch accounts · ${view.quota_stale ? 'stale' : 'independent observations'} · recovering ${view.quota_recovering_count}`));
-    for (const account of view.accounts?.accounts || []) {
-      const obs = account.observation;
-      parent.append(element('h4', `${obs.label} · ${obs.provider_label} · ${obs.plan || ''}`));
-      parent.append(element('p', `${obs.availability} · ${obs.status} · ${obs.error_code || ''} · Observed ${display(obs, 'observed_at_ms')}`, obs.has_error || obs.has_warning ? 'warning' : ''));
-      for (const scope of account.ccost_scopes) parent.append(element('p', `${scope.name} CCost ${display(scope.cost, 'account_ccost')}`));
-      for (const pace of account.pace) parent.append(element('p', `${pace.label} Pace ${display(pace, 'per_day')} ${pace.unit}/day`));
-      table(parent, 'Watch quota: ' + obs.label, ['Period', 'Used', 'Limit', 'Remaining', 'Reset', 'Status'], obs.quotas,
-        q => [q.label, `${display(q, 'used')} ${q.unit}`, q.unlimited ? 'Unlimited' : display(q, 'limit'), display(q, 'remaining'), display(q, 'reset_at_ms'), q.status], null, state, 'live-account-' + obs.id,
-        q => [q.label, q.used, q.limit, q.remaining, q.reset_at_ms, q.status]);
-    }
+    state.watch ||= new WatchView.View(state);
+    state.watch.attach(parent);
+    state.watch.update(result);
   }
-  function detailCells(row) {
-    const label = promptLabel(row);
+  function detailCells(row, live = false) {
+    const label = promptLabel(row, live);
     if (row.retained) label.append(element('span', `Last observed ${new Date(row.last_observed_at_ms).toLocaleString()}; source history omitted this row`, 'detail'));
     return [label, ccost(row), row.display?.calls ?? known(row.calls),
       display(row, 'duration_ms'), display(row, 'incoming_context_tokens'), ccost(row, 'incoming_context_ccost'),
@@ -340,5 +301,5 @@ const ReportView = (() => {
     return ['Complete session', ccost(block, 'total_ccost'), known(block.total_calls),
       display(block, 'duration_ms'), '—', known(block.total_ictx_cost_text), known(block.total_extra_cost_text), known(block.total_mix_text)];
   }
-  return {render, renderLive, element, detailCells, detailTotals, compare};
+  return {render, renderLive, element, detailCells, detailTotals, compare, overviewAccounts};
 })();

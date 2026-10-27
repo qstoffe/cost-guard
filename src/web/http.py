@@ -16,6 +16,7 @@ from .instance_state import checkout_identity
 ASSETS = {"/": ("index.html", "text/html; charset=utf-8"),
            "/app.js": ("app.js", "text/javascript; charset=utf-8"),
             "/render.js": ("render.js", "text/javascript; charset=utf-8"),
+            "/watch.js": ("watch.js", "text/javascript; charset=utf-8"),
             "/reports.js": ("reports.js", "text/javascript; charset=utf-8"),
             "/live.js": ("live.js", "text/javascript; charset=utf-8"),
             "/session.js": ("session.js", "text/javascript; charset=utf-8"),

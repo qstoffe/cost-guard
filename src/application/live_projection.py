@@ -23,7 +23,12 @@ def project_live(value, timezone_id="UTC"):
             background_ms=tool.background_ms, todo_completed=tool.todo_completed,
             todo_total=tool.todo_total, active_todo=tool.active_todo,
             skills=tuple(fields(skill, "skill_id failed_count") for skill in tool.skills))
+        duration = (max(row.prompt.duration_ms or 0, value.now_ms - row.prompt.at_ms)
+                    if row.prompt.in_progress else row.prompt.duration_ms)
+        sparse = row.prompt.is_compaction and row.prompt.calls == 0 and row.prompt.ccost == 0
         rows.append(record(session_id=row.session_id, session_title=row.session_title,
+            watch_model_effort=row.prompt.watch_model_effort or row.prompt.model_effort or "N/A",
+            watch_duration_ms=duration, watch_sparse_compaction=sparse,
             prompt=prompt(row.prompt), marker=row.marker, tool=activity, earlier=row.earlier,
             session_active=row.session_active, session_latest_ms=row.session_latest_ms,
             is_latest_session_event=row.is_latest_session_event,
