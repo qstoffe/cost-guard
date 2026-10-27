@@ -20,6 +20,7 @@ observation, refresh ownership, account/report scopes and Watch rolling behavior
 unchanged. No browser editing, privacy expansion, ZIP, release/tag or live inference.
 
 Candidate implementation: [8dc82a38](https://github.com/qstoffe/cost-guard/commit/8dc82a38dddd7f2999e7872d52e1e6a8a0949725).
+Delivery PR: [#84](https://github.com/qstoffe/cost-guard/pull/84).
 The native delivery receipt owns the confirmed PR/merge identity; this report does not
 invent a future merge SHA.
 
