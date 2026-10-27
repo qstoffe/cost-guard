@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from hashlib import sha256
+from decimal import Decimal
 import json
 
 from src.analysis.model_supersession import superseded_rows
@@ -36,6 +37,7 @@ def token_mix(value):
         sample_size=value.sample_size, request_count=value.request_count,
         costs=value.costs, priced_requests=value.priced_requests,
         cost_complete=value.cost_complete, total_tokens=value.total_tokens,
+        total_cost=None if value.costs is None else sum(value.costs, Decimal(0)),
     )
 
 

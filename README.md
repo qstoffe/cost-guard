@@ -362,7 +362,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.99 (2026-10-28):** Web shows unmistakable stopped/offline/source-unavailable status, retains time-stamped stale reports and Watch, and revalidates the authorized host after interruption or idle. Terminal/expired/different-host pages cannot silently resume acquisition. See [Web Beta](docs/web-beta.md); physical tray and assistive-technology acceptance remain separate.
+**v80.100 (2026-10-28):** Remaining Web reports use CLI-first prompt/context and historical Token Mix presentation. Complete session Snapshot/Live keeps 50-row paging and full-history totals, with formatted summaries and clear Freeze/Follow actions. Date ranges show inclusive local dates rather than raw epochs. See [Web Beta](docs/web-beta.md); physical tray, assistive-technology and native macOS acceptance remain separate.
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

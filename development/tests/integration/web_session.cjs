@@ -40,6 +40,13 @@ async function main() {
   assert.equal(view.body.children.length, 50);
   assert.equal(view.offset, 0);
   assert.match(view.summary.textContent, /100 rows/);
+  const total = input.first.result.view.prompt_blocks[0];
+  assert.ok(view.summary.textContent.includes('CCost ' + total.display.total_ccost));
+  assert.ok(view.summary.textContent.includes('Billed ' + total.display.billed_cost));
+  assert.ok(view.summary.textContent.includes('Duration ' + total.display.duration_ms));
+  assert.ok(view.context.textContent.includes(total.display.next_context));
+  assert.equal(view.toggle.textContent, 'Freeze snapshot');
+  assert.equal(view.latest.textContent, 'Jump to latest', 'initial capture is not new activity');
   const row = view.body.children[10], first = view.body.firstElementChild;
   view.follow = false;
   document.activeElement = view.next;
@@ -70,6 +77,8 @@ async function main() {
   offline = false;
   await view.switchMode();
   assert.equal(view.mode, 'snapshot');
+  assert.equal(view.toggle.textContent, 'Follow live');
+  assert.match(view.status.textContent, /Snapshot · frozen until Refresh/);
   assert.ok(calls.some(c => c.action === 'freeze'));
   await view.switchMode();
   assert.equal(view.mode, 'live');
