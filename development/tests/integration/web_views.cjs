@@ -4,7 +4,7 @@ const vm = require('node:vm');
 const fs = require('node:fs');
 
 class Node {
-  constructor(tag) { this.tag = tag; this.children = []; this.attrs = {}; this.events = {}; this.text = ''; this.disabled = false; }
+  constructor(tag) { this.tag = tag; this.children = []; this.attrs = {}; this.dataset = {}; this.events = {}; this.text = ''; this.disabled = false; }
   set textContent(value) { this.text = String(value); this.children = []; }
   get textContent() { return this.text + this.children.map(child => child.textContent).join(''); }
   append(...children) { this.children.push(...children); }
@@ -24,7 +24,7 @@ async function until(condition) {
 }
 async function main() {
   const input = JSON.parse(fs.readFileSync(0, 'utf8'));
-  const ids = Object.fromEntries(['status', 'result', 'notice', 'refresh', 'cancel', 'heading', 'skip', 'content', 'scope-controls', 'search'].map(id => [id, new Node('div')]));
+  const ids = Object.fromEntries(['host-state', 'status', 'result', 'notice', 'refresh', 'cancel', 'heading', 'skip', 'content', 'scope-controls', 'search'].map(id => [id, new Node('div')]));
   const nav = ['overview', 'sessions', 'watch', 'models', 'accounts', 'reports', 'token-mix'].map(key => {
     const node = new Node('a'); node.setAttribute('href', '#/' + key); return node;
   });
@@ -47,8 +47,13 @@ async function main() {
     if (response.headers.get('set-cookie')) cookie = response.headers.get('set-cookie').split(';')[0];
     return response;
   };
-  const context = vm.createContext({document: {createElement: tag => new Node(tag),
-    getElementById: id => ids[id], querySelectorAll: () => nav}, window: {addEventListener: (key, fn) => { handlers[key] = fn; }},
+  // Finite-page harness isolates transport; live lifecycle has its own VM/browser tests.
+  const transport = {connect(api, update, status) {
+    status('Live connected.', {kind: 'connected', writable: true, terminal: false});
+    return {resync() {}};
+  }};
+  const context = vm.createContext({LiveConnection: transport, AbortController, clearTimeout, document: {createElement: tag => new Node(tag),
+    getElementById: id => ids[id], querySelectorAll: () => nav, addEventListener() {}}, window: {addEventListener: (key, fn) => { handlers[key] = fn; }},
     location, history, URLSearchParams, fetch: wire, setTimeout, Date, console});
   for (const path of ['/render.js', '/reports.js', '/app.js']) {
     const response = await fetch(input.origin + path);
@@ -228,7 +233,7 @@ async function main() {
   assert.match(ids.result.textContent, /75% remaining/);
   // Reload with an ordinary deep link must not erase it or require the bootstrap again.
   location.hash = '#/sessions/root-0000';
-  const reloaded = vm.createContext({document: context.document, window: context.window, location, history,
+  const reloaded = vm.createContext({LiveConnection: transport, AbortController, clearTimeout, document: context.document, window: context.window, location, history,
     URLSearchParams, fetch: wire, setTimeout, Date, console});
   vm.runInContext(await (await fetch(input.origin + '/render.js')).text(), reloaded);
   vm.runInContext(await (await fetch(input.origin + '/reports.js')).text(), reloaded);
@@ -239,19 +244,33 @@ async function main() {
   assert.match(ids.heading.textContent, /Session root-0000/);
   // Legacy deep-link reload canonicalizes once. Back/Forward revisit the same entry.
   location.hash = '#/live';
-  const watchReload = vm.createContext({document: context.document, window: context.window, location, history,
+  const watchReload = vm.createContext({LiveConnection: transport, AbortController, clearTimeout, document: context.document, window: context.window, location, history,
     URLSearchParams, fetch: wire, setTimeout, Date, console});
   for (const script of ['/render.js', '/reports.js', '/app.js']) {
     vm.runInContext(await (await fetch(input.origin + script)).text(), watchReload);
   }
   await until(() => ids.heading.textContent === 'Watch');
   assert.equal(location.hash, '#/watch');
+  await until(() => vm.runInContext('Boolean(csrf)', watchReload));
   navigate('models');
   navigate('watch');
   assert.equal(ids.heading.textContent, 'Watch');
+  navigate('models');
+  await until(() => vm.runInContext('Boolean(current?.result) && !current.loading', watchReload));
+  const retained = ids.result.textContent, terminalRequests = requests;
+  vm.runInContext("connectionStatus('STOPPED — NOT LIVE. Use the OS launcher.', {kind: 'stopped', terminal: true, writable: false})", watchReload);
+  assert.match(ids['host-state'].textContent, /STOPPED — NOT LIVE/);
+  assert.match(ids.notice.textContent, /not updating/);
+  assert.equal(ids.refresh.disabled, true);
+  assert.equal(ids.cancel.disabled, true);
+  assert.equal(ids['scope-controls'].inert, true);
+  assert.equal(ids.result.textContent, retained, 'terminal state retains the exact frozen report');
+  ids.refresh.click();
+  await delay(20);
+  assert.equal(requests, terminalRequests, 'disabled terminal refresh cannot start acquisition');
   offline = true;
   ids.result.textContent = 'Starting Cost Guard';
-  const unavailable = vm.createContext({document: context.document, window: context.window, location, history,
+  const unavailable = vm.createContext({LiveConnection: transport, AbortController, clearTimeout, document: context.document, window: context.window, location, history,
     URLSearchParams, fetch: wire, setTimeout, Date, console});
   for (const script of ['/render.js', '/reports.js', '/app.js']) {
     vm.runInContext(await (await fetch(input.origin + script)).text(), unavailable);

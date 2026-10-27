@@ -285,7 +285,9 @@ class LiveTests(unittest.TestCase):
 
             response, _ = request('/api/events')
             self.assertEqual(401, response.status)
+            self.assertIsNone(response.getheader('X-CG-Instance'))
             response, _ = request('/api/bootstrap', method='POST', value={'credential': server.session.bootstrap()})
+            self.assertEqual(owner.nonce, response.getheader('X-CG-Instance'))
             cookie = response.getheader('Set-Cookie').split(';')[0]
             owner.events.publish('live', {'state': 'running', 'view': None})
             streams = []
@@ -299,6 +301,7 @@ class LiveTests(unittest.TestCase):
                     streams.append((connection, response))
                 response, data = request('/api/live', cookie=cookie)
                 self.assertEqual(200, response.status)
+                self.assertEqual(owner.nonce, response.getheader('X-CG-Instance'))
                 self.assertEqual(owner.nonce, json.loads(data)['instance_id'])
                 response, _ = request('/api/events', cookie=cookie)
                 self.assertEqual(429, response.status)

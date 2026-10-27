@@ -26,7 +26,7 @@ async function main() {
   let snapshot = {instance_id: 'instance', sequence: 0, values: {live: input}};
   let calls = 0;
   const document = {createElement: tag => new Node(tag), activeElement: null};
-  const context = vm.createContext({document, console,
+  const context = vm.createContext({document, console, setTimeout: () => 1, clearTimeout: () => {},
     window: {getSelection: () => ({isCollapsed: !selected, anchorNode: selected, focusNode: selected})},
     api: async path => { assert.equal(path, '/api/live'); calls++; return JSON.parse(JSON.stringify(snapshot)); },
     update: live => rendered.push(live), status: text => statuses.push(text),

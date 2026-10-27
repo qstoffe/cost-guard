@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.99 — 2026-10-28
+
+- Added a persistent Web host-state banner distinguishing starting, connected, source unavailable, reconnecting, offline, expired authorization and intentional stop. Retained reports/Watch stay visibly frozen with last authenticated check/source timestamps; terminal pages disable acquisition controls and require the OS launcher.
+- Added bounded authenticated same-host health checks, idle-resume revalidation, five-second request deadlines and instance-bound response validation. Fixed a terminal SSE close/read race. No browser storage, automatic host startup, new sensitive routes or CLI/Watch acquisition changes.
+
 ## v80.98 — 2026-10-27
 
 - Replaced the Web Accounts quota/prose table with shared provider/account cards, known-only remaining progress, native credits/money, billing, Pace and expandable observation details. Blocked, unavailable, partial, stale and rate-limited observations stay explicit; unknown quotas are never empty progress bars. Normal local-month/Today CCost and Copilot Unaccounted usage remain independent of Watch's rolling scope.

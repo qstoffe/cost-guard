@@ -15,23 +15,63 @@ let liveConnection = null;
 let liveValue = null;
 let liveStatus = 'Connecting';
 let sessionDetailAvailable = false;
+let hostState = {kind: 'starting', writable: false, terminal: false};
+let hostInstance = null;
+function connectionStatus(message, state = {}) {
+  if (hostState.terminal && state.kind !== hostState.kind) return;
+  hostState = {...hostState, ...state};
+  liveStatus = message;
+  statusLine.textContent = message;
+  const banner = document.getElementById('host-state');
+  if (banner) {
+    banner.dataset.kind = hostState.kind;
+    const time = value => value == null ? 'not yet observed' : new Date(value).toLocaleString();
+    banner.textContent = `${message} · Last authenticated host check: ${time(hostState.authenticatedAt)} · Last source update: ${time(hostState.observedAt)}. Reports remain frozen snapshots; account freshness is independent.`;
+  }
+  if (hostState.terminal) for (const view of views.values()) view.detail?.detach();
+  document.getElementById('scope-controls').inert = !hostState.writable;
+  if (current) show(current);
+}
 async function api(path, value) {
+  if (hostState.terminal) throw new Error(hostState.kind === 'authorization_required' ? 'authentication_required' :
+    hostState.kind === 'identity_changed' ? 'host_identity_changed' : 'instance_stopping');
   const options = {credentials: 'same-origin', cache: 'no-store'};
   if (value !== undefined) Object.assign(options, {method: 'POST',
     headers: {'Content-Type': 'application/json', 'X-CG-CSRF': csrf || ''}, body: JSON.stringify(value)});
-  const response = await fetch(path, options);
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || 'request_unavailable');
-  return data;
+  const controller = new AbortController();
+  options.signal = controller.signal;
+  const timeout = setTimeout(() => controller.abort(), 5000);
+  try {
+    const response = await fetch(path, options);
+    const data = await response.json();
+    const identity = response.headers?.get('X-CG-Instance');
+    if (identity && hostInstance && identity !== hostInstance) {
+      connectionStatus('HOST IDENTITY CHANGED — NOT LIVE. Use a fresh authorized launcher link.',
+        {kind: 'identity_changed', terminal: true, writable: false});
+      throw new Error('host_identity_changed');
+    }
+    if (response.ok && identity) hostInstance = identity;
+    if (!response.ok) {
+      if (response.status === 401 || data.error === 'csrf_required') {
+        connectionStatus('AUTHENTICATION EXPIRED — NOT LIVE. Use a fresh launcher link.',
+          {kind: 'authorization_required', terminal: true, writable: false});
+      }
+      throw new Error(data.error || 'request_unavailable');
+    }
+    if (hostState.terminal) throw new Error('instance_stopping');
+    return data;
+  } finally { clearTimeout(timeout); }
 }
 function show(state) {
   if (state !== current) return;
-  refresh.disabled = !csrf || !state.request || state.loading;
-  cancel.disabled = !state.active;
+  refresh.disabled = !csrf || !hostState.writable || !(state.request || state.detail) || state.loading;
+  cancel.disabled = !hostState.writable || !state.active;
   output.setAttribute('aria-busy', state.loading ? 'true' : 'false');
-  notice.textContent = state.message;
+  notice.textContent = hostState.writable ? state.message : `${liveStatus} Last known contents are retained, not updating.`;
   if (state.detail) {
-    state.detail.attach(output);
+    if (!hostState.terminal) state.detail.attach(output);
+    else output.replaceChildren(state.detail.root);
+    state.detail.controls.inert = !hostState.writable;
   } else if (state.live) {
     state.connection = liveStatus;
     if (liveValue?.view) ReportView.renderLive(output, liveValue, state);
@@ -53,7 +93,7 @@ function failure(code) {
   return errors[code] || 'Source/report unavailable. Check the local source and retry Refresh.';
 }
 async function acquire(state) {
-  if (state.loading) return;
+  if (state.loading || !hostState.writable) return;
   state.loading = true;
   state.message = state.result ? 'Refreshing; last known snapshot retained until success.' : 'Loading snapshot…';
   show(state);
@@ -66,6 +106,7 @@ async function acquire(state) {
         if (job.status !== 'complete' || !job.result || job.result.error) {
           throw new Error(job.result?.error?.code || job.error || job.status);
         }
+        if (hostState.terminal) break;
         state.result = job.result;
         state.pages = {};
         state.message = 'Snapshot captured. Navigation and source activity do not update it.';
@@ -118,13 +159,13 @@ function navigate() {
   if (current?.detail) current.detail.detach();
   current = views.get(key);
   document.getElementById('search').value = current.search || '';
-  if (match && csrf && sessionDetailAvailable && !current.detail) {
+  if (match && csrf && !hostState.terminal && sessionDetailAvailable && !current.detail) {
     current.detail = new SessionDetail.View(api, match[1], match[2] ? 'live' : 'snapshot');
     current.message = 'Complete session history; explicit Snapshot/Live. Acquisition is shared across tabs.';
   }
   document.getElementById('search').disabled = !!current.detail;
   if (csrf) show(current);
-  if (csrf && current.request && !current.explicit && !current.detail && !current.result && !current.attempted) {
+  if (csrf && hostState.writable && current.request && !current.explicit && !current.detail && !current.result && !current.attempted) {
     current.attempted = true;
     acquire(current);
   }
@@ -144,20 +185,21 @@ async function connect() {
         for (const job of progress?.jobs || []) {
           if (current?.active === job.id) notice.textContent = `${job.status}: ${job.progress?.phase || job.status} · ${job.progress?.completed ?? 0}${job.progress?.total == null ? '' : '/' + job.progress.total}`;
         }
-      }, message => {
-        liveStatus = message;
-        statusLine.textContent = message;
-        if (current?.live) show(current);
-      });
+        if (hostState.writable && current?.request && !current.explicit && !current.result && !current.attempted) {
+          current.attempted = true; acquire(current);
+        }
+      }, connectionStatus);
     }
     navigate();
   } catch (_) {
-    statusLine.textContent = 'Browser session unavailable. Use a fresh one-use link from this host; restart it if expired.';
+    if (!hostState.terminal) connectionStatus('OFFLINE — host unreachable or browser session unavailable. Use the OS launcher; no host is started automatically.',
+      {kind: 'offline', writable: false});
     output.setAttribute('aria-busy', 'false');
     output.replaceChildren(ReportView.element('p', 'Unable to establish the private browser session. Use tray Open Cost Guard for a fresh link, or relaunch Cost Guard Web Beta. No source data has been assumed ready.'));
   } finally { credential = null; }
 }
 refresh.addEventListener('click', () => {
+  if (!hostState.writable) return;
   if (current?.detail) current.detail.refresh();
   else if (current?.request) acquire(current);
 });
@@ -169,6 +211,10 @@ cancel.addEventListener('click', async () => {
   }
 });
 window.addEventListener('hashchange', navigate);
+window.addEventListener('pageshow', () => liveConnection?.resync());
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) liveConnection?.resync();
+});
 document.getElementById('search').addEventListener('input', event => {
   if (current) { current.search = event.target.value; current.pages = {}; show(current); }
 });

@@ -64,7 +64,7 @@
     check(watch.status.textContent.includes('offline') && rows().length === 50, 'offline retains accumulated rows');
     stream.onopen();
     for (let n = 0; n < 12; n++) await Promise.resolve();
-    check(statuses.includes('Live connected.'), 'reconnect restores transport status');
+    check(statuses.some(message => message.includes('SOURCE UNAVAILABLE')), 'reconnect does not mistake HTTP readiness for source health');
     stream.emit('terminal', 20, {reason: 'source_changed'});
     check(stream.closed && watch.status.textContent.includes('host stopped') && rows().length === 50, 'terminal stop preserves rows and ends retry');
     connection.close();

@@ -73,6 +73,12 @@ Layout choices: wrapping top navigation; system light/dark palette; source/readi
 
 ## Global Watch and reconnect
 
+The sticky common-shell banner distinguishes **STARTING**, **Live connected**, **SOURCE UNAVAILABLE** (HTTP works, acquisition does not), **RECONNECTING**, **OFFLINE — last observation**, **AUTHENTICATION EXPIRED**, changed host identity and **STOPPED — NOT LIVE**. Last authenticated host check and last successful source-update timestamps remain separate; account freshness and frozen report timestamps never become fresh merely because HTTP works. Stop/identity/authorization loss disables acquisition controls, ends retry and retains readable values. Use the OS launcher to restart or obtain fresh authorization; no host is started by the browser.
+
+One authenticated `/api/live` watchdog runs at ten-second intervals after the preceding check completes; every ordinary request has a five-second deadline. Thus a reachable tab normally detects abrupt loss within fifteen seconds (browser/OS suspension can delay timers). `pageshow` and visible-tab resume immediately mark retained data as reconnecting before revalidation. Same-instance reconnection preserves cookies, replay/resync and retained values. Authenticated API response identity is pinned per page; a replacement host is never silently accepted even if another tab renewed its cookie. No identity, token or report is persisted in browser storage, and no port/network scan or sensitive unauthenticated endpoint is added.
+
+[Built-in browser, deterministic and real-source verification](../development/architecture/governance/verification/web-connection.md) records the tested states and explicit physical-tray/suspension/restart/macOS limits.
+
 v80.95 presents one primary prompt table in CLI Watch order: Session / prompt,
 Model / effort, CCost, Calls, Duration and Δctx → Next Ictx, plus supporting activity/context details.
 Inline session dividers link to complete session detail and label subtotals as retained rows,
