@@ -16,6 +16,7 @@ consoles without changing isolation, cancellation or parent-loss cleanup. The
 managed tray remains intentional UI; browser code does not dispatch a CLI.
 
 Implementation candidate: [8b4b0c1](https://github.com/qstoffe/cost-guard/commit/8b4b0c1377f57d78a1508f92f330550d743687a5).
+Delivery PR: [#81](https://github.com/qstoffe/cost-guard/pull/81).
 
 ## Design and exclusions
 
