@@ -72,7 +72,15 @@ def spawn_detached(root, store, nonce, gui_module):
     if gui_module not in GUI_MODULES:
         raise InstanceConflict("gui_unavailable")
     entry = Path(root).resolve(strict=True) / "cost-guard-web.py"
-    arguments = [sys.executable, str(entry), "--managed", nonce, gui_module]
+    executable = Path(sys.executable)
+    if os.name == "nt":
+        # DETACHED_PROCESS hides the host's console, not multiprocessing children
+        # subsequently spawned by a console-subsystem python.exe. Use the paired
+        # GUI interpreter so finite report workers also remain console-free.
+        executable = executable.with_name("pythonw.exe")
+        if not executable.is_file():
+            raise InstanceConflict("gui_unavailable")
+    arguments = [str(executable), str(entry), "--managed", nonce, gui_module]
     options = {"cwd": str(store.directory), "stdin": subprocess.DEVNULL,
                "stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL, "close_fds": True}
     if os.name == "nt":

@@ -19,12 +19,24 @@ MAX_PENDING = 4
 
 
 def parse_report(value):
-    if not isinstance(value, dict) or set(value) - {"kind", "session_id", "date_text", "session_limit"}:
+    page_fields = {"session_page_size", "session_offset", "session_catalog_revision"}
+    if not isinstance(value, dict) or set(value) - ({"kind", "session_id", "date_text", "session_limit"} | page_fields):
         raise ValueError("invalid_request")
     kind = ReportKind(value.get("kind"))
     session = value.get("session_id", "")
     date = value.get("date_text", "")
     limit = value.get("session_limit", 20 if kind is ReportKind.SESSIONS else None)
+    size = value.get("session_page_size")
+    offset = value.get("session_offset", 0)
+    revision = value.get("session_catalog_revision")
+    if (page_fields & set(value) and kind is not ReportKind.SESSIONS
+            or size is not None and (type(size) is not int or not 1 <= size <= 100)
+            or type(offset) is not int or not 0 <= offset <= 1_000_000
+            or revision is not None and (not isinstance(revision, str) or not re.fullmatch(r"[0-9a-f]{64}", revision))
+            or offset and (size is None or revision is None)):
+        raise ValueError("invalid_request")
+    if size is not None and "session_limit" not in value:
+        limit = None
     if (not isinstance(session, str) or not isinstance(date, str) or len(date) > 32
             or len(session) > 200 or any(ord(c) < 32 for c in session + date)
             or (limit is not None and (type(limit) is not int or not 1 <= limit <= 10000))):
@@ -42,7 +54,8 @@ def parse_report(value):
             local_report_range(date, "UTC")
         except (ValueError, OverflowError) as exc:
             raise ValueError("invalid_request") from exc
-    return ReportRequest(kind, session_id=session or None, date_text=date or None, session_limit=limit)
+    return ReportRequest(kind, session_id=session or None, date_text=date or None, session_limit=limit,
+                         session_page_size=size, session_offset=offset, session_catalog_revision=revision)
 
 
 def run_report(sender, request):

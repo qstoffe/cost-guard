@@ -131,8 +131,9 @@ def project(report, timezone_id="UTC"):
         model_comparison=tuple(models), model_comparison_sample_size=report.model_comparison_sample_size,
         pricing_retrieved_at_ms=report.pricing_retrieved_at_ms,
         model_comparison_promotion_notes=report.model_comparison_promotion_notes,
-        session_usage=tuple(fields(item, "session_id title model multiple_models ccost prompt_count complete duration_ms")
+        session_usage=tuple(fields(item, "session_id title model multiple_models ccost prompt_count complete duration_ms archived running")
             for item in report.session_usage),
+        session_page=fields(report.session_page, "offset size total catalog_revision") if report.session_page else None,
         prompt_blocks=tuple(block(item) for item in report.prompt_blocks),
         accounts_quotas=accounts(report.accounts_quotas), notes=report.notes,
         recent_model_notice=report.recent_model_notice,

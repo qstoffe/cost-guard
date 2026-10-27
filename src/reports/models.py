@@ -130,6 +130,16 @@ class SessionUsageRow:
     prompt_count: int
     complete: bool = True
     duration_ms: int | None = None
+    archived: bool = False
+    running: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class SessionListPage:
+    offset: int
+    size: int
+    total: int
+    catalog_revision: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -199,3 +209,4 @@ class ReportProjection:
     token_mix: TokenMix = field(default_factory=TokenMix)
     model_token_mix: tuple[ModelTokenMixProjection, ...] = ()
     recent_model_notice_highlight_spans: tuple[tuple[int, int], ...] = ()
+    session_page: SessionListPage | None = None
