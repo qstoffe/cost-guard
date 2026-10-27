@@ -2,10 +2,35 @@
 
 Never round canonical values here: callers retain raw values alongside tokens.
 """
+from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
+import math
 import re
 
+from src.analysis.timezones import resolve_timezone
 from src.numbers import consumed_capacity, exact_number, remaining_capacity
+
+
+def format_reset(reset_at_ms: object, timezone_id: str, *, now_ms: int, compact: bool = False) -> str:
+    """Choose a tier by elapsed UTC time; render its target in the configured zone."""
+    if isinstance(reset_at_ms, bool) or not isinstance(reset_at_ms, (int, float)):
+        return "Reset unknown"
+    try:
+        if not math.isfinite(reset_at_ms) or reset_at_ms <= 0:
+            return "Reset unknown"
+        target = datetime.fromtimestamp(reset_at_ms / 1000, timezone.utc).astimezone(resolve_timezone(timezone_id))
+        remaining = reset_at_ms - now_ms
+    except (OverflowError, OSError, ValueError):
+        return "Reset unknown"
+    if remaining <= 0:
+        return "Reset expired"
+    clock = target.strftime("%H:%M")
+    if remaining < 86_400_000:
+        return f"Reset@{clock}" if compact else f"Reset in {int(remaining // 60_000)}min, {clock}"
+    if remaining < 604_800_000:
+        when = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")[target.weekday()] + " " + clock
+        return "Reset@" + when if compact else f"Reset in {int(remaining // 3_600_000)}h, {when}"
+    return ("Reset@" if compact else "Reset at ") + target.strftime("%Y-%m-%d %H:%M")
 
 
 def money(value: Decimal | None) -> str:

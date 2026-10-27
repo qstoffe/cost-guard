@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.98 — 2026-10-27
+
+- Replaced the Web Accounts quota/prose table with shared provider/account cards, known-only remaining progress, native credits/money, billing, Pace and expandable observation details. Blocked, unavailable, partial, stale and rate-limited observations stay explicit; unknown quotas are never empty progress bars. Normal local-month/Today CCost and Copilot Unaccounted usage remain independent of Watch's rolling scope.
+- Shared the unchanged CLI reset formatter with immutable Web display tokens, using the configured timezone and frozen observation time. Raw exact values, private-source restrictions, refresh ownership, provider requests and CLI behavior remain unchanged.
+
 ## v80.97 — 2026-10-27
 
 - Aligned Web Models multipliers and context tiers with CLI, preserving exact default ranking, promotional/recent/older-stable roles, native USD/M precision and explicit selectable/full-catalog controls. Empty priced samples show blank relative cells rather than synthetic multipliers or N/A tiers; verified-empty availability and unverified fallback remain distinct.

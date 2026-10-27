@@ -200,17 +200,59 @@ const ReportView = (() => {
       return [...rates.split('/').map(rate => rate === '-' ? null : rate), boundary.replace(/[^0-9]/g, '') || '0'];
     });
   }
-  function overviewAccounts(parent, accounts, title = 'Accounts Overview') {
+  function accountQuota(card, quota) {
+    const row = element('div', undefined, 'quota-summary ' + (quota.display_roles || []).join(' ') +
+      (quota.status === 'blocked' ? ' error' : ''));
+    const status = quota.status === 'blocked' ? ' · BLOCKED' : ' · ' + quota.status;
+    row.append(element('strong', quota.label + status));
+    const remaining = quota.unlimited ? 'Unlimited' : quota.remaining_fraction == null ? 'Remaining unavailable' : display(quota, 'remaining_fraction') + ' remaining';
+    row.append(element('span', remaining, 'metric-value'));
+    // Only a known server-formatted fraction creates a determinate bar. Never coerce null to zero.
+    if (!quota.unlimited && quota.remaining_fraction != null) {
+      const bar = element('progress'); bar.max = 100;
+      bar.value = display(quota, 'remaining_fraction').replace('%', '');
+      bar.setAttribute('aria-label', quota.label + ' remaining');
+      bar.setAttribute('aria-valuetext', remaining); row.append(bar);
+    }
+    const unit = quota.unit || 'units';
+    if (quota.remaining != null) row.append(element('span', `${display(quota, 'remaining')} ${unit} remaining` +
+      (quota.limit == null || quota.unlimited ? '' : ` / ${display(quota, 'limit')} ${unit}`)));
+    else if (quota.used != null || quota.limit != null) row.append(element('span',
+      `Used ${display(quota, 'used')} / ${quota.unlimited ? 'Unlimited' : display(quota, 'limit')} ${unit}`));
+    if (quota.remaining_money != null || quota.limit_money != null) row.append(element('span',
+      `Native money ${display(quota, 'remaining_money')} / ${display(quota, 'limit_money')}`, 'detail'));
+    row.append(element('span', display(quota, 'reset'), 'detail'));
+    const window = [quota.period !== 'unknown' && quota.period,
+      quota.duration_seconds && display(quota, 'window') + ' window',
+      quota.scope && quota.scope !== 'account' && quota.scope, quota.model_id].filter(Boolean);
+    if (window.length) row.append(element('span', window.join(' · '), 'detail'));
+    card.append(row);
+  }
+  function accountStatus(obs) {
+    const cause = {auth_failure: 'Authentication unavailable', unsupported_auth_method: 'Unsupported authentication method',
+      transport_failure: 'Connection failed', format_changed: 'Provider format changed',
+      software_failure: 'Account refresh failed internally', discovery_failure: 'Account metadata unavailable',
+      rate_limited: 'Rate limited', account_unavailable: 'Account unavailable'}[obs.error_code];
+    const availability = {available: 'Available', partial: 'Partial quota data', stale: 'Stale — last observation, not current',
+      unavailable: 'Unavailable', error: 'Refresh failed'}[obs.availability] || 'Availability unknown';
+    const status = obs.status === 'available' ? '' : obs.status === 'blocked' ? 'BLOCKED' : 'Usage status unknown';
+    return [availability, status, cause, obs.has_warning && 'Provider warning'].filter(Boolean).join(' · ');
+  }
+  function overviewAccounts(parent, accounts, title = 'Accounts Overview', detailed = false) {
     parent.append(element('h3', title));
     if (!accounts?.accounts.length) { parent.append(element('p', 'No configured accounts detected.')); return; }
     const group = element('div', undefined, 'account-grid');
     for (const account of accounts.accounts) {
       const obs = account.observation, card = element('section', undefined, 'account-card');
+      if (detailed) card.setAttribute('data-availability', obs.availability);
       card.append(element('h4', obs.label), element('p', [obs.provider_label, obs.plan].filter(Boolean).join(' · '), 'detail'));
-      for (const scope of account.ccost_scopes) card.append(element('p', `CCost ${scope.name}: ${display(scope.cost, 'account_ccost')}`, 'metric-value'));
-      if (account.billed_today != null) card.append(element('p', 'Billed today: ' + display(account, 'billed_today')));
-      if (account.billed_month != null) card.append(element('p', 'Billed month: ' + display(account, 'billed_month')));
+      if (detailed) card.append(element('p', accountStatus(obs),
+        obs.has_error || obs.status === 'blocked' ? 'error account-status' : obs.has_warning || obs.availability !== 'available' ? 'warning account-status' : 'account-status'));
+      for (const scope of account.ccost_scopes) card.append(element('p', `CCost ${scope.name}: ${scope.cost == null ? '—' : display(scope.cost, 'account_ccost')}`, 'metric-value'));
+      if (detailed || account.billed_today != null) card.append(element('p', 'Billed today: ' + display(account, 'billed_today')));
+      if (detailed || account.billed_month != null) card.append(element('p', 'Billed month: ' + display(account, 'billed_month')));
       for (const quota of obs.quotas) {
+        if (detailed) { accountQuota(card, quota); continue; }
         const row = element('div', undefined, 'quota-summary ' + (quota.display_roles || []).join(' '));
         row.append(element('strong', quota.label), element('span',
           `${display(quota, 'remaining')} ${quota.unit} remaining / ${quota.unlimited ? 'Unlimited' : display(quota, 'limit')} · ${display(quota, 'remaining_fraction')}`));
@@ -219,13 +261,16 @@ const ReportView = (() => {
       }
       for (const pace of account.pace) card.append(element('p', `${pace.label} Pace: ${display(pace, 'per_day')} ${pace.unit}/day · ${pace.days} days · ${pace.per_workday == null ? 'no workdays left' : display(pace, 'per_workday') + ' per workday'}`, 'detail'));
       if (['github-copilot', 'github-copilot-enterprise'].includes(obs.provider_id) || account.unaccounted_usage != null) card.append(element('p', 'Unaccounted usage (estimate): ' + display(account, 'unaccounted_usage')));
-      if (obs.has_error || obs.has_warning || ['stale', 'unavailable', 'error', 'paused', 'blocked'].includes(obs.status)) card.append(element('p', `${obs.availability} · ${obs.status} · ${obs.error_code || 'Account warning'}`, 'warning'));
+      if (!detailed && (obs.has_error || obs.has_warning || ['stale', 'unavailable', 'error', 'paused', 'blocked'].includes(obs.status))) card.append(element('p', `${obs.availability} · ${obs.status} · ${obs.error_code || 'Account warning'}`, 'warning'));
+      if (detailed && !obs.quotas.length) card.append(element('p', 'Quota unavailable; not zero or unlimited.', 'detail'));
       if (account.ccost_account_unknown) card.append(element('p', 'CCost account attribution unknown.', 'warning'));
       for (const note of account.ccost_notes || []) card.append(element('p', note, 'warning'));
       const details = element('details');
       details.append(element('summary', 'Observation details'), element('p', `${obs.availability} · ${obs.status} · Observed ${display(obs, 'observed_at_ms')}`));
-      for (const bill of obs.billing || []) details.append(element('p', `${bill.label} · ${bill.period} · ${bill.kind} · ${display(bill, 'amount')} ${bill.currency} · ${bill.status}`));
-      for (const quota of obs.quotas) details.append(element('p', `${quota.label} · ${quota.period} · ${known(quota.duration_seconds)} s · ${quota.scope || ''} · Native money remaining/limit ${display(quota, 'remaining_money')}/${display(quota, 'limit_money')}`));
+      for (const bill of obs.billing || []) (detailed ? card : details).append(element('p', `${bill.label} · ${bill.period} · ${bill.kind} · ${display(bill, 'amount')} ${bill.currency} · ${bill.status}`));
+      for (const quota of obs.quotas) details.append(element('p', detailed ?
+        `${quota.label} · Used ${display(quota, 'used')} ${quota.unit || 'units'} · ${quota.status}` :
+        `${quota.label} · ${quota.period} · ${known(quota.duration_seconds)} s · ${quota.scope || ''} · Native money remaining/limit ${display(quota, 'remaining_money')}/${display(quota, 'limit_money')}`));
       card.append(details); group.append(card);
     }
     parent.append(group);
@@ -305,27 +350,8 @@ const ReportView = (() => {
     const accounts = view.accounts_quotas;
     if (overview) overviewAccounts(parent, accounts);
     if (view.kind === 'normal' && section === 'accounts') {
-      parent.append(element('h3', 'Accounts · independent observations'));
-      if (!accounts || !accounts.accounts.length) parent.append(element('p', 'Account data unavailable or no accounts discovered. Session data remains independent.'));
-      if (accounts) {
-        parent.append(element('p', `Report Today CCost ${ccost(accounts.comparison_today, 'known_ccost')} · Local-month CCost ${ccost(accounts.comparison_month, 'known_ccost')} · report scope, not Watch rolling usage`));
-        for (const account of accounts.accounts) {
-          const obs = account.observation;
-          parent.append(element('h4', `${obs.label} · ${obs.provider_label} · ${obs.plan || 'Plan unknown'}`));
-          parent.append(element('p', `${obs.availability} · ${obs.status} · ${obs.error_code || ''} · Observed ${display(obs, 'observed_at_ms')}`, obs.has_error || obs.has_warning ? 'warning' : ''));
-          parent.append(element('p', `Billed today ${display(account, 'billed_today')} · Billed month ${display(account, 'billed_month')}`));
-          for (const bill of obs.billing || []) parent.append(element('p', `${bill.label} · ${bill.period} · ${bill.kind} · ${display(bill, 'amount')} ${bill.currency} · ${bill.status}`));
-           for (const scope of account.ccost_scopes) parent.append(element('p', `${scope.name} CCost ${display(scope.cost, 'account_ccost')} · account-only partial-display policy; attribution notes below`));
-          if (obs.provider_id === 'github-copilot' || account.unaccounted_usage != null) parent.append(element('p', `Unaccounted usage (estimate): ${display(account, 'unaccounted_usage')}`));
-          if (account.ccost_account_unknown) parent.append(element('p', 'CCost account attribution unknown.', 'warning'));
-          for (const note of account.ccost_notes || []) parent.append(element('p', note, 'warning'));
-          for (const pace of account.pace) parent.append(element('p', `${pace.label} Pace ${display(pace, 'per_day')} ${pace.unit}/day · ${known(pace.days)} days · ${pace.per_workday == null ? 'no workdays left' : display(pace, 'per_workday') + ' per workday'}`));
-          for (const quota of obs.quotas) parent.append(element('p', `${quota.label} · Remaining ${display(quota, 'remaining_fraction')} · Native money remaining/limit ${display(quota, 'remaining_money')}/${display(quota, 'limit_money')} · ${quota.window_active === false ? 'Inactive window' : 'Window activity ' + known(quota.window_active)}`));
-          table(parent, 'Quota: ' + obs.label, ['Period / window', 'Used', 'Limit', 'Remaining', 'Reset', 'Status'], obs.quotas,
-            q => [q.label + ` · ${q.period} · ${known(q.duration_seconds)} s · ${q.scope || ''}`, `${display(q, 'used')} ${q.unit}`, q.unlimited ? 'Unlimited' : display(q, 'limit'), `${display(q, 'remaining')} ${q.unit}`, display(q, 'reset_at_ms'), q.status], null, state, 'account-' + obs.id,
-            q => [q.label, q.used, q.limit, q.remaining, q.reset_at_ms, q.status]);
-        }
-      }
+      parent.append(element('p', 'Normal report · local-month / Today CCost and account-native windows. Independent frozen observations; not Watch rolling usage.', 'detail'));
+      overviewAccounts(parent, accounts, 'Accounts · independent observations', true);
     }
     if (view.token_mix && view.kind === 'token-mix') {
       const mix = view.token_mix;

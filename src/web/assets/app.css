@@ -133,6 +133,14 @@ p.warning { border-left: 3px solid var(--warn); padding: .65rem .85rem; backgrou
 .account-card { margin: 0; }
 .quota-summary { padding-block: var(--space-3); border-top: 1px solid var(--line); }
 .quota-summary > span, .quota-summary > strong { display: block; overflow-wrap: anywhere; }
+.account-card progress { display: block; width: 100%; height: .65rem; margin-block: var(--space-2); }
+.account-card .account-status { padding: .35rem .65rem; border: 1px solid currentColor; border-radius: .5rem; font-size: .85rem; overflow-wrap: anywhere; }
+.account-card:has(.account-status.error) { border-top: 3px solid var(--error); }
+.account-card:has(.account-status.warning) { border-top: 3px solid var(--warn); }
+.quota-summary:has(strong) { font-variant-numeric: tabular-nums; }
+.quota-summary.warning progress { accent-color: var(--warn); }
+.quota-summary.error progress { accent-color: var(--error); }
+.account-card[data-availability="stale"] .quota-summary { color: var(--muted); background: var(--surface); border-left: 3px dashed var(--warn); padding-left: var(--space-2); }
 footer { border-top: 1px solid var(--line); color: var(--muted); font-size: .8rem; }
 @media (max-width: 40rem) {
   header, main, footer { padding: var(--space-4); }

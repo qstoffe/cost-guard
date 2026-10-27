@@ -362,7 +362,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.97 (2026-10-27):** Web Models keeps CLI ranking, aligned multiplier tiers, exact native reference prices and selectable/full-catalog controls, with exact numeric sorting and explicit empty-sample/availability states. See [Web Beta](docs/web-beta.md); physical/assistive-technology acceptance remains separate.
+**v80.98 (2026-10-27):** Web Accounts presents Normal-report quota, remaining, reset, Pace, billing and CCost in shared account cards, with explicit unknown/unlimited/blocked/stale states and configured-timezone CLI reset formatting. No acquisition or scope changes. See [Web Beta](docs/web-beta.md); physical/assistive-technology acceptance remains separate.
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

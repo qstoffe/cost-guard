@@ -1,8 +1,8 @@
 # Optional Web runtime
 
-Source revision: c982393f29dacdf41560cc3f7c845cab739fdfe6
-Checked revision: c982393f29dacdf41560cc3f7c845cab739fdfe6
-Last checked: 2026-10-26
+Source revision: 8dc82a38dddd7f2999e7872d52e1e6a8a0949725
+Checked revision: 8dc82a38dddd7f2999e7872d52e1e6a8a0949725
+Last checked: 2026-10-27
 Status: current
 
 ## Responsibility and ownership
@@ -50,6 +50,8 @@ Overview's Normal layout is presentation-only: three concept/metric groups, refe
 Models retains that canonical order and independent priced-completed sample in both selectable/full catalogs. `render.js` owns aligned multiplier/tier cells, exact native-rate numeric sort keys and blank fallback presentation; `reports.js` marks the active catalog. Projection exports only a classified verified-empty availability flag, never raw source-warning prose. `test_web_models.py` / `integration/web_models.cjs` compare CLI membership/order and exact native precision. Explicit-browser `integration/probe_web_models.py` exercises 1200px/360px light/dark layout, complete long names, tiers, scroll, filtering and default-order restoration using synthetic canonical reports. Run browser-profile probes before, not concurrently with, whole-tree package-copy tests. [Models evidence](../governance/verification/models-display-parity.md) records proof limits; no pricing, acquisition or architecture boundary changes.
 
 ## Allowed dependencies
+
+Accounts' Normal-only detailed mode reuses `overviewAccounts` and shared card/semantic styles, not a new acquisition owner. `src/display.py` now owns the unchanged CLI `format_reset`, re-exported by terminal accounts; `with_display` propagates frozen `now_ms` to quota reset tokens in the configured timezone. Exact raw fields remain untouched. `test_web_accounts.py`, `fixtures/account_views.py` and `integration/web_accounts.cjs` cover equivalent CLI/DTO/DOM states, native amounts, periods, Pace and private-field exclusions. Explicit synthetic browser/keyboard evidence and its limits: [Accounts parity](../governance/verification/accounts-display-parity.md). No application/presentation import, report scope, formula, freshness or source/privacy boundary change; journal assessment: no-update, these durable owner facts suffice.
 
 Web Watch's persistent table owner is `src/web/assets/watch.js`, delegated by `render.js`.
 It retains one canonical-order 50-row table, inline session dividers, controls/row identities,

@@ -30,6 +30,8 @@ Run `python cost-guard-web.py --foreground` using already installed Python 3.11+
 
 The Beta shell provides global Watch, Overview, Models (selectable or full catalog), Accounts, recent Sessions with older-page navigation, local date/range Reports, explicit historical Token Mix, and session details with Snapshot/Live modes. Global `/#/watch` is canonical; legacy `/#/live` links are replaced in the same browser-history entry, preserving Back/Forward. This does not rename a session's Live mode. Overview, selectable Models and Accounts reuse the same normal-report observation when retained; changing presentation does not multiply account acquisition. Explicit Refresh creates a new observation for that view, not a silent cross-view update.
 
+Accounts uses the shared provider/account cards with native quota windows, known-only remaining bars, configured-timezone CLI reset wording, Pace, billed USD and Normal local-month/Today CCost. Unknown, zero, unlimited, blocked, partial, rate-limited and stale observations remain distinct. Stale quota values are visibly muted and labeled as last observations, not current availability. Native-money equivalents, Copilot Unaccounted usage and attribution notes remain visible; observation/used details expand through keyboard-accessible native disclosures. Classified method failures use readable labels; arbitrary private provider reasons/warnings and credentials remain excluded. No account editing or additional acquisition is introduced.
+
 | CLI use case | Discoverable fragment route | Protected scope |
 | --- | --- | --- |
 | Normal overview | `/#/overview` | Independent comparison/token samples and account-period history |
