@@ -11,12 +11,13 @@
     "id": "shared-repository-maintenance",
     "version": 1
   },
-  "lastDeliveredRevision": "ac6079864fc54934581bb25c97c7de0a34b772a6",
+  "lastDeliveredRevision": "9040d27bcf4c807e0ca74f3f75a7644aee5c36c9",
   "lastItem": {
-    "id": "fr/000480-models-view-cli-ranking-tiers-and-precision.md",
-    "kind": "ordinary"
+    "id": "contract-sync/4/9040d27bcf4c807e0ca74f3f75a7644aee5c36c9",
+    "kind": "contract-sync"
   },
   "featureDiscovery": {
     "completed": 20
-  }
+  },
+  "completionHighWatermark": 28
 }
