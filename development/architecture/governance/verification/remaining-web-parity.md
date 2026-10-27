@@ -8,7 +8,7 @@ the owner, native-platform certification or a replacement for cross-platform CI.
 ## Reproduction and evidence
 
 - `py -3 development/tools/run_tests.py --suite full`: 113 isolated files, 1,373
-  passing tests, zero failures/skips (49.6 seconds; [receipt](remaining-web/full-tests.json)). This includes the newly registered remaining-view file,
+  passing tests, zero failures/skips (43.8 seconds; [receipt](remaining-web/full-tests.json)). This includes the newly registered remaining-view file,
   existing 100/1,000/10,000-row detail tests, HTTP/authentication, source ownership,
   stale/terminal states, date/DST and CLI/report regressions.
 - `py -3 development/tools/validate_package.py --working-tree`: zero failures;
@@ -38,6 +38,15 @@ the owner, native-platform certification or a replacement for cross-platform CI.
   inference was performed; the shared OpenCode service was untouched.
 
 ## Owner-facing matrix
+
+Screenshot privacy/integrity review: both images were inspected and contain only
+synthetic fixtures, local UI timestamps and loopback-app content, not credentials,
+personal sessions, account identities or user paths. Reviewed SHA-256:
+
+| Evidence | SHA-256 |
+| --- | --- |
+| `overview.jpeg` | `8996328370ec2fd257ba116f6d1377f44f64dd1adafcd8ff4e4ab2221d38c86c` |
+| `token-mix.jpeg` | `ac172928b49bca0c02529a3798e5f7fe04a8d007705bb1a207ef00d67be9107d` |
 
 | View | Deterministic evidence | Built-in browser inspection on Windows | Intentional browser presentation differences |
 | --- | --- | --- | --- |
