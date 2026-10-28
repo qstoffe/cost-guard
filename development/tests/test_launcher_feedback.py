@@ -23,8 +23,25 @@ CONSOLE_STUB = (
 
 
 class LauncherFeedbackTests(unittest.TestCase):
+    def test_all_eight_launchers_have_whitespace_free_names_without_aliases(self):
+        expected = {
+            "windows": {"Cost-Guard.cmd", "Cost-Guard-Watch.cmd"},
+            "windows/Beta": {"Cost-Guard-Web.cmd"},
+            "macos": {"Cost-Guard.command", "Cost-Guard-Watch.command"},
+            "macos/Beta": {"Cost-Guard-Web.command"},
+            "development/user-tools/diagnostics/windows": {"Cost-Guard-Diagnostics.cmd"},
+            "development/user-tools/diagnostics/macos": {"Cost-Guard-Diagnostics.command"},
+        }
+        for folder, names in expected.items():
+            with self.subTest(folder=folder):
+                actual = {path.name for path in (ROOT / folder).iterdir()
+                          if path.suffix in (".cmd", ".command")}
+                self.assertEqual(names, actual)
+                for name in actual:
+                    self.assertFalse(any(character.isspace() for character in name))
+
     def test_windows_wrappers_leave_feedback_to_the_owned_console(self):
-        for filename in ("Cost Guard.cmd", "Cost Guard Watch.cmd"):
+        for filename in ("Cost-Guard.cmd", "Cost-Guard-Watch.cmd"):
             text = (ROOT / "windows" / filename).read_text(encoding="utf-8")
             self.assertNotIn("Checking requirements...", text)
             self.assertNotIn('<nul set /p', text)
@@ -42,7 +59,7 @@ class LauncherFeedbackTests(unittest.TestCase):
         self.assertIn("$code = $LASTEXITCODE", text)
 
     def test_macos_feedback_precedes_root_resolution_and_python_checks(self):
-        for filename in ("Cost Guard.command", "Cost Guard Watch.command"):
+        for filename in ("Cost-Guard.command", "Cost-Guard-Watch.command"):
             text = (ROOT / "macos" / filename).read_text(encoding="utf-8")
             self.assertLess(text.index("Checking requirements..."), text.index("CG_ROOT="))
             self.assertLess(text.index("Checking requirements..."), text.index("find_python()"))

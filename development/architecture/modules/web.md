@@ -27,7 +27,7 @@ Status: current
 
 `cost-guard-web.py --foreground` is explicit icon-free developer mode, independent of managed discovery and CLI. Only 127.0.0.1 with an assigned port is supported; exact Host/Origin and authenticated sensitive reads are mandatory. Standard-library only, no installation, updater, generic proxy/shell/filesystem routes or browser-side calculator. Accounts/source/analysis readiness remain independent of HTTP-shell readiness.
 
-`windows/Beta/Cost Guard Web.cmd` and experimental `macos/Beta/Cost Guard Web.command` accept only approved adapters. Readiness requires a usable icon/event loop; GUI failure cannot advertise an unmanaged host. Native preflight precedes restart. Open uses the registered browser; Exit stops only its matching host. Detached handles/private cwd, no packages/downloaded compiler/service/autostart. macOS/Finder/Gatekeeper remains unverified; in-box osacompile is optional, never an SDK install. Mocks are not native proof.
+`windows/Beta/Cost-Guard-Web.cmd` and experimental `macos/Beta/Cost-Guard-Web.command` accept only approved adapters. Readiness requires a usable icon/event loop; GUI failure cannot advertise an unmanaged host. Native preflight precedes restart. Open uses the registered browser; Exit stops only its matching host. Detached handles/private cwd, no packages/downloaded compiler/service/autostart. macOS/Finder/Gatekeeper remains unverified; in-box osacompile is optional, never an SDK install. Mocks are not native proof.
 
 Overlapping clicks coalesce; deliberate later launches restart. Private lifetime locks and nonce/PID/birth/image/port/build/schema/control records prevent duplicate or foreign ownership. Corrupt identity/reused PID is conflict, never kill authority. Graceful stop allows ten seconds; forced stop requires a revalidated Windows handle/Linux pidfd (macOS refuses). Other checkouts, CLI, browser, unknown port occupants and OpenCode are never stopped.
 
@@ -73,7 +73,7 @@ HTTP/security/assets and lifecycle/process/state/guard depend on standard librar
 
 Runtime: `cost-guard-web.py`, `src/web/main.py`, `src/web/host.py`, `src/web/composition.py`, `src/web/http.py`, `src/web/assets/index.html`, `src/web/assets/app.js`, `src/web/assets/session.js`. Supporting lifecycle/security/process/asset owners are named above.
 
-Native entries: `windows/Beta/Cost Guard Web.cmd`, `src/web/windows_launch.ps1`, `macos/Beta/Cost Guard Web.command`, `macos/Beta/launcher.applescript`. Generated applets stay outside Git, source/product/OS/architecture/Python-fingerprinted and hash-checked; failures preserve the command fallback.
+Native entries: `windows/Beta/Cost-Guard-Web.cmd`, `src/web/windows_launch.ps1`, `macos/Beta/Cost-Guard-Web.command`, `macos/Beta/launcher.applescript`. Generated applets stay outside Git, source/product/OS/architecture/Python-fingerprinted and hash-checked; failures preserve the command fallback.
 
 ## Tests
 

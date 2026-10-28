@@ -147,7 +147,7 @@ class WindowsWebTests(unittest.TestCase):
         owner.publish_ready.assert_not_called()
 
     def test_launcher_is_relative_and_does_not_change_stable_terminal_contract(self):
-        command = (ROOT / "windows/Beta/Cost Guard Web.cmd").read_text()
+        command = (ROOT / "windows/Beta/Cost-Guard-Web.cmd").read_text()
         script = (ROOT / "src/web/windows_launch.ps1").read_text()
         self.assertIn('%~dp0..\\..\\src\\web\\windows_launch.ps1', command)
         self.assertIn("exit /b %errorlevel%", command)
@@ -172,8 +172,8 @@ class WindowsWebTests(unittest.TestCase):
             web = root / 'src/web'
             beta.mkdir(parents=True)
             web.mkdir(parents=True)
-            batch = beta / 'Cost Guard Web.cmd'
-            shutil.copyfile(ROOT / 'windows/Beta/Cost Guard Web.cmd', batch)
+            batch = beta / 'Cost-Guard-Web.cmd'
+            shutil.copyfile(ROOT / 'windows/Beta/Cost-Guard-Web.cmd', batch)
             (web / 'visibility.py').write_text('''import ctypes as c
 from pathlib import Path
 k = c.WinDLL('kernel32'); u = c.WinDLL('user32')

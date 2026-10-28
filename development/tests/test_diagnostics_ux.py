@@ -143,8 +143,8 @@ class StopHelpTests(unittest.TestCase):
     def test_hint_points_at_this_installation_per_platform(self) -> None:
         root = Path(tempfile.gettempdir()) / "Cost Guard"
         for platform, target in (
-            ("win32", str(root / "development/user-tools/diagnostics/windows/Cost Guard Diagnostics.cmd")),
-            ("darwin", str(root / "development/user-tools/diagnostics/macos/Cost Guard Diagnostics.command")),
+            ("win32", str(root / "development/user-tools/diagnostics/windows/Cost-Guard-Diagnostics.cmd")),
+            ("darwin", str(root / "development/user-tools/diagnostics/macos/Cost-Guard-Diagnostics.command")),
             ("linux", str(root / "development" / "tools" / "collect_diagnostics.py")),
         ):
             with mock.patch("sys.platform", platform):

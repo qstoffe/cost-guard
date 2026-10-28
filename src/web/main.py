@@ -58,8 +58,8 @@ def main():
     if arguments == ["--help"]:
         print("Usage: python cost-guard-web.py --foreground\n"
               "Developer loopback Web Beta. Ctrl+C or runtime changes stop owned work.\n"
-              "Windows: windows/Beta/Cost Guard Web.cmd for detached tray mode.\n"
-              "macOS: macos/Beta/Cost Guard Web.command (native validation pending).\n"
+              "Windows: windows/Beta/Cost-Guard-Web.cmd for detached tray mode.\n"
+              "macOS: macos/Beta/Cost-Guard-Web.command (native validation pending).\n"
               "No browser opens in --foreground developer mode.")
         return 0
     is_managed = (len(arguments) == 3 and arguments[0] == "--managed"

@@ -187,7 +187,7 @@ def detached_probe():
     state = None
     try:
         # Actual .cmd from an unrelated cwd; CREATE_NEW_CONSOLE is a transient window.
-        batch = ROOT / "windows/Beta/Cost Guard Web.cmd"
+        batch = ROOT / "windows/Beta/Cost-Guard-Web.cmd"
         launcher = subprocess.Popen(["cmd.exe", "/d", "/c", str(batch)],
                                     cwd=store.directory, creationflags=subprocess.CREATE_NEW_CONSOLE)
         launchers.append(launcher)
@@ -261,7 +261,7 @@ def source_zip_probe():
         shutil.copy2(ROOT / "cost-guard-web.py", snapshot / "cost-guard-web.py")
         store = InstanceStore(snapshot)
         try:
-            os.startfile(snapshot / "windows/Beta/Cost Guard Web.cmd")
+            os.startfile(snapshot / "windows/Beta/Cost-Guard-Web.cmd")
             state = until(store.read, seconds=35)
             assert control(state, "status")["ready"]
             assert window(state["pid"])
@@ -286,7 +286,7 @@ def startup_timing_probe():
         for mode in ("cold_host", "warm_restart"):
             started = time.monotonic()
             previous = store.read()
-            child = subprocess.Popen(["cmd.exe", "/d", "/c", str(ROOT / "windows/Beta/Cost Guard Web.cmd")],
+            child = subprocess.Popen(["cmd.exe", "/d", "/c", str(ROOT / "windows/Beta/Cost-Guard-Web.cmd")],
                                      cwd=ROOT, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                                      stderr=subprocess.DEVNULL)
             try:

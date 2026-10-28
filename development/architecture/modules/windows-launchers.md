@@ -35,9 +35,9 @@ prompt/profile changes, analysis changes or OpenCode service control.
 
 ## Entrypoints
 
-- `windows/Cost Guard.cmd`: report.
-- `windows/Cost Guard Watch.cmd`: Watch.
-- `development/user-tools/diagnostics/windows/Cost Guard Diagnostics.cmd`: Diagnostics.
+- `windows/Cost-Guard.cmd`: report.
+- `windows/Cost-Guard-Watch.cmd`: Watch.
+- `development/user-tools/diagnostics/windows/Cost-Guard-Diagnostics.cmd`: Diagnostics.
 - `src/windows_launcher.ps1`: shared driver.
 
 ## Tests

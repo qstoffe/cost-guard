@@ -61,12 +61,12 @@ REQUIRED_FILES = {
     "src/presentation/progress.py",
     "src/presentation/report.py",
     "src/windows_launcher.ps1",
-    "windows/Cost Guard.cmd",
-    "windows/Cost Guard Watch.cmd",
-    "windows/Beta/Cost Guard Web.cmd",
-    "macos/Cost Guard.command",
-    "macos/Cost Guard Watch.command",
-    "macos/Beta/Cost Guard Web.command",
+    "windows/Cost-Guard.cmd",
+    "windows/Cost-Guard-Watch.cmd",
+    "windows/Beta/Cost-Guard-Web.cmd",
+    "macos/Cost-Guard.command",
+    "macos/Cost-Guard-Watch.command",
+    "macos/Beta/Cost-Guard-Web.command",
     "macos/Beta/launcher.applescript",
     "src/cache/database.py",
     "src/cache/repository.py",
@@ -74,10 +74,10 @@ REQUIRED_FILES = {
 
 # User-facing launcher folders hold only everyday modes; Diagnostics lives under development/.
 PUBLIC_LAUNCHERS = {
-    "windows": {"Cost Guard.cmd", "Cost Guard Watch.cmd", "Beta"},
-    "windows/Beta": {"Cost Guard Web.cmd"},
-    "macos": {"Cost Guard.command", "Cost Guard Watch.command", "Beta"},
-    "macos/Beta": {"Cost Guard Web.command", "launcher.applescript"},
+    "windows": {"Cost-Guard.cmd", "Cost-Guard-Watch.cmd", "Beta"},
+    "windows/Beta": {"Cost-Guard-Web.cmd"},
+    "macos": {"Cost-Guard.command", "Cost-Guard-Watch.command", "Beta"},
+    "macos/Beta": {"Cost-Guard-Web.command", "launcher.applescript"},
 }
 
 FORBIDDEN_TOP_LEVEL = {"cache", "diagnostics", "logs", ".git", ".vs", "data"}

@@ -3,7 +3,7 @@ param([switch]$Detached)
 $ErrorActionPreference = 'Stop'
 if ($Detached) { $ProgressPreference = 'SilentlyContinue' }
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-$message = 'Web launcher failed. Run development\user-tools\diagnostics\windows\Cost Guard Diagnostics.cmd.'
+$message = 'Web launcher failed. Run development\user-tools\diagnostics\windows\Cost-Guard-Diagnostics.cmd.'
 function Find-BetaPython {
     $tested = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
     foreach ($candidate in @(@{Name = 'py.exe'; Args = @('-3')}, @{Name = 'python.exe'; Args = @()})) {
@@ -104,7 +104,7 @@ try {
     Write-Host 'Private startup diagnostic could not be recorded.'
 }
 Write-Host $message
-Write-Host 'Diagnostics: development\user-tools\diagnostics\windows\Cost Guard Diagnostics.cmd'
+Write-Host 'Diagnostics: development\user-tools\diagnostics\windows\Cost-Guard-Diagnostics.cmd'
 try {
     Add-Type -AssemblyName System.Windows.Forms
     [System.Windows.Forms.MessageBox]::Show($message + "`nRun Cost Guard Diagnostics for details.", 'Cost Guard Web Beta') | Out-Null

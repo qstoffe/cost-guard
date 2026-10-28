@@ -150,9 +150,9 @@ class MacCompatibilityChecks(unittest.TestCase):
 
     def test_mac_launcher_contracts(self):
         launchers = (
-            ROOT / "macos/Cost Guard.command",
-            ROOT / "macos/Cost Guard Watch.command",
-            ROOT / "development/user-tools/diagnostics/macos/Cost Guard Diagnostics.command",
+            ROOT / "macos/Cost-Guard.command",
+            ROOT / "macos/Cost-Guard-Watch.command",
+            ROOT / "development/user-tools/diagnostics/macos/Cost-Guard-Diagnostics.command",
         )
         for launcher in launchers:
             with self.subTest(launcher=launcher.name):

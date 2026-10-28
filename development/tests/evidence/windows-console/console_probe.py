@@ -136,9 +136,9 @@ def run(label, shell='pwsh.exe', scenario='watch', width='120', host='console'):
     (case / 'src').mkdir(parents=True)
     (case / 'windows').mkdir()
     shutil.copyfile(ROOT / 'src/windows_launcher.ps1', case / 'src/windows_launcher.ps1')
-    relative = {'watch': 'windows/Cost Guard Watch.cmd',
-                'diagnostics': 'development/user-tools/diagnostics/windows/Cost Guard Diagnostics.cmd'}.get(
-                    scenario, 'windows/Cost Guard.cmd')
+    relative = {'watch': 'windows/Cost-Guard-Watch.cmd',
+                'diagnostics': 'development/user-tools/diagnostics/windows/Cost-Guard-Diagnostics.cmd'}.get(
+                    scenario, 'windows/Cost-Guard.cmd')
     target = case / relative
     target.parent.mkdir(parents=True, exist_ok=True)
     wrapper = (ROOT / relative).read_text(encoding='utf-8')

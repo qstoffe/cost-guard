@@ -37,18 +37,20 @@ Install **Python 3.11+**; standard supported OpenCode installations need no conf
 
 ### Optional Web Beta
 
-Windows: `windows/Beta/Cost Guard Web.cmd`; experimental macOS: `macos/Beta/Cost Guard Web.command` (hosted checks passed; desktop acceptance pending). Session Snapshot/Live provides complete paged history. No packages; independent CLI. [Beta guide](docs/web-beta.md). Foreground: `python cost-guard-web.py --foreground`.
+Windows: `windows/Beta/Cost-Guard-Web.cmd`; experimental macOS: `macos/Beta/Cost-Guard-Web.command` (desktop acceptance pending). [Beta guide](docs/web-beta.md). Foreground: `python cost-guard-web.py --foreground`.
 
 ### Windows
 
 Double-click the `.cmd` launchers under `windows/`:
 
+Update old shortcuts/bookmarks to the hyphenated names; no aliases ship.
+
 | Launcher | Mode |
 | --- | --- |
-| `Cost Guard.cmd` | Normal model comparison/account quota report. |
-| `Cost Guard Watch.cmd` | Live/global Watch; Ctrl+C stops Watch only. |
+| `Cost-Guard.cmd` | Normal model comparison/account quota report. |
+| `Cost-Guard-Watch.cmd` | Live/global Watch; Ctrl+C stops Watch only. |
 
-Report, Watch and Diagnostics open a **separate, persistent console** using PowerShell 7 or Windows PowerShell 5.1 fallback. The caller returns without sharing input/output. Completion, errors and Ctrl+C leave a usable child prompt; `$LASTEXITCODE` there retains Python's result (9009 if Python 3.11+ is missing). The calling batch reports launch status only. For synchronous terminal/exit-code use, run `py -3 cost-guard.py` or add `--watch`. Close the Cost Guard window when finished. See [download trust](#open-source-license-and-windows-download-trust).
+Report, Watch and Diagnostics open a **separate, persistent console** with PowerShell 7/5.1. Completion, errors and Ctrl+C leave a usable child prompt with Python's `$LASTEXITCODE` (9009 for missing Python 3.11+). The caller returns launch status only; for synchronous use run `py -3 cost-guard.py` (optionally `--watch`). See [download trust](#open-source-license-and-windows-download-trust).
 
 ### macOS
 
@@ -56,16 +58,18 @@ Equivalent launchers are under `macos/`:
 
 | Launcher | Mode |
 | --- | --- |
-| `Cost Guard.command` | Normal report. |
-| `Cost Guard Watch.command` | Live/global Watch; Ctrl+C exits. |
+| `Cost-Guard.command` | Normal report. |
+| `Cost-Guard-Watch.command` | Live/global Watch; Ctrl+C exits. |
 
-Prefer `git clone` on macOS: Git records launchers as executable. Source ZIPs carry executable metadata, but extraction tools may not preserve it. After extracting, run from the repository root:
+Prefer `git clone` on macOS to preserve executable modes. If ZIP extraction loses them, run:
 
 ```sh
-chmod +x macos/*.command development/user-tools/diagnostics/macos/*.command
+chmod +x macos/*.command macos/Beta/*.command development/user-tools/diagnostics/macos/*.command
 ```
 
 Use Finder's **Open** for quarantine prompts.
+
+Terminal examples: `windows\Cost-Guard.cmd`, `./macos/Cost-Guard.command`. Quote parent paths containing spaces, not these basenames.
 
 See [CLI usage](#setup-and-usage); use `python3` on macOS or `py -3` on Windows if needed.
 
@@ -346,7 +350,7 @@ SQLite WAL, short transactions and bounded waits support concurrent report/globa
 
 ## Diagnostics for environment-specific problems
 
-For troubleshooting, use `Cost Guard Diagnostics` under `development/user-tools/diagnostics/windows/` or `development/user-tools/diagnostics/macos/`, or run from the repository root:
+For troubleshooting, use `development/user-tools/diagnostics/windows/Cost-Guard-Diagnostics.cmd` (macOS: `macos/Cost-Guard-Diagnostics.command` in the same diagnostics folder), or run:
 
 ```text
 python development/tools/collect_diagnostics.py
@@ -362,7 +366,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.103 (2026-10-28):** Root Visual Studio `.vs/` cache is Git-ignored and excluded from working-tree package validation, including Diagnostics' validation view. Explicit packages containing `.vs/` are rejected; unrelated source, quotas and runtime behavior are unchanged.
+**v80.104 (2026-10-28):** All eight launchers use hyphenated names. Update shortcuts/bookmarks; no aliases ship. Console ownership, Web lifecycle and analysis are unchanged.
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

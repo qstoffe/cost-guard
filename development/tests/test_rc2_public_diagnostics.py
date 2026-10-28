@@ -62,7 +62,7 @@ class PublicRepoLayoutTests(unittest.TestCase):
 
 class WindowsLauncherTests(unittest.TestCase):
     def test_normal_launcher_keeps_powershell_open(self) -> None:
-        text = (ROOT / "windows/Cost Guard.cmd").read_text(encoding="utf-8")
+        text = (ROOT / "windows/Cost-Guard.cmd").read_text(encoding="utf-8")
         self.assertIn("powershell.exe", text.lower())
         self.assertIn("-NoExit", text)
         self.assertIn('start "Cost Guard" %costguard_shell%', text)
@@ -73,7 +73,7 @@ class WindowsLauncherTests(unittest.TestCase):
         self.assertIn("sys.version_info >= (3,11)", driver)
 
     def test_watch_launcher_exits_batch_before_ctrl_c_path(self) -> None:
-        text = (ROOT / "windows/Cost Guard Watch.cmd").read_text(encoding="utf-8")
+        text = (ROOT / "windows/Cost-Guard-Watch.cmd").read_text(encoding="utf-8")
         self.assertIn("powershell.exe", text.lower())
         self.assertIn("-Mode watch", text)
         self.assertIn("-NoExit", text)
@@ -83,7 +83,7 @@ class WindowsLauncherTests(unittest.TestCase):
         self.assertLess(text.index('start "Cost Guard Watch"'), text.index("exit /b %errorlevel%"))
 
     def test_diagnostics_launcher_is_double_clickable(self) -> None:
-        text = (ROOT / "development/user-tools/diagnostics/windows/Cost Guard Diagnostics.cmd").read_text(encoding="utf-8")
+        text = (ROOT / "development/user-tools/diagnostics/windows/Cost-Guard-Diagnostics.cmd").read_text(encoding="utf-8")
         self.assertIn('%~dp0..\\..\\..\\..\\src\\windows_launcher.ps1', text)
         self.assertIn("-Mode diagnostics", text)
         driver = (ROOT / "src/windows_launcher.ps1").read_text(encoding="utf-8")
@@ -94,13 +94,13 @@ class WindowsLauncherTests(unittest.TestCase):
 
 class LauncherPlacementTests(unittest.TestCase):
     def test_public_folders_hold_only_everyday_launchers(self) -> None:
-        self.assertEqual({"Cost Guard.cmd", "Cost Guard Watch.cmd", "Beta"},
+        self.assertEqual({"Cost-Guard.cmd", "Cost-Guard-Watch.cmd", "Beta"},
                          {path.name for path in (ROOT / "windows").iterdir()})
-        self.assertEqual({"Cost Guard Web.cmd"},
+        self.assertEqual({"Cost-Guard-Web.cmd"},
                          {path.name for path in (ROOT / "windows/Beta").iterdir()})
-        self.assertEqual({"Cost Guard.command", "Cost Guard Watch.command", "Beta"},
+        self.assertEqual({"Cost-Guard.command", "Cost-Guard-Watch.command", "Beta"},
                          {path.name for path in (ROOT / "macos").iterdir()})
-        self.assertEqual({"Cost Guard Web.command", "launcher.applescript"},
+        self.assertEqual({"Cost-Guard-Web.command", "launcher.applescript"},
                          {path.name for path in (ROOT / "macos/Beta").iterdir()})
 
     def test_validator_rejects_diagnostics_launcher_in_public_folder(self) -> None:
@@ -109,19 +109,19 @@ class LauncherPlacementTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / "windows").mkdir()
-            (root / "windows/Cost Guard Diagnostics.cmd").write_text("@echo off\n", encoding="utf-8")
+            (root / "windows/Cost-Guard-Diagnostics.cmd").write_text("@echo off\n", encoding="utf-8")
             results = Results()
             check_required_layout(root, results)
-            self.assertIn(("public launchers", "unexpected entry in user-facing launcher folder: windows/Cost Guard Diagnostics.cmd"),
+            self.assertIn(("public launchers", "unexpected entry in user-facing launcher folder: windows/Cost-Guard-Diagnostics.cmd"),
                           results.failures)
 
 
 class MacOSLauncherTests(unittest.TestCase):
     def test_macos_launchers_exist_are_executable_and_relative(self) -> None:
         expected = {
-            "macos/Cost Guard.command": "cost-guard.py",
-            "macos/Cost Guard Watch.command": "--watch",
-            "development/user-tools/diagnostics/macos/Cost Guard Diagnostics.command": "/development/tools/collect_diagnostics.py",
+            "macos/Cost-Guard.command": "cost-guard.py",
+            "macos/Cost-Guard-Watch.command": "--watch",
+            "development/user-tools/diagnostics/macos/Cost-Guard-Diagnostics.command": "/development/tools/collect_diagnostics.py",
         }
         for name, needle in expected.items():
             path = ROOT / name
@@ -135,9 +135,9 @@ class MacOSLauncherTests(unittest.TestCase):
             self.assertIn('dirname "$0"', text, name)
             self.assertIn("sys.version_info >= (3,11)", text, name)
             self.assertIn(needle, text, name)
-        watch = (ROOT / "macos/Cost Guard Watch.command").read_text(encoding="utf-8")
+        watch = (ROOT / "macos/Cost-Guard-Watch.command").read_text(encoding="utf-8")
         self.assertIn('exec "$PYTHON"', watch)
-        diagnostics = (ROOT / "development/user-tools/diagnostics/macos/Cost Guard Diagnostics.command").read_text(encoding="utf-8")
+        diagnostics = (ROOT / "development/user-tools/diagnostics/macos/Cost-Guard-Diagnostics.command").read_text(encoding="utf-8")
         self.assertIn('CG_ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"', diagnostics)
 
 

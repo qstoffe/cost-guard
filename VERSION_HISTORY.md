@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.104 — 2026-10-28
+
+- Renamed all eight Windows/macOS report, Watch, Web Beta and Diagnostics entrypoints to hyphenated filenames. Update bookmarks and shortcuts to the new names; no old-name aliases ship.
+- Updated crash guidance, launcher tests, source validation rules and macOS Finder helper fingerprint inputs. Launcher contents, console ownership, checkout-relative arguments and macOS executable modes are unchanged.
+
 ## v80.103 — 2026-10-28
 
 - Ignore root Visual Studio `.vs/` cache in Git and working-tree validation copies without deleting local IDE state. Explicit distributables reject that cache; existing validation safeguards remain active.
