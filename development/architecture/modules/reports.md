@@ -42,7 +42,7 @@ Schema version and application instance UUID are separate from per-request-view 
 
 | Existing mode | Application request / published view | Scope and protected parity |
 | --- | --- | --- |
-| Normal | NORMAL / model comparison, Token Mix, accounts/quotas | Per-model 100-slot profiles and independent latest-100 usage; account-period acquisition independent; CCost is reference value, not billing |
+| Normal | NORMAL / model comparison, Token Mix, accounts/quotas | Per-model 100-slot profiles and independent latest-100 usage; account-period acquisition independent; CCost is reference value, not billing. Full root revision evidence remains; unused month-wide request identities are not exported. |
 | All models | ALL_MODELS / model comparison, Token Mix | Same comparison eligibility, no selectable filter or accounts |
 | Session list | SESSIONS / session_usage | Limit/all or bounded revision-checked page; whole-tree cost, completeness, archived/running flags and report duration |
 | Session detail | SESSION / prompt_blocks, request_identities | Complete requested root/child tree, stable event/message/part references and opaque request key; no global Watch cap; inherited FR000200 running metrics |

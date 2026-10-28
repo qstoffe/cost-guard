@@ -44,7 +44,7 @@ if (fallback) {
   assert.ok(output.textContent.includes('hidden 2/96/1/1 mix'));
 } else {
   assert.deepEqual(relatives, ['8.0x', '8.0x', '8.0x → 20.0x (>1M)', '*1 8.0x → 16.0x (>200K)', '1.0x']);
-  assert.ok(output.textContent.includes('20%/60%/10%/10%'));
+  assert.ok(output.textContent.includes('Input: 20% (2) · Cache: 60% (6) · Write: 10% (1) · Output: 10% (1)'));
   assert.ok(output.textContent.includes('20/60/10/10 tokens · CCost 2/6/1/1'));
 }
 click('Model');
@@ -71,4 +71,34 @@ view.accounts_quotas.accounts[0].observation.has_error = true;
 view.accounts_quotas.accounts[0].observation.error_code = 'transport_failure';
 draw();
 assert.ok(all(output, 'p').some(n => n.className === 'warning' && n.textContent.includes('Partial source data')));
-assert.ok(all(output, 'p').some(n => n.className === 'warning' && n.textContent.includes('transport_failure')));
+assert.ok(all(output, 'p').some(n => n.textContent.includes('Connection failed')));
+
+// Overview is one coherent table, including every row beyond the former 50-row cap.
+for (const count of [0, 1, 49, 50, 51, 123]) {
+  view.model_comparison = Array.from({length: count}, (_, index) => ({...base,
+    publisher: index % 2 ? 'Publisher B' : 'Publisher A', model: 'Shared ' + Math.floor(index / 2),
+    recent: index % 3 === 0, superseded: index % 3 === 1}));
+  context.state.pages.models = 2; // a stale page from a retained view must never hide rows
+  draw();
+  const rows = all(output, 'tbody')[0].children;
+  assert.equal(rows.length, count);
+  assert.deepEqual(rows.map(row => row.children.slice(0, 2).map(cell => cell.textContent)),
+    view.model_comparison.map(row => [row.publisher, row.model]));
+  assert.ok(!all(output, 'button').some(n => ['Previous', 'Next'].includes(n.textContent)));
+  const scroll = all(output, 'div').find(n => n.className === 'table-scroll');
+  assert.equal(scroll.tabIndex, 0, 'complete table remains keyboard scrollable');
+  assert.equal(scroll.attrs['role'], 'region');
+  assert.ok(output.textContent.includes(count + ' full-report rows'));
+  if (count) {
+    const filter = all(output, 'input')[0];
+    filter.value = 'Publisher B'; filter.events.input();
+    assert.equal(all(output, 'tbody')[0].children.length, Math.floor(count / 2));
+    assert.ok(output.textContent.includes('FILTER ACTIVE'));
+    click('Clear model filter');
+    assert.equal(all(output, 'tbody')[0].children.length, count);
+    click('Model');
+    assert.ok(output.textContent.includes('CUSTOM SORT'));
+    click('CLI default order');
+    assert.deepEqual(names(), view.model_comparison.map(row => row.model));
+  }
+}

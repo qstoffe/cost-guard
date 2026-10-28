@@ -59,6 +59,7 @@ const ReportView = (() => {
   }
   function table(parent, title, columns, rows, cells, totals, state, key, values = cells) {
     const section = element('section');
+    const complete = key === 'models' && state.section === 'overview';
     const remote = key === 'sessions' ? state.result?.view?.session_page : null;
     state.filters ||= {}; state.sorts ||= {};
     const filterLabel = element('label', 'Filter ' + title + (remote ? ' (this page only) ' : ' ')), filter = element('input');
@@ -94,7 +95,10 @@ const ReportView = (() => {
     const label = element('span'); label.setAttribute('aria-live', 'polite');
     previous.setAttribute('aria-label', 'Previous page: ' + title);
     next.setAttribute('aria-label', 'Next page: ' + title);
-    pager.append(previous, label, next); section.append(pager);
+    if (!complete) pager.append(previous);
+    pager.append(label);
+    if (!complete) pager.append(next);
+    section.append(pager);
     const size = 50;
     function draw() {
       const text = value => value && typeof value === 'object' ? value.textContent : known(value);
@@ -111,7 +115,7 @@ const ReportView = (() => {
       const page = Math.max(0, Math.min(state.pages[key] || 0, Math.ceil(shown.length / size) - 1));
       state.pages[key] = page;
       body.replaceChildren();
-      for (const item of shown.slice(page * size, (page + 1) * size)) {
+      for (const item of complete ? shown : shown.slice(page * size, (page + 1) * size)) {
         const row = element('tr');
         row.className = [...(item.display_roles || item.prompt?.display_roles || []),
           ...(item.is_compaction ? ['compaction'] : [])].join(' ');
@@ -123,6 +127,7 @@ const ReportView = (() => {
         body.append(row);
       }
       label.textContent = (shown.length ? `${page * size + 1}–${Math.min((page + 1) * size, shown.length)} of ${shown.length}` : 'No rows') + ` · ${rows.length} full-report rows; filters/pages do not change totals`;
+      if (complete) label.textContent = `${shown.length} shown · ${rows.length} full-report rows · ${queries.length ? 'FILTER ACTIVE' : 'No filters'} · ${sort ? 'CUSTOM SORT' : 'CLI default order'}`;
       previous.disabled = page === 0;
       next.disabled = (page + 1) * size >= shown.length;
       if (remote) {
@@ -149,6 +154,11 @@ const ReportView = (() => {
       const reset = element('button', 'CLI default order');
       reset.addEventListener('click', () => { delete state.sorts[key]; state.pages[key] = 0; draw(); });
       pager.append(reset);
+      if (complete) {
+        const clear = element('button', 'Clear model filter');
+        clear.addEventListener('click', () => { filter.value = ''; state.filters[key] = ''; draw(); });
+        pager.append(clear);
+      }
     }
     draw();
   }
@@ -166,13 +176,14 @@ const ReportView = (() => {
       'Reference token valuation, not actual billing. Flat-rate accounts use Copilot’s published token rates. Unlabeled cost figures are CCost; unknown pricing is not zero.');
     costCard.append(element('p', 'CCost = reference valuation, not provider billing. Unknown pricing is not zero.', 'detail'));
     const mix = view.token_mix;
-    const mixCard = concept('Token Mix %', mix ? display(mix, 'percentages') + ' · I/C/W/O' : 'N/A',
+    const mixCard = concept('Token Mix %', mix ? ['Input', 'Cache', 'Write', 'Output'].map(name => name + ': ' + display(mix, name.toLowerCase())).join(' · ') : 'N/A',
       'Observed input/cache-read/cache-write/output token shares. Output includes reasoning. The report sample is independent of account-period usage.');
     if (mix) mixCard.append(element('p',
       `${mix.sample_size} priced prompts · ${display(mix, 'totals')} tokens · CCost ${display(mix, 'costs')}`,
       mix.cost_complete ? 'detail' : 'detail partial'));
+    mixCard.append(element('p', mix?.request_count ? `Your mix uses the latest ${mix.sample_size} priced prompts, totaling ${display(mix, 'total_tokens')} tokens.` : 'No priced prompts are available yet.', 'detail'));
     concept('Relative CCost', view.model_comparison_sample_size ? `${view.model_comparison_sample_size} completed ${view.model_comparison_sample_size === 1 ? 'prompt' : 'prompts'}` : 'No completed priced prompts',
-      view.model_comparison_sample_size ? 'Personalized workload-profile estimates, not a same-task benchmark or billing. Each model blends up to 100 own completed prompts, other verified same-publisher prompts, then a generic prior. Prompt-count weights blend pooled shares; 100 weight slots do not imply 100 observed prompts. Every tier uses its model’s mix and the same cheapest comparable base as 1.0x. Arrows show context-tier prices; > or ≥ marks the published input-token boundary.' :
+      view.model_comparison_sample_size ? 'Personalized workload-profile estimates, not a same-task benchmark or billing. Each model blends up to 100 own completed prompts, other verified same-publisher prompts, then a generic prior. Untried models use verified publisher/global evidence. Prompt-count weights blend pooled shares; 100 weight slots do not imply 100 observed prompts. Every tier uses its model’s mix and the same cheapest comparable base as 1.0x. Arrows show context-tier prices; > or ≥ marks the published input-token boundary.' :
         'Relative CCost stays blank; a hidden 2/96/1/1 mix orders published prices. No synthetic multipliers are shown.');
     parent.append(concepts);
   }
@@ -331,7 +342,7 @@ const ReportView = (() => {
     }
     view.prompt_blocks.forEach((block, index) => prompts(parent, block, state, index, view.kind === 'date'));
     if (view.kind === 'date' && !view.prompt_blocks.length) parent.append(element('p', 'No prompt rows in this local date range.'));
-    if (['overview', 'models'].includes(section) && view.model_comparison.length) {
+    if (['overview', 'models'].includes(section) && (overview || view.model_comparison.length)) {
       if (view.token_mix && !overview) mixSummary(parent, view.token_mix);
       if (!overview) parent.append(element('p', view.model_comparison_sample_size ?
         `Relative CCost · personalized model/publisher workload profiles · generic prior: ${view.model_comparison_sample_size} completed prompts · cheapest comparable base = 1.0x. Not a same-task benchmark or billing. Model-cell tooltips explain actual evidence and prior weight.` :
@@ -340,7 +351,7 @@ const ReportView = (() => {
       const all = view.kind === 'all-models';
       table(parent, overview ? 'Reference models' : 'Reference models · shared CLI sample · default exact server ranking',
         ['Publisher', 'Model', 'Relative CCost', ...(all ? ['GitHub USD/M I/C/W/O'] : []), 'Release date'], view.model_comparison,
-        row => [row.publisher || 'N/A', element('span', row.model + (row.recent ? ' · recent' : '') + (row.superseded ? ' · older stable variant' : ''), row.recent ? 'new' : ''),
+         row => [row.publisher || 'N/A', element('span', row.model + (!overview && row.recent ? ' · recent' : '') + (!overview && row.superseded ? ' · older stable variant' : ''), row.recent ? 'new' : ''),
           modelRelative(row, view.model_comparison_sample_size),
           ...(all ? [modelPrices(row)] : []), element('span', row.release_date || 'N/A', row.recent ? 'new' : '')], null, state, 'models',
          row => [row.publisher, row.model, row.relative_cost, ...(all ? [modelPriceKey(row)] : []), row.release_date]);
@@ -356,7 +367,7 @@ const ReportView = (() => {
     }
     if (section === 'models' && !view.model_comparison.length) parent.append(element('p', 'No matching reference models. Availability warnings, if any, are shown above.'));
     const accounts = view.accounts_quotas;
-    if (overview) overviewAccounts(parent, accounts);
+    if (overview) overviewAccounts(parent, accounts, 'Accounts Overview', true);
     if (view.kind === 'normal' && section === 'accounts') {
       parent.append(element('p', 'Normal report · local-month / Today CCost and account-native windows. Independent frozen observations; not Watch rolling usage.', 'detail'));
       overviewAccounts(parent, accounts, 'Accounts · independent observations', true);
