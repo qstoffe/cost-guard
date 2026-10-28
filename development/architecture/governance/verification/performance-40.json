@@ -1,0 +1,1320 @@
+{
+  "sourceRevision": "76d9054556da384d8cb888b16699ece5f1b2d984",
+  "environment": {
+    "python": "3.14.7 (tags/v3.14.7:823f032, Aug  5 2026, 10:51:32) [MSC v.1944 64 bit (AMD64)]",
+    "platform": "Windows-11-10.0.26300-SP0",
+    "machine": "AMD64"
+  },
+  "inventorySummary": {
+    "inventoried": 539,
+    "kinds": {
+      "source-or-config": 219,
+      "documentation": 148,
+      "test": 172
+    },
+    "excluded": {
+      "binary-or-over-1MiB": 64
+    },
+    "exactDuplicateGroups": 0,
+    "hotspots": [
+      {
+        "path": "development/architecture/governance/verification/remaining-web/full-tests.json",
+        "kind": "test",
+        "bytes": 34693,
+        "lines": 1587
+      },
+      {
+        "path": "development/architecture/governance/verification/performance-20.json",
+        "kind": "source-or-config",
+        "bytes": 44312,
+        "lines": 1202
+      },
+      {
+        "path": "src/watch/coordinator.py",
+        "kind": "source-or-config",
+        "bytes": 41845,
+        "lines": 767
+      },
+      {
+        "path": "src/reports/service.py",
+        "kind": "source-or-config",
+        "bytes": 40857,
+        "lines": 728
+      },
+      {
+        "path": "src/analysis/context.py",
+        "kind": "source-or-config",
+        "bytes": 33925,
+        "lines": 722
+      },
+      {
+        "path": "development/tools/collect_diagnostics.py",
+        "kind": "source-or-config",
+        "bytes": 34346,
+        "lines": 706
+      },
+      {
+        "path": "src/analysis/causal.py",
+        "kind": "source-or-config",
+        "bytes": 31596,
+        "lines": 664
+      },
+      {
+        "path": "src/pricing/github_copilot.py",
+        "kind": "source-or-config",
+        "bytes": 29934,
+        "lines": 644
+      },
+      {
+        "path": "src/sources/opencode_v2_wire.py",
+        "kind": "source-or-config",
+        "bytes": 29829,
+        "lines": 643
+      },
+      {
+        "path": "src/sources/opencode_v1.py",
+        "kind": "source-or-config",
+        "bytes": 27196,
+        "lines": 633
+      },
+      {
+        "path": "development/architecture/governance/verification/web-design/rendered-facts.json",
+        "kind": "source-or-config",
+        "bytes": 14575,
+        "lines": 622
+      },
+      {
+        "path": "development/tools/validate_package.py",
+        "kind": "source-or-config",
+        "bytes": 28918,
+        "lines": 622
+      }
+    ]
+  },
+  "runs": [
+    {
+      "scenario": "idle-100",
+      "repeat": 1,
+      "arguments": [
+        "--roots",
+        "100",
+        "--prompts",
+        "50",
+        "--watch"
+      ],
+      "result": {
+        "children_per_root": 0,
+        "first_revision_checks": 300,
+        "first_seconds": 3.0544,
+        "first_source_hydrations": 100,
+        "prompts_per_root": 50,
+        "roots": 100,
+        "running_roots": 0,
+        "sample_prompts_first": 100,
+        "sample_prompts_second": 100,
+        "second_additional_hydrations": 0,
+        "second_revision_checks": 2,
+        "second_seconds": 0.0302,
+        "today_roots": 0,
+        "total_prompts": 5000,
+        "watch": {
+          "cold": {
+            "acquisition": {
+              "counts": {
+                "analysis_candidate_roots": 20,
+                "analyzed_prompts": 1000,
+                "analyzed_requests": 1000,
+                "cache_hits": 0,
+                "cache_misses": 40,
+                "cache_reads": 40,
+                "cache_writes": 20,
+                "catalog_pages": 0,
+                "catalog_roots": 100,
+                "catalog_sessions": 100,
+                "daily_usage_projections": 1,
+                "dashboard_candidate_roots": 20,
+                "full_catalog_fetches": 2,
+                "history_candidate_roots": 0,
+                "hydrated_roots": 20,
+                "message_operations": 0,
+                "message_pages": 0,
+                "revision_calculations": 0,
+                "revision_checks": 260
+              },
+              "generation": "synthetic",
+              "milliseconds": {
+                "analysis": 61.622,
+                "cache_and_acquisition": 383.243,
+                "cache_reads": 84.461,
+                "catalog": 0.0,
+                "first_usable_dashboard": 610.562,
+                "fully_populated_dashboard": 611.699,
+                "historical_accounting": 0.0,
+                "hydration": 0.0,
+                "liveness": 0.0,
+                "projection": 172.17,
+                "rendering": 0.0,
+                "revision": 0.0,
+                "watch_refresh": 0.389
+              },
+              "mode": "watch-global"
+            },
+            "first_usable_seconds": 0.6106,
+            "fully_populated_seconds": 0.6117,
+            "initial_hydrations": 20,
+            "initial_today_pending": true,
+            "refresh_hydrations": 0,
+            "refresh_seconds": 0.0014,
+            "total_hydrations": 20
+          },
+          "warm": {
+            "acquisition": {
+              "counts": {
+                "analysis_candidate_roots": 2,
+                "analyzed_prompts": 0,
+                "analyzed_requests": 0,
+                "cache_hits": 22,
+                "cache_misses": 0,
+                "cache_reads": 22,
+                "cache_writes": 0,
+                "catalog_pages": 0,
+                "catalog_roots": 100,
+                "catalog_sessions": 100,
+                "daily_usage_projections": 1,
+                "dashboard_candidate_roots": 20,
+                "full_catalog_fetches": 2,
+                "history_candidate_roots": 0,
+                "hydrated_roots": 2,
+                "message_operations": 0,
+                "message_pages": 0,
+                "revision_calculations": 0,
+                "revision_checks": 222
+              },
+              "generation": "synthetic",
+              "milliseconds": {
+                "analysis": 0.0,
+                "cache_and_acquisition": 10.144,
+                "cache_reads": 149.98,
+                "catalog": 0.0,
+                "first_usable_dashboard": 170.027,
+                "fully_populated_dashboard": 170.409,
+                "historical_accounting": 0.0,
+                "hydration": 0.0,
+                "liveness": 0.0,
+                "projection": 12.823,
+                "rendering": 0.0,
+                "revision": 0.0,
+                "watch_refresh": 0.275
+              },
+              "mode": "watch-global"
+            },
+            "first_usable_seconds": 0.17,
+            "fully_populated_seconds": 0.1704,
+            "initial_hydrations": 2,
+            "initial_today_pending": true,
+            "refresh_hydrations": 0,
+            "refresh_seconds": 0.0005,
+            "total_hydrations": 2
+          }
+        }
+      },
+      "exitCode": 0
+    },
+    {
+      "scenario": "idle-100",
+      "repeat": 2,
+      "arguments": [
+        "--roots",
+        "100",
+        "--prompts",
+        "50",
+        "--watch"
+      ],
+      "result": {
+        "children_per_root": 0,
+        "first_revision_checks": 300,
+        "first_seconds": 2.8706,
+        "first_source_hydrations": 100,
+        "prompts_per_root": 50,
+        "roots": 100,
+        "running_roots": 0,
+        "sample_prompts_first": 100,
+        "sample_prompts_second": 100,
+        "second_additional_hydrations": 0,
+        "second_revision_checks": 2,
+        "second_seconds": 0.039,
+        "today_roots": 0,
+        "total_prompts": 5000,
+        "watch": {
+          "cold": {
+            "acquisition": {
+              "counts": {
+                "analysis_candidate_roots": 20,
+                "analyzed_prompts": 1000,
+                "analyzed_requests": 1000,
+                "cache_hits": 0,
+                "cache_misses": 40,
+                "cache_reads": 40,
+                "cache_writes": 20,
+                "catalog_pages": 0,
+                "catalog_roots": 100,
+                "catalog_sessions": 100,
+                "daily_usage_projections": 1,
+                "dashboard_candidate_roots": 20,
+                "full_catalog_fetches": 2,
+                "history_candidate_roots": 0,
+                "hydrated_roots": 20,
+                "message_operations": 0,
+                "message_pages": 0,
+                "revision_calculations": 0,
+                "revision_checks": 260
+              },
+              "generation": "synthetic",
+              "milliseconds": {
+                "analysis": 73.37,
+                "cache_and_acquisition": 1085.947,
+                "cache_reads": 89.918,
+                "catalog": 0.0,
+                "first_usable_dashboard": 1374.836,
+                "fully_populated_dashboard": 1376.48,
+                "historical_accounting": 0.0,
+                "hydration": 0.0,
+                "liveness": 0.0,
+                "projection": 223.633,
+                "rendering": 0.0,
+                "revision": 0.0,
+                "watch_refresh": 0.553
+              },
+              "mode": "watch-global"
+            },
+            "first_usable_seconds": 1.3748,
+            "fully_populated_seconds": 1.3765,
+            "initial_hydrations": 20,
+            "initial_today_pending": true,
+            "refresh_hydrations": 0,
+            "refresh_seconds": 0.0019,
+            "total_hydrations": 20
+          },
+          "warm": {
+            "acquisition": {
+              "counts": {
+                "analysis_candidate_roots": 2,
+                "analyzed_prompts": 0,
+                "analyzed_requests": 0,
+                "cache_hits": 22,
+                "cache_misses": 0,
+                "cache_reads": 22,
+                "cache_writes": 0,
+                "catalog_pages": 0,
+                "catalog_roots": 100,
+                "catalog_sessions": 100,
+                "daily_usage_projections": 1,
+                "dashboard_candidate_roots": 20,
+                "full_catalog_fetches": 2,
+                "history_candidate_roots": 0,
+                "hydrated_roots": 2,
+                "message_operations": 0,
+                "message_pages": 0,
+                "revision_calculations": 0,
+                "revision_checks": 222
+              },
+              "generation": "synthetic",
+              "milliseconds": {
+                "analysis": 0.0,
+                "cache_and_acquisition": 17.949,
+                "cache_reads": 202.819,
+                "catalog": 0.0,
+                "first_usable_dashboard": 235.619,
+                "fully_populated_dashboard": 236.255,
+                "historical_accounting": 0.0,
+                "hydration": 0.0,
+                "liveness": 0.0,
+                "projection": 23.487,
+                "rendering": 0.0,
+                "revision": 0.0,
+                "watch_refresh": 0.484
+              },
+              "mode": "watch-global"
+            },
+            "first_usable_seconds": 0.2356,
+            "fully_populated_seconds": 0.2363,
+            "initial_hydrations": 2,
+            "initial_today_pending": true,
+            "refresh_hydrations": 0,
+            "refresh_seconds": 0.0009,
+            "total_hydrations": 2
+          }
+        }
+      },
+      "exitCode": 0
+    },
+    {
+      "scenario": "idle-100",
+      "repeat": 3,
+      "arguments": [
+        "--roots",
+        "100",
+        "--prompts",
+        "50",
+        "--watch"
+      ],
+      "result": {
+        "children_per_root": 0,
+        "first_revision_checks": 300,
+        "first_seconds": 3.4656,
+        "first_source_hydrations": 100,
+        "prompts_per_root": 50,
+        "roots": 100,
+        "running_roots": 0,
+        "sample_prompts_first": 100,
+        "sample_prompts_second": 100,
+        "second_additional_hydrations": 0,
+        "second_revision_checks": 2,
+        "second_seconds": 0.0396,
+        "today_roots": 0,
+        "total_prompts": 5000,
+        "watch": {
+          "cold": {
+            "acquisition": {
+              "counts": {
+                "analysis_candidate_roots": 20,
+                "analyzed_prompts": 1000,
+                "analyzed_requests": 1000,
+                "cache_hits": 0,
+                "cache_misses": 40,
+                "cache_reads": 40,
+                "cache_writes": 20,
+                "catalog_pages": 0,
+                "catalog_roots": 100,
+                "catalog_sessions": 100,
+                "daily_usage_projections": 1,
+                "dashboard_candidate_roots": 20,
+                "full_catalog_fetches": 2,
+                "history_candidate_roots": 0,
+                "hydrated_roots": 20,
+                "message_operations": 0,
+                "message_pages": 0,
+                "revision_calculations": 0,
+                "revision_checks": 260
+              },
+              "generation": "synthetic",
+              "milliseconds": {
+                "analysis": 70.493,
+                "cache_and_acquisition": 467.09,
+                "cache_reads": 92.604,
+                "catalog": 0.0,
+                "first_usable_dashboard": 744.302,
+                "fully_populated_dashboard": 746.026,
+                "historical_accounting": 0.0,
+                "hydration": 0.0,
+                "liveness": 0.0,
+                "projection": 215.075,
+                "rendering": 0.0,
+                "revision": 0.0,
+                "watch_refresh": 0.566
+              },
+              "mode": "watch-global"
+            },
+            "first_usable_seconds": 0.7443,
+            "fully_populated_seconds": 0.746,
+            "initial_hydrations": 20,
+            "initial_today_pending": true,
+            "refresh_hydrations": 0,
+            "refresh_seconds": 0.002,
+            "total_hydrations": 20
+          },
+          "warm": {
+            "acquisition": {
+              "counts": {
+                "analysis_candidate_roots": 2,
+                "analyzed_prompts": 0,
+                "analyzed_requests": 0,
+                "cache_hits": 22,
+                "cache_misses": 0,
+                "cache_reads": 22,
+                "cache_writes": 0,
+                "catalog_pages": 0,
+                "catalog_roots": 100,
+                "catalog_sessions": 100,
+                "daily_usage_projections": 1,
+                "dashboard_candidate_roots": 20,
+                "full_catalog_fetches": 2,
+                "history_candidate_roots": 0,
+                "hydrated_roots": 2,
+                "message_operations": 0,
+                "message_pages": 0,
+                "revision_calculations": 0,
+                "revision_checks": 222
+              },
+              "generation": "synthetic",
+              "milliseconds": {
+                "analysis": 0.0,
+                "cache_and_acquisition": 17.571,
+                "cache_reads": 180.022,
+                "catalog": 0.0,
+                "first_usable_dashboard": 213.731,
+                "fully_populated_dashboard": 214.391,
+                "historical_accounting": 0.0,
+                "hydration": 0.0,
+                "liveness": 0.0,
+                "projection": 23.297,
+                "rendering": 0.0,
+                "revision": 0.0,
+                "watch_refresh": 0.508
+              },
+              "mode": "watch-global"
+            },
+            "first_usable_seconds": 0.2137,
+            "fully_populated_seconds": 0.2144,
+            "initial_hydrations": 2,
+            "initial_today_pending": true,
+            "refresh_hydrations": 0,
+            "refresh_seconds": 0.0009,
+            "total_hydrations": 2
+          }
+        }
+      },
+      "exitCode": 0
+    },
+    {
+      "scenario": "active-children",
+      "repeat": 1,
+      "arguments": [
+        "--roots",
+        "20",
+        "--prompts",
+        "50",
+        "--children",
+        "2",
+        "--today-roots",
+        "5",
+        "--running-roots",
+        "2",
+        "--watch"
+      ],
+      "result": {
+        "children_per_root": 2,
+        "first_revision_checks": 56,
+        "first_seconds": 0.5663,
+        "first_source_hydrations": 20,
+        "prompts_per_root": 50,
+        "roots": 20,
+        "running_roots": 2,
+        "sample_prompts_first": 100,
+        "sample_prompts_second": 100,
+        "second_additional_hydrations": 2,
+        "second_revision_checks": 7,
+        "second_seconds": 0.0588,
+        "today_roots": 5,
+        "total_prompts": 3000,
+        "watch": {
+          "cold": {
+            "acquisition": {
+              "counts": {
+                "analysis_candidate_roots": 22,
+                "analyzed_prompts": 1100,
+                "analyzed_requests": 3300,
+                "cache_hits": 0,
+                "cache_misses": 36,
+                "cache_reads": 36,
+                "cache_writes": 18,
+                "catalog_pages": 0,
+                "catalog_roots": 20,
+                "catalog_sessions": 60,
+                "daily_usage_projections": 2,
+                "dashboard_candidate_roots": 20,
+                "full_catalog_fetches": 2,
+                "history_candidate_roots": 7,
+                "hydrated_roots": 22,
+                "message_operations": 0,
+                "message_pages": 0,
+                "revision_calculations": 0,
+                "revision_checks": 101
+              },
+              "generation": "synthetic",
+              "milliseconds": {
+                "analysis": 62.1,
+                "cache_and_acquisition": 318.086,
+                "cache_reads": 62.65,
+                "catalog": 0.0,
+                "first_usable_dashboard": 518.193,
+                "fully_populated_dashboard": 558.223,
+                "historical_accounting": 0.73,
+                "hydration": 0.0,
+                "liveness": 0.0,
+                "projection": 163.313,
+                "rendering": 0.0,
+                "revision": 0.0,
+                "watch_refresh": 19.334
+              },
+              "mode": "watch-global"
+            },
+            "first_usable_seconds": 0.5182,
+            "fully_populated_seconds": 0.5582,
+            "initial_hydrations": 20,
+            "initial_today_pending": true,
+            "refresh_hydrations": 2,
+            "refresh_seconds": 0.0204,
+            "total_hydrations": 20
+          },
+          "warm": {
+            "acquisition": {
+              "counts": {
+                "analysis_candidate_roots": 6,
+                "analyzed_prompts": 200,
+                "analyzed_requests": 600,
+                "cache_hits": 20,
+                "cache_misses": 0,
+                "cache_reads": 20,
+                "cache_writes": 0,
+                "catalog_pages": 0,
+                "catalog_roots": 20,
+                "catalog_sessions": 60,
+                "daily_usage_projections": 2,
+                "dashboard_candidate_roots": 20,
+                "full_catalog_fetches": 2,
+                "history_candidate_roots": 7,
+                "hydrated_roots": 6,
+                "message_operations": 0,
+                "message_pages": 0,
+                "revision_calculations": 0,
+                "revision_checks": 67
+              },
+              "generation": "synthetic",
+              "milliseconds": {
+                "analysis": 10.36,
+                "cache_and_acquisition": 12.391,
+                "cache_reads": 124.892,
+                "catalog": 0.0,
+                "first_usable_dashboard": 168.173,
+                "fully_populated_dashboard": 202.282,
+                "historical_accounting": 0.588,
+                "hydration": 0.0,
+                "liveness": 0.0,
+                "projection": 47.843,
+                "rendering": 0.0,
+                "revision": 0.0,
+                "watch_refresh": 19.476
+              },
+              "mode": "watch-global"
+            },
+            "first_usable_seconds": 0.1682,
+            "fully_populated_seconds": 0.2023,
+            "initial_hydrations": 4,
+            "initial_today_pending": true,
+            "refresh_hydrations": 2,
+            "refresh_seconds": 0.02,
+            "total_hydrations": 4
+          }
+        }
+      },
+      "exitCode": 0
+    },
+    {
+      "scenario": "active-children",
+      "repeat": 2,
+      "arguments": [
+        "--roots",
+        "20",
+        "--prompts",
+        "50",
+        "--children",
+        "2",
+        "--today-roots",
+        "5",
+        "--running-roots",
+        "2",
+        "--watch"
+      ],
+      "result": {
+        "children_per_root": 2,
+        "first_revision_checks": 56,
+        "first_seconds": 0.568,
+        "first_source_hydrations": 20,
+        "prompts_per_root": 50,
+        "roots": 20,
+        "running_roots": 2,
+        "sample_prompts_first": 100,
+        "sample_prompts_second": 100,
+        "second_additional_hydrations": 2,
+        "second_revision_checks": 7,
+        "second_seconds": 0.064,
+        "today_roots": 5,
+        "total_prompts": 3000,
+        "watch": {
+          "cold": {
+            "acquisition": {
+              "counts": {
+                "analysis_candidate_roots": 22,
+                "analyzed_prompts": 1100,
+                "analyzed_requests": 3300,
+                "cache_hits": 0,
+                "cache_misses": 36,
+                "cache_reads": 36,
+                "cache_writes": 18,
+                "catalog_pages": 0,
+                "catalog_roots": 20,
+                "catalog_sessions": 60,
+                "daily_usage_projections": 2,
+                "dashboard_candidate_roots": 20,
+                "full_catalog_fetches": 2,
+                "history_candidate_roots": 7,
+                "hydrated_roots": 22,
+                "message_operations": 0,
+                "message_pages": 0,
+                "revision_calculations": 0,
+                "revision_checks": 101
+              },
+              "generation": "synthetic",
+              "milliseconds": {
+                "analysis": 58.507,
+                "cache_and_acquisition": 315.778,
+                "cache_reads": 63.398,
+                "catalog": 0.0,
+                "first_usable_dashboard": 519.05,
+                "fully_populated_dashboard": 559.668,
+                "historical_accounting": 0.732,
+                "hydration": 0.0,
+                "liveness": 0.0,
+                "projection": 166.242,
+                "rendering": 0.0,
+                "revision": 0.0,
+                "watch_refresh": 19.402
+              },
+              "mode": "watch-global"
+            },
+            "first_usable_seconds": 0.5191,
+            "fully_populated_seconds": 0.5597,
+            "initial_hydrations": 20,
+            "initial_today_pending": true,
+            "refresh_hydrations": 2,
+            "refresh_seconds": 0.0206,
+            "total_hydrations": 20
+          },
+          "warm": {
+            "acquisition": {
+              "counts": {
+                "analysis_candidate_roots": 6,
+                "analyzed_prompts": 200,
+                "analyzed_requests": 600,
+                "cache_hits": 20,
+                "cache_misses": 0,
+                "cache_reads": 20,
+                "cache_writes": 0,
+                "catalog_pages": 0,
+                "catalog_roots": 20,
+                "catalog_sessions": 60,
+                "daily_usage_projections": 2,
+                "dashboard_candidate_roots": 20,
+                "full_catalog_fetches": 2,
+                "history_candidate_roots": 7,
+                "hydrated_roots": 6,
+                "message_operations": 0,
+                "message_pages": 0,
+                "revision_calculations": 0,
+                "revision_checks": 67
+              },
+              "generation": "synthetic",
+              "milliseconds": {
+                "analysis": 10.344,
+                "cache_and_acquisition": 12.872,
+                "cache_reads": 128.755,
+                "catalog": 0.0,
+                "first_usable_dashboard": 188.398,
+                "fully_populated_dashboard": 223.979,
+                "historical_accounting": 0.748,
+                "hydration": 0.0,
+                "liveness": 0.0,
+                "projection": 49.476,
+                "rendering": 0.0,
+                "revision": 0.0,
+                "watch_refresh": 19.363
+              },
+              "mode": "watch-global"
+            },
+            "first_usable_seconds": 0.1884,
+            "fully_populated_seconds": 0.224,
+            "initial_hydrations": 4,
+            "initial_today_pending": true,
+            "refresh_hydrations": 2,
+            "refresh_seconds": 0.0199,
+            "total_hydrations": 4
+          }
+        }
+      },
+      "exitCode": 0
+    },
+    {
+      "scenario": "active-children",
+      "repeat": 3,
+      "arguments": [
+        "--roots",
+        "20",
+        "--prompts",
+        "50",
+        "--children",
+        "2",
+        "--today-roots",
+        "5",
+        "--running-roots",
+        "2",
+        "--watch"
+      ],
+      "result": {
+        "children_per_root": 2,
+        "first_revision_checks": 56,
+        "first_seconds": 0.576,
+        "first_source_hydrations": 20,
+        "prompts_per_root": 50,
+        "roots": 20,
+        "running_roots": 2,
+        "sample_prompts_first": 100,
+        "sample_prompts_second": 100,
+        "second_additional_hydrations": 2,
+        "second_revision_checks": 7,
+        "second_seconds": 0.0656,
+        "today_roots": 5,
+        "total_prompts": 3000,
+        "watch": {
+          "cold": {
+            "acquisition": {
+              "counts": {
+                "analysis_candidate_roots": 22,
+                "analyzed_prompts": 1100,
+                "analyzed_requests": 3300,
+                "cache_hits": 0,
+                "cache_misses": 36,
+                "cache_reads": 36,
+                "cache_writes": 18,
+                "catalog_pages": 0,
+                "catalog_roots": 20,
+                "catalog_sessions": 60,
+                "daily_usage_projections": 2,
+                "dashboard_candidate_roots": 20,
+                "full_catalog_fetches": 2,
+                "history_candidate_roots": 7,
+                "hydrated_roots": 22,
+                "message_operations": 0,
+                "message_pages": 0,
+                "revision_calculations": 0,
+                "revision_checks": 101
+              },
+              "generation": "synthetic",
+              "milliseconds": {
+                "analysis": 62.648,
+                "cache_and_acquisition": 334.352,
+                "cache_reads": 67.279,
+                "catalog": 0.0,
+                "first_usable_dashboard": 541.887,
+                "fully_populated_dashboard": 581.937,
+                "historical_accounting": 0.741,
+                "hydration": 0.0,
+                "liveness": 0.0,
+                "projection": 170.407,
+                "rendering": 0.0,
+                "revision": 0.0,
+                "watch_refresh": 19.264
+              },
+              "mode": "watch-global"
+            },
+            "first_usable_seconds": 0.5419,
+            "fully_populated_seconds": 0.5819,
+            "initial_hydrations": 20,
+            "initial_today_pending": true,
+            "refresh_hydrations": 2,
+            "refresh_seconds": 0.0204,
+            "total_hydrations": 20
+          },
+          "warm": {
+            "acquisition": {
+              "counts": {
+                "analysis_candidate_roots": 6,
+                "analyzed_prompts": 200,
+                "analyzed_requests": 600,
+                "cache_hits": 20,
+                "cache_misses": 0,
+                "cache_reads": 20,
+                "cache_writes": 0,
+                "catalog_pages": 0,
+                "catalog_roots": 20,
+                "catalog_sessions": 60,
+                "daily_usage_projections": 2,
+                "dashboard_candidate_roots": 20,
+                "full_catalog_fetches": 2,
+                "history_candidate_roots": 7,
+                "hydrated_roots": 6,
+                "message_operations": 0,
+                "message_pages": 0,
+                "revision_calculations": 0,
+                "revision_checks": 67
+              },
+              "generation": "synthetic",
+              "milliseconds": {
+                "analysis": 10.409,
+                "cache_and_acquisition": 13.409,
+                "cache_reads": 127.485,
+                "catalog": 0.0,
+                "first_usable_dashboard": 190.092,
+                "fully_populated_dashboard": 225.603,
+                "historical_accounting": 0.779,
+                "hydration": 0.0,
+                "liveness": 0.0,
+                "projection": 49.661,
+                "rendering": 0.0,
+                "revision": 0.0,
+                "watch_refresh": 19.583
+              },
+              "mode": "watch-global"
+            },
+            "first_usable_seconds": 0.1901,
+            "fully_populated_seconds": 0.2256,
+            "initial_hydrations": 4,
+            "initial_today_pending": true,
+            "refresh_hydrations": 2,
+            "refresh_seconds": 0.0202,
+            "total_hydrations": 4
+          }
+        }
+      },
+      "exitCode": 0
+    },
+    {
+      "scenario": "idle-1000",
+      "repeat": 1,
+      "arguments": [
+        "--roots",
+        "1000",
+        "--prompts",
+        "20",
+        "--watch"
+      ],
+      "result": {
+        "children_per_root": 0,
+        "first_revision_checks": 3000,
+        "first_seconds": 32.8811,
+        "first_source_hydrations": 1000,
+        "prompts_per_root": 20,
+        "roots": 1000,
+        "running_roots": 0,
+        "sample_prompts_first": 100,
+        "sample_prompts_second": 100,
+        "second_additional_hydrations": 0,
+        "second_revision_checks": 5,
+        "second_seconds": 0.0668,
+        "today_roots": 0,
+        "total_prompts": 20000,
+        "watch": {
+          "cold": {
+            "acquisition": {
+              "counts": {
+                "analysis_candidate_roots": 20,
+                "analyzed_prompts": 400,
+                "analyzed_requests": 400,
+                "cache_hits": 0,
+                "cache_misses": 40,
+                "cache_reads": 40,
+                "cache_writes": 20,
+                "catalog_pages": 0,
+                "catalog_roots": 1000,
+                "catalog_sessions": 1000,
+                "daily_usage_projections": 1,
+                "dashboard_candidate_roots": 20,
+                "full_catalog_fetches": 2,
+                "history_candidate_roots": 0,
+                "hydrated_roots": 20,
+                "message_operations": 0,
+                "message_pages": 0,
+                "revision_calculations": 0,
+                "revision_checks": 2060
+              },
+              "generation": "synthetic",
+              "milliseconds": {
+                "analysis": 30.525,
+                "cache_and_acquisition": 416.344,
+                "cache_reads": 80.802,
+                "catalog": 0.0,
+                "first_usable_dashboard": 583.726,
+                "fully_populated_dashboard": 585.988,
+                "historical_accounting": 0.0,
+                "hydration": 0.0,
+                "liveness": 0.0,
+                "projection": 90.043,
+                "rendering": 0.0,
+                "revision": 0.0,
+                "watch_refresh": 4.193
+              },
+              "mode": "watch-global"
+            },
+            "first_usable_seconds": 0.5837,
+            "fully_populated_seconds": 0.586,
+            "initial_hydrations": 20,
+            "initial_today_pending": true,
+            "refresh_hydrations": 0,
+            "refresh_seconds": 0.0049,
+            "total_hydrations": 20
+          },
+          "warm": {
+            "acquisition": {
+              "counts": {
+                "analysis_candidate_roots": 2,
+                "analyzed_prompts": 0,
+                "analyzed_requests": 0,
+                "cache_hits": 22,
+                "cache_misses": 0,
+                "cache_reads": 22,
+                "cache_writes": 0,
+                "catalog_pages": 0,
+                "catalog_roots": 1000,
+                "catalog_sessions": 1000,
+                "daily_usage_projections": 1,
+                "dashboard_candidate_roots": 20,
+                "full_catalog_fetches": 2,
+                "history_candidate_roots": 0,
+                "hydrated_roots": 2,
+                "message_operations": 0,
+                "message_pages": 0,
+                "revision_calculations": 0,
+                "revision_checks": 2022
+              },
+              "generation": "synthetic",
+              "milliseconds": {
+                "analysis": 0.0,
+                "cache_and_acquisition": 9.257,
+                "cache_reads": 104.538,
+                "catalog": 0.0,
+                "first_usable_dashboard": 124.813,
+                "fully_populated_dashboard": 125.831,
+                "historical_accounting": 0.0,
+                "hydration": 0.0,
+                "liveness": 0.0,
+                "projection": 9.768,
+                "rendering": 0.0,
+                "revision": 0.0,
+                "watch_refresh": 2.27
+              },
+              "mode": "watch-global"
+            },
+            "first_usable_seconds": 0.1248,
+            "fully_populated_seconds": 0.1258,
+            "initial_hydrations": 2,
+            "initial_today_pending": true,
+            "refresh_hydrations": 0,
+            "refresh_seconds": 0.0025,
+            "total_hydrations": 2
+          }
+        }
+      },
+      "exitCode": 0
+    },
+    {
+      "scenario": "idle-1000",
+      "repeat": 2,
+      "arguments": [
+        "--roots",
+        "1000",
+        "--prompts",
+        "20",
+        "--watch"
+      ],
+      "result": {
+        "children_per_root": 0,
+        "first_revision_checks": 3000,
+        "first_seconds": 32.9626,
+        "first_source_hydrations": 1000,
+        "prompts_per_root": 20,
+        "roots": 1000,
+        "running_roots": 0,
+        "sample_prompts_first": 100,
+        "sample_prompts_second": 100,
+        "second_additional_hydrations": 0,
+        "second_revision_checks": 5,
+        "second_seconds": 0.0405,
+        "today_roots": 0,
+        "total_prompts": 20000,
+        "watch": {
+          "cold": {
+            "acquisition": {
+              "counts": {
+                "analysis_candidate_roots": 20,
+                "analyzed_prompts": 400,
+                "analyzed_requests": 400,
+                "cache_hits": 0,
+                "cache_misses": 40,
+                "cache_reads": 40,
+                "cache_writes": 20,
+                "catalog_pages": 0,
+                "catalog_roots": 1000,
+                "catalog_sessions": 1000,
+                "daily_usage_projections": 1,
+                "dashboard_candidate_roots": 20,
+                "full_catalog_fetches": 2,
+                "history_candidate_roots": 0,
+                "hydrated_roots": 20,
+                "message_operations": 0,
+                "message_pages": 0,
+                "revision_calculations": 0,
+                "revision_checks": 2060
+              },
+              "generation": "synthetic",
+              "milliseconds": {
+                "analysis": 22.199,
+                "cache_and_acquisition": 291.664,
+                "cache_reads": 79.17,
+                "catalog": 0.0,
+                "first_usable_dashboard": 414.857,
+                "fully_populated_dashboard": 416.608,
+                "historical_accounting": 0.0,
+                "hydration": 0.0,
+                "liveness": 0.0,
+                "projection": 68.665,
+                "rendering": 0.0,
+                "revision": 0.0,
+                "watch_refresh": 2.971
+              },
+              "mode": "watch-global"
+            },
+            "first_usable_seconds": 0.4149,
+            "fully_populated_seconds": 0.4166,
+            "initial_hydrations": 20,
+            "initial_today_pending": true,
+            "refresh_hydrations": 0,
+            "refresh_seconds": 0.0035,
+            "total_hydrations": 20
+          },
+          "warm": {
+            "acquisition": {
+              "counts": {
+                "analysis_candidate_roots": 2,
+                "analyzed_prompts": 0,
+                "analyzed_requests": 0,
+                "cache_hits": 22,
+                "cache_misses": 0,
+                "cache_reads": 22,
+                "cache_writes": 0,
+                "catalog_pages": 0,
+                "catalog_roots": 1000,
+                "catalog_sessions": 1000,
+                "daily_usage_projections": 1,
+                "dashboard_candidate_roots": 20,
+                "full_catalog_fetches": 2,
+                "history_candidate_roots": 0,
+                "hydrated_roots": 2,
+                "message_operations": 0,
+                "message_pages": 0,
+                "revision_calculations": 0,
+                "revision_checks": 2022
+              },
+              "generation": "synthetic",
+              "milliseconds": {
+                "analysis": 0.0,
+                "cache_and_acquisition": 8.281,
+                "cache_reads": 85.906,
+                "catalog": 0.0,
+                "first_usable_dashboard": 121.076,
+                "fully_populated_dashboard": 122.644,
+                "historical_accounting": 0.0,
+                "hydration": 0.0,
+                "liveness": 0.0,
+                "projection": 9.271,
+                "rendering": 0.0,
+                "revision": 0.0,
+                "watch_refresh": 2.589
+              },
+              "mode": "watch-global"
+            },
+            "first_usable_seconds": 0.1211,
+            "fully_populated_seconds": 0.1227,
+            "initial_hydrations": 2,
+            "initial_today_pending": true,
+            "refresh_hydrations": 0,
+            "refresh_seconds": 0.0029,
+            "total_hydrations": 2
+          }
+        }
+      },
+      "exitCode": 0
+    },
+    {
+      "scenario": "idle-1000",
+      "repeat": 3,
+      "arguments": [
+        "--roots",
+        "1000",
+        "--prompts",
+        "20",
+        "--watch"
+      ],
+      "result": {
+        "children_per_root": 0,
+        "first_revision_checks": 3000,
+        "first_seconds": 35.1455,
+        "first_source_hydrations": 1000,
+        "prompts_per_root": 20,
+        "roots": 1000,
+        "running_roots": 0,
+        "sample_prompts_first": 100,
+        "sample_prompts_second": 100,
+        "second_additional_hydrations": 0,
+        "second_revision_checks": 5,
+        "second_seconds": 0.0628,
+        "today_roots": 0,
+        "total_prompts": 20000,
+        "watch": {
+          "cold": {
+            "acquisition": {
+              "counts": {
+                "analysis_candidate_roots": 20,
+                "analyzed_prompts": 400,
+                "analyzed_requests": 400,
+                "cache_hits": 0,
+                "cache_misses": 40,
+                "cache_reads": 40,
+                "cache_writes": 20,
+                "catalog_pages": 0,
+                "catalog_roots": 1000,
+                "catalog_sessions": 1000,
+                "daily_usage_projections": 1,
+                "dashboard_candidate_roots": 20,
+                "full_catalog_fetches": 2,
+                "history_candidate_roots": 0,
+                "hydrated_roots": 20,
+                "message_operations": 0,
+                "message_pages": 0,
+                "revision_calculations": 0,
+                "revision_checks": 2060
+              },
+              "generation": "synthetic",
+              "milliseconds": {
+                "analysis": 29.725,
+                "cache_and_acquisition": 355.669,
+                "cache_reads": 95.56,
+                "catalog": 0.0,
+                "first_usable_dashboard": 524.735,
+                "fully_populated_dashboard": 526.936,
+                "historical_accounting": 0.0,
+                "hydration": 0.0,
+                "liveness": 0.0,
+                "projection": 90.099,
+                "rendering": 0.0,
+                "revision": 0.0,
+                "watch_refresh": 4.268
+              },
+              "mode": "watch-global"
+            },
+            "first_usable_seconds": 0.5247,
+            "fully_populated_seconds": 0.5269,
+            "initial_hydrations": 20,
+            "initial_today_pending": true,
+            "refresh_hydrations": 0,
+            "refresh_seconds": 0.0051,
+            "total_hydrations": 20
+          },
+          "warm": {
+            "acquisition": {
+              "counts": {
+                "analysis_candidate_roots": 2,
+                "analyzed_prompts": 0,
+                "analyzed_requests": 0,
+                "cache_hits": 22,
+                "cache_misses": 0,
+                "cache_reads": 22,
+                "cache_writes": 0,
+                "catalog_pages": 0,
+                "catalog_roots": 1000,
+                "catalog_sessions": 1000,
+                "daily_usage_projections": 1,
+                "dashboard_candidate_roots": 20,
+                "full_catalog_fetches": 2,
+                "history_candidate_roots": 0,
+                "hydrated_roots": 2,
+                "message_operations": 0,
+                "message_pages": 0,
+                "revision_calculations": 0,
+                "revision_checks": 2022
+              },
+              "generation": "synthetic",
+              "milliseconds": {
+                "analysis": 0.0,
+                "cache_and_acquisition": 9.38,
+                "cache_reads": 108.442,
+                "catalog": 0.0,
+                "first_usable_dashboard": 130.519,
+                "fully_populated_dashboard": 132.165,
+                "historical_accounting": 0.0,
+                "hydration": 0.0,
+                "liveness": 0.0,
+                "projection": 10.073,
+                "rendering": 0.0,
+                "revision": 0.0,
+                "watch_refresh": 4.102
+              },
+              "mode": "watch-global"
+            },
+            "first_usable_seconds": 0.1305,
+            "fully_populated_seconds": 0.1322,
+            "initial_hydrations": 2,
+            "initial_today_pending": true,
+            "refresh_hydrations": 0,
+            "refresh_seconds": 0.0044,
+            "total_hydrations": 2
+          }
+        }
+      },
+      "exitCode": 0
+    }
+  ],
+  "limitations": [
+    "Synthetic input; no providers, models, installed-service or browser calls.",
+    "Fresh temporary SQLite cache per process; warm phases share only their run cache. OS cache not flushed; background load uncontrolled.",
+    "No candidate runtime implementation, output equivalence digest, CPU, peak memory or monetary cost measurement.",
+    "Inventory includes one empty local inventory output file created by redirection.",
+    "Initial nine-run collection timed out after 120 seconds; discarded, no surviving benchmark process observed."
+  ],
+  "runnerRepair": "Only development benchmark assertion changed: warm hydrations must equal running_roots, not always zero.",
+  "profile": {
+    "arguments": [
+      "--roots",
+      "100",
+      "--prompts",
+      "50"
+    ],
+    "watch": false,
+    "calls": 2707112,
+    "profilerTotalSeconds": 4.730244400000004,
+    "functions": [
+      {
+        "owner": "src/cache/database.py",
+        "function": "connect",
+        "primitiveCalls": 814,
+        "totalCalls": 814,
+        "selfSeconds": 0.0041427,
+        "cumulativeSeconds": 2.7823839
+      },
+      {
+        "owner": "src/reports/comparison_history.py",
+        "function": "comparison_samples",
+        "primitiveCalls": 2,
+        "totalCalls": 2,
+        "selfSeconds": 0.022770500000000003,
+        "cumulativeSeconds": 4.3385115
+      },
+      {
+        "owner": "~",
+        "function": "<method 'close' of 'sqlite3.Connection' objects>",
+        "primitiveCalls": 407,
+        "totalCalls": 407,
+        "selfSeconds": 1.1722515,
+        "cumulativeSeconds": 1.1722515
+      },
+      {
+        "owner": "~",
+        "function": "<method 'commit' of 'sqlite3.Connection' objects>",
+        "primitiveCalls": 407,
+        "totalCalls": 407,
+        "selfSeconds": 0.9312482000000001,
+        "cumulativeSeconds": 0.9312482000000001
+      }
+    ]
+  },
+  "interruptedProfile": "First attempt interrupted, no profile retained; fresh bounded rerun completed. Interrupted work is not PASS."
+}

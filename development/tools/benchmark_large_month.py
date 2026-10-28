@@ -142,8 +142,10 @@ def main() -> int:
         if args.watch:
             result["watch"] = benchmark_watch(source, Path(td), config)
         print(json.dumps(result, indent=2, sort_keys=True))
-        if result["second_additional_hydrations"] != 0:
-            print("FAIL: stable second run rehydrated source history", file=sys.stderr)
+        # Running roots must bypass the stable cache even with unchanged revisions.
+        # The comparison scan visits every root, so each active root is read once.
+        if result["second_additional_hydrations"] != args.running_roots:
+            print("FAIL: second run must hydrate only the running roots", file=sys.stderr)
             return 1
         if result["second_revision_checks"] > args.roots:
             print("FAIL: stable second run exceeded O(root) revision checks", file=sys.stderr)
