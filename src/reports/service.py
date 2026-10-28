@@ -48,6 +48,8 @@ from .accounts import accounts_quota_projection, WatchAccountProjection
 from .migration_notice import migration_gap_notes
 from .token_mix_history import HistoryProgress, build_token_mix_history
 from .sampling import AnalyzedRoot, latest_prompts, latest_token_prompts, recent_sample_roots
+from .comparison_history import comparison_samples
+from src.pricing.publishers import publisher_for
 from .history import HistoryRequirements, WatchHistoryAcquisition
 from .acquisition import RootAcquisition
 
@@ -151,6 +153,7 @@ class ReportService:
         self._watch_quota_entries: tuple[TraceEntry, ...] = ()
         self.account_diagnostics: Mapping[str, object] = {}
         self._comparison_mix: tuple[tuple[Decimal, Decimal, Decimal, Decimal, int], int] | None = None
+        self._workload_samples = None
         self._availability: AvailabilityPrefetch | None = None
         self._watch_history = WatchHistoryAcquisition()
         self._watch_history_active: set[str] = set()
@@ -333,7 +336,12 @@ class ReportService:
             self.metrics.add("context_warning_sample_roots", len(sampled))
             sample = latest_prompts(sampled, priceable)
             self._comparison_mix = (normalized_average_token_mix(self._relative_usage(sample)), self.now_ms)
-        return threshold_cost_multiplier(self._load_comparison_catalog(), model_id, threshold, self._comparison_mix[0])
+            self._workload_samples = comparison_samples(self)
+        catalog = self._load_comparison_catalog()
+        resolved = catalog.resolve_reference(model_id)
+        mix = (self._workload_samples.effective(resolved.model.model, publisher_for(catalog, model_id))[0]
+               if self._workload_samples is not None and resolved else self._comparison_mix[0])
+        return threshold_cost_multiplier(catalog, model_id, threshold, mix)
 
     def _model_comparison(
         self, roots: Sequence[AnalyzedRoot], *, all_models: bool = False,
@@ -348,14 +356,16 @@ class ReportService:
             )
         promo_markers, promo_notes = active_promotion_notes(comparison_catalog, self.now_ms)
         usage = self._relative_usage(latest_prompts(roots, self._priceable()))
+        self._workload_samples = comparison_samples(self)
         rows: list[ModelComparisonProjection] = []
-        for row in model_comparison_rows(usage, comparison_catalog):
+        for row in model_comparison_rows(usage, comparison_catalog, samples=self._workload_samples):
             marker = promo_markers.get(row.model_name)
             price_text = price_summary(comparison_catalog, row.model_name)
             rows.append(ModelComparisonProjection(
                 row.publisher, row.model_name, row.relative_to_lowest, price_text, row.release_date,
                 marker is not None, model_is_recent(row.release_date, now_ms=self.now_ms), marker,
                 row.relative_levels,
+                row.evidence,
             ))
         self._comparison_mix = (normalized_average_token_mix(usage), self.now_ms)
         sample_size = self._comparison_mix[0][4]
@@ -406,6 +416,7 @@ class ReportService:
         self._analyzed.clear()
         self._analyzed_at_ms.clear()
         self._comparison_mix = None
+        self._workload_samples = None
         self._watch_history.reset()
         self._watch_quota_entries = ()
 

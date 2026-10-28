@@ -186,7 +186,7 @@ class Step9PerformanceTests(unittest.TestCase):
                 cache_repository=repo, config=config, now_ms=NOW_MS,
             )
             report = first.build(ReportRequest())
-            self.assertEqual(7, source.load_count, "Latest 100 prompts need only seven 15-prompt roots")
+            self.assertEqual(20, source.load_count, "Model evidence visits history beyond the global latest 100")
             self.assertEqual(100, report.pricing_diagnostics["relcost_sample_prompts"])
             self.assertFalse(report.session_usage)
             first_loads = source.load_count

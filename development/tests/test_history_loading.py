@@ -338,7 +338,7 @@ class ReportHistoryLoadingTests(unittest.TestCase):
             result = service.build(ReportRequest())
             self.assertEqual(100, result.model_comparison_sample_size)
             self.assertEqual(100, result.token_mix.sample_size)
-            self.assertEqual(170, source.load_count)
+            self.assertEqual(180, source.load_count, "Per-model evidence is independent of the latest global hundred")
 
     def test_session_list_detail_date_and_deep_history_have_distinct_scopes(self):
         for request, expected in ((ReportRequest(ReportKind.SESSIONS, session_limit=3), 3),

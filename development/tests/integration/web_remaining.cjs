@@ -27,11 +27,20 @@ for (const [kind, result] of Object.entries(input)) {
     assert.ok(all(output, 'a').some(link => link.href === '#/sessions/root-0000'));
     assert.equal(all(output, 'tfoot')[0].children[0].children[1].textContent, result.view.prompt_blocks[0].display.total_ccost);
   } else {
-    assert.deepEqual(all(output, 'th').map(node => node.textContent), ['Model', 'Prompts', 'Calls', 'Input', 'Cache', 'Write', 'Output', 'CCost']);
+    assert.deepEqual(all(output, 'th').map(node => node.textContent),
+      ['Model', 'Prompts', 'Calls', 'Input', 'Cache', 'Write', 'Output', 'CCost',
+       'Publisher', 'Prompts', 'Calls', 'Input', 'Cache', 'Write', 'Output', 'CCost']);
     const mix = result.view.model_token_mix[0].mix;
     assert.deepEqual(all(output, 'tbody')[0].children[0].children.slice(3).map(cell => cell.textContent),
       ['input', 'cache', 'write', 'output', 'total_cost'].map(key => mix.display[key]));
     assert.ok(output.textContent.indexOf('Total Token Mix') < output.textContent.indexOf('Historical models'));
+    assert.ok(output.textContent.indexOf('Historical models') < output.textContent.indexOf('Historical publishers'));
+    if (result.view.publisher_token_mix.length) {
+      const publisher = result.view.publisher_token_mix[0];
+      assert.equal(all(output, 'tbody')[1].children[0].children[0].textContent, publisher.publisher);
+      assert.deepEqual(all(output, 'tbody')[1].children[0].children.slice(3).map(cell => cell.textContent),
+        ['input', 'cache', 'write', 'output', 'total_cost'].map(key => publisher.mix.display[key]));
+    }
   }
 }
 console.log('PASS date scope, configured prompt clocks/context, bounded rows/full totals, CLI historical mix columns');

@@ -59,7 +59,7 @@ Usage:
 Options:
   --all-models     Full pricing/model catalog only; ignore availability.
   --token-mix      Total Token Mix % and CCost, then per currently selectable
-                   model, over all OpenCode history still available (deep scan).
+                   model and publisher, over available OpenCode history (deep scan).
   --sessions N|all Latest N (or all) currently available root sessions.
   -watch, --watch   Keep the selected scope live until Ctrl+C.
   -h, --help       Show this help.
@@ -69,6 +69,11 @@ Token Mix %: I = uncached input (Input); C = cache read (Cache);
              W = cache write (Write); O = output (Output), including
              separately reported reasoning. Each share shows its CCost.
 Report: last 100 prompts with usage. Watch: requests observed during this run.
+Relative CCost: personalized workload profiles, not a same-task benchmark/billing.
+Each model blends up to 100 own completed prompts, other verified same-publisher
+prompts, then a generic prior. Prompt-count weights blend pooled I/C/W/O shares;
+100 weight slots are not 100 observed prompts. Cold evidence acquisition may
+traverse available history; revision-keyed disposable samples accelerate reuse.
 -- means unavailable shares (incomplete telemetry or no positive token total).
 CCost is Copilot AI-credit-equivalent reference valuation, not actual billing
 or credits deducted. Non-Copilot subscription usage can have positive CCost.

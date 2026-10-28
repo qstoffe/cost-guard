@@ -58,7 +58,7 @@ class PricingPresentationTests(unittest.TestCase):
             self.assertEqual(count, report.model_comparison_sample_size)
             text = compact.rendered(report)
             if count:
-                self.assertIn(f"Relative CCost: Applies Token Mix % from {count} completed prompt", text)
+                self.assertIn(f"Generic prior: {count} completed prompt", text)
             else:
                 self.assertIn("Relative CCost stays blank", text)
             self.assertNotIn("does not predict model behavior", text)
@@ -74,9 +74,12 @@ class PricingPresentationTests(unittest.TestCase):
         self.assertEqual(1, sample)
         priceable = service._priceable()
         self.assertEqual(3, len(latest_token_prompts((root,), priceable)), "zero-token usage is not priced usage")
-        expected = model_comparison_rows(service._relative_usage(latest_prompts((root,), priceable)),
-                                         service._load_catalog())
-        self.assertEqual([r.relative_to_lowest for r in expected], [r.relative_cost for r in rows])
+        # Per-model history is source/revision-bound, independent of this injected
+        # global sample. Source still holds the last 100 of 120 synthetic prompts:
+        # mean I=169.5, C=20, O=10, rates Claude 2/.2/6 and GPT 1/.1/4.
+        self.assertAlmostEqual(Decimal(403) / Decimal('211.5'), rows[0].relative_cost, delta=Decimal('1e-26'))
+        self.assertEqual(Decimal(1), rows[1].relative_cost)
+        self.assertEqual(100, next(r for r in rows if r.model == 'GPT Test').evidence.model_prompts)
 
     def test_marker_regions_and_numeric_alignment_do_not_pollute_prices(self):
         for markers in ((None, None, None), (1, None, 2), (1, None, 12345)):

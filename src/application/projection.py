@@ -118,7 +118,9 @@ def project(report, timezone_id="UTC"):
     faded = superseded_rows([(item.publisher, item.model) for item in report.model_comparison])
     for index, item in enumerate(report.model_comparison):
         base = fields(item, "publisher model relative_cost price_summary release_date promotional recent promotion_marker")
-        models.append(ObjectValue(base.fields + (("superseded", index in faded), ("relative_levels", tuple(
+        models.append(ObjectValue(base.fields + (("evidence", fields(item.evidence,
+            "model_prompts publisher_prompts generic_prior_weight global_prompts history_exhausted observed_prompts")),
+            ("superseded", index in faded), ("relative_levels", tuple(
             fields(level, "relative_cost threshold_tokens threshold_operator") for level in item.relative_levels)),)))
     return with_display(record(
         kind=report.kind, title=report.title, source_label=report.source_label,
@@ -144,4 +146,6 @@ def project(report, timezone_id="UTC"):
         token_mix=token_mix(report.token_mix),
         model_token_mix=tuple(record(model=item.model, prompts=item.prompts, calls=item.calls, mix=token_mix(item.mix))
             for item in report.model_token_mix),
+        publisher_token_mix=tuple(record(publisher=item.publisher, prompts=item.prompts, calls=item.calls, mix=token_mix(item.mix))
+            for item in report.publisher_token_mix),
     ), timezone_id)

@@ -13,9 +13,10 @@ from src.analysis.valuation import unique_usage
 from src.domain import ModelRef
 from src.domain.progress import WorkProgress
 from src.pricing.identities import reference_identity
+from src.pricing.publishers import publisher_for
 
 from .migration_notice import migration_gap_notes
-from .models import ModelTokenMixProjection, ReportKind, ReportProjection
+from .models import ModelTokenMixProjection, PublisherTokenMixProjection, ReportKind, ReportProjection
 
 if TYPE_CHECKING:
     from .service import ReportService
@@ -89,10 +90,18 @@ def build_token_mix_history(service: ReportService, progress: HistoryProgress) -
     # The total reprices the same shown requests directly, never rounded per-model rows.
     shown_keys = {_model_key(group.model) for group in groups}
     shown_usage = [entry for entry in usage if _model_key(entry.model) in shown_keys]
+    publisher_key = lambda model: publisher_for(reference, model.model) or "Unknown / unverified"
+    publishers = [PublisherTokenMixProjection(publisher_key(group.model), group.prompts, group.calls, group.mix)
+                  for group in model_token_mixes(shown_usage, prompt_of, reference.reference_category_valuation,
+                                               model_key=publisher_key)]
+    publishers.sort(key=lambda row: (-sum(row.mix.costs or ()), -row.calls, row.publisher))
+    notes.append("Historical publisher shares use pooled shown requests, not the 100-slot comparison prior. "
+                 "Prompts are distinct within each model/publisher; mixed prompts can appear in several rows, "
+                 "so row prompt counts are not additive. Unknown / unverified is not an account provider.")
     total = priced_token_mix(((entry.model, entry.tokens) for entry in shown_usage),
                              reference.reference_category_valuation,
                              sample_size=len({prompt_of[entry] for entry in shown_usage if entry in prompt_of}))
     return ReportProjection(
         ReportKind.TOKEN_MIX, "Token Mix % by model", service.selection.selected.upper(), warnings,
-        notes=tuple(notes), model_token_mix=tuple(rows), token_mix=total,
+        notes=tuple(notes), model_token_mix=tuple(rows), publisher_token_mix=tuple(publishers), token_mix=total,
     )

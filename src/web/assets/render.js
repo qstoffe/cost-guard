@@ -172,12 +172,13 @@ const ReportView = (() => {
       `${mix.sample_size} priced prompts · ${display(mix, 'totals')} tokens · CCost ${display(mix, 'costs')}`,
       mix.cost_complete ? 'detail' : 'detail partial'));
     concept('Relative CCost', view.model_comparison_sample_size ? `${view.model_comparison_sample_size} completed ${view.model_comparison_sample_size === 1 ? 'prompt' : 'prompts'}` : 'No completed priced prompts',
-      view.model_comparison_sample_size ? 'Applies the completed-prompt Token Mix % to every model and tier, with the same cheapest comparable base as 1.0x. Arrows show context-tier prices; > or ≥ marks the published input-token boundary.' :
+      view.model_comparison_sample_size ? 'Personalized workload-profile estimates, not a same-task benchmark or billing. Each model blends up to 100 own completed prompts, other verified same-publisher prompts, then a generic prior. Prompt-count weights blend pooled shares; 100 weight slots do not imply 100 observed prompts. Every tier uses its model’s mix and the same cheapest comparable base as 1.0x. Arrows show context-tier prices; > or ≥ marks the published input-token boundary.' :
         'Relative CCost stays blank; a hidden 2/96/1/1 mix orders published prices. No synthetic multipliers are shown.');
     parent.append(concepts);
   }
   function modelRelative(row, sampled) {
     const cell = element('span', undefined, 'model-relative' + (row.promotional ? ' promotion' : ''));
+    cell.title = display(row, 'evidence');
     cell.append(element('span', row.promotion_marker != null ? `*${row.promotion_marker} ` : '', 'model-marker'));
     const [base, ...tiers] = sampled ? display(row, 'relative_cost').split(' → ') : [''];
     cell.append(element('span', base, 'model-ratio'));
@@ -333,7 +334,7 @@ const ReportView = (() => {
     if (['overview', 'models'].includes(section) && view.model_comparison.length) {
       if (view.token_mix && !overview) mixSummary(parent, view.token_mix);
       if (!overview) parent.append(element('p', view.model_comparison_sample_size ?
-        `Relative CCost · ${view.model_comparison_sample_size} priced completed prompts · cheapest comparable base = 1.0x. Arrows show input-context tiers (> or ≥). Reference valuation, not billed USD.` :
+        `Relative CCost · personalized model/publisher workload profiles · generic prior: ${view.model_comparison_sample_size} completed prompts · cheapest comparable base = 1.0x. Not a same-task benchmark or billing. Model-cell tooltips explain actual evidence and prior weight.` :
         'No completed priced prompts: relative cells stay blank. A hidden 2/96/1/1 mix orders published prices; no synthetic multipliers are shown.', 'detail'));
       parent.append(element('p', `Pricing/cache metadata: ${display(view, 'pricing_retrieved_at_ms')}`, 'detail'));
       const all = view.kind === 'all-models';
@@ -342,7 +343,12 @@ const ReportView = (() => {
         row => [row.publisher || 'N/A', element('span', row.model + (row.recent ? ' · recent' : '') + (row.superseded ? ' · older stable variant' : ''), row.recent ? 'new' : ''),
           modelRelative(row, view.model_comparison_sample_size),
           ...(all ? [modelPrices(row)] : []), element('span', row.release_date || 'N/A', row.recent ? 'new' : '')], null, state, 'models',
-        row => [row.publisher, row.model, row.relative_cost, ...(all ? [modelPriceKey(row)] : []), row.release_date]);
+         row => [row.publisher, row.model, row.relative_cost, ...(all ? [modelPriceKey(row)] : []), row.release_date]);
+      if (view.model_comparison_sample_size) {
+        const evidence = element('details'); evidence.append(element('summary', 'Model/publisher evidence'));
+        for (const row of view.model_comparison) evidence.append(element('p', row.model + ': ' + display(row, 'evidence')));
+        parent.append(evidence);
+      }
       if (!overview && all) parent.append(element('p', 'GitHub USD/M I/C/W/O: exact published reference rates per million input/cache-read/cache-write/output tokens, not billed spend.', 'detail'));
       if (!overview && view.model_comparison.some(row => row.superseded)) parent.append(element('p', 'Older stable variants are muted, not hidden. Promotions use numbered * markers; recent releases are highlighted.', 'detail'));
       for (const note of view.model_comparison_promotion_notes || []) parent.append(element('p', note, 'promotion'));
@@ -365,6 +371,10 @@ const ReportView = (() => {
           ['Model', 'Prompts', 'Calls', 'Input', 'Cache', 'Write', 'Output', 'CCost'], view.model_token_mix,
           row => [row.model, known(row.prompts), known(row.calls), ...['input', 'cache', 'write', 'output', 'total_cost'].map(key => display(row.mix, key))], null, state, 'history',
           row => [row.model, row.prompts, row.calls, ...row.mix.shares, row.mix.total_cost]);
+        table(parent, 'Historical publishers · same shown usage, not the comparison prior',
+          ['Publisher', 'Prompts', 'Calls', 'Input', 'Cache', 'Write', 'Output', 'CCost'], view.publisher_token_mix || [],
+          row => [row.publisher, known(row.prompts), known(row.calls), ...['input', 'cache', 'write', 'output', 'total_cost'].map(key => display(row.mix, key))], null, state, 'publishers',
+          row => [row.publisher, row.prompts, row.calls, ...row.mix.shares, row.mix.total_cost]);
       }
     }
     for (const note of view.notes || []) parent.append(element('p', note, 'warning'));

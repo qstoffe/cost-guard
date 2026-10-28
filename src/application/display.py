@@ -85,6 +85,12 @@ def metric_tokens(values, timezone_id, now_ms=None):
     if "duration_seconds" in values:
         tokens["window"] = "" if values["duration_seconds"] is None else duration_text(values["duration_seconds"] * 1000)
     if "relative_cost" in values:
+        if "evidence" in values:
+            evidence = dict(values["evidence"].fields)
+            tokens["evidence"] = (f"{evidence['model_prompts']} model prompts + "
+                f"{evidence['publisher_prompts']} other same-publisher prompts; "
+                f"{evidence['generic_prior_weight']}% generic prior from "
+                f"{evidence['global_prompts']} completed prompts. 100 weight slots, not 100 observed prompts.")
         parts = [relative_cost(decimal(values["relative_cost"]))]
         for level in values.get("relative_levels", ())[1:]:
             tier = dict(level.fields)

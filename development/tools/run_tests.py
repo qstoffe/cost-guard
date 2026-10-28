@@ -47,6 +47,7 @@ QUICK_PATTERNS: tuple[str, ...] = (
     "test_domain.py",
     "test_session_tree.py",
     "test_report_sampling.py",
+    "test_workload_mix.py",
     "test_report_duration.py",
     "test_session_snapshot.py",
     "test_v2_normalization.py",

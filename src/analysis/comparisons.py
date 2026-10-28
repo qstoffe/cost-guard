@@ -11,6 +11,8 @@ from src.pricing.tiers import lower_bound, ordered_tiers
 
 from .models import PromptRecord
 from .token_mix import PricedUsage
+from .workload_mix import MixEvidence, WorkloadSamples
+from src.pricing.publishers import model_publisher
 from .effort import EffortSelection, interpret_effort
 
 # Sorting only: never exposed as observed usage or a Relative CCost sample.
@@ -33,11 +35,13 @@ class ModelComparisonRow:
     release_date: str | None = None
     promotional: bool = False
     relative_levels: tuple[RelativePriceLevel, ...] = ()
+    evidence: MixEvidence = MixEvidence()
 
 
 
-def model_comparison_rows(records: Iterable[PromptRecord | PricedUsage], catalog: PricingCatalog) -> tuple[ModelComparisonRow, ...]:
-    """Every comparable model/tier under one shared observed I/C/W/O mix.
+def model_comparison_rows(records: Iterable[PromptRecord | PricedUsage], catalog: PricingCatalog,
+                          *, samples: WorkloadSamples | None = None) -> tuple[ModelComparisonRow, ...]:
+    """Every comparable model/tier under its own observed workload-profile mix.
 
     Reports pass each sampled prompt's priceable usage; the caller owns sample
     eligibility, this applies the mix and the cheapest comparable base price.
@@ -49,8 +53,11 @@ def model_comparison_rows(records: Iterable[PromptRecord | PricedUsage], catalog
     scores: list[tuple[Decimal | None, ...]] = []
     bounds: list[tuple[tuple[str, int] | None, ...]] = []
     for model in catalog.ccost_models:
+        native = catalog.resolve_reference(model.model.model)
+        effective, evidence = (samples.effective(model.model.model, model_publisher(native)) if samples is not None
+                               else (sorting_mix, MixEvidence()))
         tiers = ordered_tiers(model)
-        units = tuple(token_mix_tier_price(sorting_mix, tier) for tier in tiers) or (None,)
+        units = tuple(token_mix_tier_price(effective if sampled else _DEFAULT_SORT_MIX, tier) for tier in tiers) or (None,)
         unit = units[0]
         if sampled and unit is None:
             continue  # Preserve the observed-mix comparable-model selection.
@@ -58,11 +65,12 @@ def model_comparison_rows(records: Iterable[PromptRecord | PricedUsage], catalog
         # number is diagnostic only; relative ordering is the important contract.
         rows.append(ModelComparisonRow(
             model_name=model.model.display_name or model.model.model,
-            publisher=str(model.metadata.get("publisher", model.model.provider)),
+            publisher=model_publisher(native) or "Unknown / unverified",
             estimated_ccost=unit if sampled else None,
             relative_to_lowest=None,
             release_date=model.metadata.get("release_date"),
             promotional=str(model.metadata.get("promotion_active", "false")).lower() == "true",
+            evidence=evidence,
         ))
         scores.append(units)
         bounds.append(tuple(None if index == 0 else lower_bound(tier, tiers[index - 1])

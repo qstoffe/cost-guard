@@ -24,6 +24,12 @@ const names = () => rows().map(row => row.children[1].textContent.split(' · ')[
 const click = text => all(output, 'button').find(n => n.textContent === text).events.click();
 draw();
 assert.deepEqual(names(), order);
+if (!fallback) {
+  assert.ok(output.textContent.includes('Model/publisher evidence'));
+  for (const row of view.model_comparison) assert.ok(output.textContent.includes(row.display.evidence));
+  const first = all(rows()[0], 'span').find(node => node.className?.includes('model-relative'));
+  assert.equal(first.title, view.model_comparison[0].display.evidence);
+}
 assert.ok(all(output, 'table')[0].className.includes('models-table'));
 assert.ok(!output.textContent.includes('Accounts Overview'));
 const old = rows().find(row => row.children[1].textContent.startsWith('GPT-5.1'));

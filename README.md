@@ -102,7 +102,7 @@ Details: [normal report](#normal-report), [model comparison](#model-comparison),
 
 ### Token Mix
 
-`--token-mix` breaks available historical usage down by model and input/cache-read/cache-write/output token category, together with CCost.
+`--token-mix`: historical model/publisher I/C/W/O shares and CCost.
 
 ![Cost Guard Token Mix: model/category usage and CCost](docs/images/cost-guard-token-mix.png)
 
@@ -181,7 +181,7 @@ Reports show `OpenCode not found` only when selection fails and no PATH executab
 
 ### Model comparison
 
-**Relative CCost** applies the priced-request I/C/W/O mix of the latest 100 priced completed prompts to every tier against the cheapest comparable **base** (`1.0x`). Illustrative `8.0x → 16.0x (>200K)` means an increase above 200000 input tokens; `≥` is inclusive. Running/aborted prompts are excluded. Without samples, values stay blank; hidden 2/96/1/1 drives sorting only.
+**Relative CCost** blends up to 100 own completed priced prompts, then verified publisher evidence, then a generic prior. Prompt-count weights blend pooled shares; 100 weight slots need not mean 100 observations. These personalized workload-profile estimates are not same-task benchmarks or billing. Cold acquisition can traverse history; compact revision-keyed samples accelerate reuse. Dashboard usage mix stays separate. [Formula, tiers and limits](docs/usage-and-cost.md#model-comparison).
 
 Availability uses settled V2 `/api/model` IDs (V1: `opencode models`), exact/verified aliases and explicit variant rates. Ambiguous prices stay unknown; failed lookups warn/show the catalog. Unpriced models have no row.
 
@@ -203,6 +203,8 @@ Both modes sort by full-Decimal base/higher price descending, earlier context bo
 ## Token Mix % by model: `--token-mix`
 
 Scans all available OpenCode history; the first uncached run can be slow. `Total Token Mix % · <volume> tokens` comes first, recomputed from shown requests. Each historically used, currently selectable model has `Prompts`, `Calls`, aligned Input/Cache/Write/Output shares and CCost, and total `CCost`.
+
+Publisher rows pool the same requests at original model/tier CCost. Unknown manufacturers stay unverified; prompt counts are not additive.
 
 - `Prompts`: unique user prompts where the model contributed usage. One prompt can count on several model rows, so rows do not sum to a prompt total.
 - `Calls`: model requests attributed to the model, including tool-loop continuations, subagent and compaction requests. Compare both to judge sample size.
@@ -366,7 +368,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.104 (2026-10-28):** All eight launchers use hyphenated names. Update shortcuts/bookmarks; no aliases ship. Console ownership, Web lifecycle and analysis are unchanged.
+**v80.105 (2026-10-28):** Model/publisher-weighted Relative CCost and historical publisher Token Mix in CLI/Web. Account costs/quotas and dashboard usage mix are unchanged.
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 
