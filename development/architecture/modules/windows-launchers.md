@@ -1,41 +1,60 @@
 # Windows launcher verification
 
-## Contract and boundary
+Source revision: 11fa96c2bea806c7a66341e407bc04eb1611d079
+Checked revision: 11fa96c2bea806c7a66341e407bc04eb1611d079
+Last checked: 2026-10-28
+Status: current
 
-The three `.cmd` files start the same `src/windows_launcher.ps1` driver with a mode.
-`start /b` reuses the launcher's console; cmd exits immediately, before Python detection/work.
-PowerShell uses `-NoExit`, sets the package root as its working directory and remains interactive.
-The per-process execution-policy option runs the bundled driver without modifying saved policies.
-Missing Python retains the actionable Python 3.11+ message and `$LASTEXITCODE = 9009`.
-Other native command results remain in `$LASTEXITCODE`, with a visible non-zero result.
+## Responsibility and ownership
 
-**Do not remove the Ctrl+C reset.** Windows `start /b` inherits ignored Ctrl+C into its child.
-The driver calls `SetConsoleCtrlHandler(NULL, FALSE)` before Python starts. Omitting it can leave
-Watch uninterruptible. Calling PowerShell synchronously from batch instead can restore the unwanted
-`Terminate batch job (Y/N)?` interaction. No renderer owns this terminal policy.
+Windows batch entrypoints own shell selection and a separate-console handoff.
+`src/windows_launcher.ps1` owns requirement feedback, Python discovery, mode dispatch,
+native results and the surviving PowerShell prompt. No renderer owns terminal policy.
 
-## Bounded workstation smoke
+## Public contract
 
-Run only with explicit approval for these launcher/UI actions. Deterministic suites never open
-windows, inject keys or depend on the user's OpenCode installation. Do not stop the shared service.
+All three batch entrypoints use START without /B or /WAIT: an existing caller can
+return, but never shares a console/input queue with the persistent child. Explorer
+open remains supported; the transient batch console may close as the Cost Guard
+console opens. The terminal host controls window/tab decoration. PowerShell uses
+-NoProfile -NoExit and checkout-relative paths; execution policy changes are process-only.
+Feedback is emitted only inside the child, before console initialization/Python checks.
 
-1. Open `windows/Cost Guard.cmd` using Explorer's open/double-click action. After the report, run
-   `Get-Location` and inspect `$LASTEXITCODE` at the ordinary package-root PowerShell prompt.
-2. Open `windows/Cost Guard Watch.cmd`, wait for the steady dashboard, press Ctrl+C and verify
-   `Watch stopped.` followed by a usable prompt in the same console, without batch confirmation.
-3. Open `development/user-tools/diagnostics/windows/Cost Guard Diagnostics.cmd`, let it finish, verify its bundle and
-   execute a harmless command at the surviving prompt. Validation failure must still be inspected
-   in the bundle; successful ZIP collection alone does not establish a passing validation gate.
-4. In a disposable package copy only, inject `ValueError('launcher smoke failure')` into
-   `WatchCoordinator._advance` from an entry-point wrapper. Open that copy's Watch launcher and
-   verify bootstrap's runtime error, native result 1 and a usable prompt; repeat with RuntimeError
-   or OSError as needed. Never modify the real OpenCode service/history or add a production test knob.
-5. Confirm the handoff creates no second console for PowerShell, the original outer cmd process
-   is gone before interruption, and each shell accepts a new command. Close only smoke-owned shells
-   after verification. Host-specific initial window decoration is not a claim of zero cmd processes.
+Missing Python retains actionable Python 3.11+ guidance and child `$LASTEXITCODE = 9009`.
+Other native results remain visible and available at that child's prompt. Batch
+exit status acknowledges START only, not later Python completion. Direct Python is
+the synchronous caller/exit-code route. Ctrl+C stops only the owned Watch console;
+no waiting batch can ask the Windows batch-termination confirmation. Retain the explicit
+SetConsoleCtrlHandler(NULL, FALSE) reset, including direct/legacy invocations.
 
-Automation may use ShellExecute's `open` verb (the Explorer double-click action), console buffer
-inspection, `GenerateConsoleCtrlEvent(CTRL_C_EVENT, 0)` and targeted console input in only the
-consoles it created. Record aggregate pass/fail/window/process observations, never prompt text,
-session titles, auth data or raw console buffers. Console-host/delegation differences require fresh
-live evidence on another Windows setup; textual launcher tests do not prove them.
+## Allowed dependencies
+
+In-box PowerShell 7 when available, Windows PowerShell 5.1 fallback, Win32 console
+control and Python 3.11+ through available py.exe/python.exe. No installed dependencies,
+prompt/profile changes, analysis changes or OpenCode service control.
+
+## Entrypoints
+
+- `windows/Cost Guard.cmd`: report.
+- `windows/Cost Guard Watch.cmd`: Watch.
+- `development/user-tools/diagnostics/windows/Cost Guard Diagnostics.cmd`: Diagnostics.
+- `src/windows_launcher.ps1`: shared driver.
+
+## Tests
+
+Focused regressions: `development/tests/test_windows_launcher.py`,
+`development/tests/test_launcher_feedback.py`, `development/tests/test_watch_lifecycle.py`,
+`development/tests/test_watch_source_recovery.py`, `development/tests/test_rc2_public_diagnostics.py`.
+These never open windows. They protect isolation, feedback ownership, persistent
+shells, shell/Python fallback, mode arguments, native results and Ctrl+C reset.
+
+Manual native evidence and commands: `development/architecture/governance/verification/windows-console-ownership.md`.
+The manual harnesses `development/tests/evidence/windows-console/console_probe.py` and
+`development/tests/evidence/windows-console/live_console_probe.py` require fresh explicit
+bounded UI approval and a disposable clone. They use only owned consoles, synthetic
+fixtures, aggregate buffer assertions and targeted input/Ctrl+C. They never stop OpenCode.
+The real Diagnostics ZIP must be inspected for its validation result; collection exit
+alone is not a full-local PASS. Never publish raw buffers/history/credentials.
+
+The colleague's exact prompt setup and physical keyboard/focus appearance remain a
+consumer follow-up, not proof supplied by textual tests or the bounded native probes.
