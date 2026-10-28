@@ -70,7 +70,7 @@ class CompactReportTests(unittest.TestCase):
                         "CCost is reference valuation"):
             self.assertNotIn(omitted, text)
         self.assertLess(text.index("Pricing/cache metadata:"), text.index("| Publisher"))
-        self.assertLess(text.index("Relative CCost: Personalized"), text.index("| Publisher"))
+        self.assertLess(text.index("Relative CCost: Common"), text.index("| Publisher"))
         self.assertNotIn("Price I/C/W/O is", text)
 
     def test_all_models_ignores_availability_accounts_and_other_views(self):
@@ -93,7 +93,7 @@ class CompactReportTests(unittest.TestCase):
         source = SyntheticMonthSource(12, 20, month_start_ms=START)
         service = self.service(source)
         report = service.build(ReportRequest())
-        self.assertEqual(12, source.load_count, "Cold model evidence covers history beyond the global sample")
+        self.assertEqual(5, source.load_count, "Five 20-prompt roots fill the global sample")
         sample = latest_prompts(tuple(service._analyzed.values()), service._priceable())
         self.assertEqual(100, len(sample))
         self.assertLess(sample[-1].prompt_time_ms, START + 10 * 60_000)  # September
@@ -104,7 +104,7 @@ class CompactReportTests(unittest.TestCase):
         service.set_now_ms(NOW + 40 * 86_400_000)
         later = service.build(ReportRequest())
         self.assertEqual(report.model_comparison, later.model_comparison)
-        self.assertEqual(12, source.load_count, "Stable roots reuse compact comparison samples")
+        self.assertEqual(5, source.load_count, "Stable roots reuse cached analysis")
         all_models = service.build(ReportRequest(ReportKind.ALL_MODELS))
         self.assertEqual(report.model_comparison_sample_size, all_models.model_comparison_sample_size)
         self.assertEqual(100, all_models.pricing_diagnostics["relcost_sample_prompts"])
@@ -118,7 +118,7 @@ class CompactReportTests(unittest.TestCase):
         service.build(ReportRequest())
         sample = latest_prompts(tuple(service._analyzed.values()), service._priceable())
         self.assertEqual({f"root-{n:04d}" for n in range(7, 12)}, {p.session_id for p in sample})
-        self.assertEqual(12, source.load_count, "Cold model evidence includes older roots too")
+        self.assertEqual(6, source.load_count, "Touched old root cannot displace the five latest roots")
 
     def test_fewer_than_100_and_visibility_completion_abort_rules(self):
         service = self.service(FakeSource(make_snapshot(running=True)), now_ms=2_200)

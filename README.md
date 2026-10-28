@@ -181,7 +181,7 @@ Reports show `OpenCode not found` only when selection fails and no PATH executab
 
 ### Model comparison
 
-**Relative CCost** blends up to 100 own completed priced prompts, then verified publisher evidence, then a generic prior. Prompt-count weights blend pooled shares; 100 weight slots need not mean 100 observations. These personalized workload-profile estimates are not same-task benchmarks or billing. Cold acquisition can traverse history; compact revision-keyed samples accelerate reuse. Dashboard usage mix stays separate. [Formula, tiers and limits](docs/usage-and-cost.md#model-comparison).
+**Relative CCost** uses one pooled I/C/W/O mix for every model/tier, tried or untried: latest **up to 100 completed priceable prompts globally**, actual count shown. Common workload prices are not same-task capability/throughput benchmarks, billing or specialized-job forecasts. Dashboard/historical Token Mix stays separate. [Details](docs/usage-and-cost.md#model-comparison).
 
 Availability uses settled V2 `/api/model` IDs (V1: `opencode models`), exact/verified aliases and explicit variant rates. Ambiguous prices stay unknown; failed lookups warn/show the catalog. Unpriced models have no row.
 
@@ -370,7 +370,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.110 (2026-10-29):** Historical Tokens per model/publisher in CLI and Web; explicit partial telemetry.
+**v80.111 (2026-10-29):** Shared global comparison mix and tier warnings; historical model/publisher Tokens unchanged.
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

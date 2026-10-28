@@ -78,12 +78,11 @@ def rel_ccost_sentences(sample_size: int) -> tuple[str, ...]:
         return ("No completed priced prompts are available yet.",
                  "Relative CCost stays blank; a hidden 2/96/1/1 mix orders published prices.")
     noun = "prompt" if sample_size == 1 else "prompts"
-    return ("Personalized workload-profile estimates, not a same-task benchmark or billing.",
-            "Each model uses up to 100 own completed prompts, then other same-publisher prompts, then a generic prior.",
-            f"Generic prior: {sample_size} completed {noun}; weights blend pooled I/C/W/O shares.",
-            "100 weight slots are not 100 observed prompts.",
-            "Untried models use verified publisher/global evidence.",
-            "Every tier uses its model's effective mix and the same cheapest comparable base price as 1.0x.",
+    return ("Common token-category workload price comparison, not a same-task benchmark or billing.",
+            f"One shared I/C/W/O mix from the latest {sample_size} completed priceable {noun} globally (up to 100).",
+            "Every model and tier, including untried models, uses those same pooled token shares.",
+            "Not a capability/throughput benchmark or a forecast of specialized future jobs.",
+            "Every tier uses the same cheapest positive comparable base price as 1.0x.",
             "Arrows show context-tier prices; > or ≥ marks the published input-token boundary.")
 
 

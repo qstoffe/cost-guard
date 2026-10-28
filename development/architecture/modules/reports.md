@@ -1,8 +1,8 @@
 # Reports source contracts
 
-Source revision: b788aa556cc12a50fc2909968fc7fdea19e1bebf
-Checked revision: b788aa556cc12a50fc2909968fc7fdea19e1bebf
-Last checked: 2026-10-28
+Source revision: 1b0fd64375bfc10c6653dda86dea41e2d0c1eb88
+Checked revision: 1b0fd64375bfc10c6653dda86dea41e2d0c1eb88
+Last checked: 2026-10-29
 Status: current
 
 [Architecture overview](../OVERVIEW.md) · [Owner/test routes](CODE_MAP.md). Source remains authoritative.
@@ -15,11 +15,13 @@ Candidate roots are ordered by whole-tree activity, so newly updated child work 
 
 ## Public contract
 
-Immutable projections cover dashboard/catalog, lists and detail/date. Generic latest-100 samples stop below whole-tree activity cutoffs (ties qualify); model-specific evidence has an independent scope below. Hydration is authoritative. Quotas remain native observations; normal account CCost independently loads local-day/rolling/month history. Other modes fetch no accounts. Lists hydrate requested roots; detail/date project prompts. Web pages reject catalog membership/order revision drift and report truthful root totals, but row observations are per-page, not cross-page transactions; sorting/filtering stays page-local.
+FR 000534 updates the comparison policy below in the same delivery; module boundaries are unchanged.
+
+Immutable projections cover dashboard/catalog, lists and detail/date. Global latest-100 samples stop below whole-tree activity cutoffs (ties qualify); historical Token Mix has an independent deep scope below. Hydration is authoritative. Quotas remain native observations; normal account CCost independently loads local-day/rolling/month history. Other modes fetch no accounts. Lists hydrate requested roots; detail/date project prompts. Web pages reject catalog membership/order revision drift and report truthful root totals, but row observations are per-page, not cross-page transactions; sorting/filtering stays page-local.
 
 `reports/sampling.py` owns both eligibility/cutoff rules; `history.py` owns explicit root/range/limit scopes and incremental Watch-day/rolling-window acquisition. `acquisition.py` coordinates source batches/exact cache proofs; `ReportService` dispatches modes and account/availability overlap. `prompt_rows.py`/`prompts.py` own shared timeline/epoch projection, range/order and totals. No second analyzer or worker.
 
-Dashboard usage mix stays latest-100, including running/interrupted priceable usage. Relative CCost independently samples up to 100 completed prompts per exact model across available history. `src/analysis/workload_mix.py` blends normalized model/publisher/global pooled shares using prompt-count weights; `src/pricing/publishers.py` resolves catalog manufacturers, never request/account routes. `src/reports/comparison_history.py` caches bounded per-root compact samples by source revision, analysis and catalog semantics; a stable-root aggregate additionally proves exact root membership/revisions, excluding unstable roots from reuse. Cold acquisition may traverse history; warm reports reanalyze unstable roots only. Deleted roots invalidate membership; cache loss reconstructs only available evidence. Hydrated deep roots are released. Warnings reuse each target model's effective mix for the existing 15-minute observation window. `src/reports/token_mix_history.py` separately groups the same availability-filtered historical requests by model and publisher, with pooled shares, distinct per-group prompts and original per-request CCost. Prompt counts are not additive. Immutable report/application projections export evidence counts/prior weights and publisher rows; CLI/Web render, never revalue. Web history stays explicit/cancellable; mobile-accessible collapsed evidence supplements model tooltips. Exact tiers, promotions, no-history sorting and accounts stay unchanged.
+Dashboard usage mix stays latest-100, including running/interrupted priceable usage. Relative CCost independently uses the latest up to 100 completed priceable prompts globally through `latest_prompts` and `_relative_usage`. Pooled I/C/W/O shares price every model/tier; warnings reuse that same global mix for the existing 15-minute observation window. Ordinary model lists no longer call `src/reports/comparison_history.py` or acquire deep per-model samples. The retained compact evidence helpers are not the model-list pricing policy. `src/pricing/publishers.py` resolves catalog manufacturers, never request/account routes. `src/reports/token_mix_history.py` separately groups the same availability-filtered historical requests by model and publisher, with pooled shares, distinct per-group prompts, absolute Tokens and original per-request CCost. Prompt counts are not additive. Immutable report/application projections export the actual global comparison sample size and publisher rows; CLI/Web render, never revalue. Web history stays explicit/cancellable; collapsed comparison help and model tooltips describe the shared sample. Exact tiers, promotions, no-history sorting and accounts stay unchanged.
 
 `src/analysis/model_supersession.py` shares table-local classification with CLI/Web. `presentation/model_supersession.py` is a compatibility export. Fading/older-stable text never changes valuation, ordering or notices.
 
@@ -42,7 +44,7 @@ Schema version and application instance UUID are separate from per-request-view 
 
 | Existing mode | Application request / published view | Scope and protected parity |
 | --- | --- | --- |
-| Normal | NORMAL / model comparison, Token Mix, accounts/quotas | Per-model 100-slot profiles and independent latest-100 usage; account-period acquisition independent; CCost is reference value, not billing. Full root revision evidence remains; unused month-wide request identities are not exported. |
+| Normal | NORMAL / model comparison, Token Mix, accounts/quotas | One global latest-up-to-100 completed-prompt comparison mix and independent latest-100 usage; account-period acquisition independent; CCost is reference value, not billing. Full root revision evidence remains; unused month-wide request identities are not exported. |
 | All models | ALL_MODELS / model comparison, Token Mix | Same comparison eligibility, no selectable filter or accounts |
 | Session list | SESSIONS / session_usage | Limit/all or bounded revision-checked page; whole-tree cost, completeness, archived/running flags and report duration |
 | Session detail | SESSION / prompt_blocks, request_identities | Complete requested root/child tree, stable event/message/part references and opaque request key; no global Watch cap; inherited FR000200 running metrics |

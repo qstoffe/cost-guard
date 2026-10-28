@@ -102,10 +102,8 @@ def metric_tokens(values, timezone_id, now_ms=None):
     if "relative_cost" in values:
         if "evidence" in values:
             evidence = dict(values["evidence"].fields)
-            tokens["evidence"] = (f"{evidence['model_prompts']} model prompts + "
-                f"{evidence['publisher_prompts']} other same-publisher prompts; "
-                f"{evidence['generic_prior_weight']}% generic prior from "
-                f"{evidence['global_prompts']} completed prompts. 100 weight slots, not 100 observed prompts.")
+            tokens["evidence"] = (f"One shared I/C/W/O mix from the latest {evidence['global_prompts']} "
+                "completed priceable prompts globally (up to 100), for every model and tier.")
         parts = [relative_cost(decimal(values["relative_cost"]))]
         for level in values.get("relative_levels", ())[1:]:
             tier = dict(level.fields)

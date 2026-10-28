@@ -11,7 +11,7 @@ from src.pricing.tiers import lower_bound, ordered_tiers
 
 from .models import PromptRecord
 from .token_mix import PricedUsage
-from .workload_mix import MixEvidence, WorkloadSamples
+from .workload_mix import MixEvidence
 from src.pricing.publishers import model_publisher
 from .effort import EffortSelection, interpret_effort
 
@@ -39,9 +39,8 @@ class ModelComparisonRow:
 
 
 
-def model_comparison_rows(records: Iterable[PromptRecord | PricedUsage], catalog: PricingCatalog,
-                          *, samples: WorkloadSamples | None = None) -> tuple[ModelComparisonRow, ...]:
-    """Every comparable model/tier under its own observed workload-profile mix.
+def model_comparison_rows(records: Iterable[PromptRecord | PricedUsage], catalog: PricingCatalog) -> tuple[ModelComparisonRow, ...]:
+    """Every comparable model/tier under one pooled global workload mix.
 
     Reports pass each sampled prompt's priceable usage; the caller owns sample
     eligibility, this applies the mix and the cheapest comparable base price.
@@ -54,10 +53,8 @@ def model_comparison_rows(records: Iterable[PromptRecord | PricedUsage], catalog
     bounds: list[tuple[tuple[str, int] | None, ...]] = []
     for model in catalog.ccost_models:
         native = catalog.resolve_reference(model.model.model)
-        effective, evidence = (samples.effective(model.model.model, model_publisher(native)) if samples is not None
-                               else (sorting_mix, MixEvidence()))
         tiers = ordered_tiers(model)
-        units = tuple(token_mix_tier_price(effective if sampled else _DEFAULT_SORT_MIX, tier) for tier in tiers) or (None,)
+        units = tuple(token_mix_tier_price(sorting_mix, tier) for tier in tiers) or (None,)
         unit = units[0]
         if sampled and unit is None:
             continue  # Preserve the observed-mix comparable-model selection.
@@ -70,7 +67,7 @@ def model_comparison_rows(records: Iterable[PromptRecord | PricedUsage], catalog
             relative_to_lowest=None,
             release_date=model.metadata.get("release_date"),
             promotional=str(model.metadata.get("promotion_active", "false")).lower() == "true",
-            evidence=evidence,
+            evidence=MixEvidence(generic_prior_weight=0, global_prompts=mix[4]),
         ))
         scores.append(units)
         bounds.append(tuple(None if index == 0 else lower_bound(tier, tiers[index - 1])

@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.111 — 2026-10-29
+
+- Relative CCost/tier warnings share the latest up to 100 completed priceable prompts globally. CLI/Web show actual counts; no model-specific blends/deep scan. Historical Token Mix, Tokens and units stay intact. Workload prices are not benchmarks/bills/forecasts.
+
 ## v80.110 — 2026-10-29
 
 - CLI/Web historical Token Mix adds model/publisher Tokens: compact K/M/B, exact Web sorting, `?` partial subtotals and `N/A` unknowns. Narrow CLI uses labeled rows. Attribution, valuation, configured units and explicit/cancellable capture are unchanged.
@@ -26,9 +30,9 @@
 
 ## v80.105 — 2026-10-28
 
-- Relative CCost now blends each model's latest completed-prompt mix with verified same-publisher evidence and a generic prior using 100 prompt-weight slots. Model history is independent of the global latest-100 usage sample; exact tiers and context warning multipliers share the effective mix.
-- CLI and Web Beta historical Token Mix retain model rows and add publisher rows from the same shown requests, with distinct prompt counts, pooled token shares and original per-request CCost. Evidence counts cross the shared Python/application boundary; JavaScript does no valuation.
-- Revision-keyed disposable compact samples reuse stable history without retaining deep hydrated roots. Cold acquisition can traverse all available history; deleted history is not reconstructed. Account CCost, quotas, Watch usage mixes and explicit Web history capture remain unchanged.
+- Relative CCost introduced 100-slot model/publisher/global prompt-weight blends independent of dashboard usage, shared by exact tiers and warnings (reversed in v80.111).
+- CLI/Web historical Token Mix added publisher rows: distinct prompts, pooled shares and original request CCost; shared Python projection, no JavaScript valuation.
+- Revision-keyed compact samples reuse stable history without deep hydrated roots; cold scans may traverse available history, never reconstruct deletions. Accounts, quotas, Watch usage and explicit Web history capture unchanged.
 
 ## v80.104 — 2026-10-28
 

@@ -1,13 +1,13 @@
 # Performance investigations
 
-Source revision: 76d9054556da384d8cb888b16699ece5f1b2d984
-Checked revision: 9a27a6ae600f4c651b3306d69f5c8fc9da0f0dff
-Last checked: 2026-10-28
+Source revision: 1b0fd64375bfc10c6653dda86dea41e2d0c1eb88
+Checked revision: 1b0fd64375bfc10c6653dda86dea41e2d0c1eb88
+Last checked: 2026-10-29
 Status: current
 
 ## Summary
 
-Milestone-40 audit: **NO_GAIN / no runtime change**. Cold normal reports now collect model/publisher evidence across all roots, not only the global latest-100 sample. Warm stable histories reuse compact samples. The earlier milestone-20 cold timings do not describe this newer workload contract. A development benchmark assertion was repaired: running roots must rehydrate even when revisions are unchanged. No source cache bypass was removed.
+FR 000534 (2026-10-29) deliberately restores global latest-up-to-100 comparison sampling; ordinary model lists and tier warnings no longer acquire deep model/publisher comparison samples. Historical Token Mix remains deep and explicit. The milestone-40 observations below describe the superseded policy, not current latency or an equivalent-work speedup. Running roots still require authoritative hydration; revision checks are unchanged.
 
 ## Evidence
 
@@ -51,8 +51,8 @@ A separate `py -3 -m cProfile -o performance-40.prof development/tools/benchmark
 
 ## Next investigations
 
-Characterize the demonstrated cold comparison-cache I/O under concurrent report/Live owners, transaction failures and actual installed history before changing connection lifetime or batching. Measure source hydration and child/task traversal separately. Watch quota projection duplication requires proof that discovery cannot change comparison pricing between projections. Browser resize/scroll/selection, assistive technology, native macOS, sleep/wake and interactive Ctrl+C remain separate proof scopes. No cross-repository proposal was published; follow-up is retained here, not a new FR.
+Measure the restored bounded comparison scope independently from deep historical Token Mix before reusing old cache-I/O conclusions. Characterize concurrent report/Live owners and transaction failures before changing connection lifetime or batching. Measure source hydration and child/task traversal separately. Watch quota projection duplication requires proof that discovery cannot change comparison pricing between projections. Browser resize/scroll/selection, assistive technology, native macOS, sleep/wake and interactive Ctrl+C remain separate proof scopes. No cross-repository proposal was published; follow-up is retained here, not a new FR.
 
 ## Rejected hypotheses
 
-Do not remove the per-model/publisher evidence scan to recover old global-sample cold timings, cache running roots, skip source revisions, impose Watch row caps on full detail, rebuild prices on display ticks or add per-tab account/Watch workers. Do not retain speculative pooling/concurrency wrappers for an invented gain. Synthetic wall measurements are not production latency, billing parity, CPU/memory savings or provider cost evidence. The no-change runtime decision preserves current transaction isolation, rollback/close behavior and source authority.
+The milestone-40 rejection of removing comparison evidence applied to its then-required model-specific policy; FR 000534 explicitly reverses that policy, not historical Token Mix. Do not cache running roots, skip source revisions, impose Watch row caps on full detail, rebuild prices on display ticks or add per-tab account/Watch workers. Do not retain speculative pooling/concurrency wrappers for an invented gain. Synthetic wall measurements are not production latency, billing parity, CPU/memory savings or provider cost evidence. Transaction isolation, rollback/close behavior and source authority remain required.
