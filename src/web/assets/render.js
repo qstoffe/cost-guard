@@ -183,7 +183,7 @@ const ReportView = (() => {
       mix.cost_complete ? 'detail' : 'detail partial'));
     mixCard.append(element('p', mix?.request_count ? `Your mix uses the latest ${mix.sample_size} priced prompts, totaling ${display(mix, 'total_tokens')} tokens.` : 'No priced prompts are available yet.', 'detail'));
     concept('Relative CCost', view.model_comparison_sample_size ? `${view.model_comparison_sample_size} completed ${view.model_comparison_sample_size === 1 ? 'prompt' : 'prompts'}` : 'No completed priced prompts',
-      view.model_comparison_sample_size ? 'Personalized workload-profile estimates, not a same-task benchmark or billing. Each model blends up to 100 own completed prompts, other verified same-publisher prompts, then a generic prior. Untried models use verified publisher/global evidence. Prompt-count weights blend pooled shares; 100 weight slots do not imply 100 observed prompts. Every tier uses its model’s mix and the same cheapest comparable base as 1.0x. Arrows show context-tier prices; > or ≥ marks the published input-token boundary.' :
+      view.model_comparison_sample_size ? 'Common token-category workload price comparison: one shared pooled I/C/W/O mix from the latest up to 100 completed priceable prompts globally prices every model and tier, including untried models. Every tier uses the same cheapest positive comparable base as 1.0x. Not a same-task capability/throughput benchmark, actual billing or a forecast of specialized future jobs. Dashboard Token Mix % uses a separate usage sample. Arrows show context-tier prices; > or ≥ marks the published input-token boundary.' :
         'Relative CCost stays blank; a hidden 2/96/1/1 mix orders published prices. No synthetic multipliers are shown.');
     parent.append(concepts);
   }
@@ -341,7 +341,7 @@ const ReportView = (() => {
     if (['overview', 'models'].includes(section) && (overview || view.model_comparison.length)) {
       if (view.token_mix && !overview) mixSummary(parent, view.token_mix);
       if (!overview) parent.append(element('p', view.model_comparison_sample_size ?
-        `Relative CCost · personalized model/publisher workload profiles · generic prior: ${view.model_comparison_sample_size} completed prompts · cheapest comparable base = 1.0x. Not a same-task benchmark or billing. Model-cell tooltips explain actual evidence and prior weight.` :
+        `Relative CCost · one shared global I/C/W/O mix: latest ${view.model_comparison_sample_size} completed priceable prompts (up to 100) · every model and tier · cheapest positive comparable base = 1.0x. Not a same-task capability/throughput benchmark, billing or specialized-job forecast.` :
         'No completed priced prompts: relative cells stay blank. A hidden 2/96/1/1 mix orders published prices; no synthetic multipliers are shown.', 'detail'));
       parent.append(element('p', `Pricing/cache metadata: ${display(view, 'pricing_retrieved_at_ms')}`, 'detail'));
       const all = view.kind === 'all-models';
@@ -352,7 +352,7 @@ const ReportView = (() => {
           ...(all ? [modelPrices(row)] : []), element('span', row.release_date || 'N/A', row.recent ? 'new' : '')], null, state, 'models',
          row => [row.publisher, row.model, row.relative_cost, ...(all ? [modelPriceKey(row)] : []), row.release_date]);
       if (view.model_comparison_sample_size) {
-        const evidence = element('details'); evidence.append(element('summary', 'Model/publisher evidence'));
+        const evidence = element('details'); evidence.append(element('summary', 'Shared global comparison sample'));
         for (const row of view.model_comparison) evidence.append(element('p', row.model + ': ' + display(row, 'evidence')));
         parent.append(evidence);
       }

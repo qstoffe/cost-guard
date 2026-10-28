@@ -7,7 +7,7 @@ Status: current
 
 Installed OpenCode Toolkit shared repository skills own development procedures. Source remains authoritative; historical measurements are not current PASS claims. External reference: https://github.com/qstoffe/opencode-toolkit/tree/main/skills/shared-repo-contract .
 
-- Performance investigations: `development/journal/PERFORMANCE.md` retains milestone-40 synthetic report/Watch measurements (NO_GAIN), cold model/publisher scan and cache-I/O limits, the active-root benchmark assertion repair, and scoped historical findings.
+- Performance investigations: `development/journal/PERFORMANCE.md` distinguishes FR 000534's global comparison policy from superseded milestone-40 deep-scan timings, retaining historical measurements, cache-I/O limits and active-root hydration findings.
 - History acquisition and startup: `development/architecture/modules/history-loading.md` retains scopes, measurements and unresolved terminal/live proof.
 - [OpenAI identity and quota evidence](openai-identity.md): canonical aliases, removed generations, deterministic recovery and historical 401 limits.
 - Architecture and owners: `development/architecture/OVERVIEW.md` routes module contracts and source/tests.

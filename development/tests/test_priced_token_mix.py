@@ -85,7 +85,11 @@ class RequestPriceabilityTests(unittest.TestCase):
         reference = {row.model_name: row for row in model_comparison_rows((usage, usage), catalog())}
         self.assertEqual(Decimal(1), rows["GPT Test"].relative_to_lowest)
         self.assertEqual(Decimal(2), rows["Claude Test"].relative_to_lowest)
-        self.assertEqual(rows, reference, "ratios depend on the normalized mix, not the sample size")
+        for name, row in rows.items():
+            self.assertEqual(row.relative_levels, reference[name].relative_levels,
+                             "ratios depend on the normalized mix, not the sample size")
+            self.assertEqual(row.estimated_ccost, reference[name].estimated_ccost)
+            self.assertEqual((1, 2), (row.evidence.global_prompts, reference[name].evidence.global_prompts))
 
 
 class ReportPricedSampleTests(unittest.TestCase):

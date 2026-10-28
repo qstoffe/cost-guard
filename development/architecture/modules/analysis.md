@@ -2,10 +2,12 @@
 
 [Architecture overview](../OVERVIEW.md) · [Owner/test routes](CODE_MAP.md). Source remains authoritative.
 
-Source revision: a27d5fede5d07a7a2e992691b34790b6017cd780
-Checked revision: a27d5fede5d07a7a2e992691b34790b6017cd780
-Last checked: 2026-10-28
+Source revision: 1b0fd64375bfc10c6653dda86dea41e2d0c1eb88
+Checked revision: 1b0fd64375bfc10c6653dda86dea41e2d0c1eb88
+Last checked: 2026-10-29
 Status: current
+
+FR 000534 updates comparison policy in this delivery without changing module boundaries.
 
 ## Responsibility and ownership
 
@@ -41,7 +43,7 @@ Usage/billing consumes all canonical providers: V2 `openai` requests must not di
 
 The causal core uses `TraceEntry`, `PromptRecord`, `CompactionRecord` and `RootAnalysisBundle`. Billing retains reported/included/fallback provenance. `analysis/valuation.py` independently derives `ComparisonCost` via reference estimation and actual `billed_spend`, never substituting fallback prices. Subscription CCost exposes priced/observed coverage, never billed dollars for unsupported models. `ReportService` may take a separate comparison catalog provider. Exact catalog identities prevent fuzzy CCost matches; clone de-duplication retains source-instance provenance. Root-first provenance reconciles main/subagent CCost before rounding.
 
-Context/comparison consumes canonical messages/parts/invocations. `analysis/context_history.py` separates request-local input from persisted history; unsupported decreases stay unknown. `estimate_event_context` preserves historical completion estimates independently of current anchor retirement. Model-selection boundaries allow historical comparison only with compatible telemetry and complete retained same-model history; resets remain separate epochs. Accounting stays independent. Completed compaction owns its summary/tail and negative delta. Next-Ictx never predicts cache hits; current warnings require eligible anchors. Comparison prices each target model/tier under its own 100-slot profile and cheapest base reference. `src/analysis/workload_mix.py` weights up to 100 own completed prompts, then other same-publisher prompts, then a global prior; slots are weights, not 100 observed prompts. The independent dashboard usage mix may include running/interrupted usage. Full-Decimal sorting orders base/next-tier prices descending, earlier boundaries, then name, recursively. Without samples, hidden 2/96/1/1 sorts while Relative CCost stays blank. Diagnostics never feed billing.
+Context/comparison consumes canonical messages/parts/invocations. `analysis/context_history.py` separates request-local input from persisted history; unsupported decreases stay unknown. `estimate_event_context` preserves historical completion estimates independently of current anchor retirement. Model-selection boundaries allow historical comparison only with compatible telemetry and complete retained same-model history; resets remain separate epochs. Accounting stays independent. Completed compaction owns its summary/tail and negative delta. Next-Ictx never predicts cache hits; current warnings require eligible anchors. Comparison prices every target model/tier under one shared pooled I/C/W/O mix from the latest up to 100 completed priceable prompts globally, with a common cheapest positive base reference. `src/analysis/comparisons.py` uses `normalized_average_token_mix`; model/publisher profiles do not affect ranking or tier-warning ratios. The independent dashboard usage mix may include running/interrupted usage. Full-Decimal sorting orders base/next-tier prices descending, earlier boundaries, then name, recursively. Without samples, hidden 2/96/1/1 sorts while Relative CCost stays blank. Diagnostics never feed billing.
 
 Stable complete analysis requires exact source revision, algorithm/config compatibility and a semantic pricing signature (identities/aliases, currency, rates/tiers), not retrieval timestamps/document labels. Malformed/incompatible, running or incomplete results never persist. Revisions remain conservative gates, not semantic truth.
 

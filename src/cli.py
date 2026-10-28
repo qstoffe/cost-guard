@@ -71,11 +71,11 @@ Token Mix %: I = uncached input (Input); C = cache read (Cache);
              W = cache write (Write); O = output (Output), including
              separately reported reasoning. Each share shows its CCost.
 Report: last 100 prompts with usage. Watch: requests observed during this run.
-Relative CCost: personalized workload profiles, not a same-task benchmark/billing.
-Each model blends up to 100 own completed prompts, other verified same-publisher
-prompts, then a generic prior. Prompt-count weights blend pooled I/C/W/O shares;
-100 weight slots are not 100 observed prompts. Cold evidence acquisition may
-traverse available history; revision-keyed disposable samples accelerate reuse.
+Relative CCost: common token-category workload price comparison, not billing.
+One shared I/C/W/O mix from the latest up to 100 completed priceable prompts
+globally prices every model and tier, including untried models and --all-models.
+Not a same-task capability/throughput benchmark or specialized-job forecast.
+Dashboard Token Mix % uses its separate usage sample.
 -- means unavailable shares (incomplete telemetry or no positive token total).
 CCost is Copilot AI-credit-equivalent reference valuation, not actual billing
 or credits deducted. Non-Copilot subscription usage can have positive CCost.

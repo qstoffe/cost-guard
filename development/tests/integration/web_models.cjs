@@ -25,7 +25,10 @@ const click = text => all(output, 'button').find(n => n.textContent === text).ev
 draw();
 assert.deepEqual(names(), order);
 if (!fallback) {
-  assert.ok(output.textContent.includes('Model/publisher evidence'));
+  assert.ok(output.textContent.includes('Shared global comparison sample'));
+  assert.ok(output.textContent.includes('one shared global I/C/W/O mix'));
+  assert.ok(output.textContent.includes(`latest ${view.model_comparison_sample_size} completed priceable prompts`));
+  assert.ok(!/personalized|generic prior|weight slots|same-publisher/.test(output.textContent));
   for (const row of view.model_comparison) assert.ok(output.textContent.includes(row.display.evidence));
   const first = all(rows()[0], 'span').find(node => node.className?.includes('model-relative'));
   assert.equal(first.title, view.model_comparison[0].display.evidence);

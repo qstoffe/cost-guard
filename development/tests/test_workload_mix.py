@@ -5,7 +5,7 @@ import io
 import unittest
 
 from development.tests.fixtures.compact_reports import Availability, report_service, START, NOW
-from development.tests.fixtures.synthetic_month import SyntheticMonthSource
+from development.tests.fixtures.synthetic_month import SyntheticMonthSource, make_root_snapshot
 from development.tests.fixtures.session_snapshots import make_snapshot
 from src.analysis import analyze_snapshot
 from src.analysis.comparisons import model_comparison_rows, threshold_cost_multiplier
@@ -115,25 +115,88 @@ class WorkloadMixTests(unittest.TestCase):
             altered = PricingCatalog((replace(catalog.models[0], metadata=metadata),))
             self.assertIsNone(publisher_for(altered, "gpt-test"))
 
-    def test_own_mixes_change_cheapest_reference_and_warning_tier_ratio(self):
+    def test_global_mix_prices_every_model_and_warning_tier_ratio(self):
         catalog = prices()
-        samples = WorkloadSamples()
-        add(samples, "gpt-test", "OpenAI", 100, (0, 0, 0, 10))
-        add(samples, "claude-test", "Anthropic", 100, (10, 0, 0, 0), start=1000)
-        rows = {r.model_name: r for r in model_comparison_rows((PricedUsage(input_tokens=1),), catalog, samples=samples)}
-        # CCost conversion is shared; independent ratio 5/2, and Anthropic 3/2.
-        self.assertEqual(D('2.5'), rows['gpt-test'].relative_to_lowest)
-        self.assertEqual(D('1.5'), rows['claude-test'].relative_to_lowest)
-        self.assertEqual(D(1), rows['gpt-other'].relative_to_lowest)
-        mix, _ = samples.effective('gpt-test', 'OpenAI')
+        usage = (PricedUsage(cache_read_tokens=90), PricedUsage(output_tokens=10))
+        rows = {r.model_name: r for r in model_comparison_rows(usage, catalog)}
+        # Shared 90% cache / 10% output: .59, .38, .37, .49 USD/M.
+        self.assertEqual(D('.59') / D('.37'), rows['gpt-test'].relative_to_lowest)
+        self.assertEqual(D(1), rows['claude-test'].relative_to_lowest)
+        self.assertEqual(D('.38') / D('.37'), rows['gpt-other'].relative_to_lowest)
+        self.assertEqual(D('.49') / D('.37'), rows['untried'].relative_to_lowest)
+        self.assertTrue(all(row.evidence.global_prompts == 2 for row in rows.values()))
+        mix = (D(0), D('.9'), D(0), D('.1'), 2)
         multiplier = threshold_cost_multiplier(catalog, 'gpt-test', 100, mix)
-        self.assertEqual(D(3), multiplier)
+        self.assertEqual(D('1.59') / D('.59'), multiplier)
         levels = rows['gpt-test'].relative_levels
-        self.assertEqual(multiplier, levels[1].relative_cost / levels[0].relative_cost)
+        self.assertAlmostEqual(multiplier, levels[1].relative_cost / levels[0].relative_cost, places=25)
+
+    def test_identical_prices_compare_equally_including_untried_models(self):
+        catalog = prices()
+        catalog = PricingCatalog((catalog.models[0], replace(catalog.models[0],
+            model=ModelRef('route', 'untried', 'untried'), metadata={})))
+        rows = model_comparison_rows((PricedUsage(input_tokens=3, output_tokens=7),), catalog)
+        self.assertEqual(2, len(rows))
+        self.assertEqual(rows[0].estimated_ccost, rows[1].estimated_ccost)
+        self.assertEqual(rows[0].relative_levels, rows[1].relative_levels)
+        self.assertEqual(D(1), rows[0].relative_to_lowest)
 
 
 class ComparisonHistoryTests(unittest.TestCase):
-    def test_older_model_history_warm_reuse_revision_change_and_deleted_roots(self):
+    def test_warning_first_uses_global_sample_not_targets_older_own_prompts(self):
+        source = SyntheticMonthSource(2, 100, month_start_ms=START)
+        for index in range(2):
+            # Separate the roots by a day: 100 one-second prompts otherwise overlap.
+            root = make_root_snapshot(index, 100, month_start_ms=START + index * 86_400_000)
+            source.snapshots[root.root.session_id] = replace(root, invocations=tuple(
+                replace(item, model=ModelRef('route', 'gpt-test' if index == 0 else 'claude-test'),
+                    tokens=TokenUsage(output=100) if index == 0 else TokenUsage(cache_read=90, output=10))
+                for item in root.invocations))
+        service = report_service(self, source, now_ms=NOW)
+        service.pricing_provider.catalog = prices()
+        expected = D('1.59') / D('.59')
+        self.assertEqual(expected, service._threshold_multiplier('gpt-test', 100))
+        self.assertEqual(1, source.load_count, 'older target history is not acquired')
+        report = service.build(ReportRequest(ReportKind.ALL_MODELS))
+        levels = next(row for row in report.model_comparison if row.model == 'gpt-test').relative_levels
+        self.assertAlmostEqual(expected, levels[1].relative_cost / levels[0].relative_cost, places=25)
+
+    def test_actual_global_sample_sizes_and_warning_cache_use_same_pooled_mix(self):
+        for count in (0, 1, 99, 100, 121):
+            with self.subTest(count=count):
+                source = SyntheticMonthSource(1, count, month_start_ms=START)
+                root = source.snapshots['root-0000']
+                # Deliberately dissimilar model/publisher jobs, not equal prompt weights.
+                source.snapshots['root-0000'] = replace(root, invocations=tuple(
+                    replace(item, model=ModelRef('route', 'gpt-test' if i % 2 else 'claude-test'),
+                        tokens=TokenUsage(cache_read=90) if i % 2 else TokenUsage(output=10))
+                    for i, item in enumerate(root.invocations)))
+                service = report_service(self, source, now_ms=NOW)
+                service.pricing_provider.catalog = prices()
+                report = service.build(ReportRequest(ReportKind.ALL_MODELS))
+                self.assertEqual(min(count, 100), report.model_comparison_sample_size)
+                rows = {row.model: row for row in report.model_comparison}
+                if not count:
+                    self.assertTrue(all(row.relative_cost is None for row in rows.values()))
+                    continue
+                cached = min(count // 2, 50) * 90
+                output = min((count + 1) // 2, 50) * 10
+                total = D(cached + output)
+                # Independent category-price formula; every row uses these same volumes.
+                raw = {name: (D(cached) * cache + D(output) * out) / total
+                    for name, cache, out in (('gpt-test', D('.1'), D(5)),
+                        ('gpt-other', D('.2'), D(2)), ('claude-test', D('.3'), D(1)),
+                        ('untried', D('.1'), D(4)))}
+                for name, cost in raw.items():
+                    self.assertAlmostEqual(cost / min(raw.values()), rows[name].relative_cost, places=25)
+                expected = (D(cached) * D('.1') + D(output) * 15) / (D(cached) * D('.1') + D(output) * 5)
+                self.assertAlmostEqual(expected, service._threshold_multiplier('gpt-test', 100), places=25)
+                dto = export(project(report))
+                self.assertEqual(min(count, 100), dto['model_comparison_sample_size'])
+                for row in dto['model_comparison']:
+                    self.assertIn(f"latest {min(count, 100)} completed priceable prompts globally", row['display']['evidence'])
+
+    def test_older_model_history_never_changes_global_comparison_or_loads_deep_roots(self):
         source = SyntheticMonthSource(12, 20, month_start_ms=START)
         for index in range(5):
             root = source.snapshots[f"root-{index:04d}"]
@@ -143,9 +206,11 @@ class ComparisonHistoryTests(unittest.TestCase):
         service.pricing_provider.catalog = prices()
         first = service.build(ReportRequest(ReportKind.ALL_MODELS))
         older = next(r for r in first.model_comparison if r.model == 'claude-test')
-        self.assertEqual(100, older.evidence.model_prompts)
+        self.assertEqual((0, 0, 100), (older.evidence.model_prompts,
+            older.evidence.publisher_prompts, older.evidence.global_prompts))
         self.assertEqual(100, first.token_mix.sample_size)
-        self.assertEqual(12, source.load_count)
+        self.assertLess(source.load_count, 12)
+        loaded = source.load_count
         self.assertLess(len(service._analyzed), 12, 'deep snapshots released')
         warm = report_service(self, source, now_ms=NOW)
         # New service with the SAME cache repository proves cross-process-style reuse.
@@ -154,16 +219,16 @@ class ComparisonHistoryTests(unittest.TestCase):
         warm.pricing_provider.catalog = prices()
         again = warm.build(ReportRequest(ReportKind.ALL_MODELS))
         self.assertEqual(first.model_comparison, again.model_comparison)
-        self.assertEqual(12, source.load_count)
+        self.assertEqual(loaded, source.load_count)
         source.snapshots.pop('root-0000')
         revised = warm.build(ReportRequest(ReportKind.ALL_MODELS))
-        self.assertEqual(80, next(r for r in revised.model_comparison if r.model == 'claude-test').evidence.model_prompts)
+        self.assertEqual(first.model_comparison, revised.model_comparison)
         root = source.snapshots['root-0001']
         source.snapshots[root.root.session_id] = replace(root, source_revision='changed', invocations=tuple(
             replace(i, model=ModelRef('route', 'gpt-test')) for i in root.invocations))
         changed = warm.build(ReportRequest(ReportKind.ALL_MODELS))
-        self.assertEqual(60, next(r for r in changed.model_comparison if r.model == 'claude-test').evidence.model_prompts)
-        self.assertEqual(13, source.load_count)
+        self.assertEqual(first.model_comparison, changed.model_comparison)
+        self.assertEqual(loaded, source.load_count)
 
     def test_publisher_history_reconciles_same_requests_and_shared_cli_web_projection(self):
         source = SyntheticMonthSource(1, 2, month_start_ms=START)
