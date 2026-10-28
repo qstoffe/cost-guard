@@ -48,6 +48,12 @@ class LauncherFeedbackTests(unittest.TestCase):
             self.assertEqual(1, text.count("start \""))
             self.assertNotIn("timeout", text.lower())
 
+    def test_all_macos_launcher_directories_pin_lf_for_windows_source_exports(self):
+        attributes = (ROOT / ".gitattributes").read_text(encoding="utf-8").splitlines()
+        for pattern in ("macos/*.command", "macos/Beta/*.command",
+                        "development/user-tools/diagnostics/macos/*.command"):
+            self.assertIn(pattern + " text eol=lf", attributes)
+
     def test_powershell_feedback_precedes_console_init_and_python_checks(self):
         text = (ROOT / "src/windows_launcher.ps1").read_text(encoding="utf-8")
         feedback = text.index("Write-Host -NoNewline 'Cost Guard: Checking requirements...'")
