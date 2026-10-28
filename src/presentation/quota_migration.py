@@ -1,6 +1,6 @@
 """Temporary CLI Watch announcement; no acquisition, config or usage history.
 
-TODO(FR000525, 2026-10-28): after the verified merge + 60-day sunset,
+TODO(FR000525, 2026-12-27T21:35:22Z): after this verified 60-day sunset,
 remove this module, WatchRenderer wiring, its tests and the cleanup note.
 The permanent Used quota presentation must remain.
 """
@@ -13,9 +13,9 @@ import sqlite3
 import sys
 import time
 
-# Filled only from the actual implementation PR's verified GitHub mergedAt.
-# None deliberately disables the notice until the post-merge metadata update.
-MERGED_AT_UTC: str | None = None
+# PR #98 merged as ebd3dce5212e8d7aaca1929335a191957678c0e7.
+# GitHub merged_at verified 2026-10-28; immutable sunset 2026-12-27T21:35:22Z.
+MERGED_AT_UTC: str | None = "2026-10-28T21:35:22Z"
 NOTICE = "⚠ Quota bars now show Used instead of Remaining"
 PERSONAL_SECONDS = 72 * 3600
 GLOBAL_SECONDS = 60 * 86400

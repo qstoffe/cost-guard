@@ -1,6 +1,6 @@
 # FR000525 temporary warning cleanup
 
-Recorded 2026-10-28. Implementation merge UTC and exact global sunset: pending the actual implementation PR merge; the FR-authorized post-merge metadata commit must fill both before delivery is claimed. Until then `MERGED_AT_UTC = None` disables the warning.
+Recorded 2026-10-28 from [implementation PR #98](https://github.com/qstoffe/cost-guard/pull/98), verified merged as `ebd3dce5212e8d7aaca1929335a191957678c0e7`. GitHub `merged_at`: **2026-10-28T21:35:22Z**. Immutable global sunset (60 elapsed days): **2026-12-27T21:35:22Z**. The FR-authorized narrow metadata update fixes `MERGED_AT_UTC` to that implementation merge, never to a later update/launch.
 
 After that verified 60-day sunset, deliberately remove:
 
