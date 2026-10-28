@@ -2,7 +2,18 @@
 
 [Architecture overview](../OVERVIEW.md) · [Owner/test routes](CODE_MAP.md). Source remains authoritative.
 
-## Canonical domain
+Source revision: a27d5fede5d07a7a2e992691b34790b6017cd780
+Checked revision: a27d5fede5d07a7a2e992691b34790b6017cd780
+Last checked: 2026-10-28
+Status: current
+
+## Responsibility and ownership
+
+Canonical domain, source-neutral analysis and disposable cache have separate owners.
+
+## Public contract
+
+### Canonical domain
 
 The domain separates:
 
@@ -20,9 +31,9 @@ Equal numbers are not interchangeable. Analysis consumes capabilities/domain sem
 
 `domain/ccost.py` owns reference conversion (100 CCost/USD), `CCostPricing` and valuation contracts. Catalog `models` remain native monetary metadata; immutable `ccost_models` are converted once before reference usage/category/context/comparison analysis, never billing fallback. Unknown currencies are unpriceable, not guessed FX. CCost is Copilot AI-credit-equivalent reference value, not deduction/billing; projections use explicit CCost fields.
 
-`numbers.py` owns display rounding: upward CCost/consumption, downward Remaining, exact rates/limits, no grouping; analysis never calls it. `version.mode_heading` owns startup grammar, CLI modes, progress transient rows. Reports align all quota labels; Watch only primary labels.
+`src/numbers.py` owns display rounding: credits use upward CCost, reference USD uses 100 CCost/USD and two decimals; native consumption/Remaining keep upward/downward rounding, rates/limits stay exact. `ccost_display` scopes synchronous render/export with ContextVar reset even on exceptions. It never converts canonical analysis values or native billing/quota amounts; analysis never calls it. `version.mode_heading` owns startup grammar, CLI modes, progress transient rows. Reports align all quota labels; Watch only primary labels.
 
-## Analysis
+### Analysis
 
 `src/analysis/` owns attribution, prompt/child/synthetic/compaction semantics, clone billing de-duplication, context and comparisons over canonical domain/provider-neutral abstractions only.
 
@@ -30,7 +41,7 @@ Usage/billing consumes all canonical providers: V2 `openai` requests must not di
 
 The causal core uses `TraceEntry`, `PromptRecord`, `CompactionRecord` and `RootAnalysisBundle`. Billing retains reported/included/fallback provenance. `analysis/valuation.py` independently derives `ComparisonCost` via reference estimation and actual `billed_spend`, never substituting fallback prices. Subscription CCost exposes priced/observed coverage, never billed dollars for unsupported models. `ReportService` may take a separate comparison catalog provider. Exact catalog identities prevent fuzzy CCost matches; clone de-duplication retains source-instance provenance. Root-first provenance reconciles main/subagent CCost before rounding.
 
-Context/comparison consumes canonical messages/parts/invocations. `analysis/context_history.py` separates request-local input from persisted history; unsupported decreases stay unknown. `estimate_event_context` preserves historical completion estimates independently of current anchor retirement. Model-selection boundaries allow historical comparison only with compatible telemetry and complete retained same-model history; resets remain separate epochs. Accounting stays independent. Completed compaction owns its summary/tail and negative delta. Next-Ictx never predicts cache hits; current warnings require eligible anchors. Comparison prices each tier under one 100-completed-prompt mix and cheapest base reference. Full-Decimal sorting orders base/next-tier prices descending, earlier boundaries, then name, recursively. Without samples, hidden 2/96/1/1 sorts while Relative CCost stays blank. Diagnostics never feed billing.
+Context/comparison consumes canonical messages/parts/invocations. `analysis/context_history.py` separates request-local input from persisted history; unsupported decreases stay unknown. `estimate_event_context` preserves historical completion estimates independently of current anchor retirement. Model-selection boundaries allow historical comparison only with compatible telemetry and complete retained same-model history; resets remain separate epochs. Accounting stays independent. Completed compaction owns its summary/tail and negative delta. Next-Ictx never predicts cache hits; current warnings require eligible anchors. Comparison prices each target model/tier under its own 100-slot profile and cheapest base reference. `src/analysis/workload_mix.py` weights up to 100 own completed prompts, then other same-publisher prompts, then a global prior; slots are weights, not 100 observed prompts. The independent dashboard usage mix may include running/interrupted usage. Full-Decimal sorting orders base/next-tier prices descending, earlier boundaries, then name, recursively. Without samples, hidden 2/96/1/1 sorts while Relative CCost stays blank. Diagnostics never feed billing.
 
 Stable complete analysis requires exact source revision, algorithm/config compatibility and a semantic pricing signature (identities/aliases, currency, rates/tiers), not retrieval timestamps/document labels. Malformed/incompatible, running or incomplete results never persist. Revisions remain conservative gates, not semantic truth.
 
@@ -42,7 +53,19 @@ The latest assistant's `termination` ends running/duration and distinguishes suc
 
 `analysis/duration.py` qualifies retrospective execution boundaries from normalized assistant/tool/background evidence, never session metadata or report time for terminated work. `PromptRecord.execution_duration_ms` and compaction timing survive derived caching; the legacy prompt `duration_ms` remains unchanged for Watch. Reports project qualified timing into `PromptProjection.duration_ms`; listings union the cached bundle directly, without detail hydration. A sorted interval union excludes idle gaps/overlap and propagates unknown timing to `N/A`; date totals union only selected events. Presentation shares Watch's compact formatter, not timing calculations.
 
-## Cache
+### Cache
 
 Disposable `cache/` uses generation-named SQLite, WAL, short transactions, 5s busy timeout and explicit close after commit/rollback. Schema changes never migrate/delete in-use generations. JSON carries source/algorithm revisions and bounded coordination, never sole history/credential ownership. Delete only while Cost Guard is stopped. Atomic `model_first_sightings` rows keep shared provider-qualified UTC Report/Watch presentation timestamps.
 
+
+## Allowed dependencies
+
+Domain uses the standard library; analysis consumes canonical domain and provider-neutral catalog contracts, not source transports, report orchestration or presentation. Cache is reconstructible storage, never source authority.
+
+## Entrypoints
+
+`src/analysis/core.py` composes attribution/compaction; `src/analysis/workload_mix.py` owns completed-prompt profiles; `src/analysis/valuation.py` owns reference valuation; `src/cache/database.py` owns transactions.
+
+## Tests
+
+`development/tests/test_analysis_core.py`, `development/tests/test_context_history_projection.py`, `development/tests/test_workload_mix.py`, `development/tests/test_cache.py`, `development/tests/test_ccost_display_unit.py`. Inspected source/assertions are not a fresh test PASS.

@@ -1,7 +1,7 @@
 # Cost Guard v80 architecture
 
-Source revision: 11fa96c2bea806c7a66341e407bc04eb1611d079
-Checked revision: 11fa96c2bea806c7a66341e407bc04eb1611d079
+Source revision: a27d5fede5d07a7a2e992691b34790b6017cd780
+Checked revision: a27d5fede5d07a7a2e992691b34790b6017cd780
 Last checked: 2026-10-28
 Status: current
 
@@ -30,14 +30,14 @@ flowchart TD
     reports --> analysis["Analysis: causal usage, valuation, context"]
     analysis --> domain
     reports --> cache["Cache: disposable revision-keyed acceleration"]
-    entry --> presentation["Presentation: report / Watch projections to terminal"]
+    entry --> presentation["Presentation: job-local units / immutable DTOs / terminal"]
     watch --> presentation
     watch -->|"outage: retain frame; same-source retry / terminal schema stop"| sources
     entry -->|"unexpected fault: sanitized stop / close owned work"| faults["RuntimeErrors: sanitized fatal / isolated recoverable evidence"]
     diagnostics["Development Diagnostics: independent observations"] --> sources
 ```
 
-Arrows show calls/consumption, not a single linear execution pipeline. `src/web/host.py` owns HTTP/jobs and one `src/application/live.py` thread. `src/web/jobs.py` isolates finite report processes with parent-loss cleanup. The live thread ticks Watch and `src/application/session_detail.py`; `src/reports/session_history.py` retains observed evidence outside cache. HTTP leases/pages never acquire source data. Source-change stops, never reloads; CLI/Diagnostics remain independent. `src/web/` owns loopback HTTP/security/assets, bounded SSE/replay, finite report processes, private instance/restart locks and best-effort source-change stop. Windows and experimental macOS menus share this host; macOS native proof is pending. Web reuses Watch's renderer-independent acquisition seam, not a CLI process or per-tab coordinator. Bootstrap dispatches CLI reports/Watch directly. Source normalization establishes evidence, not cost; analysis consumes provider-neutral pricing contracts. The cache never replaces source authority. Recovery belongs to acquisition, not rendering.
+Arrows show calls/consumption, not a single linear execution pipeline. `src/web/host.py` owns HTTP/jobs and one `src/application/live.py` thread. `src/web/jobs.py` isolates finite report processes with parent-loss cleanup. The live thread ticks Watch and `src/application/session_detail.py`; `src/reports/session_history.py` retains observed evidence outside cache. HTTP leases/pages never acquire source data. Source-change stops, never reloads; CLI/Diagnostics remain independent. `src/web/` owns loopback HTTP/security/assets, bounded SSE/replay, finite report processes, private instance/restart locks and best-effort source-change stop. Windows and experimental macOS menus share this host; macOS native proof is pending. Web reuses Watch's renderer-independent acquisition seam, not a CLI process or per-tab coordinator. Bootstrap dispatches CLI reports/Watch directly. Source normalization establishes evidence, not cost; analysis consumes provider-neutral pricing contracts. The cache never replaces source authority. Recovery belongs to acquisition, not rendering. `src/numbers.py` scopes CCost display units with exception-safe ContextVar reset; canonical valuation and native quotas are unchanged.
 
 `modules/CODE_MAP.md` and the module contracts route owners/tests, history, providers, launchers and failure/privacy facts; `development/journal/INDEX.md` routes historical evidence, not current coverage. Toolkit owns development procedure. Account-period CCost and its indexed regressions remain inside analysis/report/Watch.
 
@@ -90,7 +90,7 @@ Configuration must be validated before any OpenCode/provider/network/runtime-cac
 | Presentation and CLI / Software-failure boundaries / Diagnostics boundary | [presentation-diagnostics.md](modules/presentation-diagnostics.md) |
 | Windows console | [windows-launchers.md](modules/windows-launchers.md) |
 
-The code map names focused tests; static paths do not establish current test coverage. Historical performance evidence retains its original validity limits.
+Test routes are not executed coverage; historical performance evidence keeps its original limits.
 
 ## Dependency direction
 
@@ -154,6 +154,6 @@ flowchart TD
 | Product verification | Shipped-source changes | Repository-owned applicable tests/security checks | `development/tools/run_tests.py`, `development/tools/validate_package.py`, `src/version.py`, `VERSION_HISTORY.md`, `README.md` | Investigate/repair required failures; never weaken assertions |
 | Real installation / live tests | Relevant product proof; model inference separately authorized | Read-only probes conditional; live-model default-denied | `development/tools/collect_diagnostics.py`; `development/tests/integration/live/` is reserved, not an implemented runner | Do not stop shared OpenCode; disclose unavailable proof; no invented freeze/dispatch owner |
 | PR / merge | Authorized delivery | Required Git safety; self-review not a gate | Installed `/repo-backlog` and actual GitHub default/protection/check state | No force/protection bypass; uncertain merge requires read-back, not replay |
-| Delivery / cleanup | Confirmed merge on fresh default | Required native receipt/owned cleanup | Installed native `repo_backlog` operations | Preserve recovery evidence; cleanup failure permits idempotent cleanup only |
+| Delivery / cleanup | Confirmed merge on fresh default | Required native receipt/owned cleanup | Installed native `repo_backlog` operations | Preserve recovery evidence; cleanup failure permits finish with retained leftovers |
 
-Milestone-30 source assessment (runtime no-change): `development/journal/architecture.md`. Windows/macOS adapters share main-thread GUI/asynchronous browser ownership. The Web module routes native proof limits; CLI/Watch acquisition is unchanged.
+Milestone-40 source assessment: `development/journal/architecture.md` (runtime no-change; sampling/display owners and unmeasured risks). Native desktop proof remains separate.
