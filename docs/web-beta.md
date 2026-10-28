@@ -1,5 +1,13 @@
 # Web Beta
 
+v80.106 fixes real-installation Normal results that exceeded the unchanged 8 MiB
+limit because they carried unused month-wide causal request identities. Normal now
+retains per-root revision evidence without that detail-only payload; no model rows,
+account periods or totals are capped. Overview renders every reference-model row in
+one keyboard-scrollable table, with explicit active-filter/custom-sort labels and
+CLI default-order restoration. Token Mix phase costs and account native-money,
+relative-reset and availability detail are present on Overview itself.
+
 v80.93 adds a shared responsive light/dark visual system and global **Watch** navigation.
 The theme follows the operating-system preference, with no saved browser settings or external fonts.
 Rounded controls, visible keyboard focus, sticky table headings, exact numeric alignment and
@@ -56,6 +64,10 @@ The session table retains Prompt, CCost, Calls, Duration, ~Ictx, ~Ictx CCost, ~E
 Most finite report tables show 50 rows per page from **one complete immutable API result**. Sessions instead requests at most 50 roots per Web page: catalog membership and CLI activity-descending/id-descending order are fingerprinted (including child activity/source identity), and only that slice is hydrated/analyzed. Totals count discovered available roots, not missing history; partial-source warnings remain visible. Each page's row values are observed separately, not an atomic cross-page snapshot. Search/filter/sort apply only to the loaded slice. Changed catalogs reject older-page requests with `session_catalog_changed`; Latest sessions / restart browsing discards cached list observations and captures a fresh first page. Previous/Next use ordinary fragment links, supporting Back/Forward and direct-link reload. The existing 8 MiB/120-second job limits still apply: oversized/slow pages fail explicitly. Session detail uses its independent bounded revision-aware contract below. Up to twelve views are retained only in page memory; reload/eviction requests a new capture, while Back to a retained Snapshot does not refresh it.
 
 ## Complete session Snapshot/Live
+
+Overview's reference-model table is the exception to finite-table paging: all rows
+are present by default in one scrollable region. Background connection-status updates
+retain that frozen DOM, including scroll position, keyboard focus and text selection.
 
 Normal `/#/sessions/<id>` links default to Snapshot; `/#/sessions/<id>/live` explicitly requests Live. The mode button switches without stopping the shared server. Entering Live queues an authoritative source observation, not event-only continuation of an old snapshot. Snapshot freezes the whole report, including running durations and totals; Refresh requests a new capture. Leaving Live freezes one consistent current revision. Idle, abort and prompt completion never end Live.
 

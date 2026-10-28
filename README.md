@@ -368,7 +368,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.105 (2026-10-28):** Model/publisher-weighted Relative CCost and historical publisher Token Mix in CLI/Web. Account costs/quotas and dashboard usage mix are unchanged.
+**v80.106 (2026-10-28):** Overview fixes oversized reports and hidden model pages; adds Token Mix costs and native account detail. CLI valuation is unchanged.
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

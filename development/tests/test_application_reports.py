@@ -57,6 +57,17 @@ class ApplicationReportTests(unittest.TestCase):
         self.services.append(service)
         return service
 
+    def test_normal_keeps_revision_proof_without_month_wide_request_payload(self):
+        with patch.object(ReportService, "report_request_identities",
+                          side_effect=AssertionError("Normal must not enumerate causal history")):
+            result = ReportApplication(self.factory, clock=lambda: 4000).execute(ReportRequest(ReportKind.NORMAL))
+        exported = result.to_json()
+        self.assertIsNone(result.error)
+        self.assertEqual([], exported["view"]["request_identities"])
+        self.assertTrue(exported["source"]["revisions"])
+        self.assertTrue(exported["view"]["model_comparison"])
+        self.assertLess(len(json.dumps(exported)), 8 * 1024 * 1024)
+
     def assert_parity(self, request, *, now=4000):
         old = self.factory(now, lambda _: None)
         report = (old.build_token_mix_history() if request.kind is ReportKind.TOKEN_MIX else old.build(request))

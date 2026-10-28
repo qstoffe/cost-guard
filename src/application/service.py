@@ -102,7 +102,11 @@ class ReportApplication:
             )
             requests = tuple(record(id=identity(parts), session_id=parts[0], event_id=parts[1],
                                     message_id=parts[2], step_part_id=parts[3])
-                             for parts in (() if request.session_page_size else service.report_request_identities()))
+                             # Normal is an aggregate comparison/account report. Its
+                             # month-wide causal identities are not displayed and can
+                             # dwarf the report; per-root revision evidence stays above.
+                             for parts in (() if request.session_page_size or request.kind is ReportKind.NORMAL
+                                           else service.report_request_identities()))
             view = project(report, service.timezone_id)
             view = ObjectValue(view.fields + (("request_identities", requests),))
             recovered("application-report")

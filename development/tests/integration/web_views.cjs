@@ -7,6 +7,7 @@ class Node {
   constructor(tag) { this.tag = tag; this.children = []; this.attrs = {}; this.dataset = {}; this.events = {}; this.text = ''; this.disabled = false; }
   set textContent(value) { this.text = String(value); this.children = []; }
   get textContent() { return this.text + this.children.map(child => child.textContent).join(''); }
+  get firstChild() { return this.children[0] || null; }
   append(...children) { this.children.push(...children); }
   replaceChildren(...children) { this.children = children; this.text = ''; }
   setAttribute(key, value) { this.attrs[key] = value; }
@@ -70,6 +71,18 @@ async function main() {
   await until(() => ids.notice.textContent.includes('Snapshot captured'));
   assert.equal(location.hash, '#/overview');
   assert.match(ids.result.textContent, /CCost = reference valuation/);
+  const overviewTable = all(ids.result, 'table')[0];
+  const overviewScroll = all(ids.result, 'div').find(node => node.className === 'table-scroll');
+  overviewScroll.scrollTop = 317;
+  const beforeHeartbeat = requests;
+  vm.runInContext("connectionStatus('Live connected.', {kind:'connected', writable:true})", context);
+  assert.equal(all(ids.result, 'table')[0], overviewTable, 'host heartbeat must retain the actual Overview DOM');
+  assert.equal(overviewScroll.scrollTop, 317);
+  assert.equal(requests, beforeHeartbeat, 'no hidden reacquisition');
+  ids.search.events.input({target: {value: 'no matching model'}});
+  assert.equal(all(ids.result, 'tbody')[0].children.length, 0, 'explicit search still redraws');
+  ids.search.events.input({target: {value: ''}});
+  assert.ok(all(ids.result, 'tbody')[0].children.length);
   const navigate = key => { location.hash = '#/' + key; handlers.hashchange(); };
   navigate('sessions');
   await until(() => ids.notice.textContent.includes('Snapshot captured'));

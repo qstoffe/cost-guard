@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.106 — 2026-10-28
+
+- Web Beta Normal/Overview no longer serializes unused month-wide causal request identities; full per-root revision evidence remains. This fixes real-installation reports exceeding the unchanged 8 MiB result limit without truncating model rows, account periods or totals.
+- Overview shows the complete CLI-ranked model table without hidden 50-row pages, with explicit filter/sort state and keyboard-scrollable columns. Token Mix includes CLI phase shares and phase costs; account cards retain native-money, relative-reset and availability details on Overview itself.
+
 ## v80.105 — 2026-10-28
 
 - Relative CCost now blends each model's latest completed-prompt mix with verified same-publisher evidence and a generic prior using 100 prompt-weight slots. Model history is independent of the global latest-100 usage sample; exact tiers and context warning multipliers share the effective mix.
@@ -170,21 +175,9 @@
 
 - Adopted Toolkit's development layout and six-digit backlog bundles while preserving test membership, repository facts and pending requests. Product versions and release checks remain Cost Guard-owned; legacy adapter data is opaque to Toolkit. Relocated human Diagnostics launchers and updated software-failure hints; Watch, account and cost semantics are unchanged.
 
-## v80.70 — 2026-10-23
+## v80.67–v80.70 — 2026-10-23
 
-- Added pending FR 0140 for stable Watch Today rendering, a shorter overall CCost label and per-provider/subscription CCost for current day and native quota periods, with explanatory normal-report output. FR 0130 remains distinct. No production Watch, report, cost or quota code changed.
-
-## v80.69 — 2026-10-23
-
-- Added pending FR 0130 for global Watch historical recency of newly finished prompts, including verified terminal evidence and plugin-end behavior. This documentation-only delivery does not change running Watch behavior.
-
-## v80.68 — 2026-10-23
-
-- Added two pending Cost Guard adoption FRs for Toolkit-owned release/version-history and version-free Feature Request authoring, with explicit Toolkit/migration prerequisites. No production Watch, quota or shared-authoring runtime changed.
-
-## v80.67 — 2026-10-23
-
-- Added two pending repository-native backlog FRs: migrate Cost Guard to the Toolkit-owned FR-folder/attachment contract, then fix OpenAI account replacement and rejected quota after a subscription upgrade. Diagnostic observations are sanitized in the bug specification; no production account, Watch or quota behavior changed.
+- FR-only registrations; no production behavior changed. v80.67 added Toolkit bundle migration and OpenAI account-replacement/rejected-quota requests with sanitized diagnostics. v80.68 added Toolkit release/history and version-free FR authoring adoption requests with explicit migration prerequisites. v80.69 added FR 0130 for completed Watch recency using verified terminal/plugin-end evidence. v80.70 separately added FR 0140 for stable Watch Today, a shorter overall CCost label and current-day/native-period provider/subscription CCost with Normal explanations.
 
 ## Earlier v80 history
 

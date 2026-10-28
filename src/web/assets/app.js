@@ -17,6 +17,7 @@ let liveStatus = 'Connecting';
 let sessionDetailAvailable = false;
 let hostState = {kind: 'starting', writable: false, terminal: false};
 let hostInstance = null;
+let overviewRender = null;
 function connectionStatus(message, state = {}) {
   if (hostState.terminal && state.kind !== hostState.kind) return;
   hostState = {...hostState, ...state};
@@ -76,7 +77,18 @@ function show(state) {
     state.connection = liveStatus;
     if (liveValue?.view) ReportView.renderLive(output, liveValue, state);
     else output.replaceChildren(ReportView.element('p', liveValue?.state || 'Live acquisition starting…'));
-  } else if (state.result) ReportView.render(output, state.result, state);
+  } else if (state.result) {
+    // Connection/source status is not a new frozen report. Replacing Overview's
+    // table here discards scroll, focus and selection during ordinary heartbeats.
+    const retained = state.section === 'overview' && overviewRender?.state === state &&
+      overviewRender.result === state.result && overviewRender.search === state.search &&
+      overviewRender.first === output.firstChild;
+    if (!retained) {
+      ReportView.render(output, state.result, state);
+      overviewRender = state.section === 'overview' ?
+        {state, result: state.result, search: state.search, first: output.firstChild} : null;
+    }
+  }
   else if (state.loading) {
     const activity = ReportView.element('progress');
     activity.setAttribute('aria-label', 'Acquiring initial report');
