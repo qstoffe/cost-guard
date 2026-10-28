@@ -52,14 +52,18 @@ It cleans only owned Web/Watch children and its own source-change marker.
 
 | Measurement | Cold/no host | Warm verified restart |
 | --- | ---: | ---: |
-| New `.cmd` process exit | 0.027 s | 0.027 s |
-| Required native host/tray readiness | 1.007 s | 2.053 s |
+| New `.cmd` process exit, final joined probe | 0.028 s | 0.026 s |
+| Required native host/tray readiness, final joined probe | 2.415 s | 3.573 s |
+| Delegate exit observed after retained-handle join | 2.759 s | 3.973 s |
 | Synchronous direct PowerShell fallback exit, separate run | 1.023 s | 1.649 s |
 
 Fallback comparator: call the same `src/web/windows_launch.ps1` directly without
 `-Detached`, with null input/output and a 45-second bound; retain the managed host
 between cold/warm trials, then stop it via verified `stop_existing`. Both exited
-zero. Trials are single observations, not medians, a browser-paint measurement,
+zero; that comparator was measured before the paused session's continuation, not
+simultaneously with the final joined native run. Initial native readiness samples
+were 1.007/2.053 s with 0.027 s batch exit. Trials are single observations, not
+medians, a browser-paint measurement,
 universal timing target or claim that native preparation itself became faster.
 The new batch no longer waits for those variable stages.
 
@@ -81,7 +85,7 @@ source-change shutdown, independent CLI Watch startup/process survival, and
 ShellExecute of the real batch in a no-Git space/Unicode source snapshot. No
 physical Explorer mouse input or browser-paint timing is implied.
 
-Full: **113/113 files PASS**, final run 43.8 s. Working-tree validator: **0 errors**,
+Full: **113/113 files PASS**, final run 47.7 s. Working-tree validator: **0 errors**,
 11 passes, four design-budget warnings (README and pre-existing large context,
 report-service and Watch modules); no hard limit changed. Existing lifecycle,
 loopback/control security, PID/birth ownership, ReportJobs and macOS cache tests
@@ -108,6 +112,25 @@ probe now checks live Watch startup after Web restart/exit, not full real-histor
 completion within 60 seconds. It explicitly does not claim report completion.
 Full retains deterministic report/Watch correctness assertions. The repaired
 native probe then passed. No production timeouts/assertions were weakened.
+
+Final safety inspection nevertheless found an owned detached launcher still
+displaying a startup-error dialog. Its allowlisted `gui_or_server_start_failed`
+record followed the timing probe's last launch. Source inspection established a
+test teardown race: the probe used host/tray readiness to end a trial and stopped
+the host before its separate launcher necessarily observed readiness and finished
+the authenticated browser handoff. The same distinction applies to the source
+snapshot's immediate Exit. Stopping the server that early can legitimately make
+the still-polling launcher report failed startup. This is not readiness proof for
+the supervisor and does not call for suppressing production errors.
+
+After explicit continuation, the probe matches only the exact batch argument
+suffix for its own root/snapshot, checks CIM birth against a retained process
+handle, and waits for each delegate to exit zero before test Exit/teardown. A
+bounded failed join cleans only that proven owned launcher and fails the probe.
+The complete native rerun passed; post-run inspection found **zero** matching
+task delegates, no managed instance, and no new startup-error record. The final
+measurements above include separately observed delegate completion; they still
+do not measure browser paint. Production lifecycle/security code is unchanged.
 
 ## Limits and follow-up
 

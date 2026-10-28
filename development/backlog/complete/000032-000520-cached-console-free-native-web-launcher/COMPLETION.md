@@ -25,15 +25,16 @@ integrity-checked, in-box osacompile Finder app mechanism and documented fallbac
 
 ## Verification and evidence
 
-- Full: 113/113 test files PASS; final run 43.8 s.
+- Full: 113/113 test files PASS; final run 47.7 s.
 - Working-tree validator: 0 errors, 11 passes, four nonblocking design-budget
   warnings; no caps or assertions weakened.
 - Real Windows native probe: tray Open/Exit, failed browser/preflight retention,
   HTTP-fault cleanup, detached survival, no inherited host console, overlap,
   verified restart, source-change exit, CLI Watch process independence and
   ShellExecute of the real batch from a no-Git space/Unicode snapshot PASS.
-- Windows 11 AMD64/Python 3.14.7: batch exit 0.027 s cold and warm; host/tray ready
-  1.007/2.053 s. Separate synchronous fallback comparator 1.023/1.649 s. These
+- Windows 11 AMD64/Python 3.14.7, final joined probe: batch exit 0.028/0.026 s;
+  host/tray ready 2.415/3.573 s; delegate exit observed at 2.759/3.973 s. Earlier
+  separate synchronous fallback comparator 1.023/1.649 s. These
   single observations separate delegation/readiness, not browser paint or a
   universal performance target.
 - Real blocked-delegate regression proves batch exit before slow work and no
@@ -57,6 +58,15 @@ not claim complete real-history rendering. The native rerun and Full passed.
 Helper knowledge read rejected the existing oversized Web module page; bounded
 INDEX/topic updates were applied with exact HEAD/hash guards instead. No
 installed runtime was modified. No cross-repository defect proposal was published.
+
+The paused session's final safety audit found an owned startup-error dialog. On
+continuation, its log/source evidence identified test teardown that stopped the
+host at readiness before the asynchronous launcher necessarily completed its
+handoff. The probe now verifies exact-root delegated process births, retains
+their handles and joins zero-exit completion before test Exit/teardown. The full
+native rerun passed; subsequent inspection found zero task launcher delegates,
+no managed instance and no new startup-error record. Production errors are not
+suppressed and readiness is still distinct from launcher completion.
 
 ## Explicit remaining acceptance limits
 

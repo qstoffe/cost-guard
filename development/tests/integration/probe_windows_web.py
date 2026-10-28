@@ -42,6 +42,46 @@ def until(predicate, seconds=20):
     raise RuntimeError("native_probe_timeout")
 
 
+def join_delegated_launchers(root):
+    """Readiness is not launcher completion; retain owned handles before test Exit.
+
+    Match only the exact source-shaped batch argument suffix, never all shells.
+    CIM's microsecond birth observation must match the retained process handle.
+    A timed-out owned launcher is stopped so a failed probe cannot leak a dialog.
+    """
+    suffix = '-File "' + str(root / "windows/Beta/../../src/web/windows_launch.ps1") + '" -Detached'
+    literal = "'" + suffix.replace("'", "''") + "'"
+    script = r'''
+$ErrorActionPreference = 'Stop'
+$suffix = SUFFIX
+$owned = @(Get-CimInstance Win32_Process -Filter "Name = 'powershell.exe'" | Where-Object {
+    $_.CommandLine -and $_.CommandLine.EndsWith($suffix, [StringComparison]::OrdinalIgnoreCase)
+})
+foreach ($record in $owned) {
+    try { $handle = [Diagnostics.Process]::GetProcessById($record.ProcessId) }
+    catch [ArgumentException] { continue }
+    try {
+        if ($handle.HasExited) { continue }
+        if ([Math]::Abs(($handle.StartTime - $record.CreationDate).Ticks) -ge 10) {
+            throw 'delegated_launcher_birth_changed'
+        }
+        if (-not $handle.WaitForExit(60000)) {
+            $handle.Kill()
+            $handle.WaitForExit(5000) | Out-Null
+            throw 'delegated_launcher_timeout'
+        }
+        if ($handle.ExitCode -ne 0) { throw 'delegated_launcher_failed' }
+    } finally { $handle.Dispose() }
+}
+Write-Output 'DELEGATES_JOINED'
+'''.replace('SUFFIX', literal)
+    result = subprocess.run(["powershell.exe", "-NoLogo", "-NoProfile", "-Command", script],
+                            capture_output=True, text=True, timeout=75,
+                            creationflags=subprocess.CREATE_NO_WINDOW)
+    if result.returncode or "DELEGATES_JOINED" not in result.stdout:
+        raise RuntimeError("delegated_launcher_join_failed")
+
+
 def window(pid):
     user = c.WinDLL("user32", use_last_error=True)
     callback = c.WINFUNCTYPE(w.BOOL, w.HWND, w.LPARAM)
@@ -155,6 +195,7 @@ def detached_probe():
         state = until(store.read)
         assert control(state, "status")["ready"]
         assert window(state["pid"])
+        join_delegated_launchers(ROOT)
         # No inherited console: attempt attach in a separate no-console probe process.
         check = subprocess.run([sys.executable, "-c",
                                 "import ctypes,sys; k=ctypes.WinDLL('kernel32',use_last_error=True); "
@@ -224,6 +265,7 @@ def source_zip_probe():
             state = until(store.read, seconds=35)
             assert control(state, "status")["ready"]
             assert window(state["pid"])
+            join_delegated_launchers(snapshot)
             command(state["pid"], EXIT)
             until(lambda: process_identity(state["pid"]) != state["process"])
             assert store.read() is None
@@ -257,12 +299,16 @@ def startup_timing_probe():
                         return state if control(state, "status")["ready"] else None
 
                 until(ready, seconds=40)
+                ready_seconds = time.monotonic() - started
+                join_delegated_launchers(ROOT)
+                launcher_seconds = time.monotonic() - started
             finally:
                 if child.poll() is None:
                     child.kill()
                 child.wait(timeout=3)
             observations[mode] = {"batch_exit_seconds": round(delegated, 3),
-                                  "host_tray_ready_seconds": round(time.monotonic() - started, 3),
+                                  "host_tray_ready_seconds": round(ready_seconds, 3),
+                                  "delegate_join_observed_seconds": round(launcher_seconds, 3),
                                   "browser_paint": "not_measured"}
     finally:
         state = store.read()
