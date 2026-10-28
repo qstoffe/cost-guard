@@ -5,12 +5,18 @@ const vm = require('node:vm');
 const turns = async () => { for (let n = 0; n < 20; n++) await Promise.resolve(); };
 async function main() {
   let now = 1000, failure = null, calls = 0;
+  let held = false, releaseApi = null, inFlight = 0, maxInFlight = 0;
   const timers = new Map(), streams = [], states = [], updates = [];
   let next = 0;
   let snapshot = {instance_id: 'first', sequence: 1, values: {
     live: {state: 'running', source_observed_at_ms: 900, view: {retained: 'not zero'}}}};
   const context = vm.createContext({Date, api: async () => {
-    calls++; if (failure) throw new Error(failure); return structuredClone(snapshot);
+    calls++; inFlight++; maxInFlight = Math.max(maxInFlight, inFlight);
+    try {
+      if (held) await new Promise(resolve => { releaseApi = resolve; });
+      if (failure) throw new Error(failure);
+      return structuredClone(snapshot);
+    } finally { inFlight--; }
   }, update: value => updates.push(value), status: (message, state) => states.push({message, ...state}),
   clock: {now: () => now, later: (fn, ms) => { assert.equal(ms, 10000); timers.set(++next, fn); return next; },
     cancel: id => timers.delete(id)}, sourceFactory: () => {
@@ -22,6 +28,7 @@ async function main() {
   const connect = async () => {
     vm.runInContext('globalThis.connection = LiveConnection.connect(api, update, status, sourceFactory, clock)', context);
     await turns();
+    streams.at(-1)?.onopen(); await turns();
   };
   const tick = async () => {
     assert.equal(timers.size, 1, 'one bounded watchdog');
@@ -40,11 +47,18 @@ async function main() {
   streams[0].onerror();
   assert.equal(states.at(-1).kind, 'reconnecting');
   assert.equal(states.at(-1).writable, false);
+  const errorCalls = calls;
+  for (let n = 0; n < 5; n++) streams[0].onerror();
+  assert.equal(calls, errorCalls, 'transport retry notifications never start a busy HTTP loop');
+  assert.equal(streams.length, 1, 'native EventSource owns retry; no duplicate stream');
+  await tick();
+  assert.equal(states.at(-1).kind, 'reconnecting', 'healthy HTTP must not mask an interrupted stream');
+  assert.match(states.at(-1).message, /HTTP connected/);
   failure = 'network_error';
   await tick();
   assert.equal(states.at(-1).kind, 'offline');
   assert.match(states.at(-1).message, /OFFLINE — last observation/);
-  assert.equal(states.at(-1).authenticatedAt, 21000, 'failed probes cannot freshen the timestamp');
+  assert.equal(states.at(-1).authenticatedAt, 31000, 'failed probes cannot freshen the timestamp');
   assert.equal(updates.at(-1).view.retained, 'not zero');
   streams[0].listeners.progress({lastEventId: 'first:4', data: '{"jobs":[]}'});
   assert.equal(states.at(-1).kind, 'offline', 'job progress cannot claim that a failed source/host check recovered');
@@ -53,12 +67,30 @@ async function main() {
   await tick();
   assert.equal(states.at(-1).kind, 'source_unavailable', 'working HTTP is not source readiness');
   snapshot.sequence++; snapshot.values.live.state = 'running';
+  streams[0].onopen(); await turns();
   await tick();
   assert.equal(states.at(-1).kind, 'connected');
   assert.equal(streams.length, 1);
   vm.runInContext('connection.resync()', context);
-  assert.equal(states.at(-1).kind, 'reconnecting', 'idle resume invalidates stale DOM before fetching');
+  assert.equal(states.at(-1).kind, 'connected', 'recent healthy visibility return does not invent an outage');
   await turns();
+  now += 20000;
+  vm.runInContext('connection.resync()', context);
+  assert.equal(states.at(-1).kind, 'reconnecting', 'stale idle resume invalidates retained DOM before fetching');
+  await turns();
+  const start = states.length;
+  for (let n = 0; n < 120; n++) await tick();
+  assert.ok(states.slice(start).every(s => s.kind === 'connected'), 'twenty healthy virtual minutes never flap');
+  held = true;
+  await tick();
+  streams[0].onerror(); streams[0].onopen(); streams[0].onopen();
+  vm.runInContext('connection.resync()', context);
+  assert.equal(inFlight, 1, 'probe/open/resync race shares the in-flight authenticated snapshot');
+  held = false; releaseApi(); await turns();
+  assert.equal(maxInFlight, 1);
+  assert.equal(states.at(-1).kind, 'connected');
+  assert.equal(streams.length, 1);
+  assert.equal(timers.size, 1);
   snapshot.instance_id = 'replacement';
   const count = updates.length;
   await tick();
@@ -66,6 +98,8 @@ async function main() {
   assert.equal(updates.length, count, 'different host values never enter the old page');
   assert.equal(timers.size, 0);
   assert.equal(streams[0].closed, true);
+  streams[0].onopen(); streams[0].onerror();
+  assert.equal(states.at(-1).kind, 'identity_changed', 'late transport callbacks cannot undo terminal state');
   snapshot.instance_id = 'first';
   await connect();
   failure = 'authentication_required';
@@ -86,6 +120,7 @@ async function main() {
   assert.equal(states.at(-1).kind, 'offline');
   failure = null;
   await tick();
+  streams.at(-1).onopen(); await turns();
   assert.equal(states.at(-1).kind, 'connected');
   vm.runInContext('connection.close()', context);
   assert.equal(timers.size, 0);

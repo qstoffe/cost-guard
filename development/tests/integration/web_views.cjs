@@ -25,7 +25,8 @@ async function until(condition) {
 }
 async function main() {
   const input = JSON.parse(fs.readFileSync(0, 'utf8'));
-  const ids = Object.fromEntries(['host-state', 'status', 'result', 'notice', 'refresh', 'cancel', 'heading', 'skip', 'content', 'scope-controls', 'search'].map(id => [id, new Node('div')]));
+  const ids = Object.fromEntries(['host-state', 'host-message', 'host-details', 'status', 'result', 'notice', 'refresh', 'cancel', 'heading', 'skip', 'content', 'scope-controls', 'search'].map(id => [id, new Node('div')]));
+  ids['host-state'].append(ids['host-message'], ids['host-details']);
   const nav = ['overview', 'sessions', 'watch', 'models', 'accounts', 'reports', 'token-mix'].map(key => {
     const node = new Node('a'); node.setAttribute('href', '#/' + key); return node;
   });
@@ -79,6 +80,9 @@ async function main() {
   assert.equal(all(ids.result, 'table')[0], overviewTable, 'host heartbeat must retain the actual Overview DOM');
   assert.equal(overviewScroll.scrollTop, 317);
   assert.equal(requests, beforeHeartbeat, 'no hidden reacquisition');
+  assert.equal(ids['host-state'].hidden, true, 'healthy operation has no persistent banner');
+  assert.equal(ids.status.textContent, 'Live connected.', 'one compact accessible status');
+  assert.match(ids.status.title, /Last authenticated host check/);
   ids.search.events.input({target: {value: 'no matching model'}});
   assert.equal(all(ids.result, 'tbody')[0].children.length, 0, 'explicit search still redraws');
   ids.search.events.input({target: {value: ''}});
@@ -273,6 +277,8 @@ async function main() {
   const retained = ids.result.textContent, terminalRequests = requests;
   vm.runInContext("connectionStatus('STOPPED — NOT LIVE. Use the OS launcher.', {kind: 'stopped', terminal: true, writable: false})", watchReload);
   assert.match(ids['host-state'].textContent, /STOPPED — NOT LIVE/);
+  assert.equal(ids['host-state'].hidden, false, 'terminal notice is never hidden');
+  assert.match(ids['host-details'].textContent, /Reports remain frozen snapshots/);
   assert.match(ids.notice.textContent, /not updating/);
   assert.equal(ids.refresh.disabled, true);
   assert.equal(ids.cancel.disabled, true);

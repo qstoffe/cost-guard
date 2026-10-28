@@ -368,7 +368,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.106 (2026-10-28):** Overview fixes oversized reports and hidden model pages; adds Token Mix costs and native account detail. CLI valuation is unchanged.
+**v80.107 (2026-10-28):** Web Beta removes timed healthy-stream reconnects and the bulky connected banner, while retaining truthful outage, authorization and stopped notices. CLI valuation is unchanged.
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

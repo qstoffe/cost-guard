@@ -22,12 +22,18 @@ function connectionStatus(message, state = {}) {
   if (hostState.terminal && state.kind !== hostState.kind) return;
   hostState = {...hostState, ...state};
   liveStatus = message;
-  statusLine.textContent = message;
+  statusLine.textContent = hostState.kind === 'connected' ? message : `Connection: ${hostState.kind.replaceAll('_', ' ')}. See notice below.`;
   const banner = document.getElementById('host-state');
   if (banner) {
     banner.dataset.kind = hostState.kind;
     const time = value => value == null ? 'not yet observed' : new Date(value).toLocaleString();
-    banner.textContent = `${message} · Last authenticated host check: ${time(hostState.authenticatedAt)} · Last source update: ${time(hostState.observedAt)}. Reports remain frozen snapshots; account freshness is independent.`;
+    banner.hidden = hostState.kind === 'connected';
+    const summary = document.getElementById('host-message');
+    const details = document.getElementById('host-details');
+    const timing = `Last authenticated host check: ${time(hostState.authenticatedAt)} · Last source update: ${time(hostState.observedAt)}. Reports remain frozen snapshots; account freshness is independent.`;
+    if (summary && details) { summary.textContent = message; details.textContent = timing; }
+    else banner.textContent = `${message} · ${timing}`;
+    statusLine.title = `${message} ${timing}`;
   }
   if (hostState.terminal) for (const view of views.values()) view.detail?.detach();
   document.getElementById('scope-controls').inert = !hostState.writable;
@@ -68,7 +74,7 @@ function show(state) {
   refresh.disabled = !csrf || !hostState.writable || !(state.request || state.detail) || state.loading;
   cancel.disabled = !hostState.writable || !state.active;
   output.setAttribute('aria-busy', state.loading ? 'true' : 'false');
-  notice.textContent = hostState.writable ? state.message : `${liveStatus} Last known contents are retained, not updating.`;
+    notice.textContent = hostState.writable ? state.message : 'Last known contents are retained, not updating. See connection notice above.';
   if (state.detail) {
     if (!hostState.terminal) state.detail.attach(output);
     else output.replaceChildren(state.detail.root);

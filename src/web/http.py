@@ -376,9 +376,12 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.wfile.flush()
             hub = self.server.lifecycle.events
             cursor = self.headers.get("Last-Event-ID", "")
-            deadline = time.monotonic() + 60
             heartbeat = time.monotonic()
-            while time.monotonic() < deadline:
+            # A healthy authenticated stream has no rotation timer. Closing it
+            # periodically creates real EventSource errors/replay work even on
+            # an idle loopback host. Admission, write timeout, session expiry
+            # and terminal shutdown still bound resource ownership.
+            while True:
                 if not self.server.session.authenticated(self.headers.get("Cookie")):
                     self.wfile.write(b"event: authorization_required\ndata: {}\n\n")
                     self.wfile.flush()
