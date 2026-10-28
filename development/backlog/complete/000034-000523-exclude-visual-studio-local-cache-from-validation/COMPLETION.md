@@ -31,4 +31,4 @@ Journal: no-update; existing test-health knowledge already distinguishes package
 
 ## Delivery
 
-PR: pending creation; the verified PR link will replace this line before merge.
+PR: https://github.com/qstoffe/cost-guard/pull/92
