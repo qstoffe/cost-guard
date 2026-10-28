@@ -113,7 +113,7 @@ def accounts(value):
     ))
 
 
-def project(report, timezone_id="UTC"):
+def project(report, timezone_id="UTC", ccost_display_unit="credits"):
     models = []
     faded = superseded_rows([(item.publisher, item.model) for item in report.model_comparison])
     for index, item in enumerate(report.model_comparison):
@@ -124,6 +124,7 @@ def project(report, timezone_id="UTC"):
             fields(level, "relative_cost threshold_tokens threshold_operator") for level in item.relative_levels)),)))
     return with_display(record(
         kind=report.kind, title=report.title, source_label=report.source_label,
+        ccost_display_unit=ccost_display_unit,
         # Source messages can contain transport/private details. Preserve status, not raw prose.
         source_warning_count=len(report.source_warnings),
         model_availability_empty="⚠ No available OpenCode models match the pricing catalog." in report.source_warnings,
@@ -148,4 +149,4 @@ def project(report, timezone_id="UTC"):
             for item in report.model_token_mix),
         publisher_token_mix=tuple(record(publisher=item.publisher, prompts=item.prompts, calls=item.calls, mix=token_mix(item.mix))
             for item in report.publisher_token_mix),
-    ), timezone_id)
+    ), timezone_id, ccost_display_unit=ccost_display_unit)

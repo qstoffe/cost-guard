@@ -9,7 +9,7 @@ from src.analysis.timezones import format_local_timestamp
 from src.analysis.context import PriceWarningSeverity
 from src.reports.models import PromptProjection, ReportKind, ReportProjection, SessionPromptBlock
 from src.version import DISPLAY_VERSION, PRODUCT_NAME, RELEASE_DATE
-from src.numbers import ccost_amount
+from src.numbers import ccost_amount, ccost_display
 from src.display import context_tokens as _context_k, context_delta as _context_delta_k
 
 from .terminal import AnsiStyler, Column, StyledText, fit, render_table, single_line, terminal_content_width, wrap_prose
@@ -406,6 +406,12 @@ class ReportRenderer:
             self._prose(explanation, prefix="* ")
 
     def render(self, report: ReportProjection, *, include_header: bool = True) -> None:
+        with ccost_display(str(self.config.get("ccostDisplayUnit", "credits"))):
+            self._render(report, include_header=include_header)
+
+    def _render(self, report: ReportProjection, *, include_header: bool) -> None:
+        if self.config.get("ccostDisplayUnit") == "usd":
+            self._prose("CCost: reference USD, not billing; 100 credits = $1.00. Small positive values can round to $0.00.")
         if include_header:
             self._write(f"# {PRODUCT_NAME} {DISPLAY_VERSION} ({RELEASE_DATE}) — Source: OpenCode {report.source_label}")
         if report.kind in {ReportKind.SESSION, ReportKind.DATE, ReportKind.TOKEN_MIX}:

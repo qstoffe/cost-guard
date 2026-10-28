@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
+from dataclasses import replace
 from decimal import Decimal, ROUND_HALF_UP
 import os
 import io
@@ -9,7 +10,7 @@ import sys
 from typing import Mapping, TextIO
 
 from src.version import DISPLAY_VERSION, PRODUCT_NAME
-from src.numbers import ccost_amount
+from src.numbers import ccost_amount, ccost_display, ccost_unit
 from src.analysis.timezones import format_local_timestamp, resolve_timezone
 from src.watch.models import ToolObservation, WatchProjection, WatchRow, WatchSessionSubtotal
 
@@ -431,7 +432,11 @@ class WatchRenderer:
                       if index > 0 and session_id in active and sessions[index - 1] not in active]
         if not rows:
             rows, styles = [_empty_row("No prompts since Watch started")], [("watchToolActivity",) + (None,) * 5]
-        lines = render_table(_WATCH_COLUMNS, rows,
+        columns = _WATCH_COLUMNS
+        if ccost_unit() == "usd":
+            columns = tuple(replace(column, fixed_width=max(7, max(len(str(row[2])) for row in rows)))
+                            if index == 2 else column for index, column in enumerate(columns))
+        lines = render_table(columns, rows,
                              styles=styles, styler=self.styler,
                              separator_before_rows=separators,
                              leading_spans={index: 2 for index in headers})
@@ -510,6 +515,10 @@ class WatchRenderer:
         self._status_visible = True
 
     def render(self, projection: WatchProjection) -> None:
+        with ccost_display(str(self.config.get("ccostDisplayUnit", "credits"))):
+            self._render(projection)
+
+    def _render(self, projection: WatchProjection) -> None:
         # Hidden/redirected processes never consume a personal viewing window.
         notice = self._notice_eligible()
         self._quota_notice_visible = notice
@@ -533,6 +542,8 @@ class WatchRenderer:
 
     def _render_frame(self, projection: WatchProjection) -> None:
         self._write(self._watch_title(projection.source_label, projection.title, projection.watch_started_at_ms))
+        if ccost_unit() == "usd":
+            self._write("CCost: reference USD, not billing; 100 credits = $1.00; small positive values can round to $0.00.")
         for warning in projection.source_warnings:
             self._write(self.styler.apply("WARNING: " + warning, "costQuotaWarning"))
         width = self._content_width()

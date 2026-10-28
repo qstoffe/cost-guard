@@ -319,7 +319,8 @@ Quota credentials stay memory-only: V2 precedes legacy, explicit `authJsonPath` 
 
 Useful settings include:
 
-- `runningPromptWarningCCost`: warn for a running prompt at 1800 CCost by default (0 disables). Obsolete `runningPromptWarningUsd`/`thresholds.watchCostDeltaDisplayUsd` (removed in v78.36) fail startup as unrecognized; delete them.
+- `ccostDisplayUnit`: `credits` (default) or `usd`; override with `--ccost-unit usd`. 100 credits = $1.00 reference USD, not billing; positive values may round to $0.00. Quotas/Billed/rates stay unchanged.
+- `runningPromptWarningCCost`: 1800 credits by default (0 disables), independent of display units.
 
 - `openCode.source`: `auto`, `v1` or `v2`.
 - `timezone`: local day/timestamp zone. The shipped `Europe/Stockholm` default works without an external tzdata package; other custom IANA zones require host/Python zoneinfo data.
@@ -368,7 +369,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.108 (2026-10-28):** CLI/Web quotas show Used / Total; Remaining pace is unchanged. A temporary visible-Watch warning explains the change.
+**v80.109 (2026-10-28):** Optional reference-USD CCost display; valuation, quotas and billing unchanged.
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

@@ -9,7 +9,7 @@ from src.analysis.quota_pace import QuotaPace
 from src.analysis.valuation import ComparisonCost
 from src.domain import AccountSnapshot, AccountUsageStatus, BillingComponent, QuotaComponent
 from src.reports.models import AccountProjection
-from src.numbers import consumed_capacity, remaining_capacity
+from src.numbers import ccost_amount, remaining_capacity
 from src.display import format_reset, money, native_amount as _native_amount, unaccounted_usage, quota_usage
 from .terminal import AnsiStyler, StyledText
 
@@ -36,7 +36,7 @@ def account_ccost_text(value: ComparisonCost | None) -> str:
     """Show the known account subtotal; global partial markers stay intact."""
     if value is None or (value.observed_requests and not value.priced_requests):
         return "—"
-    return consumed_capacity(value.known_ccost)
+    return ccost_amount(value.known_ccost)
 
 
 def quota_parts(component: QuotaComponent, timezone_id: str, *, now_ms: int,

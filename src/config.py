@@ -226,6 +226,10 @@ def validate_configuration(config: dict[str, Any], defaults: dict[str, Any], ove
     _assert_object(overrides, "", root_keys, "config/user-config.jsonc")
     _assert_object(config, "", root_keys, "config/default-config.jsonc")
 
+    unit = config.get("ccostDisplayUnit", "credits")
+    if not isinstance(unit, str) or unit not in {"credits", "usd"}:
+        raise _invalid(_setting_source("ccostDisplayUnit", overrides), "ccostDisplayUnit", unit, "credits or usd")
+
     numeric = {
         "pricingMaxAgeHours": (0.0, float("inf"), False),
         "runningPromptWarningCCost": (0.0, float("inf"), False),

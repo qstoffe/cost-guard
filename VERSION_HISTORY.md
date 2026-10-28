@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.109 — 2026-10-28
+
+- Add `ccostDisplayUnit: credits|usd` and `--ccost-unit credits|usd` for reports and Watch; credits remain the default. Reference USD uses 100 credits = $1.00 and two decimals, including small positive values rounding to $0.00.
+- Shared Python display tokens expose the configured default for Web Beta. Exact valuations, thresholds, native quotas, Unaccounted credits, Billed money, catalog rates and Relative CCost stay unchanged; no currency service or interactive Web toggle is added.
+
 ## v80.108 — 2026-10-28
 
 - Quota bars, percentages and native fractions now show Used / Total consistently in CLI Normal/Watch and Web Accounts/Watch. Remaining pace is unchanged; unlimited native usage stays textual, without a fabricated capacity.

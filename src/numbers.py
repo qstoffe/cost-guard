@@ -3,8 +3,29 @@
 Standard-library-only so report projections and terminal renderers share the
 same amount/rate rules without depending on each other's layers.
 """
-from decimal import Decimal, ROUND_CEILING, ROUND_FLOOR
+from contextlib import contextmanager
+from contextvars import ContextVar
+from decimal import Decimal, ROUND_CEILING, ROUND_FLOOR, ROUND_HALF_UP, localcontext
 from typing import Sequence
+
+
+_CCOST_UNIT = ContextVar("ccost_display_unit", default="credits")
+
+
+@contextmanager
+def ccost_display(unit: str):
+    """Scope one synchronous render/export; never leak units across jobs/threads."""
+    if unit not in {"credits", "usd"}:
+        raise ValueError("CCost display unit must be credits or usd")
+    token = _CCOST_UNIT.set(unit)
+    try:
+        yield
+    finally:
+        _CCOST_UNIT.reset(token)
+
+
+def ccost_unit() -> str:
+    return _CCOST_UNIT.get()
 
 
 def exact_number(value: Decimal | int) -> str:
@@ -23,10 +44,15 @@ def _capacity_amount(value: Decimal, *, rounding: str) -> str:
     return format(value.to_integral_value(rounding=rounding), "f")
 
 
-def ccost_amount(value: Decimal | None, *, unresolved: bool = False) -> str:
-    """Naked consumed/reference amount, conservative upward display only."""
+def ccost_amount(value: Decimal | None, *, unresolved: bool = False, unit: str | None = None) -> str:
+    """Reference amount only; native quotas, rates and billing never use this rule."""
     if value is None or (unresolved and value == 0):
         return "N/A"
+    if (unit or ccost_unit()) == "usd":
+        with localcontext() as context:
+            context.prec = max(context.prec, len(value.as_tuple().digits) + 4, value.adjusted() + 5)
+            dollars = (value / 100).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        return ("?" if unresolved else "") + f"${abs(dollars) if dollars == 0 else dollars:.2f}"
     return ("?" if unresolved else "") + _capacity_amount(value, rounding=ROUND_CEILING)
 
 

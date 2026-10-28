@@ -44,7 +44,8 @@ class LiveRuntime:
                     "recovering" if driver.error else "running",
                     source_observed_at_ms=driver.observed_at_ms,
                     error_code=driver.error.code.value if driver.error else None,
-                    view=project_live(frame, driver.coordinator.report_service.timezone_id) if frame is not None else None))
+                    view=project_live(frame, driver.coordinator.report_service.timezone_id,
+                        driver.coordinator.report_service.config.get("ccostDisplayUnit", "credits")) if frame is not None else None))
                 if driver.terminal:
                     break
                 # Yield between history slices and keep account-only updates timely.

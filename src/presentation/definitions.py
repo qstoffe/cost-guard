@@ -5,6 +5,7 @@ sentence. Labels (including the colon) and the user's own live values are
 emphasized; explanatory prose stays in the normal color.
 """
 from __future__ import annotations
+from src.numbers import ccost_unit
 
 from dataclasses import dataclass
 import re
@@ -53,7 +54,8 @@ def definition_lines(label: str, sentences: Sequence[Sentence], width: int, styl
 
 def ccost_sentences() -> tuple[str, ...]:
     return (
-        "1 CCost equals 1 Copilot AI credit.",
+        ("CCost displays reference USD: 100 credits = $1.00; small positive values can round to $0.00."
+         if ccost_unit() == "usd" else "1 CCost equals 1 Copilot AI credit."),
         "Flat-rate accounts use Copilot's published token rates, not the billed cost.",
         "Unlabeled cost figures in Cost Guard are CCost unless stated otherwise.",
         "Watch Today is CCost, not provider-native Used or actual Billed spend.",

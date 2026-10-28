@@ -1,7 +1,7 @@
 """v77-compatible command-line parsing for the Python entry point."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
 import re
 from typing import Sequence
@@ -26,6 +26,7 @@ class CliCommand:
     kind: CommandKind
     target: str | None = None
     watch: bool = False
+    ccost_unit: str | None = None
 
 
 class CliUsageError(ValueError):
@@ -64,6 +65,7 @@ Options:
   -watch, --watch   Keep the selected scope live until Ctrl+C.
   -h, --help       Show this help.
   --version        Show the Cost Guard version.
+  --ccost-unit credits|usd  Override CCost display only (100 credits = $1 reference USD).
 
 Token Mix %: I = uncached input (Input); C = cache read (Cache);
              W = cache write (Write); O = output (Output), including
@@ -79,11 +81,25 @@ CCost is Copilot AI-credit-equivalent reference valuation, not actual billing
 or credits deducted. Non-Copilot subscription usage can have positive CCost.
 Naked amounts round upward; Token Mix % parentheses are CCost; ? marks partial
 pricing. Model rates are CCost/M. Actual billed/account money stays monetary.
+USD display uses $ plus two decimals, not billing; small positive CCost can
+round to $0.00. Native quotas, catalog rates and Relative CCost are unchanged.
 Remaining AI credits round downward; quantities never use thousands separators.
 """
 
 
 def parse_command(argv: Sequence[str]) -> CliCommand:
+    args = list(argv)
+    unit = None
+    if "--ccost-unit" in args:
+        index = args.index("--ccost-unit")
+        if args.count("--ccost-unit") != 1 or index + 1 == len(args) or args[index + 1] not in {"credits", "usd"}:
+            raise CliUsageError("Use --ccost-unit credits|usd exactly once.")
+        unit = args[index + 1]
+        del args[index:index + 2]
+    return replace(_parse_scope(args), ccost_unit=unit)
+
+
+def _parse_scope(argv: Sequence[str]) -> CliCommand:
     if "--all-models" in argv:
         if tuple(argv) != ("--all-models",):
             raise CliUsageError("--all-models is a standalone one-shot report.")
