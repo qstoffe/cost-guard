@@ -13,7 +13,7 @@ Installed OpenCode Toolkit shared repository skills own development procedures. 
 - Architecture and owners: `development/architecture/OVERVIEW.md` routes module contracts and source/tests.
 - [Architecture assessment](architecture.md): milestone-40 whole-repository review, finite-report/Live/detail authority, sampling/display isolation, no-change rationale and unmeasured risks.
 - [Test system health](test-health.md): retained critical risks, real hosted cross-platform revalidation, causal fixture/runtime repairs and desktop-proof limits.
-- [Feature opportunities](feature-discovery.md): milestone-30 no-suggestion assessment, existing UX ownership and external-feasibility limits.
+- [Feature opportunities](feature-discovery.md): milestone-40 no-suggestion assessment, seven pending UX owners, implemented publisher history and external/platform evidence limits.
 - [Windows startup](windows-startup.md): Web delegation/readiness and CLI console ownership, native probes and remaining consumer-desktop limits.
 - [Overview parity](web-overview.md): real V2 result-size failure, aggregate/detail export distinction and same-input browser proof.
 

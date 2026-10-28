@@ -11,13 +11,13 @@
     "id": "shared-repository-maintenance",
     "version": 1
   },
-  "lastDeliveredRevision": "76d9054556da384d8cb888b16699ece5f1b2d984",
+  "lastDeliveredRevision": "578170588bd28a904e5b446949ba40ea76ff5b0a",
   "lastItem": {
-    "id": "performance/40",
-    "kind": "performance"
+    "id": "feature-discovery/40",
+    "kind": "feature-discovery"
   },
   "featureDiscovery": {
-    "completed": 30
+    "completed": 40
   },
   "completionHighWatermark": 40
 }
