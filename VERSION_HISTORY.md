@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.108 — 2026-10-28
+
+- Quota bars, percentages and native fractions now show Used / Total consistently in CLI Normal/Watch and Web Accounts/Watch. Remaining pace is unchanged; unlimited native usage stays textual, without a fabricated capacity.
+- Watch adds a compact warning for 72 hours after the first visible display, capped at 60 days after the verified implementation merge. Hidden acquisition and redirected output never start the personal timer; CCost definitions remain centralized.
+
 ## v80.107 — 2026-10-28
 
 - Web Beta keeps healthy authenticated SSE streams open instead of forcing a reconnect every sixty seconds. HTTP probes cannot label an interrupted stream healthy; recent healthy tab returns no longer invent a reconnecting state. Session expiry, identity changes, source outages and terminal shutdown remain distinct.

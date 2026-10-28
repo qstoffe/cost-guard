@@ -10,7 +10,7 @@ from src.analysis.valuation import ComparisonCost
 from src.domain import AccountSnapshot, AccountUsageStatus, BillingComponent, QuotaComponent
 from src.reports.models import AccountProjection
 from src.numbers import consumed_capacity, remaining_capacity
-from src.display import format_reset, money, native_amount as _native_amount, unaccounted_usage
+from src.display import format_reset, money, native_amount as _native_amount, unaccounted_usage, quota_usage
 from .terminal import AnsiStyler, StyledText
 
 QUOTA_BAR_WIDTH = 10
@@ -51,11 +51,13 @@ def quota_parts(component: QuotaComponent, timezone_id: str, *, now_ms: int,
     def prefix(text: str) -> str:
         return text + " " if compact and not label_width else text.ljust(label_width) + "  "
 
-    fraction = component.remaining_fraction
+    fraction, used, used_money = quota_usage(used=component.used, limit=component.limit,
+        remaining=component.remaining, remaining_fraction=component.remaining_fraction,
+        unlimited=component.unlimited, remaining_money=component.remaining_money, limit_money=component.limit_money)
     if component.unlimited:
         parts.append(StyledText(((prefix(label) + "Unlimited", None),)))
     elif fraction is not None:
-        parts.append(StyledText(((prefix(label), None),) + format_quota_bar(fraction).parts))
+        parts.append(StyledText(((prefix(label), None),) + format_quota_bar(fraction).parts + ((" used", None),)))
     elif component.remaining is None and component.used is None and component.limit is None:
         if not blocked:
             parts.append(StyledText(((prefix(label) + "N/A", None),)))
@@ -71,26 +73,36 @@ def quota_parts(component: QuotaComponent, timezone_id: str, *, now_ms: int,
             parts[-1] = StyledText(parts[-1].parts + ((" · BLOCKED", "copilotPausedWarning"),))
         else:
             parts.append(StyledText(((prefix(label) + "BLOCKED", "copilotPausedWarning"),)))
-    if component.remaining is not None:
+    if used is not None and (fraction is not None or component.unlimited):
+        native = _native_amount(used, component.unit, kind="consumed")
+        if not component.unlimited and component.limit is not None and component.limit > 0:
+            native += "/" + _native_amount(component.limit, component.unit)
+        if not watch or (component.unit or "").casefold() != "ai credits":
+            native += " " + (component.unit or "units")
+        if component.unlimited:
+            native += " used"
+    elif component.remaining is not None and not component.unlimited:
         native = _native_amount(component.remaining, component.unit, kind="remaining") + (
             "/" + _native_amount(component.limit, component.unit) if component.limit is not None else "")
         if not watch or (component.unit or "").casefold() != "ai credits":
             native += " " + (component.unit or "units")
-        if fraction is None:
-            native += " remaining"
+        native += " remaining"
     elif component.used is not None:
         unit = "" if watch and (component.unit or "").casefold() == "ai credits" else " " + (component.unit or "units")
         native = _native_amount(component.used, component.unit, kind="consumed") + unit + " used"
-        native += " / " + _native_amount(component.limit, component.unit) if component.limit is not None else " · limit unavailable"
-    elif component.limit is not None:
+        native += (" / " + _native_amount(component.limit, component.unit)
+                   if component.limit is not None and component.limit > 0 else " · limit unavailable")
+    elif component.limit is not None and not component.unlimited:
         native = "Limit " + _native_amount(component.limit, component.unit)
         if not watch or (component.unit or "").casefold() != "ai credits":
             native += " " + (component.unit or "units")
     else:
         native = ""
     if native:
-        if not watch and component.remaining_money is not None:
-            native += " (" + money(component.remaining_money)
+        if not watch and used_money is not None:
+            native += " (" + money(used_money) + "/" + money(component.limit_money) + ")"
+        elif not watch and not component.unlimited and component.remaining_money is not None:
+            native += " (remaining " + money(component.remaining_money)
             if component.limit_money is not None:
                 native += "/" + money(component.limit_money)
             native += ")"

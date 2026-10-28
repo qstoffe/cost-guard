@@ -88,8 +88,11 @@ def main():
     save(phase, dict(outcome="NOT RUN", reason="phase started but has not completed"))
     try:
         if phase == "regression":
+            # Hosted Windows shell startup is contended by concurrent launcher
+            # fixtures. Preserve all tests/deadlines; remove only cross-file load.
+            jobs = "1" if sys.platform == "win32" else "4"
             suite = run([sys.executable, "development/tools/run_tests.py", "--suite", "full",
-                         "--json-report", "ci-results/full.json"], 900)
+                         "--jobs", jobs, "--json-report", "ci-results/full.json"], 900)
             validation = subprocess.run([sys.executable, "development/tools/validate_package.py", "--working-tree"],
                 cwd=ROOT, timeout=180, capture_output=True, text=True, encoding="utf-8")
             print(validation.stdout)

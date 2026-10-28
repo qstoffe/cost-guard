@@ -283,13 +283,23 @@ $found = Find-BetaPython
 if ($found.Executable -ne $Python -or $found.Arguments.Count -ne 0) { throw 'PATH fallback failed' }
 if ($realLauncher) {
     Write-Output 'STAGE:py-launcher'
-    function Get-Command { return @([pscustomobject]@{Source=$realLauncher}) }
+    function Get-Command {
+        param($Name, [switch]$All, $CommandType, $ErrorAction)
+        if ($Name -eq 'py.exe') { return @([pscustomobject]@{Source=$realLauncher}) }
+        return @([pscustomobject]@{Source=$Python})
+    }
     $found = Find-BetaPython
+    if (-not $found) { throw 'Neither real launcher nor supported PATH interpreter accepted' }
+    if ($found.Executable -eq $realLauncher) {
+        if ($found.Arguments.Count -ne 1 -or $found.Arguments[0] -ne '-3') { throw 'Launcher must retain single -3 argument' }
+    } elseif ($found.Executable -ne $Python -or $found.Arguments.Count -ne 0) {
+        throw 'Unusable real launcher must fall back to the supported interpreter'
+    }
     $python = $found.Executable
     $assignment = $ast.Find({param($node) $node -is [Management.Automation.Language.AssignmentStatementAst] -and $node.Left.Extent.Text -like '*$pythonArgs'}, $true)
     Invoke-Expression $assignment.Extent.Text
     $result = & $python @pythonArgs -c 'print(1234567)'
-    if ($result -ne '1234567') { throw 'Single py -3 argument lost native command' }
+    if ($result -ne '1234567') { throw 'Selected native interpreter command lost arguments' }
 }
 $logging = $ast.Find({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Write-BetaStartupRecord'}, $true)
 Write-Output 'STAGE:private-log'

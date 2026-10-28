@@ -62,6 +62,8 @@ All paths in this table are relative to the repository root. Test names live und
 
 ## Shared synthetic fixtures
 
+Quota Used display is shared by `src/display.py`, `src/presentation/accounts.py` and `src/application/display.py`; `test_quota_used.py` covers parity and the temporary `src/presentation/quota_migration.py` visible-Watch state owner. Remove only the temporary notice per the [cleanup note](../../backlog/quota-used-warning-cleanup.md), never the permanent Used conversion.
+
 - `development/tests/fixtures/session_snapshots.py`: canonical root/child/task/continuation/compaction/running snapshots (also without the /compact work, or after a location move) and message/part/provenance builders.
 - `development/tests/fixtures/pricing_catalog.py`: the small deterministic two-model reference catalog and a two-tier 100K-threshold catalog.
 - `development/tests/fixtures/warning_projections.py`: single-prompt report/Watch projections carrying one Next-Ictx warning severity.

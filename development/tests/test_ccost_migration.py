@@ -184,11 +184,11 @@ class NumericSemanticsTests(unittest.TestCase):
         account = AccountProjection(AccountSnapshot(AccountRef("fixture", "generic", "1"), 1, "Any", quotas=(quota,)), "Any")
         styler = AnsiStyler({}, enabled=False)
         text = "\n".join(capacity_lines(account, styler, "UTC", width=180, force_vertical=True))
-        self.assertIn("6993/7000.125 AI credits ($69.94/$70.00)", text)
+        self.assertIn("7/7000.125 AI credits ($0.06/$70.00)", text)
         used = replace(quota, remaining=None, remaining_fraction=None, used=D("6993.7"))
         account = replace(account, account=replace(account.account, quotas=(used,)))
         text = "\n".join(capacity_lines(account, styler, "UTC", width=180, force_vertical=True))
-        self.assertIn("6994 AI credits used / 7000.125", text)
+        self.assertIn("6994/7000.125 AI credits ($69.94/$70.00)", text)
 
     def test_historical_counts_mix_cost_and_session_numbers_are_ungrouped(self):
         mix = priced_token_mix(((MODEL, TokenUsage(input=1000000)),), PricingCatalog((NATIVE,)).reference_category_valuation)

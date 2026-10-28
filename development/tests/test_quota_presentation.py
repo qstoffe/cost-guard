@@ -75,7 +75,7 @@ class FormattingTests(unittest.TestCase):
                                                 ("Native", "0.2"), ("Credits", "1"))))
         lines = capacity_lines(AccountProjection(snapshot, "Any provider"), STYLER, "UTC", width=120,
                                force_vertical=True, now_ms=NOW)[1:]
-        self.assertEqual(1, len({line.index("█") for line in lines}))
+        self.assertEqual(1, len({re.search(r"[█░]{10}", line).start() for line in lines}))
         self.assertEqual(1, len({line.index("%") for line in lines}))
         self.assertTrue(all(len(re.search(r"[█░]+", line).group()) == 10 for line in lines))
 
@@ -196,7 +196,7 @@ class LayoutTests(unittest.TestCase):
             "Month", remaining_fraction=D("0.5"), remaining=D(250), limit=D(500), unit="widgets",
             remaining_money=D("2.5"), limit_money=D(5)),)))
         for text in (watch_text(quotas(row), width=160), report_text(quotas(row))):
-            self.assertIn("50% · 250/500 widgets", text)
+            self.assertIn("50% used · 250/500 widgets", text)
             self.assertNotIn("Native", text)
             self.assertEqual(1, len([line for line in text.splitlines() if "250/500" in line]))
         self.assertNotIn("$", watch_text(quotas(row), width=160))
@@ -211,7 +211,7 @@ class LayoutTests(unittest.TestCase):
         primary = [line for line in text.splitlines() if re.search(r"[█░]{10}", line)]
         self.assertEqual(1, len({re.search(r"[█░]{10}", line).start() for line in primary}))
         self.assertNotIn("BLOCKED", text, "the exactly exhausted Month already explains the restriction")
-        self.assertIn("0% · 0/500", text)
+        self.assertIn("100% used · 500/500", text)
         native = replace(rolling(), account=replace(rolling().account, quotas=(QuotaComponent("Balance", remaining=D(50), unit="widgets"),)))
         self.assertIn("50 widgets remaining", watch_text(quotas(native), width=160))
 
@@ -220,9 +220,9 @@ class LayoutTests(unittest.TestCase):
             for width in (45, 100, 300):
                 text = watch_text(quotas(*rows), width=width)
                 if width >= 100:
-                    self.assertIn(" | ", text)
+                    self.assertTrue(" | " in text or re.search(r"\n +Week +[█░]{10}", text))
                     self.assertIn("Reset@", text)
-                    self.assertEqual(len(rows), sum("█" in line for line in text.splitlines()))
+                    self.assertEqual(len(rows) * 2, sum(len(re.findall(r"[█░]{10}", line)) for line in text.splitlines()))
                 else:
                     self.assertNotIn(" | ", text)
                     self.assertIn("Reset in", text)

@@ -23,6 +23,7 @@ from .pricing_notices import pricing_notice_lines
 from .watch_activity import BASE_ROLE, skill_summary_segments, status_segments, tool_summary_segments
 from .duration import duration_text as _duration
 from .watch_screen import WatchScreen
+from .quota_migration import NOTICE, QuotaMigrationNotice
 from src.launcher_feedback import release_launcher_status
 
 _WATCH_COLUMNS = (
@@ -242,6 +243,8 @@ class WatchRenderer:
         self.terminal_width = terminal_width
         self._screen = WatchScreen(self.stream)
         self._initializing = False
+        self._quota_notice = QuotaMigrationNotice()
+        self._quota_notice_visible = False
 
     def _content_width(self, *, minimum: int = 40) -> int:
         """Configured test width, otherwise the live terminal's content width."""
@@ -507,23 +510,35 @@ class WatchRenderer:
         self._status_visible = True
 
     def render(self, projection: WatchProjection) -> None:
+        # Hidden/redirected processes never consume a personal viewing window.
+        notice = self._notice_eligible()
+        self._quota_notice_visible = notice
         if not self.interactive:
             self._render_frame(projection)
-            return
-        output = self.stream
-        buffer = io.StringIO()
-        try:
-            self.stream = buffer
-            self._render_frame(projection)
-        finally:
-            self.stream = output
-        self._screen.publish(buffer.getvalue())
+        else:
+            output = self.stream
+            buffer = io.StringIO()
+            try:
+                self.stream = buffer
+                self._render_frame(projection)
+            finally:
+                self.stream = output
+            self._screen.publish(buffer.getvalue())
+        if notice:
+            self._quota_notice.displayed(self._quota_notice.clock())
+
+    def _notice_eligible(self) -> bool:
+        return (self.interactive and bool(getattr(self._screen.stream, "isatty", lambda: False)())
+                and self._quota_notice.eligible())
 
     def _render_frame(self, projection: WatchProjection) -> None:
         self._write(self._watch_title(projection.source_label, projection.title, projection.watch_started_at_ms))
         for warning in projection.source_warnings:
             self._write(self.styler.apply("WARNING: " + warning, "costQuotaWarning"))
         width = self._content_width()
+        if self._quota_notice_visible:
+            notice = NOTICE if len(NOTICE) <= width else "⚠ Quota bars: Used, not Remaining"
+            self._write(self.styler.apply(fit(notice, width).rstrip(), "costQuotaWarning"))
         if projection.recent_model_notice:
             for line in pricing_notice_lines(projection.recent_model_notice, width, self.styler, "modelComparisonNew",
                                           highlight_spans=projection.recent_model_notice_highlight_spans):
@@ -547,7 +562,7 @@ class WatchRenderer:
     def render_status(self, projection: WatchProjection) -> None:
         if not self.interactive:
             return
-        if self._screen.resized():
+        if self._screen.resized() or self._quota_notice_visible != self._notice_eligible():
             self.render(projection)
             return
         text = self.styler.apply(

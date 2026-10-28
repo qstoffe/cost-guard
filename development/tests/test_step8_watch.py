@@ -121,9 +121,9 @@ class WatchGatingTests(unittest.TestCase):
             WatchRenderer(config, stream=stream, interactive=False).render(projection)
             text = stream.getvalue()
             self.assertIn("OpenAI Plus", text)
-            self.assertIn("5h     " + "█" * 8 + "░" * 2 + "  75%", text)
-            self.assertIn("Week " + "█" * 6 + "░" * 4 + "  60%", text)
-            self.assertNotIn(" used", text)
+            self.assertIn("5h     " + "█" * 3 + "░" * 7 + "  25% used", text)
+            self.assertIn("Week " + "█" * 4 + "░" * 6 + "  40% used", text)
+            self.assertEqual(3, text.count(" used"))
             self.assertNotIn("equiv", text)
 
     def test_watch_quota_footer_lists_detected_accounts_and_status_stays_last(self):
@@ -143,7 +143,7 @@ class WatchGatingTests(unittest.TestCase):
             copilot = replace(projection.quota.accounts[0], label="GitHub Copilot Business")
             copilot_only = footer((copilot,))
             self.assertTrue(any("GitHub Copilot Business" in line for line in copilot_only))
-            self.assertTrue(any("Month  " + "█" * 7 + "░" * 3 + "  70%" in line for line in copilot_only))
+            self.assertTrue(any("Month  " + "█" * 3 + "░" * 7 + "  30% used" in line for line in copilot_only))
             self.assertFalse(any(line.startswith(("Cost today %:", "Local calculated:", "GitHub reported:", "~Copilot equiv:")) for line in copilot_only))
             self.assertFalse(any(line.startswith("OpenAI ") for line in copilot_only))
 
@@ -152,8 +152,8 @@ class WatchGatingTests(unittest.TestCase):
             self.assertNotIn("Quotas:", openai_only)
             self.assertFalse(any(line.startswith(("Cost today %:", "Local calculated:", "GitHub reported:", "Copilot ")) for line in openai_only))
             self.assertTrue(any("OpenAI Plus" in line for line in openai_only))
-            self.assertTrue(any("5h    " + "█" * 8 + "░" * 2 + "  75% · Reset@" in line for line in openai_only))
-            self.assertTrue(any("Week " + "█" * 6 + "░" * 4 + "  60% · Reset@" in line for line in openai_only))
+            self.assertTrue(any("5h    " + "█" * 3 + "░" * 7 + "  25% used · Reset@" in line for line in openai_only))
+            self.assertTrue(any("Week " + "█" * 4 + "░" * 6 + "  40% used · Reset@" in line for line in openai_only))
             self.assertTrue(openai_only[-1].startswith("Watch:"))
 
             both = footer((copilot, openai))
@@ -186,7 +186,7 @@ class WatchGatingTests(unittest.TestCase):
             ReportRenderer(config, stream=stream, color_enabled=False, terminal_width=160).render(report)
             section = stream.getvalue().split("OpenAI Plus", 1)[1]
             section = "OpenAI Plus" + section
-            for text in ("OpenAI Plus", "5h", "Week", "75%", "60%"):
+            for text in ("OpenAI Plus", "5h", "Week", "25% used", "40% used"):
                 self.assertIn(text, section)
             self.assertNotIn("~5-hour remaining", section)
             self.assertNotIn("~weekly remaining", section)

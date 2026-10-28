@@ -11,6 +11,28 @@ from development.tools import ci_web_beta, run_tests
 
 
 class CiEvidenceTests(unittest.TestCase):
+    def test_regression_workers_preserve_full_suite_and_deadlines(self):
+        for platform, jobs in (("win32", "1"), ("darwin", "4"), ("linux", "4")):
+            with self.subTest(platform=platform), \
+                    patch.object(ci_web_beta, "hosted_only"), \
+                    patch.object(ci_web_beta, "facts", return_value={}), \
+                    patch.object(ci_web_beta, "save"), \
+                    patch.object(ci_web_beta, "run", return_value=0) as suite, \
+                    patch.object(ci_web_beta.subprocess, "run") as validator, \
+                    patch("sys.platform", platform), \
+                    patch("sys.argv", ["ci", "regression"]), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                validator.return_value.returncode = 0
+                validator.return_value.stdout = "PASS"
+
+                result = ci_web_beta.main()
+
+                self.assertEqual(0, result)
+                suite.assert_called_once_with(
+                    [ci_web_beta.sys.executable, "development/tools/run_tests.py", "--suite", "full",
+                     "--jobs", jobs, "--json-report", "ci-results/full.json"], 900)
+                self.assertEqual(180, validator.call_args.kwargs["timeout"])
+
     def test_workstation_cannot_enter_hosted_probe(self):
         with patch.dict("os.environ", {}, clear=True):
             with self.assertRaisesRegex(SystemExit, "not authorized on a workstation"):

@@ -247,7 +247,7 @@ async function main() {
   assert.match(ids.result.textContent, /Unsupported authentication method/);
   assert.doesNotMatch(ids.result.textContent, /unsupported_auth_method/);
   assert.match(ids.result.textContent, /Unaccounted usage \(estimate\): —/);
-  assert.match(ids.result.textContent, /75% remaining/);
+  assert.match(ids.result.textContent, /25% used/);
   // Reload with an ordinary deep link must not erase it or require the bootstrap again.
   location.hash = '#/sessions/root-0000';
   const reloaded = vm.createContext({LiveConnection: transport, AbortController, clearTimeout, document: context.document, window: context.window, location, history,

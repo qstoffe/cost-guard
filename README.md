@@ -84,7 +84,7 @@ Distinct signals:
 - **Billed:** actual monetary spend with reported or explicit subscription/zero-billing evidence; otherwise `N/A`.
 - **Quotas / limits:** independent account-native windows, credits, budgets and availability.
 
-CCost uses GitHub reference rates in Copilot AI-credit-equivalent units. Included subscription work can have positive CCost and Billed $0.00. Unknown prices stay unknown, never replaced with billed cost. A quota credential does **not** prove historical request-account attribution.
+Reference costs—including Watch **Today**—are **CCost**, unless labeled otherwise, not native **Used** or actual **Billed**. Included work can have CCost with Billed $0. Quota bars show **Used / Total**; **Remaining** pace describes capacity left. Quota credentials do not prove historical attribution.
 
 ### Symbols and token categories
 
@@ -368,7 +368,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.107 (2026-10-28):** Web Beta removes timed healthy-stream reconnects and the bulky connected banner, while retaining truthful outage, authorization and stopped notices. CLI valuation is unchanged.
+**v80.108 (2026-10-28):** CLI/Web quotas show Used / Total; Remaining pace is unchanged. A temporary visible-Watch warning explains the change.
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

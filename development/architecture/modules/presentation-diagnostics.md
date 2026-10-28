@@ -8,6 +8,10 @@ Presentation renders projections/progress, never integration queries or analysis
 
 CLI retains v77 report/Watch argument shapes. Public `windows/|macos/` hold everyday launchers; Diagnostics lives under `development/user-tools/diagnostics/windows|macos/`. Shell-native requirements feedback precedes environment checks; `launcher_feedback.py` consumes its transient row when Python can replace it (plain lines on redirection). Windows `.cmd` files hand off with `start /b` then exit; `src/windows_launcher.ps1` restores inherited Ctrl+C, detects Python 3.11+ and runs the relative entry point. `-NoExit` leaves one usable shell after completion/failure/Ctrl+C, never an Enter-to-close or batch confirmation.
 
+## Temporary quota-warning state
+
+FR000525 keeps provider capacity and Remaining pace canonical; `src/display.py` supplies the shared presentation-only Used conversion for CLI and immutable Web display tokens. The temporary CLI Watch warning owns a single earliest-display UTC timestamp under user-local CostGuard state, not runtime cache/config/OpenCode. Only successful interactive frame publication starts its 72-hour window. A fixed verified implementation-merge anchor imposes the independent 60-day sunset; status redraws remove expired text. SQLite handles always close, concurrent inserts retain the earliest display, and invalid/unwritable state or backward clocks suppress the notice without changing account health. No Web acquisition/view notice is added. [Removal and state-loss limits](../../backlog/quota-used-warning-cleanup.md).
+
 ## Software-failure boundaries
 
 `cost-guard.py` and Diagnostics guard imports with stdlib-only `src/runtime_errors.py` (only version metadata may cross in). It owns logs/crashes, deduplication/30-day retention, hooks, emergency stderr and the Diagnostics hint. Faults default fatal; isolated owners may expose ERROR and continue. [Failure policy/root audit](../governance/policies/runtime-failures.md) owns details; new roots need explicit ownership/tests.

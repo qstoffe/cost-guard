@@ -37,6 +37,28 @@ def money(value: Decimal | None) -> str:
     return "N/A" if value is None else f"${value:.2f}"
 
 
+def quota_usage(*, used=None, limit=None, remaining=None, remaining_fraction=None,
+                unlimited=False, remaining_money=None, limit_money=None):
+    """Presentation only: native consumption, bounded fill and equivalent money.
+
+    A normalized percentage-only window supports its exact complement, not an
+    invented absolute amount. Never change canonical capacity or Remaining pace.
+    """
+    finite = not unlimited and limit is not None and limit > 0
+    consumed = used
+    if consumed is None and finite and remaining is not None:
+        consumed = max(Decimal(0), limit - remaining)
+    fraction = None
+    if finite and consumed is not None:
+        fraction = min(Decimal(1), consumed / limit)
+    elif not unlimited and remaining_fraction is not None and limit != 0:
+        fraction = 1 - remaining_fraction
+    used_money = None
+    if finite and consumed is not None and limit_money is not None:
+        used_money = consumed * limit_money / limit
+    return fraction, consumed, used_money
+
+
 def native_amount(value: Decimal, unit: str | None, *, kind: str = "exact") -> str:
     if unit == "USD":
         return money(value)

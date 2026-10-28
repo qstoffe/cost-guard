@@ -176,7 +176,7 @@ class AccountsTests(unittest.TestCase):
         self.assertEqual(1, len(wide))
         self.assertGreater(len(narrow), 1)
         self.assertTrue(all(len(line) <= 45 for line in narrow))
-        for text in ("OpenAI Plus", "75%", "█" * 8 + "░" * 2):
+        for text in ("OpenAI Plus", "25% used", "█" * 3 + "░" * 7):
             self.assertIn(text, "\n".join(wide))
             self.assertIn(text, "\n".join(narrow))
 
@@ -195,7 +195,7 @@ class AccountsTests(unittest.TestCase):
         a = replace(account(), quotas=(QuotaComponent("Team budget", remaining=D("18.40"), limit=D(200), unit="USD"),
                                       QuotaComponent("Model credits", used=D("2.75"), unit="credits")))
         text = "\n".join(capacity_lines(AccountProjection(a, "Account"), AnsiStyler({}, enabled=False), "UTC", width=200))
-        self.assertIn("Team budget    $18.40/$200.00 USD", text)
+        self.assertIn("91% used · $181.60/$200.00 USD", text)
         self.assertIn("Model credits 2.75 credits used", text)
 
 

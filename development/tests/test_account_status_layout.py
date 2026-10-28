@@ -50,7 +50,7 @@ class StatusOwnershipTests(unittest.TestCase):
         self.assertIs(AccountUsageStatus.BLOCKED, row.account.quotas[0].status)
         for text in (watch_text(quotas(row), width=160), report_text(quotas(row))):
             self.assertIn("COPILOT PAUSED", text)
-            self.assertIn("60%", text)
+            self.assertIn("40% used", text)
             self.assertEqual(1, len(re.findall(r"\bBLOCKED\b", text)), "positive quota cannot explain the pause")
 
 
@@ -60,7 +60,7 @@ class BlockedDeduplicationTests(unittest.TestCase):
         watch = watch_text(quotas(row), width=160)
         lines = [line for line in watch.splitlines() if line.startswith("OpenAI Plus")]
         self.assertEqual(1, len(lines))
-        self.assertRegex(lines[0], r"5h +░{10} +0% · Reset@\d\d:\d\d \| Week ███████░░░  69% · Reset@\w+ \d\d:\d\d$")
+        self.assertRegex(lines[0], r"5h +█{10} 100% used · Reset@\d\d:\d\d \| Week ███░░░░░░░  31% used · Reset@\w+ \d\d:\d\d$")
         report = report_text(quotas(row))
         for text in (watch, report):
             self.assertNotIn("BLOCKED", text)
@@ -84,13 +84,13 @@ class BlockedDeduplicationTests(unittest.TestCase):
                 for text in (watch_text(quotas(row), width=160), report_text(quotas(row))):
                     self.assertEqual(1, len(re.findall(r"\bBLOCKED\b", text)), text)
         rounded = watch_text(quotas(with_quotas(rolling(), *cases["rounded zero"])), width=160)
-        self.assertIn("  0%", rounded)
+        self.assertIn("100% used", rounded)
 
     def test_component_block_without_account_block_keeps_its_own_indicator(self):
         row = with_quotas(rolling(), QuotaComponent("5-hour", remaining_fraction=D("0.4")),
                           QuotaComponent("Fable", remaining_fraction=D(0), scope="model", status=AccountUsageStatus.BLOCKED),
                           status=AccountUsageStatus.AVAILABLE)
-        self.assertIn("Fable ░░░░░░░░░░   0% · BLOCKED", watch_text(quotas(row), width=160))
+        self.assertIn("Fable ██████████ 100% used · BLOCKED", watch_text(quotas(row), width=160))
 
     def test_available_account_has_no_blocked_warning(self):
         for row in (openai(40, 31, allowed=True), rolling()):
@@ -120,7 +120,7 @@ class ResponsiveLayoutTests(unittest.TestCase):
         self.assertTrue(all(line.startswith(" " * 14) for line in visible[1:]))
         self.assertTrue(all(len(line) <= 60 for line in visible))
         joined = " ".join(line.strip() for line in visible)
-        for value in (long, "40%", "25%", "Reset@21:00", "Reset@22:00", "███░░░░░░░"):
+        for value in (long, "60% used", "75% used", "Reset@21:00", "Reset@22:00", "████████░░"):
             self.assertIn(value, joined)
         for line in lines:
             self.assertEqual(line.count("\x1b[0m"), len(re.findall(r"\x1b\[(?!0m)[0-9;]*m", line)))

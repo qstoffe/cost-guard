@@ -182,7 +182,7 @@ class ClaudeAccountTests(unittest.TestCase):
         self.assertEqual(D(1), value.quotas[0].remaining_fraction)
         text = "\n".join(capacity_lines(AccountProjection(value, "Claude Code Pro"), AnsiStyler({}, enabled=False),
                                         "UTC", width=200, now_ms=1000))
-        self.assertIn("100% · not started", text)
+        self.assertIn("0% used · not started", text)
         self.assertNotIn("PARTIAL", text)
         # Only the explicit zero/null pair proves an idle window.
         for window in ({"utilization": 0}, {"utilization": 3, "resets_at": None}):

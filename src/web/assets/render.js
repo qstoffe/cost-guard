@@ -217,22 +217,23 @@ const ReportView = (() => {
       (quota.status === 'blocked' ? ' error' : ''));
     const status = quota.status === 'blocked' ? ' · BLOCKED' : ' · ' + quota.status;
     row.append(element('strong', quota.label + status));
-    const remaining = quota.unlimited ? 'Unlimited' : quota.remaining_fraction == null ? 'Remaining unavailable' : display(quota, 'remaining_fraction') + ' remaining';
-    row.append(element('span', remaining, 'metric-value'));
+    const used = display(quota, 'used_fraction');
+    const summary = quota.unlimited ? 'Unlimited' : used === 'N/A' ? 'Used percentage unavailable' : used + ' used';
+    row.append(element('span', summary, 'metric-value'));
     // Only a known server-formatted fraction creates a determinate bar. Never coerce null to zero.
-    if (!quota.unlimited && quota.remaining_fraction != null) {
+    if (!quota.unlimited && used !== 'N/A') {
       const bar = element('progress'); bar.max = 100;
-      bar.value = display(quota, 'remaining_fraction').replace('%', '');
-      bar.setAttribute('aria-label', quota.label + ' remaining');
-      bar.setAttribute('aria-valuetext', remaining); row.append(bar);
+      bar.value = used.replace('%', '');
+      bar.setAttribute('aria-label', quota.label + ' used');
+      bar.setAttribute('aria-valuetext', summary); row.append(bar);
     }
     const unit = quota.unit || 'units';
-    if (quota.remaining != null) row.append(element('span', `${display(quota, 'remaining')} ${unit} remaining` +
-      (quota.limit == null || quota.unlimited ? '' : ` / ${display(quota, 'limit')} ${unit}`)));
-    else if (quota.used != null || quota.limit != null) row.append(element('span',
-      `Used ${display(quota, 'used')} / ${quota.unlimited ? 'Unlimited' : display(quota, 'limit')} ${unit}`));
+    if (!display(quota, 'quota_used').startsWith('N/A')) row.append(element('span', 'Used ' + display(quota, 'quota_used')));
+    else if (!quota.unlimited && quota.remaining != null) row.append(element('span', `${display(quota, 'remaining')} ${unit} remaining`));
+    else if (!quota.unlimited && quota.limit != null) row.append(element('span', `Limit ${display(quota, 'limit')} ${unit}`));
     if (quota.remaining_money != null || quota.limit_money != null) row.append(element('span',
-      `Native money ${display(quota, 'remaining_money')} / ${display(quota, 'limit_money')}`, 'detail'));
+      display(quota, 'used_money') !== 'N/A' ? `Native money used ${display(quota, 'used_money')} / ${display(quota, 'limit_money')}` :
+        `Native money remaining ${display(quota, 'remaining_money')} / ${display(quota, 'limit_money')}`, 'detail'));
     row.append(element('span', display(quota, 'reset'), 'detail'));
     const window = [quota.period !== 'unknown' && quota.period,
       quota.duration_seconds && display(quota, 'window') + ' window',
@@ -264,14 +265,9 @@ const ReportView = (() => {
       if (detailed || account.billed_today != null) card.append(element('p', 'Billed today: ' + display(account, 'billed_today')));
       if (detailed || account.billed_month != null) card.append(element('p', 'Billed month: ' + display(account, 'billed_month')));
       for (const quota of obs.quotas) {
-        if (detailed) { accountQuota(card, quota); continue; }
-        const row = element('div', undefined, 'quota-summary ' + (quota.display_roles || []).join(' '));
-        row.append(element('strong', quota.label), element('span',
-          `${display(quota, 'remaining')} ${quota.unit || 'units'} remaining / ${quota.unlimited ? 'Unlimited' : display(quota, 'limit')} · ${display(quota, 'remaining_fraction')}`));
-        row.append(element('span', `Used ${display(quota, 'used')} · Reset ${display(quota, 'reset_at_ms')} · ${quota.status}${quota.window_active === false ? ' · Inactive window' : ''}`, 'detail'));
-        card.append(row);
+        accountQuota(card, quota);
       }
-      for (const pace of account.pace) card.append(element('p', `${pace.label} Pace: ${display(pace, 'per_day')} ${pace.unit}/day · ${pace.days} days · ${pace.per_workday == null ? 'no workdays left' : display(pace, 'per_workday') + ' per workday'}`, 'detail'));
+      for (const pace of account.pace) card.append(element('p', `${pace.label} Remaining: ${display(pace, 'per_day')} ${pace.unit}/day · ${pace.days} days · ${pace.per_workday == null ? 'no workdays left' : display(pace, 'per_workday') + ' per workday'}`, 'detail'));
       if (['github-copilot', 'github-copilot-enterprise'].includes(obs.provider_id) || account.unaccounted_usage != null) card.append(element('p', 'Unaccounted usage (estimate): ' + display(account, 'unaccounted_usage')));
       if (!detailed && (obs.has_error || obs.has_warning || ['stale', 'unavailable', 'error', 'paused', 'blocked'].includes(obs.status))) card.append(element('p', `${obs.availability} · ${obs.status} · ${obs.error_code || 'Account warning'}`, 'warning'));
       if (detailed && !obs.quotas.length) card.append(element('p', 'Quota unavailable; not zero or unlimited.', 'detail'));
