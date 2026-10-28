@@ -6,7 +6,7 @@ Implemented in v80.104 (2026-10-28). All eight report, Watch, Web Beta and Diagn
 
 Updated current docs, runtime/bootstrap crash guidance, PowerShell/Python/AppleScript paths, package rules, macOS compatibility checks, native probe fixtures and regression tests. Finder helper fingerprint inputs use the renamed Web script; the filename and bytes participate in cache identity. All eight scripts are byte-identical Git renames; all four macOS scripts retain mode 100755. Console ownership, Ctrl+C reset, Web lifecycle, trust/signing policy and analysis/UI behavior are deliberately unchanged. The existing no-build Windows Web route remains; no new compiler or dependency was introduced.
 
-Candidate implementation: [76e1d919](https://github.com/qstoffe/cost-guard/commit/76e1d919afded5f830b30db699d306d9a8c1f8cd).
+Delivery PR: [#93](https://github.com/qstoffe/cost-guard/pull/93). Candidate implementation: [76e1d919](https://github.com/qstoffe/cost-guard/commit/76e1d919afded5f830b30db699d306d9a8c1f8cd).
 
 ## Verification
 
