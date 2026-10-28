@@ -1,13 +1,13 @@
 # Test system health
 
-Source revision: 82f555e2ef9d3c0ee3586f067694f101d39d511b
-Checked revision: 82f555e2ef9d3c0ee3586f067694f101d39d511b
+Source revision: 6fdb3f5e7b03f97481c03e56876dc3e5c3b0ade3
+Checked revision: 6fdb3f5e7b03f97481c03e56876dc3e5c3b0ade3
 Last checked: 2026-10-28
 Status: current
 
 ## Summary
 
-Milestone-35 audit retains isolated files, responsibility-owned fixtures and hard deadlines: no source-backed harness rewrite justified. Whole-tree inventory, sampled source/tests and fresh three-platform CI outcomes are in development/architecture/governance/verification/test-health-35.md. No product tests, validator, live/model calls or version work ran for this development-only delivery. Historical hosted results are revision-specific, never consumer-desktop acceptance.
+Milestone-40 audit retains isolated files, responsibility-owned fixtures and hard deadlines: no source-backed harness rewrite justified. Whole-tree inventory, sampled source/tests, independent new-feature risk mapping and fresh three-platform CI outcomes are in development/architecture/governance/verification/test-health-40.md. No product tests, validator, live/model calls or version work ran for this development-only delivery. Retrieved hosted results are revision-specific, never candidate execution or consumer-desktop acceptance.
 
 ## Evidence
 
@@ -15,7 +15,7 @@ Milestone-35 audit retains isolated files, responsibility-owned fixtures and har
 
 `development/tools/run_tests.py` defaults to four isolated workers, Quick's 25-second and Full's 240-second per-file bounds. Hosted Windows CI selects one worker to isolate shell-startup fixtures from cross-file contention; no deadline/assertion changes. Its JSON report distinguishes named skips, failures/errors and incomplete known-passed counts. A method inventory is not an executed count. CI supplies Node; Chromium smoke remains separate from DOM substitutes. `test_ci_web_beta.py` covers hosted-only admission and sanitized reporting.
 
-At 82f555e2ef9d3c0ee3586f067694f101d39d511b: 113 registered files (109 Quick/four Full-only), no gaps, 1,380 syntactic methods; eleven sibling imports/ten distinct edges. Inventory: 511 text/config entries, 64 binary/large exclusions, no exact-byte duplicates. Five-run sample: success, two cancelled, failure, queued; not five PASS. Run 40735661619 at 227d2ad failed Windows regression on README CRLF 32,771 > 32,768 bytes, cascading into three foundation checks including .vs. Current README is 32,142 LF/32,533 CRLF bytes under the unchanged cap. Subsequent candidate run 40737349402 at f8edc0c passed all three hosted regression/native/browser jobs; Windows: 113 files, 1,380 passed, no skips/failures/errors, regression+validator 131.17 s. Exact-base main run 40738339004 was queued, never PASS. Full revisions, links, risk mapping and timing limits: milestone-35 report. No controlled speedup or consumer-desktop proof.
+At 6fdb3f5e7b03f97481c03e56876dc3e5c3b0ade3: 116 registered files (112 Quick/four Full-only), no gaps, 1,409 syntactic methods; eleven sibling imports/ten distinct edges. Inventory: 538 text/config entries, 64 binary/large exclusions, no exact-byte duplicates. The three new suites cover model/publisher sampling, Used quotas/temporary notice and isolated reference-USD display with independent numeric/raw-value expectations. Five latest workflow runs: four successful, one cancelled, not five PASS. Run 40778103084 at a27d5fede5d07a7a2e992691b34790b6017cd780 passed all three hosted regression/native/browser jobs; Windows Checks reports 116 files, 1,409 passed, no skips/failures/errors, complete counts, regression+validator 260.48 s. Coarse regression/native/browser step times: Windows 263/11/13 s, ARM64 Mac 203/10/11 s, Intel Mac 234/11/27 s; not per-file measurements or controlled comparisons. Full source IDs/links/limitations: milestone-40 report. Prior README CRLF baseline failure and subsequent repair remain in milestone-35 evidence, not a current failure claim. No controlled speedup or consumer-desktop proof.
 
 Tests below are under `development/tests/`; mappings establish intended contracts, not coverage percentages:
 
@@ -57,7 +57,7 @@ Actions raw-log download through the installed transport returned HTTP 401; it w
 
 ### Historical causes retained
 
-FR000525 candidate 42a7b156e5c365cfb2d71c5286e8eab6ffe7750b ([run 40770133676](https://github.com/qstoffe/cost-guard/actions/runs/40770133676)) passed both macOS jobs; Windows regression failed only `test_windows_web.py`, while native/browser and validation passed. The discovery fixture assumed an installed `py.exe` necessarily had a usable registered Python; it must instead exercise production fallback to the known supported PATH interpreter and preserve exact argument assertions. The asynchronous handoff fixture missed its 15-second delegate checkpoint under concurrent suite load. Repair uses serial hosted Windows file execution, not longer waits or a skipped test; fresh hosted verification is required. Local Full (115 files) remained green; this is not physical-desktop proof.
+FR000525 candidate 42a7b156e5c365cfb2d71c5286e8eab6ffe7750b ([run 40770133676](https://github.com/qstoffe/cost-guard/actions/runs/40770133676)) passed both macOS jobs; Windows regression failed only `test_windows_web.py`, while native/browser and validation passed. The discovery fixture assumed an installed `py.exe` necessarily had a usable registered Python; current source exercises production fallback to the supported PATH interpreter and preserves exact argument assertions. The asynchronous handoff fixture missed its 15-second delegate checkpoint under concurrent suite load. Repair uses serial hosted Windows file execution, not longer waits or a skipped test. Fresh read-only evidence from [run 40778103084](https://github.com/qstoffe/cost-guard/actions/runs/40778103084) corroborates successful three-platform verification at its revision. Historical local Full (115 files) and hosted success are not physical-desktop proof.
 
 FR 000370's report timeout was product IPC backpressure: retain the 64-message drain canary. FR 000380's overlapping probes interfered; sequential rerun passed, not evidence against isolation. FR 000500's finite-report-only CI fixture incorrectly expected Live connected with no source; current ci_browser_web.py requires STARTING/source pending, then SOURCE UNAVAILABLE/HTTP connected after publication/recovery, retaining actual SSE, stale report and terminal assertions. Successful hosted run 40601136981 corroborates repair; web_connection.cjs independently checks source versus HTTP readiness with a virtual clock. Repaired malformed-request/lifecycle/authorization assumptions are recorded in that delivery, not suppressed. Different revisions' times are not controlled comparisons.
 
