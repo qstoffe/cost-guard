@@ -4,7 +4,7 @@
 
 Implemented in Cost Guard v80.105: model-specific, prompt-weighted Relative CCost with verified-publisher/global fallback, shared tier-warning mixes and a second historical publisher Token Mix table in CLI and Web Beta. Comparison evidence is immutable shared report/application data, with help, tooltips and collapsed mobile-accessible provenance; JavaScript performs no pricing/mix calculation.
 
-Candidate source: [b788aa556cc12a50fc2909968fc7fdea19e1bebf](https://github.com/qstoffe/cost-guard/commit/b788aa556cc12a50fc2909968fc7fdea19e1bebf). Original FR bytes are unchanged. Native delivery receipt owns verified merge truth; this document does not invent a merge SHA.
+Delivery PR: [#95](https://github.com/qstoffe/cost-guard/pull/95). Candidate source: [b788aa556cc12a50fc2909968fc7fdea19e1bebf](https://github.com/qstoffe/cost-guard/commit/b788aa556cc12a50fc2909968fc7fdea19e1bebf). Original FR bytes are unchanged. Native delivery receipt owns verified merge truth; this document does not invent a merge SHA.
 
 ## Design and exclusions
 
