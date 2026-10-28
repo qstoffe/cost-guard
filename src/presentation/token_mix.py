@@ -91,7 +91,7 @@ def token_mix_lines(scope: str, mix: TokenMix, *, width: int | None = None) -> l
 
 def comparison_cost_text(cost: ComparisonCost) -> str:
     if not cost.observed_requests:
-        return "0"
+        return ccost_amount(Decimal(0))
     if not cost.priced_requests:
         return "N/A"
     return ("" if cost.complete else "?") + ccost_amount(cost.known_ccost)
@@ -100,7 +100,7 @@ def comparison_cost_text(cost: ComparisonCost) -> str:
 def watch_total_lines(mix: TokenMix, today: ComparisonCost, today_label: str = "Today", *,
                       width: int | None = None, pending: bool = False) -> list[str]:
     """Retained run total and deletion-resilient current-day CCost; one line when it fits."""
-    run = "0" if not mix.request_count else total_cost_text(mix)
+    run = ccost_amount(Decimal(0)) if not mix.request_count else total_cost_text(mix)
     daily = "Pending" if pending else comparison_cost_text(today)
     label = "Total today" if today_label == "Today" else "Total " + today_label
     return [f"CCost · Watch: {run} · {label}: {daily}"]

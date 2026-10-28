@@ -1,5 +1,7 @@
 # Usage and cost reference
 
+CCost examples use default AI-credit reference units. Set `ccostDisplayUnit` to `usd` in `config/user-config.jsonc`, or append `--ccost-unit usd` to any report/Watch command, for reference USD: **100 CCost credits = $1.00**. Thus 10742 credits displays as **$107.42**, 395 as **$3.95**, and a small positive amount may round to **$0.00** without being zero. USD amounts include `$` and two decimals; `?` still marks partial pricing and unknowns stay unavailable. Decimal valuations, ordering, thresholds and prompt attribution do not change. Native GitHub credits, Unaccounted residuals, quotas, Billed amounts, catalog rates and Relative CCost are independent. This is neither an invoice nor live forex. Web Beta consumes shared Python tokens and the configured default; its interactive unit toggle is separate work.
+
 Detailed counting and display contracts for Cost Guard. Start with the [README](../README.md#core-concepts) for the product introduction and core concepts.
 
 ## What Cost Guard counts

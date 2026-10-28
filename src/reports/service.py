@@ -670,7 +670,8 @@ class ReportService:
             if (block := self._prompt_block(item, start_ms=date_range.start_ms, end_ms=date_range.end_ms)).rows
         ))
         valuation = self._range_comparison(analyzed, date_range.start_ms, date_range.end_ms)
-        range_text = ccost_amount(valuation.known_ccost, unresolved=not valuation.complete)
+        range_text = ccost_amount(valuation.known_ccost, unresolved=not valuation.complete,
+                                  unit=self.config.get("ccostDisplayUnit", "credits"))
         return ReportProjection(
             ReportKind.DATE, f"Date report {date_range.text}", self.selection.selected.upper(), tuple(self.selection.warnings),
             prompt_blocks=blocks,

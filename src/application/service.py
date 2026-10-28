@@ -107,7 +107,7 @@ class ReportApplication:
                              # dwarf the report; per-root revision evidence stays above.
                              for parts in (() if request.session_page_size or request.kind is ReportKind.NORMAL
                                            else service.report_request_identities()))
-            view = project(report, service.timezone_id)
+            view = project(report, service.timezone_id, service.config.get("ccostDisplayUnit", "credits"))
             view = ObjectValue(view.fields + (("request_identities", requests),))
             recovered("application-report")
             return ReportResult(self._instance_id, sequence, now, scope, source, view)

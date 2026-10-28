@@ -220,7 +220,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     watch_renderer: WatchRenderer | None = None
     service: ReportService | None = None
     try:
-        config = loaded.values
+        config = dict(loaded.values)
+        if command.ccost_unit is not None:
+            config["ccostDisplayUnit"] = command.ccost_unit
         if command.watch:
             watch_renderer = WatchRenderer(config)
             watch_renderer.render_initializing("detecting...")

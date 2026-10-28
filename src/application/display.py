@@ -8,7 +8,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from src.analysis.timezones import format_local_timestamp
 from src.display import (compact_threshold, compact_tokens, context_delta, context_tokens,
                          duration_text, format_reset, money, native_amount, price_summary, relative_cost, unaccounted_usage, quota_usage)
-from src.numbers import balanced_share_percents, ccost_amount, ccost_range, consumed_capacity, remaining_capacity
+from src.numbers import balanced_share_percents, ccost_amount, ccost_display, ccost_range, remaining_capacity
 
 from .contracts import ObjectValue, record
 
@@ -57,7 +57,7 @@ def amount_tokens(values):
         tokens["remaining_fraction"] = "N/A" if fraction is None else f"{fraction * 100:.0f}%"
     if "known_ccost" in values:
         tokens["account_ccost"] = ("—" if values.get("observed_requests") and not values.get("priced_requests")
-                                   else consumed_capacity(decimal(values["known_ccost"])))
+                                   else ccost_amount(decimal(values["known_ccost"])))
     if "run_ccost" in values:
         mix = dict(values["run_total"].fields)
         tokens["run_ccost"] = ("N/A" if values["run_ccost"] is None or (mix["request_count"] and not mix["priced_requests"])
@@ -182,10 +182,16 @@ def history_tokens(values, timezone_id):
     return tokens
 
 
-def with_display(value, timezone_id="UTC", now_ms=None):
+def with_display(value, timezone_id="UTC", now_ms=None, *, ccost_display_unit="credits"):
+    """Apply a job-local display policy without changing any canonical fields."""
+    with ccost_display(ccost_display_unit):
+        return _with_display(value, timezone_id, now_ms)
+
+
+def _with_display(value, timezone_id, now_ms):
     """Traverse only frozen allowlisted records; preserve field and row ordering."""
     if isinstance(value, tuple):
-        return tuple(with_display(item, timezone_id, now_ms) for item in value)
+        return tuple(_with_display(item, timezone_id, now_ms) for item in value)
     if not isinstance(value, ObjectValue):
         return value
     values = dict(value.fields)
@@ -196,7 +202,7 @@ def with_display(value, timezone_id="UTC", now_ms=None):
     tokens.update(history_tokens(values, timezone_id))
     # These are opaque maps keyed by external model/source labels, not DTO schemas.
     opaque = {"by_model", "by_day_utc", "current_context_sources"}
-    fields = tuple((key, item if key in opaque else with_display(item, timezone_id, now_ms)) for key, item in value.fields)
+    fields = tuple((key, item if key in opaque else _with_display(item, timezone_id, now_ms)) for key, item in value.fields)
     role_tokens = roles(values)
     return ObjectValue(fields + ((("display", record(**tokens)),) if tokens else ()) +
                        ((("display_roles", role_tokens),) if role_tokens else ()))
