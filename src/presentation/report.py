@@ -7,14 +7,15 @@ import sys
 
 from src.analysis.timezones import format_local_timestamp
 from src.analysis.context import PriceWarningSeverity
+from src.analysis.token_mix import TokenMix
 from src.reports.models import PromptProjection, ReportKind, ReportProjection, SessionPromptBlock
 from src.version import DISPLAY_VERSION, PRODUCT_NAME, RELEASE_DATE
 from src.numbers import ccost_amount, ccost_display
-from src.display import context_tokens as _context_k, context_delta as _context_delta_k
+from src.display import context_tokens as _context_k, context_delta as _context_delta_k, token_volume
 
 from .terminal import AnsiStyler, Column, StyledText, fit, render_table, single_line, terminal_content_width, wrap_prose
 from .accounts import capacity_lines, money, quota_label, account_ccost_lines
-from .token_mix import MIX_TERM, aligned_mix_cells, compact_tokens, mix_cells, packed_cells, total_cost_text
+from .token_mix import MIX_TERM, aligned_mix_cells, mix_cells, packed_cells, total_cost_text
 from .definitions import concept_lines
 from .context_warnings import WARNING_ROLE, context_warning_text, next_ictx_ccost, threshold_multiplier_text, warning_explanation_lines
 from .pricing_notices import pricing_notice_lines
@@ -362,6 +363,27 @@ class ReportRenderer:
             if account.account.reason:
                 self._prose(account.account.reason, prefix="  ")
 
+    def _render_history_mix_table(self, label: str, groups: list[tuple[str, int, int, TokenMix]]) -> None:
+        cells = aligned_mix_cells([mix for _name, _prompts, _calls, mix in groups])
+        rows = [(name, str(prompts), str(calls), token_volume(mix.total_tokens, mix.known_total_tokens),
+                 *shares, total_cost_text(mix))
+                for (name, prompts, calls, mix), shares in zip(groups, cells)]
+        columns = (Column(label, min_width=12, max_width=60, flexible=True), Column("Prompts", True),
+                   Column("Calls", True), Column("Tokens", True),
+                   *(Column(name, True, max_width=24) for name in ("Input", "Cache", "Write", "Output")),
+                   Column("CCost", True))
+        lines = render_table(columns, rows, styler=self.styler, target_width=self.table_width)
+        if len(lines[0]) <= self.table_width:
+            for line in lines:
+                self._write(line)
+            return
+        # Keep all metrics without clipping or wrapping a wide grid in narrow terminals.
+        for row in rows:
+            self._prose(f"{label}: {row[0]}")
+            metrics = tuple(f"{column.name}: {value.strip()}" for column, value in zip(columns[1:], row[1:]))
+            for line in packed_cells(metrics, self.table_width, indent="  "):
+                self._write(line)
+
     def _render_model_token_mix(self, report: ReportProjection) -> None:
         self._write()
         if not report.model_token_mix:
@@ -369,35 +391,20 @@ class ReportRenderer:
         else:
             total = report.token_mix
             heading = f"Total {MIX_TERM}"
-            if total.total_tokens is not None:
-                heading += f" · {compact_tokens(total.total_tokens)} tokens"
+            heading += f" · {token_volume(total.total_tokens, total.known_total_tokens)} tokens"
             self._write(heading)
             for line in packed_cells(mix_cells(total), self.table_width):
                 self._write(line)
             self._write()
-            cells = aligned_mix_cells([item.mix for item in report.model_token_mix])
-            rows = [(item.model, str(item.prompts), str(item.calls), *mix, total_cost_text(item.mix))
-                    for item, mix in zip(report.model_token_mix, cells)]
-            for line in render_table(
-                (Column("Model", min_width=12, max_width=60, flexible=True), Column("Prompts", True),
-                 Column("Calls", True), *(Column(name, True, max_width=24) for name in ("Input", "Cache", "Write", "Output")),
-                 Column("CCost", True)),
-                rows, styler=self.styler, target_width=self.table_width,
-            ):
-                self._write(line)
+            self._render_history_mix_table("Model", [(item.model, item.prompts, item.calls, item.mix)
+                                                     for item in report.model_token_mix])
         if report.publisher_token_mix:
             self._write()
             self._write("Token Mix % by publisher · historical shown usage")
-            cells = aligned_mix_cells([item.mix for item in report.publisher_token_mix])
-            rows = [(item.publisher, str(item.prompts), str(item.calls), *mix, total_cost_text(item.mix))
-                    for item, mix in zip(report.publisher_token_mix, cells)]
-            for line in render_table(
-                (Column("Publisher", min_width=12, max_width=60, flexible=True), Column("Prompts", True),
-                 Column("Calls", True), *(Column(name, True, max_width=24) for name in ("Input", "Cache", "Write", "Output")),
-                 Column("CCost", True)), rows, styler=self.styler, target_width=self.table_width,
-            ):
-                self._write(line)
+            self._render_history_mix_table("Publisher", [(item.publisher, item.prompts, item.calls, item.mix)
+                                                         for item in report.publisher_token_mix])
         for explanation in (
+            "Tokens: known I/C/W/O volume, including reasoning in Output; K/M/B are rounded display only. ? marks incomplete telemetry; N/A means no known categories.",
             "Input/Cache/Write/Output: Token Mix % of the model/publisher's token volume (output includes reasoning) and its CCost.",
             "CCost: reference token valuation priced per request, not actual billing; ? marks partial pricing.",
             "Prompts: unique user prompts where the model contributed usage; one prompt can count on several rows.",

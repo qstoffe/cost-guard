@@ -16,5 +16,6 @@ Installed OpenCode Toolkit shared repository skills own development procedures. 
 - [Feature opportunities](feature-discovery.md): milestone-40 no-suggestion assessment, seven pending UX owners, implemented publisher history and external/platform evidence limits.
 - [Windows startup](windows-startup.md): Web delegation/readiness and CLI console ownership, native probes and remaining consumer-desktop limits.
 - [Overview parity](web-overview.md): real V2 result-size failure, aggregate/detail export distinction and same-input browser proof.
+- Historical token volumes: `development/architecture/governance/verification/historical-token-volumes.md` records shared aggregation/display, exact Web sorting and a bounded real-installation scan (including the initial timeout). No architecture-boundary change or general speedup is claimed.
 
 Contract Sync assessment (2026-10-25): navigation/fixture/Diagnostics relocation changes no analysis or account boundary. FR 000410 consolidates test evidence without a runtime boundary change. Canonical local topic links stay within this journal; external/parent and legacy-uppercase reference paths remain explicit text for the bounded knowledge writer.

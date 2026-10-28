@@ -51,6 +51,8 @@ Schema version and application instance UUID are separate from per-request-view 
 
 The [Web route inventory](../../../docs/web-beta.md#navigation-and-static-reports) maps views; visual/native acceptance is separate. Application tests pin canonical V1/V2 lifecycle/child/compaction/partial, timezone/account-error, uncapped detail, deduplication, immutable export and typed-failure parity. Fresh ownership, cleanup and forbidden application/Web imports in CLI/Diagnostics remain covered. Focused workload/history tests cover revision/catalog invalidation, deletion and publisher totals; no new dependency or permanent gate.
 
+Historical model/publisher `Tokens` reuse `TokenMix.total_tokens` and its exact `known_total_tokens` subtotal, accumulated during the existing category pass. Incomplete telemetry keeps shares/complete totals unknown while retaining known-category volume (including reasoning). The application exports the subtotal as an exact decimal string for Web sorting, independent of compact Python display tokens and price completeness. Narrow CLI falls back to labeled metrics; Web retains its keyboard-scrollable tables. No acquisition, publisher, analysis-layer or account boundary changes. [Volume evidence](../governance/verification/historical-token-volumes.md).
+
 ## Allowed dependencies
 
 Reports depend on canonical domain, analysis, cache and abstract source/account/pricing contracts, never Watch, presentation or concrete adapters. Period analysis depends on domain and provider-neutral pricing/valuation only.

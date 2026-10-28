@@ -28,19 +28,40 @@ for (const [kind, result] of Object.entries(input)) {
     assert.equal(all(output, 'tfoot')[0].children[0].children[1].textContent, result.view.prompt_blocks[0].display.total_ccost);
   } else {
     assert.deepEqual(all(output, 'th').map(node => node.textContent),
-      ['Model', 'Prompts', 'Calls', 'Input', 'Cache', 'Write', 'Output', 'CCost',
-       'Publisher', 'Prompts', 'Calls', 'Input', 'Cache', 'Write', 'Output', 'CCost']);
+       ['Model', 'Prompts', 'Calls', 'Tokens', 'Input', 'Cache', 'Write', 'Output', 'CCost',
+        'Publisher', 'Prompts', 'Calls', 'Tokens', 'Input', 'Cache', 'Write', 'Output', 'CCost']);
     const mix = result.view.model_token_mix[0].mix;
     assert.deepEqual(all(output, 'tbody')[0].children[0].children.slice(3).map(cell => cell.textContent),
-      ['input', 'cache', 'write', 'output', 'total_cost'].map(key => mix.display[key]));
+       ['total_tokens', 'input', 'cache', 'write', 'output', 'total_cost'].map(key => mix.display[key]));
     assert.ok(output.textContent.indexOf('Total Token Mix') < output.textContent.indexOf('Historical models'));
     assert.ok(output.textContent.indexOf('Historical models') < output.textContent.indexOf('Historical publishers'));
     if (result.view.publisher_token_mix.length) {
       const publisher = result.view.publisher_token_mix[0];
       assert.equal(all(output, 'tbody')[1].children[0].children[0].textContent, publisher.publisher);
       assert.deepEqual(all(output, 'tbody')[1].children[0].children.slice(3).map(cell => cell.textContent),
-        ['input', 'cache', 'write', 'output', 'total_cost'].map(key => publisher.mix.display[key]));
+         ['total_tokens', 'input', 'cache', 'write', 'output', 'total_cost'].map(key => publisher.mix.display[key]));
     }
   }
 }
 console.log('PASS date scope, configured prompt clocks/context, bounded rows/full totals, CLI historical mix columns');
+
+// Identical rounded labels, very large adjacent integers and partial/unknown volumes.
+const sorted = JSON.parse(JSON.stringify(input['token-mix']));
+const base = sorted.view.model_token_mix[0];
+sorted.view.model_token_mix = [
+  ['larger', '9007199254740993', '9007199.3B'],
+  ['unknown', null, 'N/A'],
+  ['smaller', '9007199254740992', '9007199.3B'],
+  ['partial', '999999', '?1M']
+].map(([model, raw, label]) => ({...base, model, mix: {...base.mix,
+  total_tokens: null, known_total_tokens: raw, display: {...base.mix.display, total_tokens: label}}}));
+context.result = sorted;
+vm.runInContext('ReportView.render(output, result, {pages: {}, section: "reports"})', context);
+const header = all(output, 'th')[3].children[0];
+header.events.click();
+const names = () => all(output, 'tbody')[0].children.map(row => row.children[0].textContent);
+assert.deepEqual(names(), ['partial', 'smaller', 'larger', 'unknown']);
+header.events.click();
+assert.deepEqual(names(), ['larger', 'smaller', 'partial', 'unknown']);
+assert.ok(all(output, 'div').some(node => node.className === 'table-scroll' && node.tabIndex === 0));
+console.log('PASS raw exact token sorting, partial/unknown volumes, keyboard-scrollable history tables');

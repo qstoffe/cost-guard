@@ -27,6 +27,8 @@ class TokenMix:
     # Known CCost per I/C/W/O category over priced requests; None when not valued.
     costs: CategoryCosts | None = None
     priced_requests: int = 0
+    # Observed subtotal includes known categories even when another is missing.
+    known_total_tokens: int | None = None
 
     @property
     def cost_complete(self) -> bool:
@@ -58,9 +60,13 @@ def token_mix(usages: Iterable[TokenUsage], *, sample_size: int = 0) -> TokenMix
     totals = [0, 0, 0, 0]
     known = set(MIX_FIELDS)
     count = 0
+    observed = None
     for usage in usages:
         count += 1
         known.intersection_update(usage.known_fields)
+        if usage.reasoning or any(name in usage.known_fields for name in MIX_FIELDS):
+            observed = (observed or 0) + sum(getattr(usage, name) for name in MIX_FIELDS
+                                           if name in usage.known_fields) + usage.reasoning
         for index, name in enumerate(MIX_FIELDS):
             totals[index] += getattr(usage, name)
         # Canonical reasoning is separate; the established display folds it into O.
@@ -70,12 +76,12 @@ def token_mix(usages: Iterable[TokenUsage], *, sample_size: int = 0) -> TokenMix
     total = sum(totals)
     if not count or len(known) != 4 or not total:
         # An unknown category makes the denominator unknown for every share.
-        return TokenMix(values, sample_size=sample_size, request_count=count)
+        return TokenMix(values, sample_size=sample_size, request_count=count, known_total_tokens=observed)
     percentages = [100 * value // total for value in totals]
     order = sorted(range(4), key=lambda i: (-(100 * totals[i] % total), i))
     for index in order[:100 - sum(percentages)]:
         percentages[index] += 1
-    return TokenMix(values, tuple(percentages), sample_size, count)
+    return TokenMix(values, tuple(percentages), sample_size, count, known_total_tokens=observed)
 
 
 def priced_token_mix(

@@ -186,7 +186,10 @@ class ModelHistoryTests(unittest.TestCase):
         self.assertEqual((0, 1), (observation.completed, observation.total))
         self.assertTrue(all(percent is None for _label, percent in calls), "history reports work, not invented percentages")
         text = rendered(report)
-        for heading in ("Model", "Prompts", "Calls", "Input", "Cache", "Write", "Output", "CCost", "not actual billing"):
+        self.assertEqual(sum(row.mix.totals), row.mix.total_tokens)
+        self.assertEqual(sum(e.tokens.total for e in unique_usage(bundle.trace_entries)), row.mix.total_tokens)
+        self.assertEqual(report.token_mix.total_tokens, row.mix.total_tokens)
+        for heading in ("Model", "Prompts", "Calls", "Tokens", "Input", "Cache", "Write", "Output", "CCost", "not actual billing"):
             self.assertIn(heading, text)
         self.assertNotIn("Accounts Overview", text)
 
