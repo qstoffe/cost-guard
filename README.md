@@ -320,7 +320,7 @@ Quota credentials stay memory-only: V2 precedes legacy, explicit `authJsonPath` 
 
 Useful settings include:
 
-- `ccostDisplayUnit`: `credits` (default) or `usd`; override with `--ccost-unit usd`. 100 credits = $1.00 reference USD, not billing; positive values may round to $0.00. Quotas/Billed/rates stay unchanged.
+- `ccostDisplayUnit`: `credits` (default) or `usd`; CLI override: `--ccost-unit usd`. Web's CCost selector is page-memory only; reload restores configuration. 100 credits = $1.00 reference USD, not billing; small positive amounts may show $0.00. Quotas/Billed/rates are unchanged.
 - `runningPromptWarningCCost`: 1800 credits by default (0 disables), independent of display units.
 
 - `openCode.source`: `auto`, `v1` or `v2`.
@@ -370,7 +370,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.111 (2026-10-29):** Shared global comparison mix and tier warnings; historical model/publisher Tokens unchanged.
+**v80.112 (2026-10-29):** Web CCost Credits/USD selector; page-memory only, no acquisition or repricing.
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

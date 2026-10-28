@@ -25,7 +25,7 @@ async function until(condition) {
 }
 async function main() {
   const input = JSON.parse(fs.readFileSync(0, 'utf8'));
-  const ids = Object.fromEntries(['host-state', 'host-message', 'host-details', 'status', 'result', 'notice', 'refresh', 'cancel', 'heading', 'skip', 'content', 'scope-controls', 'search'].map(id => [id, new Node('div')]));
+  const ids = Object.fromEntries(['ccost-unit', 'host-state', 'host-message', 'host-details', 'status', 'result', 'notice', 'refresh', 'cancel', 'heading', 'skip', 'content', 'scope-controls', 'search'].map(id => [id, new Node('div')]));
   ids['host-state'].append(ids['host-message'], ids['host-details']);
   const nav = ['overview', 'sessions', 'watch', 'models', 'accounts', 'reports', 'token-mix'].map(key => {
     const node = new Node('a'); node.setAttribute('href', '#/' + key); return node;
@@ -72,6 +72,15 @@ async function main() {
   await until(() => ids.notice.textContent.includes('Snapshot captured'));
   assert.equal(location.hash, '#/overview');
   assert.match(ids.result.textContent, /CCost = reference valuation/);
+  const creditsText = ids.result.textContent, beforeToggle = requests;
+  const retainedChildren = [...ids.result.children];
+  ids['ccost-unit'].events.change({target: {value: 'usd'}});
+  assert.notEqual(ids.result.textContent, creditsText);
+  assert.match(ids.result.textContent, /\$\d+\.\d{2}/);
+  assert.deepEqual(ids.result.children, retainedChildren, 'unit change retains DOM');
+  ids['ccost-unit'].events.change({target: {value: 'credits'}});
+  assert.equal(ids.result.textContent, creditsText, 'exact reversible display');
+  assert.equal(requests, beforeToggle, 'toggle never requests a report/provider');
   const overviewTable = all(ids.result, 'table')[0];
   const overviewScroll = all(ids.result, 'div').find(node => node.className === 'table-scroll');
   overviewScroll.scrollTop = 317;

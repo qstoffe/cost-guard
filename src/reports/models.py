@@ -184,6 +184,7 @@ class AccountProjection:
     ccost_notes: tuple[str, ...] = ()
     ccost_account_unknown: bool = False
     unaccounted_usage: Decimal | None = None
+    provider_ccost_notes: tuple[tuple[int, str, ComparisonCost], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -221,3 +222,4 @@ class ReportProjection:
     recent_model_notice_highlight_spans: tuple[tuple[int, int], ...] = ()
     session_page: SessionListPage | None = None
     publisher_token_mix: tuple[PublisherTokenMixProjection, ...] = ()
+    range_comparison: ComparisonCost | None = None

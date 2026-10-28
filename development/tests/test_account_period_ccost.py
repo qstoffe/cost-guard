@@ -98,6 +98,13 @@ class AccountPeriodCCostTests(unittest.TestCase):
         notes = "\n".join(note for row in rows for note in row.ccost_notes)
         self.assertEqual(1, notes.count("Provider-only CCost today: 200"))
         self.assertIn("multiple compatible accounts", notes)
+        from src.application.display import with_display
+        from src.application.projection import account
+        dto = with_display(account(rows[0])).to_json()
+        provider_note = next(item for item in dto["provider_ccost_notes"] if item["name"] == "today")
+        self.assertIn("Provider-only CCost today: 200", dto["ccost_notes"][provider_note["index"]])
+        self.assertEqual("$2.00", provider_note["cost"]["display_units"]["usd"]["known_ccost"])
+        self.assertEqual(D(200), D(provider_note["cost"]["known_ccost"]))
         text = "\n".join(capacity_lines(rows[0], AnsiStyler({}, enabled=False), "UTC", width=240, now_ms=NOW, watch=True))
         self.assertIn("CCost: account unknown", text)
         self.assertNotIn("(200)", text)

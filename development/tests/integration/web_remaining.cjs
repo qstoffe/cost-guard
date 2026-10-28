@@ -42,8 +42,33 @@ for (const [kind, result] of Object.entries(input)) {
          ['total_tokens', 'input', 'cache', 'write', 'output', 'total_cost'].map(key => publisher.mix.display[key]));
     }
   }
+  const credits = output.textContent, tables = all(output, 'table'), rows = all(output, 'tr');
+  vm.runInContext('ReportView.setUnit("usd", output)', context);
+  assert.notEqual(output.textContent, credits);
+  assert.deepEqual(all(output, 'table'), tables, 'unit change keeps table identity');
+  assert.deepEqual(all(output, 'tr'), rows, 'unit change keeps ordering and row identity');
+  if (kind === 'date') {
+    const block = result.view.prompt_blocks[0];
+    assert.equal(all(output, 'tfoot')[0].children[0].children[1].textContent, block.display_units.usd.total_ccost);
+    assert.ok(output.textContent.includes('CCost for range: ' + result.view.range_comparison.display_units.usd.known_ccost));
+  } else {
+    const mix = result.view.model_token_mix[0].mix;
+    assert.deepEqual(all(output, 'tbody')[0].children[0].children.slice(3).map(cell => cell.textContent),
+      ['total_tokens', 'input', 'cache', 'write', 'output', 'total_cost'].map(key => mix.display_units?.usd?.[key] ?? mix.display[key]));
+  }
+  vm.runInContext('ReportView.setUnit("credits", output)', context);
+  assert.equal(output.textContent, credits, 'reversible without jobs, repricing or replacing DOM');
 }
 console.log('PASS date scope, configured prompt clocks/context, bounded rows/full totals, CLI historical mix columns');
+
+// Independent page contexts start from configuration, not another tab's choice.
+const freshOutput = new Node('main');
+const fresh = vm.createContext({document: {createElement: tag => new Node(tag)}, output: freshOutput,
+  result: {...input.date, view: {...input.date.view, ccost_display_unit: 'usd'}}, Date});
+vm.runInContext(fs.readFileSync('src/web/assets/render.js', 'utf8'), fresh);
+vm.runInContext('ReportView.render(output, result, {pages: {}, section: "reports"})', fresh);
+assert.equal(all(freshOutput, 'tfoot')[0].children[0].children[1].textContent,
+  input.date.view.prompt_blocks[0].display_units.usd.total_ccost);
 
 // Identical rounded labels, very large adjacent integers and partial/unknown volumes.
 const sorted = JSON.parse(JSON.stringify(input['token-mix']));

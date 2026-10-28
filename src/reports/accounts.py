@@ -44,7 +44,7 @@ def account_projections(
             label += f" · account {labels[label]}"
         attributed = tuple(entry for entry in entries if entry.account_ref and entry.account_ref.key == account.key
                            and entry.model.provider == account.ref.provider_id)
-        scopes, notes, account_unknown = _period_scopes(account, index, providers, explained, today_start_ms,
+        scopes, notes, account_unknown, provider_notes = _period_scopes(account, index, providers, explained, today_start_ms,
                                        month_start_ms, now_ms, watch=watch, observed_start_ms=observed_start_ms)
         unassigned = any(entry.model.provider == account.ref.provider_id and entry.account_ref is None
                          and month_start_ms <= entry.completed_at_ms <= now_ms for entry in entries)
@@ -63,6 +63,7 @@ def account_projections(
             account, label, tuple(scopes),
             actual_billing(today_start_ms), actual_billing(month_start_ms), pace, notes, account_unknown,
             unaccounted_usage=None if watch else _unaccounted_usage(account, index, providers, now_ms, observed_start_ms),
+            provider_ccost_notes=provider_notes,
         ))
     return tuple(projections)
 
@@ -97,7 +98,7 @@ def _period_scopes(account, index, providers, explained, today_start_ms, month_s
         ranges.append(("this month", (month_start_ms, now_ms + 1, "configured local calendar month to date"), None))
     ranges.extend((component.label, quota_window(component, now_ms), component.model_id)
                   for component in account.quotas if component.duration_seconds)
-    scopes, notes = [], []
+    scopes, notes, provider_notes = [], [], []
     account_unknown = False
     for name, window, model in ranges:
         if window is None:
@@ -120,6 +121,7 @@ def _period_scopes(account, index, providers, explained, today_start_ms, month_s
             if (provider, name) not in explained:
                 total = index.cost(provider, "provider", start, end, model)
                 number = str(total.known_ccost) if total.priced_requests else "N/A"
+                provider_notes.append((len(notes), name, total))
                 notes.append(f"Provider-only CCost {name}: {number}{' (partial pricing)' if not total.complete else ''}; not allocated to accounts.")
                 explained.add((provider, name))
         else:
@@ -130,7 +132,7 @@ def _period_scopes(account, index, providers, explained, today_start_ms, month_s
             attribution = "verified request account references" if proven.observed_requests else "no attributable observed requests"
         scopes.append((name, value))
         notes.append(f"CCost {name}: {basis}; {attribution}.")
-    return tuple(scopes), tuple(notes), account_unknown
+    return tuple(scopes), tuple(notes), account_unknown, tuple(provider_notes)
 
 
 class WatchAccountProjection:

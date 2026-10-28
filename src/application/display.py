@@ -8,7 +8,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from src.analysis.timezones import format_local_timestamp
 from src.display import (compact_threshold, compact_tokens, context_delta, context_tokens,
                          duration_text, format_reset, money, native_amount, price_summary, relative_cost, unaccounted_usage, quota_usage, token_volume)
-from src.numbers import balanced_share_percents, ccost_amount, ccost_display, ccost_range, remaining_capacity
+from src.numbers import balanced_share_percents, ccost_amount, ccost_display, ccost_range, ccost_unit, remaining_capacity
 
 from .contracts import ObjectValue, record
 
@@ -196,13 +196,24 @@ def _with_display(value, timezone_id, now_ms):
         return value
     values = dict(value.fields)
     now_ms = values.get("now_ms", now_ms)
-    tokens = amount_tokens(values)
+    # Only differing CCost tokens need a second wire representation. Native
+    # amounts and canonical sort/analysis values never participate in switching.
+    variants = {}
+    for unit in ("credits", "usd"):
+        with ccost_display(unit):
+            alternate = amount_tokens(values)
+            alternate.update(metric_tokens(values, timezone_id, now_ms))
+            alternate.update(history_tokens(values, timezone_id))
+        variants[unit] = alternate
+    tokens = dict(variants[ccost_unit()])
     tokens.update(quota_tokens(values))
-    tokens.update(metric_tokens(values, timezone_id, now_ms))
-    tokens.update(history_tokens(values, timezone_id))
+    differing = {key for key in variants["credits"] if variants["credits"][key] != variants["usd"][key]}
+    unit_tokens = record(**{unit: record(**{key: items[key] for key in tokens if key in differing})
+                            for unit, items in variants.items()}) if differing else None
     # These are opaque maps keyed by external model/source labels, not DTO schemas.
     opaque = {"by_model", "by_day_utc", "current_context_sources"}
     fields = tuple((key, item if key in opaque else _with_display(item, timezone_id, now_ms)) for key, item in value.fields)
     role_tokens = roles(values)
     return ObjectValue(fields + ((("display", record(**tokens)),) if tokens else ()) +
+                       ((("display_units", unit_tokens),) if unit_tokens is not None else ()) +
                        ((("display_roles", role_tokens),) if role_tokens else ()))

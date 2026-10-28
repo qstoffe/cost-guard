@@ -89,6 +89,8 @@ def account(value):
         billed_today=value.billed_today, billed_month=value.billed_month,
         pace=tuple(fields(item, "label unit per_day days workdays per_workday") for item in value.pace),
         ccost_notes=value.ccost_notes, ccost_account_unknown=value.ccost_account_unknown,
+        provider_ccost_notes=tuple(record(index=index, name=name, cost=comparison(cost))
+            for index, name, cost in value.provider_ccost_notes),
         unaccounted_usage=value.unaccounted_usage,
     )
 
@@ -143,6 +145,7 @@ def project(report, timezone_id="UTC", ccost_display_unit="credits"):
         session_page=fields(report.session_page, "offset size total catalog_revision") if report.session_page else None,
         prompt_blocks=tuple(block(item) for item in report.prompt_blocks),
         accounts_quotas=accounts(report.accounts_quotas), notes=report.notes,
+        range_comparison=comparison(report.range_comparison) if report.range_comparison else None,
         recent_model_notice=report.recent_model_notice,
         recent_model_notice_highlight_spans=report.recent_model_notice_highlight_spans,
         token_mix=token_mix(report.token_mix),

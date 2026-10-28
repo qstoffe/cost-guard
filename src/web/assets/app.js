@@ -8,6 +8,9 @@ const notice = document.getElementById('notice');
 const refresh = document.getElementById('refresh');
 const cancel = document.getElementById('cancel');
 const heading = document.getElementById('heading');
+document.getElementById('ccost-unit').addEventListener('change', event => {
+  ReportView.setUnit(event.target.value, output);
+});
 const views = new Map(); // Bounded page-memory only; never browser storage/history payloads.
 let csrf = null;
 let current = null;
@@ -76,6 +79,7 @@ function show(state) {
   output.setAttribute('aria-busy', state.loading ? 'true' : 'false');
     notice.textContent = hostState.writable ? state.message : 'Last known contents are retained, not updating. See connection notice above.';
   if (state.detail) {
+    ReportView.syncUnits(state.detail.root);
     if (!hostState.terminal) state.detail.attach(output);
     else output.replaceChildren(state.detail.root);
     state.detail.controls.inert = !hostState.writable;

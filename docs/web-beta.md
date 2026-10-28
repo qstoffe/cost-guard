@@ -1,5 +1,11 @@
 # Web Beta
 
+v80.112 adds the shared **CCost: Credits / USD** selector. It switches Python-prepared
+reference amounts in place, without report jobs or provider refresh. Native money,
+quotas, Unaccounted usage and Relative CCost stay unchanged. The choice is page-memory
+only across routes, live publications and Snapshot/Live; reload or a fresh tab restores
+validated `ccostDisplayUnit`. No URL, browser storage or settings cookie is written.
+
 v80.107 keeps healthy authenticated streams open without periodic rotation. Connected
 status is a compact header label; only actionable states show a notice, with expandable
 host/source timestamps. See [real-source soak and fault evidence](../development/architecture/governance/verification/web-live-stability.md).

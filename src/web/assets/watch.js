@@ -2,8 +2,8 @@
 // One persistent, paged Watch table over shared server truth. No acquisition or valuation.
 const WatchView = (() => {
   const el = (...args) => ReportView.element(...args);
-  const display = (row, key) => row?.display?.[key] ?? 'N/A';
-  const text = (node, value) => { if (node.textContent !== value) node.textContent = value; };
+  const display = (row, key) => ReportView.display(row, key);
+  const text = (node, value) => ReportView.text(node, value);
   class View {
     constructor(state) {
       this.state = state;
@@ -37,6 +37,7 @@ const WatchView = (() => {
       this.next.addEventListener('click', () => { this.page++; this.draw(); });
     }
     attach(parent) {
+      ReportView.syncUnits(this.root);
       if (this.root.parentNode !== parent) parent.replaceChildren(this.root);
     }
     protected(node) {
@@ -51,8 +52,8 @@ const WatchView = (() => {
       const lifecycle = fresh ? view.active_count ? 'Updating · active prompts' : 'Idle · no active prompts' : 'Stale / retained activity; not current lifecycle proof';
       const observed = result.source_observed_at_ms == null ? 'not yet observed' : new Date(result.source_observed_at_ms).toLocaleString();
       text(this.status, `${this.state.connection || 'Connecting'} · ${result.state}${result.error_code ? ' · ' + result.error_code : ''} · ${lifecycle} · ${view.source_label} · ${view.status} · Source observation ${observed} · Published ${new Date(view.now_ms).toLocaleString()}${view.source_warning_count ? ' · Source warnings ' + view.source_warning_count : ''}`);
-      text(this.totals, `Run CCost ${display(view, 'run_ccost')} · Requests ${view.run_total.request_count} · ${view.today_label} CCost ${display(view.today_total, 'known_ccost')}${view.today_pending ? ' · History pending' : ''}`);
-      text(this.scope, `Run origin: ${view.run_origin}, ${new Date(view.started_at_ms).toLocaleString()}. CCost is reference valuation, not billing. Run I/C/W/O tokens ${display(view.run_total, 'totals')} · CCost ${display(view.run_total, 'costs')} · Token Mix % ${display(view.token_mix, 'percentages')}. Session subtotals cover all retained rows, independent of filters/pages, not full historical sessions.`);
+      text(this.totals, () => `Run CCost ${display(view, 'run_ccost')} · Requests ${view.run_total.request_count} · ${view.today_label} CCost ${display(view.today_total, 'known_ccost')}${view.today_pending ? ' · History pending' : ''}`);
+      text(this.scope, () => `Run origin: ${view.run_origin}, ${new Date(view.started_at_ms).toLocaleString()}. CCost is reference valuation, not billing. Run I/C/W/O tokens ${display(view.run_total, 'totals')} · CCost ${display(view.run_total, 'costs')} · Token Mix % ${display(view.token_mix, 'percentages')}. Session subtotals cover all retained rows, independent of filters/pages, not full historical sessions.`);
       text(this.notices, [view.recent_model_notice, ...view.recent_promotion_notices].filter(Boolean).join(' · '));
       if (!this.protected(this.body)) this.draw();
       if (!this.protected(this.accounts)) this.drawAccounts(view);
@@ -78,7 +79,7 @@ const WatchView = (() => {
           group.dataset.id = 'session:' + session; group.className = 'watch-session';
           if (group.signature !== title) {
             const th = el('th'); th.colSpan = 7; th.scope = 'rowgroup';
-            const link = el('a', title);
+             const link = el('a', () => `${item.session_title} · ${item.session_active ? 'Active / recent' : item.earlier ? 'Earlier' : 'Retained'} · Displayed rows CCost ${display(subtotal, 'ccost')} (not full session)`);
             if (/^[A-Za-z0-9_-]{1,200}$/.test(session)) link.href = '#/sessions/' + session;
             th.append(link); group.replaceChildren(th); group.signature = title;
           }
@@ -91,8 +92,8 @@ const WatchView = (() => {
           const open = [...row.querySelectorAll('details')].map(node => node.open);
           row.className = [...(item.prompt.display_roles || []), ...(item.display_roles || []),
             ...(item.prompt.is_compaction ? ['compaction'] : [])].join(' ');
-          row.replaceChildren(...this.cells(item).map(value => {
-            const cell = el('td'); cell.append(typeof value === 'object' ? value : el('span', value)); return cell;
+          row.replaceChildren(...this.cells(item).map((value, index) => {
+            const cell = el('td'); cell.append(typeof value === 'object' ? value : el('span', () => this.cells(item)[index])); return cell;
           }));
           [...row.querySelectorAll('details')].forEach((node, index) => { node.open = open[index] || false; });
           row.signature = signature;
@@ -114,7 +115,7 @@ const WatchView = (() => {
       const cells = ReportView.detailCells({...row.prompt, model_effort: null, next_context_warning: row.next_context_warning}, true);
       cells[0].append(el('span', `${row.marker} · ${row.is_latest_session_event ? 'Newest' : row.earlier ? 'Earlier' : 'Retained'}`, 'detail'));
       const detail = el('span', row.next_context_warning || '', row.next_context_warning ? 'threshold' : '');
-      const extra = el('details'); extra.append(el('summary', 'Context / token detail'), el('span', `Incoming context ${cells[4]} · ~Ictx CCost ${cells[5]} · ~Extra CCost ${cells[6]} · I/C/W/O % ${cells[7]} · Next context cached/fresh CCost ${display(row.live_context, 'watch_next_context_cached_ccost')}/${display(row.live_context, 'watch_next_context_fresh_ccost')}`, 'detail'));
+      const extra = el('details'); extra.append(el('summary', 'Context / token detail'), el('span', () => `Incoming context ${cells[4]} · ~Ictx CCost ${display(row.prompt, 'incoming_context_ccost')} · ~Extra CCost ${display(row.prompt, 'extra_ccost')} · I/C/W/O % ${cells[7]} · Next context cached/fresh CCost ${display(row.live_context, 'watch_next_context_cached_ccost')}/${display(row.live_context, 'watch_next_context_fresh_ccost')}`, 'detail'));
       const tool = row.tool;
       if (tool) detail.append(el('span', `${tool.running_tool || ''} ${display(tool, 'running_ms')} · Calls ${tool.counts.map(pair => pair.join(': ')).join(', ')} · Failed ${tool.failed_count} · TODO ${tool.todo_completed}/${tool.todo_total} ${tool.active_todo || ''} · Background ${tool.background_kinds.join(', ')} ${display(tool, 'background_ms')} · Skills ${tool.skills.map(s => s.skill_id + (s.failed_count ? ' (failed ' + s.failed_count + ')' : '')).join(', ')}`, 'detail ' + (tool.failed_count ? 'warning' : '')));
       detail.append(extra);
