@@ -55,6 +55,15 @@ def main():
             pass
 
     host = WebHost(ROOT, jobs=Jobs())
+    read = host.events.read
+    interruption = [0]
+
+    def read_with_owned_fault(*args, **kwargs):
+        if time.monotonic() < interruption[0]:
+            raise ConnectionResetError('owned_fixture_stream_interruption')
+        return read(*args, **kwargs)
+
+    host.events.read = read_with_owned_fault
     host.start()
     # A fixture-only asset bootstraps the test browser without printing a token.
     # Production routing/assets remain unchanged on disk.
@@ -87,6 +96,8 @@ def main():
                     host.events.publish('live', dict(state=action, source_observed_at_ms=2200, view=view))
                 elif action == 'new_identity':
                     host.nonce = 'replacement-fixture'
+                elif action == 'interrupt':
+                    interruption[0] = time.monotonic() + 1
                 else:
                     raise ValueError('unknown_fixture_action')
             time.sleep(.1)

@@ -5,7 +5,7 @@ const LiveConnection = (() => {
   function connect(api, update, status, sourceFactory = url => new EventSource(url),
       clock = {now: () => Date.now(), later: (fn, ms) => setTimeout(fn, ms), cancel: id => clearTimeout(id)}) {
     let source = null, instance = null, sequence = 0, syncing = null, stopped = false;
-    let dirty = false, pending = [], values = {}, timer = null, authenticatedAt = null;
+    let dirty = false, pending = [], values = {}, timer = null, authenticatedAt = null, streamOpen = false;
     function report(kind, message) {
       status(message, {kind, authenticatedAt, observedAt: values.live?.source_observed_at_ms ?? null,
         terminal: stopped, writable: !stopped && ['connected', 'starting', 'source_unavailable'].includes(kind)});
@@ -20,6 +20,7 @@ const LiveConnection = (() => {
       const live = values.live;
       if (!live || live.state === 'starting' || (live.state === 'running' && !live.view)) report('starting', 'STARTING — source observation pending. HTTP is not source readiness.');
       else if (live.state !== 'running') report('source_unavailable', 'SOURCE UNAVAILABLE — HTTP connected; last source observation retained, not live.');
+      else if (!streamOpen) report('reconnecting', 'RECONNECTING — HTTP connected; live stream interrupted. Last source observation retained.');
       else report('connected', 'Live connected.');
     }
     function publish(validate = false) {
@@ -89,8 +90,11 @@ const LiveConnection = (() => {
       for (const kind of ['live', 'progress', 'terminal']) source.addEventListener(kind, e => accept(kind, e));
       source.addEventListener('resync', sync);
       source.addEventListener('authorization_required', () => stop('AUTHENTICATION EXPIRED — NOT LIVE. Obtain a fresh launcher link.', 'authorization_required'));
-      source.onopen = () => { if (!stopped) sync(); };
-      source.onerror = () => { if (!stopped) report('reconnecting', 'RECONNECTING — Live offline; last observation retained, not live. Checking the same authorized host.'); };
+      source.onopen = () => { if (!stopped) { streamOpen = true; sync(); } };
+      source.onerror = () => {
+        streamOpen = false;
+        if (!stopped) report('reconnecting', 'RECONNECTING — live stream interrupted; host reachability being checked. Last observation retained, not live.');
+      };
     }
     async function probe() {
       await sync();
@@ -98,7 +102,8 @@ const LiveConnection = (() => {
     }
     function revalidate() {
       if (stopped) return;
-      report('reconnecting', 'RECONNECTING — revalidating after idle; last observation retained, not live.');
+      if (!streamOpen || authenticatedAt == null || clock.now() - authenticatedAt >= 15000)
+        report('reconnecting', 'RECONNECTING — revalidating after idle; last observation retained, not live.');
       sync();
     }
     report('starting', 'STARTING — connecting to the authorized host.');

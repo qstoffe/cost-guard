@@ -44,6 +44,7 @@ async function main() {
   await turns();
   assert.equal(streams.length, 1);
   const stream = streams[0];
+  stream.onopen(); await turns();
   stream.emit('live', 1, input);
   const count = rendered.length;
   stream.emit('live', 1, {view: null});
@@ -55,7 +56,8 @@ async function main() {
   assert.ok(calls >= 2, 'gap requires authoritative HTTP snapshot');
   assert.ok(rendered.at(-1).view, 'gap event is not invented continuation');
   stream.onerror();
-  assert.match(statuses.at(-1), /offline/);
+  assert.match(statuses.at(-1), /RECONNECTING.*live stream interrupted/);
+  assert.match(statuses.at(-1), /not live/);
   assert.equal(streams.length, 1, 'offline/reconnect cannot create duplicate stream owners');
   stream.emit('live', 6, {view: null}, 'old-instance');
   assert.equal(stream.closed, true);

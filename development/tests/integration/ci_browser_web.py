@@ -50,7 +50,7 @@ def main():
                 assert page.locator("#result table").count() > 0
                 # This finite-report fixture has no live acquisition owner. An
                 # authenticated SSE socket must not claim source readiness.
-                expect(page.locator("#status")).to_contain_text("STARTING", timeout=15000)
+                expect(page.locator("#status")).to_have_text("Connection: starting. See notice below.", timeout=15000)
                 assert streams, "authenticated real SSE connection was not established"
                 expect(page.locator("#host-state")).to_contain_text("source observation pending")
                 evidence["checks"].append("one-use bootstrap, HttpOnly auth cookie, actual report table, real SSE connection")
@@ -113,11 +113,15 @@ def main():
                 expect(page.locator("#status")).to_contain_text(re.compile("offline|reconnecting"), timeout=45000)
                 expect(page.locator("#result")).to_contain_text("<script>PRIVATE_TEXT</script>")
                 context.set_offline(False)
-                expect(page.locator("#status")).to_contain_text("SOURCE UNAVAILABLE", timeout=30000)
+                expect(page.locator("#status")).to_have_text("Connection: source unavailable. See notice below.", timeout=30000)
+                expect(page.locator("#host-message")).to_contain_text("SOURCE UNAVAILABLE")
                 expect(page.locator("#host-state")).to_contain_text("HTTP connected")
                 evidence["checks"].append("real browser network loss/reconnect retains report")
                 owner.stop("menu")
-                expect(page.locator("#status")).to_contain_text("host stopped", timeout=15000)
+                expect(page.locator("#status")).to_have_text("Connection: stopped. See notice below.", timeout=15000)
+                expect(page.locator("#host-message")).to_contain_text("host stopped")
+                expect(page.locator("#host-state")).to_be_visible()
+                assert page.locator("#refresh").is_disabled()
                 assert owner.stopped.wait(10)
                 assert not errors
                 evidence["checks"].append("terminal SSE and clean owned server shutdown; no JavaScript errors")
