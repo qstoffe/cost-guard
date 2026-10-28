@@ -7,7 +7,7 @@ from decimal import Decimal, ROUND_HALF_UP
 
 from src.analysis.timezones import format_local_timestamp
 from src.display import (compact_threshold, compact_tokens, context_delta, context_tokens,
-                         duration_text, format_reset, money, native_amount, price_summary, relative_cost, unaccounted_usage)
+                         duration_text, format_reset, money, native_amount, price_summary, relative_cost, unaccounted_usage, quota_usage)
 from src.numbers import balanced_share_percents, ccost_amount, ccost_range, consumed_capacity, remaining_capacity
 
 from .contracts import ObjectValue, record
@@ -63,6 +63,21 @@ def amount_tokens(values):
         tokens["run_ccost"] = ("N/A" if values["run_ccost"] is None or (mix["request_count"] and not mix["priced_requests"])
             else ("" if mix["cost_complete"] else "?") + ccost_amount(decimal(values["run_ccost"])))
     return tokens
+
+
+def quota_tokens(values):
+    """Same Used presentation as CLI; canonical remaining fields stay untouched."""
+    if "remaining_fraction" not in values:
+        return {}
+    fraction, used, used_money = quota_usage(**{key: decimal(values.get(key)) for key in
+        ("used", "limit", "remaining", "remaining_fraction", "remaining_money", "limit_money")},
+        unlimited=values.get("unlimited", False))
+    unit = values.get("unit") or "units"
+    native = "N/A" if used is None else native_amount(used, unit, kind="consumed")
+    if not values.get("unlimited") and values.get("limit") is not None and decimal(values["limit"]) > 0:
+        native += "/" + native_amount(decimal(values["limit"]), unit)
+    return {"used_fraction": "N/A" if fraction is None else f"{fraction * 100:.0f}%",
+            "quota_used": native + " " + unit, "used_money": money(used_money)}
 
 
 def metric_tokens(values, timezone_id, now_ms=None):
@@ -176,6 +191,7 @@ def with_display(value, timezone_id="UTC", now_ms=None):
     values = dict(value.fields)
     now_ms = values.get("now_ms", now_ms)
     tokens = amount_tokens(values)
+    tokens.update(quota_tokens(values))
     tokens.update(metric_tokens(values, timezone_id, now_ms))
     tokens.update(history_tokens(values, timezone_id))
     # These are opaque maps keyed by external model/source labels, not DTO schemas.

@@ -56,6 +56,7 @@ def ccost_sentences() -> tuple[str, ...]:
         "1 CCost equals 1 Copilot AI credit.",
         "Flat-rate accounts use Copilot's published token rates, not the billed cost.",
         "Unlabeled cost figures in Cost Guard are CCost unless stated otherwise.",
+        "Watch Today is CCost, not provider-native Used or actual Billed spend.",
     )
 
 

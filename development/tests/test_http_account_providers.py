@@ -78,8 +78,8 @@ class OpenRouterTests(unittest.TestCase):
         self.assertEqual(D(50), quota.limit)
         self.assertEqual("USD", quota.unit)
         self.assertEqual([D("1.42"), D("8.75"), D("32.10")], [b.amount for b in account.billing])
-        self.assertIn("36%", text(account))
-        self.assertIn("$17.90/$50.00", text(account))
+        self.assertIn("64% used", text(account))
+        self.assertIn("$32.10/$50.00", text(account))
         self.assertIsNone(account.plan)
         self.assertFalse(account.usage_attribution_complete)
 
@@ -156,7 +156,7 @@ class MiniMaxTests(unittest.TestCase):
         self.assertEqual([D(".72"), D(".54")], [q.remaining_fraction for q in account.quotas])
         self.assertEqual([NOW + 18_000_000, NOW + 604_800_000], [q.reset_at_ms for q in account.quotas])
         self.assertIsNone(account.plan)
-        self.assertIn("72%", text(account))
+        self.assertIn("28% used", text(account))
 
     def test_relative_reset_offsets_are_explicit_milliseconds(self):
         row = bucket(start_time=None, end_time=None, weekly_start_time=None, weekly_end_time=None,
@@ -318,7 +318,7 @@ class WiringAndLifecycleTests(unittest.TestCase):
             self.assertEqual(1, len(set(bars)))
             narrow = text(account, width=40, watch=watch)
             self.assertTrue(all(len(row) <= 40 for row in narrow.splitlines()))
-            self.assertIn("$17.90/$50.00", narrow)
+            self.assertIn("$32.10/$50.00", narrow)
             self.assertNotIn("█", text(normalize(DEEPSEEK, seek()), watch=watch))
         combined = replace(account, quotas=tuple(replace(account.quotas[0], label=label)
                             for label in ("5h", "Day", "Week", "Month", "Limit")))

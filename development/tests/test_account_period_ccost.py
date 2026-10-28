@@ -136,8 +136,8 @@ class AccountPeriodCCostTests(unittest.TestCase):
                 watch = project((native,), (), watch=True, observed_start_ms=MONTH)[0]
                 text = "\n".join(capacity_lines(watch, AnsiStyler({}, enabled=False), "UTC",
                                                width=160, now_ms=NOW, watch=True))
-                self.assertIn("100% (0)", text)
-                self.assertIn("57% (0)", text)
+                self.assertIn("0% used (0)", text)
+                self.assertIn("43% used (0)", text)
 
     def test_empty_periods_require_history_not_just_account_attribution(self):
         native = replace(subscription(), usage_attribution_complete=True)
@@ -177,8 +177,8 @@ class AccountPeriodCCostTests(unittest.TestCase):
                     for watch in (False, True):
                         text = "\n".join(strip_ansi(line) for line in capacity_lines(
                             row, styler, "UTC", width=width, now_ms=NOW, watch=watch))
-                        self.assertIn("100% (38)", text)
-                        self.assertIn("57% (38)", text)
+                        self.assertIn("0% used (38)", text)
+                        self.assertIn("43% used (38)", text)
                         self.assertNotIn("≥", text)
                         self.assertNotIn("?", text)
                     text = strip_ansi(report_text(replace(quotas(row), now_ms=NOW), width=width))
@@ -204,8 +204,8 @@ class AccountPeriodCCostTests(unittest.TestCase):
                     lines = capacity_lines(row, AnsiStyler({}, enabled=color), "UTC", width=width,
                                            force_vertical=True, now_ms=NOW)
                     text = "\n".join(strip_ansi(line) for line in lines)
-                    self.assertIn("100% (100)", text)
-                    self.assertIn("57% (200)", text)
+                    self.assertIn("0% used (100)", text)
+                    self.assertIn("43% used (200)", text)
                     self.assertTrue(all(len(strip_ansi(line)) <= width for line in lines))
             text = report_text(replace(quotas(row), now_ms=NOW), width=width)
             self.assertIn("CCost today: 100", text)
@@ -255,8 +255,8 @@ class AccountPeriodCCostTests(unittest.TestCase):
             for color in (False, True):
                 lines = capacity_lines(row, AnsiStyler({}, enabled=color), "UTC", width=width, now_ms=NOW, watch=True)
                 text = "\n".join(strip_ansi(line) for line in lines)
-                self.assertIn("100% (100)", text)
-                self.assertIn("57% (100)", text)
+                self.assertIn("0% used (100)", text)
+                self.assertIn("43% used (100)", text)
                 self.assertIn("not started", " ".join(text.split()))
                 self.assertTrue(all(len(strip_ansi(line)) <= width for line in lines))
                 self.assertNotIn("this month", text)
@@ -264,7 +264,7 @@ class AccountPeriodCCostTests(unittest.TestCase):
                          limit=D(7000), remaining_fraction=D("0.35"), unit="AI credits", reset_at_ms=NOW + 5 * 86_400_000),))
         monthly = project((native,), (request("copilot", NOW, provider="github-copilot"),), watch=True)[0]
         text = "\n".join(capacity_lines(monthly, AnsiStyler({}, enabled=False), "UTC", width=240, now_ms=NOW, watch=True))
-        self.assertIn("2483/7000 · Today: 100 · Remaining:", text)
+        self.assertIn("4517/7000 · Today: 100 · Remaining:", text)
         no_percent = replace(row, account=replace(row.account, quotas=(replace(row.account.quotas[0], remaining_fraction=None),)))
         text = "\n".join(capacity_lines(no_percent, AnsiStyler({}, enabled=False), "UTC", width=240, now_ms=NOW, watch=True))
         self.assertIn("N/A · CCost: 100", text)

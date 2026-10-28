@@ -289,7 +289,7 @@ class AccountFreshnessTests(unittest.TestCase):
                         shown.setdefault(value, second)
                 for changed_at, value in changes.items():
                     self.assertLessEqual(shown[value] - changed_at, 60)
-                    self.assertIn(f"{int(value * 100)}%", output.getvalue())
+                    self.assertIn(f"{int((1 - value) * 100)}% used", output.getvalue())
                 self.assertEqual(list(range(0, 181, 30)), provider.starts)
                 provider.gate.set()
                 watch.close()

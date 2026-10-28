@@ -346,9 +346,9 @@ class ReportProjectionTests(unittest.TestCase):
         self.assertNotIn("provider-attributed estimate", section)
         self.assertNotIn("Account CCost values", section)
         self.assertNotIn("configured monthly CCost budget", section)
-        self.assertIn("70/100 AI credits", section)
+        self.assertIn("30/100 AI credits", section)
         self.assertNotIn("Native", section)
-        self.assertIn("█" * 7 + "░" * 3 + "  70%", section)
+        self.assertIn("█" * 3 + "░" * 7 + "  30% used", section)
         self.assertNotIn("Difference", section)
 
     def test_renderer_restores_responsive_width_without_truncating_session_id_or_numeric_cells(self) -> None:

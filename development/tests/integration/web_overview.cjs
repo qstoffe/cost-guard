@@ -33,7 +33,7 @@ for (const [first, second] of [['Release date', 'Promotion terms'], ['Promotion 
 assert.ok(output.textContent.includes('CCost today: 2'));
 assert.ok(output.textContent.includes('Billed month: $2.34'));
 assert.ok(output.textContent.includes('5-hour'));
-assert.ok(output.textContent.includes('64%'));
+assert.ok(output.textContent.includes('36% used'));
 assert.ok(!output.textContent.includes('Report Today CCost'), 'no unrelated whole-report totals');
 const warnings = all(output, 'p').filter(n => n.className === 'warning').map(n => n.textContent);
 assert.ok(warnings.includes('CCost account attribution unknown.'));
