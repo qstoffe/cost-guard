@@ -80,7 +80,7 @@ PUBLIC_LAUNCHERS = {
     "macos/Beta": {"Cost Guard Web.command", "launcher.applescript"},
 }
 
-FORBIDDEN_TOP_LEVEL = {"cache", "diagnostics", "logs", ".git", "data"}
+FORBIDDEN_TOP_LEVEL = {"cache", "diagnostics", "logs", ".git", ".vs", "data"}
 FORBIDDEN_NAMES = {"auth.json", ".env", "credentials.json"}
 TEXT_SUFFIXES = {".md", ".txt", ".json", ".jsonc", ".py", ".cmd", ".command", ".applescript", ".ps1", ".sh", ".toml", ".yaml", ".yml"}
 
@@ -592,7 +592,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json", action="store_true")
     parser.add_argument(
         "--working-tree", action="store_true",
-        help="Validate the distributable view of a working tree while ignoring runtime cache/diagnostics/logs/releases/user config/bytecode.",
+        help="Validate a working-tree distributable view, excluding root .vs IDE state, runtime state, user config and bytecode.",
     )
     args = parser.parse_args(argv)
     root = (args.root.resolve() if args.root else Path(__file__).resolve().parents[2])
@@ -604,7 +604,7 @@ def main(argv: list[str] | None = None) -> int:
             current = Path(directory).resolve()
             ignored = {name for name in names if name in {".git", "__pycache__"} or name.endswith((".pyc", ".zip"))}
             if current == root:
-                ignored.update(name for name in ("cache", "diagnostics", "logs", "releases") if name in names)
+                ignored.update(name for name in (".vs", "cache", "diagnostics", "logs", "releases") if name in names)
             if current == (root / "config").resolve() and "user-config.jsonc" in names:
                 ignored.add("user-config.jsonc")
             return ignored

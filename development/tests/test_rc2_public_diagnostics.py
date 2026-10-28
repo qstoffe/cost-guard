@@ -16,6 +16,7 @@ from src.reports import ReportKind, ReportProjection
 from src.version import DISPLAY_VERSION, RELEASE_DATE
 from development.tools.collect_diagnostics import _projection_summary, _session_stats
 from development.tools.validate_package import Results, check_lowercase_directories, check_public_hygiene
+from development.tests.fixtures.package_copy import copy_package
 
 ROOT = Path(__file__).resolve().parents[2]
 DIAG = ROOT / "development/tools/collect_diagnostics.py"
@@ -41,9 +42,11 @@ class PublicRepoLayoutTests(unittest.TestCase):
             self.assertTrue(all(label == "public repository hygiene" for label, _ in results.failures))
 
     def test_all_package_owned_directories_are_lowercase(self) -> None:
-        results = Results()
-        check_lowercase_directories(ROOT, results)
-        self.assertEqual([], results.failures)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = copy_package(Path(tmp))
+            results = Results()
+            check_lowercase_directories(root, results)
+            self.assertEqual([], results.failures)
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / "BadDir").mkdir()

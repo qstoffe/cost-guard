@@ -23,14 +23,14 @@ def run_python(
 
 
 def copy_package(destination: Path) -> Path:
-    """Distributable working-tree view: no runtime state, user config, archives or bytecode."""
+    """Distributable view: no root .vs, runtime state, user config, archives or bytecode."""
     root = destination / "package"
 
     def ignore(directory: str, names: list[str]) -> set[str]:
         ignored = {name for name in names if name in {".git", "__pycache__"} or name.endswith((".pyc", ".zip"))}
         current = Path(directory).resolve()
         if current == ROOT.resolve():
-            ignored.update(name for name in ("cache", "diagnostics", "logs", "releases") if name in names)
+            ignored.update(name for name in (".vs", "cache", "diagnostics", "logs", "releases") if name in names)
         if current == (ROOT / "config").resolve() and "user-config.jsonc" in names:
             ignored.add("user-config.jsonc")
         return ignored

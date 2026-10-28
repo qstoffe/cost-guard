@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.103 — 2026-10-28
+
+- Ignore root Visual Studio `.vs/` cache in Git and working-tree validation copies without deleting local IDE state. Explicit distributables reject that cache; existing validation safeguards remain active.
+
 ## v80.102 — 2026-10-28
 
 - Windows report, Watch and Diagnostics now open a separate persistent PowerShell console instead of asynchronously sharing the caller's console through `START /B`. Startup feedback stays in the Cost Guard window; a decorated parent prompt cannot compete with Python for that console's input/output.

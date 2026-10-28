@@ -5,6 +5,7 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from development.tests.fixtures.package_copy import ROOT, copy_package, run_python
 from development.tools import validate_package
@@ -14,6 +15,55 @@ VALIDATOR = ROOT / "development/tools/validate_package.py"
 
 
 class ValidationTests(unittest.TestCase):
+    def test_root_visual_studio_cache_is_local_not_distributable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            copy = copy_package(Path(tmp))
+            index = copy / ".vs/CostGuard/FileContentIndex/cache.vsidx"
+            index.parent.mkdir(parents=True)
+            index.write_bytes(b"\0" * 65537)
+            database = copy / ".vs/slnx.sqlite"
+            database.write_bytes(b"\0" * 65537)
+
+            validation = run_python(str(VALIDATOR), "--root", str(copy), "--working-tree")
+            self.assertEqual(0, validation.returncode, validation.stdout + validation.stderr)
+            self.assertEqual(65537, index.stat().st_size)
+            self.assertEqual(65537, database.stat().st_size)
+
+            observed = []
+
+            def inspect_view(view: Path) -> validate_package.Results:
+                observed.append((view / ".vs").exists())
+                return validate_package.Results()
+
+            with patch.object(validate_package, "validate", side_effect=inspect_view):
+                self.assertEqual(0, validate_package.main(["--root", str(copy), "--working-tree"]))
+            self.assertEqual([False], observed)
+            with patch("development.tests.fixtures.package_copy.ROOT", copy):
+                fixture = copy_package(Path(tmp) / "fixture")
+            self.assertFalse((fixture / ".vs").exists())
+
+            explicit = run_python(str(VALIDATOR), "--root", str(copy))
+            self.assertNotEqual(0, explicit.returncode)
+            self.assertIn("forbidden packaged top-level path: .vs", explicit.stdout)
+
+            malformed = copy / "docs/Unexpected/oversize.txt"
+            malformed.parent.mkdir(parents=True)
+            malformed.write_text("x" * 65537, encoding="utf-8")
+            validation = run_python(str(VALIDATOR), "--root", str(copy), "--working-tree")
+            self.assertNotEqual(0, validation.returncode)
+            self.assertIn("lowercase directories", validation.stdout)
+            self.assertIn("otherText hard cap", validation.stdout)
+
+    def test_nested_visual_studio_directory_is_not_excluded(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            copy = copy_package(Path(tmp))
+            nested = copy / "docs/.vs/Unexpected/index.vsidx"
+            nested.parent.mkdir(parents=True)
+            nested.write_bytes(b"\0" * 65537)
+            validation = run_python(str(VALIDATOR), "--root", str(copy), "--working-tree")
+            self.assertNotEqual(0, validation.returncode)
+            self.assertIn("docs/.vs/Unexpected", validation.stdout)
+
     def test_documentation_images_use_existing_binary_cap_not_text_cap(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
