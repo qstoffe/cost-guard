@@ -3,8 +3,7 @@ param([ValidateSet('report', 'watch', 'diagnostics')][string]$Mode = 'report')
 # Shared Windows terminal boundary. No policy changes outside this PowerShell process.
 $ErrorActionPreference = 'Stop'
 $code = 1
-# The batch wrapper already writes before PowerShell startup. Direct invocations
-# get the same feedback here, before Add-Type or Python discovery.
+# Feedback belongs only to this console, never to the caller's prompt.
 $interactiveStatus = -not [Console]::IsOutputRedirected
 if ($env:COST_GUARD_LAUNCHER_STATUS -ne 'pending') {
     if ($interactiveStatus) { Write-Host -NoNewline 'Cost Guard: Checking requirements...' }
@@ -22,8 +21,8 @@ function Clear-LauncherStatus {
 try {
     Set-Location -LiteralPath (Split-Path -Parent $PSScriptRoot)
 
-    # cmd's start /b inherits ignored Ctrl+C. Re-enable it before spawning Python;
-    # cmd has already exited, so no outer batch can ask to terminate a batch job.
+    # Explicitly enable Ctrl+C before Python, including direct/legacy invocations.
+    # The wrapper starts a separate console; no waiting batch owns this input.
     if (-not ('CostGuardLauncherConsole' -as [type])) {
         Add-Type -TypeDefinition @'
 using System;

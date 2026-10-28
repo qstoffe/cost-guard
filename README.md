@@ -48,7 +48,7 @@ Double-click the `.cmd` launchers under `windows/`:
 | `Cost Guard.cmd` | Normal model comparison/account quota report. |
 | `Cost Guard Watch.cmd` | Live/global Watch; Ctrl+C stops Watch only. |
 
-Windows launchers use PowerShell 7 (`pwsh.exe`) when available, otherwise Windows PowerShell 5.1 (`powershell.exe`). They reuse one persistent console: completion, errors and Ctrl+C leave a usable prompt. Python discovery checks available `py.exe` and `python.exe` installations for Python 3.11+. See [download trust](#open-source-license-and-windows-download-trust).
+Report, Watch and Diagnostics open a **separate, persistent console** using PowerShell 7 or Windows PowerShell 5.1 fallback. The caller returns without sharing input/output. Completion, errors and Ctrl+C leave a usable child prompt; `$LASTEXITCODE` there retains Python's result (9009 if Python 3.11+ is missing). The calling batch reports launch status only. For synchronous terminal/exit-code use, run `py -3 cost-guard.py` or add `--watch`. Close the Cost Guard window when finished. See [download trust](#open-source-license-and-windows-download-trust).
 
 ### macOS
 
@@ -362,7 +362,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.101 (2026-10-28):** Windows Web Beta delegates immediately to hidden PowerShell, without waiting in a visible console for Python discovery, host restart or browser handoff. No compiler or executable cache is needed; startup failures retain native dialogs and private diagnostics. CLI/Watch remain unchanged. See [Web Beta](docs/web-beta.md); physical Explorer flash duration and native macOS acceptance remain separate.
+**v80.102 (2026-10-28):** Windows report, Watch and Diagnostics launch into their own persistent console, eliminating competing prompts in the caller's terminal. Ctrl+C, Python discovery and visible errors remain supported. Real native ownership/input probes and read-only report/Watch/Diagnostics smoke passed; the colleague's exact prompt configuration remains a consumer follow-up. Web Beta and numerical semantics are unchanged.
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.102 — 2026-10-28
+
+- Windows report, Watch and Diagnostics now open a separate persistent PowerShell console instead of asynchronously sharing the caller's console through `START /B`. Startup feedback stays in the Cost Guard window; a decorated parent prompt cannot compete with Python for that console's input/output.
+- Retained PowerShell 7/5.1 fallback, Python 3.11+ discovery, Ctrl+C reset, visible errors and the child prompt's native result. The caller receives only launch status; synchronous exit-code consumers can invoke Python directly. Native synthetic prompt/console, cancellation, error and real-installation probes passed; the colleague's exact prompt setup remains explicitly unverified. Web Beta, macOS and numerical semantics are unchanged.
+
 ## v80.101 — 2026-10-28
 
 - Windows Web Beta now returns its batch entry immediately after delegating to hidden, separate PowerShell. Python discovery, verified host restart, tray readiness and authenticated browser handoff no longer retain the launcher's visible console. This no-build route needs no compiler, downloaded helper or executable cache; a brief platform batch/minimized-window flash remains possible.

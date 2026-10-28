@@ -24,7 +24,13 @@ class WindowsLauncherTests(unittest.TestCase):
                 self.assertIn("where pwsh.exe >nul 2>nul", text)
                 self.assertIn('set "costguard_shell=pwsh.exe"', text)
                 self.assertIn('set "costguard_shell=powershell.exe"', text)
-                self.assertIn(" /b %costguard_shell% ", text)
+                start = next(line for line in text.splitlines() if line.startswith('start "'))
+                self.assertIn(" %costguard_shell% ", start)
+                self.assertNotIn(" /b ", start.lower())
+                self.assertNotIn(" /wait ", start.lower())
+                self.assertNotIn("Checking requirements", text)
+                self.assertNotIn("COST_GUARD_LAUNCHER_STATUS", text)
+                self.assertIn("exit /b %errorlevel%", text)
                 self.assertIn("-NoExit -ExecutionPolicy Bypass", text)
 
 
