@@ -23,11 +23,11 @@ CONSOLE_STUB = (
 
 
 class LauncherFeedbackTests(unittest.TestCase):
-    def test_windows_wrappers_write_before_shell_detection_without_new_process(self):
+    def test_windows_wrappers_leave_feedback_to_the_owned_console(self):
         for filename in ("Cost Guard.cmd", "Cost Guard Watch.cmd"):
             text = (ROOT / "windows" / filename).read_text(encoding="utf-8")
-            self.assertLess(text.index("Checking requirements..."), text.index("where pwsh.exe"))
-            self.assertIn('<nul set /p "=Cost Guard:', text)
+            self.assertNotIn("Checking requirements...", text)
+            self.assertNotIn('<nul set /p', text)
             self.assertEqual(1, text.count("start \""))
             self.assertNotIn("timeout", text.lower())
 

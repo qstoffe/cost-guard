@@ -125,7 +125,7 @@ class WatchLifecycleTests(unittest.TestCase):
 
 
 class WindowsShellContractTests(unittest.TestCase):
-    def test_all_launchers_share_persistent_same_console_handoff(self):
+    def test_all_launchers_use_persistent_separate_console_handoff(self):
         launchers = {
             "windows/Cost Guard.cmd": "report",
             "windows/Cost Guard Watch.cmd": "watch",
@@ -134,15 +134,16 @@ class WindowsShellContractTests(unittest.TestCase):
         for name, mode in launchers.items():
             with self.subTest(launcher=name):
                 text = (ROOT / name).read_text(encoding="utf-8")
-                self.assertIn('/b %costguard_shell% -NoLogo -NoProfile -NoExit', text)
+                self.assertIn('%costguard_shell% -NoLogo -NoProfile -NoExit', text)
+                self.assertNotIn('/b %costguard_shell%', text)
                 self.assertIn('src\\windows_launcher.ps1" -Mode ' + mode, text)
-                self.assertIn("exit /b 0", text)
+                self.assertIn("exit /b %errorlevel%", text)
                 self.assertNotIn("call :detect_python", text, "Python probes belong after batch handoff")
                 self.assertNotIn("pause", text)
                 self.assertNotIn("Read-Host", text)
         driver = (ROOT / "src/windows_launcher.ps1").read_text(encoding="utf-8")
         self.assertIn("SetConsoleCtrlHandler([IntPtr]::Zero, $false)", driver,
-                      "start /b inherits ignored Ctrl+C; explicitly enable it before Python")
+                      "explicitly enable Ctrl+C before Python, including legacy direct callers")
         self.assertIn("sys.version_info >= (3,11)", driver)
         self.assertIn("Install Python 3.11+", driver)
         self.assertIn("$global:LASTEXITCODE = $code", driver)

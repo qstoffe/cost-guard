@@ -1,7 +1,7 @@
 # Cost Guard v80 architecture
 
-Source revision: e25cf3b63a5ffe73e20787a96c9c1ee38f356c1a
-Checked revision: e25cf3b63a5ffe73e20787a96c9c1ee38f356c1a
+Source revision: 11fa96c2bea806c7a66341e407bc04eb1611d079
+Checked revision: 11fa96c2bea806c7a66341e407bc04eb1611d079
 Last checked: 2026-10-28
 Status: current
 
@@ -88,6 +88,7 @@ Configuration must be validated before any OpenCode/provider/network/runtime-cac
 | Optional Web / lifecycle | [web.md](modules/web.md) |
 | Watch | [watch.md](modules/watch.md) |
 | Presentation and CLI / Software-failure boundaries / Diagnostics boundary | [presentation-diagnostics.md](modules/presentation-diagnostics.md) |
+| Windows console | [windows-launchers.md](modules/windows-launchers.md) |
 
 The code map names focused tests; static paths do not establish current test coverage. Historical performance evidence retains its original validity limits.
 
