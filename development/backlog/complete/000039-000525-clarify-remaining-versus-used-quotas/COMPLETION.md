@@ -20,6 +20,6 @@ Exact implementation merge UTC/global sunset will be filled from actual GitHub m
 
 ## Knowledge and dependencies
 
-Updated presentation-state contract and code-map route. Journal assessment: **no-update**; no new source-acquisition finding/root cause is claimed from the broad probe timeout. Existing pending Web layout, CCost units and independent Unaccounted-usage ownership remain separate. The original FR specification is preserved byte-for-byte, with no attachments or additional bundle evidence.
+Updated presentation-state contract, code-map route and test-health journal. No new source-acquisition finding/root cause is claimed from the broad probe timeout. Hosted candidate 42a7b15 passed both macOS jobs but exposed two Windows launcher-fixture failures: assumed usable py registration and a missed delegate-start checkpoint under concurrent load. The repair keeps native fallback/argument assertions and every timeout, serializes only hosted Windows regression files and requires fresh CI verification. Existing pending Web layout, CCost units and independent Unaccounted-usage ownership remain separate. The original FR specification is preserved byte-for-byte, with no attachments or additional bundle evidence.
 
 No release ZIP/tag/GitHub Release, live model evaluation, self-review, implementation agent or ordinary-checkout mutation was used. Model cost is not available; no cost/PASS totals are invented.
