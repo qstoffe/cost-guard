@@ -85,12 +85,15 @@ source-change shutdown, independent CLI Watch startup/process survival, and
 ShellExecute of the real batch in a no-Git space/Unicode source snapshot. No
 physical Explorer mouse input or browser-paint timing is implied.
 
-Full: **113/113 files PASS**, final run 47.7 s. Working-tree validator: **0 errors**,
+Full: **113/113 files PASS**, latest local run 59.6 s. Working-tree validator: **0 errors**,
 11 passes, four design-budget warnings (README and pre-existing large context,
 report-service and Watch modules); no hard limit changed. Existing lifecycle,
 loopback/control security, PID/birth ownership, ReportJobs and macOS cache tests
 remain in Full. Native macOS tooling/Finder cannot be exercised on this Windows
-workstation; no macOS runtime change is included.
+workstation; no macOS runtime change is included. The later hosted matrix passed
+Windows Server 2025, macOS 15 ARM64 and macOS 15 Intel regression, isolated native
+and rendered-browser phases on the repaired test candidate (see below). This is
+not physical Finder/Gatekeeper acceptance.
 
 ## Built-in browser and recovery
 
@@ -131,6 +134,18 @@ The complete native rerun passed; post-run inspection found **zero** matching
 task delegates, no managed instance, and no new startup-error record. The final
 measurements above include separately observed delegate completion; they still
 do not measure browser paint. Production lifecycle/security code is unchanged.
+
+The first PR Windows-hosted run also exposed a probe-only startup budget error:
+the visibility fixture read its result after only five seconds, producing
+`FileNotFoundError`; hosted native command/ownership and rendered-browser phases
+passed independently. The fixture now separates the unchanged five-second batch
+exit check from a bounded 15-second delegate startup allowance, records an
+explicit visibility-interpreter failure marker, and requires the same invisible
+console/blocked-delegate assertions. No product timeout or visibility assertion
+was relaxed. Local Full passed again (113 files, 59.6 s). The repaired candidate
+`3ed0be0e514e72ab1fd586e8bf1e113d8efa917b` then passed **all three hosted jobs**:
+[Windows/ARM64 macOS/Intel macOS evidence](https://github.com/qstoffe/cost-guard/actions/runs/40724292824).
+The preceding red run remains historical failure evidence, not a waived check.
 
 ## Limits and follow-up
 

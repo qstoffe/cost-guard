@@ -25,7 +25,7 @@ integrity-checked, in-box osacompile Finder app mechanism and documented fallbac
 
 ## Verification and evidence
 
-- Full: 113/113 test files PASS; final run 47.7 s.
+- Full: 113/113 test files PASS; latest local run 59.6 s.
 - Working-tree validator: 0 errors, 11 passes, four nonblocking design-budget
   warnings; no caps or assertions weakened.
 - Real Windows native probe: tray Open/Exit, failed browser/preflight retention,
@@ -67,6 +67,17 @@ their handles and joins zero-exit completion before test Exit/teardown. The full
 native rerun passed; subsequent inspection found zero task launcher delegates,
 no managed instance and no new startup-error record. Production errors are not
 suppressed and readiness is still distinct from launcher completion.
+
+The initial PR Windows-hosted regression exposed a separate five-second
+visibility-fixture startup budget, while hosted native and browser phases
+passed. The repaired fixture retains the immediate batch-exit and invisible
+console assertions, allows a bounded 15 seconds for delegate startup, and
+records explicit interpreter failure. Local Full passed again. Candidate
+`3ed0be0e514e72ab1fd586e8bf1e113d8efa917b` passed the full hosted matrix on
+Windows Server 2025, macOS ARM64 and Intel, including isolated native/compiler
+and rendered-browser phases: [verified run](https://github.com/qstoffe/cost-guard/actions/runs/40724292824).
+This adds hosted macOS evidence, not physical Finder acceptance. No failed check
+was bypassed or classified as delivered.
 
 ## Explicit remaining acceptance limits
 
