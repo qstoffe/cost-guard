@@ -1,13 +1,13 @@
 # Test system health
 
-Source revision: ebacf2cde20a2ee1db2168569e00fa43c87f27bb
-Checked revision: ebacf2cde20a2ee1db2168569e00fa43c87f27bb
+Source revision: 82f555e2ef9d3c0ee3586f067694f101d39d511b
+Checked revision: 82f555e2ef9d3c0ee3586f067694f101d39d511b
 Last checked: 2026-10-28
 Status: current
 
 ## Summary
 
-Milestone-30 audit retains isolated files, responsibility-owned fixtures and hard deadlines: no source-backed harness rewrite justified. Whole-tree inventory, sampled source/tests and fresh three-platform CI outcomes are in development/architecture/governance/verification/test-health-30.md. No product tests, validator, live/model calls or version work ran for this development-only delivery. Historical hosted results are revision-specific, never consumer-desktop acceptance.
+Milestone-35 audit retains isolated files, responsibility-owned fixtures and hard deadlines: no source-backed harness rewrite justified. Whole-tree inventory, sampled source/tests and fresh three-platform CI outcomes are in development/architecture/governance/verification/test-health-35.md. No product tests, validator, live/model calls or version work ran for this development-only delivery. Historical hosted results are revision-specific, never consumer-desktop acceptance.
 
 ## Evidence
 
@@ -15,7 +15,7 @@ Milestone-30 audit retains isolated files, responsibility-owned fixtures and har
 
 `development/tools/run_tests.py` keeps four isolated workers, Quick's 25-second and Full's 240-second per-file bounds. Its JSON report now distinguishes named skips, failures/errors and incomplete known-passed counts for failed files. A test-method inventory is not an executed count. CI supplies Node so optional VM tests actually execute; Chromium smoke remains separate from DOM substitutes. `test_ci_web_beta.py` covers hosted-only admission and sanitized reporting.
 
-At ebacf2cde20a2ee1db2168569e00fa43c87f27bb, AST inventory found 112 registered files (108 Quick, four Full-only), no gaps and 1,370 syntactic test methods. Eleven sibling-import statements remain ten distinct importer/module edges, unchanged since milestone 25. Inventory: 485 text/config files, 61 binary/large exclusions, no exact-byte duplicates (not semantic uniqueness). Latest main run 40601136981 at e25cf3b63a5ffe73e20787a96c9c1ee38f356c1a passed all three hosted jobs: Windows 1,370 passed; both Macs 1,365 passed/five Windows-only skips; no failures/errors. Regression including validator: Windows 107.20 s, ARM64 201.45 s, Intel 214.00 s; browser 9.38/10.33/10.50 s. Structured phase durations are not per-file timings or a controlled speedup. The intervening architecture-only commit changes no tested source. Eight-run sample: five success/three cancelled, not eight PASS.
+At 82f555e2ef9d3c0ee3586f067694f101d39d511b: 113 registered files (109 Quick/four Full-only), no gaps, 1,380 syntactic methods; eleven sibling imports/ten distinct edges. Inventory: 511 text/config entries, 64 binary/large exclusions, no exact-byte duplicates. Five-run sample: success, two cancelled, failure, queued; not five PASS. Run 40735661619 at 227d2ad failed Windows regression on README CRLF 32,771 > 32,768 bytes, cascading into three foundation checks including .vs. Current README is 32,142 LF/32,533 CRLF bytes under the unchanged cap. Subsequent candidate run 40737349402 at f8edc0c passed all three hosted regression/native/browser jobs; Windows: 113 files, 1,380 passed, no skips/failures/errors, regression+validator 131.17 s. Exact-base main run 40738339004 was queued, never PASS. Full revisions, links, risk mapping and timing limits: milestone-35 report. No controlled speedup or consumer-desktop proof.
 
 Tests below are under `development/tests/`; mappings establish intended contracts, not coverage percentages:
 
