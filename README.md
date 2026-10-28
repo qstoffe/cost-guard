@@ -362,7 +362,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.102 (2026-10-28):** Windows report, Watch and Diagnostics launch into their own persistent console, eliminating competing prompts in the caller's terminal. Ctrl+C, Python discovery and visible errors remain supported. Real native ownership/input probes and read-only report/Watch/Diagnostics smoke passed; the colleague's exact prompt configuration remains a consumer follow-up. Web Beta and numerical semantics are unchanged.
+**v80.103 (2026-10-28):** Root Visual Studio `.vs/` cache is Git-ignored and excluded from working-tree package validation, including Diagnostics' validation view. Explicit packages containing `.vs/` are rejected; unrelated source, quotas and runtime behavior are unchanged.
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 
@@ -384,3 +384,4 @@ python development/tools/collect_diagnostics.py
 ```
 
 Hosted/web AI runs Quick + validation; local sessions run Full + validation + live checks. No local product-release ZIP is routinely generated; current `main` remains the supported source distribution. Diagnostics bundles are separate troubleshooting artifacts.
+`--working-tree` excludes root `.vs/` generated IDE state without reading or deleting it. It does not ignore nested `.vs/` directories or arbitrary project files. Without that flag, an explicit distributable containing root `.vs/` fails validation; normal path, size, encoding, security and Python checks remain active.
