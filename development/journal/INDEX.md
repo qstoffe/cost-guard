@@ -1,13 +1,13 @@
 # Cost Guard engineering knowledge
 
-Source revision: a27d5fede5d07a7a2e992691b34790b6017cd780
-Checked revision: a27d5fede5d07a7a2e992691b34790b6017cd780
+Source revision: 76d9054556da384d8cb888b16699ece5f1b2d984
+Checked revision: 9a27a6ae600f4c651b3306d69f5c8fc9da0f0dff
 Last checked: 2026-10-28
 Status: current
 
 Installed OpenCode Toolkit shared repository skills own development procedures. Source remains authoritative; historical measurements are not current PASS claims. External reference: https://github.com/qstoffe/opencode-toolkit/tree/main/skills/shared-repo-contract .
 
-- Performance investigations: `development/journal/PERFORMANCE.md` retains the milestone-20 synthetic report/Watch audit (NO_GAIN), cache-I/O limits and long-session indexes.
+- Performance investigations: `development/journal/PERFORMANCE.md` retains milestone-40 synthetic report/Watch measurements (NO_GAIN), cold model/publisher scan and cache-I/O limits, the active-root benchmark assertion repair, and scoped historical findings.
 - History acquisition and startup: `development/architecture/modules/history-loading.md` retains scopes, measurements and unresolved terminal/live proof.
 - [OpenAI identity and quota evidence](openai-identity.md): canonical aliases, removed generations, deterministic recovery and historical 401 limits.
 - Architecture and owners: `development/architecture/OVERVIEW.md` routes module contracts and source/tests.
