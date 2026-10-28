@@ -1,17 +1,47 @@
 # Feature opportunity assessment
 
-Source revision: 708dc0f11237bd97c2b8a91c6714b72c58f5a70f
-Checked revision: 708dc0f11237bd97c2b8a91c6714b72c58f5a70f
+Source revision: 578170588bd28a904e5b446949ba40ea76ff5b0a
+Checked revision: 578170588bd28a904e5b446949ba40ea76ff5b0a
 Last checked: 2026-10-28
 Status: current
 
 ## Summary
 
-Feature Discovery at ordinary milestone 30: **no new suggestion**. The strongest grounded usability gaps already have pending work: remaining report/session-detail presentation (FR 000510) and console-free native startup (FR 000520). Do not duplicate or implement them in discovery. Cross-platform CI, recent-session pagination, structured Accounts and explicit stopped/offline states are delivered work, not new opportunities. Web promotion and Legacy retirement remain separately parked owner decisions.
+Feature Discovery at ordinary milestone 40: **no new suggestion**. All seven pending FRs already own the strongest concrete presentation opportunities. Historical model/publisher Token Mix is implemented; global comparison weighting, absolute model token volumes, category wording, Web unit selection, scrolling, active-hour cost and minimal Overview are separately queued. Web promotion and Legacy retirement remain parked owner decisions. Previous remaining-report and console-free-startup work is completed, not pending.
 
-Journal assessment: update this map and its INDEX route to retire milestone-20's obsolete pending-CI assumption and record current opportunity ownership. Architecture assessment: **no-update**; no responsibility, dependency or runtime flow changes. Only development knowledge and the exact native maintenance transaction change. Product tests, validators, Diagnostics, real-installation probes, UI, inference, product version changes and packaging are intentionally skipped. Source/assertion inspection establishes neither a fresh behavioral PASS nor demand or measured gain.
+Journal assessment: update this map and its INDEX route with current ownership and limits. Architecture assessment: **no-update**; no responsibility, dependency or runtime flow changes. Only development knowledge and the exact native maintenance transaction change. Product tests, validators, Diagnostics, real-installation probes, UI, inference, product version changes and packaging are intentionally skipped. Source/assertion inspection establishes neither a fresh behavioral PASS nor demand or measured gain.
 
-## Evidence
+## Milestone-40 evidence and decisions
+
+Inventory at the checked revision: 540 text/config records (219 source-or-config, 172 test, 149 documentation), 64 binary/over-1-MiB exclusions and zero exact-byte duplicate groups. Scope: tracked plus nonignored untracked files, excluding Git/runtime artifacts. Reproduce with installed `shared-repo/scripts/maintenance_evidence.py inventory --repo-root .`; full metadata stayed in owned scratch. Counts are triage, not coverage or demand.
+
+Navigation read: root README, architecture overview, reports/Web contracts, journal INDEX, architecture assessment and OpenAI limitations. Overview/architecture source revision a27d5fede5d07a7a2e992691b34790b6017cd780, reports b788aa556cc12a50fc2909968fc7fdea19e1bebf and Web 8dc82a38dddd7f2999e7872d52e1e6a8a0949725 predate the checked default. Fresh targeted source below resolves opportunity ownership only, not whole-product/platform acceptance.
+
+One semantic pass inspected six source/test files, 28,678 characters of numbered excerpts (within twelve files/32,000 characters):
+
+- `src/analysis/workload_mix.py:1-120`: exact-model/publisher/global prompt-weighted profiles are implemented, with distinct completed eligibility and compact samples. FR 000534 explicitly owns the requested common-global-mix reversal; no duplicate proposal.
+- `src/reports/token_mix_history.py:1-107`: one available-history scan produces both model and publisher projections from the same shown canonical requests, releasing hydrated roots. Absolute volume presentation belongs to FR 000527, not a second report.
+- `src/web/assets/reports.js:1-68`: date-range forms, recent-session paging and explicit cancellable deep-history routes already exist. More navigation/export convenience has no demonstrated new user workflow here.
+- `src/web/assets/session.js:90-140`: Snapshot/Live switching, retained results, selection/focus protection and scroll anchoring are implemented. Source alone does not establish physical scrolling success; the reported usability defect belongs to FR 000529.
+- `src/accounts/openai_subscription.py:300-355`: parser distinguishes native quota windows, billing components and unavailable/partial observations. This does not resolve the journal's token-sharing transport gap or justify guessing endpoints.
+- `development/tests/test_workload_mix.py:65-140`: assertions characterize short/empty samples, mixed prompts, canonical deduplication and model-specific tier ratios. Read, not executed; FR 000534 must deliberately revise its own affected expectations.
+
+Deduplication compared all seven pending specifications in full, all forty completed FR headings, targeted completion reports for 000521/000532/000526, both full active suggestions, the rejected-store inventory (placeholder only), and accessible suggestion-store Git history. No proposal was published; no rejected history was invented. Existing suggestion history reflects parking/wording changes, not approval.
+
+| Ranked problem/capability | Decision and minimal alternative |
+| --- | --- |
+| Clear comparable model costs and token-volume/category meaning | Strong concrete owner evidence, already scoped by 000527/000534/000533. Preserve historical publisher output while those FRs deliver; no duplicate. |
+| Usable long tables and less cluttered Overview | Direct owner/colleague observations, already owned by 000529/000535. Their real-browser/input acceptance is not established by this static pass. |
+| Consistent units and reference cost per active hour | Existing 000528/000530 define display and bounded derived-metric scope. No adjacent feature is justified. |
+| Offline status, complete detail and console-free entry | Delivered capabilities; recent 000532 completion documents historical soak/fault evidence with explicit physical/native limits, not a new PASS here. |
+| Token-sharing quotas, broader export or platform acceptance | Supported upstream transport/demand remains unestablished; export is speculative; platform/soak/performance characterization is maintenance evidence, not an invented capability. |
+| Promote Web or retire Legacy | Both active suggestions remain separately parked; no approval or rewrite. |
+
+No runtime changes, numeric FR, suggestion, attachment or completion manifest. Stage native Feature Discovery nextState at 40 exactly; ordinaryCount/completionHighWatermark remain 40, identity watermark 535, no pruning. Only verified merge/default read-back and native delivery establish completion. Pending/complete bundles and both suggestion stores remain unchanged.
+
+Next investigations: use actual pending-FR review outcomes and specific new owner feedback before adjacent UX proposals. Physical scrolling/input, screen-reader/macOS acceptance, retained memory/latency and supported token-sharing quota retrieval remain unverified here. No cross-repository proposal is needed for local inventory encoding/PowerShell quoting errors; local UTF-16 parsing and a UTF-8 Python excerpt helper resolved them without runtime changes.
+
+## Historical milestone-30 evidence (not current pending-work status)
 
 Read README product purpose, architecture overview/Web module, journal INDEX, architecture assessment and OpenAI limitations. The overview/architecture assessment's source/check revision is e25cf3b63a5ffe73e20787a96c9c1ee38f356c1a; the Web module's is 8dc82a38dddd7f2999e7872d52e1e6a8a0949725. These predate the current default. Their navigation and historical limits support triage only; fresh targeted source resolves the decisions below, not whole-product/platform acceptance.
 
