@@ -187,6 +187,7 @@ $ErrorActionPreference = 'Stop'
 if (-not $Detached) { throw 'Missing detached mode' }
 [IO.File]::WriteAllText((Join-Path $PSScriptRoot 'entered'), 'entered')
 & 'PYTHON' (Join-Path $PSScriptRoot 'visibility.py')
+if ($LASTEXITCODE -ne 0) { [IO.File]::WriteAllText((Join-Path $PSScriptRoot 'failed'), 'visibility_python_failed') }
 $deadline = [DateTime]::UtcNow.AddSeconds(10)
 while (-not (Test-Path (Join-Path $PSScriptRoot 'release')) -and [DateTime]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 20 }
 [IO.File]::WriteAllText((Join-Path $PSScriptRoot 'done'), 'done')
@@ -196,9 +197,14 @@ while (-not (Test-Path (Join-Path $PSScriptRoot 'release')) -and [DateTime]::Utc
                                      stderr=subprocess.PIPE, creationflags=subprocess.CREATE_NO_WINDOW)
             try:
                 self.assertEqual(child.wait(timeout=5), 0)
-                deadline = time.monotonic() + 5
-                while not (web / 'visible').exists() and time.monotonic() < deadline:
+                # A loaded hosted runner can take longer to start PowerShell/Python
+                # than the product's immediate batch handoff. Do not conflate them.
+                deadline = time.monotonic() + 15
+                while not (web / 'visible').exists() and not (web / 'failed').exists() and time.monotonic() < deadline:
                     time.sleep(0.02)
+                self.assertFalse((web / 'failed').exists(), 'Delegate visibility interpreter failed')
+                self.assertTrue((web / 'visible').exists(),
+                                'Delegate visibility stage not reached; entered=' + str((web / 'entered').exists()))
                 self.assertEqual((web / 'visible').read_text(), 'False')
                 self.assertFalse((web / 'done').exists(), 'Batch waited for blocked delegate')
             finally:
