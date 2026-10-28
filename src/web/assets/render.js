@@ -375,13 +375,13 @@ const ReportView = (() => {
       if (view.kind === 'token-mix') {
         if (!view.model_token_mix.length) parent.append(element('p', 'No available historical model rows. Missing history is not reconstructed.'));
         table(parent, 'Historical models · canonical totals above, independent of filters',
-          ['Model', 'Prompts', 'Calls', 'Input', 'Cache', 'Write', 'Output', 'CCost'], view.model_token_mix,
-          row => [row.model, known(row.prompts), known(row.calls), ...['input', 'cache', 'write', 'output', 'total_cost'].map(key => display(row.mix, key))], null, state, 'history',
-          row => [row.model, row.prompts, row.calls, ...row.mix.shares, row.mix.total_cost]);
+          ['Model', 'Prompts', 'Calls', 'Tokens', 'Input', 'Cache', 'Write', 'Output', 'CCost'], view.model_token_mix,
+          row => [row.model, known(row.prompts), known(row.calls), display(row.mix, 'total_tokens'), ...['input', 'cache', 'write', 'output', 'total_cost'].map(key => display(row.mix, key))], null, state, 'history',
+          row => [row.model, row.prompts, row.calls, row.mix.known_total_tokens ?? row.mix.total_tokens, ...row.mix.shares, row.mix.total_cost]);
         table(parent, 'Historical publishers · same shown usage, not the comparison prior',
-          ['Publisher', 'Prompts', 'Calls', 'Input', 'Cache', 'Write', 'Output', 'CCost'], view.publisher_token_mix || [],
-          row => [row.publisher, known(row.prompts), known(row.calls), ...['input', 'cache', 'write', 'output', 'total_cost'].map(key => display(row.mix, key))], null, state, 'publishers',
-          row => [row.publisher, row.prompts, row.calls, ...row.mix.shares, row.mix.total_cost]);
+          ['Publisher', 'Prompts', 'Calls', 'Tokens', 'Input', 'Cache', 'Write', 'Output', 'CCost'], view.publisher_token_mix || [],
+          row => [row.publisher, known(row.prompts), known(row.calls), display(row.mix, 'total_tokens'), ...['input', 'cache', 'write', 'output', 'total_cost'].map(key => display(row.mix, key))], null, state, 'publishers',
+          row => [row.publisher, row.prompts, row.calls, row.mix.known_total_tokens ?? row.mix.total_tokens, ...row.mix.shares, row.mix.total_cost]);
       }
     }
     for (const note of view.notes || []) parent.append(element('p', note, 'warning'));
@@ -390,7 +390,7 @@ const ReportView = (() => {
     parent.append(element('p', `Total Token Mix % · ${display(mix, 'total_tokens')} tokens · ` +
       ['Input', 'Cache', 'Write', 'Output'].map(name => name + ': ' + display(mix, name.toLowerCase())).join(' · '), mix.cost_complete ? 'metric-value' : 'metric-value partial'));
     const details = element('details'); details.append(element('summary', 'Sample and price coverage'), element('p',
-      `Full-report I/C/W/O tokens: ${display(mix, 'totals')} · Requests ${mix.request_count} · Prompts ${mix.sample_size} · Priced requests ${mix.priced_requests} · ${mix.cost_complete ? 'Complete prices' : 'Incomplete prices'}. Output includes reasoning; one prompt can contribute to several model rows.`)); parent.append(details);
+      `Full-report I/C/W/O tokens: ${display(mix, 'totals')} · Requests ${mix.request_count} · Prompts ${mix.sample_size} · Priced requests ${mix.priced_requests} · ${mix.cost_complete ? 'Complete prices' : 'Incomplete prices'}. Tokens sum known I/C/W/O categories; ? marks incomplete telemetry, N/A no known categories. K/M/B are rounded display only; sorting uses raw volumes. Output includes reasoning; one prompt can contribute to several model rows.`)); parent.append(details);
   }
   function contextSummary(parent, block) {
     parent.append(element('p', display(block, 'next_context'), block.next_context_warning ? 'threshold' : 'detail'));

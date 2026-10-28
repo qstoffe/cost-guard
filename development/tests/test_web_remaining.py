@@ -2,6 +2,7 @@
 from dataclasses import replace
 from decimal import Decimal
 import json
+import io
 from pathlib import Path
 import shutil
 import subprocess
@@ -11,12 +12,40 @@ from development.tests.fixtures.compact_reports import rendered
 from development.tests.fixtures.remaining_views import remaining_reports, result, ZONE
 from src.application.contracts import record
 from src.application.display import with_display
+from src.analysis.token_mix import token_mix
+from src.application.projection import token_mix as project_mix
+from src.domain import TokenUsage
+from src.display import token_volume
 from src.presentation.token_mix import mix_cells, total_cost_text
+from src.presentation import ReportRenderer
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
 class RemainingViewTests(unittest.TestCase):
+    def test_volume_display_shares_partial_and_unknown_semantics(self):
+        for usage, expected in ((TokenUsage(input=5_300_000), "5.3M"),
+                (TokenUsage(input=842_000, known_fields=("input",)), "?842K"),
+                (TokenUsage(known_fields=()), "N/A"),
+                (TokenUsage(known_fields=("input",)), "?0"), (TokenUsage(), "0")):
+            native = token_mix((usage,))
+            dto = with_display(project_mix(native)).to_json()
+            self.assertEqual(expected, dto["display"]["total_tokens"])
+            self.assertEqual(expected, token_volume(native.total_tokens, native.known_total_tokens))
+            self.assertEqual(None if native.known_total_tokens is None else str(native.known_total_tokens),
+                             dto["known_total_tokens"])
+
+    def test_narrow_cli_retains_every_history_metric_without_overflow(self):
+        report = remaining_reports(self)["token-mix"]
+        for width in (50, 80, 120):
+            stream = io.StringIO()
+            ReportRenderer({"timezone": ZONE}, stream=stream, color_enabled=False, terminal_width=width).render(
+                report, include_header=False)
+            text = stream.getvalue()
+            self.assertTrue(all(len(line) <= width for line in text.splitlines()), text)
+            for heading in ("Tokens", "Prompts", "Calls", "Input", "Cache", "Write", "Output", "CCost"):
+                self.assertIn(heading, text)
+
     def test_history_mix_cells_match_cli_for_complete_partial_unknown_and_empty(self):
         mix = remaining_reports(self)["token-mix"].token_mix
         for native in (mix, replace(mix, priced_requests=mix.priced_requests - 1), replace(mix, costs=None),
@@ -48,6 +77,7 @@ class RemainingViewTests(unittest.TestCase):
                 self.assertIn(block["display"]["next_context"], text)
             for row in cases[kind]["view"]["model_token_mix"]:
                 self.assertIn(row["mix"]["display"]["total_cost"], text)
+                self.assertIn(row["mix"]["display"]["total_tokens"], text)
         check = subprocess.run(["node", "development/tests/integration/web_remaining.cjs"],
             input=json.dumps(cases), text=True, capture_output=True, timeout=10, cwd=ROOT)
         self.assertEqual(0, check.returncode, check.stdout + check.stderr)

@@ -37,6 +37,7 @@ def token_mix(value):
         sample_size=value.sample_size, request_count=value.request_count,
         costs=value.costs, priced_requests=value.priced_requests,
         cost_complete=value.cost_complete, total_tokens=value.total_tokens,
+        known_total_tokens=None if value.known_total_tokens is None else Decimal(value.known_total_tokens),
         total_cost=None if value.costs is None else sum(value.costs, Decimal(0)),
     )
 

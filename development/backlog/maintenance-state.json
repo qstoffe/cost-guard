@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "epochRevision": "df44c06a97244278abd8d0dc9ed90ea12c368e47",
-  "ordinaryCount": 40,
+  "ordinaryCount": 41,
   "completed": {
     "architecture": 40,
     "test-health": 40,
@@ -11,13 +11,13 @@
     "id": "shared-repository-maintenance",
     "version": 1
   },
-  "lastDeliveredRevision": "578170588bd28a904e5b446949ba40ea76ff5b0a",
+  "lastDeliveredRevision": "7d625fda623477ccafd7c9f606fbb92f3e014f0a",
   "lastItem": {
-    "id": "feature-discovery/40",
-    "kind": "feature-discovery"
+    "id": "fr/000527",
+    "kind": "ordinary"
   },
   "featureDiscovery": {
     "completed": 40
   },
-  "completionHighWatermark": 40
+  "completionHighWatermark": 41
 }

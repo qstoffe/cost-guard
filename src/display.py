@@ -98,6 +98,13 @@ def compact_tokens(value: int) -> str:
     return str(value)
 
 
+def token_volume(total: int | None, known: int | None) -> str:
+    """Compact exact total or explicitly partial observed-category subtotal."""
+    if total is not None:
+        return compact_tokens(total)
+    return "N/A" if known is None else "?" + compact_tokens(known)
+
+
 def context_tokens(value: int | None) -> str:
     if value is None:
         return "N/A"

@@ -181,6 +181,8 @@ class ComparisonHistoryTests(unittest.TestCase):
         self.assertEqual((2, 3), (family.prompts, family.calls))
         self.assertEqual(report.token_mix.request_count, sum(p.calls for p in report.publisher_token_mix))
         self.assertEqual(sum(report.token_mix.costs), sum(sum(p.mix.costs) for p in report.publisher_token_mix))
+        self.assertEqual(report.token_mix.total_tokens, sum(p.mix.total_tokens for p in report.publisher_token_mix))
+        self.assertEqual(report.token_mix.total_tokens, sum(m.mix.total_tokens for m in report.model_token_mix))
         dto = export(project(report))
         self.assertEqual('OpenAI', dto['publisher_token_mix'][0]['publisher'])
         self.assertEqual('3', str(dto['publisher_token_mix'][0]['calls']))

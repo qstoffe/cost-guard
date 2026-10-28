@@ -102,7 +102,7 @@ Details: [normal report](#normal-report), [model comparison](#model-comparison),
 
 ### Token Mix
 
-`--token-mix`: historical model/publisher I/C/W/O shares and CCost.
+`--token-mix`: historical model/publisher token volumes, I/C/W/O shares and CCost.
 
 ![Cost Guard Token Mix: model/category usage and CCost](docs/images/cost-guard-token-mix.png)
 
@@ -202,12 +202,13 @@ Both modes sort by full-Decimal base/higher price descending, earlier context bo
 
 ## Token Mix % by model: `--token-mix`
 
-Scans all available OpenCode history; the first uncached run can be slow. `Total Token Mix % · <volume> tokens` comes first, recomputed from shown requests. Each historically used, currently selectable model has `Prompts`, `Calls`, aligned Input/Cache/Write/Output shares and CCost, and total `CCost`.
+Scans available history (cold runs can be slow). `Total Token Mix % · <volume> tokens` precedes selectable models' `Prompts`, `Calls`, `Tokens`, I/C/W/O shares/category CCost and total `CCost`. Narrow terminals use labeled rows.
 
-Publisher rows pool the same requests at original model/tier CCost. Unknown manufacturers stay unverified; prompt counts are not additive.
+Publisher rows pool the same requests at original model/tier CCost. Unknown manufacturers stay unverified; prompts are not additive.
 
-- `Prompts`: unique user prompts where the model contributed usage. One prompt can count on several model rows, so rows do not sum to a prompt total.
-- `Calls`: model requests attributed to the model, including tool-loop continuations, subagent and compaction requests. Compare both to judge sample size.
+- `Prompts`: distinct contributing user prompts per model. Mixed-model prompts count on multiple rows; counts are not additive.
+- `Calls`: attributed model requests, including tool-loop, subagent and compaction work. Both counts indicate sample size.
+- `Tokens`: known I/C/W/O (Output includes reasoning); K/M/B display, exact Web sorting. `?` partial; `N/A` unknown.
 - Deleted or pruned history is not reconstructed; no private ledger exists. Rows never imply which account or subscription served a model.
 - If current model availability cannot be established, all historically used models are shown with a warning (fail open).
 
@@ -369,7 +370,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.109 (2026-10-28):** Optional reference-USD CCost display; valuation, quotas and billing unchanged.
+**v80.110 (2026-10-29):** Historical Tokens per model/publisher in CLI and Web; explicit partial telemetry.
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

@@ -7,7 +7,7 @@ from decimal import Decimal, ROUND_HALF_UP
 
 from src.analysis.timezones import format_local_timestamp
 from src.display import (compact_threshold, compact_tokens, context_delta, context_tokens,
-                         duration_text, format_reset, money, native_amount, price_summary, relative_cost, unaccounted_usage, quota_usage)
+                         duration_text, format_reset, money, native_amount, price_summary, relative_cost, unaccounted_usage, quota_usage, token_volume)
 from src.numbers import balanced_share_percents, ccost_amount, ccost_display, ccost_range, remaining_capacity
 
 from .contracts import ObjectValue, record
@@ -178,7 +178,9 @@ def history_tokens(values, timezone_id):
             cost = "N/A" if not priced else prefix + ccost_amount(decimal(costs[index]))
             tokens[name] = shares[index] + ("" if costs is None else f" ({cost})")
         tokens["total_cost"] = prefix + ccost_amount(sum((decimal(item) for item in costs), Decimal(0))) if priced else "N/A"
-        tokens["total_tokens"] = "N/A" if values.get("total_tokens") is None else compact_tokens(values["total_tokens"])
+        known_volume = values.get("known_total_tokens")
+        tokens["total_tokens"] = token_volume(values.get("total_tokens"),
+                                             None if known_volume is None else int(known_volume))
     return tokens
 
 

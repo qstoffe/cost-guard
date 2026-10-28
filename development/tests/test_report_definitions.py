@@ -242,7 +242,7 @@ class TokenMixHistoryTotalTests(unittest.TestCase):
                                       token_mix=priced_token_mix((), lambda *_: None))
         table = [line for line in rendered(projection).splitlines() if re.match(r"\| M\d", line)]
         self.assertEqual(4, len(table))
-        for index in (4, 5, 6, 7):
+        for index in (5, 6, 7, 8):
             column = [line.split("|")[index] for line in table]
             self.assertEqual(1, len({cell.index("%") for cell in column}))
             self.assertEqual(1, len({cell.index(")") for cell in column}))

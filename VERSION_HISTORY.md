@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.110 — 2026-10-29
+
+- CLI/Web historical Token Mix adds model/publisher Tokens: compact K/M/B, exact Web sorting, `?` partial subtotals and `N/A` unknowns. Narrow CLI uses labeled rows. Attribution, valuation, configured units and explicit/cancellable capture are unchanged.
+
 ## v80.109 — 2026-10-28
 
 - Add `ccostDisplayUnit: credits|usd` and `--ccost-unit credits|usd` for reports and Watch; credits remain the default. Reference USD uses 100 credits = $1.00 and two decimals, including small positive values rounding to $0.00.

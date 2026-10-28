@@ -82,6 +82,22 @@ class TokenMixCalculationTests(unittest.TestCase):
         self.assertIsNone(mix.totals[2])
         self.assertEqual((None,) * 4, mix.percentages)
 
+    def test_observed_volume_retains_known_categories_from_partial_requests(self):
+        mix = token_mix((TokenUsage(input=10, cache_read=80, cache_write=3, output=5, reasoning=2),
+                         TokenUsage(input=7, output=4, reasoning=1, known_fields=("input", "output"))))
+        self.assertIsNone(mix.total_tokens)
+        self.assertEqual(112, mix.known_total_tokens)
+        self.assertEqual((None,) * 4, mix.percentages)
+        self.assertIsNone(token_mix((TokenUsage(known_fields=()),)).known_total_tokens)
+        self.assertEqual(0, token_mix((TokenUsage(known_fields=("input",)),)).known_total_tokens)
+        self.assertEqual(0, token_mix((TokenUsage(),)).total_tokens)
+        self.assertEqual(9, token_mix((TokenUsage(reasoning=9, known_fields=()),)).known_total_tokens)
+
+    def test_volume_keeps_exact_large_integers_and_reasoning_once(self):
+        mix = token_mix((TokenUsage(input=9_007_199_254_740_991, output=3, reasoning=5),))
+        self.assertEqual(9_007_199_254_740_999, mix.total_tokens)
+        self.assertEqual(mix.total_tokens, mix.known_total_tokens)
+
     def test_v1_v2_normalization_explicit_zero_absent_null_and_malformed(self):
         for normalize in (v1_usage, v2_usage):
             with self.subTest(normalize=normalize):
