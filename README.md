@@ -362,7 +362,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.100 (2026-10-28):** Remaining Web reports use CLI-first prompt/context and historical Token Mix presentation. Complete session Snapshot/Live keeps 50-row paging and full-history totals, with formatted summaries and clear Freeze/Follow actions. Date ranges show inclusive local dates rather than raw epochs. See [Web Beta](docs/web-beta.md); physical tray, assistive-technology and native macOS acceptance remain separate.
+**v80.101 (2026-10-28):** Windows Web Beta delegates immediately to hidden PowerShell, without waiting in a visible console for Python discovery, host restart or browser handoff. No compiler or executable cache is needed; startup failures retain native dialogs and private diagnostics. CLI/Watch remain unchanged. See [Web Beta](docs/web-beta.md); physical Explorer flash duration and native macOS acceptance remain separate.
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 
