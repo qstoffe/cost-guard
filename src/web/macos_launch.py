@@ -72,5 +72,5 @@ def launch_macos(root):
     if store:
         store.log(code)
     print("Cost Guard Web Beta: " + MESSAGES[code])
-    print("Diagnostics: development/user-tools/diagnostics/macos/Cost Guard Diagnostics.command")
+    print("Diagnostics: development/user-tools/diagnostics/macos/Cost-Guard-Diagnostics.command")
     return 1

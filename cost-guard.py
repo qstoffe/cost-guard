@@ -25,8 +25,8 @@ def run(application=None):
         try:
             sys.stderr.write(f"COST GUARD FAILED\nUnhandled {type(exc).__name__}\n"
                              "Crash report could not be written: runtime boundary unavailable\n")
-            launcher = {"win32": "development/user-tools/diagnostics/windows/Cost Guard Diagnostics.cmd",
-                        "darwin": "development/user-tools/diagnostics/macos/Cost Guard Diagnostics.command"}.get(
+            launcher = {"win32": "development/user-tools/diagnostics/windows/Cost-Guard-Diagnostics.cmd",
+                        "darwin": "development/user-tools/diagnostics/macos/Cost-Guard-Diagnostics.command"}.get(
                 sys.platform, "development/tools/collect_diagnostics.py")
             sys.stderr.write("\nNeed help? Run Cost Guard Diagnostics:\n"
                              + str(Path(__file__).resolve().parent / launcher) + "\n")

@@ -14,7 +14,7 @@ from src.version import VERSION
 from .instance_state import _private, _safe
 from .process_identity import InstanceConflict
 
-SOURCES = ("macos/Beta/launcher.applescript", "macos/Beta/Cost Guard Web.command",
+SOURCES = ("macos/Beta/launcher.applescript", "macos/Beta/Cost-Guard-Web.command",
            "cost-guard-web.py", "src/web/macos_app.py", "src/web/macos_launch.py",
            "src/web/native_macos.py", "src/web/macos_status.py", "src/web/objc_bridge.py")
 

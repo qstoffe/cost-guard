@@ -123,13 +123,13 @@ def detached(root, home):
             assert store.read() is None
             # Actual executable .command plumbing, but shim suppresses Finder/browser.
             if sys.platform == "darwin":
-                entry = root / "macos/Beta/Cost Guard Web.command"
+                entry = root / "macos/Beta/Cost-Guard-Web.command"
                 assert os.access(entry, os.X_OK)
                 result = subprocess.run([str(entry)], cwd=home, env=environment,
                                         capture_output=True, timeout=45)
                 assert result.returncode == 0
             else:
-                entry = root / "windows/Beta/Cost Guard Web.cmd"
+                entry = root / "windows/Beta/Cost-Guard-Web.cmd"
                 result = subprocess.run(["cmd.exe", "/d", "/c", str(entry)], cwd=home,
                                         env=environment, capture_output=True, timeout=45)
                 assert result.returncode == 0

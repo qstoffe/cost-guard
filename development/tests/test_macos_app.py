@@ -81,6 +81,23 @@ class MacAppTests(unittest.TestCase):
         self.assertEqual(compiler.call_count, 1)
         self.assertEqual(executable.read_bytes(), b"tampered")
 
+    def test_hyphenated_launcher_name_and_bytes_invalidate_finder_cache(self):
+        launcher = "macos/Beta/Cost-Guard-Web.command"
+        self.assertIn(launcher, macos_app.SOURCES)
+        before = macos_app.fingerprint(self.root)
+        source = self.root / launcher
+        source.write_bytes(source.read_bytes() + b"\n# changed launcher\n")
+        self.assertNotEqual(before, macos_app.fingerprint(self.root))
+        # Identical content at another basename still gives a different identity.
+        renamed = source.with_name("renamed.command")
+        source.rename(renamed)
+        changed = tuple("macos/Beta/renamed.command" if name == launcher else name
+                        for name in macos_app.SOURCES)
+        with patch.object(macos_app, "SOURCES", changed):
+            renamed_key = macos_app.fingerprint(self.root)
+        renamed.rename(source)
+        self.assertNotEqual(renamed_key, macos_app.fingerprint(self.root))
+
     def test_runtime_guard_observes_applescript_but_not_external_generated_cache(self):
         guard = SourceGuard(self.root, interval=0)
         (self.store.directory / "unrelated-cache").write_text("local data")

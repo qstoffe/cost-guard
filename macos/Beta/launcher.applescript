@@ -7,7 +7,7 @@ on run
         if errorNumber is 4 then
             display alert "Cost Guard Web is running" message "The default browser could not open. Use Open Cost Guard from the CG menu to retry."
         else
-            display alert "Cost Guard Web could not start" message "Use macos/Beta/Cost Guard Web.command for startup details. Run the existing Cost Guard Diagnostics launcher if needed. No extra packages or developer tools are required."
+            display alert "Cost Guard Web could not start" message "Use macos/Beta/Cost-Guard-Web.command for startup details. Run the existing Cost Guard Diagnostics launcher if needed. No extra packages or developer tools are required."
         end if
     end try
 end run

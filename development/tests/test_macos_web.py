@@ -288,7 +288,7 @@ class MacWebTests(unittest.TestCase):
         store.assert_not_called()
 
     def test_source_launcher_is_relative_and_does_not_control_terminal(self):
-        source = (ROOT / "macos/Beta/Cost Guard Web.command").read_text()
+        source = (ROOT / "macos/Beta/Cost-Guard-Web.command").read_text()
         self.assertTrue(source.startswith("#!/bin/zsh\n"))
         self.assertIn('$(dirname "$0")/../..', source)
         self.assertIn("(3,11)", source)
