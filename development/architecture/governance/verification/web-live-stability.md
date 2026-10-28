@@ -106,6 +106,11 @@ and deterministic clocks do not establish physical OS suspension behavior.
   opening several standard-browser tabs. They do not close arbitrary Chrome tabs.
   Reducing this test's UI/tab noise is deferred; no cross-repository proposal was
   published and no additional native invocation is needed for this delivery.
+- Initial PR CI passed Full/validation/native on all three platforms but failed
+  its rendered-browser smoke at an old assertion looking for the full STARTING
+  message in the now-compact header. The harness now asserts the exact compact
+  header plus the full source/terminal notice, visible terminal banner and disabled
+  Refresh; it retains the real socket, network-loss, layout and shutdown checks.
 
 Architecture boundaries: unchanged; the Web module's current lifetime/status
 contract and user documentation are updated. Journal assessment: **no-update**;
