@@ -10,7 +10,8 @@ The batch reports launch status, not the later Python result; direct Python rema
 the synchronous exit-code route.
 
 Implementation candidate: [11fa96c](https://github.com/qstoffe/cost-guard/commit/11fa96c2bea806c7a66341e407bc04eb1611d079).
-The native delivery receipt records the confirmed PR/merge after publication.
+Delivery PR: [#91](https://github.com/qstoffe/cost-guard/pull/91).
+The native delivery receipt records the confirmed merge after publication.
 
 ## Changes and alternatives
 
