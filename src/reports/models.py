@@ -15,6 +15,7 @@ from src.analysis.quota_pace import QuotaPace
 from src.analysis.context import PriceWarningSeverity
 from src.analysis.valuation import ComparisonCost
 from src.analysis.token_mix import TokenMix
+from src.analysis.workload_mix import MixEvidence
 from src.analysis.comparisons import RelativePriceLevel
 from src.domain import AccountSnapshot
 
@@ -153,11 +154,20 @@ class ModelComparisonProjection:
     recent: bool = False
     promotion_marker: int | None = None
     relative_levels: tuple[RelativePriceLevel, ...] = ()
+    evidence: MixEvidence = MixEvidence()
 
 
 @dataclass(frozen=True, slots=True)
 class ModelTokenMixProjection:
     model: str
+    prompts: int
+    calls: int
+    mix: TokenMix
+
+
+@dataclass(frozen=True, slots=True)
+class PublisherTokenMixProjection:
+    publisher: str
     prompts: int
     calls: int
     mix: TokenMix
@@ -210,3 +220,4 @@ class ReportProjection:
     model_token_mix: tuple[ModelTokenMixProjection, ...] = ()
     recent_model_notice_highlight_spans: tuple[tuple[int, int], ...] = ()
     session_page: SessionListPage | None = None
+    publisher_token_mix: tuple[PublisherTokenMixProjection, ...] = ()

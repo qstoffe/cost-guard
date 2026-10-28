@@ -60,7 +60,7 @@ class ReportDefinitionTests(unittest.TestCase):
         self.assertEqual(3, len(groups), "exactly one blank line between blocks")
         for group, label in zip(groups, LABELS):
             self.assertTrue(group[0].startswith(label + " "), group[0])
-        self.assertLess(text.index("Relative CCost: Applies"), text.index("| Publisher"))
+        self.assertLess(text.index("Relative CCost: Personalized"), text.index("| Publisher"))
         self.assertEqual([
             "CCost:  1 CCost equals 1 Copilot AI credit.",
             "        Flat-rate accounts use Copilot's published token rates, not the billed cost.",
@@ -72,10 +72,15 @@ class ReportDefinitionTests(unittest.TestCase):
             "             Input: 3% (123)   Cache: 82% (456)   Write: 1% (12)   Output: 14% (789)",
         ], groups[1])
         self.assertEqual([
-            "Relative CCost: Applies Token Mix % from 100 completed prompts to each model's CCost/M",
-            "                rates.",
-            "                Every tier uses this mix and the same cheapest comparable base price as",
-            "                1.0x.",
+            "Relative CCost: Personalized workload-profile estimates, not a same-task benchmark or",
+            "                billing.",
+            "                Each model uses up to 100 own completed prompts, then other same-publisher",
+            "                prompts, then a generic prior.",
+            "                Generic prior: 100 completed prompts; weights blend pooled I/C/W/O shares.",
+            "                100 weight slots are not 100 observed prompts.",
+            "                Untried models use verified publisher/global evidence.",
+            "                Every tier uses its model's effective mix and the same cheapest comparable",
+            "                base price as 1.0x.",
             "                Arrows show context-tier prices; > or ≥ marks the published input-token",
             "                boundary.",
         ], groups[2])
@@ -149,7 +154,7 @@ class ReportDefinitionTests(unittest.TestCase):
                       priced_requests=1)
         text = rendered(report(one, sample=1))
         self.assertIn("Your mix uses the latest 1 priced prompt, totaling 842.3K tokens.", text)
-        self.assertIn("Applies Token Mix % from 1 completed prompt to each", text)
+        self.assertIn("Generic prior: 1 completed prompt;", text)
         twelve = replace(large_mix(37), totals=(700_000, 10_000_000, 0, 2_000_000))
         self.assertIn("latest 37 priced prompts, totaling 12.7M tokens.", rendered(report(twelve)))
         empty = rendered(report(TokenMix(), sample=0))
@@ -169,7 +174,7 @@ class ReportDefinitionTests(unittest.TestCase):
         self.assertEqual((100, 100), (built.token_mix.sample_size, built.model_comparison_sample_size))
         text = rendered(built)
         self.assertIn("Your mix uses the latest 100 priced prompts", text)
-        self.assertIn("Relative CCost: Applies Token Mix % from 100 completed prompts", text)
+        self.assertIn("Generic prior: 100 completed prompts;", text)
         # Running/aborted prompts qualify only for the displayed mix, as before.
         root = roots[0]
         record = root.bundle.prompts[0]

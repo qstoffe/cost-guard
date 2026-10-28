@@ -1,5 +1,11 @@
 # Cost Guard version history
 
+## v80.105 — 2026-10-28
+
+- Relative CCost now blends each model's latest completed-prompt mix with verified same-publisher evidence and a generic prior using 100 prompt-weight slots. Model history is independent of the global latest-100 usage sample; exact tiers and context warning multipliers share the effective mix.
+- CLI and Web Beta historical Token Mix retain model rows and add publisher rows from the same shown requests, with distinct prompt counts, pooled token shares and original per-request CCost. Evidence counts cross the shared Python/application boundary; JavaScript does no valuation.
+- Revision-keyed disposable compact samples reuse stable history without retaining deep hydrated roots. Cold acquisition can traverse all available history; deleted history is not reconstructed. Account CCost, quotas, Watch usage mixes and explicit Web history capture remain unchanged.
+
 ## v80.104 — 2026-10-28
 
 - Renamed all eight Windows/macOS report, Watch, Web Beta and Diagnostics entrypoints to hyphenated filenames. Update bookmarks and shortcuts to the new names; no old-name aliases ship.

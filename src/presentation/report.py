@@ -385,8 +385,20 @@ class ReportRenderer:
                 rows, styler=self.styler, target_width=self.table_width,
             ):
                 self._write(line)
+        if report.publisher_token_mix:
+            self._write()
+            self._write("Token Mix % by publisher · historical shown usage")
+            cells = aligned_mix_cells([item.mix for item in report.publisher_token_mix])
+            rows = [(item.publisher, str(item.prompts), str(item.calls), *mix, total_cost_text(item.mix))
+                    for item, mix in zip(report.publisher_token_mix, cells)]
+            for line in render_table(
+                (Column("Publisher", min_width=12, max_width=60, flexible=True), Column("Prompts", True),
+                 Column("Calls", True), *(Column(name, True, max_width=24) for name in ("Input", "Cache", "Write", "Output")),
+                 Column("CCost", True)), rows, styler=self.styler, target_width=self.table_width,
+            ):
+                self._write(line)
         for explanation in (
-            "Input/Cache/Write/Output: Token Mix % of the model's token volume (output includes reasoning) and its CCost.",
+            "Input/Cache/Write/Output: Token Mix % of the model/publisher's token volume (output includes reasoning) and its CCost.",
             "CCost: reference token valuation priced per request, not actual billing; ? marks partial pricing.",
             "Prompts: unique user prompts where the model contributed usage; one prompt can count on several rows.",
             "Calls: model requests attributed to the model, including tool-loop, subagent and compaction requests.",

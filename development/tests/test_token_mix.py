@@ -224,7 +224,7 @@ class ReportTokenMixTests(unittest.TestCase):
         prompts = latest_token_prompts(tuple(service._analyzed.values()), service._priceable())
         self.assertEqual(100, report.token_mix.sample_size)
         self.assertEqual({f"root-{n:04d}" for n in range(7, 12)}, {p.session_id for p in prompts})
-        self.assertEqual(5, source.load_count)
+        self.assertEqual(12, source.load_count, "Model evidence now also visits older history; usage stays latest-100")
         expected = token_mix(e.tokens for p in prompts for e in p.entries)
         self.assertEqual(expected.totals, report.token_mix.totals)
         self.assertEqual(expected.percentages, report.token_mix.percentages)
@@ -254,7 +254,7 @@ class ReportTokenMixTests(unittest.TestCase):
         before = service.build(ReportRequest()).token_mix
         prompts = latest_token_prompts(tuple(service._analyzed.values()), service._priceable())
         self.assertEqual({f"root-{n:04d}" for n in range(7, 12)}, {p.session_id for p in prompts})
-        self.assertEqual(6, source.load_count)
+        self.assertEqual(12, source.load_count, "Model evidence visits older roots without changing the usage sample")
         service.set_now_ms(START + 365 * 86_400_000)
         self.assertEqual(before, service.build(ReportRequest()).token_mix)
 

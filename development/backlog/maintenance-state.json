@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "epochRevision": "df44c06a97244278abd8d0dc9ed90ea12c368e47",
-  "ordinaryCount": 35,
+  "ordinaryCount": 36,
   "completed": {
     "architecture": 30,
     "test-health": 35,
@@ -11,13 +11,13 @@
     "id": "shared-repository-maintenance",
     "version": 1
   },
-  "lastDeliveredRevision": "82f555e2ef9d3c0ee3586f067694f101d39d511b",
+  "lastDeliveredRevision": "c7c98ce3426f5b11393a4dec9a9584ed8d219001",
   "lastItem": {
-    "id": "test-health/35",
-    "kind": "test-health"
+    "id": "fr/000521",
+    "kind": "ordinary"
   },
   "featureDiscovery": {
     "completed": 30
   },
-  "completionHighWatermark": 35
+  "completionHighWatermark": 36
 }
