@@ -15,7 +15,7 @@ import socket
 import subprocess
 import sys
 import tempfile
-from threading import Thread, Timer
+from threading import Thread
 import time
 from unittest.mock import patch
 
@@ -235,7 +235,7 @@ def source_zip_probe():
 
 
 def startup_timing_probe():
-    """Actual batch/PowerShell/Python chain; no raw URL or source data is retained."""
+    """Separate delegation latency from real native readiness, never browser paint."""
     store = InstanceStore(ROOT)
     if store.read():
         raise RuntimeError("timing_requires_no_existing_instance")
@@ -243,31 +243,27 @@ def startup_timing_probe():
     try:
         for mode in ("cold_host", "warm_restart"):
             started = time.monotonic()
+            previous = store.read()
             child = subprocess.Popen(["cmd.exe", "/d", "/c", str(ROOT / "windows/Beta/Cost Guard Web.cmd")],
-                                     cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                                     text=True)
-            deadline = Timer(40, child.kill)
-            deadline.start()
-            stages = []
+                                     cwd=ROOT, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                     stderr=subprocess.DEVNULL)
             try:
-                for line in child.stdout:
-                    if line.startswith("Cost Guard startup:"):
-                        stages.append({"seconds": round(time.monotonic() - started, 3),
-                                       "stage": line.strip()})
-                assert child.wait(timeout=3) == 0
+                assert child.wait(timeout=5) == 0
+                delegated = time.monotonic() - started
+
+                def ready():
+                    state = store.read()
+                    if state and (not previous or state['nonce'] != previous['nonce']):
+                        return state if control(state, "status")["ready"] else None
+
+                until(ready, seconds=40)
             finally:
-                deadline.cancel()
-                deadline.join()
                 if child.poll() is None:
                     child.kill()
                 child.wait(timeout=3)
-                child.stdout.close()
-            assert stages and "Checking Python" in stages[0]["stage"]
-            assert any("Opening authenticated browser" in item["stage"] for item in stages)
-            assert "handoff complete" in stages[-1]["stage"]
-            assert control(store.read(), "status")["ready"]
-            observations[mode] = {"launcher_seconds": round(time.monotonic() - started, 3),
-                                  "streamed_stages": stages}
+            observations[mode] = {"batch_exit_seconds": round(delegated, 3),
+                                  "host_tray_ready_seconds": round(time.monotonic() - started, 3),
+                                  "browser_paint": "not_measured"}
     finally:
         state = store.read()
         if state:
@@ -290,10 +286,14 @@ def watch_and_detached_probe():
                 if child.poll() is not None:
                     raise RuntimeError("cli_watch_stopped_with_web")
                 output.seek(0)
-                return b"Total today" in output.read()
+                # Independence is process ownership, not completion of an unbounded
+                # real-history scan. A rendered Watch startup is positive evidence;
+                # full report/valuation correctness belongs to focused regressions.
+                return b"Watch" in output.read()
 
             until(rendered, seconds=60)
             result["independent_cli_watch_after_web_restart_exit"] = "passed"
+            result["cli_watch_report_completion"] = "not_required_or_claimed"
             return result
         finally:
             if child.poll() is None:

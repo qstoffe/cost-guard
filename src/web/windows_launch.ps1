@@ -1,5 +1,7 @@
-# Beta only: return to existing terminals; Explorer's transient console exits on success.
+# Beta only: the normal batch delegates asynchronously; direct invocation keeps status.
+param([switch]$Detached)
 $ErrorActionPreference = 'Stop'
+if ($Detached) { $ProgressPreference = 'SilentlyContinue' }
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $message = 'Web launcher failed. Run development\user-tools\diagnostics\windows\Cost Guard Diagnostics.cmd.'
 function Find-BetaPython {
@@ -8,12 +10,27 @@ function Find-BetaPython {
         foreach ($application in @(Get-Command $candidate.Name -All -CommandType Application -ErrorAction SilentlyContinue)) {
             if (-not $application -or -not $application.Source -or -not $tested.Add($application.Source)) { continue }
             $arguments = $candidate.Args
+            $probe = $null
             try {
-                & $application.Source @arguments -c 'import sys; raise SystemExit(0 if sys.version_info >= (3,11) else 1)' 1>$null 2>$null
-                if ($LASTEXITCODE -eq 0) {
+                # A broken launcher must not strand an invisible discovery process.
+                $info = [Diagnostics.ProcessStartInfo]::new()
+                $info.FileName = $application.Source
+                $info.Arguments = (($arguments + @('-c', '"import sys; raise SystemExit(0 if sys.version_info >= (3,11) else 1)"')) -join ' ')
+                $info.UseShellExecute = $false
+                $info.CreateNoWindow = $true
+                $info.RedirectStandardOutput = $true
+                $info.RedirectStandardError = $true
+                $probe = [Diagnostics.Process]::Start($info)
+                if (-not $probe.WaitForExit(5000)) {
+                    $probe.Kill() # Only this exact discovery process, never a PID/name search.
+                    $probe.WaitForExit(1000) | Out-Null
+                    continue
+                }
+                if ($probe.ExitCode -eq 0) {
                     return @{Executable = $application.Source; Arguments = $arguments}
                 }
             } catch { continue }
+            finally { if ($probe) { $probe.Dispose() } }
         }
     }
     return $null
@@ -92,7 +109,7 @@ try {
     Add-Type -AssemblyName System.Windows.Forms
     [System.Windows.Forms.MessageBox]::Show($message + "`nRun Cost Guard Diagnostics for details.", 'Cost Guard Web Beta') | Out-Null
 } catch {
-    # Without the native dialog, keep an Explorer-started console readable on failure.
-    if (-not [Console]::IsInputRedirected) { Read-Host 'Press Enter to return' | Out-Null }
+    # Never wait for input in the hidden handoff. The private failure record survives.
+    if (-not $Detached -and -not [Console]::IsInputRedirected) { Read-Host 'Press Enter to return' | Out-Null }
 }
 exit $code

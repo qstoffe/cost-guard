@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.101 — 2026-10-28
+
+- Windows Web Beta now returns its batch entry immediately after delegating to hidden, separate PowerShell. Python discovery, verified host restart, tray readiness and authenticated browser handoff no longer retain the launcher's visible console. This no-build route needs no compiler, downloaded helper or executable cache; a brief platform batch/minimized-window flash remains possible.
+- Bounded Python discovery probes and detached-mode error handling prevent an invisible input wait. Native failure dialogs, private allowlisted diagnostics, the visible troubleshooting fallback, pythonw report workers and shared instance/security controls remain authoritative. CLI/Watch and macOS runtime behavior are unchanged; automated native results are not physical Explorer/Finder acceptance.
+
 ## v80.100 — 2026-10-28
 
 - Finished remaining Web report presentation: configured-local prompt clocks and Next Ictx guidance, inclusive human-readable date ranges, and CLI-aligned historical Token Mix Input/Cache/Write/Output share-and-cost columns with full-report totals above the table. Exact backend values remain separate sort keys; historical capture stays explicit and cancellable.
