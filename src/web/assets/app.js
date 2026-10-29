@@ -20,7 +20,7 @@ let liveStatus = 'Connecting';
 let sessionDetailAvailable = false;
 let hostState = {kind: 'starting', writable: false, terminal: false};
 let hostInstance = null;
-let overviewRender = null;
+let snapshotRender = null;
 function connectionStatus(message, state = {}) {
   if (hostState.terminal && state.kind !== hostState.kind) return;
   hostState = {...hostState, ...state};
@@ -88,15 +88,14 @@ function show(state) {
     if (liveValue?.view) ReportView.renderLive(output, liveValue, state);
     else output.replaceChildren(ReportView.element('p', liveValue?.state || 'Live acquisition starting…'));
   } else if (state.result) {
-    // Connection/source status is not a new frozen report. Replacing Overview's
-    // table here discards scroll, focus and selection during ordinary heartbeats.
-    const retained = state.section === 'overview' && overviewRender?.state === state &&
-      overviewRender.result === state.result && overviewRender.search === state.search &&
-      overviewRender.first === output.firstChild;
+    // Connection/source status is not a new frozen report. Replacing its DOM
+    // discards scroll, focus and selection during ordinary health checks.
+    const retained = snapshotRender?.state === state &&
+      snapshotRender.result === state.result && snapshotRender.search === state.search &&
+      snapshotRender.first === output.firstChild;
     if (!retained) {
       ReportView.render(output, state.result, state);
-      overviewRender = state.section === 'overview' ?
-        {state, result: state.result, search: state.search, first: output.firstChild} : null;
+      snapshotRender = {state, result: state.result, search: state.search, first: output.firstChild};
     }
   }
   else if (state.loading) {
