@@ -21,6 +21,7 @@ class Node {
 async function main() {
   let selected = null, offline = false, page = input.first, opens = 0;
   const calls = [], scrolls = [];
+  let duringPage = () => {};
   const document = {createElement: tag => new Node(tag), activeElement: null, documentElement: {scrollHeight: 1000}};
   const context = vm.createContext({document, console, Date, setTimeout: () => 1, clearTimeout: () => {},
     window: {innerHeight: 500, scrollY: 0, addEventListener() {}, removeEventListener() {},
@@ -30,6 +31,7 @@ async function main() {
       if (offline) throw new Error('offline');
       if (value.action === 'open') { opens++; return {token: 'owned'}; }
       if (value.action === 'freeze' || value.action === 'close') return {};
+      duringPage();
       return JSON.parse(JSON.stringify(page));
     }});
   for (const path of ['render', 'session']) vm.runInContext(fs.readFileSync(`src/web/assets/${path}.js`, 'utf8'), context);
@@ -92,6 +94,36 @@ async function main() {
   assert.ok(calls.at(-1).offset >= 2 ** 52);
   assert.equal(view.toggle, view.controls.children[0]);
   assert.equal(scrolls.length, 0, 'unchanged geometry does not move scroll');
+  const scroll = view.root.children.find(node => node.className === 'table-scroll');
+  scroll.scrollTop = 200; scroll.scrollLeft = 90;
+  scroll.clientHeight = 300; scroll.scrollHeight = 1200;
+  scroll.getBoundingClientRect = () => ({top: 100});
+  for (const [index, node] of view.body.children.entries()) {
+    node.getBoundingClientRect = () => ({top: 100 + index * 20 - scroll.scrollTop,
+      bottom: 120 + index * 20 - scroll.scrollTop});
+  }
+  view.follow = false;
+  // Movement while HTTP is in flight belongs to the user, not the old anchor.
+  duringPage = () => { scroll.scrollTop = 400; };
+  await view.load();
+  assert.equal(scroll.scrollTop, 400);
+  assert.equal(scrolls.length, 0, 'a delayed response must not undo user scrolling via the page');
+  duringPage = () => {};
+  const update = view.update.bind(view);
+  const visible = view.body.children[20];
+  view.update = data => {
+    update(data);
+    // Rows above the viewport grew; the visible row moved within the table.
+    visible.getBoundingClientRect = () => ({top: 160, bottom: 180});
+  };
+  page = {...page, revision: 'geometry-change'};
+  await view.load();
+  assert.equal(scroll.scrollTop, 460, 'restore the visible anchor in the inner scroll owner');
+  assert.equal(scroll.scrollLeft, 90, 'vertical retention preserves horizontal navigation');
+  assert.equal(scrolls.length, 0, 'inner table changes must not move the document');
+  view.follow = true;
+  scroll.events.scroll();
+  assert.equal(view.follow, false, 'browsing older rows in the internal table disables follow');
   console.log('PASS bounded DOM, canonical row identity, anchor, selection/focus, offline, mode transitions and latest');
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

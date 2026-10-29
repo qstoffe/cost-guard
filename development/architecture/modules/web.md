@@ -111,6 +111,13 @@ records Windows built-in-browser inspection and remaining native/assistive limit
 Architecture boundaries are unchanged; journal assessment: no-update, these owner facts
 and the focused evidence are sufficient.
 
+Session-detail scroll retention uses the inner `.table-scroll` owner and captures
+the visible row after the HTTP response, immediately before DOM mutation. Internal
+scrolling away from the bottom disables follow; background retention never calls
+document scrolling. The deterministic pending-response/geometry regressions and
+outstanding real-browser acceptance are recorded in
+[table-scroll investigation](../governance/verification/web-table-scroll.md).
+
 ## Native launcher maintenance notes
 
 PowerShell 5.1: preserve `[array]$pythonArgs` (scalar `-3` splatting lost the command in a real probe). Use DirectoryInfo.SetAccessControl/private DACL, not Set-Acl requiring SeSecurityPrivilege. AST-extracted production functions/assignments test real py.exe handoff/private logs. Never elevate or change global policy. These owner facts replace a redundant journal log; historical evidence is unchanged.

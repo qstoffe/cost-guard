@@ -29,7 +29,7 @@ const SessionDetail = (() => {
       this.source = el('p'); this.provenance.append(this.source, el('p',
         'CCost is reference valuation, not billing. Unknown is not zero. Duration unions execution intervals, excluding idle gaps. Totals cover all history, not this page. Refresh captures a new observation; Freeze snapshot keeps the current one. Copy and selection cover this page.'));
       const back = el('a', 'All sessions'); back.href = '#/sessions';
-      const scroll = el('div', undefined, 'table-scroll'); scroll.tabIndex = 0;
+      const scroll = this.scroll = el('div', undefined, 'table-scroll'); scroll.tabIndex = 0;
       scroll.setAttribute('role', 'region'); scroll.setAttribute('aria-label', 'Session prompt history');
       const table = el('table'); table.append(el('caption', 'Complete session history — 50 rows per page'));
       const head = el('thead'), header = el('tr');
@@ -47,6 +47,9 @@ const SessionDetail = (() => {
       this.onScroll = () => {
         if (window.innerHeight + window.scrollY < document.documentElement.scrollHeight - 24) this.follow = false;
       };
+      scroll.addEventListener('scroll', () => {
+        if (scroll.scrollTop + scroll.clientHeight < scroll.scrollHeight - 24) this.follow = false;
+      }, {passive: true});
       this.root.addEventListener('focusin', () => { this.follow = false; });
     }
     attach(parent) {
@@ -106,8 +109,6 @@ const SessionDetail = (() => {
     async load(navigation = false, latest = false) {
       if (this.busy) return;
       this.busy = true;
-      const oldAnchor = this.body.firstElementChild;
-      const top = oldAnchor?.getBoundingClientRect().top;
       try {
         if (this.protectedSelection()) this.follow = false;
         if (!this.token) await this.open();
@@ -122,7 +123,15 @@ const SessionDetail = (() => {
         }
         if (!navigation && (this.protectedSelection() || this.body.contains(document.activeElement))) return;
         if (data.revision === this.revision && data.offset === this.offset && !navigation) return;
+        // Capture after HTTP: the user may have scrolled while it was in flight.
+        // Retain a visible row relative to its actual scroll owner, not the page.
+        const edge = this.scroll.getBoundingClientRect().top;
+        const anchor = [...this.body.children].find(row => row.getBoundingClientRect().bottom > edge);
+        const top = anchor ? anchor.getBoundingClientRect().top - edge : null;
         this.update(data);
+        if (!navigation && !this.follow && anchor?.isConnected) {
+          this.scroll.scrollTop += anchor.getBoundingClientRect().top - this.scroll.getBoundingClientRect().top - top;
+        }
       } catch (error) {
         this.status.textContent = `Unavailable (${error.message}). Last known result retained; Refresh to retry. Return via Sessions.`;
         if (error.message === 'detail_expired') this.token = null;
@@ -131,10 +140,6 @@ const SessionDetail = (() => {
           this.detach();
         }
       } finally {
-        if (!navigation && !this.follow && oldAnchor?.isConnected && top !== undefined) {
-          const delta = oldAnchor.getBoundingClientRect().top - top;
-          if (delta) window.scrollBy(0, delta);
-        }
         this.busy = false;
       }
     }
