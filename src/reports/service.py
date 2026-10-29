@@ -666,6 +666,7 @@ class ReportService:
         return ReportProjection(
             ReportKind.DATE, f"Date report {date_range.text}", self.selection.selected.upper(), tuple(self.selection.warnings),
             prompt_blocks=blocks,
+            range_comparison=valuation,
             notes=(f"CCost for range: {range_text}; reference valuation, not billing.",)
             + migration_gap_notes(self.selection.migration_gap, start_ms=date_range.start_ms, end_ms=date_range.end_ms),
         )

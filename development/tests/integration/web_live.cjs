@@ -89,6 +89,17 @@ async function main() {
   const firstCell = firstRow.children[0];
   const canonical = input.view.rows.map(r => r.prompt.display.ccost);
   assert.deepEqual(promptRows().map(r => r.children[2].textContent), canonical);
+  const credits = context.parent.textContent, beforeUnits = calls;
+  vm.runInContext('ReportView.setUnit("usd", parent)', context);
+  assert.deepEqual(promptRows().map(r => r.children[2].textContent), input.view.rows.map(r =>
+    r.prompt.display_units?.usd?.ccost ?? r.prompt.display.ccost));
+  assert.equal(promptRows()[0], firstRow);
+  assert.equal(firstRow.children[0], firstCell);
+  vm.runInContext('ReportView.renderLive(parent, example, state)', context);
+  assert.ok(context.parent.textContent.includes('$'), 'new publication retains unit');
+  vm.runInContext('ReportView.setUnit("credits", parent)', context);
+  assert.equal(context.parent.textContent, credits);
+  assert.equal(calls, beforeUnits, 'switching is not acquisition');
   const normalized = value => value.replace(/\s+/g, ' ').trim();
   assert.deepEqual(promptRows().map(r => r.children.slice(2, 6).map(c => normalized(c.textContent))),
     input.cli_cells.map(row => row.map(normalized)), 'same projection has CLI-equivalent cost/calls/running duration/context');

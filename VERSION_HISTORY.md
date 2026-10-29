@@ -1,17 +1,21 @@
 # Cost Guard version history
 
+## v80.112 — 2026-10-29
+
+- Web CCost Credits/USD selector: Python tokens, text-only switching, no acquisition/repricing. Page-memory only; reload restores configuration. Raw totals/order and native amounts unchanged.
+
 ## v80.111 — 2026-10-29
 
-- Relative CCost/tier warnings share the latest up to 100 completed priceable prompts globally. CLI/Web show actual counts; no model-specific blends/deep scan. Historical Token Mix, Tokens and units stay intact. Workload prices are not benchmarks/bills/forecasts.
+- Relative CCost/tier warnings: one global latest-100 completed priceable mix; CLI/Web actual counts, no per-model blend/deep scan. Historical mix/Tokens/units unchanged; not benchmarks, bills or forecasts.
 
 ## v80.110 — 2026-10-29
 
-- CLI/Web historical Token Mix adds model/publisher Tokens: compact K/M/B, exact Web sorting, `?` partial subtotals and `N/A` unknowns. Narrow CLI uses labeled rows. Attribution, valuation, configured units and explicit/cancellable capture are unchanged.
+- CLI/Web historical model/publisher Tokens: K/M/B, exact Web sort, `?` partial/`N/A` unknown; narrow CLI labeled rows. Attribution, valuation, units and explicit/cancellable capture unchanged.
 
 ## v80.109 — 2026-10-28
 
-- Add `ccostDisplayUnit: credits|usd` and `--ccost-unit credits|usd` for reports and Watch; credits remain the default. Reference USD uses 100 credits = $1.00 and two decimals, including small positive values rounding to $0.00.
-- Shared Python display tokens expose the configured default for Web Beta. Exact valuations, thresholds, native quotas, Unaccounted credits, Billed money, catalog rates and Relative CCost stay unchanged; no currency service or interactive Web toggle is added.
+- Add `ccostDisplayUnit: credits|usd` / CLI `--ccost-unit credits|usd` for reports/Watch; credits default. Python tokens expose Web's default. Reference USD: 100 credits = $1.00, two decimals; tiny positives may show $0.00.
+- Valuations, thresholds, quotas, Unaccounted, Billed, rates and Relative CCost unchanged; no currency service or Web toggle in this release.
 
 ## v80.108 — 2026-10-28
 

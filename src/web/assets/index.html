@@ -15,7 +15,9 @@
 <aside id="host-state" class="host-state" role="status" aria-live="polite"><p id="host-message">STARTING — host/source readiness not yet established.</p><details><summary>Connection details</summary><p id="host-details">Host/source observation pending.</p></details></aside>
 <main id="content" tabindex="-1">
 <div class="toolbar"><h2 id="heading">Overview</h2>
-<button id="refresh" class="primary" disabled>Refresh snapshot</button><button id="cancel" disabled>Cancel</button></div>
+<button id="refresh" class="primary" disabled>Refresh snapshot</button><button id="cancel" disabled>Cancel</button>
+<label>CCost: <select id="ccost-unit" aria-describedby="ccost-help" disabled><option value="credits">Credits</option><option value="usd">USD</option></select></label></div>
+<p id="ccost-help" class="detail">USD is reference token valuation, not actual billing. Reload resets this display choice to application configuration.</p>
 <p id="notice" role="status">Cost Guard is starting. Establishing your private browser session before requesting data…</p>
 <div id="scope-controls"></div>
 <label class="report-search">Search displayed report tables <input id="search" type="search" placeholder="Presentation filter only"></label>

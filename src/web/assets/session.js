@@ -139,6 +139,7 @@ const SessionDetail = (() => {
       }
     }
     update(data) {
+      ReportView.defaultUnit(data.result.view);
       const block = data.result.view.prompt_blocks[0];
       const existing = new Map([...this.body.children].map(row => [row.dataset.id, row]));
       const desired = new Set(block.rows.map(row => row.id));
@@ -149,16 +150,17 @@ const SessionDetail = (() => {
         row.className = [...(value.display_roles || []), ...(value.is_compaction ? ['compaction'] : [])].join(' ');
         const signature = this.mode + JSON.stringify(value);
         if (row.dataset.value !== signature) {
-          row.replaceChildren(...ReportView.detailCells(value, this.mode === 'live').map(value => {
-            const cell = el('td'); cell.append(typeof value === 'object' ? value : el('span', value)); return cell;
+          const live = this.mode === 'live';
+          row.replaceChildren(...ReportView.detailCells(value, live).map((content, index) => {
+            const cell = el('td'); cell.append(typeof content === 'object' ? content : el('span', () => ReportView.detailCells(value, live)[index])); return cell;
           })); row.dataset.value = signature;
         }
         if (this.body.children[index] !== row) this.body.insertBefore(row, this.body.children[index] || null);
       });
-      this.footer.replaceChildren(...ReportView.detailTotals(block).map(value => el('td', value)));
+      this.footer.replaceChildren(...ReportView.detailTotals(block).map((value, index) => el('td', () => ReportView.detailTotals(block)[index])));
       this.heading.textContent = block.title || 'Session history';
-      this.summary.textContent = `Whole session: ${data.total} rows · CCost ${ReportView.display(block, 'total_ccost')}${!block.comparison_cost_complete ? ' (incomplete)' : ''} · Billed ${ReportView.display(block, 'billed_cost')} · Duration ${ReportView.display(block, 'duration_ms')}` +
-        (block.total_has_cost_breakdown ? block.total_breakdown_known ? ` · Main CCost ${ReportView.display(block, 'total_main_ccost')} · Linked child CCost ${ReportView.display(block, 'total_subagent_ccost')}` : ' · Linked child breakdown unavailable' : '');
+      ReportView.text(this.summary, () => `Whole session: ${data.total} rows · CCost ${ReportView.display(block, 'total_ccost')}${!block.comparison_cost_complete ? ' (incomplete)' : ''} · Billed ${ReportView.display(block, 'billed_cost')} · Duration ${ReportView.display(block, 'duration_ms')}` +
+        (block.total_has_cost_breakdown ? block.total_breakdown_known ? ` · Main CCost ${ReportView.display(block, 'total_main_ccost')} · Linked child CCost ${ReportView.display(block, 'total_subagent_ccost')}` : ' · Linked child breakdown unavailable' : ''));
       this.context.replaceChildren(); ReportView.contextSummary(this.context, block);
       this.source.textContent = `${data.result.view.source_label} · ${data.state} · Observed ${new Date(data.result.observed_at_ms).toLocaleString()} · ${this.id}. Complete history, 50 rows per page; totals are not page subtotals.`;
       this.warning.textContent = (data.state === 'history_retained' ?

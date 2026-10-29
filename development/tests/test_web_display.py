@@ -26,6 +26,45 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class WebDisplayTests(unittest.TestCase):
+    def test_both_prepared_units_match_independent_cli_exports_for_every_scope(self):
+        service = report_service(self)
+        self.addCleanup(service.close_accounts)
+        def compare_units(credits, usd):
+            if isinstance(credits, dict):
+                if "display" in credits:
+                    variants = credits.get("display_units", {})
+                    self.assertEqual(credits["display"], {**usd["display"], **variants.get("credits", {})})
+                    self.assertEqual(usd["display"], {**credits["display"], **variants.get("usd", {})})
+                    self.assertEqual(variants, usd.get("display_units", {}))
+                for key in credits.keys() - {"display", "display_units", "ccost_display_unit"}:
+                    compare_units(credits[key], usd[key])
+            elif isinstance(credits, list):
+                for left, right in zip(credits, usd, strict=True):
+                    compare_units(left, right)
+            else:
+                self.assertEqual(credits, usd)
+        for kind in ReportKind:
+            request = ReportRequest(kind, session_id="root" if kind is ReportKind.SESSION else None,
+                                    date_text="1970-01-01" if kind is ReportKind.DATE else None)
+            report = service.build_token_mix_history() if kind is ReportKind.TOKEN_MIX else service.build(request)
+            with self.subTest(kind=kind):
+                compare_units(project(report).to_json(), project(report, ccost_display_unit="usd").to_json())
+        compare_units(project_live(warning_watch_projection(warning_prompt(PriceWarningSeverity.NONE))).to_json(),
+                      project_live(warning_watch_projection(warning_prompt(PriceWarningSeverity.NONE)), ccost_display_unit="usd").to_json())
+
+    def test_dual_tokens_exclude_native_values_and_preserve_partial_sparse_markers(self):
+        dto = with_display(record(ccost=Decimal("395"), unresolved_cost=True,
+            used=Decimal("395"), unit="AI credits", billed_cost=Decimal("395"),
+            unaccounted_usage=Decimal("395"), relative_cost=Decimal("395"))).to_json()
+        self.assertEqual({"credits": {"ccost": "?395"}, "usd": {"ccost": "?$3.95"}}, dto["display_units"])
+        for value in (None, Decimal(0)):
+            unknown = with_display(record(ccost=value, unresolved_cost=True)).to_json()
+            self.assertEqual("N/A", unknown["display"]["ccost"])
+            self.assertNotIn("display_units", unknown)
+        sparse = with_display(record(ccost=Decimal(0), calls=0, is_compaction=True)).to_json()
+        self.assertEqual("", sparse["display"]["ccost"])
+        self.assertNotIn("display_units", sparse)
+
     def test_ccost_money_and_duration_goldens_keep_exact_raw_values(self):
         cases = [(None, "N/A"), ("0", "0"), ("0.00000000001", "<0.1"),
                  ("0.1234567890123456789", "0.2"), ("1.000000000001", "2"), ("-0.12", "-0.1")]
