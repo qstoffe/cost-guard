@@ -1,7 +1,8 @@
 # Web table scroll investigation — FR 000529
 
 Base: `a554d312fecc7d7db31ae6aebe7819418c18c11c`; checked 2026-10-29 on Windows.
-Status: unfinished; real-browser reproduction and acceptance pending. This is not
+Status: unfinished; source-bound browser reproduction now confirmed, full input
+and visual acceptance pending. This is not
 a completion report or confirmation of the colleague's reported root cause.
 
 ## Source-bound defect and repair
@@ -42,14 +43,47 @@ synthetic: it is not browser layout, wheel, touchpad or physical-device proof.
   workers closed; the shared OpenCode service was untouched. This observed only
   three detail rows and is not long-list or browser proof.
 
+## Integrated browser follow-up
+
+After native reactivation succeeded, `browser.tabs.list` confirmed an attached
+browser. The earlier disconnected observation is historical, not its current
+status. [Measured browser evidence](web-table-scroll-browser.json) records the
+actual cases and remaining limitations.
+
+In real Chromium, the source-derived previous load implementation moved the
+document from 600 to 250 when the internal table moved from 500 to 850 during a
+pending response. The candidate kept the document at 600 and table at 850. This
+isolates the identified race; it does not identify the colleague's original
+device/route or claim a full old-host replay.
+
+The measured layout matrix covers eight renderer views at 1000px and 360px,
+including 125-row/card stress fixtures. All table ends were reachable, headings
+remained sticky and the measured documents had no horizontal page overflow.
+Native trusted wheel events moved each of seven views at both widths: table
+offsets advanced 600px with a stable document, while Accounts cards scrolled the
+document. Narrow Watch horizontal movement also worked. These are injected native
+events, not a physical mouse/touchpad claim. Initial mis-targeted iframe wheel
+cases failed; matching the fixture height to the observed desktop viewport fixed
+the harness, and the fourteen reruns passed.
+
+Snapshot/Live detail first/middle/latest paging, complete summaries, idle offsets,
+selected text, focused cells and deferred updates passed in real DOM/layout.
+Detail and Watch visible-row growth retained the anchor within 0.25px while
+preserving horizontal/document offsets and canonical nodes. Updates were driven
+through shipped renderers over synthetic fixtures, not real-source browser SSE.
+
 ## Remaining mandatory browser work
 
-Native `browser.tabs.list` returned `[browser.disconnected] No desktop browser is
-connected to this session.` No external browser fallback, polling or restart was
-attempted. Attach this same session in OpenCode Desktop, then perform one native
-readiness check and continue real-browser reproduction before deciding whether
-the source-bound repair addresses the reported problem or additional changes are
-needed.
+Native `browser.hover` returned `UnknownVizError`; screenshot attempts after
+explicit `browser.tabs.focus` still required a visible tab. The DOM reports
+visible/focused, but that alone is not native pointing/capture proof. Some isolated
+trusted PageDown/PageUp/arrow cases scrolled correctly; the first-key/batched
+matrix was inconsistent and must not be counted as passing. Explicit focus, native
+Tab entry, event/scrollend conditions, separate calls and a scroll-driven
+`browser.wait` marker did not establish repeatable full acceptance. No speculative
+production key handler was added. Open this task's Cost Guard tab in the visible
+OpenCode Review pane and keep the Desktop window visible, then continue the actual
+input/visual cases. Do not substitute another disconnected diagnosis.
 
 Cover Watch idle/changing Live rows, Sessions, Models, Accounts, deep Token Mix,
 date reports and 50-row session Snapshot/Live pages. Verify list-to-end browsing,
