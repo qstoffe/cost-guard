@@ -1,7 +1,7 @@
 # Web snapshot parity and navigation
 
-Source revision: a454de53e2349c940035db9b302db9e3ffac3e4f
-Checked revision: a454de53e2349c940035db9b302db9e3ffac3e4f
+Source revision: c87bd954decd5bc36ea06409abc1a78d3c7951c2
+Checked revision: c87bd954decd5bc36ea06409abc1a78d3c7951c2
 Last checked: 2026-10-30
 Status: current
 
@@ -26,6 +26,11 @@ Detail attachment must also be idempotent: replacing a parent's children with it
 already-connected root still disconnects/reinserts the subtree. The heartbeat
 must not disturb native focus or internal scrolling simply to show unchanged
 detail controls. Watch already follows the same parent-identity guard.
+
+FR 000530 adds explicit finite Cost per Active Hour captures. Route navigation and
+unit switching must not acquire history; period clocks/CCost come from Python.
+Session rate health must update even if the source loses availability without a
+new report revision. The last good value remains frozen and visibly retained.
 
 ## Evidence
 
@@ -86,6 +91,28 @@ the relevant Web/browser checks and validator passing. No policy or unrelated
 tests were changed or circumvented. Decision Delegate separately authorized only
 session-isolated Playwright/Chromium provisioning and synthetic loopback tests;
 no personal profiles, source acquisition, model calls or shared-service changes.
+
+FR 000530's isolated headless Edge probe passed 20 assertions in each of four
+1200px/360px light/dark cases: no scan on opening, capture/cancel, three scopes,
+prepared USD/credits, frozen navigation/failed refresh, Snapshot/Live/Freeze/Follow,
+same-revision stale state and layout/programmatic focus. This is synthetic HTTP
+with scripted EventSource, not real SSE, physical keyboard or source/native proof.
+Reproduce with `development/tests/integration/probe_web_active_hour.py` and an
+explicit approved executable/output. The Decision Delegate authorized only exact
+installed-browser discovery and owned profiles/loopback tests, renewing bounded
+batches for concrete fixture repairs. All owned profiles/processes/server closed.
+
+Earlier attempts remain unsuccessful: one 40-second TIMEOUT gave no assertion
+result; four cases passed 13 assertions then failed a route-readiness fixture race;
+four passed 16 then failed a fixture that reused an immutable one-shot service.
+Wait for routed detail data, not old page text; prepare separate one-shot captures
+at different clocks. Deterministic real SessionHistory tests independently verify
+3000->7000ms advancement and frozen last-good time on source outage.
+
+Decision Delegate separately approved the unchanged four Windows PowerShell 5.1
+policy-blocked subcases for this delivery, contingent on relevant checks passing.
+No host policy/test bypass was made; the suite must not be labeled an overall PASS.
+Current scoped evidence and limits: [active-hour verification](../architecture/governance/verification/web-active-hour.md).
 
 ## Next investigations
 

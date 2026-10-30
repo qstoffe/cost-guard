@@ -79,7 +79,8 @@ class ReportApplication:
                     ReportKind.SESSIONS: "requested_root_list",
                     ReportKind.SESSION: "complete_root_tree",
                     ReportKind.DATE: "local_range",
-                    ReportKind.TOKEN_MIX: "all_available_history_selectable_models",
+                     ReportKind.TOKEN_MIX: "all_available_history_selectable_models",
+                     ReportKind.COST_PER_HOUR: "explicit_period_execution_history",
                 }[request.kind]),
                 ("local_day_start_ms", local_day_start_ms(service.timezone_id, now_ms=now)),
                 ("local_month_start_ms", local_month_start_ms(service.timezone_id, now_ms=now)),
@@ -105,7 +106,7 @@ class ReportApplication:
                              # Normal is an aggregate comparison/account report. Its
                              # month-wide causal identities are not displayed and can
                              # dwarf the report; per-root revision evidence stays above.
-                             for parts in (() if request.session_page_size or request.kind is ReportKind.NORMAL
+                             for parts in (() if request.session_page_size or request.kind in {ReportKind.NORMAL, ReportKind.COST_PER_HOUR}
                                            else service.report_request_identities()))
             view = project(report, service.timezone_id, service.config.get("ccostDisplayUnit", "credits"))
             view = ObjectValue(view.fields + (("request_identities", requests),))

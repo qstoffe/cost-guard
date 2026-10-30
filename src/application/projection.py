@@ -6,6 +6,7 @@ from decimal import Decimal
 import json
 
 from src.analysis.model_supersession import superseded_rows
+from src.analysis.active_hour import active_hour
 
 from .contracts import ObjectValue, record
 from .display import with_display
@@ -55,7 +56,11 @@ def prompt(value):
                                       ("has_error", value.watch_error)))
 
 
-def block(value):
+def hourly(value):
+    return fields(value, "scope start_ms end_ms known_ccost cost_complete duration_ms rate status observed_requests")
+
+
+def block(value, *, source_complete=True):
     base = fields(value, """session_id title total_ccost total_calls total_ictx_cost_text total_extra_cost_text
         total_mix_text current_context_tokens next_context_tokens next_context_cached_ccost
         next_context_fresh_ccost next_context_warning event_id duration_ms total_main_ccost total_subagent_ccost
@@ -65,6 +70,9 @@ def block(value):
         ("rows", tuple(prompt(row) for row in value.rows)),
         ("current_context_sources", record(**dict(value.current_context_sources))),
         ("has_error", value.watch_error),
+        ("active_hour", hourly(active_hour("Complete session", None, None, value.total_ccost, value.duration_ms,
+            complete=source_complete and value.comparison_cost_complete and value.rate_usage_complete,
+            provisional=value.rate_provisional, observed_requests=value.total_calls))),
     ))
 
 
@@ -143,7 +151,8 @@ def project(report, timezone_id="UTC", ccost_display_unit="credits"):
         session_usage=tuple(fields(item, "session_id title model multiple_models ccost prompt_count complete duration_ms archived running")
             for item in report.session_usage),
         session_page=fields(report.session_page, "offset size total catalog_revision") if report.session_page else None,
-        prompt_blocks=tuple(block(item) for item in report.prompt_blocks),
+        prompt_blocks=tuple(block(item, source_complete=not report.source_warnings) for item in report.prompt_blocks),
+        active_hours=tuple(hourly(item) for item in report.active_hours),
         accounts_quotas=accounts(report.accounts_quotas), notes=report.notes,
         range_comparison=comparison(report.range_comparison) if report.range_comparison else None,
         recent_model_notice=report.recent_model_notice,

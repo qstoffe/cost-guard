@@ -109,6 +109,10 @@ def _session_block(*, session_id: str, title: str, rows: list[PromptProjection],
                              or any(row.is_compaction and row.unresolved_cost for row in rows),
         total_subagent_estimated=any(row.subagent_estimated for row in prompt_rows),
         comparison_cost_complete=all(not row.unresolved_cost for row in rows),
+        rate_usage_complete=all({"input", "cache_read", "cache_write", "output"} <= set(entry.tokens.known_fields)
+                                for entry in projector.bundle.trace_entries)
+                            and not any(row.in_progress and not row.calls for row in rows),
+        rate_provisional=any(row.in_progress for row in rows),
         billed_cost=(sum((row.billed_cost for row in rows), Decimal(0))
                      if all(row.billed_cost is not None for row in rows) else None),
     )
