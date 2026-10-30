@@ -2,7 +2,7 @@
 
 ## v80.117 — 2026-10-30
 
-- Restore Windows OpenAI quota via verified ROOT-store trust, avoiding expired intermediates. Distinct safe TLS/DNS/timeouts retain bounded refreshes.
+- Windows OpenAI quota: verified ROOT trust; safe TLS failures and bounded refresh.
 
 ## v80.116 — 2026-10-30
 

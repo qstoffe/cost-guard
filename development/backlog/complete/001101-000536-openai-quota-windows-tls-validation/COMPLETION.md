@@ -76,6 +76,14 @@ double-click, a diagnostic rerender or mocked acquisition.
   11 checks, zero failures, four nonblocking design-budget warnings for README,
   analysis/context, reports/service and watch/coordinator. The initial history
   hard-cap failure was repaired and revalidated; no budget was raised.
+- Post-documentation `py -3 -B -m unittest development.tests.test_foundation_quick`:
+  **10 tests PASS**. The first hosted Windows attempt additionally exposed the
+  CRLF checkout size described below; the release wording was shortened again,
+  preserving both the cap and test assertions.
+- After that CRLF repair, `py -3 -B -m unittest development.tests.test_foundation -v`:
+  **nine tests PASS**. Package validation was repeated: **11 PASS**, zero failures,
+  the same four warnings. Explicit byte comparison found **32,466 LF** and
+  **32,708 CRLF** bytes, both under the unchanged **32,768-byte** history cap.
 - Real loopback TLS regressions reproduce expired-intermediate shadowing and
   reject expired leaves, untrusted chains and hostname mismatch. Additional tests
   exercise actual urllib exceptions through normalization/export/both renderers,
@@ -119,5 +127,22 @@ presentation/Diagnostics and code-map contracts. No system-layer dependency,
 validation trigger, permanent release gate or workflow diagram change was needed.
 Product source delivery does not install/reload or restart the existing runtime.
 
-Hosted verification and canonical PR/merge evidence will be recorded after the
-ordinary PR checks complete; local results above do not substitute for them.
+## Hosted verification and delivery
+
+Delivery is through [PR #111](https://github.com/qstoffe/cost-guard/pull/111).
+Its [canonical checks](https://github.com/qstoffe/cost-guard/pull/111/checks)
+retain hosted results for the final head; local results do not substitute for
+those checks or normal merge protections.
+
+The [first hosted run](https://github.com/qstoffe/cost-guard/actions/runs/41121059703)
+at head `f21c0c0aa47cc3ee6629111121178604cef83fdc` passed on macOS 15 ARM64 and
+Intel: 119 files, 1,441 tests passed and seven platform skips on each, plus
+package validation, isolated native APIs/launcher and rendered Chromium smoke.
+Windows 2025 passed native/browser smoke and the OpenAI/TLS/Watch files, but
+failed three foundation assertions and package validation because its CRLF
+history checkout was **32,775 bytes**, seven above the unchanged 32,768 cap.
+The local mixed-line-ending working file had been 32,765 bytes; that local PASS
+did not establish Windows-checkout acceptance. The v80.117 bullet was shortened
+again, with explicit LF/CRLF size checks and focused package/foundation validation.
+No hosted failure was waived, no assertion or cap changed, and the final outcome
+is retained by the PR's checks rather than relabelling that failed run PASS.
