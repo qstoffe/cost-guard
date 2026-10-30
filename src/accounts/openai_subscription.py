@@ -9,7 +9,9 @@ from __future__ import annotations
 import base64
 import json
 import re
+import socket
 import sqlite3
+import ssl
 import time
 import urllib.error
 import urllib.request
@@ -18,7 +20,7 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Callable, Mapping
+from typing import Callable, Literal, Mapping
 
 from src.version import VERSION
 from src.domain import (
@@ -32,6 +34,7 @@ from src.domain import (
 )
 from .base import normalize_quota
 from .credentials import CredentialRecord, provider_credentials, resolve_auth_path
+from .openai_tls import usage_ssl_context
 
 USAGE_URL = "https://chatgpt.com/backend-api/wham/usage"
 # OpenCode renews the OAuth token when it next calls OpenAI; Cost Guard never does.
@@ -43,6 +46,8 @@ TOKEN_SHARING_REASON = (
     "quota availability is not guaranteed. API keys also do not provide Codex subscription quota."
 )
 UNKNOWN_METHOD_REASON = "OpenAI quota unavailable for this sign-in method; no compatible quota source is known."
+TransportCategory = Literal["", "tls_certificate_failure", "tls_failure", "dns_failure",
+                            "connection_failure", "timeout", "network_failure"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,6 +65,9 @@ class UsageResponse:
     status_code: int = 0
     payload: object | None = field(default=None, repr=False)
     network_error: bool = False
+    transport_category: TransportCategory = ""
+    tls_verify_code: int | None = None
+    tls_verify_category: str = ""
 
 
 UsageGet = Callable[[str, str, str, int], UsageResponse]
@@ -208,6 +216,24 @@ def load_v2_credential(path: Path, *, now_ms: int) -> OpenAICredential | None:
     return credential
 
 
+def _transport_failure(error: BaseException) -> UsageResponse:
+    reason = error.reason if isinstance(error, urllib.error.URLError) else error
+    if isinstance(reason, ssl.SSLCertVerificationError):
+        code = getattr(reason, "verify_code", None)
+        code = code if type(code) is int and 0 <= code <= 255 else None
+        category = {9: "certificate_not_yet_valid", 10: "certificate_expired", 23: "certificate_revoked",
+                    18: "certificate_untrusted", 19: "certificate_untrusted", 20: "certificate_untrusted",
+                    21: "certificate_untrusted", 62: "hostname_mismatch", 64: "hostname_mismatch"}.get(
+                        code, "certificate_verification_failed")
+        return UsageResponse(False, network_error=True, transport_category="tls_certificate_failure",
+                             tls_verify_code=code, tls_verify_category=category)
+    category = ("timeout" if isinstance(reason, TimeoutError) else
+                "dns_failure" if isinstance(reason, socket.gaierror) else
+                "tls_failure" if isinstance(reason, ssl.SSLError) else
+                "connection_failure" if isinstance(reason, ConnectionError) else "network_failure")
+    return UsageResponse(False, network_error=True, transport_category=category)
+
+
 def _default_usage_get(url: str, token: str, account_id: str, timeout_seconds: int) -> UsageResponse:
     headers = {
         "Authorization": f"Bearer {token}",
@@ -218,15 +244,18 @@ def _default_usage_get(url: str, token: str, account_id: str, timeout_seconds: i
         headers["ChatGPT-Account-ID"] = account_id
     request = urllib.request.Request(url, headers=headers)
     try:
-        with urllib.request.urlopen(request, timeout=max(1, timeout_seconds)) as response:  # noqa: S310 - fixed HTTPS URL
+        with urllib.request.urlopen(request, timeout=max(1, timeout_seconds),
+                                    context=usage_ssl_context()) as response:  # noqa: S310 - fixed HTTPS URL
             status = int(getattr(response, "status", 200))
-            body = response.read().decode("utf-8")
+            body = response.read()
     except urllib.error.HTTPError as exc:
-        return UsageResponse(False, int(exc.code))
-    except (urllib.error.URLError, TimeoutError, OSError):
-        return UsageResponse(False, network_error=True)
+        status = int(exc.code)
+        exc.close()
+        return UsageResponse(False, status)
+    except (urllib.error.URLError, OSError) as exc:
+        return _transport_failure(exc)
     try:
-        return UsageResponse(True, status, json.loads(body))
+        return UsageResponse(True, status, json.loads(body.decode("utf-8")))
     except (UnicodeError, json.JSONDecodeError):
         return UsageResponse(False, status)
 
@@ -472,8 +501,8 @@ class OpenAIAccountProvider:
         try:
             try:
                 response = self.usage_get(USAGE_URL, token, credential.account_id, 15)
-            except OSError:
-                response = UsageResponse(False, network_error=True)
+            except OSError as exc:
+                response = _transport_failure(exc)
             if response.succeeded and 200 <= response.status_code < 300:
                 snapshot = convert_usage_payload(response.payload, fetched_at_ms=now)
                 return replace(snapshot, observations={**snapshot.observations, "http_status": response.status_code})
@@ -486,8 +515,15 @@ class OpenAIAccountProvider:
                                observations={"http_status": 403, "parser_reason": "access_denied",
                                              "user_action": "Check OpenAI account access in OpenCode; quota lookup was denied"})
             if response.network_error:
-                return replace(_unavailable("OpenAI usage request failed (network)", now), availability="error",
-                                observations={"http_status": 0, "parser_reason": "network_failure"})
+                category = response.transport_category
+                category = category if category in {"tls_certificate_failure", "tls_failure", "dns_failure",
+                    "connection_failure", "timeout", "network_failure"} else "network_failure"
+                evidence = {"http_status": 0, "parser_reason": category}
+                if category == "tls_certificate_failure":
+                    evidence.update(tls_verify_code=response.tls_verify_code,
+                                    tls_verify_category=response.tls_verify_category)
+                return replace(_unavailable("OpenAI usage request failed (" + category + ")", now),
+                               availability="error", observations=evidence)
             if response.status_code == 429:
                 return replace(_unavailable("OpenAI quota lookup throttled; no current quota was returned.", now),
                                availability="error", observations={"http_status": 429, "parser_reason": "rate_limited"})

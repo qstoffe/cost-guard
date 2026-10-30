@@ -14,8 +14,19 @@ _OBSERVATION_FIELDS = frozenset({
     "credential_discovered", "credential_category", "credential_active", "credential_qualifying",
     "request_attempted", "mapping_matched", "malformed_fields", "ignored_rows",
     "account_header_present", "endpoint_family",
+    "tls_verify_code", "tls_verify_category",
     "quota_components", "billing_components", "response_form", "quota_windows", "provider_status",
 })
+_TLS_CATEGORIES = frozenset({"certificate_not_yet_valid", "certificate_expired", "certificate_revoked",
+    "certificate_untrusted", "hostname_mismatch", "certificate_verification_failed"})
+
+
+def _safe_observation(name: str, value: object) -> bool:
+    if name == "tls_verify_code":
+        return type(value) is int and 0 <= value <= 255
+    if name == "tls_verify_category":
+        return isinstance(value, str) and value in _TLS_CATEGORIES
+    return name in _OBSERVATION_FIELDS
 
 
 def sanitized_account_observation(account: AccountSnapshot) -> dict[str, object]:
@@ -25,7 +36,7 @@ def sanitized_account_observation(account: AccountSnapshot) -> dict[str, object]
         "plan": account.plan,
         "status": account.status.value,
         "availability": account.availability,
-        "quota_shape": {name: value for name, value in account.observations.items() if name in _OBSERVATION_FIELDS},
+        "quota_shape": {name: value for name, value in account.observations.items() if _safe_observation(name, value)},
         "components": [{
             "label": component.label, "period": component.period,
             "used": str(component.used) if component.used is not None else None,

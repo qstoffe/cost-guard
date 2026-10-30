@@ -360,7 +360,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.116 (2026-10-30):** Web Beta Overview is model-table-first, with quiet progress, collapsed explanations and compact accounts. CLI behavior and report values are unchanged.
+**v80.117 (2026-10-30):** Windows OpenAI quota uses verified root-store trust instead of cached intermediates. TLS failures stay distinct; credentials and sign-in are unchanged.
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 
