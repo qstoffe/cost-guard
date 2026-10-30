@@ -1,5 +1,6 @@
 {
   "date": "2026-10-30",
+  "source_revision": "a454de53e2349c940035db9b302db9e3ffac3e4f",
   "base": "a554d312fecc7d7db31ae6aebe7819418c18c11c",
   "baseline": {
     "outcome": "EXPECTED BASELINE DEFECT",

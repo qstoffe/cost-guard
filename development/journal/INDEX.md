@@ -1,8 +1,8 @@
 # Cost Guard engineering knowledge
 
-Source revision: 76d9054556da384d8cb888b16699ece5f1b2d984
-Checked revision: 9a27a6ae600f4c651b3306d69f5c8fc9da0f0dff
-Last checked: 2026-10-28
+Source revision: a454de53e2349c940035db9b302db9e3ffac3e4f
+Checked revision: a454de53e2349c940035db9b302db9e3ffac3e4f
+Last checked: 2026-10-30
 Status: current
 
 Installed OpenCode Toolkit shared repository skills own development procedures. Source remains authoritative; historical measurements are not current PASS claims. External reference: https://github.com/qstoffe/opencode-toolkit/tree/main/skills/shared-repo-contract .

@@ -1,8 +1,8 @@
 # Optional Web runtime
 
-Source revision: 8dc82a38dddd7f2999e7872d52e1e6a8a0949725
-Checked revision: 8dc82a38dddd7f2999e7872d52e1e6a8a0949725
-Last checked: 2026-10-27
+Source revision: a454de53e2349c940035db9b302db9e3ffac3e4f
+Checked revision: a454de53e2349c940035db9b302db9e3ffac3e4f
+Last checked: 2026-10-30
 Status: current
 
 ## Responsibility and ownership

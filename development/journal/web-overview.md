@@ -1,7 +1,7 @@
 # Web snapshot parity and navigation
 
-Source revision: 5b5e58725654868386e31124c3b826a1eff51ec6
-Checked revision: 5b5e58725654868386e31124c3b826a1eff51ec6
+Source revision: a454de53e2349c940035db9b302db9e3ffac3e4f
+Checked revision: a454de53e2349c940035db9b302db9e3ffac3e4f
 Last checked: 2026-10-30
 Status: current
 
