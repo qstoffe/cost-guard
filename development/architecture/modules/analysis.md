@@ -2,12 +2,12 @@
 
 [Architecture overview](../OVERVIEW.md) · [Owner/test routes](CODE_MAP.md). Source remains authoritative.
 
-Source revision: 1b0fd64375bfc10c6653dda86dea41e2d0c1eb88
-Checked revision: 1b0fd64375bfc10c6653dda86dea41e2d0c1eb88
-Last checked: 2026-10-29
+Source revision: c87bd954decd5bc36ea06409abc1a78d3c7951c2
+Checked revision: c87bd954decd5bc36ea06409abc1a78d3c7951c2
+Last checked: 2026-10-30
 Status: current
 
-FR 000534 updates comparison policy in this delivery without changing module boundaries.
+FR 000530 adds Web-only active-hour analysis without changing module boundaries; FR 000534's global comparison policy remains unchanged.
 
 ## Responsibility and ownership
 
@@ -55,6 +55,17 @@ The latest assistant's `termination` ends running/duration and distinguishes suc
 
 `analysis/duration.py` qualifies retrospective execution boundaries from normalized assistant/tool/background evidence, never session metadata or report time for terminated work. `PromptRecord.execution_duration_ms` and compaction timing survive derived caching; the legacy prompt `duration_ms` remains unchanged for Watch. Reports project qualified timing into `PromptProjection.duration_ms`; listings union the cached bundle directly, without detail hydration. A sorted interval union excludes idle gaps/overlap and propagates unknown timing to `N/A`; date totals union only selected events. Presentation shares Watch's compact formatter, not timing calculations.
 
+`src/analysis/active_hour.py` owns reference cost per active hour. It reuses canonical
+prompt/compaction execution boundaries, clips before overlap union across roots,
+reconciles request/step identities and reuses clone deduplication/event-time CCost.
+Configured local day/month boundaries differ from exactly trailing 30 x 24 hours.
+Unknown telemetry/pricing/time suppresses the rate; running evidence is provisional.
+`ReportService.build_cost_per_hour` is an explicit finite Web capture, never Normal,
+Watch or CLI polling. The application exports exact Decimal values and prepared
+credits/USD tokens; the browser never calculates rates. Complete-session rates
+use whole-report totals even when detail pages contain only 50 rows. Source loss
+retains the observed clock, not proof of completion. No durable ledger is added.
+
 ### Cache
 
 Disposable `cache/` uses generation-named SQLite, WAL, short transactions, 5s busy timeout and explicit close after commit/rollback. Schema changes never migrate/delete in-use generations. JSON carries source/algorithm revisions and bounded coordination, never sole history/credential ownership. Delete only while Cost Guard is stopped. Atomic `model_first_sightings` rows keep shared provider-qualified UTC Report/Watch presentation timestamps.
@@ -70,4 +81,4 @@ Domain uses the standard library; analysis consumes canonical domain and provide
 
 ## Tests
 
-`development/tests/test_analysis_core.py`, `development/tests/test_context_history_projection.py`, `development/tests/test_workload_mix.py`, `development/tests/test_cache.py`, `development/tests/test_ccost_display_unit.py`. Inspected source/assertions are not a fresh test PASS.
+`development/tests/test_active_hour.py` (formula, period/DST, concurrency, missing data and full-session rates), `development/tests/test_analysis_core.py`, `development/tests/test_context_history_projection.py`, `development/tests/test_workload_mix.py`, `development/tests/test_cache.py`, `development/tests/test_ccost_display_unit.py`. Inspected source/assertions are not a fresh test PASS.
