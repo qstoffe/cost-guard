@@ -17,6 +17,10 @@ vm.runInContext(fs.readFileSync('src/web/assets/render.js', 'utf8'), context);
 for (const [kind, result] of Object.entries(input)) {
   context.result = result;
   vm.runInContext('ReportView.render(output, result, {pages: {}, section: "reports"})', context);
+  assert.ok(output.textContent.includes('I = Input; C = Cached input; W = Cache write; O = Output'));
+  assert.ok(!/\b(?:Cache|Write):/.test(output.textContent));
+  assert.ok(!all(output, 'th').some(n => ['Cache', 'Write', 'I/C/W/O %'].includes(n.textContent)));
+  for (const node of all(output, 'th')) assert.equal(node.scope, 'col');
   if (kind === 'date') {
     assert.ok(!output.textContent.includes(String(result.scope.start_ms)), 'no epoch range prose');
     assert.match(output.textContent, /2026-10-26:2026-10-27.*Europe\/Stockholm/);
@@ -28,8 +32,8 @@ for (const [kind, result] of Object.entries(input)) {
     assert.equal(all(output, 'tfoot')[0].children[0].children[1].textContent, result.view.prompt_blocks[0].display.total_ccost);
   } else {
     assert.deepEqual(all(output, 'th').map(node => node.textContent),
-       ['Model', 'Prompts', 'Calls', 'Tokens', 'Input', 'Cache', 'Write', 'Output', 'CCost',
-        'Publisher', 'Prompts', 'Calls', 'Tokens', 'Input', 'Cache', 'Write', 'Output', 'CCost']);
+       ['Model', 'Prompts', 'Calls', 'Tokens', 'Input', 'Cached input', 'Cache write', 'Output', 'CCost',
+        'Publisher', 'Prompts', 'Calls', 'Tokens', 'Input', 'Cached input', 'Cache write', 'Output', 'CCost']);
     const mix = result.view.model_token_mix[0].mix;
     assert.deepEqual(all(output, 'tbody')[0].children[0].children.slice(3).map(cell => cell.textContent),
        ['total_tokens', 'input', 'cache', 'write', 'output', 'total_cost'].map(key => mix.display[key]));

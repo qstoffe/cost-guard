@@ -96,6 +96,7 @@ QUICK_PATTERNS: tuple[str, ...] = (
     "test_runtime_errors.py",
     "test_zero_data_robustness.py",
     "test_token_mix.py",
+    "test_token_category_names.py",
     "test_token_mix_economics.py",
     "test_priced_token_mix.py",
     "test_v783_regressions.py",

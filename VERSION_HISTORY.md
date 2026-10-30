@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.114 — 2026-10-30
+
+- CLI/Web: shared Input / Cached input / Cache write / Output labels and legends; accounting unchanged.
+
 ## v80.113 — 2026-10-30
 
 - Web scroll fixes.
@@ -10,7 +14,7 @@
 
 ## v80.111 — 2026-10-29
 
-- Relative CCost/tier warnings: one global latest-100 completed priceable mix; CLI/Web actual counts, no per-model blend/deep scan. Historical mix/Tokens/units unchanged; not benchmarks, bills or forecasts.
+- Relative CCost/tier warnings: global latest-100 completed priceable mix; CLI/Web actual counts, no per-model blend/deep scan. Historical mix/Tokens/units unchanged; not benchmarks, bills or forecasts.
 
 ## v80.110 — 2026-10-29
 
@@ -18,8 +22,7 @@
 
 ## v80.109 — 2026-10-28
 
-- Add `ccostDisplayUnit: credits|usd` / CLI `--ccost-unit credits|usd` for reports/Watch; credits default. Python tokens expose Web's default. Reference USD: 100 credits = $1.00, two decimals; tiny positives may show $0.00.
-- Valuations, thresholds, quotas, Unaccounted, Billed, rates and Relative CCost unchanged; no currency service or Web toggle in this release.
+- Reports/Watch: `ccostDisplayUnit: credits|usd`, CLI `--ccost-unit credits|usd`; default credits exported to Web. USD: 100 credits = $1.00, 2 decimals; tiny positives may show $0.00. Valuations/thresholds/quotas/Unaccounted/Billed/rates/Relative CCost unchanged; no currency service/Web toggle.
 
 ## v80.108 — 2026-10-28
 
@@ -58,7 +61,7 @@
 
 ## v80.101 — 2026-10-28
 
-- Windows Web Beta now returns its batch entry immediately after delegating to hidden, separate PowerShell. Python discovery, verified host restart, tray readiness and authenticated browser handoff no longer retain the launcher's visible console. This no-build route needs no compiler, downloaded helper or executable cache; a brief platform batch/minimized-window flash remains possible.
+- Windows Web Beta returns immediately after delegating to hidden, separate PowerShell. Python discovery, verified host restart, tray readiness and authenticated browser handoff no longer retain the visible console. No compiler, downloaded helper or executable cache; a brief batch/minimized-window flash remains possible.
 - Bounded Python discovery probes and detached-mode error handling prevent an invisible input wait. Native failure dialogs, private allowlisted diagnostics, the visible troubleshooting fallback, pythonw report workers and shared instance/security controls remain authoritative. CLI/Watch and macOS runtime behavior are unchanged; automated native results are not physical Explorer/Finder acceptance.
 
 ## v80.100 — 2026-10-28

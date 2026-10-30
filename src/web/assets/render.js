@@ -6,6 +6,10 @@ const ReportView = (() => {
   let unit = null;
   const bindings = new WeakMap();
   const display = (row, key) => row?.display_units?.[unit]?.[key] ?? row?.display?.[key] ?? 'N/A';
+  const mixLabels = row => Object.values(row?.display?.token_categories || {});
+  const mixText = row => Object.entries(row?.display?.token_categories || {})
+    .map(([key, label]) => label + ': ' + display(row, key)).join(' · ');
+  const mixLegend = row => display(row, 'token_category_legend') + '. Output includes reasoning.';
   function text(node, value) {
     if (typeof value === 'function') { bindings.set(node, value); value = value(); }
     else bindings.delete(node);
@@ -213,8 +217,8 @@ const ReportView = (() => {
       'Reference token valuation, not actual billing. Flat-rate accounts use Copilot’s published token rates. Unlabeled cost figures are CCost; unknown pricing is not zero.');
     costCard.append(element('p', 'CCost = reference valuation, not provider billing. Unknown pricing is not zero.', 'detail'));
     const mix = view.token_mix;
-    const mixCard = concept('Token Mix %', () => mix ? ['Input', 'Cache', 'Write', 'Output'].map(name => name + ': ' + display(mix, name.toLowerCase())).join(' · ') : 'N/A',
-      'Observed input/cache-read/cache-write/output token shares. Output includes reasoning. The report sample is independent of account-period usage.');
+    const mixCard = concept('Token Mix %', () => mix ? mixText(mix) : 'N/A',
+      'Observed token shares: ' + mixLegend(view) + ' Input is uncached; Cached input is cache read; Cache write is cache creation. The report sample is independent of account-period usage.');
     if (mix) mixCard.append(element('p',
       () => `${mix.sample_size} priced prompts · ${display(mix, 'totals')} tokens · CCost ${display(mix, 'costs')}`,
       mix.cost_complete ? 'detail' : 'detail partial'));
@@ -346,7 +350,7 @@ const ReportView = (() => {
     contextSummary(parent, block);
     if (!block.rows.length) parent.append(element('p', 'This session exists but has no prompt rows.'));
     table(parent, `Prompts · ${ranged ? 'selected range' : 'complete session'} totals, independent of page`,
-      ['Prompt', 'CCost', 'Calls', 'Duration', '~Ictx', '~Ictx CCost', '~Extra CCost', 'I/C/W/O %'], block.rows,
+      ['Prompt', 'CCost', 'Calls', 'Duration', '~Ictx', '~Ictx CCost', '~Extra CCost', 'Token Mix %'], block.rows,
       row => detailCells(row),
        () => [ranged ? 'Selected range' : 'Complete session', ccost(block, 'total_ccost'), known(block.total_calls),
          display(block, 'duration_ms'), '—', known(block.total_ictx_cost_text), known(block.total_extra_cost_text), known(block.total_mix_text)],
@@ -366,8 +370,9 @@ const ReportView = (() => {
     if (view.model_availability_empty) parent.append(element('p', 'No available OpenCode models match the pricing catalog.', 'warning'));
     if (view.kind === 'date') parent.append(element('p', `Inclusive local range ${result.scope.date_text} · ${result.scope.timezone_id} · inclusive local calendar dates. Session links open complete history; Back returns to this frozen range.`, 'snapshot'));
     const definitions = element('details');
-    definitions.append(element('summary', 'Reading this report'), element('p', 'CCost = reference valuation, not provider billing. Unknown pricing is not zero. I/C/W/O = input/cache read/cache write/output. Durations are report execution durations, frozen at observation time.'));
+    definitions.append(element('summary', 'Reading this report'), element('p', 'CCost = reference valuation, not provider billing. Unknown pricing is not zero. Durations are report execution durations, frozen at observation time.'));
     if (!overview) parent.append(definitions);
+    parent.append(element('p', 'Token category order: ' + mixLegend(view), 'detail'));
     if (overview) overviewConcepts(parent, view);
     if (view.session_usage.length || view.kind === 'sessions') {
       if (!view.session_usage.length) parent.append(element('p', result.source.status === 'partial' ? 'Partial source: no sessions returned; unavailable history is not empty success.' : 'Source acquired: no available sessions.'));
@@ -397,7 +402,7 @@ const ReportView = (() => {
         for (const row of view.model_comparison) evidence.append(element('p', row.model + ': ' + display(row, 'evidence')));
         parent.append(evidence);
       }
-      if (!overview && all) parent.append(element('p', 'GitHub USD/M I/C/W/O: exact published reference rates per million input/cache-read/cache-write/output tokens, not billed spend.', 'detail'));
+      if (!overview && all) parent.append(element('p', 'GitHub USD/M I/C/W/O: exact published reference rates per million tokens, not billed spend. ' + mixLegend(view) + ' A dash means no published rate (Not applicable), not measured usage. Published prices do not imply observed tokens.', 'detail'));
       if (!overview && view.model_comparison.some(row => row.superseded)) parent.append(element('p', 'Older stable variants are muted, not hidden. Promotions use numbered * markers; recent releases are highlighted.', 'detail'));
       for (const note of view.model_comparison_promotion_notes || []) parent.append(element('p', note, 'promotion'));
       if (view.recent_model_notice) parent.append(element('p', view.recent_model_notice, 'new'));
@@ -416,11 +421,11 @@ const ReportView = (() => {
       if (view.kind === 'token-mix') {
         if (!view.model_token_mix.length) parent.append(element('p', 'No available historical model rows. Missing history is not reconstructed.'));
         table(parent, 'Historical models · canonical totals above, independent of filters',
-          ['Model', 'Prompts', 'Calls', 'Tokens', 'Input', 'Cache', 'Write', 'Output', 'CCost'], view.model_token_mix,
+          ['Model', 'Prompts', 'Calls', 'Tokens', ...mixLabels(view), 'CCost'], view.model_token_mix,
           row => [row.model, known(row.prompts), known(row.calls), display(row.mix, 'total_tokens'), ...['input', 'cache', 'write', 'output', 'total_cost'].map(key => display(row.mix, key))], null, state, 'history',
           row => [row.model, row.prompts, row.calls, row.mix.known_total_tokens ?? row.mix.total_tokens, ...row.mix.shares, row.mix.total_cost]);
         table(parent, 'Historical publishers · same shown usage, not the comparison prior',
-          ['Publisher', 'Prompts', 'Calls', 'Tokens', 'Input', 'Cache', 'Write', 'Output', 'CCost'], view.publisher_token_mix || [],
+          ['Publisher', 'Prompts', 'Calls', 'Tokens', ...mixLabels(view), 'CCost'], view.publisher_token_mix || [],
           row => [row.publisher, known(row.prompts), known(row.calls), display(row.mix, 'total_tokens'), ...['input', 'cache', 'write', 'output', 'total_cost'].map(key => display(row.mix, key))], null, state, 'publishers',
           row => [row.publisher, row.prompts, row.calls, row.mix.known_total_tokens ?? row.mix.total_tokens, ...row.mix.shares, row.mix.total_cost]);
       }
@@ -430,7 +435,8 @@ const ReportView = (() => {
   }
   function mixSummary(parent, mix) {
     parent.append(element('p', () => `Total Token Mix % · ${display(mix, 'total_tokens')} tokens · ` +
-      ['Input', 'Cache', 'Write', 'Output'].map(name => name + ': ' + display(mix, name.toLowerCase())).join(' · '), mix.cost_complete ? 'metric-value' : 'metric-value partial'));
+      mixText(mix), mix.cost_complete ? 'metric-value' : 'metric-value partial'));
+    parent.append(element('p', mixLegend(mix), 'detail'));
     const details = element('details'); details.append(element('summary', 'Sample and price coverage'), element('p',
       `Full-report I/C/W/O tokens: ${display(mix, 'totals')} · Requests ${mix.request_count} · Prompts ${mix.sample_size} · Priced requests ${mix.priced_requests} · ${mix.cost_complete ? 'Complete prices' : 'Incomplete prices'}. Tokens sum known I/C/W/O categories; ? marks incomplete telemetry, N/A no known categories. K/M/B are rounded display only; sorting uses raw volumes. Output includes reasoning; one prompt can contribute to several model rows.`)); parent.append(details);
   }
@@ -455,5 +461,5 @@ const ReportView = (() => {
     return ['Complete session', ccost(block, 'total_ccost'), known(block.total_calls),
       display(block, 'duration_ms'), '—', known(block.total_ictx_cost_text), known(block.total_extra_cost_text), known(block.total_mix_text)];
   }
-  return {render, renderLive, element, detailCells, detailTotals, compare, overviewAccounts, display, contextSummary, text, setUnit, syncUnits, defaultUnit};
+  return {render, renderLive, element, detailCells, detailTotals, compare, overviewAccounts, display, contextSummary, text, setUnit, syncUnits, defaultUnit, mixLegend};
 })();

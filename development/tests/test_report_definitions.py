@@ -68,9 +68,11 @@ class ReportDefinitionTests(unittest.TestCase):
             "        Watch Today is CCost, not provider-native Used or actual Billed spend.",
         ], groups[0])
         self.assertEqual([
-            "Token Mix %: The I/C/W/O percentage split of your observed token usage.",
+            "Token Mix %: The Input / Cached input / Cache write / Output percentage split of your",
+            "             observed token usage.",
             "             Your mix uses the latest 100 priced prompts, totaling 137.1M tokens.",
-            "             Input: 3% (123)   Cache: 82% (456)   Write: 1% (12)   Output: 14% (789)",
+            "             Input: 3% (123)   Cached input: 82% (456)   Cache write: 1% (12)",
+            "             Output: 14% (789)",
         ], groups[1])
         self.assertEqual([
             "Relative CCost: Common token-category workload price comparison, not a same-task benchmark",
@@ -84,6 +86,7 @@ class ReportDefinitionTests(unittest.TestCase):
             "                Every tier uses the same cheapest positive comparable base price as 1.0x.",
             "                Arrows show context-tier prices; > or ≥ marks the published input-token",
             "                boundary.",
+            "                I = Input; C = Cached input; W = Cache write; O = Output.",
         ], groups[2])
 
     def test_continuations_align_sentences_split_and_width_bounded(self):
@@ -105,16 +108,18 @@ class ReportDefinitionTests(unittest.TestCase):
         self.assertEqual(list(LABELS), re.findall(r"\x1b\[38;5;226m(.*?)\x1b\[0m", colored))
         for label in LABELS:
             self.assertIn(f"\x1b[38;5;226m{label}\x1b[0m ", colored)
-        cells = "Input: 3% (123)   Cache: 82% (456)   Write: 1% (12)   Output: 14% (789)"
-        self.assertEqual(["100", "137.1M", cells], re.findall(r"\x1b\[38;5;227m(.*?)\x1b\[0m", colored))
-        self.assertIn(" " * 13 + f"\x1b[38;5;227m{cells}\x1b[0m\n", colored, "indent stays unstyled")
+        cells = "Input: 3% (123)   Cached input: 82% (456)   Cache write: 1% (12)   Output: 14% (789)"
+        wrapped = cells.rsplit("   ", 1)
+        self.assertEqual(["100", "137.1M", *wrapped], re.findall(r"\x1b\[38;5;227m(.*?)\x1b\[0m", colored))
+        for line in wrapped:
+            self.assertIn(" " * 13 + f"\x1b[38;5;227m{line}\x1b[0m\n", colored, "indent stays unstyled")
         self.assertIn("the latest \x1b[38;5;227m100\x1b[0m priced prompts, totaling "
                       "\x1b[38;5;227m137.1M\x1b[0m tokens.", colored)
         self.assertEqual(ANSI.sub("", colored), rendered(report()))
         # Wrapped narrow cells stay emphasized per line, never across the indent.
         narrow = rendered(report(), CONFIG, width=40, color=True)
         self.assertEqual(cells.split("   "), [cell for segment in re.findall(r"\x1b\[38;5;227m(.*?)\x1b\[0m", narrow)
-                                              if segment.startswith(("Input", "Cache", "Write", "Output"))
+                                              if segment.startswith(("Input", "Cached input", "Cache write", "Output"))
                                               for cell in segment.split("   ")])
 
     def test_default_palettes_use_plain_yellow_not_promotion_gold(self):
@@ -159,7 +164,7 @@ class ReportDefinitionTests(unittest.TestCase):
         twelve = replace(large_mix(37), totals=(700_000, 10_000_000, 0, 2_000_000))
         self.assertIn("latest 37 priced prompts, totaling 12.7M tokens.", rendered(report(twelve)))
         empty = rendered(report(TokenMix(), sample=0))
-        self.assertIn("Token Mix %: The I/C/W/O percentage split of your observed token usage.", empty)
+        self.assertIn("Token Mix %: The Input / Cached input / Cache write / Output percentage split", empty)
         self.assertIn("No priced prompts are available yet.", empty)
         self.assertIn("Relative CCost: No completed priced prompts are available yet.", empty)
         self.assertIn("Relative CCost stays blank", empty)
@@ -290,9 +295,9 @@ class BalancedShareTests(unittest.TestCase):
         self.assertEqual(100, sum(mix.percentages))
         self.assertEqual(sum(mix.totals), mix.total_tokens)
         self.assertLess(abs(Decimal(100) - sum(mix.shares)), Decimal("1e-20"))
-        self.assertEqual(("Input: 0% (<0.1)", "Cache: 98.6% (60)", "Write: 1% (15)", "Output: 0.4% (24)"),
+        self.assertEqual(("Input: 0% (<0.1)", "Cached input: 98.6% (60)", "Cache write: 1% (15)", "Output: 0.4% (24)"),
                           mix_cells(mix))
-        self.assertEqual("Token Mix % · 1 prompt · Input: 0% (<0.1)   Cache: 98.6% (60)   Write: 1% (15)   "
+        self.assertEqual("Token Mix % · 1 prompt · Input: 0% (<0.1)   Cached input: 98.6% (60)   Cache write: 1% (15)   "
                          "Output: 0.4% (24)", token_mix_line("1 prompt", mix))
         self.assertIn("Output: 0.4% (24)", rendered(report(mix, sample=1)))
 

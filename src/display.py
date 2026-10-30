@@ -10,6 +10,12 @@ import re
 from src.analysis.timezones import resolve_timezone
 from src.numbers import consumed_capacity, exact_number, remaining_capacity
 
+TOKEN_CATEGORIES = (("input", "Input"), ("cache", "Cached input"),
+                    ("write", "Cache write"), ("output", "Output"))
+TOKEN_CATEGORY_LABELS = tuple(label for _key, label in TOKEN_CATEGORIES)
+TOKEN_CATEGORY_ORDER = " / ".join(TOKEN_CATEGORY_LABELS)
+TOKEN_CATEGORY_LEGEND = "; ".join(f"{letter} = {label}" for letter, label in zip("ICWO", TOKEN_CATEGORY_LABELS))
+
 
 def format_reset(reset_at_ms: object, timezone_id: str, *, now_ms: int, compact: bool = False) -> str:
     """Choose a tier by elapsed UTC time; render its target in the configured zone."""

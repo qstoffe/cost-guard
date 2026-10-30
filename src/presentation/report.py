@@ -11,11 +11,12 @@ from src.analysis.token_mix import TokenMix
 from src.reports.models import PromptProjection, ReportKind, ReportProjection, SessionPromptBlock
 from src.version import DISPLAY_VERSION, PRODUCT_NAME, RELEASE_DATE
 from src.numbers import ccost_amount, ccost_display
-from src.display import context_tokens as _context_k, context_delta as _context_delta_k, token_volume
+from src.display import (TOKEN_CATEGORY_ORDER, TOKEN_CATEGORY_LEGEND, context_tokens as _context_k,
+                         context_delta as _context_delta_k, token_volume)
 
 from .terminal import AnsiStyler, Column, StyledText, fit, render_table, single_line, terminal_content_width, wrap_prose
 from .accounts import capacity_lines, money, quota_label, account_ccost_lines
-from .token_mix import MIX_TERM, aligned_mix_cells, mix_cells, packed_cells, total_cost_text
+from .token_mix import MIX_LABELS, MIX_TERM, aligned_mix_cells, mix_cells, packed_cells, total_cost_text
 from .definitions import concept_lines
 from .context_warnings import WARNING_ROLE, context_warning_text, next_ictx_ccost, threshold_multiplier_text, warning_explanation_lines
 from .pricing_notices import pricing_notice_lines
@@ -142,6 +143,10 @@ class ReportRenderer:
             faded_rows=superseded_rows([(item.publisher, item.model) for item in report.model_comparison]),
         ):
             self._write(line)
+        if all_models:
+            self._prose("GitHub USD/M I/C/W/O: exact published rates per million tokens, not billed spend. "
+                        + TOKEN_CATEGORY_LEGEND + ". A dash means no published rate (Not applicable), not measured usage. "
+                        "Published prices do not imply observed tokens.")
         for note in report.model_comparison_promotion_notes:
             for line in pricing_notice_lines(note, self.table_width, self.styler, "modelComparisonPromotion"):
                 self._write(line)
@@ -273,7 +278,7 @@ class ReportRenderer:
 
         table_lines = render_table(
             (Column("Prompt", min_width=18, max_width=240, flexible=True), Column("CCost", True), Column("Calls", True), Column("Duration", True), Column("~Ictx", True, max_width=22),
-             Column("~Ictx CCost", True), Column("~Extra CCost", True), Column("I/C/W/O %", True, max_width=24)),
+             Column("~Ictx CCost", True), Column("~Extra CCost", True), Column(MIX_TERM, True, max_width=24)),
             rows, styles=styles, styler=self.styler, target_width=self.table_width, separator_before_rows=(total_index,),
             leading_spans={index: 8 for index, row in enumerate(rows) if not any(str(cell) for cell in row[1:])},
         )
@@ -325,7 +330,7 @@ class ReportRenderer:
                                       snapshot_running_metrics=report.kind is ReportKind.SESSION)
         for explanation in (
             "CCost: reference token valuation including linked child work, not actual billing; ? marks partial pricing.",
-            "Calls: causal model requests. I/C/W/O %: input/cache-read/cache-write/output (including reasoning) token shares.",
+            f"Calls: causal model requests. {MIX_TERM}: {TOKEN_CATEGORY_ORDER} token shares (Output includes reasoning).",
             "Duration: execution wall-clock time, not calendar elapsed time. Total unions selected prompt/compaction intervals, excluding idle gaps; N/A means timing is incomplete.",
             "~Ictx: approximate incoming context, or context change → next-input context along the session timeline.",
             "~Ictx CCost: current-price reference value of incoming context; not actual billing.",
@@ -370,7 +375,7 @@ class ReportRenderer:
                 for (name, prompts, calls, mix), shares in zip(groups, cells)]
         columns = (Column(label, min_width=12, max_width=60, flexible=True), Column("Prompts", True),
                    Column("Calls", True), Column("Tokens", True),
-                   *(Column(name, True, max_width=24) for name in ("Input", "Cache", "Write", "Output")),
+                   *(Column(name, True, max_width=24) for name in MIX_LABELS),
                    Column("CCost", True))
         lines = render_table(columns, rows, styler=self.styler, target_width=self.table_width)
         if len(lines[0]) <= self.table_width:
@@ -404,8 +409,8 @@ class ReportRenderer:
             self._render_history_mix_table("Publisher", [(item.publisher, item.prompts, item.calls, item.mix)
                                                          for item in report.publisher_token_mix])
         for explanation in (
-            "Tokens: known I/C/W/O volume, including reasoning in Output; K/M/B are rounded display only. ? marks incomplete telemetry; N/A means no known categories.",
-            "Input/Cache/Write/Output: Token Mix % of the model/publisher's token volume (output includes reasoning) and its CCost.",
+            f"Tokens: known {TOKEN_CATEGORY_ORDER} volume, including reasoning in Output; K/M/B are rounded display only. ? marks incomplete telemetry; N/A means no known categories.",
+            f"{TOKEN_CATEGORY_ORDER}: Token Mix % of the model/publisher's token volume (Output includes reasoning) and its CCost.",
             "CCost: reference token valuation priced per request, not actual billing; ? marks partial pricing.",
             "Prompts: unique user prompts where the model contributed usage; one prompt can count on several rows.",
             "Calls: model requests attributed to the model, including tool-loop, subagent and compaction requests.",

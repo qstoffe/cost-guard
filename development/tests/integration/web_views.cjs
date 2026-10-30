@@ -128,7 +128,7 @@ async function main() {
   const snapshot = ids.result.textContent;
   assert.match(snapshot, /Running at snapshot · provisional|1–50 of 151/);
   const headers = all(ids.result, 'th').map(node => node.textContent);
-  assert.deepEqual(headers, ['Prompt', 'CCost', 'Calls', 'Duration', '~Ictx', '~Ictx CCost', '~Extra CCost', 'I/C/W/O %']);
+  assert.deepEqual(headers, ['Prompt', 'CCost', 'Calls', 'Duration', '~Ictx', '~Ictx CCost', '~Extra CCost', 'Token Mix %']);
   const totals = all(ids.result, 'tfoot')[0].textContent;
   for (let i = 0; i < 3; i++) all(ids.result, 'button').find(node => node.textContent === 'Next').click();
   assert.match(ids.result.textContent, /151–151 of 151/);

@@ -6,7 +6,7 @@ ranking or arbitrary object introspection. CLI and Web consume shared primitives
 from decimal import Decimal, ROUND_HALF_UP
 
 from src.analysis.timezones import format_local_timestamp
-from src.display import (compact_threshold, compact_tokens, context_delta, context_tokens,
+from src.display import (TOKEN_CATEGORIES, TOKEN_CATEGORY_LEGEND, compact_threshold, compact_tokens, context_delta, context_tokens,
                          duration_text, format_reset, money, native_amount, price_summary, relative_cost, unaccounted_usage, quota_usage, token_volume)
 from src.numbers import balanced_share_percents, ccost_amount, ccost_display, ccost_range, ccost_unit, remaining_capacity
 
@@ -82,6 +82,9 @@ def quota_tokens(values):
 
 def metric_tokens(values, timezone_id, now_ms=None):
     tokens = {}
+    if "source_label" in values or "token_mix_percent" in values or ("totals" in values and "shares" in values):
+        tokens["token_categories"] = record(**dict(TOKEN_CATEGORIES))
+        tokens["token_category_legend"] = TOKEN_CATEGORY_LEGEND
     for key in ("duration_ms", "watch_duration_ms", "running_ms", "background_ms"):
         if key in values:
             tokens[key] = duration_text(values[key])
@@ -172,7 +175,7 @@ def history_tokens(values, timezone_id):
         costs = values.get("costs")
         priced = costs is not None and not (values["request_count"] and not values["priced_requests"])
         prefix = "" if values["cost_complete"] else "?"
-        for index, name in enumerate(("input", "cache", "write", "output")):
+        for index, (name, _label) in enumerate(TOKEN_CATEGORIES):
             cost = "N/A" if not priced else prefix + ccost_amount(decimal(costs[index]))
             tokens[name] = shares[index] + ("" if costs is None else f" ({cost})")
         tokens["total_cost"] = prefix + ccost_amount(sum((decimal(item) for item in costs), Decimal(0))) if priced else "N/A"

@@ -43,7 +43,7 @@ class RemainingViewTests(unittest.TestCase):
                 report, include_header=False)
             text = stream.getvalue()
             self.assertTrue(all(len(line) <= width for line in text.splitlines()), text)
-            for heading in ("Tokens", "Prompts", "Calls", "Input", "Cache", "Write", "Output", "CCost"):
+            for heading in ("Tokens", "Prompts", "Calls", "Input", "Cached input", "Cache write", "Output", "CCost"):
                 self.assertIn(heading, text)
 
     def test_history_mix_cells_match_cli_for_complete_partial_unknown_and_empty(self):

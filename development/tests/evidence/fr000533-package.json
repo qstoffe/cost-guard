@@ -1,0 +1,35 @@
+﻿{
+  "status": "ok",
+  "passes": [
+    "required layout/runtime-artifact rules checked",
+    "package-owned directory names are lowercase",
+    "text files are UTF-8 readable",
+    "generic open-source/public-repository hygiene checked",
+    "machine-enforced file budgets checked",
+    "Python 3.11 syntax compatibility checked",
+    "Python compile checks executed",
+    "bootstrap import smoke passed",
+    "version consistency checked for v80.114",
+    "thin entry-point architecture checked",
+    "absolute/relative/nested architecture import boundaries checked"
+  ],
+  "warnings": [
+    {
+      "label": "rootReadme design budget",
+      "detail": "README.md: 32705 > 24576 bytes"
+    },
+    {
+      "label": "pythonModule design budget",
+      "detail": "src/analysis/context.py: 33925 > 32768 bytes"
+    },
+    {
+      "label": "pythonModule design budget",
+      "detail": "src/reports/service.py: 40323 > 32768 bytes"
+    },
+    {
+      "label": "pythonModule design budget",
+      "detail": "src/watch/coordinator.py: 41845 > 32768 bytes"
+    }
+  ],
+  "failures": []
+}

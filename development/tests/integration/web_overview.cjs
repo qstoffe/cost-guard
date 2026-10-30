@@ -22,6 +22,8 @@ const draw = () => vm.runInContext('ReportView.render(output, result, state)', c
 const names = () => all(output, 'tbody')[0].children.map(row => row.children[1].textContent);
 const click = title => all(output, 'button').find(n => n.textContent === title).events.click();
 draw();
+assert.ok(output.textContent.includes('I = Input; C = Cached input; W = Cache write; O = Output'));
+assert.ok(!/\b(?:Cache|Write):/.test(output.textContent));
 assert.deepEqual(names(), order, 'default rendered order must match CLI, not a local sort');
 assert.deepEqual(all(output, 'th').map(n => n.textContent), ['Publisher', 'Model', 'Relative CCost', 'Release date']);
 assert.deepEqual(all(output, 'h3').map(n => n.textContent), ['CCost', 'Token Mix %', 'Relative CCost', 'Accounts Overview']);
@@ -44,7 +46,7 @@ if (fallback) {
   assert.ok(output.textContent.includes('hidden 2/96/1/1 mix'));
 } else {
   assert.deepEqual(relatives, ['8.0x', '8.0x', '8.0x → 20.0x (>1M)', '*1 8.0x → 16.0x (>200K)', '1.0x']);
-  assert.ok(output.textContent.includes('Input: 20% (2) · Cache: 60% (6) · Write: 10% (1) · Output: 10% (1)'));
+  assert.ok(output.textContent.includes('Input: 20% (2) · Cached input: 60% (6) · Cache write: 10% (1) · Output: 10% (1)'));
   assert.ok(output.textContent.includes('20/60/10/10 tokens · CCost 2/6/1/1'));
 }
 click('Model');

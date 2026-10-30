@@ -7,9 +7,9 @@ from typing import Sequence
 from src.analysis.token_mix import TokenMix
 from src.analysis.valuation import ComparisonCost
 from src.numbers import balanced_share_percents, ccost_amount
-from src.display import compact_tokens
+from src.display import TOKEN_CATEGORY_LABELS, compact_tokens
 
-MIX_LABELS = ("Input", "Cache", "Write", "Output")
+MIX_LABELS = TOKEN_CATEGORY_LABELS
 MIX_TERM = "Token Mix %"
 
 
