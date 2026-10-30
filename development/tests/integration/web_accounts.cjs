@@ -38,3 +38,26 @@ for (const text of ['PRIVATE', '0.89876543211', '89.876543211', '1.23456789', 'r
 }
 // Rendering another section must not acquire or mutate the shared frozen report.
 assert.equal(view.accounts_quotas.accounts[0].observation.quotas[0].remaining, '89.876543211');
+
+// Overview reuses the same frozen CLI-defined values, with provenance hidden.
+output.replaceChildren();
+vm.runInContext('ReportView.overviewAccounts(output, result.view.accounts_quotas, "", true, true)', context);
+const compact = all(output, 'section');
+const visible = node => node.tag === 'details' ? node.children[0].textContent : node.text + node.children.map(visible).join('');
+assert.equal(compact.length, 7);
+for (const text of ['10% used', 'Used 11/100 AI credits', '$1.01 / $10.00',
+  'Billed today: $0.00', 'Billed month: $1.23', 'CCost today: 2', 'CCost this month: 13',
+  '29 AI credits/day', 'no workdays left', 'Unaccounted usage (estimate): -0.2',
+  'Rate limited', 'Connection failed', 'Window not started', 'Quota unavailable; not zero or unlimited.']) {
+  assert.ok(visible(output).includes(text), 'important CLI value visible by default: ' + text);
+}
+assert.ok(!compact[0].children.some(node => node.tag === 'p' && /^Available/.test(node.textContent)), 'healthy observation prose hidden, not the legitimate account name');
+assert.ok(!visible(compact[0]).includes('GitHub Copilot'), 'no second provider/plan heading');
+assert.ok(!visible(compact[0]).includes('Extra usage'), 'billing component detail collapsed');
+assert.ok(!visible(output).includes('Attribution incomplete'), 'verbose attribution detail collapsed');
+assert.ok(visible(compact[1]).includes('BLOCKED'));
+assert.ok(visible(compact[6]).includes('Stale'));
+assert.equal(all(output, 'details').length, 7);
+assert.ok(all(output, 'summary').every(node => node.textContent === 'Details'));
+assert.ok(all(output, 'details').every(node => !node.open));
+assert.ok(output.textContent.includes('Extra usage') && output.textContent.includes('Attribution incomplete'));

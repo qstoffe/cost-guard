@@ -1,5 +1,35 @@
 # Web Beta
 
+## Minimal Overview
+
+v80.116 puts the complete CLI-ranked model table first: Publisher, Model,
+Relative CCost, Release date. Only the rows scroll vertically; the header stays
+fixed, and narrow screens can scroll the table horizontally. Names are not truncated.
+Overview has no search, sorting, pager, capture/refresh/cancel toolbar or snapshot
+metadata paragraph. Models and other report routes retain their own controls.
+
+First acquisition shows only branding/navigation and a centered progress bar with
+one short stage line. Its **≈ percentage is a bounded stage-weighted estimate**, not
+a measured global total; actual stage counts appear when supplied. It never moves
+backwards or reaches 100 before a complete, usable source result. Failed/partial
+acquisition stops activity and gives actionable feedback; missing data is not zero.
+Reload requests a fresh Overview; Back/Forward to a retained view and live host
+heartbeats do not refresh its frozen report or reset its table scroll/selection.
+
+Below the table, **More information** starts collapsed and contains CCost, Token Mix,
+the shared global latest-100-completed-priceable-prompt Relative CCost explanation,
+and the **CCost: Credits / USD** selector. Genuine promotion/new-model notices follow,
+then compact equal-height account cards: one name, CLI-formatted costs, native quotas,
+resets/Pace and known billing/Unaccounted values. One **Details** disclosure reveals
+provenance and billing components; expanding it need not stretch neighboring cards.
+Real blocked/stale/partial/error warnings remain visible. The Accounts route retains
+its diagnostic presentation and independent observation facts.
+
+Healthy connections have no visible status label or banner. An unhealthy loaded page
+shows a compact, actionable warning with hover/focus/touch-accessible connection
+details. A server that never served the page cannot display an offline page. The
+global footer is removed; guarantees remain in relevant optional report help.
+
 ## Cost per Active Hour
 
 v80.115 adds Web-only `/#/cost-per-hour`: **Today**, **Month to date** and
@@ -39,25 +69,24 @@ only across routes, live publications and Snapshot/Live; reload or a fresh tab r
 validated `ccostDisplayUnit`. No URL, browser storage or settings cookie is written.
 
 v80.107 keeps healthy authenticated streams open without periodic rotation. Connected
-status is a compact header label; only actionable states show a notice, with expandable
+status is now visually quiet; only actionable states show a notice, with expandable
 host/source timestamps. See [real-source soak and fault evidence](../development/architecture/governance/verification/web-live-stability.md).
 
 v80.106 fixes real-installation Normal results that exceeded the unchanged 8 MiB
 limit because they carried unused month-wide causal request identities. Normal now
 retains per-root revision evidence without that detail-only payload; no model rows,
 account periods or totals are capped. Overview renders every reference-model row in
-one keyboard-scrollable table, with explicit active-filter/custom-sort labels and
-CLI default-order restoration. Token Mix phase costs and account native-money,
-relative-reset and availability detail are present on Overview itself.
+one keyboard-scrollable table. v80.116 removes Overview filter/sort controls; the
+dedicated Models route retains them. Token Mix phase costs and account provenance
+are available under Overview's optional explanations/details.
 
 v80.93 adds a shared responsive light/dark visual system and global **Watch** navigation.
 The theme follows the operating-system preference, with no saved browser settings or external fonts.
 Rounded controls, visible keyboard focus, sticky table headings, exact numeric alignment and
 local table scrolling keep data selectable at narrow widths; reduced-motion preferences disable transitions.
 The native “Reading this report” disclosure contains definitions, never report rows or totals.
-In v80.94, Overview instead follows CLI Normal order: CCost, Token Mix %, Relative CCost,
-pricing metadata, reference models, promotion/new-model notices, Accounts Overview and final notes.
-Definition help is expandable beside each metric. Account cards show native quotas/remaining/reset,
+Overview now follows the minimal model-table-first hierarchy described above rather
+than v80.94's metric-first framing. Account cards show native quotas/remaining/reset,
 Pace and known bills without duplicate quota tables or whole-report account totals. Independent
 attribution/source/account warnings remain visible; observation/native billing detail is expandable.
 See the [synthetic before/after gallery](../development/architecture/governance/verification/web-design/index.html)
@@ -93,13 +122,13 @@ Accounts uses the shared provider/account cards with native quota windows, known
 | Date / inclusive range | `/#/reports?date=2026-10-25`, `/#/reports?date=2026-10-24:2026-10-25` | Configured-local boundaries/DST; canonical range valuation and union duration; impossible/reversed dates fail explicitly |
 | Historical Token Mix | `/#/token-mix` | Explicit Capture/Refresh only, never navigation/prefetch; CLI Input / Cached input / Cache write / Output share-and-CCost cells, model/publisher Prompts/Calls/Tokens/CCost, exact-volume sorting with compact K/M/B labels and explicit partial/unknown telemetry, full-report total above the table and optional sample/price coverage |
 
-Search above the report filters all finite/live tables; each table also has its own filter and sortable column buttons. Column clicks cycle ascending, descending, then original server order; model tables also offer **CLI default order**. Filters/sorts are presentation-only and show filtered/page counts alongside full-report row counts; totals and source queries never change. Decimal strings are compared exactly, vector columns lexicographically I/C/W/O, and unknown scalar values sort last. Default model order remains the shared server ranking, including exact tier/boundary and no-sample fallback rules, not rounded display values. Overview uses one-decimal `x` multipliers with arrows/compact K/M thresholds; without completed priced prompts it leaves multipliers blank, as Normal does. Complete revision-paged session detail has its own browsing controls rather than pretending a filter covers unloaded rows; the global search is disabled there.
+Outside Overview, search above the report filters the displayed tables; tables retain their own filters and sortable column buttons. Column clicks cycle ascending, descending, then original server order; Models also offers **CLI default order**. Filters/sorts are presentation-only, with filtered/page and full-report row counts; totals and source queries never change. Decimal strings are compared exactly, vector columns lexicographically I/C/W/O, and unknown scalar values sort last. Overview keeps the shared server ranking without presentation controls: one-decimal `x` multipliers with arrows/compact K/M thresholds, blank multipliers without completed priced prompts, just as CLI Normal. Complete revision-paged session detail has its own browsing controls; global search is disabled there rather than implying coverage of unloaded rows.
 
 Token Mix shows actual phase/completed/total progress and Cancel terminates only that finite scan. Reopening a retained view reuses its timestamped result; explicit recapture checks the real source/config/pricing dependencies through the existing derived-analysis cache (`src/reports/acquisition.py`, `src/analysis/cache.py`), not a browser ledger or request-name-only cache. Deleted/pruned history stays unavailable. Timeout/cancellation/empty history are distinct; Live and its account scheduler continue independently. Date prompt links open full session detail; Back restores the retained range. URL fragments contain only scope/locators, never prompt content.
 
 Session-ID links open `/#/sessions/<id>`. Fragment routes support direct links, reload and browser Back/Forward without expanding the HTTP path allowlist. The one-use bootstrap fragment is removed before requests; ordinary session routes are preserved on reload. Names/prompts are text, never links or tooltips containing source paths. Navigation and paging never put prompt/history payloads in browser storage or history state.
 
-Every successful result has a visible observation time, source status and per-root revision evidence from the shared facade. A running prompt is **running at that snapshot**, with canonical provisional values and frozen duration. Only **Refresh snapshot** reacquires a viewed result. Source events, elapsed wall time, navigation and paging cannot update it; no Watch starts. Failed refresh preserves the last known result with **STALE** status. Missing sessions, existing sessions without prompts, partial source, independent unavailable accounts and source failures are distinct from acquired zero.
+Every successful result retains observation time, source status and per-root revision evidence from the shared facade; Overview hides the verbose snapshot paragraph, not its provenance or partial/error warnings. A running prompt is **running at that snapshot**, with canonical provisional values and frozen duration. **Refresh snapshot** reacquires other report views; reload reacquires Overview. Source events, elapsed wall time, navigation and paging cannot update a frozen report; no Watch starts. Failed refresh preserves the last known result with **STALE** status. Missing sessions, empty sessions, partial source, independent unavailable accounts and source failures are distinct from acquired zero.
 
 The session table retains Prompt, CCost, Calls, Duration, ~Ictx, ~Ictx CCost, ~Extra CCost and Token Mix %. Category names and adjacent legends come from Python's shared display tokens: **I = Input; C = Cached input; W = Cache write; O = Output**. Input is uncached, Cached input is cache read, Cache write is cache creation, and Output includes reasoning. This order also applies to compact reference-price and Watch run fields. Full-session totals and main/linked-child breakdown come from the canonical result, never from the visible page. Unknown, incomplete and estimated amounts are labeled; a published Cache write price does not imply observed tokens. Catalog `Not applicable` is an unpublished rate, not measured zero. CCost is not billing. The browser performs no valuation or token attribution.
 
@@ -137,7 +166,7 @@ Layout choices: wrapping top navigation; system light/dark palette; source/readi
 
 ## Global Watch and reconnect
 
-The common shell distinguishes **STARTING**, **Live connected**, **SOURCE UNAVAILABLE** (HTTP works, acquisition does not), **RECONNECTING**, **OFFLINE — last observation**, **AUTHENTICATION EXPIRED**, changed host identity and **STOPPED — NOT LIVE**. Healthy operation has only a compact accessible header label, no persistent full-width banner. Actionable notices are non-sticky, with host/source timestamps in expandable Connection details. Account freshness and frozen report timestamps never become fresh merely because HTTP works. Stop/identity/authorization loss disables acquisition controls, ends retry and retains readable values. Use the OS launcher to restart or obtain fresh authorization; no host is started by the browser.
+The common shell distinguishes starting, connected, **SOURCE UNAVAILABLE** (HTTP works, acquisition does not), **RECONNECTING**, **OFFLINE — last observation**, **AUTHENTICATION EXPIRED**, changed host identity and **STOPPED — NOT LIVE**. Healthy status is visually quiet. Actionable non-sticky warnings expose host/source timestamps on hover, keyboard focus or touch disclosure. Account freshness and frozen report timestamps never become fresh merely because HTTP works. Stop/identity/authorization loss disables acquisition controls, ends retry and retains readable values. Use the OS launcher to restart or obtain fresh authorization; no host is started by the browser.
 
 One authenticated `/api/live` watchdog runs at ten-second intervals after the preceding check completes; every ordinary request has a five-second deadline. Thus a reachable tab normally detects abrupt loss within fifteen seconds (browser/OS suspension can delay timers). `pageshow` and visible-tab resume revalidate; only stale checks (at least fifteen seconds) or interrupted streams first mark retained data as reconnecting. Healthy HTTP cannot restore a broken stream to connected. Same-instance EventSource retry preserves cookies, replay/resync and retained values. Authenticated API response identity is pinned per page; a replacement host is never silently accepted even if another tab renewed its cookie. No identity, token or report is persisted in browser storage, and no port/network scan or sensitive unauthenticated endpoint is added.
 

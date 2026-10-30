@@ -1,7 +1,7 @@
 # Web snapshot parity and navigation
 
-Source revision: c87bd954decd5bc36ea06409abc1a78d3c7951c2
-Checked revision: c87bd954decd5bc36ea06409abc1a78d3c7951c2
+Source revision: e6b2ad827f3f3681123e6ba1eac292b5dc8f31c3
+Checked revision: e6b2ad827f3f3681123e6ba1eac292b5dc8f31c3
 Last checked: 2026-10-30
 Status: current
 
@@ -33,6 +33,54 @@ Session rate health must update even if the source loses availability without a
 new report revision. The last good value remains frozen and visibly retained.
 
 ## Evidence
+
+FR 000535's minimal Overview uses one semantic HTML table with CSS subgrid tracks,
+native tbody-only vertical scrolling and matching header/body scrollbar gutters.
+The first Chromium attempt found a real 15px final-column width mismatch; reserving
+the header gutter with hidden overflow fixed it without wheel/key interception or
+separate duplicate tables. Prepared-text lengths size Relative CCost segments; only
+Release date expands. Concept help and the memory-only unit selector move together
+under one collapsed disclosure. Account summaries reuse CLI tokens, not JS amounts.
+
+Approval-only `integration/web_minimal_overview.py` passed twelve cases in isolated
+Playwright 1.64.1 / Chromium 156.0.8078.4: 360/1280/1920px light/dark, 30 stress rows,
+monotonic approximate progress 22/42/55/80/80/99, success/partial/error/timeout/auth,
+offline/reconnect/stopped states, real wheel/keyboard, horizontal access, equal-height
+cards/independent expansion and frozen DOM/selection/no extra acquisition. The
+strengthened rerun also passed emulated mobile touch pans/taps and zero/one-account
+layouts. Screenshots were visually inspected. This is synthetic loopback evidence, not private provider,
+physical touchpad/touch, screen-reader or native macOS acceptance. Details and exact
+commands: [minimal Overview verification](../architecture/governance/verification/web-minimal-overview.md).
+
+Hosted [run 40988348673](https://github.com/qstoffe/cost-guard/actions/runs/40988348673)
+subsequently passed full regression/package, isolated native API/launcher and
+rendered Chromium smoke on Windows 2025 and macOS 15 ARM64/Intel at `adfdf7d`.
+Windows passed all 1,438 tests; each macOS passed 1,431 with seven Windows-only
+skips. The initial terminal-browser failure was a fixture sequencing race: HTTP
+recovery did not prove that EventSource had reconnected. Passively observing an
+open SSE stream before stopping the fixture repaired it without weakening any
+terminal assertion or changing production code. Hosted native success is not
+physical desktop acceptance and does not erase the local policy failures.
+
+Failed fixture attempts were not product passes: Playwright string predicates hit
+the shipped CSP (use function predicates, never weaken CSP); repeated cold documents
+exhausted the four SSE slots before closed sockets were observed (use a distinct
+owned fixture host per cold case); a compact-card test mistook the legitimate account
+name Available account for status prose. A version-history cap failure was repaired
+by shortening only this delivery's new entry, not pruning history or raising the cap.
+
+The Decision Delegate authorized scratch-only Playwright/Chromium provisioning and
+synthetic loopback browser tests, not personal-profile discovery or installed-app
+changes. It separately approved only four unrelated PowerShell 5.1 launcher subcases
+blocked by host execution policy for this delivery, conditional on all other tests,
+package validation and strengthened browser checks passing. No policy/bypass/test
+weakening was attempted; failed launcher behavior remains unverified, not PASS.
+
+The fresh confirming full run had 118 files: 117 PASS, only launcher feedback FAIL;
+1,438 registered tests and two symlink-privilege skips. The four unsuccessful
+PowerShell 5.1 subcases were missing-Python and mode-exit report/watch/diagnostics.
+All causal fixes, other regression files, the twelve browser cases and all eleven
+package-validator checks passed; the validator retained four design-budget warnings.
 
 CLI Normal was captured privately from the scratch clone with default config and
 the already running V2 service. First cold capture exceeded a 180-second harness

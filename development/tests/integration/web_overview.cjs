@@ -26,10 +26,15 @@ assert.ok(output.textContent.includes('I = Input; C = Cached input; W = Cache wr
 assert.ok(!/\b(?:Cache|Write):/.test(output.textContent));
 assert.deepEqual(names(), order, 'default rendered order must match CLI, not a local sort');
 assert.deepEqual(all(output, 'th').map(n => n.textContent), ['Publisher', 'Model', 'Relative CCost', 'Release date']);
-assert.deepEqual(all(output, 'h3').map(n => n.textContent), ['CCost', 'Token Mix %', 'Relative CCost', 'Accounts Overview']);
-assert.ok(output.textContent.indexOf('Pricing/cache metadata') < output.textContent.indexOf('Publisher'));
+assert.deepEqual(all(output, 'h3').map(n => n.textContent), ['CCost', 'Token Mix %', 'Relative CCost']);
+assert.equal(output.children[0].className, 'overview-models', 'table is first');
+assert.equal(output.children[1].children[0].textContent, 'More information');
+assert.ok(!output.children[1].open, 'explanations start collapsed');
+for (const text of ['Pricing/cache metadata', 'Snapshot:', 'Shared global comparison sample', 'full-report rows']) assert.ok(!output.textContent.includes(text));
+assert.equal(all(output, 'input').length, 0);
+assert.equal(all(output, 'button').length, 0);
 for (const [first, second] of [['Release date', 'Promotion terms'], ['Promotion terms', 'New models'],
-  ['New models', 'Accounts Overview'], ['Accounts Overview', 'Final note']]) {
+  ['New models', 'CCost today'], ['CCost today', 'Final note']]) {
   assert.ok(output.textContent.indexOf(first) < output.textContent.indexOf(second));
 }
 assert.ok(output.textContent.includes('CCost today: 2'));
@@ -49,7 +54,8 @@ if (fallback) {
   assert.ok(output.textContent.includes('Input: 20% (2) · Cached input: 60% (6) · Cache write: 10% (1) · Output: 10% (1)'));
   assert.ok(output.textContent.includes('20/60/10/10 tokens · CCost 2/6/1/1'));
 }
-click('Model');
+// Dedicated Models retains its independent sort/filter controls.
+context.state.section = 'models'; draw(); click('Model');
 assert.deepEqual(names(), ['A', 'Reference', 'TierHigh', 'TierLow', 'Z']);
 click('Model');
 assert.deepEqual(names(), ['Z', 'TierLow', 'TierHigh', 'Reference', 'A']);
@@ -68,6 +74,7 @@ assert.deepEqual(names(), ['Higher', 'Lower', 'Equal', 'Unknown']);
 click('CLI default order');
 assert.deepEqual(names(), ['Higher', 'Lower', 'Equal', 'Unknown']);
 // Partial sources and failed accounts stay visible, not hidden in disclosure widgets.
+context.state.section = 'overview';
 context.result.source.status = 'partial';
 view.accounts_quotas.accounts[0].observation.has_error = true;
 view.accounts_quotas.accounts[0].observation.error_code = 'transport_failure';
@@ -87,20 +94,10 @@ for (const count of [0, 1, 49, 50, 51, 123]) {
   assert.deepEqual(rows.map(row => row.children.slice(0, 2).map(cell => cell.textContent)),
     view.model_comparison.map(row => [row.publisher, row.model]));
   assert.ok(!all(output, 'button').some(n => ['Previous', 'Next'].includes(n.textContent)));
-  const scroll = all(output, 'div').find(n => n.className === 'table-scroll');
+  const scroll = all(output, 'div').find(n => n.className === 'overview-models');
   assert.equal(scroll.tabIndex, 0, 'complete table remains keyboard scrollable');
   assert.equal(scroll.attrs['role'], 'region');
-  assert.ok(output.textContent.includes(count + ' full-report rows'));
-  if (count) {
-    const filter = all(output, 'input')[0];
-    filter.value = 'Publisher B'; filter.events.input();
-    assert.equal(all(output, 'tbody')[0].children.length, Math.floor(count / 2));
-    assert.ok(output.textContent.includes('FILTER ACTIVE'));
-    click('Clear model filter');
-    assert.equal(all(output, 'tbody')[0].children.length, count);
-    click('Model');
-    assert.ok(output.textContent.includes('CUSTOM SORT'));
-    click('CLI default order');
-    assert.deepEqual(names(), view.model_comparison.map(row => row.model));
-  }
+  assert.ok(!output.textContent.includes('full-report rows'));
+  assert.equal(all(output, 'tbody')[0].tabIndex, 0);
+  assert.deepEqual(names(), view.model_comparison.map(row => row.model));
 }

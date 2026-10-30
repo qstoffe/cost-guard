@@ -3,26 +3,23 @@
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Cost Guard Web Beta</title><link rel="stylesheet" href="/app.css">
 <script src="/render.js" defer></script><script src="/watch.js" defer></script><script src="/reports.js" defer></script><script src="/live.js" defer></script><script src="/session.js" defer></script><script src="/app.js" defer></script></head>
-<body>
+<body data-section="overview">
 <button class="skip" id="skip">Skip to report</button>
 <header><div class="brand"><span class="brand-mark" aria-hidden="true">CG</span><h1>Cost Guard <small>Web Beta</small></h1></div>
-<p>Local, read-only · CCost is reference valuation, not billing</p>
-<p id="status" role="status">HTTP ready. Establishing browser session…</p></header>
+<span id="status" class="sr-only" role="status"></span></header>
 <nav aria-label="Main navigation">
 <a href="#/overview">Overview</a><a href="#/watch">Watch</a><a href="#/sessions">Sessions</a>
 <a href="#/models">Models</a><a href="#/accounts">Accounts</a><a href="#/reports">Reports</a>
 <a href="#/token-mix">Token Mix</a><a href="#/cost-per-hour">Cost per Active Hour</a></nav>
-<aside id="host-state" class="host-state" role="status" aria-live="polite"><p id="host-message">STARTING — host/source readiness not yet established.</p><details><summary>Connection details</summary><p id="host-details">Host/source observation pending.</p></details></aside>
+<aside id="host-state" class="host-state" hidden><details><summary id="host-warning" aria-describedby="host-tooltip">Connection warning</summary><div role="tooltip" id="host-tooltip"><p id="host-message"></p><p id="host-details"></p></div></details></aside>
 <main id="content" tabindex="-1">
 <div class="toolbar"><h2 id="heading">Overview</h2>
 <button id="refresh" class="primary" disabled>Refresh snapshot</button><button id="cancel" disabled>Cancel</button>
-<label>CCost: <select id="ccost-unit" aria-describedby="ccost-help" disabled><option value="credits">Credits</option><option value="usd">USD</option></select></label></div>
+<label id="unit-choice">CCost: <select id="ccost-unit" aria-describedby="ccost-help" disabled><option value="credits">Credits</option><option value="usd">USD</option></select></label></div>
 <p id="ccost-help" class="detail">USD is reference token valuation, not actual billing. Reload resets this display choice to application configuration.</p>
 <p id="notice" role="status">Cost Guard is starting. Establishing your private browser session before requesting data…</p>
 <div id="scope-controls"></div>
 <label class="report-search">Search displayed report tables <input id="search" type="search" placeholder="Presentation filter only"></label>
-<div id="result" aria-busy="true"><h2>Starting Cost Guard</h2><progress aria-label="Establishing private browser session"></progress><p>The local HTTP shell is ready. Source, accounts and initial report readiness are checked separately. If this view does not advance, reload; if authorization has expired, use tray Open Cost Guard for a fresh link.</p></div>
+<div id="result" aria-busy="true"><div class="overview-loading"><progress max="100" value="0" aria-label="Initial report progress" aria-valuetext="Approximately 0 percent"></progress><p role="status">≈0% · Authorizing browser session…</p></div></div>
 </main>
-<footer>Reports stay frozen until Refresh. Closing this tab does not stop Cost Guard.
-Watch shares one host-owned engine across tabs; its run begins at engine start. Search/sort/page controls never change report scope or totals. CLI remains independent.</footer>
 </body></html>
