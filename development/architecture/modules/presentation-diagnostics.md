@@ -1,8 +1,19 @@
 # Presentation Diagnostics source contracts
 
+Source revision: 61088f210250f41e2f28f2a5d1da74794995915c
+Checked revision: 61088f210250f41e2f28f2a5d1da74794995915c
+Last checked: 2026-10-30
+Status: current
+
 [Architecture overview](../OVERVIEW.md) · [Owner/test routes](CODE_MAP.md). Source remains authoritative.
 
-## Presentation and CLI
+## Responsibility and ownership
+
+Presentation consumes report/domain projections; Diagnostics exports bounded troubleshooting evidence. Neither owns provider acquisition, identity selection or credential repair.
+
+## Public contract
+
+`src/presentation/accounts.py` renders shared safe transport causes for certificate validation, other TLS, DNS, connection and timeout failures. `src/accounts/diagnostics.py` exports only allowlisted TLS categories and integer verification codes in 0..255, excluding booleans. HTTP status stays zero without an HTTP response; HTTP 401/403/429 keep their existing meanings. No arbitrary exception messages, certificate subjects or response bodies cross these boundaries.
 
 `src/display.py` owns the ordered GitHub token vocabulary: Input / Cached input / Cache write / Output and the I/C/W/O legend. CLI mix cells/headings reuse it; `src/application/display.py` exports additive `display.token_categories` (existing input/cache/write/output keys) and `display.token_category_legend` to report/Watch/detail DTOs. Web reads this metadata rather than deriving names from keys. Token acquisition, aggregation, valuation and unknown/zero semantics are unchanged. `test_token_category_names.py` separates observed zero, absent telemetry, published prices without observations and Not applicable rates; 80/120/160-column synthetic text lives in `development/tests/fixtures/token-categories/`.
 
@@ -23,3 +34,15 @@ FR000525 keeps provider capacity and Remaining pace canonical; `src/display.py` 
 ## Diagnostics boundary
 
 `collect_diagnostics.py` composes metadata/statistics-only troubleshooting; local Full/validation failures never suppress its bundle. IDs are hashed; prompts/titles/payloads/auth stay excluded. `diagnostic_watch.py` records fixed mode/generation labels, catalog/revision/cache/hydration/analysis counts, staged startup/refresh/render timings and geometry; `domain/acquisition.py` shares numeric instrumentation. Diagnostics remains runtime output, not a release.
+
+## Allowed dependencies
+
+Presentation depends on projection/domain display contracts, never concrete account integrations. Development Diagnostics may compose runtime readers but runtime modules must not import development tooling or fixtures.
+
+## Entrypoints
+
+`src/presentation/accounts.py`, `src/accounts/diagnostics.py`, `src/presentation/report.py`, `src/presentation/watch.py`, `development/tools/collect_diagnostics.py`.
+
+## Tests
+
+`development/tests/test_openai_transport.py` exercises exception normalization, privacy filtering and report/Watch failure text. Existing presentation/Diagnostics routes include `development/tests/test_quota_presentation.py`, `development/tests/test_quota_observations.py`, `development/tests/test_watch_rendering.py` and `development/tests/test_rc2_public_diagnostics.py`.

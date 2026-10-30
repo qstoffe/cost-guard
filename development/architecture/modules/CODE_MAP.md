@@ -1,5 +1,10 @@
 # Cost Guard code map
 
+Source revision: 61088f210250f41e2f28f2a5d1da74794995915c
+Checked revision: 61088f210250f41e2f28f2a5d1da74794995915c
+Last checked: 2026-10-30
+Status: current
+
 Navigation, not another architecture authority: [OVERVIEW.md](../OVERVIEW.md) owns the source contracts; installed OpenCode Toolkit skills own the workflow. This map routes implementation and tests without importing the application or loading historical releases.
 
 ## Start here
@@ -51,6 +56,7 @@ All paths in this table are relative to the repository root. Test names live und
 | New Models first-sighting persistence/highlight | `src/cache/repository.py`, `src/reports/semantics.py`, `src/watch/model_discovery.py`, `src/presentation/pricing_notices.py` | `test_cache.py`, `test_model_pricing_presentation.py`, `test_release_metadata_recovery.py`, `test_watch_model_discovery.py` |
 | Account discovery/async acquisition/freshness evidence | `src/accounts/credentials.py`, `discovery.py`, `acquisition.py`, `refresh_policy.py`, `refresh_loop.py`, `quota_observations.py`; `src/cache/account_refresh_state.py` | `test_account_acquisition.py`, `test_account_freshness.py`, `test_quota_observations.py`, `test_accounts_ccost.py`, `test_claude_code_accounts.py` |
 | Concrete quota providers/mapping | `src/accounts/github_copilot.py`, `openai_subscription.py`, `anthropic.py`, `claude_code.py`, `claude_transport.py`, `minimax.py`, `simple_http*.py`, `http_*.py` | `test_step6_pricing_accounts.py`, `test_http_account_providers.py`, `test_simple_http_engine.py`, `test_claude_transport.py` |
+| OpenAI identity, verified TLS and safe transport failures | `src/accounts/openai_subscription.py`, `openai_tls.py`, `diagnostics.py`, `refresh_policy.py`; shared failure text in `src/presentation/accounts.py` | `test_openai_account_switch.py`, `test_openai_transport.py`; synthetic chain fixture `development/tests/fixtures/openai-tls/` |
 | Prices, tiers, aliases, promotions, release metadata | `src/pricing/catalog.py`, `tiers.py`, `identities.py`, `github_copilot.py`, `promotions.py`, `release_metadata.py`, `metadata_health.py` | `test_pricing_identities.py`, `test_model_comparison_tiers.py`, `test_model_pricing_presentation.py`, `test_release_metadata_recovery.py`, `test_pricing_watch_startup.py` |
 | Disposable persistence/analysis reuse | `src/cache/database.py`, `repository.py`, `metadata_state.py`; `src/analysis/cache.py` | `test_cache.py`, `test_analysis_core.py`, `test_release_metadata_recovery.py`, `test_step9_parity_performance.py` (Full) |
 | Watch lifecycle/change hints/recovery/redraw decisions | `src/watch/coordinator.py`, `redraw.py`, `observers.py`, `account_refresh.py`, `accounts.py`, `model_discovery.py` | `test_watch_account_refresh.py`, `test_watch_idle_accounts.py`, `test_step8_watch.py`, `test_watch_source_recovery.py`, `test_account_acquisition.py`, `test_v7814_regressions.py` |
@@ -73,6 +79,7 @@ Quota Used display is shared by `src/display.py`, `src/presentation/accounts.py`
 - `development/tests/fixtures/watch_runtime.py`: mutable/live synthetic sources, deterministic account scheduler and Watch service composition. It preserves the existing report/account seam without depending on test modules.
 - `development/tests/fixtures/terminal_buffer.py`: in-memory VT cursor/erase/wrap and scrollback replay for Watch overflow redraws; no terminal process or UI automation.
 - `development/tests/fixtures/account_workers.py`: finite gated provider calls, virtual-latency quota observations and bounded worker synchronization.
+- `development/tests/fixtures/openai-tls/`: disposable localhost chain/key reproducing expired cached-intermediate shadowing and rejecting expired leaves, untrusted chains and hostname mismatch; no workstation/provider certificates or credentials.
 - `development/tests/fixtures/watch_rows.py`: synthetic neutral prompt blocks/canonical snapshots for global grouping, chronological lifecycle order and divider regression tests (`test_watch_session_groups.py`).
 - `development/tests/fixtures/opencode_v2_service.py`: fake loopback V2 services (transitional and current wire) that drop keep-alive sockets on stop like a real process.
 - `development/tests/fixtures/opencode_v1_database.py`: the synthetic V1 SQLite history used for generation parity.

@@ -1,13 +1,15 @@
 # OpenAI identity and quota evidence
 
-Source revision: 22f0bff2df29d57de05c12c9586e6a6640771175
-Checked revision: 22f0bff2df29d57de05c12c9586e6a6640771175
-Last checked: 2026-10-25
+Source revision: 61088f210250f41e2f28f2a5d1da74794995915c
+Checked revision: 61088f210250f41e2f28f2a5d1da74794995915c
+Last checked: 2026-10-30
 Status: current
 
 ## Summary
 
 An upstream 401 establishes request rejection, not failed model authentication or paid-tier incompatibility. The earlier affected OpenCode 2.1.4 connection used API-resource ChatGPT token sharing; the latest FR 000160 read-only observation instead found a legacy connection with successful WHAM quota retrieval. Neither result generalizes to another method or account. Classify the method/scopes before sending credentials. Cost Guard never repairs auth or retries another identity.
+
+FR 000536 established a different, pre-HTTP Windows failure: OpenSSL preferred an expired local `CA` intermediate over the peer's valid chain. Restricting Windows trust to server-authentication `ROOT` anchors, while retaining configured OpenSSL CA paths and verification defaults, restored real current-account quota and ordinary CLI Watch refresh. No new sign-in, credential change or TLS bypass was necessary.
 
 ## Evidence
 
@@ -21,7 +23,19 @@ Pinned current OpenAI records were passed separately through real `AccountAcquis
 
 Source comparison: [OpenCode token sharing](https://github.com/anomalyco/opencode/blob/1743d1a24e2356b3f631d3d384f44cb9d8359add/packages/core/src/plugin/provider/chatgpt.ts) explicitly binds the method/scopes to the API resource and migrates browser credentials with token-sharing metadata. It defines no quota fetch. The public [Codex client](https://github.com/openai/codex/blob/970111f6cb62cc02fe36a82ea7d71b37a2889c97/codex-rs/backend-client/src/client.rs) supports legacy WHAM, not arbitrary token-sharing credentials. Public source is supporting evidence; local method/route/schema checks establish the installed contract.
 
-FR 000160 acceptance at the source revision above used `py -3 development/tools/collect_diagnostics.py --snapshots 1 --skip-validation` on the same Windows OpenCode V2 2.1.4 installation. The normal report returned three accounts; the sanitized OpenAI observation classified the current connection as legacy, attempted WHAM, returned HTTP 200 and retained native quota. Headless Watch reused acquired observations with zero free-flowing overflow at 80/120/160 columns. A separate real-source report/Watch-history probe passed ANSI/plain account rendering at those widths, including known-empty daily CCost. Separate Full passed 93 files and the working-tree validator passed with nonblocking design-budget warnings. No paid inference, auth changes or shared-service restart occurred. Private Diagnostics output was not committed; the FR completion retains the sanitized result. This supersedes the old lack-of-live-legacy-success limitation, not the token-sharing gap.
+FR 000160 acceptance at `22f0bff2df29d57de05c12c9586e6a6640771175` used `py -3 development/tools/collect_diagnostics.py --snapshots 1 --skip-validation` on the same Windows OpenCode V2 2.1.4 installation. The normal report returned three accounts; the sanitized OpenAI observation classified the current connection as legacy, attempted WHAM, returned HTTP 200 and retained native quota. Headless Watch reused acquired observations with zero free-flowing overflow at 80/120/160 columns. A separate real-source report/Watch-history probe passed ANSI/plain account rendering at those widths, including known-empty daily CCost. Separate Full passed 93 files and the working-tree validator passed with nonblocking design-budget warnings. No paid inference, auth changes or shared-service restart occurred. Private Diagnostics output was not committed; the FR completion retains the sanitized result. This supersedes the old lack-of-live-legacy-success limitation, not the token-sharing gap.
+
+### Windows verified-TLS repair, 2026-10-30
+
+FR 000536 measurements used CPython 3.14.8 / OpenSSL 3.5.9 on Windows and the candidate now committed at the source revision above. A credential-free urllib comparison against the same maintained WHAM URL kept certificate and hostname verification enabled. Python default trust failed with verification code 10; removing PARTIAL_CHAIN also failed. Windows `ROOT`-only trust reached verified HTTP 401. No SSL CA/proxy environment override or configured urllib HTTPS proxy was present; transparent/network intermediaries remain unexcluded.
+
+The peer-supplied four-certificate chain contained no expired certificate. OpenSSL's failed built chain instead ended at an expired element found in Windows `CA`, not `ROOT`; none of the peer elements matched those stores. This identifies local cached-intermediate shadowing, not an expired peer certificate. A chain retrieved after a failed handshake is not a successfully verified chain. No subjects, certificate bytes or account identifiers were exported. The application-local repair in `src/accounts/openai_tls.py` leaves certificate/hostname checks, default flags and machine settings intact, preserves configured OpenSSL CA paths, and fails closed on empty eligible roots.
+
+Bounded read-only metadata on healthy OpenCode V2 2.2.4 compared identifiers only in memory. The sole selected canonical active quota credential matched an integration connection and its token-account/header identity, with actual method `chatgpt-browser` and no auth-file override. Credentials were equal before/after acquisition; no old/inactive alias was substituted. Production acquisition returned HTTP 200 and one native weekly window: 75% remaining, reset `1793807183000` UTC milliseconds. No five-hour window was returned. Existing route/credential preservation was verified without a paid inference call, token renewal, account switch or service restart.
+
+Unmodified `py -3 -B cost-guard.py --watch` ran twice with normal configuration/acquisition (75s, then fresh 40s). Native CLI output showed weekly 25% USED with reset text and no OpenAI quota-error blocks. The first run acquired at UTC milliseconds `1793390269565`, `1793390299622`, `1793390329594`; the fresh run acquired at `1793390340638`, `1793390370616`. Later normal scheduled acquisitions were about 30s apart and retained the same native values; a percentage change was neither required nor observed. Last main-thread publications followed retrieval by 0.409s and 1.013s. This is production CLI output/publication, not mocked data, a diagnostic rerender or physical desktop/launcher proof. Each bounded child was ended with CTRL_BREAK and exited `0xC000013A` with nonempty stderr; the memory-only harness did not retain its content or establish its cause. Both were reaped; graceful shutdown and helper-process state were not verified.
+
+Reproduce deterministic repair/rejection and real transport/privacy/Watch recovery with `py -3 -B -m unittest development.tests.test_openai_transport development.tests.test_openai_account_switch` (10 new transport tests and 17 identity/method tests). The full final local run registered 1,448 tests across 119 files: 118 file PASS, one FAIL, two symlink-privilege skips; not an overall PASS. The only failures were four unchanged `powershell.exe` launcher subcases blocked by script execution policy. The Decision Delegate, not the user, authorized only this local exception conditional on repaired history limits, all functional/TLS/account/privacy acceptance and passing normal hosted PR checks/protections. Corresponding `pwsh` success is not equivalent PowerShell 5.1 proof. No policy bypass or test weakening was used. Package validation passed 11 checks with four nonblocking design-budget warnings. Hosted evidence belongs to the FR completion/PR, not this local claim. New evidence is retained outside the preserved task payload.
 
 ## Next investigations
 
@@ -35,3 +49,6 @@ Actual token-sharing quota retrieval remains an external functional gap. Reasses
 - Successful deterministic recovery proves the historical user's token now works: it does not.
 - Successful API model invocation authorizes WHAM quota access: token-sharing resource/method evidence contradicts that inference.
 - Missing ChatGPT account header justifies guessing/importing one: unsupported; legacy requests may omit it and token sharing is not repaired by an unrelated identity.
+- Credential-free HTTP 401 proves authenticated quota or the intended account: false; live production acquisition and in-memory identity matching were separately required.
+- Another legacy sign-in repairs the demonstrated certificate expiry: unsupported; the current legacy credential already worked after secure trust repair.
+- Removing PARTIAL_CHAIN fixes this machine's expiry: directly tested and still failed; ROOT-anchor selection fixed the measured local-intermediate substitution.
