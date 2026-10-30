@@ -4,15 +4,13 @@
 
 Cost Guard analyzes [OpenCode](https://opencode.ai/) prompts/sessions, relative model costs and account quotas locally, with real-time Watch.
 
-![Cost Guard Watch: OpenCode sessions and quotas](docs/images/cost-guard-watch.png)
-
-Live OpenCode prompts: model/effort, CCost, calls, context and quotas.
+[Synthetic CLI text](development/tests/fixtures/token-categories/120.txt): Watch, Normal, history and detail—not Web screenshots.
 
 ## At a glance
 
 - Monitor active OpenCode prompts and sessions in real time.
 - Compare AI model costs; see CCost per prompt/session.
-- Analyze Token Mix across input, cache read, cache write and output.
+- Analyze Input / Cached input / Cache write / Output Token Mix.
 - Track context growth and causal usage, including subagents.
 - Monitor account/subscription quotas across supported providers.
 - Inspect available historical OpenCode sessions and prompts.
@@ -79,7 +77,7 @@ See [CLI usage](#setup-and-usage); use `python3` on macOS or `py -3` on Windows 
 
 Distinct signals:
 
-- **Usage:** observed model requests and input/cache/output/reasoning tokens.
+- **Usage:** observed model requests and Input / Cached input / Cache write / Output tokens (Output includes reasoning).
 - **CCost:** reference token valuation, not verified billing or credits deducted.
 - **Billed:** actual monetary spend with reported or explicit subscription/zero-billing evidence; otherwise `N/A`.
 - **Quotas / limits:** independent account-native windows, credits, budgets and availability.
@@ -88,25 +86,17 @@ Reference costs—including Watch **Today**—are **CCost**, unless labeled othe
 
 ### Symbols and token categories
 
-Token Mix uses **I/C/W/O** for uncached input/cache read/cache write/output (including reasoning). See the [usage and cost reference](docs/usage-and-cost.md) for exact counting, rounding, symbols and attribution caveats. Session detail is opt-in, not a billing ledger.
+**I = Input; C = Cached input; W = Cache write; O = Output**: GitHub's names, always in this order. Input is uncached; Cached input is cache read; Cache write is cache creation; Output includes reasoning. [Counting and symbols](docs/usage-and-cost.md).
 
 ## Reports and usage analysis
 
 ### Model comparison and account overview
 
-Normal-report excerpt: model pricing/comparison using your observed workload mix, plus account quotas.
-
-![Cost Guard: model comparison and account quotas](docs/images/cost-guard-report.png)
-
-Details: [normal report](#normal-report), [model comparison](#model-comparison), [account quotas](#account-quota-blocks).
+Normal: model comparisons/account quotas. [Synthetic 160-column CLI text](development/tests/fixtures/token-categories/160.txt).
 
 ### Token Mix
 
-`--token-mix`: historical model/publisher token volumes, I/C/W/O shares and CCost.
-
-![Cost Guard Token Mix: model/category usage and CCost](docs/images/cost-guard-token-mix.png)
-
-See [Token Mix reference](#token-mix--by-model---token-mix). Screenshots are illustrative and may show an earlier version.
+`--token-mix`: historical model/publisher volumes, shares and CCost. [Synthetic 80-column CLI text](development/tests/fixtures/token-categories/80.txt). Retained `docs/images/` assets are historical v78 screenshots, not current labels.
 
 ## Requirements
 
@@ -202,7 +192,7 @@ Both modes sort by full-Decimal base/higher price descending, earlier context bo
 
 ## Token Mix % by model: `--token-mix`
 
-Scans available history (cold runs can be slow). `Total Token Mix % · <volume> tokens` precedes selectable models' `Prompts`, `Calls`, `Tokens`, I/C/W/O shares/category CCost and total `CCost`. Narrow terminals use labeled rows.
+Scans available history (cold runs can be slow). `Total Token Mix % · <volume> tokens` precedes models' `Prompts`, `Calls`, `Tokens`, `Input`, `Cached input`, `Cache write`, `Output` shares/category CCost and total `CCost`. Narrow terminals use labeled rows. A Cache write price does not imply observed tokens: zero stays zero, missing telemetry stays unknown, and `Not applicable` rates stay unpublished (`-`).
 
 Publisher rows pool the same requests at original model/tier CCost. Unknown manufacturers stay unverified; prompts are not additive.
 
@@ -240,7 +230,7 @@ Passing a session ID prints one snapshot and exits, even with active work; use `
 | `~Ictx` | Incoming context or `Δctx -> Next Ictx` when the chronological context state is available. |
 | `~Ictx CCost` | Incoming-context reference valuation, not billing. |
 | `~Extra CCost` | Additional causal usage reference valuation beyond incoming context, not billing. |
-| `I/C/W/O %` | Observed token mix, including supported running session usage; otherwise unknown/running. |
+| `Token Mix %` | Input / Cached input / Cache write / Output shares, including supported running session usage; otherwise unknown/running. |
 
 Known causal splits show **Main / Subagents / Total**; running prompts may show `running - consider ABORT`. `(Next Ictx CCost 0.3–3)` is the next input's cached–fresh CCost range; price-threshold warnings show `(1.9x more expensive)`, the model table's Relative CCost ratio across that threshold. Amber `nextIctxWarning`: approaching highlights the marker; exceeded the full explanation.
 
@@ -370,7 +360,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.113 (2026-10-30):** Web Beta retains frozen tables and session Live scroll anchors.
+**v80.114 (2026-10-30):** CLI/Web use GitHub's Input / Cached input / Cache write / Output names and explicit compact-field legends; accounting is unchanged.
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

@@ -24,6 +24,7 @@ const SessionDetail = (() => {
       });
       this.status = el('p'); this.status.setAttribute('role', 'status');
       this.summary = el('p'); this.warning = el('p', undefined, 'warning');
+      this.legend = el('p', undefined, 'detail');
       this.context = el('div'); this.heading = el('h3', 'Session history');
       this.provenance = el('details'); this.provenance.append(el('summary', 'Source and reading guide'));
       this.source = el('p'); this.provenance.append(this.source, el('p',
@@ -33,12 +34,12 @@ const SessionDetail = (() => {
       scroll.setAttribute('role', 'region'); scroll.setAttribute('aria-label', 'Session prompt history');
       const table = el('table'); table.append(el('caption', 'Complete session history — 50 rows per page'));
       const head = el('thead'), header = el('tr');
-      for (const name of ['Prompt', 'CCost', 'Calls', 'Duration', '~Ictx', '~Ictx CCost', '~Extra CCost', 'I/C/W/O %']) {
+      for (const name of ['Prompt', 'CCost', 'Calls', 'Duration', '~Ictx', '~Ictx CCost', '~Extra CCost', 'Token Mix %']) {
         const th = el('th', name); th.scope = 'col'; header.append(th);
       }
       head.append(header); this.body = el('tbody'); this.footer = el('tr');
       const foot = el('tfoot'); foot.append(this.footer); table.append(head, this.body, foot); scroll.append(table);
-      this.root.append(back, this.heading, this.controls, this.status, this.summary, this.warning, this.context, scroll, this.provenance);
+      this.root.append(back, this.heading, this.controls, this.status, this.summary, this.warning, this.context, this.legend, scroll, this.provenance);
       this.first.addEventListener('click', () => this.page(0));
       this.previous.addEventListener('click', () => this.page(Math.max(0, this.offset - 50)));
       this.next.addEventListener('click', () => this.page(this.offset + 50));
@@ -145,6 +146,7 @@ const SessionDetail = (() => {
     }
     update(data) {
       ReportView.defaultUnit(data.result.view);
+      this.legend.textContent = 'Token Mix % order: ' + ReportView.mixLegend(data.result.view);
       const block = data.result.view.prompt_blocks[0];
       const existing = new Map([...this.body.children].map(row => [row.dataset.id, row]));
       const desired = new Set(block.rows.map(row => row.id));

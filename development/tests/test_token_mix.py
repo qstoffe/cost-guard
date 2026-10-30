@@ -299,7 +299,7 @@ class ReportTokenMixTests(unittest.TestCase):
 class TokenMixPresentationTests(unittest.TestCase):
     def test_compact_row_no_bar_and_labelled_categories(self):
         mix = token_mix((TokenUsage(input=9, cache_read=85, cache_write=1, output=5),))
-        expected = "Token Mix % · 12 prompts · Input: 9%   Cache: 85%   Write: 1%   Output: 5%"
+        expected = "Token Mix % · 12 prompts · Input: 9%   Cached input: 85%   Cache write: 1%   Output: 5%"
         self.assertEqual(expected, token_mix_line("12 prompts", mix))
         self.assertNotIn("█", expected)
 
@@ -337,7 +337,7 @@ class TokenMixPresentationTests(unittest.TestCase):
         report = ReportProjection(ReportKind.NORMAL, "Report", "V2", accounts_quotas=quotas(rolling()), token_mix=mix)
         lines = rendered(report).splitlines()
         index = next(i for i, line in enumerate(lines) if line.startswith("Token Mix %"))
-        self.assertIn("latest 37 priced prompts", lines[index + 1])
+        self.assertIn("latest 37 priced prompts", lines[index + 2])
         self.assertLess(index, next(i for i, line in enumerate(lines) if line.startswith("| Publisher")))
         accounts = lines.index("Accounts Overview")
         self.assertEqual("", lines[accounts - 1])
@@ -350,7 +350,7 @@ class TokenMixPresentationTests(unittest.TestCase):
         self.assertRegex(stream.getvalue(), r"Cost Guard v\d+\.\d+ \(Watch started: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\) — Watch\n")
         self.assertNotIn("Token Mix %", stream.getvalue())
         self.assertNotIn("Quotas", stream.getvalue())
-        for phrase in ("I = uncached input", "C = cache read", "W = cache write", "O = output"):
+        for phrase in ("I = Input", "C = Cached input", "W = Cache write", "O = Output"):
             self.assertIn(phrase, help_text())
 
 

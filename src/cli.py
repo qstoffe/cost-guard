@@ -7,6 +7,7 @@ import re
 from typing import Sequence
 
 from .version import DISPLAY_VERSION, PRODUCT_NAME
+from .display import TOKEN_CATEGORY_LEGEND
 
 _SESSION_RE = re.compile(r"^ses_[A-Za-z0-9._-]+$")
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}(?::\d{4}-\d{2}-\d{2})?$")
@@ -67,9 +68,9 @@ Options:
   --version        Show the Cost Guard version.
   --ccost-unit credits|usd  Override CCost display only (100 credits = $1 reference USD).
 
-Token Mix %: I = uncached input (Input); C = cache read (Cache);
-             W = cache write (Write); O = output (Output), including
-             separately reported reasoning. Each share shows its CCost.
+Token Mix %: {TOKEN_CATEGORY_LEGEND}.
+Input is uncached; Cached input is cache read; Cache write is cache creation.
+Output includes separately reported reasoning. Each share shows its CCost.
 Report: last 100 prompts with usage. Watch: requests observed during this run.
 Relative CCost: common token-category workload price comparison, not billing.
 One shared I/C/W/O mix from the latest up to 100 completed priceable prompts

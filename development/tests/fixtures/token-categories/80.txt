@@ -1,0 +1,285 @@
+Synthetic CLI text at 80 columns; no live source or browser evidence.
+Numeric prompt/Watch grids retain their minimum widths (no clipping);
+Token Mix cells wrap, and narrow historical tables use labeled rows.
+
+=== normal ===
+# Cost Guard v80.114 (2026-10-30) — Source: OpenCode V2
+WARNING: Source-wide warning
+CCost:  1 CCost equals 1 Copilot AI credit.
+        Flat-rate accounts use Copilot's published token rates, not the billed
+        cost.
+        Unlabeled cost figures in Cost Guard are CCost unless stated otherwise.
+        Watch Today is CCost, not provider-native Used or actual Billed spend.
+
+Token Mix %: The Input / Cached input / Cache write / Output percentage split of
+             your observed token usage.
+             Your mix uses the latest 2 priced prompts, totaling 72 tokens.
+             Input: 83.3% (<0.1)   Cached input: 0% (0)   Cache write: 0% (0)
+             Output: 16.7% (<0.1)
+
+Relative CCost: Common token-category workload price comparison, not a same-task
+                benchmark or billing.
+                One shared I/C/W/O mix from the latest 2 completed priceable
+                prompts globally (up to 100).
+                Every model and tier, including untried models, uses those same
+                pooled token shares.
+                Not a capability/throughput benchmark or a forecast of
+                specialized future jobs.
+                Every tier uses the same cheapest positive comparable base price
+                as 1.0x.
+                Arrows show context-tier prices; > or ≥ marks the published
+                input-token boundary.
+                I = Input; C = Cached input; W = Cache write; O = Output.
+
+Pricing/cache metadata: 1970-01-01 00:00
+|-----------|--------------|----------------|--------------|
+| Publisher | Model        | Relative CCost | Release date |
+|-----------|--------------|----------------|--------------|
+| Test      | GPT Test     | 1.0x           |          N/A |
+|-----------|--------------|----------------|--------------|
+
+Accounts Overview
+───────────────────────────────────────────────────────────────────
+No configured accounts detected.
+
+=== all-models ===
+# Cost Guard v80.114 (2026-10-30) — Source: OpenCode V2
+WARNING: Source-wide warning
+CCost:  1 CCost equals 1 Copilot AI credit.
+        Flat-rate accounts use Copilot's published token rates, not the billed
+        cost.
+        Unlabeled cost figures in Cost Guard are CCost unless stated otherwise.
+        Watch Today is CCost, not provider-native Used or actual Billed spend.
+
+Token Mix %: The Input / Cached input / Cache write / Output percentage split of
+             your observed token usage.
+             Your mix uses the latest 2 priced prompts, totaling 72 tokens.
+             Input: 83.3% (<0.1)   Cached input: 0% (0)   Cache write: 0% (0)
+             Output: 16.7% (<0.1)
+
+Relative CCost: Common token-category workload price comparison, not a same-task
+                benchmark or billing.
+                One shared I/C/W/O mix from the latest 2 completed priceable
+                prompts globally (up to 100).
+                Every model and tier, including untried models, uses those same
+                pooled token shares.
+                Not a capability/throughput benchmark or a forecast of
+                specialized future jobs.
+                Every tier uses the same cheapest positive comparable base price
+                as 1.0x.
+                Arrows show context-tier prices; > or ≥ marks the published
+                input-token boundary.
+                I = Input; C = Cached input; W = Cache write; O = Output.
+
+Pricing/cache metadata: 1970-01-01 00:00
+|-----------|--------------|----------------|----------------------|--------------|
+| Publisher | Model        | Relative CCost | GitHub USD/M I/C/W/O | Release date |
+|-----------|--------------|----------------|----------------------|--------------|
+| Test      | Claude Test  | 1.8x           | 2/0.2/-/6            |          N/A |
+| Test      | GPT Test     | 1.0x           | 1/0.1/-/4            |          N/A |
+|-----------|--------------|----------------|----------------------|--------------|
+GitHub USD/M I/C/W/O: exact published rates per million tokens, not billed
+spend. I = Input; C = Cached input; W = Cache write; O = Output. A dash means no
+published rate (Not applicable), not measured usage. Published prices do not
+imply observed tokens.
+
+=== sessions ===
+# Cost Guard v80.114 (2026-10-30) — Source: OpenCode V2
+WARNING: Source-wide warning
+|------------|--------------|------------|-------|---|----------|
+| Session id | Name         | Model      | CCost | # | Duration |
+|------------|--------------|------------|-------|---|----------|
+| root       | Root         | GPT Test   |  <0.1 | 2 |       1s |
+|------------|--------------|------------|-------|---|----------|
+* CCost is whole-session reference token valuation, not billing; ? marks partial
+  pricing.
+* # counts visible prompts; linked child work is included. Only currently
+  available OpenCode data is shown.
+* Duration: accumulated execution wall-clock time, excluding idle gaps; overlaps
+  count once. N/A means timing is incomplete.
+
+=== session ===
+# Cost Guard v80.114 (2026-10-30) — Source: OpenCode V2
+Session root
+WARNING: Source-wide warning
+
+
+## User prompts
+--------------------------------------------------------------------------------
+
+|----------------------------------------------------------------------------------------------------|
+| Session: root                                                                                      |
+| Root                                                                                               |
+|--------------------|-------|-------|----------|---------|-------------|--------------|-------------|
+| Prompt             | CCost | Calls | Duration |   ~Ictx | ~Ictx CCost | ~Extra CCost | Token Mix % |
+|--------------------|-------|-------|----------|---------|-------------|--------------|-------------|
+| Model: GPT Test (Default)                                                                          |
+| 00:00 #1 inspect   |  <0.1 |     3 |       1s |      1k |         N/A |          N/A |   79/0/0/21 |
+|   Main: <0.1 | Subagents: <0.1 | Total: <0.1                                                       |
+| 00:00 #2 next      |  <0.1 |     1 |       0s | 0k → 1k |        <0.1 |         <0.1 |   88/0/0/12 |
+| Model: GPT Test                                                                                    |
+| 00:00 #3 /compa... |  <0.1 |     1 |       0s |      1k |        <0.1 |         <0.1 |   80/6/4/10 |
+|--------------------|-------|-------|----------|---------|-------------|--------------|-------------|
+| Total              |  <0.1 |     5 |       1s |         |         N/A |          N/A |   82/2/2/14 |
+|   Main: <0.1 | Subagents: <0.1 | Total: <0.1                                                       |
+|--------------------|-------|-------|----------|---------|-------------|--------------|-------------|
+* Next Ictx: ~1k (Next Ictx CCost <0.1–<0.1)
+* CCost: reference token valuation including linked child work, not actual
+  billing; ? marks partial pricing.
+* Calls: causal model requests. Token Mix %: Input / Cached input / Cache write
+  / Output token shares (Output includes reasoning).
+* Duration: execution wall-clock time, not calendar elapsed time. Total unions
+  selected prompt/compaction intervals, excluding idle gaps; N/A means timing is
+  incomplete.
+* ~Ictx: approximate incoming context, or context change → next-input context
+  along the session timeline.
+* ~Ictx CCost: current-price reference value of incoming context; not actual
+  billing.
+* ~Extra CCost: current-price reference value of additional causal usage beyond
+  incoming context; not actual billing.
+* Next Ictx: estimated next-input context and cached–fresh CCost bounds; future
+  cache hits are not predicted.
+
+=== date ===
+# Cost Guard v80.114 (2026-10-30) — Source: OpenCode V2
+Date report 1970-01-01
+WARNING: Source-wide warning
+
+
+## User prompts
+--------------------------------------------------------------------------------
+
+|----------------------------------------------------------------------------------------------------|
+| Session: root                                                                                      |
+| Root                                                                                               |
+|--------------------|-------|-------|----------|---------|-------------|--------------|-------------|
+| Prompt             | CCost | Calls | Duration |   ~Ictx | ~Ictx CCost | ~Extra CCost | Token Mix % |
+|--------------------|-------|-------|----------|---------|-------------|--------------|-------------|
+| Model: GPT Test (Default)                                                                          |
+| 00:00 #1 inspect   |  <0.1 |     3 |       1s |      1k |         N/A |          N/A |   79/0/0/21 |
+|   Main: <0.1 | Subagents: <0.1 | Total: <0.1                                                       |
+| 00:00 #2 next      |  <0.1 |     1 |       0s | 0k → 1k |        <0.1 |         <0.1 |   88/0/0/12 |
+| Model: GPT Test                                                                                    |
+| 00:00 #3 /compa... |  <0.1 |     1 |       0s |      1k |        <0.1 |         <0.1 |   80/6/4/10 |
+|--------------------|-------|-------|----------|---------|-------------|--------------|-------------|
+| Total              |  <0.1 |     5 |       1s |         |         N/A |          N/A |   82/2/2/14 |
+|   Main: <0.1 | Subagents: <0.1 | Total: <0.1                                                       |
+|--------------------|-------|-------|----------|---------|-------------|--------------|-------------|
+* Next Ictx: ~1k (Next Ictx CCost <0.1–<0.1)
+* CCost: reference token valuation including linked child work, not actual
+  billing; ? marks partial pricing.
+* Calls: causal model requests. Token Mix %: Input / Cached input / Cache write
+  / Output token shares (Output includes reasoning).
+* Duration: execution wall-clock time, not calendar elapsed time. Total unions
+  selected prompt/compaction intervals, excluding idle gaps; N/A means timing is
+  incomplete.
+* ~Ictx: approximate incoming context, or context change → next-input context
+  along the session timeline.
+* ~Ictx CCost: current-price reference value of incoming context; not actual
+  billing.
+* ~Extra CCost: current-price reference value of additional causal usage beyond
+  incoming context; not actual billing.
+* Next Ictx: estimated next-input context and cached–fresh CCost bounds; future
+  cache hits are not predicted.
+
+* CCost for range: <0.1; reference valuation, not billing.
+
+=== token-mix ===
+# Cost Guard v80.114 (2026-10-30) — Source: OpenCode V2
+Token Mix % by model
+WARNING: Source-wide warning
+
+Total Token Mix % · 122 tokens
+Input: 82% (<0.1)   Cached input: 2.5% (<0.1)   Cache write: 1.6% (<0.1)
+Output: 13.9% (<0.1)
+
+Model: GPT Test
+  Prompts: 2   Calls: 5   Tokens: 122   Input: 82% (<0.1)
+  Cached input: 2.5% (<0.1)   Cache write: 1.6% (<0.1)   Output: 13.9% (<0.1)
+  CCost: <0.1
+
+Token Mix % by publisher · historical shown usage
+Publisher: Test
+  Prompts: 2   Calls: 5   Tokens: 122   Input: 82% (<0.1)
+  Cached input: 2.5% (<0.1)   Cache write: 1.6% (<0.1)   Output: 13.9% (<0.1)
+  CCost: <0.1
+* Tokens: known Input / Cached input / Cache write / Output volume, including
+  reasoning in Output; K/M/B are rounded display only. ? marks incomplete
+  telemetry; N/A means no known categories.
+* Input / Cached input / Cache write / Output: Token Mix % of the
+  model/publisher's token volume (Output includes reasoning) and its CCost.
+* CCost: reference token valuation priced per request, not actual billing; ?
+  marks partial pricing.
+* Prompts: unique user prompts where the model contributed usage; one prompt can
+  count on several rows.
+* Calls: model requests attributed to the model, including tool-loop, subagent
+  and compaction requests.
+
+* History includes OpenCode usage data that is still available; deleted or
+  pruned history is not reconstructed.
+* Historical publisher shares use pooled shown requests, not the 100-slot
+  comparison prior. Prompts are distinct within each model/publisher; mixed
+  prompts can appear in several rows, so row prompt counts are not additive.
+  Unknown / unverified is not an account provider.
+
+=== date ===
+# Cost Guard v80.114 (2026-10-30) — Source: OpenCode V2
+Date report 1970-01-01:1970-01-02
+WARNING: Source-wide warning
+
+
+## User prompts
+--------------------------------------------------------------------------------
+
+|----------------------------------------------------------------------------------------------------|
+| Session: root                                                                                      |
+| Root                                                                                               |
+|--------------------|-------|-------|----------|---------|-------------|--------------|-------------|
+| Prompt             | CCost | Calls | Duration |   ~Ictx | ~Ictx CCost | ~Extra CCost | Token Mix % |
+|--------------------|-------|-------|----------|---------|-------------|--------------|-------------|
+| Model: GPT Test (Default)                                                                          |
+| 00:00 #1 inspect   |  <0.1 |     3 |       1s |      1k |         N/A |          N/A |   79/0/0/21 |
+|   Main: <0.1 | Subagents: <0.1 | Total: <0.1                                                       |
+| 00:00 #2 next      |  <0.1 |     1 |       0s | 0k → 1k |        <0.1 |         <0.1 |   88/0/0/12 |
+| Model: GPT Test                                                                                    |
+| 00:00 #3 /compa... |  <0.1 |     1 |       0s |      1k |        <0.1 |         <0.1 |   80/6/4/10 |
+|--------------------|-------|-------|----------|---------|-------------|--------------|-------------|
+| Total              |  <0.1 |     5 |       1s |         |         N/A |          N/A |   82/2/2/14 |
+|   Main: <0.1 | Subagents: <0.1 | Total: <0.1                                                       |
+|--------------------|-------|-------|----------|---------|-------------|--------------|-------------|
+* Next Ictx: ~1k (Next Ictx CCost <0.1–<0.1)
+* CCost: reference token valuation including linked child work, not actual
+  billing; ? marks partial pricing.
+* Calls: causal model requests. Token Mix %: Input / Cached input / Cache write
+  / Output token shares (Output includes reasoning).
+* Duration: execution wall-clock time, not calendar elapsed time. Total unions
+  selected prompt/compaction intervals, excluding idle gaps; N/A means timing is
+  incomplete.
+* ~Ictx: approximate incoming context, or context change → next-input context
+  along the session timeline.
+* ~Ictx CCost: current-price reference value of incoming context; not actual
+  billing.
+* ~Extra CCost: current-price reference value of additional causal usage beyond
+  incoming context; not actual billing.
+* Next Ictx: estimated next-input context and cached–fresh CCost bounds; future
+  cache hits are not predicted.
+
+* CCost for range: <0.1; reference valuation, not billing.
+
+=== watch ===
+Cost Guard v80.114 (Watch started: 1970-01-01 00:00:01) — Prompt watch
+Source: OpenCode V2
+|-------------------------------------|---------------------------|---------|-------|----------|----------------------|
+| Session / prompt                    | Model / effort            |   CCost | Calls | Duration | Δctx → Next Ictx     |
+|-------------------------------------|---------------------------|---------|-------|----------|----------------------|
+|   Normal session                                                |   Σ N/A |       |          |                      |
+|     #1 Normal prompt                | Test (Default)            |      12 |     1 |      N/A | +4k  →     ~120k *1  |
+|-------------------------------------|---------------------------|---------|-------|----------|----------------------|
+*1 Context: Localized economic warning (Next Ictx CCost 1–12)
+Token Mix % · 2 prompts
+  Input: 83.3% (<0.1)
+  Cached input: 0% (0)
+  Cache write: 0% (0)
+  Output: 16.7% (<0.1)
+CCost · Watch: 0 · Total today: 0
+Watch: Watching

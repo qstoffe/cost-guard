@@ -11,6 +11,7 @@ const WatchView = (() => {
       this.root = el('div', undefined, 'watch-view');
       this.status = el('p', undefined, 'snapshot'); this.status.setAttribute('role', 'status');
       this.totals = el('p', undefined, 'metric-value');
+      this.legend = el('p', undefined, 'detail');
       this.origin = el('details'); this.origin.append(el('summary', 'Run scope / valuation'));
       this.scope = el('p'); this.origin.append(this.scope);
       this.notices = el('p', undefined, 'warning');
@@ -31,7 +32,7 @@ const WatchView = (() => {
       pager.append(this.previous, this.pageLabel, this.next);
       section.append(label, this.scroll, pager);
       this.accounts = el('div');
-      this.root.append(this.status, this.totals, this.origin, this.notices, section, this.accounts);
+      this.root.append(this.status, this.totals, this.legend, this.origin, this.notices, section, this.accounts);
       this.filter.addEventListener('input', () => { this.page = 0; this.draw(); });
       this.previous.addEventListener('click', () => { this.page--; this.draw(); });
       this.next.addEventListener('click', () => { this.page++; this.draw(); });
@@ -53,6 +54,7 @@ const WatchView = (() => {
       const observed = result.source_observed_at_ms == null ? 'not yet observed' : new Date(result.source_observed_at_ms).toLocaleString();
       text(this.status, `${this.state.connection || 'Connecting'} · ${result.state}${result.error_code ? ' · ' + result.error_code : ''} · ${lifecycle} · ${view.source_label} · ${view.status} · Source observation ${observed} · Published ${new Date(view.now_ms).toLocaleString()}${view.source_warning_count ? ' · Source warnings ' + view.source_warning_count : ''}`);
       text(this.totals, () => `Run CCost ${display(view, 'run_ccost')} · Requests ${view.run_total.request_count} · ${view.today_label} CCost ${display(view.today_total, 'known_ccost')}${view.today_pending ? ' · History pending' : ''}`);
+      text(this.legend, 'Token Mix % order: ' + ReportView.mixLegend(view));
       text(this.scope, () => `Run origin: ${view.run_origin}, ${new Date(view.started_at_ms).toLocaleString()}. CCost is reference valuation, not billing. Run I/C/W/O tokens ${display(view.run_total, 'totals')} · CCost ${display(view.run_total, 'costs')} · Token Mix % ${display(view.token_mix, 'percentages')}. Session subtotals cover all retained rows, independent of filters/pages, not full historical sessions.`);
       text(this.notices, [view.recent_model_notice, ...view.recent_promotion_notices].filter(Boolean).join(' · '));
       if (!this.protected(this.body)) this.draw();
@@ -115,7 +117,7 @@ const WatchView = (() => {
       const cells = ReportView.detailCells({...row.prompt, model_effort: null, next_context_warning: row.next_context_warning}, true);
       cells[0].append(el('span', `${row.marker} · ${row.is_latest_session_event ? 'Newest' : row.earlier ? 'Earlier' : 'Retained'}`, 'detail'));
       const detail = el('span', row.next_context_warning || '', row.next_context_warning ? 'threshold' : '');
-      const extra = el('details'); extra.append(el('summary', 'Context / token detail'), el('span', () => `Incoming context ${cells[4]} · ~Ictx CCost ${display(row.prompt, 'incoming_context_ccost')} · ~Extra CCost ${display(row.prompt, 'extra_ccost')} · I/C/W/O % ${cells[7]} · Next context cached/fresh CCost ${display(row.live_context, 'watch_next_context_cached_ccost')}/${display(row.live_context, 'watch_next_context_fresh_ccost')}`, 'detail'));
+      const extra = el('details'); extra.append(el('summary', 'Context / token detail'), el('span', () => `Incoming context ${cells[4]} · ~Ictx CCost ${display(row.prompt, 'incoming_context_ccost')} · ~Extra CCost ${display(row.prompt, 'extra_ccost')} · Token Mix % ${cells[7]} · ${ReportView.mixLegend(row.prompt)} · Next context cached/fresh CCost ${display(row.live_context, 'watch_next_context_cached_ccost')}/${display(row.live_context, 'watch_next_context_fresh_ccost')}`, 'detail'));
       const tool = row.tool;
       if (tool) detail.append(el('span', `${tool.running_tool || ''} ${display(tool, 'running_ms')} · Calls ${tool.counts.map(pair => pair.join(': ')).join(', ')} · Failed ${tool.failed_count} · TODO ${tool.todo_completed}/${tool.todo_total} ${tool.active_todo || ''} · Background ${tool.background_kinds.join(', ')} ${display(tool, 'background_ms')} · Skills ${tool.skills.map(s => s.skill_id + (s.failed_count ? ' (failed ' + s.failed_count + ')' : '')).join(', ')}`, 'detail ' + (tool.failed_count ? 'warning' : '')));
       detail.append(extra);

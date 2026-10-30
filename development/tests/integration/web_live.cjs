@@ -76,6 +76,9 @@ async function main() {
   vm.runInContext("globalThis.state = {pages: {}, connection: 'Live connected.'}; ReportView.renderLive(parent, example, state)", context);
   assert.match(context.parent.textContent, /Web live engine start/);
   assert.match(context.parent.textContent, /Watch prompts/);
+  assert.match(context.parent.textContent, /I = Input; C = Cached input; W = Cache write; O = Output/);
+  assert.ok(!/\b(?:Cache|Write):/.test(context.parent.textContent));
+  assert.match(context.parent.textContent, /Token Mix %/);
   assert.match(context.parent.textContent, /Next Ictx/);
   assert.ok(context.parent.textContent.includes(input.view.today_label + ' CCost'));
   assert.match(context.parent.textContent, /not full session/);

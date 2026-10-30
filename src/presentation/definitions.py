@@ -12,6 +12,7 @@ import re
 from typing import Sequence
 
 from src.analysis.token_mix import TokenMix
+from src.display import TOKEN_CATEGORY_ORDER, TOKEN_CATEGORY_LEGEND
 
 from .terminal import AnsiStyler, wrap_prose
 from .token_mix import compact_tokens, mix_cells, packed_cells
@@ -63,7 +64,7 @@ def ccost_sentences() -> tuple[str, ...]:
 
 
 def token_mix_sentences(mix: TokenMix) -> tuple[Sentence, ...]:
-    definition = "The I/C/W/O percentage split of your observed token usage."
+    definition = f"The {TOKEN_CATEGORY_ORDER} percentage split of your observed token usage."
     if not mix.request_count:
         return definition, "No priced prompts are available yet."
     count = mix.sample_size
@@ -76,14 +77,16 @@ def token_mix_sentences(mix: TokenMix) -> tuple[Sentence, ...]:
 def rel_ccost_sentences(sample_size: int) -> tuple[str, ...]:
     if not sample_size:
         return ("No completed priced prompts are available yet.",
-                 "Relative CCost stays blank; a hidden 2/96/1/1 mix orders published prices.")
+                 "Relative CCost stays blank; a hidden 2/96/1/1 mix orders published prices.",
+                 TOKEN_CATEGORY_LEGEND + ".")
     noun = "prompt" if sample_size == 1 else "prompts"
     return ("Common token-category workload price comparison, not a same-task benchmark or billing.",
             f"One shared I/C/W/O mix from the latest {sample_size} completed priceable {noun} globally (up to 100).",
             "Every model and tier, including untried models, uses those same pooled token shares.",
             "Not a capability/throughput benchmark or a forecast of specialized future jobs.",
             "Every tier uses the same cheapest positive comparable base price as 1.0x.",
-            "Arrows show context-tier prices; > or ≥ marks the published input-token boundary.")
+            "Arrows show context-tier prices; > or ≥ marks the published input-token boundary.",
+            TOKEN_CATEGORY_LEGEND + ".")
 
 
 def concept_lines(mix: TokenMix, sample_size: int, width: int, styler: AnsiStyler) -> list[str]:

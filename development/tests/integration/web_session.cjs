@@ -47,6 +47,10 @@ async function main() {
   view.attach(parent);
   assert.equal(replacements, 0, 'a health check must not detach the connected detail tree');
   await view.load();
+  assert.match(view.root.textContent, /I = Input; C = Cached input; W = Cache write; O = Output/);
+  assert.ok(!/\b(?:Cache|Write):/.test(view.root.textContent));
+  assert.ok(view.root.children.find(node => node === view.legend));
+  assert.ok(view.root.textContent.includes('Token Mix %'));
   assert.equal(view.body.children.length, 50);
   assert.equal(view.offset, 0);
   assert.match(view.summary.textContent, /100 rows/);

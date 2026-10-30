@@ -190,7 +190,7 @@ class CompactReportTests(unittest.TestCase):
         service = self.service(accounts=(ForbiddenAccount(),))
         report = service.build(ReportRequest(ReportKind.SESSION, session_id="root"))
         text = rendered(report)
-        for expected in ("#1", "Next Ictx:", "CCost:", "I/C/W/O %:", "~Ictx:", "~Ictx CCost:", "~Extra CCost:", "not actual billing"):
+        for expected in ("#1", "Next Ictx:", "CCost:", "Token Mix %:", "~Ictx:", "~Ictx CCost:", "~Extra CCost:", "not actual billing"):
             self.assertIn(expected, text)
         self.assertNotIn("Relative CCost", text)
         self.assertIsNone(report.accounts_quotas)

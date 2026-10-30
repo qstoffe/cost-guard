@@ -109,8 +109,8 @@ class CategoryCostTests(unittest.TestCase):
                       percentages=(3, 92, 3, 2), request_count=4, priced_requests=4,
                       costs=(Decimal("18"), Decimal("31"), Decimal("0.6"), Decimal("0.027")))
         line = token_mix_lines("12 prompts", mix)[0]
-        self.assertEqual("Token Mix % · 12 prompts · Input: 3% (18)   Cache: 92% (31)   "
-                         "Write: 3% (0.6)   Output: 2% (<0.1)", line)
+        self.assertEqual("Token Mix % · 12 prompts · Input: 3% (18)   Cached input: 92% (31)   "
+                         "Cache write: 3% (0.6)   Output: 2% (<0.1)", line)
         for width in (80, 50):
             lines = token_mix_lines("12 prompts", mix, width=width)
             self.assertGreater(len(lines), 1)
@@ -189,7 +189,7 @@ class ModelHistoryTests(unittest.TestCase):
         self.assertEqual(sum(row.mix.totals), row.mix.total_tokens)
         self.assertEqual(sum(e.tokens.total for e in unique_usage(bundle.trace_entries)), row.mix.total_tokens)
         self.assertEqual(report.token_mix.total_tokens, row.mix.total_tokens)
-        for heading in ("Model", "Prompts", "Calls", "Tokens", "Input", "Cache", "Write", "Output", "CCost", "not actual billing"):
+        for heading in ("Model", "Prompts", "Calls", "Tokens", "Input", "Cached input", "Cache write", "Output", "CCost", "not actual billing"):
             self.assertIn(heading, text)
         self.assertNotIn("Accounts Overview", text)
 
