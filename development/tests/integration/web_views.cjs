@@ -97,8 +97,22 @@ async function main() {
   ids.search.events.input({target: {value: ''}});
   assert.ok(all(ids.result, 'tbody')[0].children.length);
   const navigate = key => { location.hash = '#/' + key; handlers.hashchange(); };
+  const retainedHeartbeat = () => {
+    const children = [...ids.result.children], before = requests;
+    const scroll = all(ids.result, 'div').find(node => node.className === 'table-scroll');
+    if (scroll) { scroll.scrollTop = 317; scroll.scrollLeft = 91; }
+    vm.runInContext("connectionStatus('Live connected.', {kind:'connected', writable:true})", context);
+    assert.equal(ids.result.children.length, children.length);
+    assert.ok(ids.result.children.every((node, index) => node === children[index]), 'host health must retain every frozen report DOM');
+    if (scroll) {
+      assert.equal(scroll.scrollTop, 317);
+      assert.equal(scroll.scrollLeft, 91);
+    }
+    assert.equal(requests, before, 'health must not reacquire frozen reports');
+  };
   navigate('sessions');
   await until(() => ids.notice.textContent.includes('Snapshot captured'));
+  retainedHeartbeat();
   assert.match(ids.result.textContent, /1–50 of 55/);
   assert.equal(all(ids.result, 'tbody')[0].children.length, 50);
    const next = all(ids.result, 'a').find(node => node.textContent === 'Next');
@@ -162,9 +176,11 @@ async function main() {
   const overviewTime = ids.result.textContent.match(/Snapshot: ([^·]+)/)[1];
   const beforePresentation = requests;
   navigate('models');
+  retainedHeartbeat();
   assert.match(ids.result.textContent, /Reference models/);
   assert.equal(ids.result.textContent.match(/Snapshot: ([^·]+)/)[1], overviewTime);
   navigate('accounts');
+  retainedHeartbeat();
   assert.match(ids.result.textContent, /Accounts · independent/);
   assert.equal(requests, beforePresentation, 'normal subviews reuse one frozen acquisition');
   navigate('models/all');

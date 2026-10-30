@@ -1,0 +1,100 @@
+{
+  "date": "2026-10-29",
+  "candidate": "1ca68628fc98193fe743983f3a9e60ac460c2536",
+  "status": "partial; not full input-device acceptance",
+  "environment": "OpenCode integrated Chromium; shipped assets; synthetic HTTP fixture and renderer stress cases",
+  "fixture": "development/tests/integration/serve_web_remaining.py",
+  "reproduction": {
+    "case": "Scroll inner session table from 500 to 850 while page response is pending",
+    "baseline": "Source-derived prior load implementation isolated in the real browser, including pre-await first-row capture and finally window.scrollBy; not a full baseline-host launch",
+    "baselinePageBefore": 600,
+    "baselinePageAfter": 250,
+    "candidatePageBefore": 600,
+    "candidatePageAfter": 600,
+    "candidateInnerAfter": 850,
+    "result": "reproduced the source-bound document jump; candidate retained both intended offsets",
+    "historicalDeviceCause": "Unknown: colleague's exact original browser, route and device were not supplied"
+  },
+  "layout": {
+    "widths": [1000, 360],
+    "height": 700,
+    "routes": ["overview", "models", "all-models", "sessions", "accounts", "date", "token-mix", "watch"],
+    "data": "125 duplicated synthetic rows/cards per long-list stress case, except date/detail using the existing 120-prompt fixture; not a calculation/total-parity assertion",
+    "cases": 16,
+    "observations": [
+      "Every table could be scrolled to its final rendered row; that row was inside the scroll region",
+      "Column headers remained at the scroll region's top, with computed sticky positioning",
+      "All table regions accepted focus",
+      "No document horizontal overflow in the measured child viewports",
+      "Overview retained 125 reference rows; ordinary tables retained 50-row paging",
+      "Watch had 50 prompt rows plus its session-divider row",
+      "Accounts used 125 cards and document scrolling, not an internal table"
+    ]
+  },
+  "nativeWheel": {
+    "widths": [1000, 360],
+    "height": 1245,
+    "routes": ["models", "all-models", "sessions", "accounts", "date", "token-mix", "watch"],
+    "cases": 14,
+    "verticalDelta": 600,
+    "trustedEvents": true,
+    "result": "Each table's scrollTop advanced from 0 to 600 while its document offset stayed unchanged. Accounts instead advanced its document from 0 to 600.",
+    "horizontalWatch360": {"deltaX": 200, "scrollLeftAfter": 200, "scrollTopRetained": 500, "trustedInsideRegion": true},
+    "fixtureRepair": "Initial wheel cases hit content below a 700px iframe because the desktop viewport had become 800x1245. These cases failed and were not counted as PASS. Matching the iframe height to the observed parent viewport placed the trusted wheel target inside the table; all 14 rerun cases above passed."
+  },
+  "detailPages": {
+    "widths": [1000, 360],
+    "modes": ["snapshot", "live"],
+    "cases": 4,
+    "totalRows": 120,
+    "pageRows": 50,
+    "middleOffset": 50,
+    "latestOffset": 70,
+    "lastRowId": "root-0000-u-0119",
+    "observations": ["Idle reload retained row identity and both scroll offsets", "Middle/latest pages were reachable", "Whole-session summary was unchanged by paging"],
+    "narrowHorizontalRange": 443
+  },
+  "detailRetention360": {
+    "visibleAnchorDeltaAfterGrowth": -0.25,
+    "horizontalOffsetPreserved": true,
+    "documentOffsetPreserved": true,
+    "selectedTextAndLeafPreserved": true,
+    "revisionDeferredDuringSelection": true,
+    "focusedCellPreserved": true,
+    "revisionDeferredDuringFocus": true,
+    "pendingRevisionAppliedAfterRelease": true
+  },
+  "watchRetention360": {
+    "idleAnchorAndOffsetPreserved": true,
+    "visibleAnchorDeltaAfterGrowth": -0.0520782470703125,
+    "horizontalOffsetPreserved": true,
+    "documentOffsetPreserved": true,
+    "selectedTextAndLeafPreserved": true,
+    "focusedDisclosurePreserved": true
+  },
+  "keyboard": {
+    "trustedEventsObserved": ["Tab", "PageDown", "PageUp", "ArrowDown", "ArrowUp"],
+    "isolatedModels360Observations": [
+      "PageDown moved scrollTop from 40 to 733.3333129882812",
+      "Separate PageDown moved scrollTop from 0 to 693.3333129882812; subsequent PageUp returned it to 0",
+      "ArrowDown moved scrollTop from 0 to 40",
+      "Separate ArrowUp moved scrollTop from 400 to 360 while preserving scrollLeft=200"
+    ],
+    "status": "incomplete: first-key/batched attempts also delivered trusted events without observed scroll; not counted as passing keyboard matrix",
+    "recovery": "Tried explicit focus, native Tab entry, scroll-event/scrollend conditions, separate input/read calls and browser.wait on a scroll-driven DOM marker. Some isolated inputs worked, but repeatable full keyboard acceptance remains unverified. No production key interception was added to mask the uncertainty."
+  },
+  "visualAccess": {
+    "hover": "[browser.operation_failed] browser.hover failed. UnknownVizError",
+    "screenshot": "[browser.operation_failed] browser.screenshot failed. Screenshot needs a visible tab. Call browser.tabs.focus and keep its desktop window visible.",
+    "explicitTabFocusAttempted": true,
+    "domVisibilityState": "visible",
+    "documentAndFrameHasFocus": true,
+    "result": "Native capture/pointing still unavailable despite DOM focus/visibility; this is not an authentication or denied-permission claim"
+  },
+  "remaining": [
+    "Reliable keyboard matrix, wheel boundary chaining and visual column/focus inspection in a genuinely visible Review pane",
+    "Physical touchpad/touch and other unavailable device checks must remain explicitly unsupported",
+    "Browser SSE/real-source integration is not proved by manually driving the synthetic renderer/update path",
+    "Do not treat programmatic layout/retention or trusted injected wheel events as full physical-device acceptance"
+  ]
+}

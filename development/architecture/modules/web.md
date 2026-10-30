@@ -1,8 +1,8 @@
 # Optional Web runtime
 
-Source revision: 8dc82a38dddd7f2999e7872d52e1e6a8a0949725
-Checked revision: 8dc82a38dddd7f2999e7872d52e1e6a8a0949725
-Last checked: 2026-10-27
+Source revision: a454de53e2349c940035db9b302db9e3ffac3e4f
+Checked revision: a454de53e2349c940035db9b302db9e3ffac3e4f
+Last checked: 2026-10-30
 Status: current
 
 ## Responsibility and ownership
@@ -110,6 +110,17 @@ never a product host or provider. The [owner matrix](../governance/verification/
 records Windows built-in-browser inspection and remaining native/assistive limitations.
 Architecture boundaries are unchanged; journal assessment: no-update, these owner facts
 and the focused evidence are sufficient.
+
+Session-detail scroll retention uses the inner `.table-scroll` owner and captures
+the visible row after the HTTP response, immediately before DOM mutation. Internal
+scrolling away from the bottom disables follow; background retention never calls
+document scrolling. Frozen reports also retain their actual DOM during host-health
+checks unless the report, search, view or output changes. This applies to every
+finite report, not only Overview: health is not a new snapshot. Session detail's
+attach is also idempotent for its current parent, avoiding a disconnect/reinsert
+that loses native focus/scroll during health updates. The deterministic
+pending-response/geometry/heartbeat regressions and browser evidence are recorded in
+[table-scroll investigation](../governance/verification/web-table-scroll.md).
 
 ## Native launcher maintenance notes
 

@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.113 — 2026-10-30
+
+- Web scroll fixes.
+
 ## v80.112 — 2026-10-29
 
 - Web CCost Credits/USD selector: Python tokens, text-only switching, no acquisition/repricing. Page-memory only; reload restores configuration. Raw totals/order and native amounts unchanged.
