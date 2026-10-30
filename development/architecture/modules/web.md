@@ -114,8 +114,12 @@ and the focused evidence are sufficient.
 Session-detail scroll retention uses the inner `.table-scroll` owner and captures
 the visible row after the HTTP response, immediately before DOM mutation. Internal
 scrolling away from the bottom disables follow; background retention never calls
-document scrolling. The deterministic pending-response/geometry regressions and
-outstanding real-browser acceptance are recorded in
+document scrolling. Frozen reports also retain their actual DOM during host-health
+checks unless the report, search, view or output changes. This applies to every
+finite report, not only Overview: health is not a new snapshot. Session detail's
+attach is also idempotent for its current parent, avoiding a disconnect/reinsert
+that loses native focus/scroll during health updates. The deterministic
+pending-response/geometry/heartbeat regressions and browser evidence are recorded in
 [table-scroll investigation](../governance/verification/web-table-scroll.md).
 
 ## Native launcher maintenance notes

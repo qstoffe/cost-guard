@@ -1,99 +1,122 @@
 # Web table scroll investigation — FR 000529
 
-Base: `a554d312fecc7d7db31ae6aebe7819418c18c11c`; checked 2026-10-29 on Windows.
-Status: unfinished; source-bound browser reproduction now confirmed, full input
-and visual acceptance pending. This is not
-a completion report or confirmation of the colleague's reported root cause.
+Base: `a554d312fecc7d7db31ae6aebe7819418c18c11c`; Windows, 2026-10-30.
+Status: complete automated browser run passed; physical-device limits remain explicit.
+The [fresh measurements](web-table-scroll-2026-10-30.json) retain the baseline,
+complete candidate run and registered-suite outcome without private payloads.
+The colleague's original browser, route and physical device remain unknown.
 
-## Source-bound defect and repair
+## Source-bound causes and repair
 
-Session detail polls captured the first row's document position before awaiting
-HTTP. The `finally` block then compensated through `window.scrollBy`, including
-unchanged responses and errors. A user could scroll the independently scrollable
-table during that await; the resulting geometry delta incorrectly moved the
-document. Internal table scrolling also did not disable Live follow, because only
-window scroll and focus were observed.
+1. Session-detail polls captured the first row's document position **before** HTTP
+   and compensated through `window.scrollBy` in `finally`, even on unchanged/error
+   responses. Internal wheel movement during the await was mistaken for a layout
+   change and moved the document. Capture now occurs immediately before an actual
+   DOM update, after HTTP, over the visible row relative to `.table-scroll`.
+   Compensation changes that container's `scrollTop`, not the document.
+2. Internal browsing did not disable Live follow; only window scroll/focus did.
+   Scrolling away from the internal bottom now disables follow.
+3. Host-health checks rebuilt all frozen finite reports except Overview.
+   `app.js` now retains the DOM for any unchanged report/search/current output.
+   Health is not a new frozen observation. Detail's `attach` also avoids replacing
+   an already-connected root with itself, preserving native focus/scroll.
 
-`src/web/assets/session.js` now captures the first visible row immediately before
-an actual DOM update, relative to the table's scroll container. Compensation uses
-that container's vertical offset and leaves horizontal/document navigation alone.
-Scrolling away from the internal list's bottom disables follow. No wheel/key
-handlers, CSS overflow removal, acquisition, valuation, security, paging or frozen
-snapshot changes were introduced. The existing keyed-row and selection/focus
-guards remain. Architecture-boundary and journal assessment: no-update; the Web
-module owner and this evidence document capture the relevant facts.
+There are no wheel/key handlers, overflow removal, valuation, source/provider
+acquisition, security, SSE limits or frozen snapshot calculation changes. Native
+scrolling, sticky headers and existing 50-row paging remain. No Web promotion.
 
-`development/tests/integration/web_session.cjs` adds deterministic cases for
-scrolling during a pending page response, a visible row displaced by growth above
-it, unchanged horizontal offset and internal-scroll follow cancellation. The
-pending-response case failed against the base implementation (`window.scrollBy`
-called once, expected zero), then passed after repair. VM geometry is deliberately
-synthetic: it is not browser layout, wheel, touchpad or physical-device proof.
+## Reproducible browser setup
 
-## Independent verification
+`development/tests/integration/web_table_scroll.py --approved-browser --output <json>
+--screenshots <directory>` requires separately approved browser use/provisioning.
+Use the repository's CI-pinned Playwright 1.56.0 and matching Chromium; the observed
+headless version was 141.0.7390.37. No product dependency or automatic gate was added.
+`--skip-layout-matrix` is a focused diagnosis, explicitly identified in its output,
+not full layout acceptance. `--baseline-session <file>` injects only baseline
+session.js read from the base commit to isolate the former response race.
 
-- Focused `run_tests.py --pattern test_web_session_detail.py`: 9 tests passed.
-- `run_tests.py --suite full`: all 116 test files passed, 56.7 seconds.
-- `validate_package.py --working-tree`: 0 failures, 11 passes; four existing design
-  budget warnings (README, analysis/context, reports/service, watch/coordinator).
-- Read-only `probe_web_live.py --detail --reports`: V2, one acquisition owner,
-  two streams, preserved run origin and advancing publication sequence. First and
-  latest detail pages and frozen consistency passed. Normal, all-models, sessions
-  and date reports completed; explicit deep history cancelled. Owned Live/HTTP
-  workers closed; the shared OpenCode service was untouched. This observed only
-  three detail rows and is not long-list or browser proof.
+The harness uses the shipped WebHost, HTTP/security, authenticated EventSource and
+assets. Only application jobs/detail observations are synthetic; no providers,
+personal browser/profile, model calls, actual user sources or shared host are used.
+Long-list fixtures duplicate 125 rows/cards for layout stress, not total-value
+assertions. The session fixture has 120 canonical prompts and 50-row pages.
+All owned browser/server work is closed in `finally` and closure is recorded.
 
-## Integrated browser follow-up
+Decision Delegate authorized session-isolated Playwright/Chromium discovery,
+official dependency provisioning and this bounded loopback testing because no
+integrated browser tools were exposed in the current session. This is not a claim
+that the previously connected browser was disconnected or authentication failed.
 
-After native reactivation succeeded, `browser.tabs.list` confirmed an attached
-browser. The earlier disconnected observation is historical, not its current
-status. [Measured browser evidence](web-table-scroll-browser.json) records the
-actual cases and remaining limitations.
+## Measured checks
 
-In real Chromium, the source-derived previous load implementation moved the
-document from 600 to 250 when the internal table moved from 500 to 850 during a
-pending response. The candidate kept the document at 600 and table at 850. This
-isolates the identified race; it does not identify the colleague's original
-device/route or claim a full old-host replay.
+- Actual pending HTTP + native injected wheel: table 500→850, document 578.
+  Baseline session.js then moved the document to 228. Candidate retained 578/850.
+  This is a real-browser source-bound reproduction, not proof of the colleague's
+  exact historical cause or a complete old-host replay.
+- The 1000px/360px matrix covers Watch, Models, all Models, Sessions, deep Token
+  Mix, date reports, Snapshot/Live detail and Accounts (18 view/width cases).
+  Table wheel advanced 350px with stable document; PageDown/PageUp moved ±453px
+  and arrows ±40px. Accounts scroll the document instead (page keys ±700px).
+  Last rows/cards were reachable; sticky headers, focusable regions, filters,
+  horizontal input, page overflow and boundary chaining were asserted.
+- Explicit host resync retained finite-report DOM, selection, focus and offsets.
+  Actual synthetic SSE publications verified Watch idle/changing rows, visible
+  anchor, canonical nodes, horizontal/document offsets, selection and disclosure
+  focus. These are real browser/transport checks, not actual source acquisition.
+- Snapshot/Live first/middle/latest paging retained 50 rows and the whole-session
+  summary. Detail selection/focus deferred revisions, release applied the pending
+  revision, Freeze retained its revision, resizing worked, and reduced-motion
+  transitions remained disabled. Stable-controls growth retained document and
+  horizontal offsets with visible-anchor drift below 1px.
+- Screenshots were inspected for readable narrow left/right columns and focus
+  rings, alongside numeric sticky/overflow checks. They are browser raster proof,
+  not OS/default-browser or physical-device proof.
 
-The measured layout matrix covers eight renderer views at 1000px and 360px,
-including 125-row/card stress fixtures. All table ends were reachable, headings
-remained sticky and the measured documents had no horizontal page overflow.
-Native trusted wheel events moved each of seven views at both widths: table
-offsets advanced 600px with a stable document, while Accounts cards scrolled the
-document. Narrow Watch horizontal movement also worked. These are injected native
-events, not a physical mouse/touchpad claim. Initial mis-targeted iframe wheel
-cases failed; matching the fixture height to the observed desktop viewport fixed
-the harness, and the fourteen reruns passed.
+## Native anchoring versus an unrelated jump
 
-Snapshot/Live detail first/middle/latest paging, complete summaries, idle offsets,
-selected text, focused cells and deferred updates passed in real DOM/layout.
-Detail and Watch visible-row growth retained the anchor within 0.25px while
-preserving horizontal/document offsets and canonical nodes. Updates were driven
-through shipped renderers over synthetic fixtures, not real-source browser SSE.
+An initial blanket document-offset assertion failed: the existing new-activity
+button label expanded controls by 47.25px at 360px; native document anchoring moved
+the page 47px while the same connected row drifted only 0.25px. Focus, selection
+and horizontal offset survived. This is distinct from the old unrelated 350px
+response jump. The original failed run is not relabeled PASS.
 
-## Remaining mandatory browser work
+Decision Delegate directed anchor-aware checks, not a production control redesign
+or FR waiver: controls expansion must explain document movement by its measured
+height change while preserving the visible row/focus/selection. With controls
+already stable, document/horizontal offsets must stay fixed and inner adjustment
+must compensate preceding-row growth. Geometry-neutral updates retain all raw
+offsets. The focused rerun passed: growth moved inner scroll to 1647 while document
+900 and horizontal 100 stayed fixed; visible-anchor drift was -0.25px.
 
-Native `browser.hover` returned `UnknownVizError`; screenshot attempts after
-explicit `browser.tabs.focus` still required a visible tab. The DOM reports
-visible/focused, but that alone is not native pointing/capture proof. Some isolated
-trusted PageDown/PageUp/arrow cases scrolled correctly; the first-key/batched
-matrix was inconsistent and must not be counted as passing. Explicit focus, native
-Tab entry, event/scrollend conditions, separate calls and a scroll-driven
-`browser.wait` marker did not establish repeatable full acceptance. No speculative
-production key handler was added. Open this task's Cost Guard tab in the visible
-OpenCode Review pane and keep the Desktop window visible, then continue the actual
-input/visual cases. Do not substitute another disconnected diagnosis.
+## Regression and verification limits
 
-Cover Watch idle/changing Live rows, Sessions, Models, Accounts, deep Token Mix,
-date reports and 50-row session Snapshot/Live pages. Verify list-to-end browsing,
-wheel, available touchpad, PageUp/PageDown/arrows, horizontal movement, boundary
-scroll chaining, sticky headings, filters/paging, resizing/360px, focus and text
-selection across publications. Record unavailable physical inputs honestly;
-synthetic DOM tests cannot fulfill that requirement. Existing natural browser
-scrolling and reduced-motion CSS have not been modified speculatively.
+`web_session.cjs` covers the pending response, changed visible geometry, horizontal
+retention, internal-follow cancellation and idempotent detail attachment.
+`web_views.cjs` covers frozen-report heartbeat DOM retention. Both new attachment
+and finite-view regressions failed before their respective causal fixes.
+The final full registered suite passed 115/116 test files (54.2 seconds).
+`test_launcher_feedback.py` failed four Windows PowerShell 5.1 subcases: scripts
+were disabled (`SecurityError` / `UnauthorizedAccess`), exit 1 rather than 9009/17.
+The corresponding pwsh.exe coverage passed; intended 5.1 behavior remains
+unverified, not proven pre-existing. Decision Delegate approved only this narrow
+exception, conditional on relevant Web/browser checks and validator passing.
+No policy or unrelated test was changed or circumvented. Package validation:
+11 passes, zero failures, four existing design-budget warnings. Release notes
+were shortened to preserve unchanged hard caps rather than weaken the validator.
+Two registered tests also skipped their symlink cases because Windows did not
+permit creating test symlinks (`test_macos_app.py`, `test_web_lifecycle.py`).
 
-No FR bundle/state/completion changes, PR or merge yet. Product version/history
-and README current version must be updated against the fresh base in the eventual
-delivery PR after acceptance. Preserve the selected owner and unfinished branch;
-do not select another FR or delete its scratch workspace.
+The [2026-10-29 integrated-browser measurements](web-table-scroll-browser.json)
+remain historical partial evidence: 16 layout/14 trusted-wheel cases, detail and
+Watch fixture retention, but inconsistent keyboard cases and unavailable native
+capture. That run's full suite passed 116 files and its real-source read-only
+probe observed one owner/two streams, three detail rows, frozen consistency,
+normal/all-models/sessions/date reports and cancelled explicit deep history.
+Those observations are not fresh long-list or physical-device proof.
+
+Physical mouse/touchpad/touch, assistive technology and the colleague's original
+installation are not verified by this headless environment. Automated trusted
+browser input over synthetic observations must never be called full physical-device
+acceptance. Earlier harness failures (old-route readiness, rapid document reloads
+retaining SSE slots, fractional final scroll pixels and an already-latest disabled
+Next button) were corrected in the harness, not masked by production input handlers.

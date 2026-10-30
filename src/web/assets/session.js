@@ -53,7 +53,7 @@ const SessionDetail = (() => {
       this.root.addEventListener('focusin', () => { this.follow = false; });
     }
     attach(parent) {
-      parent.replaceChildren(this.root);
+      if (this.root.parentNode !== parent) parent.replaceChildren(this.root);
       if (this.attached) return;
       this.attached = true;
       window.addEventListener('scroll', this.onScroll, {passive: true});

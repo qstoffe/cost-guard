@@ -8,6 +8,7 @@ class Node {
   set textContent(value) { this.text = String(value); this.replaceChildren(); }
   get textContent() { return this.text + this.children.map(c => c.textContent).join(''); }
   get firstElementChild() { return this.children[0]; }
+  get parentNode() { return this.parent; }
   get isConnected() { return Boolean(this.parent); }
   append(...children) { for (const child of children) { child.remove(); this.children.push(child); child.parent = this; } }
   replaceChildren(...children) { for (const child of this.children) child.parent = null; this.children = []; this.append(...children); }
@@ -38,6 +39,13 @@ async function main() {
   vm.runInContext("globalThis.view = new SessionDetail.View(api, 'root-0000', 'live')", context);
   const view = context.view;
   view.attached = true;
+  const parent = new Node('main');
+  parent.append(view.root);
+  const replace = parent.replaceChildren.bind(parent);
+  let replacements = 0;
+  parent.replaceChildren = (...children) => { replacements++; replace(...children); };
+  view.attach(parent);
+  assert.equal(replacements, 0, 'a health check must not detach the connected detail tree');
   await view.load();
   assert.equal(view.body.children.length, 50);
   assert.equal(view.offset, 0);

@@ -1,0 +1,441 @@
+{
+  "date": "2026-10-30",
+  "base": "a554d312fecc7d7db31ae6aebe7819418c18c11c",
+  "baseline": {
+    "outcome": "EXPECTED BASELINE DEFECT",
+    "matrix": [],
+    "limitations": [
+      "Headless Chromium automated trusted input, not physical mouse/touchpad/touch or assistive technology proof.",
+      "Synthetic application results and duplicated layout stress rows; not source/provider acquisition or total-value proof.",
+      "Historical colleague browser/route/device remains unknown."
+    ],
+    "browser": "141.0.7390.37",
+    "response_race": {
+      "before": {
+        "top": 500,
+        "left": 0,
+        "page": 578
+      },
+      "during": {
+        "top": 850,
+        "left": 0,
+        "page": 578
+      },
+      "after": {
+        "top": 850,
+        "left": 0,
+        "page": 228
+      }
+    },
+    "owned_host_closed": true
+  },
+  "candidate": {
+    "outcome": "PASS",
+    "matrix": [
+      {
+        "width": 1000,
+        "route": "watch",
+        "wheel_delta": 350,
+        "keyboard": {
+          "PageDown": 453,
+          "PageUp": -453,
+          "ArrowDown": 40,
+          "ArrowUp": -40
+        },
+        "horizontal_range": 2,
+        "boundary_page_delta": 134,
+        "upward_boundary_delta": -559,
+        "document_end": false,
+        "lastVisible": true,
+        "sticky": true,
+        "overflow": "auto"
+      },
+      {
+        "width": 1000,
+        "route": "models",
+        "wheel_delta": 350,
+        "keyboard": {
+          "PageDown": 453,
+          "PageUp": -453,
+          "ArrowDown": 40,
+          "ArrowUp": -40
+        },
+        "horizontal_range": 0,
+        "boundary_page_delta": 208,
+        "upward_boundary_delta": -600,
+        "document_end": false,
+        "lastVisible": true,
+        "sticky": true,
+        "overflow": "auto"
+      },
+      {
+        "width": 1000,
+        "route": "models/all",
+        "wheel_delta": 350,
+        "keyboard": {
+          "PageDown": 453,
+          "PageUp": -453,
+          "ArrowDown": 40,
+          "ArrowUp": -40
+        },
+        "horizontal_range": 456,
+        "boundary_page_delta": 261,
+        "upward_boundary_delta": -600,
+        "document_end": false,
+        "lastVisible": true,
+        "sticky": true,
+        "overflow": "auto"
+      },
+      {
+        "width": 1000,
+        "route": "sessions",
+        "wheel_delta": 350,
+        "keyboard": {
+          "PageDown": 453,
+          "PageUp": -453,
+          "ArrowDown": 40,
+          "ArrowUp": -40
+        },
+        "horizontal_range": 0,
+        "boundary_page_delta": 55,
+        "upward_boundary_delta": -600,
+        "document_end": false,
+        "lastVisible": true,
+        "sticky": true,
+        "overflow": "auto"
+      },
+      {
+        "width": 1000,
+        "route": "token-mix",
+        "wheel_delta": 350,
+        "keyboard": {
+          "PageDown": 453,
+          "PageUp": -453,
+          "ArrowDown": 40,
+          "ArrowUp": -40
+        },
+        "horizontal_range": 0,
+        "boundary_page_delta": 600,
+        "upward_boundary_delta": -600,
+        "document_end": false,
+        "lastVisible": true,
+        "sticky": true,
+        "overflow": "auto"
+      },
+      {
+        "width": 1000,
+        "route": "reports?date=2026-10-26:2026-10-27",
+        "wheel_delta": 350,
+        "keyboard": {
+          "PageDown": 453,
+          "PageUp": -453,
+          "ArrowDown": 40,
+          "ArrowUp": -40
+        },
+        "horizontal_range": 0,
+        "boundary_page_delta": 110,
+        "upward_boundary_delta": -600,
+        "document_end": false,
+        "lastVisible": true,
+        "sticky": true,
+        "overflow": "auto"
+      },
+      {
+        "width": 1000,
+        "route": "sessions/root-0000",
+        "wheel_delta": 350,
+        "keyboard": {
+          "PageDown": 453,
+          "PageUp": -453,
+          "ArrowDown": 40,
+          "ArrowUp": -40
+        },
+        "horizontal_range": 0,
+        "boundary_page_delta": 46,
+        "upward_boundary_delta": -578,
+        "document_end": false,
+        "lastVisible": true,
+        "sticky": true,
+        "overflow": "auto"
+      },
+      {
+        "width": 1000,
+        "route": "sessions/root-0000/live",
+        "wheel_delta": 350,
+        "keyboard": {
+          "PageDown": 453,
+          "PageUp": -453,
+          "ArrowDown": 40,
+          "ArrowUp": -40
+        },
+        "horizontal_range": 0,
+        "boundary_page_delta": 46,
+        "upward_boundary_delta": -578,
+        "document_end": false,
+        "lastVisible": true,
+        "sticky": true,
+        "overflow": "auto"
+      },
+      {
+        "width": 1000,
+        "route": "accounts",
+        "document_keyboard": {
+          "PageDown": 700,
+          "PageUp": -700,
+          "ArrowDown": 40,
+          "ArrowUp": -40
+        },
+        "last_card_visible": true
+      },
+      {
+        "width": 360,
+        "route": "watch",
+        "wheel_delta": 350,
+        "keyboard": {
+          "PageDown": 453,
+          "PageUp": -453,
+          "ArrowDown": 40,
+          "ArrowUp": -40
+        },
+        "horizontal_range": 574,
+        "boundary_page_delta": 215,
+        "upward_boundary_delta": -600,
+        "document_end": false,
+        "lastVisible": true,
+        "sticky": true,
+        "overflow": "auto"
+      },
+      {
+        "width": 360,
+        "route": "models",
+        "wheel_delta": 350,
+        "keyboard": {
+          "PageDown": 453,
+          "PageUp": -453,
+          "ArrowDown": 40,
+          "ArrowUp": -40
+        },
+        "horizontal_range": 410,
+        "boundary_page_delta": 285,
+        "upward_boundary_delta": -600,
+        "document_end": false,
+        "lastVisible": true,
+        "sticky": true,
+        "overflow": "auto"
+      },
+      {
+        "width": 360,
+        "route": "models/all",
+        "wheel_delta": 350,
+        "keyboard": {
+          "PageDown": 453,
+          "PageUp": -453,
+          "ArrowDown": 40,
+          "ArrowUp": -40
+        },
+        "horizontal_range": 1040,
+        "boundary_page_delta": 300,
+        "upward_boundary_delta": -600,
+        "document_end": false,
+        "lastVisible": true,
+        "sticky": true,
+        "overflow": "auto"
+      },
+      {
+        "width": 360,
+        "route": "sessions",
+        "wheel_delta": 350,
+        "keyboard": {
+          "PageDown": 453,
+          "PageUp": -453,
+          "ArrowDown": 40,
+          "ArrowUp": -40
+        },
+        "horizontal_range": 246,
+        "boundary_page_delta": 110,
+        "upward_boundary_delta": -600,
+        "document_end": false,
+        "lastVisible": true,
+        "sticky": true,
+        "overflow": "auto"
+      },
+      {
+        "width": 360,
+        "route": "token-mix",
+        "wheel_delta": 350,
+        "keyboard": {
+          "PageDown": 453,
+          "PageUp": -453,
+          "ArrowDown": 40,
+          "ArrowUp": -40
+        },
+        "horizontal_range": 473,
+        "boundary_page_delta": 600,
+        "upward_boundary_delta": -600,
+        "document_end": false,
+        "lastVisible": true,
+        "sticky": true,
+        "overflow": "auto"
+      },
+      {
+        "width": 360,
+        "route": "reports?date=2026-10-26:2026-10-27",
+        "wheel_delta": 350,
+        "keyboard": {
+          "PageDown": 453,
+          "PageUp": -453,
+          "ArrowDown": 40,
+          "ArrowUp": -40
+        },
+        "horizontal_range": 471,
+        "boundary_page_delta": 188,
+        "upward_boundary_delta": -600,
+        "document_end": false,
+        "lastVisible": true,
+        "sticky": true,
+        "overflow": "auto"
+      },
+      {
+        "width": 360,
+        "route": "sessions/root-0000",
+        "wheel_delta": 350,
+        "keyboard": {
+          "PageDown": 453,
+          "PageUp": -453,
+          "ArrowDown": 40,
+          "ArrowUp": -40
+        },
+        "horizontal_range": 414,
+        "boundary_page_delta": 58,
+        "upward_boundary_delta": -600,
+        "document_end": false,
+        "lastVisible": true,
+        "sticky": true,
+        "overflow": "auto"
+      },
+      {
+        "width": 360,
+        "route": "sessions/root-0000/live",
+        "wheel_delta": 350,
+        "keyboard": {
+          "PageDown": 453,
+          "PageUp": -453,
+          "ArrowDown": 40,
+          "ArrowUp": -40
+        },
+        "horizontal_range": 414,
+        "boundary_page_delta": 58,
+        "upward_boundary_delta": -600,
+        "document_end": false,
+        "lastVisible": true,
+        "sticky": true,
+        "overflow": "auto"
+      },
+      {
+        "width": 360,
+        "route": "accounts",
+        "document_keyboard": {
+          "PageDown": 700,
+          "PageUp": -700,
+          "ArrowDown": 40,
+          "ArrowUp": -40
+        },
+        "last_card_visible": true
+      }
+    ],
+    "limitations": [
+      "Headless Chromium automated trusted input, not physical mouse/touchpad/touch or assistive technology proof.",
+      "Synthetic application results and duplicated layout stress rows; not source/provider acquisition or total-value proof.",
+      "Historical colleague browser/route/device remains unknown."
+    ],
+    "layout_matrix_requested": true,
+    "browser": "141.0.7390.37",
+    "response_race": {
+      "before": {
+        "top": 500,
+        "left": 0,
+        "page": 578
+      },
+      "during": {
+        "top": 850,
+        "left": 0,
+        "page": 578
+      },
+      "after": {
+        "top": 850,
+        "left": 0,
+        "page": 578
+      }
+    },
+    "watch_sse": "PASS idle/changing rows, visible anchor, horizontal/document offsets, selection and focused disclosure",
+    "detail_paging": "PASS Snapshot/Live first/middle/latest, 50 rows, unchanged whole-session summary",
+    "detail_notice_layout": {
+      "rowDelta": 0.25,
+      "documentDelta": 47,
+      "controlsDelta": 47.25,
+      "horizontalRetained": true,
+      "focusRetained": true,
+      "selectionRetained": true
+    },
+    "detail_growth": {
+      "connected": true,
+      "delta": -0.25,
+      "before": [
+        100,
+        900
+      ],
+      "after": [
+        100,
+        900
+      ],
+      "top": 1647,
+      "follow": false,
+      "revision": "2",
+      "offset": 0
+    },
+    "detail_retention": "PASS growth anchor, offsets, selection/focus defer then apply, frozen revision, resize and reduced motion",
+    "finite_requests": [
+      "normal",
+      "all-models",
+      "sessions",
+      "token-mix",
+      "date",
+      "session",
+      "token-mix"
+    ],
+    "host_reason_before_close": null,
+    "host_failure": null,
+    "owned_host_closed": true
+  },
+  "registered_suite": {
+    "files": 116,
+    "passed_files": 115,
+    "failed_files": [
+      "test_launcher_feedback.py"
+    ],
+    "tests": 1418,
+    "failure_subcases": 4,
+    "errors": 0,
+    "skips": [
+      {
+        "file": "test_macos_app.py",
+        "cases": [
+          {
+            "test": "test_linked_cache_destination_is_refused (development.tests.test_macos_app.MacAppTests.test_linked_cache_destination_is_refused)",
+            "reason": "'Symlink privilege unavailable'"
+          }
+        ]
+      },
+      {
+        "file": "test_web_lifecycle.py",
+        "cases": [
+          {
+            "test": "test_guard_does_not_follow_runtime_symlinks (development.tests.test_web_lifecycle.LifecycleTests.test_guard_does_not_follow_runtime_symlinks)",
+            "reason": "'OS does not permit creating test symlinks'"
+          }
+        ]
+      }
+    ],
+    "policy_limitation": "Four Windows PowerShell 5.1 subcases rejected scripts with SecurityError/UnauthorizedAccess; corresponding pwsh.exe coverage passed. Decision Delegate approved this narrow exception, not a full suite PASS."
+  }
+}

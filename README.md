@@ -370,7 +370,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.113 (2026-10-30):** Web Beta preserves table scrolling, selection and focus during host-health checks and retains session Live anchors inside the table without document jumps.
+**v80.113 (2026-10-30):** Web Beta retains frozen tables and session Live scroll anchors.
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

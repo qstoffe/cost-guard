@@ -112,12 +112,14 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--screenshots', type=Path, required=True)
     parser.add_argument('--baseline-session', type=Path)
+    parser.add_argument('--skip-layout-matrix', action='store_true', help='Focused race/SSE/detail diagnosis, not full layout acceptance')
     args = parser.parse_args()
     from playwright.sync_api import sync_playwright, expect
     evidence = dict(outcome='RUNNING', matrix=[], limitations=[
         'Headless Chromium automated trusted input, not physical mouse/touchpad/touch or assistive technology proof.',
         'Synthetic application results and duplicated layout stress rows; not source/provider acquisition or total-value proof.',
         'Historical colleague browser/route/device remains unknown.'])
+    evidence['layout_matrix_requested'] = not args.skip_layout_matrix
     args.screenshots.mkdir(parents=True, exist_ok=True)
     owner = unittest.TestCase()
     host = None
@@ -172,13 +174,21 @@ def main():
                     evidence['outcome'] = 'EXPECTED BASELINE DEFECT'
                     return
                 assert abs(after['page'] - during['page']) < 1 and abs(after['top'] - during['top']) < 1, evidence['response_race']
-                for width in (1000, 360):
+                for width in (() if args.skip_layout_matrix else (1000, 360)):
                     page.set_viewport_size(dict(width=width, height=800))
                     for route in ('watch', 'models', 'models/all', 'sessions', 'token-mix', 'reports?date=2026-10-26:2026-10-27', 'sessions/root-0000', 'sessions/root-0000/live'):
                         page.goto(origin + '/#/' + route)
-                        # Hash navigation can return while the previous view is still
-                        # visible. Start each layout case in a fresh document/mode.
-                        page.reload()
+                        # Wait for hash routing, not the still-visible previous table.
+                        # Keep one EventSource: rapid document reloads consume server
+                        # stream slots until the next write detects closed sockets.
+                        key = 'session/root-0000' if route.startswith('sessions/root-0000') else '#/' + route
+                        page.wait_for_function('(key) => current===views.get(key)', arg=key)
+                        if route.startswith('sessions/root-0000'):
+                            mode = 'live' if route.endswith('/live') else 'snapshot'
+                            page.wait_for_function('() => current.detail?.data && !current.detail.busy')
+                            if page.evaluate('current.detail.mode') != mode:
+                                page.evaluate('() => current.detail.switchMode()')
+                            page.wait_for_function('(mode) => current.detail.mode===mode && !current.detail.busy', arg=mode)
                         if route == 'token-mix':
                             expect(page.locator('#refresh')).to_be_enabled()
                             page.locator('#refresh').click()
@@ -210,9 +220,15 @@ def main():
                                 assert region.locator('tbody tr').count() == 0
                             filters.first.fill('')
                             assert region.locator('tbody tr').count() >= 50
-                        page.screenshot(path=str(args.screenshots / f'{width}-{route.split("?")[0].replace("/", "-")}.png'))
+                        region.evaluate('e => { e.scrollLeft=0; e.scrollIntoView({block:"center"}); }')
+                        settle(page)
+                        name = f'{width}-{route.split("?")[0].replace("/", "-")}'
+                        page.screenshot(path=str(args.screenshots / f'{name}.png'))
+                        if case['horizontal_range'] > 0:
+                            region.evaluate('e => e.scrollLeft=e.scrollWidth')
+                            page.screenshot(path=str(args.screenshots / f'{name}-right.png'))
                     page.goto(origin + '/#/accounts')
-                    page.reload()
+                    page.wait_for_function('() => current===views.get("#/accounts") && !current.loading && current.result')
                     expect(page.locator('.account-card').first).to_be_visible()
                     assert page.locator('.account-card').count() >= 125
                     page.evaluate('scrollTo(0, 500); document.activeElement?.blur()')
@@ -232,6 +248,7 @@ def main():
                     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
                     evidence['matrix'].append(dict(width=width, route='accounts', document_keyboard=keys, last_card_visible=True))
                 # Real SSE publications must retain Watch nodes, selection, focus and anchors.
+                page.set_viewport_size(dict(width=360, height=800))
                 page.goto(origin + '/#/watch')
                 region = page.locator('.watch-view .table-scroll')
                 expect(region).to_be_visible()
@@ -276,9 +293,13 @@ def main():
                 page.wait_for_function('() => current.detail?.data != null && !current.detail.busy')
                 summary = page.locator('.session-detail > p').nth(1).inner_text()
                 for mode in ('snapshot', 'live'):
-                    if mode == 'live':
-                        page.get_by_role('button', name='Follow live', exact=True).click()
-                        page.wait_for_function('() => current.detail.mode==="live" && !current.detail.busy')
+                    if page.evaluate('current.detail.mode') != mode:
+                        label = 'Follow live' if mode == 'live' else 'Freeze snapshot'
+                        page.get_by_role('button', name=label, exact=True).click()
+                        page.wait_for_function('(mode) => current.detail.mode===mode && !current.detail.busy', arg=mode)
+                    if page.evaluate('current.detail.offset') != 0:
+                        page.get_by_role('button', name='First', exact=True).click()
+                        page.wait_for_function('() => current.detail.offset===0 && !current.detail.busy')
                     for offset, button in ((50, 'Next'), (70, 'Jump to latest'), (0, 'First')):
                         page.get_by_role('button', name=button, exact=True).click()
                         page.wait_for_function('(offset) => current.detail.offset===offset && !current.detail.busy', arg=offset)
@@ -295,11 +316,43 @@ def main():
                   window.savedRow=[...current.detail.body.children].find(r=>r.getBoundingClientRect().bottom>current.detail.scroll.getBoundingClientRect().top+80);
                   window.savedTop=savedRow.getBoundingClientRect().top;
                   window.savedOffsets=[current.detail.scroll.scrollLeft,scrollY];
+                  window.savedControlsHeight=current.detail.controls.getBoundingClientRect().height;
+                  window.savedLeaf=savedRow.querySelector('td span').firstChild;
+                  savedRow.firstChild.tabIndex=0; savedRow.firstChild.focus({preventScroll:true});
+                  getSelection().setBaseAndExtent(savedLeaf,0,savedLeaf,Math.min(5,savedLeaf.length));
+                  window.savedText=getSelection().toString();
                 }''')
                 details.full['view']['prompt_blocks'][0]['rows'][0]['preview'] = 'Earlier detail growth ' * 80
                 details.revision += 1
                 page.evaluate('() => current.detail.load()')
-                assert page.evaluate('savedRow.isConnected && Math.abs(savedRow.getBoundingClientRect().top-savedTop)<1 && [current.detail.scroll.scrollLeft,scrollY].every((x,i)=>x===savedOffsets[i])')
+                notice_growth = page.evaluate('''() => ({
+                  rowDelta:savedRow.getBoundingClientRect().top-savedTop,
+                  documentDelta:scrollY-savedOffsets[1],
+                  controlsDelta:current.detail.controls.getBoundingClientRect().height-savedControlsHeight,
+                  horizontalRetained:current.detail.scroll.scrollLeft===savedOffsets[0],
+                  focusRetained:savedRow.contains(document.activeElement),
+                  selectionRetained:savedLeaf.isConnected && getSelection().toString()===savedText})''')
+                evidence['detail_notice_layout'] = notice_growth
+                # Decision Delegate: native page anchoring may compensate for a
+                # measured controls-height change; unexplained movement is not OK.
+                assert abs(notice_growth['rowDelta']) < 1 and abs(notice_growth['documentDelta'] - notice_growth['controlsDelta']) < 1, notice_growth
+                assert all(notice_growth[key] for key in ('horizontalRetained', 'focusRetained', 'selectionRetained')), notice_growth
+                page.evaluate('''() => {
+                  getSelection().removeAllRanges(); document.activeElement.blur();
+                  savedTop=savedRow.getBoundingClientRect().top;
+                  savedOffsets=[current.detail.scroll.scrollLeft,scrollY];
+                }''')
+                page.evaluate('() => current.detail.load()')
+                growth = page.evaluate('''() => ({connected:savedRow.isConnected,
+                  delta:savedRow.getBoundingClientRect().top-savedTop,
+                  before:savedOffsets, after:[current.detail.scroll.scrollLeft,scrollY],
+                  top:current.detail.scroll.scrollTop, follow:current.detail.follow,
+                  revision:current.detail.revision, offset:current.detail.offset})''')
+                evidence['detail_growth'] = growth
+                assert growth['connected'] and abs(growth['delta']) < 1 and growth['before'] == growth['after'], growth
+                unchanged = offsets(page, region)
+                page.evaluate('() => current.detail.load()')
+                assert offsets(page, region) == unchanged, 'geometry-neutral update retains all raw offsets'
                 page.evaluate('''() => {
                   window.savedLeaf=savedRow.querySelector('td span').firstChild;
                   getSelection().setBaseAndExtent(savedLeaf,0,savedLeaf,Math.min(5,savedLeaf.length));
@@ -327,6 +380,11 @@ def main():
                 evidence['detail_retention'] = 'PASS growth anchor, offsets, selection/focus defer then apply, frozen revision, resize and reduced motion'
                 evidence['finite_requests'] = jobs.requests
                 evidence['outcome'] = 'PASS'
+            except Exception:
+                evidence['page_status'] = page.locator('#status').inner_text()
+                evidence['notice'] = page.locator('#notice').inner_text()
+                page.screenshot(path=str(args.screenshots / 'failure.png'))
+                raise
             finally:
                 browser.close()
     except Exception as error:
@@ -339,6 +397,8 @@ def main():
         raise RuntimeError('Browser acceptance failed; inspect the local assertion location') from None
     finally:
         if host:
+            evidence['host_reason_before_close'] = host.reason
+            evidence['host_failure'] = type(host.failure).__name__ if host.failure else None
             if host.live:
                 host.live.details.release.set()
             host.close()

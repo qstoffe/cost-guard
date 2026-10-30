@@ -2,7 +2,7 @@
 
 ## v80.113 — 2026-10-30
 
-- Web Beta keeps frozen report tables intact during host-health checks, preserving scrolling, selection and focus. Session Live updates retain the visible row inside its table, without undoing scrolling performed during an HTTP request or moving the document. Internal browsing disables follow; native scrolling, paging and canonical totals are unchanged.
+- Web scroll fixes.
 
 ## v80.112 — 2026-10-29
 
