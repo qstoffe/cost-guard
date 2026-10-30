@@ -38,6 +38,14 @@ were no attachments. New evidence is outside the task payload.
 - Fresh full suite: **118 files: 117 PASS, one FAIL; 1,438 registered tests, two
   symlink-privilege skips**. All changed Web/display, CLI parity and causal tests pass.
 - Package validator: **PASS**, 11 checks, four design-budget warnings, zero failures.
+- [Hosted revalidation](https://github.com/qstoffe/cost-guard/actions/runs/40988348673):
+  **PASS** on Windows 2025 and macOS 15 ARM64/Intel at `adfdf7d`.
+  Full suite/package, native API/launcher smoke and rendered Chromium smoke passed
+  on all three. Windows: 1,438 tests passed, no skips; each macOS: 1,431 passed,
+  seven Windows-only skips. The initial terminal-browser fixture race was repaired
+  by waiting for real SSE reconnection before stopping its owned host, without
+  changing product behavior or removing assertions. Final evidence-only edits
+  change no product/test source. The local 12-case Overview rerun also passed.
 - Exact commands, sanitized browser measurements, repaired failed attempts and
   coverage limits: [verification](../../../architecture/governance/verification/web-minimal-overview.md).
 
@@ -60,6 +68,7 @@ not equivalent. No policy/bypass flag/test weakening was applied.
 The delegate separately authorized isolated scratch-only browser-tool provisioning
 and synthetic loopback tests, not a user-directed system installation or personal
 browser access. No test waiver was granted for the UI feature. Physical touchpad/touch,
-screen-reader, private installed-provider history, native macOS and non-Chromium
-browser acceptance remain untested. Product source delivery does not install/reload
+screen-reader, private installed-provider history, consumer macOS desktop and
+non-Chromium browser acceptance remain untested. Hosted native API smoke is not
+equivalent to those consumer checks. Product source delivery does not install/reload
 or restart the user's existing runtime.

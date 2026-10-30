@@ -79,6 +79,30 @@ Available account name mistaken for status; this delivery's history entry exceed
 the unchanged cap. Fixture CSP/closed-SSE-slot failures were corrected in the harness
 without weakening production security, stream limits or input behavior.
 
+## Hosted revalidation
+
+[Actions run 40988348673](https://github.com/qstoffe/cost-guard/actions/runs/40988348673)
+passed on Windows 2025, macOS 15 ARM64 and macOS 15 Intel at
+`adfdf7d30fb25998ff4ae14022465efa7ae49cbe`. Each platform passed the package
+validator, full 118-file suite, isolated native API/launcher smoke and rendered
+Chromium 141.0.7390.37 browser smoke. Windows passed all 1,438 tests without skips;
+each macOS run passed 1,431 with seven Windows-only skips and no failures.
+These hosted results do not rewrite the local policy-blocked failures above.
+
+The first hosted run failed the same final browser assertion on all platforms:
+the fixture stopped its server after HTTP recovery, before asynchronous SSE
+reconnection. The probe now passively observes actual EventSource readiness and
+waits for an open stream before shutdown. All original terminal/retained-report
+assertions remain; no production lifecycle or test guard was weakened. The
+corrected hosted runs passed terminal SSE delivery and clean owned shutdown.
+The strengthened local 12-case Overview probe also passed again after continuation;
+desktop-light and narrow-dark ready screenshots were visually inspected.
+
+Hosted native evidence covers Win32/AppKit callbacks, isolated lifecycle/launcher
+fixtures and macOS osacompile cache behavior, not physical consumer desktop use.
+Only this verification note, completion report and journal changed after that
+tested revision; no product or test source changed in the final evidence update.
+
 ## Limits
 
 This is actual headless Chromium rendering with automated wheel/keyboard/focus,

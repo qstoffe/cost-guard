@@ -52,6 +52,16 @@ layouts. Screenshots were visually inspected. This is synthetic loopback evidenc
 physical touchpad/touch, screen-reader or native macOS acceptance. Details and exact
 commands: [minimal Overview verification](../architecture/governance/verification/web-minimal-overview.md).
 
+Hosted [run 40988348673](https://github.com/qstoffe/cost-guard/actions/runs/40988348673)
+subsequently passed full regression/package, isolated native API/launcher and
+rendered Chromium smoke on Windows 2025 and macOS 15 ARM64/Intel at `adfdf7d`.
+Windows passed all 1,438 tests; each macOS passed 1,431 with seven Windows-only
+skips. The initial terminal-browser failure was a fixture sequencing race: HTTP
+recovery did not prove that EventSource had reconnected. Passively observing an
+open SSE stream before stopping the fixture repaired it without weakening any
+terminal assertion or changing production code. Hosted native success is not
+physical desktop acceptance and does not erase the local policy failures.
+
 Failed fixture attempts were not product passes: Playwright string predicates hit
 the shipped CSP (use function predicates, never weaken CSP); repeated cold documents
 exhausted the four SSE slots before closed sockets were observed (use a distinct
