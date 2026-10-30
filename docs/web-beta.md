@@ -1,5 +1,37 @@
 # Web Beta
 
+## Cost per Active Hour
+
+v80.115 adds Web-only `/#/cost-per-hour`: **Today**, **Month to date** and
+**Rolling 30 days**, plus a compact rate in complete session Snapshot/Live detail.
+Use **Refresh snapshot** to capture period history explicitly. Opening/revisiting
+the page never scans it. Progress, Cancel, the existing 120-second/8 MiB job bounds
+and dependency-aware derived cache apply; Watch/accounts keep their own cadence.
+
+Each scope shows reference CCost, active execution duration and rate with observation
+time and complete/partial/provisional/unavailable status. Complete means complete
+*observed* evidence, not recovered deleted/pruned history. Unknown or zero duration,
+incomplete telemetry, unpriceable cost or known source gaps suppress the rate; true
+priced zero with positive known duration can show zero. Running work is provisional.
+Freeze preserves the whole-session rate, independent of the visible 50-row page;
+source loss retains the last observation and never proves completion.
+
+Python computes `CCost / (active milliseconds / 3,600,000)` using unrounded Decimal
+inputs, then applies the shared credits/USD display policy: `CCost/h` or `$/h`
+(100 credits = $1.00, two USD decimals). JavaScript only chooses prepared text.
+Active time reuses qualified prompt, child, compaction, tool and background execution
+boundaries, excluding idle gaps and unverified time. Clip to the window, then union
+overlap within **and across** sessions: this is observed concurrent execution,
+not summed agent-worker-hours. Distinct concurrent requests still each incur CCost.
+Deduplicated request cost is allocated by its canonical event/completion timestamp;
+cross-boundary requests are **not** proportionally token-billed.
+
+Today/month use configured timezone boundaries including DST. Rolling 30 days is
+exactly the preceding 30 × 24 hours at capture, not another calendar-month scope.
+This is reference spending per active hour, not provider billing, a consultant
+invoice or human hours/salary saved. No model selector, new CLI command/option,
+provider/model call, browser persistence or durable history ledger is added.
+
 v80.112 adds the shared **CCost: Credits / USD** selector. It switches Python-prepared
 reference amounts in place, without report jobs or provider refresh. Native money,
 quotas, Unaccounted usage and Relative CCost stay unchanged. The choice is page-memory

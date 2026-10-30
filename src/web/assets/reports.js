@@ -10,7 +10,8 @@ const ReportRoutes = (() => {
     const routes = {overview: ['Overview', 'normal'], watch: ['Watch', null], live: ['Watch', null],
       models: ['Models · selectable catalog', 'normal'], 'models/all': ['Models · all catalog', 'all-models'],
       accounts: ['Accounts', 'normal'], sessions: ['Sessions', 'sessions'],
-      reports: ['Date reports', null], 'token-mix': ['Token Mix · deep history', 'token-mix']};
+      reports: ['Date reports', null], 'token-mix': ['Token Mix · deep history', 'token-mix'],
+      'cost-per-hour': ['Cost per Active Hour', 'cost-per-hour']};
     if (!routes[path]) return {title: 'Page not found', section: '', request: null};
     const [title, kind] = routes[path];
     let request = kind ? {kind} : null;
@@ -27,7 +28,7 @@ const ReportRoutes = (() => {
     }
     if (path === 'reports' && params.has('date')) request = {kind: 'date', date_text: params.get('date')};
     return {title, section: path === 'live' ? 'watch' : path.split('/')[0], request, live: path === 'live' || path === 'watch',
-      explicit: path === 'token-mix' || path === 'reports' && !request, params};
+      explicit: path === 'token-mix' || path === 'cost-per-hour' || path === 'reports' && !request, params};
   }
   function controls(parent, route, restartSessions) {
     parent.replaceChildren();
@@ -63,6 +64,7 @@ const ReportRoutes = (() => {
       parent.append(form, e('p', 'Configured-local calendar dates, not browser timezone. Reversed/impossible ranges are rejected, never normalized.'));
     }
     if (route.section === 'token-mix') parent.append(e('p', 'Explicit deep scan of all available history; may take time. Capture/Refresh starts it; Cancel stops only this finite job. Live continues. Reopening retains the frozen result in page memory.'));
+    if (route.section === 'cost-per-hour') parent.append(e('p', 'Capture/Refresh explicitly reads available period history (120-second limit). Cancel stops only this view’s finite capture; Watch and accounts continue independently. Opening or revisiting this page never starts a scan.'));
   }
   return {resolve, controls};
 })();

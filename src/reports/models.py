@@ -12,6 +12,7 @@ from enum import Enum
 from typing import Mapping
 
 from src.analysis.quota_pace import QuotaPace
+from src.analysis.active_hour import ActiveHour
 from src.analysis.context import PriceWarningSeverity
 from src.analysis.valuation import ComparisonCost
 from src.analysis.token_mix import TokenMix
@@ -27,6 +28,7 @@ class ReportKind(str, Enum):
     SESSION = "session"
     DATE = "date"
     TOKEN_MIX = "token-mix"
+    COST_PER_HOUR = "cost-per-hour"  # Web-only explicit finite capture; no CLI option.
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,6 +121,8 @@ class SessionPromptBlock:
     billed_cost: Decimal | None = None
     next_context_warning_severity: PriceWarningSeverity = PriceWarningSeverity.NONE
     next_context_cost_multiplier: Decimal | None = None
+    rate_usage_complete: bool = True
+    rate_provisional: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -223,3 +227,4 @@ class ReportProjection:
     session_page: SessionListPage | None = None
     publisher_token_mix: tuple[PublisherTokenMixProjection, ...] = ()
     range_comparison: ComparisonCost | None = None
+    active_hours: tuple[ActiveHour, ...] = ()

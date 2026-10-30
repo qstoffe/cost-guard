@@ -58,6 +58,10 @@ def amount_tokens(values):
     if "known_ccost" in values:
         tokens["account_ccost"] = ("—" if values.get("observed_requests") and not values.get("priced_requests")
                                    else ccost_amount(decimal(values["known_ccost"])))
+    if "rate" in values and "cost_complete" in values:
+        tokens["known_ccost"] = ccost_amount(decimal(values["known_ccost"]), unresolved=not values["cost_complete"])
+        rate = decimal(values["rate"])
+        tokens["rate"] = "N/A" if rate is None else ccost_amount(rate) + ("/h" if ccost_unit() == "usd" else " CCost/h")
     if "run_ccost" in values:
         mix = dict(values["run_total"].fields)
         tokens["run_ccost"] = ("N/A" if values["run_ccost"] is None or (mix["request_count"] and not mix["priced_requests"])
@@ -94,7 +98,7 @@ def metric_tokens(values, timezone_id, now_ms=None):
     for key in ("delta_context_tokens", "watch_delta_context_tokens"):
         if key in values:
             tokens[key] = context_delta(values[key])
-    for key in ("pricing_retrieved_at_ms", "observed_at_ms", "now_ms", "started_at_ms", "reset_at_ms"):
+    for key in ("pricing_retrieved_at_ms", "observed_at_ms", "now_ms", "started_at_ms", "reset_at_ms", "start_ms", "end_ms"):
         if key in values:
             tokens[key] = "unknown" if values[key] is None else format_local_timestamp(values[key], timezone_id)
     if "reset_at_ms" in values and now_ms is not None:

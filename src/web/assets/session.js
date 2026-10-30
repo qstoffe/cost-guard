@@ -24,6 +24,7 @@ const SessionDetail = (() => {
       });
       this.status = el('p'); this.status.setAttribute('role', 'status');
       this.summary = el('p'); this.warning = el('p', undefined, 'warning');
+      this.hourly = el('p', undefined, 'detail');
       this.legend = el('p', undefined, 'detail');
       this.context = el('div'); this.heading = el('h3', 'Session history');
       this.provenance = el('details'); this.provenance.append(el('summary', 'Source and reading guide'));
@@ -39,7 +40,7 @@ const SessionDetail = (() => {
       }
       head.append(header); this.body = el('tbody'); this.footer = el('tr');
       const foot = el('tfoot'); foot.append(this.footer); table.append(head, this.body, foot); scroll.append(table);
-      this.root.append(back, this.heading, this.controls, this.status, this.summary, this.warning, this.context, this.legend, scroll, this.provenance);
+      this.root.append(back, this.heading, this.controls, this.status, this.summary, this.hourly, this.warning, this.context, this.legend, scroll, this.provenance);
       this.first.addEventListener('click', () => this.page(0));
       this.previous.addEventListener('click', () => this.page(Math.max(0, this.offset - 50)));
       this.next.addEventListener('click', () => this.page(this.offset + 50));
@@ -123,7 +124,8 @@ const SessionDetail = (() => {
           this.latest.textContent = 'New/changed activity — Jump to latest';
         }
         if (!navigation && (this.protectedSelection() || this.body.contains(document.activeElement))) return;
-        if (data.revision === this.revision && data.offset === this.offset && !navigation) return;
+        const healthChanged = data.state !== this.data?.state;
+        if (data.revision === this.revision && data.offset === this.offset && !navigation && !healthChanged) return;
         // Capture after HTTP: the user may have scrolled while it was in flight.
         // Retain a visible row relative to its actual scroll owner, not the page.
         const edge = this.scroll.getBoundingClientRect().top;
@@ -169,6 +171,8 @@ const SessionDetail = (() => {
       ReportView.text(this.summary, () => `Whole session: ${data.total} rows · CCost ${ReportView.display(block, 'total_ccost')}${!block.comparison_cost_complete ? ' (incomplete)' : ''} · Billed ${ReportView.display(block, 'billed_cost')} · Duration ${ReportView.display(block, 'duration_ms')}` +
         (block.total_has_cost_breakdown ? block.total_breakdown_known ? ` · Main CCost ${ReportView.display(block, 'total_main_ccost')} · Linked child CCost ${ReportView.display(block, 'total_subagent_ccost')}` : ' · Linked child breakdown unavailable' : ''));
       this.context.replaceChildren(); ReportView.contextSummary(this.context, block);
+      ReportView.text(this.hourly, () => block.active_hour ? ReportView.hourlySummary(block.active_hour) +
+        (data.state !== 'observed' ? ` · ${data.state}: retained observation, not proof of completion` : '') : '');
       this.source.textContent = `${data.result.view.source_label} · ${data.state} · Observed ${new Date(data.result.observed_at_ms).toLocaleString()} · ${this.id}. Complete history, 50 rows per page; totals are not page subtotals.`;
       this.warning.textContent = (data.state === 'history_retained' ?
         'Source history omitted previously observed evidence. Retained last observations are included, not newly completed. Deleted-before-observation history cannot be reconstructed. ' : '') +

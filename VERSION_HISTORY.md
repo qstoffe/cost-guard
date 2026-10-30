@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.115 — 2026-10-30
+
+- Web Beta: explicit Cost per Active Hour captures Today/local month/rolling 30 days; overlap-safe execution, deduplicated event-time CCost and Python Decimal rates. Session Snapshot/Live adds provisional/unknown-aware rates. Credits/USD toggle retained; CLI unchanged.
+
 ## v80.114 — 2026-10-30
 
 - CLI/Web: shared Input / Cached input / Cache write / Output labels and legends; accounting unchanged.
@@ -56,8 +60,7 @@
 
 ## v80.102 — 2026-10-28
 
-- Windows report, Watch and Diagnostics now open a separate persistent PowerShell console instead of asynchronously sharing the caller's console through `START /B`. Startup feedback stays in the Cost Guard window; a decorated parent prompt cannot compete with Python for that console's input/output.
-- Retained PowerShell 7/5.1 fallback, Python 3.11+ discovery, Ctrl+C reset, visible errors and the child prompt's native result. The caller receives only launch status; synchronous exit-code consumers can invoke Python directly. Native synthetic prompt/console, cancellation, error and real-installation probes passed; the colleague's exact prompt setup remains explicitly unverified. Web Beta, macOS and numerical semantics are unchanged.
+- Windows report/Watch/Diagnostics use a separate persistent PowerShell console, avoiding caller-prompt I/O competition. Retained 7/5.1 fallback, Python discovery, Ctrl+C, errors and child exit codes; caller gets launch status. Synthetic/native and installation probes passed, not the colleague's exact prompt. Web/macOS/accounting unchanged.
 
 ## v80.101 — 2026-10-28
 

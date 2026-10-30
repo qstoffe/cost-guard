@@ -30,7 +30,7 @@ from src.domain import AccountSnapshot, NormalizedSession, SessionSnapshot
 from src.domain.acquisition import AcquisitionMetrics
 from src.domain.progress import WorkProgress
 from src.domain.ccost import ReferenceValuation
-from src.domain.session_tree import root_activity, root_for_session
+from src.domain.session_tree import root_activity, root_for_session, root_by_session
 from src.pricing.base import PricingProvider
 from src.pricing.catalog import PricingCatalog, normalized_average_token_mix
 from src.sources.model_availability import ModelAvailabilitySource
@@ -399,6 +399,33 @@ class ReportService:
         self.metrics.mode = "token-mix-history"
         return build_token_mix_history(self, progress or (lambda _label, _percent: None))
 
+    def build_cost_per_hour(self) -> ReportProjection:
+        """Explicit Web capture only; never called by Normal, Watch or CLI dispatch."""
+        from src.analysis.active_hour import period_active_hours, period_windows
+        self.metrics.mode = "cost-per-hour"
+        self._load_catalog()
+        self.progress(WorkProgress("Listing period candidates", "catalog"))
+        sessions = self.session_catalog()
+        roots, activity = self._ordered_roots(sessions)
+        cutoff = min(start for _scope, start in period_windows(self.timezone_id, self.now_ms))
+        # Active roots qualify even with stale metadata: unfinished work may cross
+        # the entire window. Hydrated evidence, not metadata, supplies intervals.
+        ancestry = root_by_session(sessions)
+        active_roots = {ancestry.get(session.session_id) for session in sessions if session.active is True}
+        candidates = tuple(root for root in roots if activity.get(root.session_id, root.updated_at_ms) >= cutoff
+                           or root.session_id in active_roots)
+        analyzed = []
+        for index, root in enumerate(candidates):
+            self.progress(WorkProgress("Capturing period history", "history", index, len(candidates)))
+            analyzed.append(self._analyze(root))
+        self.progress(WorkProgress("Building hourly reference rates", "projection", len(candidates), len(candidates)))
+        warnings = tuple(self.selection.warnings)
+        gaps = migration_gap_notes(self.selection.migration_gap, start_ms=cutoff)
+        return ReportProjection(ReportKind.COST_PER_HOUR, "Cost per Active Hour", self.selection.selected.upper(),
+            warnings, active_hours=period_active_hours((item.bundle for item in analyzed),
+                self._load_comparison_catalog().reference_valuation, timezone_id=self.timezone_id,
+                now_ms=self.now_ms, source_complete=not warnings and not gaps), notes=gaps)
+
     def set_now_ms(self, now_ms: int) -> None:
         """Advance wall-clock-dependent presentation semantics without rebuilding dependencies."""
         self.now_ms = int(now_ms)
@@ -561,6 +588,8 @@ class ReportService:
     def build(self, request: ReportRequest) -> ReportProjection:
         self.metrics.mode = request.kind.value
         try:
+            if request.kind is ReportKind.COST_PER_HOUR:
+                return self.build_cost_per_hour()
             if request.kind is ReportKind.NORMAL:
                 # Both are I/O-bound and independent of local analysis: overlap them.
                 self.begin_account_refresh()
@@ -639,12 +668,15 @@ class ReportService:
 
     def session_detail_projection(self, session_id, root, block) -> ReportProjection:
         """Shared snapshot/live report semantics, never Watch display metrics."""
+        gaps = migration_gap_notes(self.selection.migration_gap, root_id=root.session_id)
+        if gaps:
+            block = replace(block, rate_usage_complete=False)
         return ReportProjection(
             ReportKind.SESSION, f"Session {session_id}", self.selection.selected.upper(), tuple(self.selection.warnings),
             prompt_blocks=(block,),
             notes=(("WARNING: CCost totals are incomplete because some reference pricing is unavailable.",)
                    if not block.comparison_cost_complete else ())
-            + migration_gap_notes(self.selection.migration_gap, root_id=root.session_id),
+            + gaps,
         )
 
     def _build_date_detail(self, request: ReportRequest, roots: Sequence[NormalizedSession],

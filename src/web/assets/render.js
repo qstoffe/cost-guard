@@ -345,6 +345,7 @@ const ReportView = (() => {
   function prompts(parent, block, state, index, ranged = false) {
     const title = element('h3', block.title || 'Session'); parent.append(title, link(block.session_id));
     parent.append(element('p', () => `${ranged ? 'Selected-range' : 'Full-session'} CCost ${ccost(block, 'total_ccost')} · Billing ${display(block, 'billed_cost')} · Duration ${display(block, 'duration_ms')}`));
+    if (!ranged && block.active_hour) parent.append(element('p', () => hourlySummary(block.active_hour), 'detail'));
     if (block.total_has_cost_breakdown) parent.append(element('p',
       () => block.total_breakdown_known ? `Main CCost ${ccost(block, 'total_main_ccost')} · Linked child CCost ${ccost(block, 'total_subagent_ccost')}` : 'Linked child breakdown unavailable.'));
     contextSummary(parent, block);
@@ -357,6 +358,22 @@ const ReportView = (() => {
       state, 'prompts-' + index,
       row => [row.prompt_number, row.ccost, row.calls, row.duration_ms, row.incoming_context_tokens,
         row.incoming_context_ccost, row.extra_ccost, row.token_mix_percent?.join('/')]);
+  }
+  function hourlySummary(value) {
+    return `Reference cost per active hour: ${display(value, 'rate')} · ${value.status} · CCost ${display(value, 'known_ccost')} · Active execution ${display(value, 'duration_ms')}`;
+  }
+  function hourlyPeriods(parent, view, scope) {
+    parent.append(element('p', 'Reference spending per hour of observed concurrent execution, not agent-worker-hours, actual billing, a consultant invoice or human time saved. Unknown pricing/time is not zero.'));
+    parent.append(element('p', `Timezone: ${scope.timezone_id}. Today and month-to-date use local calendar boundaries (including DST). Rolling 30 days is exactly 30 × 24 hours before this observation.`, 'detail'));
+    const grid = element('div', undefined, 'report-concepts');
+    for (const value of view.active_hours || []) {
+      const card = element('div');
+      card.append(element('h3', value.scope), element('p', () => hourlySummary(value)),
+        element('p', `${display(value, 'start_ms')} → ${display(value, 'end_ms')} · ${value.observed_requests} observed requests`, 'detail'));
+      grid.append(card);
+    }
+    parent.append(grid, element('p', 'Execution intervals are clipped before unioning, within and across sessions; idle gaps are excluded. CCost is deduplicated and allocated by each request’s canonical event/completion timestamp, even when execution crosses a boundary. Tokens are never prorated. Running work is provisional and frozen at capture. Complete means complete observed evidence, not recovered deleted/pruned history.', 'detail'));
+    const sessions = element('a', 'Browse sessions and their Snapshot/Live rates'); sessions.href = '#/sessions'; parent.append(sessions);
   }
   function render(parent, result, state) {
     defaultUnit(result.view);
@@ -372,6 +389,11 @@ const ReportView = (() => {
     const definitions = element('details');
     definitions.append(element('summary', 'Reading this report'), element('p', 'CCost = reference valuation, not provider billing. Unknown pricing is not zero. Durations are report execution durations, frozen at observation time.'));
     if (!overview) parent.append(definitions);
+    if (view.kind === 'cost-per-hour') {
+      hourlyPeriods(parent, view, result.scope);
+      for (const note of view.notes || []) parent.append(element('p', note, 'warning'));
+      return;
+    }
     parent.append(element('p', 'Token category order: ' + mixLegend(view), 'detail'));
     if (overview) overviewConcepts(parent, view);
     if (view.session_usage.length || view.kind === 'sessions') {
@@ -461,5 +483,5 @@ const ReportView = (() => {
     return ['Complete session', ccost(block, 'total_ccost'), known(block.total_calls),
       display(block, 'duration_ms'), '—', known(block.total_ictx_cost_text), known(block.total_extra_cost_text), known(block.total_mix_text)];
   }
-  return {render, renderLive, element, detailCells, detailTotals, compare, overviewAccounts, display, contextSummary, text, setUnit, syncUnits, defaultUnit, mixLegend};
+  return {render, renderLive, element, detailCells, detailTotals, compare, overviewAccounts, display, contextSummary, text, setUnit, syncUnits, defaultUnit, mixLegend, hourlySummary};
 })();
