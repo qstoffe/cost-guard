@@ -16,6 +16,8 @@ from .terminal import AnsiStyler, StyledText
 QUOTA_BAR_WIDTH = 10
 # Provider-normalized transient causes; never raw provider/stderr text.
 _FAILURE_CAUSES = {"timeout": "timed out", "transport_failure": "connection failed",
+                   "tls_certificate_failure": "certificate verification failed", "tls_failure": "secure connection failed",
+                   "dns_failure": "name lookup failed", "connection_failure": "connection failed",
                    "network_failure": "network unavailable", "http_failure": "service unavailable",
                    "format_changed": "format changed", "parser_failure": "unreadable response",
                    "discovery_failure": "account metadata unavailable"}

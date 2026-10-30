@@ -9,7 +9,8 @@ REFRESH_SECONDS = 30.0
 WATCH_TIMEOUT_SECONDS = 20.0
 RETRY_SECONDS = (5.0, 10.0, 20.0)
 FAILURE_INTERVAL_SECONDS = 60.0
-TRANSIENT_REASONS = frozenset({"network_failure", "transport_failure", "timeout", "discovery_failure"})
+TRANSIENT_REASONS = frozenset({"network_failure", "transport_failure", "timeout", "discovery_failure",
+                               "dns_failure", "connection_failure", "tls_failure"})
 
 
 def transient_failure(item: AccountSnapshot) -> bool:

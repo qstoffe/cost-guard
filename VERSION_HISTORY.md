@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.117 — 2026-10-30
+
+- Windows OpenAI quota: verified ROOT trust; safe TLS failures and bounded refresh.
+
 ## v80.116 — 2026-10-30
 
 - Minimal Web Overview.
@@ -10,7 +14,7 @@
 
 ## v80.114 — 2026-10-30
 
-- CLI/Web: shared Input / Cached input / Cache write / Output labels and legends; accounting unchanged.
+- CLI/Web: shared GitHub token-category labels/legends; accounting unchanged.
 
 ## v80.113 — 2026-10-30
 
@@ -18,7 +22,7 @@
 
 ## v80.112 — 2026-10-29
 
-- Web CCost Credits/USD selector: Python tokens, text-only switching, no acquisition/repricing. Page-memory only; reload restores configuration. Raw totals/order and native amounts unchanged.
+- Web CCost Credits/USD: Python tokens, text-only toggle without acquisition/repricing; page-memory only, reload restores configuration. Native values/order unchanged.
 
 ## v80.111 — 2026-10-29
 
@@ -30,7 +34,7 @@
 
 ## v80.109 — 2026-10-28
 
-- Reports/Watch: `ccostDisplayUnit: credits|usd`, CLI `--ccost-unit credits|usd`; default credits exported to Web. USD: 100 credits = $1.00, 2 decimals; tiny positives may show $0.00. Valuations/thresholds/quotas/Unaccounted/Billed/rates/Relative CCost unchanged; no currency service/Web toggle.
+- CLI/Watch: `ccostDisplayUnit` and `--ccost-unit` select credits (default) or USD; Web receives display tokens. USD: 100 credits = $1.00, 2 decimals. Canonical valuation, native quotas and Relative CCost unchanged.
 
 ## v80.108 — 2026-10-28
 

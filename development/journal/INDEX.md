@@ -1,7 +1,7 @@
 # Cost Guard engineering knowledge
 
-Source revision: a454de53e2349c940035db9b302db9e3ffac3e4f
-Checked revision: a454de53e2349c940035db9b302db9e3ffac3e4f
+Source revision: 61088f210250f41e2f28f2a5d1da74794995915c
+Checked revision: 61088f210250f41e2f28f2a5d1da74794995915c
 Last checked: 2026-10-30
 Status: current
 
@@ -9,7 +9,7 @@ Installed OpenCode Toolkit shared repository skills own development procedures. 
 
 - Performance investigations: `development/journal/PERFORMANCE.md` distinguishes FR 000534's global comparison policy from superseded milestone-40 deep-scan timings, retaining historical measurements, cache-I/O limits and active-root hydration findings.
 - History acquisition and startup: `development/architecture/modules/history-loading.md` retains scopes, measurements and unresolved terminal/live proof.
-- [OpenAI identity and quota evidence](openai-identity.md): canonical aliases, removed generations, deterministic recovery and historical 401 limits.
+- [OpenAI identity, TLS and quota evidence](openai-identity.md): canonical aliases, method/resource boundaries, Windows expired-intermediate repair, live intended-account Watch refresh and explicit verification limits.
 - Architecture and owners: `development/architecture/OVERVIEW.md` routes module contracts and source/tests.
 - [Architecture assessment](architecture.md): milestone-40 whole-repository review, finite-report/Live/detail authority, sampling/display isolation, no-change rationale and unmeasured risks.
 - [Test system health](test-health.md): retained critical risks, real hosted cross-platform revalidation, causal fixture/runtime repairs and desktop-proof limits.
