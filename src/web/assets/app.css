@@ -25,7 +25,7 @@ body {
   background: var(--bg); accent-color: var(--accent);
 }
 header, main, footer { padding: var(--space-5) clamp(.85rem, 3vw, 2.5rem); }
-header { background: linear-gradient(120deg, var(--panel), var(--surface)); }
+header { background: linear-gradient(120deg, var(--panel), var(--surface)); padding-block: .75rem; }
 .brand { display: flex; align-items: center; gap: var(--space-3); }
 .brand-mark {
   display: grid; place-items: center; width: 2.8rem; height: 2.8rem; flex-shrink: 0;
@@ -38,18 +38,22 @@ h1 small { display: inline-block; margin-left: .4rem; padding: .2rem .55rem; ver
   text-transform: uppercase; color: var(--muted); font-weight: 650; }
 header p { margin: var(--space-2) 0 0; font-size: .85rem; color: var(--muted); }
 #status { color: var(--ink); overflow-wrap: anywhere; }
-.host-state { padding: .65rem clamp(.85rem, 3vw, 2.5rem);
-  border: 3px solid var(--warn); background: var(--warn-bg); color: var(--warn); font-weight: 700;
+.host-state { padding: .25rem clamp(.85rem, 3vw, 2.5rem);
+  background: var(--warn-bg); color: var(--warn); font-weight: 600;
   overflow-wrap: anywhere; }
 .host-state[hidden] { display: none; }
 .host-state p { margin: 0; }
 .host-state details { margin-top: .25rem; font-size: .85rem; font-weight: 400; }
+.host-state summary { color: var(--warn); }
+.host-state summary:focus-visible + [role="tooltip"], .host-state summary:hover + [role="tooltip"] { display: block; }
+.host-state details:not([open]):is(:hover, :focus-within)::details-content { content-visibility: visible; }
+.host-state details:not([open]) [role="tooltip"] { position: absolute; z-index: 4; max-width: min(38rem, 90vw); padding: .6rem; border: 1px solid var(--line); background: var(--panel); box-shadow: var(--shadow); }
 .host-state[data-kind="stopped"], .host-state[data-kind="offline"],
 .host-state[data-kind="authorization_required"], .host-state[data-kind="identity_changed"] { border-color: var(--error); }
 nav { display: flex; flex-wrap: wrap; gap: var(--space-1); padding: .65rem clamp(.85rem, 3vw, 2.5rem);
   border-block: 1px solid var(--line); background: var(--panel); }
 a { color: var(--accent); text-underline-offset: .2em; overflow-wrap: anywhere; }
-nav a { padding: .55rem .9rem; border: 1px solid transparent; border-radius: .65rem;
+nav a { padding: .4rem .75rem; border: 1px solid transparent; border-radius: .65rem;
   color: var(--muted); text-decoration: none; font-weight: 600; }
 nav a[aria-current="page"] { color: var(--accent); background: var(--accent-soft); border-color: var(--accent); }
 button, input { font: inherit; max-width: 100%; border: 1px solid var(--control-line); border-radius: .55rem;
@@ -168,3 +172,37 @@ footer { border-top: 1px solid var(--line); color: var(--muted); font-size: .8re
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
 }
+/* Overview keeps one native table, with shared intrinsic subgrid tracks. Only
+   tbody owns vertical overflow; the outer region owns horizontal overflow.
+   Scrollbar space is taken from the final expanding track, not numeric cells. */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+[data-section="overview"] main { padding-top: .65rem; }
+[data-section="overview"] .toolbar, [data-section="overview"] #ccost-help,
+[data-section="overview"] #notice, [data-section="overview"] #scope-controls,
+[data-section="overview"] .report-search { display: none; }
+[data-section="overview"] .overview-explanations #ccost-help { display: block; }
+.overview-loading { display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 45vh; text-align: center; }
+.overview-loading progress { width: min(26rem, 90%); height: 1.1rem; }
+.overview-loading p { font-size: .9rem; margin-top: .5rem; }
+.overview-models { overflow-x: auto; background: var(--panel); scrollbar-color: var(--control-line) var(--surface); }
+.overview-model-table { display: grid; grid-template-columns: max-content max-content max-content minmax(max-content, 1fr); min-width: 100%; width: max-content; }
+.overview-model-table thead, .overview-model-table tbody, .overview-model-table tr { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; }
+.overview-model-table thead { overflow: hidden; scrollbar-gutter: stable; }
+.overview-model-table tbody { overflow-y: auto; overflow-x: hidden; max-height: 60vh; scrollbar-gutter: stable; scrollbar-color: var(--control-line) var(--surface); }
+.overview-model-table th, .overview-model-table td { position: static; padding: .4rem .65rem; text-align: left; min-width: 0; max-width: none; white-space: nowrap; overflow-wrap: normal; }
+.overview-model-table th:not(:last-child), .overview-model-table td:not(:last-child) { border-right: 1px solid var(--line); }
+.overview-model-table .model-relative { display: inline-grid; grid-template-columns: var(--marker-width, 3ch) var(--ratio-width, 7ch) max-content; font-family: ui-monospace, monospace; text-align: right; }
+.overview-model-table .model-tiers { display: inline-flex; }
+.overview-model-table .model-tier { display: inline-grid; grid-template-columns: 3ch var(--ratio-width, 7ch) var(--boundary-width, max-content); }
+.overview-model-table .tier-ratio { text-align: right; }
+.overview-model-table th:nth-child(2), .overview-model-table td:nth-child(2) { max-width: 32ch; white-space: normal; overflow-wrap: anywhere; }
+.overview-model-table tr.promotion, .overview-model-table tr.new { color: inherit; font-weight: inherit; }
+.overview-model-table tr.superseded { color: var(--muted); }
+.overview-explanations { margin-block: .65rem; }
+.overview-explanations .report-concepts { margin-block: .65rem; }
+.compact-accounts { grid-auto-rows: 1fr; gap: .75rem; margin-top: .75rem; }
+.compact-accounts:has(details[open]) { grid-auto-rows: auto; align-items: start; }
+.compact-accounts .account-card { padding: .75rem; box-shadow: none; font-size: .85rem; }
+.compact-accounts .account-card p { margin-block: .35rem; }
+.compact-accounts .quota-summary { padding-block: .35rem; }
+.compact-accounts .account-card details { margin-bottom: 0; }

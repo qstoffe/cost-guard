@@ -360,7 +360,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.115 (2026-10-30):** Web Beta adds explicit Cost per Active Hour captures and session Snapshot/Live rates. CLI behavior is unchanged.
+**v80.116 (2026-10-30):** Web Beta Overview is model-table-first, with quiet progress, collapsed explanations and compact accounts. CLI behavior and report values are unchanged.
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

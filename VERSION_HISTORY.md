@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.116 — 2026-10-30
+
+- Minimal Web Overview.
+
 ## v80.115 — 2026-10-30
 
 - Web Beta: explicit Cost per Active Hour captures Today/local month/rolling 30 days; overlap-safe execution, deduplicated event-time CCost and Python Decimal rates. Session Snapshot/Live adds provisional/unknown-aware rates. Credits/USD toggle retained; CLI unchanged.

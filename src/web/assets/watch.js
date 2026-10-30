@@ -12,7 +12,7 @@ const WatchView = (() => {
       this.status = el('p', undefined, 'snapshot'); this.status.setAttribute('role', 'status');
       this.totals = el('p', undefined, 'metric-value');
       this.legend = el('p', undefined, 'detail');
-      this.origin = el('details'); this.origin.append(el('summary', 'Run scope / valuation'));
+      this.origin = el('details'); this.origin.append(el('summary', 'Run scope / valuation'), el('p', 'Watch shares one host-owned engine across tabs; its run begins at engine start. Closing this tab does not stop Cost Guard. Search/sort/page controls never change report scope or totals. CLI remains independent.'));
       this.scope = el('p'); this.origin.append(this.scope);
       this.notices = el('p', undefined, 'warning');
       const section = el('section');

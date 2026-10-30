@@ -8,7 +8,9 @@ class Node {
   set textContent(value) { this.text = String(value); this.children = []; }
   get textContent() { return this.text + this.children.map(child => child.textContent).join(''); }
   get firstChild() { return this.children[0] || null; }
-  append(...children) { this.children.push(...children); }
+  append(...children) { for (const child of children) { if (child.parentNode) child.parentNode.children = child.parentNode.children.filter(node => node !== child); child.parentNode = this; this.children.push(child); } }
+  insertBefore(child, before) { this.append(child); this.children = this.children.filter(node => node !== child); const index = this.children.indexOf(before); this.children.splice(index < 0 ? this.children.length : index, 0, child); }
+  querySelector(selector) { return all(this, selector.startsWith('.') ? null : selector).find(node => selector.startsWith('.') ? (node.className || '').split(' ').includes(selector.slice(1)) : node.tag === selector) || null; }
   replaceChildren(...children) { this.children = children; this.text = ''; }
   setAttribute(key, value) { this.attrs[key] = value; }
   getAttribute(key) { return this.attrs[key]; }
@@ -16,7 +18,7 @@ class Node {
   addEventListener(key, fn) { this.events[key] = fn; }
   click() { if (!this.disabled) return this.events.click?.(); }
 }
-const all = (node, tag) => [...(node.tag === tag ? [node] : []), ...node.children.flatMap(child => all(child, tag))];
+const all = (node, tag) => [...(!tag || node.tag === tag ? [node] : []), ...node.children.flatMap(child => all(child, tag))];
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function until(condition) {
   const caller = new Error().stack.split('\n')[2].match(/web_views\.cjs:(\d+)/)?.[1];
@@ -25,7 +27,9 @@ async function until(condition) {
 }
 async function main() {
   const input = JSON.parse(fs.readFileSync(0, 'utf8'));
-  const ids = Object.fromEntries(['ccost-unit', 'host-state', 'host-message', 'host-details', 'status', 'result', 'notice', 'refresh', 'cancel', 'heading', 'skip', 'content', 'scope-controls', 'search'].map(id => [id, new Node('div')]));
+  const ids = Object.fromEntries(['unit-choice', 'ccost-help', 'ccost-unit', 'host-state', 'host-message', 'host-details', 'status', 'result', 'notice', 'refresh', 'cancel', 'heading', 'skip', 'content', 'scope-controls', 'search'].map(id => [id, new Node('div')]));
+  const toolbar = new Node('div');
+  toolbar.append(ids['unit-choice']); ids['unit-choice'].append(ids['ccost-unit']);
   ids['host-state'].append(ids['host-message'], ids['host-details']);
   const nav = ['overview', 'sessions', 'watch', 'models', 'accounts', 'reports', 'token-mix'].map(key => {
     const node = new Node('a'); node.setAttribute('href', '#/' + key); return node;
@@ -54,7 +58,7 @@ async function main() {
     status('Live connected.', {kind: 'connected', writable: true, terminal: false});
     return {resync() {}};
   }};
-  const context = vm.createContext({LiveConnection: transport, AbortController, clearTimeout, document: {createElement: tag => new Node(tag),
+  const context = vm.createContext({LiveConnection: transport, AbortController, clearTimeout, document: {body: new Node('body'), querySelector: () => toolbar, createElement: tag => new Node(tag),
     getElementById: id => ids[id], querySelectorAll: () => nav, addEventListener() {}}, window: {addEventListener: (key, fn) => { handlers[key] = fn; }},
     location, history, URLSearchParams, fetch: wire, setTimeout, Date, console});
   for (const path of ['/render.js', '/reports.js', '/app.js']) {
@@ -62,16 +66,16 @@ async function main() {
     assert.equal(response.status, 200);
     vm.runInContext(await response.text(), context);
   }
-  assert.equal(ids.result.textContent, 'Starting Cost Guard', 'slow authorization retains branded shell');
+  assert.match(ids.result.textContent, /≈0%.*Authorizing browser session/, 'slow authorization has only approximate progress');
   assert.equal(location.hash, '#/overview', 'credential erased before waiting');
   releaseBootstrap();
   await until(() => all(ids.result, 'progress').length === 1);
-  assert.equal(ids.result.getAttribute('aria-busy'), 'true');
-  assert.equal(all(ids.result, 'progress')[0].getAttribute('value'), undefined, 'no invented percentage');
+  assert.equal(all(ids.result, 'progress')[0].max, 100);
+  assert.match(all(ids.result, 'progress')[0].getAttribute('aria-valuetext'), /Approximately/, 'never an invented exact global percentage');
   releaseReport();
   await until(() => ids.notice.textContent.includes('Snapshot captured'));
   assert.equal(location.hash, '#/overview');
-  assert.match(ids.result.textContent, /CCost = reference valuation/);
+  assert.match(ids.result.textContent, /Reference token valuation, not actual billing/);
   const creditsText = ids.result.textContent, beforeToggle = requests;
   const retainedChildren = [...ids.result.children];
   ids['ccost-unit'].events.change({target: {value: 'usd'}});
@@ -82,7 +86,7 @@ async function main() {
   assert.equal(ids.result.textContent, creditsText, 'exact reversible display');
   assert.equal(requests, beforeToggle, 'toggle never requests a report/provider');
   const overviewTable = all(ids.result, 'table')[0];
-  const overviewScroll = all(ids.result, 'div').find(node => node.className === 'table-scroll');
+  const overviewScroll = all(ids.result, 'tbody')[0];
   overviewScroll.scrollTop = 317;
   const beforeHeartbeat = requests;
   vm.runInContext("connectionStatus('Live connected.', {kind:'connected', writable:true})", context);
@@ -93,7 +97,7 @@ async function main() {
   assert.equal(ids.status.textContent, 'Live connected.', 'one compact accessible status');
   assert.match(ids.status.title, /Last authenticated host check/);
   ids.search.events.input({target: {value: 'no matching model'}});
-  assert.equal(all(ids.result, 'tbody')[0].children.length, 0, 'explicit search still redraws');
+  assert.ok(all(ids.result, 'tbody')[0].children.length, 'Overview ignores hidden legacy search state');
   ids.search.events.input({target: {value: ''}});
   assert.ok(all(ids.result, 'tbody')[0].children.length);
   const navigate = key => { location.hash = '#/' + key; handlers.hashchange(); };
@@ -173,12 +177,12 @@ async function main() {
   assert.match(vm.runInContext("ReportRoutes.resolve('#/sessions/root-0000/live').title", context), /Session root-0000/);
   assert.equal(vm.runInContext("ReportRoutes.resolve('#/sessions/root-0000/live').section", context), 'sessions');
   navigate('overview');
-  const overviewTime = ids.result.textContent.match(/Snapshot: ([^·]+)/)[1];
+  const overviewTime = vm.runInContext('current.result.observed_at_ms', context);
   const beforePresentation = requests;
   navigate('models');
   retainedHeartbeat();
   assert.match(ids.result.textContent, /Reference models/);
-  assert.equal(ids.result.textContent.match(/Snapshot: ([^·]+)/)[1], overviewTime);
+  assert.equal(vm.runInContext('current.result.observed_at_ms', context), overviewTime);
   navigate('accounts');
   retainedHeartbeat();
   assert.match(ids.result.textContent, /Accounts · independent/);

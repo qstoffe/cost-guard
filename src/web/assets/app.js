@@ -8,6 +8,8 @@ const notice = document.getElementById('notice');
 const refresh = document.getElementById('refresh');
 const cancel = document.getElementById('cancel');
 const heading = document.getElementById('heading');
+const unitChoice = document.getElementById('unit-choice');
+const unitHelp = document.getElementById('ccost-help');
 document.getElementById('ccost-unit').addEventListener('change', event => {
   ReportView.setUnit(event.target.value, output);
 });
@@ -30,13 +32,19 @@ function connectionStatus(message, state = {}) {
   if (banner) {
     banner.dataset.kind = hostState.kind;
     const time = value => value == null ? 'not yet observed' : new Date(value).toLocaleString();
-    banner.hidden = hostState.kind === 'connected';
+    banner.hidden = hostState.kind === 'connected' || (hostState.kind === 'starting' && !(current?.result || current?.detail?.data || liveValue?.view));
     const summary = document.getElementById('host-message');
     const details = document.getElementById('host-details');
     const timing = `Last authenticated host check: ${time(hostState.authenticatedAt)} · Last source update: ${time(hostState.observedAt)}. Reports remain frozen snapshots; account freshness is independent.`;
     if (summary && details) { summary.textContent = message; details.textContent = timing; }
     else banner.textContent = `${message} · ${timing}`;
     statusLine.title = `${message} ${timing}`;
+    const warning = document.getElementById('host-warning');
+    if (warning) {
+      const recovery = ['authorization_required', 'identity_changed', 'stopped'].includes(hostState.kind) ? 'Use a fresh OS launcher link.' : 'Check the local source/host; reload to retry.';
+      warning.textContent = `${hostState.kind.replaceAll('_', ' ')} — ${recovery}`;
+      warning.title = `${message} ${timing}`;
+    }
   }
   if (hostState.terminal) for (const view of views.values()) view.detail?.detach();
   document.getElementById('scope-controls').inert = !hostState.writable;
@@ -72,12 +80,49 @@ async function api(path, value) {
     return data;
   } finally { clearTimeout(timeout); }
 }
+// Canonical phases have local counts, not a global total. These bounded weights
+// are explicitly estimates, never clock-driven or new source requests. Counts
+// remain visible in their own stage; only a complete usable result means 100%.
+function overviewProgress(state, progress = {}) {
+  const stages = {authorizing: [0, 5, 'Authorizing browser session'], queued: [5, 10, 'Waiting for report'],
+    pricing: [10, 20, 'Loading reference prices'], catalog: [20, 30, 'Loading source'],
+    history: [30, 55, 'Loading source history'], projection: [55, 70, 'Comparing models'],
+    quotas: [70, 90, 'Acquiring accounts'], availability: [90, 95, 'Checking model availability'],
+    finalizing: [95, 99, 'Preparing report']};
+  const [start, end, label] = stages[progress.phase] || [5, 10, 'Acquiring report'];
+  const measured = Number.isFinite(progress.completed) && Number.isFinite(progress.total) && progress.total > 0;
+  const fraction = measured ? Math.max(0, Math.min(1, progress.completed / progress.total)) : 0;
+  state.percent = Math.max(state.percent || 0, Math.min(99, Math.floor(start + (end - start) * fraction)));
+  state.stage = label + (measured ? ` (${progress.completed}/${progress.total})` : '');
+}
+function showOverviewProgress(state) {
+  let activity = output.querySelector('.overview-loading');
+  if (!activity) {
+    activity = ReportView.element('div', undefined, 'overview-loading');
+    const bar = ReportView.element('progress'); bar.max = 100;
+    bar.setAttribute('aria-label', 'Initial report progress');
+    const line = ReportView.element('p'); line.setAttribute('role', 'status');
+    activity.append(bar, line); output.replaceChildren(activity);
+  }
+  const bar = activity.querySelector('progress');
+  bar.value = state.percent || 0;
+  bar.setAttribute('aria-valuetext', bar.value === 100 ? '100 percent — report ready' : `Approximately ${bar.value} percent`);
+  activity.querySelector('p').textContent = bar.value === 100 ? '100% · Report ready' : `≈${bar.value}% · ${state.stage || 'Authorizing browser session'}…`;
+}
 function show(state) {
   if (state !== current) return;
   refresh.disabled = !csrf || !hostState.writable || !(state.request || state.detail) || state.loading;
   cancel.disabled = !hostState.writable || !state.active;
   output.setAttribute('aria-busy', state.loading ? 'true' : 'false');
-    notice.textContent = hostState.writable ? state.message : 'Last known contents are retained, not updating. See connection notice above.';
+  notice.textContent = hostState.writable ? state.message : 'Last known contents are retained, not updating. See connection notice above.';
+  if (state.section === 'overview' && !state.result) {
+    if ((!hostState.writable && hostState.kind !== 'starting') || state.failed) {
+      output.setAttribute('aria-busy', 'false');
+      const error = ReportView.element('p', state.failed ? state.message : 'Report interrupted. Check the connection warning; reload to retry, or use a fresh OS launcher link.', 'error');
+      error.setAttribute('role', 'alert'); output.replaceChildren(error);
+    } else { output.setAttribute('aria-busy', 'true'); showOverviewProgress(state); }
+    return;
+  }
   if (state.detail) {
     ReportView.syncUnits(state.detail.root);
     if (!hostState.terminal) state.detail.attach(output);
@@ -94,9 +139,13 @@ function show(state) {
       snapshotRender.result === state.result && snapshotRender.search === state.search &&
       snapshotRender.first === output.firstChild;
     if (!retained) {
+      document.querySelector('.toolbar').append(unitChoice);
+      document.getElementById('content').insertBefore(unitHelp, notice);
       ReportView.render(output, state.result, state);
+      if (state.section === 'overview') output.querySelector('.overview-explanations').append(unitChoice, unitHelp);
       snapshotRender = {state, result: state.result, search: state.search, first: output.firstChild};
     }
+    if (state.section === 'overview' && unitChoice.parentNode !== output.querySelector('.overview-explanations')) output.querySelector('.overview-explanations').append(unitChoice, unitHelp);
   }
   else if (state.loading) {
     const activity = ReportView.element('progress');
@@ -110,12 +159,14 @@ function failure(code) {
     report_timeout: 'Report timed out; no empty result was substituted.', cancelled: 'Report cancelled.',
     invalid_request: 'Invalid report scope. Check dates/limits; no alternate range was substituted.',
     session_catalog_changed: 'Session catalog changed. Use Latest sessions / restart browsing to avoid skipped or duplicate rows.',
-    pricing_unavailable: 'Reference pricing unavailable.', busy: 'Report service busy. Retry Refresh.'};
+     pricing_unavailable: 'Reference pricing unavailable.', busy: 'Report service busy. Retry Refresh.'};
   return errors[code] || 'Source/report unavailable. Check the local source and retry Refresh.';
 }
 async function acquire(state) {
   if (state.loading || !hostState.writable) return;
   state.loading = true;
+  state.failed = false;
+  overviewProgress(state, {phase: 'queued'});
   state.message = state.result ? 'Refreshing; last known snapshot retained until success.' : 'Loading snapshot…';
   show(state);
   try {
@@ -128,24 +179,45 @@ async function acquire(state) {
           throw new Error(job.result?.error?.code || job.error || job.status);
         }
         if (hostState.terminal) break;
+        // Partial data is usable but never a successful 100% acquisition. Paint
+        // completion only after the whole successful result has arrived.
+        if (state.section === 'overview' && job.result.source.status === 'acquired') {
+          state.percent = 100;
+          if (state === current) {
+            showOverviewProgress(state);
+            if (typeof requestAnimationFrame === 'function') await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+          }
+        }
         state.result = job.result;
         state.pages = {};
         state.message = 'Snapshot captured. Navigation and source activity do not update it.';
         break;
       }
-      state.message = `${job.status}: ${job.progress.phase} · ${job.progress.completed ?? 0}${job.progress.total == null ? '' : '/' + job.progress.total}. ${state.result ? 'Last known snapshot retained.' : ''}`;
+       state.message = `${job.status}: ${job.progress.phase} · ${job.progress.completed ?? 0}${job.progress.total == null ? '' : '/' + job.progress.total}. ${state.result ? 'Last known snapshot retained.' : ''}`;
+       overviewProgress(state, job.progress);
       // Do not redraw a retained report while polling: keep selection and scroll useful.
-      if (state === current) notice.textContent = state.message;
+      if (state === current) {
+        notice.textContent = state.message;
+        if (state.section === 'overview' && !state.result) show(state);
+      }
       await new Promise(resolve => setTimeout(resolve, 500));
     }
   } catch (error) {
     state.message = `${state.result ? 'STALE — last known snapshot retained. ' : ''}${failure(error.message)}`;
+    if (state.section === 'overview') {
+      state.message = state.message.replaceAll('retry Refresh', 'reload to retry').replaceAll('Retry Refresh', 'Reload to retry');
+      if (!/reload/i.test(state.message)) state.message += ' Reload to retry.';
+    }
+    state.failed = true;
   } finally { state.loading = false; state.active = null; show(state); }
 }
 function navigate() {
   // Replace, never push: legacy bookmarks keep their place in Back/Forward history.
   if (/^#\/live(?:\?|$)/.test(location.hash)) history.replaceState(null, '', '/#/watch' + location.hash.slice(6));
   const route = ReportRoutes.resolve(location.hash), match = route.session;
+  document.body.dataset.section = route.section;
+  document.querySelector('.toolbar').append(unitChoice);
+  document.getElementById('content').insertBefore(unitHelp, notice);
   const key = match ? 'session/' + match[1] : location.hash || '#/overview';
   heading.textContent = route.title;
   ReportRoutes.controls(document.getElementById('scope-controls'), route, event => {
@@ -185,7 +257,7 @@ function navigate() {
     current.message = 'Complete session history; explicit Snapshot/Live. Acquisition is shared across tabs.';
   }
   document.getElementById('search').disabled = !!current.detail;
-  if (csrf) show(current);
+  show(current);
   if (csrf && hostState.writable && current.request && !current.explicit && !current.detail && !current.result && !current.attempted) {
     current.attempted = true;
     acquire(current);
@@ -204,7 +276,12 @@ async function connect() {
           view: liveValue.view, source_observed_at_ms: liveValue.source_observed_at_ms};
         if (current?.live) { current.message = 'Live observation; source/account freshness shown below.'; show(current); }
         for (const job of progress?.jobs || []) {
-          if (current?.active === job.id) notice.textContent = `${job.status}: ${job.progress?.phase || job.status} · ${job.progress?.completed ?? 0}${job.progress?.total == null ? '' : '/' + job.progress.total}`;
+           if (current?.active === job.id) {
+             notice.textContent = `${job.status}: ${job.progress?.phase || job.status} · ${job.progress?.completed ?? 0}${job.progress?.total == null ? '' : '/' + job.progress.total}`;
+             if (current.section === 'overview' && !current.result && ['queued', 'running'].includes(job.status)) {
+               overviewProgress(current, job.progress || {}); show(current);
+             }
+           }
         }
         if (hostState.writable && current?.request && !current.explicit && !current.result && !current.attempted) {
           current.attempted = true; acquire(current);
@@ -216,7 +293,8 @@ async function connect() {
     if (!hostState.terminal) connectionStatus('OFFLINE — host unreachable or browser session unavailable. Use the OS launcher; no host is started automatically.',
       {kind: 'offline', writable: false});
     output.setAttribute('aria-busy', 'false');
-    output.replaceChildren(ReportView.element('p', 'Unable to establish the private browser session. Use tray Open Cost Guard for a fresh link, or relaunch Cost Guard Web Beta. No source data has been assumed ready.'));
+    const error = ReportView.element('p', 'Unable to establish the private browser session. Use tray Open Cost Guard for a fresh link, or relaunch Cost Guard Web Beta. No source data has been assumed ready.', 'error');
+    error.setAttribute('role', 'alert'); output.replaceChildren(error);
   } finally { credential = null; }
 }
 refresh.addEventListener('click', () => {
@@ -233,6 +311,8 @@ cancel.addEventListener('click', async () => {
 });
 window.addEventListener('hashchange', navigate);
 window.addEventListener('pageshow', () => liveConnection?.resync());
+window.addEventListener('offline', () => connectionStatus('OFFLINE — last observation retained, not live. Check the connection and reload to retry.', {kind: 'offline', writable: false}));
+window.addEventListener('online', () => liveConnection?.resync());
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) liveConnection?.resync();
 });
