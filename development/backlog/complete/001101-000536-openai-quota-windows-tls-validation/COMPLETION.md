@@ -146,3 +146,33 @@ did not establish Windows-checkout acceptance. The v80.117 bullet was shortened
 again, with explicit LF/CRLF size checks and focused package/foundation validation.
 No hosted failure was waived, no assertion or cap changed, and the final outcome
 is retained by the PR's checks rather than relabelling that failed run PASS.
+
+The [next hosted run](https://github.com/qstoffe/cost-guard/actions/runs/41122806573)
+at `5fa7212ae887b8c50082466c290d88d21547c886` passed Windows (1,448 tests,
+no skips) and macOS ARM64 (1,441 passed, seven platform skips), including
+package/native/browser phases. Intel package/native/browser phases passed, but
+the full suite had one error in unchanged `test_web_runtime.py`; its precise
+test name/trace was absent from the complete Checks annotations. The relevant
+runtime, test and fixture diff against default was empty. Canonical GitHub job-log
+access through the owning transport returned **HTTP 401**, so the original cause
+is **unknown**, not established as transient, a timeout or a product defect.
+
+For this concrete evidence obstacle, the **Decision Delegate** authorized exactly
+one rerun of Intel job `124293317491` at that unchanged head, preserving every
+configured test, assertion, deadline and phase. No speculative code/test edit,
+credential change, alternate access route or second raw-log attempt was authorized.
+Normal hosted checks/protections must still pass; no hosted failure was waived.
+The rerun request was accepted with HTTP 201. Its result does not diagnose the
+original error or establish recovery of raw-log access.
+
+That [single Intel rerun](https://github.com/qstoffe/cost-guard/actions/runs/41122806573/job/124298298993)
+**passed** at the same `5fa7212` head: 119 files, **1,441 tests passed**, seven
+platform skips, zero failures/errors; package validation, native APIs/launcher
+and rendered Chromium smoke also **PASS**. The latest rollup then showed all
+three Windows/ARM64/Intel checks **SUCCESS**, with merge state **CLEAN**. This is
+actual rerun evidence, not a waiver or relabelling of the original failure.
+Its original cause remains unknown and raw-log access remains unverified.
+
+The final evidence-only documentation edits change no runtime, test, launcher
+or CI configuration. The PR's canonical checks retain results for the final
+documentation head separately from this explicitly identified tested head.
