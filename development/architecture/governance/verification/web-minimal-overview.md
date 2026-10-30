@@ -19,6 +19,8 @@ personal profile, installed application, shared host or model is used.
 - The first three desktop columns are intrinsic-sized; only Release date expands.
   Body-only scroll geometry, real wheel input, Home/End and horizontal ArrowRight
   access, last-row reachability, stable selection/DOM across host revalidation.
+  The strengthened rerun also passed browser-emulated touch pans/disclosure taps
+  at 360px and zero/one-account layouts, in addition to the seven-account fixture.
 - Slow authorization and changing real job polls expose no report skeleton/controls.
   Approximate percentages **22 → 42 → 55 → 80 → 80 → 99** remain monotonic even when
   an earlier phase arrives late. Only a received complete acquired result reaches

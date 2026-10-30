@@ -32,7 +32,8 @@ were no attachments. New evidence is outside the task payload.
 
 - Approval-only real browser: **12 cases PASS**, 360/1280/1920px light/dark,
   30 model rows, geometry/scroll/selection, loading and acquisition failures,
-  authorization/offline/reconnect/stopped, cards, unit switching and frozen navigation.
+  authorization/offline/reconnect/stopped, zero/one/many accounts, browser-emulated
+  mobile touch pans/taps, unit switching and frozen navigation.
   Screenshots visually inspected. Playwright 1.64.1 / Chromium 156.0.8078.4.
 - Fresh full suite: **118 files: 117 PASS, one FAIL; 1,438 registered tests, two
   symlink-privilege skips**. All changed Web/display, CLI parity and causal tests pass.

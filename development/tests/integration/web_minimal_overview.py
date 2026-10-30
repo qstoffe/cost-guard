@@ -117,7 +117,7 @@ def main():
                     host = fixture_host(host, jobs, data)
                     jobs.mode = 'hold'
                     jobs.phase = dict(phase='catalog', completed=2, total=10)
-                    context = browser.new_context(viewport=dict(width=width, height=900), color_scheme=theme, reduced_motion='reduce')
+                    context = browser.new_context(viewport=dict(width=width, height=900), color_scheme=theme, reduced_motion='reduce', has_touch=width == 360)
                     origin = host.server.origin
                     context.route('**/*', lambda route: route.continue_() if route.request.url.startswith(origin + '/') else route.abort())
                     page = context.new_page()
@@ -173,6 +173,17 @@ def main():
                     assert end['last']['bottom'] <= end['body']['bottom'] + 1
                     page.keyboard.press('Home')
                     page.wait_for_function('() => document.querySelector(".overview-model-table tbody").scrollTop === 0')
+                    if width == 360:
+                        # Browser-emulated touch, not workstation/physical input.
+                        session = context.new_cdp_session(page)
+                        touch = dict(x=100, y=500)
+                        session.send('Input.dispatchTouchEvent', dict(type='touchStart', touchPoints=[touch]))
+                        for step in range(1, 9):
+                            session.send('Input.dispatchTouchEvent', dict(type='touchMove', touchPoints=[dict(x=100, y=500-step*20)]))
+                        session.send('Input.dispatchTouchEvent', dict(type='touchEnd', touchPoints=[]))
+                        page.wait_for_function('() => document.querySelector(".overview-model-table tbody").scrollTop > 0')
+                        rows.evaluate('e=>e.scrollTop=0')
+                        session.detach()
                     page.screenshot(path=str(args.screenshots / f'{width}-{theme}-ready.png'))
                     if width == 360:
                         horizontal = page.locator('.overview-models')
@@ -199,10 +210,11 @@ def main():
                         for scope in account['ccost_scopes']:
                             text = scope['cost']['display']['account_ccost'] if scope['cost'] else '—'
                             expect(card).to_contain_text(f"CCost {scope['name']}: {text}")
-                    cards.first.locator('summary').click()
+                    summary = cards.first.locator('summary')
+                    summary.tap() if width == 360 else summary.click()
                     assert cards.first.bounding_box()['height'] > heights[0]
                     assert cards.nth(1).bounding_box()['height'] < cards.first.bounding_box()['height']
-                    cards.first.locator('summary').click()
+                    summary.tap() if width == 360 else summary.click()
                     page.locator('.overview-explanations > summary').click()
                     expect(page.locator('#ccost-unit')).to_be_visible()
                     page.locator('#ccost-unit').select_option('usd')
@@ -222,6 +234,18 @@ def main():
                     page.locator('#host-warning').click()
                     expect(page.locator('#host-details')).to_be_visible()
                     assert page.evaluate('current.result != null')
+                    # Empty and single-account grids use the same presenter and
+                    # frozen values, without acquisition or unknown-to-zero casts.
+                    for count in (0, 1):
+                        page.evaluate('''count => {
+                          const result=structuredClone(current.result);
+                          result.view.accounts_quotas.accounts=result.view.accounts_quotas.accounts.slice(0,count);
+                          ReportView.render(output,result,{section:'overview',pages:{}});
+                        }''', count)
+                        assert page.locator('.account-card').count() == count
+                        if count == 0:
+                            expect(page.locator('#result')).to_contain_text('No configured accounts detected.')
+                    assert len(jobs.requests) == requests
                     assert not errors, errors
                     evidence['cases'].append(dict(width=width, theme=theme, progress=samples, geometry=case, account_heights=heights, outcome='PASS'))
                     context.close()

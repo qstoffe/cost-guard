@@ -46,8 +46,9 @@ Approval-only `integration/web_minimal_overview.py` passed twelve cases in isola
 Playwright 1.64.1 / Chromium 156.0.8078.4: 360/1280/1920px light/dark, 30 stress rows,
 monotonic approximate progress 22/42/55/80/80/99, success/partial/error/timeout/auth,
 offline/reconnect/stopped states, real wheel/keyboard, horizontal access, equal-height
-cards/independent expansion and frozen DOM/selection/no extra acquisition. Screenshots
-were visually inspected. This is synthetic loopback evidence, not private provider,
+cards/independent expansion and frozen DOM/selection/no extra acquisition. The
+strengthened rerun also passed emulated mobile touch pans/taps and zero/one-account
+layouts. Screenshots were visually inspected. This is synthetic loopback evidence, not private provider,
 physical touchpad/touch, screen-reader or native macOS acceptance. Details and exact
 commands: [minimal Overview verification](../architecture/governance/verification/web-minimal-overview.md).
 

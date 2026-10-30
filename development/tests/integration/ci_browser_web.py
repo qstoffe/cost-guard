@@ -41,6 +41,18 @@ def main():
                 origin = owner.server.origin
                 context.route("**/*", lambda route: route.continue_() if route.request.url.startswith(origin + "/") else route.abort())
                 page = context.new_page()
+                # Observe actual stream readiness without changing its behavior.
+                # HTTP /api/live recovery alone does not prove SSE reconnection.
+                page.add_init_script('''
+                    window.ciEventStreams = [];
+                    const NativeEventSource = window.EventSource;
+                    window.EventSource = class extends NativeEventSource {
+                        constructor(...args) {
+                            super(...args);
+                            window.ciEventStreams.push(this);
+                        }
+                    };
+                ''')
                 errors = []
                 page.on("pageerror", lambda error: errors.append(type(error).__name__))
                 page.goto(owner.browser_url())
@@ -116,6 +128,10 @@ def main():
                 expect(page.locator("#status")).to_have_text("Connection: source unavailable. See notice below.", timeout=30000)
                 expect(page.locator("#host-message")).to_contain_text("SOURCE UNAVAILABLE")
                 expect(page.locator("#host-state")).to_contain_text("HTTP connected")
+                # Do not shut down the fixture in the gap between the successful
+                # HTTP health probe and EventSource's asynchronous retry. A dead
+                # server cannot deliver a terminal event to a disconnected tab.
+                page.wait_for_function('() => ciEventStreams.some(stream => stream.readyState === EventSource.OPEN)', timeout=30000)
                 evidence["checks"].append("real browser network loss/reconnect retains report")
                 owner.stop("menu")
                 expect(page.locator("#status")).to_have_text("Connection: stopped. See notice below.", timeout=15000)
