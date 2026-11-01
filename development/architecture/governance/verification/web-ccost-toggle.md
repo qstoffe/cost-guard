@@ -67,3 +67,5 @@ launcher acceptance is claimed. Existing transport/history tests remain relevant
 No architecture-boundary change; updated the Web module owner facts. Journal no-update:
 the focused durable evidence and owner contract suffice; no separate reusable discovery.
 No cross-repository suggestion publication was needed.
+> Historical selector evidence: FR 000539 replaces page-memory-only preference
+> ownership with [persisted Web settings](web-settings.md). Numeric token contracts remain.

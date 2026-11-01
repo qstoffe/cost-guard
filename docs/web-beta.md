@@ -1,26 +1,42 @@
 # Web Beta
 
-## Settings and appearance
+## Web settings
 
-v80.119 adds **Settings** at the far right of desktop navigation (last when wrapped),
-at `/#/settings`. Its sole setting is **Theme**: **Classic**, a dark CLI-inspired
-palette independent of system preference, or **Web**, the existing adaptive
-light/dark design. CLI `colorScheme`, custom palettes and color overrides are separate.
+v80.120 groups exactly two controls under **Settings → Web settings**, at
+`/#/settings`: **Theme** (Classic / Web) and **CCost display** (Credits / USD).
+Classic is dark independently of system preference; Web follows system light/dark.
+USD is reference token valuation, not billed spending. No CCost selector remains
+on Models or other report pages.
 
-Selecting a different theme saves immediately to `config/user-config.jsonc` through
-the private authenticated/CSRF-protected API, then restyles the whole loaded page
-without reload, report acquisition or host restart. No Apply button or browser-local
-preference exists. Saving temporarily disables only the dropdown; failures restore
-the last confirmed choice and show an error. Select the desired theme again to retry.
+Each selection saves immediately to `config/user-config.jsonc` through the private
+authenticated/CSRF-protected API. Only confirmed success changes the loaded theme
+or Python-prepared CCost tokens, including retained Snapshot/Live views. There is no
+reload, report/history/pricing/account acquisition, host restart, Apply button or
+browser-local preference. Both dropdowns disable briefly during a write. Failure
+restores the last confirmed choices and shows an accessible error; select again to retry.
 
-Top-level `webTheme` accepts exactly lowercase `"classic"` or `"web"`; an omitted
-override inherits Classic. No user file is created by reads. Reload, a new tab and
-relaunch use the validated effective file value; the HTML shell carries it before
-analytics loads. Reopening Settings also reads external edits; there is no polling
-or automatic cross-tab broadcast. Existing tabs retain their confirmed appearance
-until a settings read or their own successful change.
+```json
+{"webSettings": {"theme": "classic", "ccostDisplayUnit": "credits"}}
+```
 
-Only this one field is writable. Minimal JSONC edits preserve other text/comments,
+The enums are exactly lowercase `classic|web` and `credits|usd`. Missing overrides
+inherit the shipped Classic/Credits defaults without creating a user file.
+Theme precedence is explicit user `webSettings.theme`, then legacy user `webTheme`,
+then Classic. Legacy `webTheme` remains accepted and is never destructively migrated;
+subsequent Theme changes write the nested key. Web CCost independently defaults to
+Credits even if the original CLI `ccostDisplayUnit` is USD. The CLI key and its
+`--ccost-unit` override keep their behavior and cannot override a Web choice.
+
+Reload/new tabs/relaunch read confirmed file values. Theme is in the early HTML;
+CCost is read before report/Live presentation. Reopening Settings recognizes valid
+external edits, without polling or automatic cross-tab broadcast. Existing tabs
+retain confirmed values until their next settings read or successful change.
+
+Only these two nested fields are writable. A setting stays shared while Web only
+consumes it; promotion to an editable Web control requires a separate approved
+feature and an independent value in `webSettings`. No other settings migrate here.
+CLI `colorScheme`, custom palettes and unpromoted shared settings are unchanged.
+Minimal JSONC edits preserve the other Web preference, legacy keys, text/comments,
 ordering, nested settings and CLI palettes. Invalid/ambiguous JSONC, linked/reparse
 locations, hard-linked files, insufficient permissions, files over 1 MiB or detected
 concurrent edits fail without a destructive rewrite. Replacement uses a private,
@@ -72,8 +88,8 @@ Reload requests fresh Models; Back/Forward to a retained view and live host
 heartbeats do not refresh its frozen report or reset its table scroll/selection.
 
 Below the table, **More information** starts collapsed and contains CCost, Token Mix,
-the shared global latest-100-completed-priceable-prompt Relative CCost explanation,
-and the **CCost: Credits / USD** selector, followed by genuine **Price Promotion**
+and the shared global latest-100-completed-priceable-prompt Relative CCost explanation,
+followed by genuine **Price Promotion**
 notices for shown markers. Genuine **New Models** notices sit above the table at the
 left, with the two filters grouped at the right (wrapping on mobile). Partial and
 unverified-source warnings remain explicit. **Accounts** retains full supported quota,
@@ -116,11 +132,11 @@ This is reference spending per active hour, not provider billing, a consultant
 invoice or human hours/salary saved. No model selector, new CLI command/option,
 provider/model call, browser persistence or durable history ledger is added.
 
-v80.112 adds the shared **CCost: Credits / USD** selector. It switches Python-prepared
-reference amounts in place, without report jobs or provider refresh. Native money,
-quotas, Unaccounted usage and Relative CCost stay unchanged. The choice is page-memory
-only across routes, live publications and Snapshot/Live; reload or a fresh tab restores
-validated `ccostDisplayUnit`. No URL, browser storage or settings cookie is written.
+**Settings → Web settings → CCost display** switches Python-prepared reference
+amounts in place, without report jobs or provider refresh. Native money, quotas,
+Unaccounted usage and Relative CCost stay unchanged. The saved independent
+`webSettings.ccostDisplayUnit` applies across routes, publications and Snapshot/Live,
+including reload/new tabs. No URL, browser storage or preference cookie is written.
 
 v80.107 keeps healthy authenticated streams open without periodic rotation. Connected
 status is now visually quiet; only actionable states show a notice, with expandable
@@ -313,7 +329,9 @@ The historical synthetic parity and bounded integration inventory is [Beta stabi
 | `/health` | GET | Public HTTP-shell readiness only |
 | `/api/bootstrap` | POST | One-use `{"credential":"…"}` exchange with exact Origin |
 | `/api/session` | GET | Authenticated CSRF recovery, no control credential |
-| `/api/settings/theme` | GET / POST | Authenticated enum read; CSRF-protected `{"webTheme":"classic"}` or `{"webTheme":"web"}` write only |
+| `/api/settings` | GET | Authenticated read of only `webSettings.theme` and `webSettings.ccostDisplayUnit` |
+| `/api/settings/theme` | POST | CSRF-protected fixed `{"theme":"classic"}` or `{"theme":"web"}` write only |
+| `/api/settings/ccost` | POST | CSRF-protected fixed `{"ccostDisplayUnit":"credits"}` or `{"ccostDisplayUnit":"usd"}` write only |
 | `/api/status` | GET | Separate HTTP, analysis, source and account acquisition states |
 | `/api/live` | GET | Authenticated coherent live/progress snapshot and instance/sequence; retained terminal state while stopping |
 | `/api/events` | GET | Authenticated multiplexed SSE, bounded replay with Last-Event-ID; no query strings |

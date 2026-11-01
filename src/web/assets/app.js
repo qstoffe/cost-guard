@@ -8,11 +8,6 @@ const notice = document.getElementById('notice');
 const refresh = document.getElementById('refresh');
 const cancel = document.getElementById('cancel');
 const heading = document.getElementById('heading');
-const unitChoice = document.getElementById('unit-choice');
-const unitHelp = document.getElementById('ccost-help');
-document.getElementById('ccost-unit').addEventListener('change', event => {
-  ReportView.setUnit(event.target.value, output);
-});
 const views = new Map(); // Bounded page-memory only; never browser storage/history payloads.
 let csrf = null;
 let current = null;
@@ -24,6 +19,11 @@ let hostState = {kind: 'starting', writable: false, terminal: false};
 let hostInstance = null;
 let snapshotRender = null;
 let settingsView = null;
+function applySettings(value) {
+  const confirmed = WebSettings.apply(value, output);
+  for (const state of views.values()) if (state.detail) ReportView.syncUnits(state.detail.root);
+  return confirmed;
+}
 function connectionStatus(message, state = {}) {
   if (hostState.terminal && state.kind !== hostState.kind) return;
   hostState = {...hostState, ...state};
@@ -117,7 +117,7 @@ function show(state) {
   output.setAttribute('aria-busy', state.loading ? 'true' : 'false');
   notice.textContent = hostState.writable ? state.message : 'Last known contents are retained, not updating. See connection notice above.';
   if (state.section === 'settings') {
-    if (!settingsView) settingsView = new ThemeSettings.View(api);
+    if (!settingsView) settingsView = new WebSettings.View(api, applySettings);
     settingsView.attach(output);
     return;
   }
@@ -145,13 +145,9 @@ function show(state) {
       snapshotRender.result === state.result && snapshotRender.search === state.search &&
       snapshotRender.first === output.firstChild;
     if (!retained) {
-      document.querySelector('.toolbar').append(unitChoice);
-      document.getElementById('content').insertBefore(unitHelp, notice);
       ReportView.render(output, state.result, state);
-      if (state.section === 'models') output.querySelector('.overview-explanations').append(unitChoice, unitHelp);
       snapshotRender = {state, result: state.result, search: state.search, first: output.firstChild};
     }
-    if (state.section === 'models' && unitChoice.parentNode !== output.querySelector('.overview-explanations')) output.querySelector('.overview-explanations').append(unitChoice, unitHelp);
   }
   else if (state.loading) {
     const activity = ReportView.element('progress');
@@ -227,8 +223,6 @@ function navigate() {
   const route = ReportRoutes.resolve(location.hash), match = route.session;
   document.title = `${route.title} · Cost Guard Web Beta`;
   document.body.dataset.section = route.section;
-  document.querySelector('.toolbar').append(unitChoice);
-  document.getElementById('content').insertBefore(unitHelp, notice);
   const key = match ? 'session/' + match[1] : location.hash || '#/models';
   heading.textContent = route.title;
   ReportRoutes.controls(document.getElementById('scope-controls'), route, event => {
@@ -280,8 +274,8 @@ async function connect() {
     const session = credential ? await api('/api/bootstrap', {credential}) : await api('/api/session');
     csrf = session.csrf;
     // Lightweight file read precedes reports; HTML already carries the early-paint theme.
-    try { ThemeSettings.apply(await api('/api/settings/theme')); }
-    catch (_) { notice.textContent = 'Unable to read saved theme. Open Settings for details.'; }
+    try { applySettings(await api('/api/settings')); }
+    catch (_) { notice.textContent = 'Unable to read saved Web settings. Open Settings for details.'; }
     const state = await api('/api/status');
     sessionDetailAvailable = state.session_detail === true && typeof SessionDetail !== 'undefined';
     statusLine.textContent = `HTTP ${state.http}; analysis ${state.analysis}; source ${state.source}; accounts ${state.accounts}. Snapshot health is shown below.`;

@@ -1,8 +1,12 @@
 # Cost Guard version history
 
+## v80.120 — 2026-11-02
+
+- Web settings: independent `webSettings` Theme and persistent CCost Credits/USD. Legacy theme and CLI values survive. Confirmed saves update retained Python tokens without reload/acquisition; preserving JSONC/security guards remain.
+
 ## v80.119 — 2026-11-01
 
-- Web Settings adds immediately saved Classic/Web appearance. Classic defaults to a dark CLI-inspired palette; Web retains adaptive light/dark. A narrow authenticated API preserves user JSONC and rejects unsafe paths, invalid configuration and detected editor conflicts. CLI palettes, reports and Watch acquisition are unchanged.
+- Web Settings: saved Classic dark/Web adaptive theme, narrow authenticated preserving JSONC writes. CLI/Watch unchanged.
 
 ## v80.118 — 2026-11-01
 
@@ -31,7 +35,7 @@
 
 ## v80.112 — 2026-10-29
 
-- Web CCost Credits/USD: Python tokens, text-only toggle without acquisition/repricing; page-memory only, reload restores configuration. Native values/order unchanged.
+- Web CCost Credits/USD tokens (persistence added in v80.120); no repricing or native-value changes.
 
 ## v80.111 — 2026-10-29
 

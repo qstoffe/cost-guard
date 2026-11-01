@@ -28,9 +28,8 @@ async function until(condition) {
 }
 async function main() {
   const input = JSON.parse(fs.readFileSync(0, 'utf8'));
-  const ids = Object.fromEntries(['unit-choice', 'ccost-help', 'ccost-unit', 'host-state', 'host-message', 'host-details', 'status', 'result', 'notice', 'refresh', 'cancel', 'heading', 'skip', 'content', 'scope-controls', 'search'].map(id => [id, new Node('div')]));
+  const ids = Object.fromEntries(['host-state', 'host-message', 'host-details', 'status', 'result', 'notice', 'refresh', 'cancel', 'heading', 'skip', 'content', 'scope-controls', 'search'].map(id => [id, new Node('div')]));
   const toolbar = new Node('div');
-  toolbar.append(ids['unit-choice']); ids['unit-choice'].append(ids['ccost-unit']);
   ids['host-state'].append(ids['host-message'], ids['host-details']);
   const nav = ['models', 'sessions', 'watch', 'accounts', 'reports', 'token-mix', 'settings'].map(key => {
     const node = new Node('a'); node.setAttribute('href', '#/' + key); return node;
@@ -79,11 +78,11 @@ async function main() {
   assert.match(ids.result.textContent, /Reference token valuation, not actual billing/);
   const creditsText = ids.result.textContent, beforeToggle = requests;
   const retainedChildren = [...ids.result.children];
-  ids['ccost-unit'].events.change({target: {value: 'usd'}});
+  vm.runInContext('applySettings({webSettings: {theme: "classic", ccostDisplayUnit: "usd"}})', context);
   assert.notEqual(ids.result.textContent, creditsText);
   assert.match(ids.result.textContent, /\$\d+\.\d{2}/);
   assert.deepEqual(ids.result.children, retainedChildren, 'unit change retains DOM');
-  ids['ccost-unit'].events.change({target: {value: 'credits'}});
+  vm.runInContext('applySettings({webSettings: {theme: "classic", ccostDisplayUnit: "credits"}})', context);
   assert.equal(ids.result.textContent, creditsText, 'exact reversible display');
   assert.equal(requests, beforeToggle, 'toggle never requests a report/provider');
   const overviewTable = all(ids.result, 'table')[0];
@@ -122,16 +121,36 @@ async function main() {
   const frozenModels = ids.result.textContent;
   navigate('settings');
   await until(() => all(ids.result, 'select')[0]?.disabled === false);
-  assert.equal(all(ids.result, 'select').length, 1, 'sole setting is Theme');
+  assert.equal(all(ids.result, 'select').length, 2, 'exactly Theme and CCost display');
+  assert.match(ids.result.textContent, /Web settings/);
   assert.equal(all(ids.result, 'button').length, 0, 'no save or apply action');
   assert.equal(ids.heading.textContent, 'Settings');
   assert.equal(nav.at(-1).getAttribute('aria-current'), 'page');
   const settingsRequests = requests;
   vm.runInContext("connectionStatus('Live connected.', {kind:'connected', writable:true})", context);
   assert.equal(requests, settingsRequests, 'health does not poll settings');
+  const unitSelect = all(ids.result, 'select').find(node => node.id === 'ccost-unit');
+  context.retainedBlock = input.examples[0].view.prompt_blocks[0];
+  vm.runInContext(`const retainedDetail = ReportView.element('section');
+    retainedDetail.append(ReportView.element('span', () => ReportView.display(retainedBlock, 'total_ccost')));
+    views.set('retained-unit-fixture', {detail: {root: retainedDetail, detach() {}}});`, context);
+  unitSelect.value = 'usd'; await unitSelect.events.change();
+  assert.match(ids.result.textContent, /CCost display saved/);
+  assert.equal(requests, settingsRequests + 1, 'selection uses one fixed settings write');
+  assert.equal(vm.runInContext('retainedDetail.textContent', context), context.retainedBlock.display_units.usd.total_ccost,
+    'a confirmed save immediately updates detached retained detail DOM');
   navigate('models');
-  assert.equal(ids.result.textContent, frozenModels, 'settings does not discard frozen models');
-  assert.equal(requests, settingsRequests, 'settings does not reacquire models');
+  assert.notEqual(ids.result.textContent, frozenModels, 'saved unit applies to frozen models');
+  assert.match(ids.result.textContent, /\$\d+\.\d{2}/);
+  assert.equal(all(ids.result, 'select').length, 0, 'no old interactive CCost control');
+  assert.equal(requests, settingsRequests + 1, 'settings does not reacquire models');
+  navigate('settings');
+  await until(() => all(ids.result, 'select')[0]?.disabled === false);
+  unitSelect.value = 'credits'; await unitSelect.events.change();
+  assert.equal(vm.runInContext('retainedDetail.textContent', context), context.retainedBlock.display.total_ccost);
+  vm.runInContext('views.delete("retained-unit-fixture")', context);
+  navigate('models');
+  assert.equal(ids.result.textContent, frozenModels, 'confirmed credits restores existing display tokens');
   navigate('sessions');
   await until(() => ids.notice.textContent.includes('Snapshot captured'));
   retainedHeartbeat();
@@ -304,6 +323,7 @@ async function main() {
     URLSearchParams, fetch: wire, setTimeout, Date, console});
   vm.runInContext(await (await fetch(input.origin + '/render.js')).text(), reloaded);
   vm.runInContext(await (await fetch(input.origin + '/reports.js')).text(), reloaded);
+  vm.runInContext(await (await fetch(input.origin + '/settings.js')).text(), reloaded);
   ids.notice.textContent = 'reload pending';
   vm.runInContext(await (await fetch(input.origin + '/app.js')).text(), reloaded);
   await until(() => ids.notice.textContent.includes('Snapshot captured'));
@@ -313,7 +333,7 @@ async function main() {
   location.hash = '#/live';
   const watchReload = vm.createContext({LiveConnection: transport, AbortController, clearTimeout, document: context.document, window: context.window, location, history,
     URLSearchParams, fetch: wire, setTimeout, Date, console});
-  for (const script of ['/render.js', '/reports.js', '/app.js']) {
+  for (const script of ['/render.js', '/reports.js', '/settings.js', '/app.js']) {
     vm.runInContext(await (await fetch(input.origin + script)).text(), watchReload);
   }
   await until(() => ids.heading.textContent === 'Watch');
@@ -341,7 +361,7 @@ async function main() {
   ids.result.textContent = 'Starting Cost Guard';
   const unavailable = vm.createContext({LiveConnection: transport, AbortController, clearTimeout, document: context.document, window: context.window, location, history,
     URLSearchParams, fetch: wire, setTimeout, Date, console});
-  for (const script of ['/render.js', '/reports.js', '/app.js']) {
+  for (const script of ['/render.js', '/reports.js', '/settings.js', '/app.js']) {
     vm.runInContext(await (await fetch(input.origin + script)).text(), unavailable);
   }
   await until(() => ids.result.textContent.includes('Unable to establish'));

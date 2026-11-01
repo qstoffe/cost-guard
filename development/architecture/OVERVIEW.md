@@ -73,7 +73,7 @@ cost-guard.py
 
 ## Configuration
 
-`src/config.py` owns JSONC, v77-compatible recursive merging, legacy normalization and startup validation. Omitted properties inherit defaults; explicit null overrides. Reads never create optional `config/user-config.jsonc`. Web's sole mutation is `webTheme`, owned by `src/web/theme.py`: the shared canonical validation pipeline precedes a bounded preserving edit and atomic replacement. No report/source/account or CLI-color configuration is changed.
+`src/config.py` owns JSONC, v77-compatible recursive merging, legacy normalization and startup validation. Omitted properties inherit defaults; explicit null overrides. Reads never create optional `config/user-config.jsonc`. `src/web/settings.py` owns the two allowed mutations: `webSettings.theme` and `webSettings.ccostDisplayUnit`, with canonical validation, preserving edits and atomic replacement. User legacy `webTheme` is normalized before default merging, unless the nested theme is explicit. Web CCost independently defaults to Credits; the CLI key/flag is unchanged. Settings stay shared until separately promoted to editable Web preferences; only these two have independent Web ownership. No report/source/account or CLI-color setting changes.
 
 Configuration must be validated before any OpenCode/provider/network/runtime-cache work. Errors use terminal-default presentation and must not echo arbitrary configured paths/secrets. `openCode.source` is normalized to `auto|v1|v2`; concrete source selection remains outside the config layer.
 

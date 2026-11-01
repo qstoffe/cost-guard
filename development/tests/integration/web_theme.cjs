@@ -19,45 +19,60 @@ async function main() {
   documentState = {documentElement: html, body: new Node('body')};
   documentState.activeElement = documentState.body;
   const context = vm.createContext({document: documentState, ReportView: {
-    element(tag, text) { const node = new Node(tag); node.textContent = text; return node; }
+   element(tag, text) { const node = new Node(tag); node.textContent = text; return node; },
+   setUnit(unit) { documentState.unit = unit; }
   }});
   vm.runInContext(fs.readFileSync('src/web/assets/settings.js', 'utf8'), context);
-  const Theme = vm.runInContext('ThemeSettings', context);
-  const calls = []; let saved = 'classic', failure = null, release;
+  const Settings = vm.runInContext('WebSettings', context);
+  const calls = []; let saved = {theme: 'classic', ccostDisplayUnit: 'credits'}, failure = null, release;
   const api = async (path, value) => {
     calls.push({path, value});
     if (failure) throw new Error(failure);
-    if (value) { await new Promise(resolve => { release = resolve; }); saved = value.webTheme; }
-    return {webTheme: saved};
+    if (value) { await new Promise(resolve => { release = resolve; }); saved = {...saved, ...value}; }
+    return {webSettings: saved};
   };
-  const view = new Theme.View(api), output = new Node('div');
+  const view = new Settings.View(api), output = new Node('div');
+  const theme = view.controls.get('theme'), ccost = view.controls.get('ccostDisplayUnit');
+  assert.equal(view.controls.size, 2);
+  assert.equal(view.root.children[0].textContent, 'Web settings');
+  const save = select => select.events.change();
   view.attach(output); const root = output.firstChild;
   await view.read();
-  assert.equal(view.select.value, 'classic');
-  view.select.focus(); view.select.value = 'web'; const pending = view.save();
-  assert.equal(view.select.disabled, true);
+  assert.equal(theme.value, 'classic'); assert.equal(ccost.value, 'credits');
+  theme.focus(); theme.value = 'web'; const pending = save(theme);
+  assert.equal(theme.disabled, true); assert.equal(ccost.disabled, true);
   assert.equal(html.dataset.theme, 'classic', 'never optimistically claim saved theme');
   assert.match(view.feedback.textContent, /Saving/);
   release(); await pending;
   assert.equal(html.dataset.theme, 'web');
-  assert.equal(documentState.activeElement, view.select, 'save restores keyboard focus after native disabled blur');
+  assert.equal(documentState.activeElement, theme, 'save restores keyboard focus after native disabled blur');
   assert.equal(view.feedback.textContent, 'Theme saved.');
-  const count = calls.length; await view.save();
+  const count = calls.length; await save(theme);
   assert.equal(calls.length, count, 'unchanged selection never writes');
   view.attach(output); assert.equal(output.firstChild, root, 'heartbeat retains native focus owner');
   for (const code of ['settings_conflict','settings_invalid_config','settings_not_writable','instance_stopping',
       'authentication_required','csrf_required','host_identity_changed','offline','AbortError']) {
-    failure = code; view.select.value = 'classic'; await view.save();
-    assert.equal(view.select.value, 'web'); assert.equal(html.dataset.theme, 'web');
+    failure = code; theme.value = 'classic'; await save(theme);
+    assert.equal(theme.value, 'web'); assert.equal(html.dataset.theme, 'web');
     assert.equal(view.feedback.className, 'error'); assert.doesNotMatch(view.feedback.textContent, /Theme saved/);
-    assert.equal(view.select.disabled, false);
+    assert.equal(theme.disabled, false);
+    ccost.value = 'usd'; await save(ccost);
+    assert.equal(ccost.value, 'credits'); assert.equal(documentState.unit, 'credits');
   }
-  failure = null; saved = 'classic'; await view.read();
+  failure = null;
+  ccost.focus(); ccost.value = 'usd'; const ccostPending = save(ccost);
+  assert.equal(documentState.unit, 'credits', 'CCost applies only after confirmed success');
+  release(); await ccostPending;
+  assert.equal(documentState.unit, 'usd'); assert.equal(html.dataset.theme, 'web');
+  assert.equal(documentState.activeElement, ccost);
+  assert.equal(view.feedback.textContent, 'CCost display saved.');
+  saved = {theme: 'classic', ccostDisplayUnit: 'credits'}; await view.read();
   assert.equal(html.dataset.theme, 'classic', 'external file edits apply on next read');
-  const fresh = new Theme.View(api); await fresh.read();
-  assert.equal(fresh.select.value, 'classic', 'new view reads file rather than browser storage');
-  assert.ok(calls.every(call => call.path === '/api/settings/theme'));
-  assert.ok(calls.filter(call => call.value).every(call => Object.keys(call.value).join() === 'webTheme'));
-  console.log('theme state machine passed');
+  const fresh = new Settings.View(api); await fresh.read();
+  assert.equal(fresh.controls.get('theme').value, 'classic', 'new view reads file rather than browser storage');
+  assert.equal(fresh.controls.get('ccostDisplayUnit').value, 'credits');
+  assert.ok(calls.every(call => ['/api/settings', '/api/settings/theme', '/api/settings/ccost'].includes(call.path)));
+  assert.ok(calls.filter(call => call.value).every(call => Object.keys(call.value).length === 1));
+  console.log('Web settings state machine passed');
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

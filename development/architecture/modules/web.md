@@ -25,8 +25,9 @@ Status: current
 
 ## Public contract
 
-`src/web/theme.py` is the sole write exception: `webTheme` (`classic` default or
-`web`) in this checkout's `config/user-config.jsonc`. `config.validated_values`
+`src/web/settings.py` is the sole write exception: `webSettings.theme` (`classic`
+default or `web`) and `webSettings.ccostDisplayUnit` (`credits` default or `usd`)
+in this checkout's `config/user-config.jsonc`. `config.validated_values`
 shares startup validation, normalization and color resolution; neither merged
 defaults nor CLI colors are serialized. Bounded JSONC token offsets preserve every
 unrelated byte; duplicate keys and malformed/unsupported settings fail safely.
@@ -34,15 +35,20 @@ Owned/non-reparse paths, 1 MiB bounds, private same-directory temporaries, in-ho
 serialization and last-moment file identity/byte comparison precede atomic replace.
 This is ordinary editor-conflict detection, not a hostile same-user race guarantee.
 
-`GET/POST /api/settings/theme` exposes only the enum and allowlisted error codes,
+`GET /api/settings` and fixed `POST /api/settings/theme` / `POST /api/settings/ccost`
+expose only those enums and allowlisted error codes,
 behind existing Host/Origin/session/CSRF/body/stopping guards. Early HTML selects
 the effective theme before CSS paint. `assets/settings.js` owns the sole native
-dropdown and confirmed-only live CSS-variable switching, safe error rollback and
+two dropdowns under Web settings and confirmed-only CSS/display-token switching, rollback and
 keyboard focus recovery. `#/settings` reads on entry, never submits report jobs,
 restarts the host or polls. Other tabs converge on their next read, not a broadcast.
-CLI/Watch settings and acquisition remain unchanged. Tests: `test_web_theme.py`,
+Explicit nested theme overrides legacy user `webTheme`; normalization happens before
+shipped nested defaults merge. Web CCost never follows CLI `ccostDisplayUnit` after
+promotion. Only separately approved promotions get independent Web fields; other
+settings remain shared. CLI/Watch settings and acquisition stay unchanged. Tests: `test_web_theme.py`,
 `integration/web_theme.cjs`, and `integration/web_views.cjs`; evidence/limits:
-[Web theme verification](../governance/verification/web-theme.md).
+[Web settings verification](../governance/verification/web-settings.md); historical
+[theme verification](../governance/verification/web-theme.md).
 
 `cost-guard-web.py --foreground` is explicit icon-free developer mode, independent of managed discovery and CLI. Only 127.0.0.1 with an assigned port is supported; exact Host/Origin and authenticated sensitive reads are mandatory. Standard-library only, no installation, updater, generic proxy/shell/filesystem routes or browser-side calculator. Accounts/source/analysis readiness remain independent of HTTP-shell readiness.
 
@@ -65,15 +71,17 @@ v80.89 stabilization: `security.py` names cookies by canonical checkout (not por
 The shared numeric display seam is `src/display.py` / `src/numbers.py` → terminal and `src/application/display.py` → immutable DTO `display` / `display_roles` → `render.js`. Raw exact values remain separate sort keys. Application never imports terminal presentation; formatting never acquires or values usage. `development/tests/test_web_display.py` and `development/tests/integration/web_display.cjs` pin CLI-derived goldens. The [per-view display baseline](../governance/verification/web-display-parity.md) distinguishes formatting coverage, browser-only interactions and page-specific remaining work; it is not visual acceptance.
 
 FR 000528 adds sparse `display_units.credits/usd` tokens only where CCost text differs.
-`render.js` owns memory-only unit selection and weak DOM text bindings; switching changes
+`render.js` owns weak DOM text bindings; file-backed Web Settings selects the unit before
+report/Live startup and synchronizes visible and detached detail roots. Switching changes
 text nodes, not tables, sort keys, report identities or acquisition. Session/Watch presenters
 bind summaries, subtotals and context amounts too. Report projections retain structured
 date-range and provider-only note costs rather than parsing formatted prose in JavaScript.
-Reload/fresh tabs use the configured default; CLI/native quotas/billing stay independent.
+Reload/fresh tabs read the saved Web-only unit; CLI/native quotas/billing stay independent.
 Architecture boundaries are unchanged; journal assessment: no-update. Evidence and explicit
-browser/platform limits: [CCost selector verification](../governance/verification/web-ccost-toggle.md).
+browser/platform limits: [historical selector verification](../governance/verification/web-ccost-toggle.md)
+and [current Settings verification](../governance/verification/web-settings.md).
 
-FR 000537 unifies the former Overview and Models at `#/models`; `#/overview` and `#/models/all` replace legacy history entries, preserving bootstrap erasure and Models keyboard focus. Exactly Publisher/Model/Relative CCost/Release date fill main-content width with intrinsic subgrid tracks. All matching rows scroll with the document; narrow screens alone use horizontal overflow. Models has no account cards, search, pager, catalog links, native-rate column or superseded fading. New Models and two accessible checkboxes precede the table; collapsed More information/unit selection and matching Price Promotion follow. Accounts retains full shared acquisition/data. Other routes retain their controls and scroll contracts.
+FR 000537 unifies the former Overview and Models at `#/models`; `#/overview` and `#/models/all` replace legacy history entries, preserving bootstrap erasure and Models keyboard focus. Exactly Publisher/Model/Relative CCost/Release date fill main-content width with intrinsic subgrid tracks. All matching rows scroll with the document; narrow screens alone use horizontal overflow. Models has no account cards, search, pager, catalog links, native-rate column or superseded fading. New Models and two accessible checkboxes precede the table; collapsed More information and matching Price Promotion follow. CCost selection now belongs only to Settings. Accounts retains full shared acquisition/data. Other routes retain their controls and scroll contracts.
 
 One opt-in `ModelCatalogProjection` freezes full catalog, selectable publisher/name membership, notices and candidate-local supersession from the same acquired sample, without new availability/history/account calls. Every filter combination uses the same full-catalog cheapest-positive base; CLI ranking/denominator remain unchanged. Defaults: all-priced off, latest-only on, exact Relative CCost descending. Candidate scope precedes conservative supersession and stable exact tier-vector sorting; missing ratios/dates stay last. Shift mouse/keyboard and Add sort keys support ordered multi-sort with primary-only aria-sort. Unknown prices remain rows; unverified fail-open and verified-empty remain distinct, never subscription entitlement proof. Prepared tokens align tiers without browser valuation.
 

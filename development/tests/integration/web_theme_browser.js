@@ -68,3 +68,55 @@ window.checkThemeLayouts = async () => {
     settingsChoices: cases.filter(value => value.route === 'settings').map(value => value.visibleSelects),
     backgrounds: [...new Set(cases.map(value => value.theme + '/' + value.scheme + '/' + value.background))]};
 };
+
+// One selected unit per call keeps the actual-browser check bounded and inspectable.
+window.checkWebCCost = async unit => {
+  const iframe = document.querySelector('iframe'), win = iframe.contentWindow, doc = win.document;
+  const until = predicate => new Promise((resolve, reject) => {
+    const observer = new MutationObserver(check);
+    const deadline = setTimeout(() => { observer.disconnect(); reject(new Error('CCost condition: ' + win.location.hash)); }, 10000);
+    function check() { if (predicate()) { observer.disconnect(); clearTimeout(deadline); resolve(); } }
+    observer.observe(doc, {subtree: true, childList: true, attributes: true, characterData: true}); check();
+  });
+  const go = async route => {
+    if (win.location.hash !== '#/' + route) await new Promise(resolve => {
+      win.addEventListener('hashchange', resolve, {once: true}); win.location.hash = '#/' + route;
+    });
+    await until(() => doc.body.dataset.section === route.split(/[/?]/)[0]);
+  };
+  await go('settings');
+  await until(() => doc.querySelector('#ccost-unit') && !doc.querySelector('#ccost-unit').disabled);
+  const select = doc.querySelector('#ccost-unit');
+  if (select.value !== unit) {
+    select.value = unit; select.dispatchEvent(new win.Event('change'));
+    await until(() => !select.disabled && select.value === unit);
+    if (doc.querySelector('#settings-feedback').className !== 'success') throw new Error('save failed');
+  }
+  const results = [];
+  for (const route of ['models', 'accounts', 'sessions', 'reports?date=2026-10-26:2026-10-27',
+      'token-mix', 'cost-per-hour', 'watch', 'sessions/root-0000', 'sessions/root-0000/live']) {
+    await go(route);
+    if (['token-mix', 'cost-per-hour'].includes(route) && !doc.querySelector('#notice').textContent.includes('Snapshot captured')) {
+      doc.querySelector('#refresh').click();
+      if (route === 'token-mix') {
+        await until(() => doc.querySelector('#notice').textContent.includes('running:'));
+        await fetch('/fixture/finish-history', {method: 'POST'});
+      }
+    }
+    if (route.startsWith('sessions/root')) {
+      await until(() => doc.querySelector('.session-detail tbody tr'));
+      if (route.endsWith('/live')) {
+        const follow = [...doc.querySelectorAll('.session-detail button')].find(node => node.textContent === 'Follow live');
+        follow?.click();
+      }
+    }
+    else if (route !== 'watch') await until(() => doc.querySelector('#notice').textContent.includes('Snapshot captured'));
+    const text = doc.querySelector('#result').innerText;
+    const cell = [...doc.querySelectorAll('#result td, #result tfoot')].map(node => node.textContent).find(value => /\$\d+\.\d{2}/.test(value));
+    results.push({unit, route, tables: doc.querySelectorAll('#result table').length,
+      usdCell: cell || null, referenceUSD: /\$\d+\.\d{2}/.test(text),
+      oldControls: doc.querySelectorAll('#result select').length,
+      overflow: doc.documentElement.scrollWidth > win.innerWidth});
+  }
+  return results;
+};

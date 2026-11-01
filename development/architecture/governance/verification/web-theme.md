@@ -1,5 +1,8 @@
 # Web Settings / theme verification
 
+Historical FR 000538 evidence. FR 000539 moves the preference to `webSettings.theme`
+and adds persisted Web CCost; see [current verification](web-settings.md).
+
 FR 000538; Windows workstation, Python 3.14; 2026-11-01; v80.119.
 
 ## Delivered scope and deterministic checks

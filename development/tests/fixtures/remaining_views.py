@@ -22,7 +22,8 @@ def remaining_reports(test):
     mix = service.build_token_mix_history()
     normal = replace(model_report(), accounts_quotas=account_report().accounts_quotas)
     return {"normal": normal, "all-models": model_report(all_models=True), "session": session,
-        "date": dated, "token-mix": mix, "sessions": service.build(ReportRequest(ReportKind.SESSIONS))}
+        "date": dated, "token-mix": mix, "sessions": service.build(ReportRequest(ReportKind.SESSIONS)),
+        "cost-per-hour": service.build(ReportRequest(ReportKind.COST_PER_HOUR))}
 
 
 def result(report):

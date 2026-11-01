@@ -1,4 +1,4 @@
-"""The sole writable Web preference: bounded, preserving user JSONC theme edits.
+"""The two writable Web preferences: bounded, preserving nested JSONC edits.
 
 No settings cache: reads use canonical configuration validation. Local writes are
 serialized and compare file identity/bytes immediately before atomic replacement.
@@ -17,11 +17,11 @@ from .instance_state import _private
 from .process_identity import InstanceConflict
 
 MAX_CONFIG_BYTES = 1024 * 1024
-THEMES = ("classic", "web")
+WEB_FIELDS = {"theme": ("classic", "web"), "ccostDisplayUnit": ("credits", "usd")}
 JSONC_TOKENS = re.compile(r'"(?:[^"\\]|\\.)*"|//[^\r\n]*|/\*[\s\S]*?\*/')
 
 
-class ThemeError(ValueError):
+class SettingsError(ValueError):
     """Allowlisted public error code only; never includes parser text or paths."""
 
 
@@ -29,7 +29,7 @@ def unique_pairs(pairs):
     result = {}
     for key, value in pairs:
         if key in result:
-            raise ThemeError("settings_invalid_config")
+            raise SettingsError("settings_invalid_config")
         result[key] = value
     return result
 
@@ -41,16 +41,22 @@ def jsonc_document(raw):
                              re.sub(r"[^\r\n]", " ", m[0]), text)
     value = json.loads(masked, object_pairs_hook=unique_pairs)
     if not isinstance(value, dict):
-        raise ThemeError("settings_invalid_config")
+        raise SettingsError("settings_invalid_config")
     return text, masked, value
 
 
-def replace_theme(raw, theme):
-    """Locate only a top-level value; preserve all other original bytes exactly."""
-    text, masked, values = jsonc_document(raw)
+def replace_preference(raw, field, value):
+    """Edit one allowlisted nested leaf, retaining comments and unrelated bytes."""
+    if field not in WEB_FIELDS or not isinstance(value, str) or value not in WEB_FIELDS[field]:
+        raise SettingsError("invalid_request")
+    text, masked, _ = jsonc_document(raw)
+    return _replace_member(text, masked, masked.index("{"), ("webSettings", field), value).encode("utf-8")
+
+
+def _replace_member(text, masked, opening, path, value):
     decoder = json.JSONDecoder()
-    opening = masked.index("{")
     cursor = opening + 1
+    has_members = False
     while masked[cursor:].lstrip()[:1] != "}":
         cursor += len(masked[cursor:]) - len(masked[cursor:].lstrip())
         key, cursor = decoder.raw_decode(masked, cursor)
@@ -58,22 +64,31 @@ def replace_theme(raw, theme):
         cursor += len(masked[cursor:]) - len(masked[cursor:].lstrip())
         start = cursor
         _, cursor = decoder.raw_decode(masked, cursor)
-        if key == "webTheme":
-            return (text[:start] + json.dumps(theme) + text[cursor:]).encode("utf-8")
+        has_members = True
+        if key == path[0]:
+            if len(path) > 1:
+                if masked[start] != "{":
+                    raise SettingsError("settings_invalid_config")
+                return _replace_member(text, masked, start, path[1:], value)
+            return text[:start] + json.dumps(value) + text[cursor:]
         cursor += len(masked[cursor:]) - len(masked[cursor:].lstrip())
         if masked[cursor] == ",":
             cursor += 1
     newline = "\r\n" if "\r\n" in text else "\n"
-    insertion = newline + '  "webTheme": ' + json.dumps(theme) + ("," if values else "")
-    return (text[:opening + 1] + insertion + text[opening + 1:]).encode("utf-8")
+    inserted = value
+    for key in reversed(path[1:]):
+        inserted = {key: inserted}
+    insertion = newline + '  ' * (3 - len(path)) + json.dumps(path[0]) + ': ' + json.dumps(inserted)
+    insertion += "," if has_members else ""
+    return text[:opening + 1] + insertion + text[opening + 1:]
 
 
 def safe_info(path, *, owned=False):
     info = path.lstat()
     if stat.S_ISLNK(info.st_mode) or getattr(info, "st_file_attributes", 0) & 0x400:
-        raise ThemeError("settings_unsafe_path")
+        raise SettingsError("settings_unsafe_path")
     if owned and os.name != "nt" and info.st_uid != os.getuid():
-        raise ThemeError("settings_unsafe_path")
+        raise SettingsError("settings_unsafe_path")
     return info
 
 
@@ -82,7 +97,7 @@ def signature(info):
     return info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns
 
 
-class ThemeSettings:
+class WebSettings:
     def __init__(self, root):
         self.root = Path(root).absolute()
         self.directory = self.root / "config"
@@ -93,11 +108,11 @@ class ThemeSettings:
         for path in (self.directory, *self.directory.parents):
             info = safe_info(path, owned=path in (self.directory, self.root))
             if not stat.S_ISDIR(info.st_mode):
-                raise ThemeError("settings_unsafe_path")
+                raise SettingsError("settings_unsafe_path")
         default = self.directory / "default-config.jsonc"
         info = safe_info(default)
         if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_CONFIG_BYTES:
-            raise ThemeError("settings_unsafe_path")
+            raise SettingsError("settings_unsafe_path")
 
     def _snapshot(self):
         self._paths()
@@ -106,15 +121,15 @@ class ThemeSettings:
         except FileNotFoundError:
             return None, None
         if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
-            raise ThemeError("settings_unsafe_path")
+            raise SettingsError("settings_unsafe_path")
         if info.st_size > MAX_CONFIG_BYTES:
-            raise ThemeError("settings_config_too_large")
+            raise SettingsError("settings_config_too_large")
         with self.path.open("rb") as stream:
             if signature(os.fstat(stream.fileno())) != signature(info):
-                raise ThemeError("settings_conflict")
+                raise SettingsError("settings_conflict")
             raw = stream.read(MAX_CONFIG_BYTES + 1)
         if len(raw) > MAX_CONFIG_BYTES:
-            raise ThemeError("settings_config_too_large")
+            raise SettingsError("settings_config_too_large")
         return raw, signature(info)
 
     def _values(self, raw):
@@ -123,37 +138,39 @@ class ThemeSettings:
         return validated_values(defaults, overrides)
 
     def read(self):
-        return self._perform(None)
+        return self._perform()
 
-    def write(self, theme, *, allowed=lambda: True):
-        if not isinstance(theme, str) or theme not in THEMES:
-            raise ThemeError("invalid_request")
-        return self._perform(theme, allowed=allowed)
+    def write(self, field, value, *, allowed=lambda: True):
+        if field not in WEB_FIELDS or not isinstance(value, str) or value not in WEB_FIELDS[field]:
+            raise SettingsError("invalid_request")
+        return self._perform(field, value, allowed=allowed)
 
-    def _perform(self, theme, *, allowed=lambda: True):
+    def _perform(self, field=None, value=None, *, allowed=lambda: True):
         try:
             with self.lock:
                 raw, identity = self._snapshot()
                 effective = self._values(raw)
-                if theme is None:
-                    return effective["webTheme"]
-                updated = replace_theme(raw if raw is not None else b"{\n}\n", theme)
-                self._values(updated)
+                if field is None:
+                    return effective["webSettings"]
+                updated = replace_preference(raw if raw is not None else b"{\n}\n", field, value)
+                effective = self._values(updated)
+                if len(updated) > MAX_CONFIG_BYTES:
+                    raise SettingsError("settings_config_too_large")
                 if not allowed():
-                    raise ThemeError("instance_stopping")
+                    raise SettingsError("instance_stopping")
                 self._commit(raw, identity, updated, allowed)
-                return theme
-        except ThemeError:
+                return effective["webSettings"]
+        except SettingsError:
             raise
         except (ConfigError, ValueError, UnicodeError, RecursionError, OverflowError):
-            raise ThemeError("settings_invalid_config") from None
+            raise SettingsError("settings_invalid_config") from None
         except (OSError, InstanceConflict):
-            raise ThemeError("settings_not_writable" if theme is not None else "settings_unavailable") from None
+            raise SettingsError("settings_not_writable" if field is not None else "settings_unavailable") from None
 
     def _commit(self, raw, identity, updated, allowed):
         if raw is not None and not safe_info(self.path).st_mode & stat.S_IWUSR:
-            raise ThemeError("settings_not_writable")
-        descriptor, name = tempfile.mkstemp(prefix=".web-theme-", suffix=".tmp", dir=self.directory)
+            raise SettingsError("settings_not_writable")
+        descriptor, name = tempfile.mkstemp(prefix=".web-settings-", suffix=".tmp", dir=self.directory)
         temporary = Path(name)
         try:
             with os.fdopen(descriptor, "wb") as stream:
@@ -163,9 +180,9 @@ class ThemeSettings:
                 os.fsync(stream.fileno())
             current, current_identity = self._snapshot()
             if current_identity != identity or current != raw:
-                raise ThemeError("settings_conflict")
+                raise SettingsError("settings_conflict")
             if not allowed():
-                raise ThemeError("instance_stopping")
+                raise SettingsError("instance_stopping")
             os.replace(temporary, self.path)
         finally:
             temporary.unlink(missing_ok=True)
