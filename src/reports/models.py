@@ -162,6 +162,15 @@ class ModelComparisonProjection:
 
 
 @dataclass(frozen=True, slots=True)
+class ModelCatalogProjection:
+    """One full pricing snapshot, with global selectable membership (not entitlement)."""
+    rows: tuple[ModelComparisonProjection, ...]
+    selectable: tuple[tuple[str, str], ...]
+    promotion_notes: tuple[str, ...] = ()
+    recent_notices: tuple[tuple[str, str], ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class ModelTokenMixProjection:
     model: str
     prompts: int
@@ -228,3 +237,4 @@ class ReportProjection:
     publisher_token_mix: tuple[PublisherTokenMixProjection, ...] = ()
     range_comparison: ComparisonCost | None = None
     active_hours: tuple[ActiveHour, ...] = ()
+    model_catalog: ModelCatalogProjection | None = None

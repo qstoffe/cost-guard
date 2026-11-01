@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.118 — 2026-11-01
+
+- Unified Web Models: page scrolling, catalog/version filters, exact tier multi-sort, legacy bookmarks; Accounts/CLI/Watch unchanged.
+- Web launch activity lasts through host/browser handoff; host detached. Physical macOS handoff unverified.
+
 ## v80.117 — 2026-10-30
 
 - Windows OpenAI quota: verified ROOT trust; safe TLS failures and bounded refresh.
@@ -48,8 +53,8 @@
 
 ## v80.106 — 2026-10-28
 
-- Web Beta Normal/Overview no longer serializes unused month-wide causal request identities; full per-root revision evidence remains. This fixes real-installation reports exceeding the unchanged 8 MiB result limit without truncating model rows, account periods or totals.
-- Overview shows the complete CLI-ranked model table without hidden 50-row pages, with explicit filter/sort state and keyboard-scrollable columns. Token Mix includes CLI phase shares and phase costs; account cards retain native-money, relative-reset and availability details on Overview itself.
+- Web Normal omits unused month-wide causal identities, fixing the 8 MiB result overflow; per-root evidence, rows, periods and totals remain complete.
+- Overview removes hidden model paging; explicit filter/sort and keyboard scrolling remain. Token Mix adds CLI phase shares/costs; cards retain native amounts, resets and availability.
 
 ## v80.105 — 2026-10-28
 

@@ -27,7 +27,7 @@ def main():
     assets = ROOT / 'src/web/assets'
     resources = {'/' + name: (assets / name).read_bytes() for name in ('app.css', 'render.js', 'reports.js')}
     resources['/data.js'] = ('const INPUT = ' + json.dumps([
-        project(model_report(all_models=all_models, fallback=fallback)).to_json()
+        project(model_report(all_models=all_models, fallback=fallback, include_model_catalog=True)).to_json()
         for all_models in (False, True) for fallback in (False, True)]) + ';').encode()
     resources['/browser.js'] = Path(__file__).with_name('web_models_browser.js').read_bytes()
     resources['/case.html'] = b'''<!doctype html><html><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/app.css"><main><div id="scope-controls"></div><div id="result"></div></main><script src="/render.js"></script><script src="/reports.js"></script><script src="/data.js"></script><script src="/browser.js"></script></html>'''
@@ -54,7 +54,7 @@ def main():
     outcomes = []
     try:
         with tempfile.TemporaryDirectory(dir=args.output.parent, prefix='models-browser-') as tmp:
-            for theme, width in (('light', 1200), ('light', 360), ('dark', 1200), ('dark', 360)):
+            for theme, width in ((theme, width) for theme in ('light', 'dark') for width in (360, 1366, 1920)):
                 resources['/'] = (f'<!doctype html><html><iframe style="width:{width}px;height:1100px" src="/case.html"></iframe><pre id="probe">PENDING</pre></html>').encode()
                 command = [str(args.browser), '--headless=new', '--disable-gpu', '--no-first-run',
                     '--no-default-browser-check', '--disable-extensions', '--disable-background-networking',

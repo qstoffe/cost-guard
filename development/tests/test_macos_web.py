@@ -2,8 +2,12 @@
 import contextlib
 import ctypes as C
 import io
+import os
 from pathlib import Path
+import select
+import shutil
 import subprocess
+import tempfile
 from threading import Event, Thread
 import unittest
 from unittest.mock import Mock, patch
@@ -287,14 +291,60 @@ class MacWebTests(unittest.TestCase):
             self.assertEqual(macos_launch.launch_macos(ROOT), 1)
         store.assert_not_called()
 
+    @unittest.skipUnless(shutil.which('zsh') and hasattr(os, 'openpty'), 'zsh/PTY unavailable; native macOS CI owns shell execution')
+    def test_command_activity_and_exit_codes_without_native_or_browser_work(self):
+        # A fake interpreter tests shell lifetime only, not discovery correctness/AppKit.
+        with tempfile.TemporaryDirectory(prefix='web command space ') as directory:
+            root = Path(directory)
+            beta = root / 'macos/Beta'; beta.mkdir(parents=True)
+            command = beta / 'Cost-Guard-Web.command'
+            shutil.copyfile(ROOT / 'macos/Beta/Cost-Guard-Web.command', command)
+            binary = root / 'bin'; binary.mkdir()
+            python = binary / 'python3'
+            python.write_text('''#!/bin/sh
+if [ "$1" = "-c" ]; then exit 0; fi
+printf 'Cost Guard startup: Checking native support\\n'
+sleep 0.4
+exit "$CG_FAKE_EXIT"
+''', encoding='utf-8')
+            python.chmod(0o700)
+            for code in (0, 4):
+                with self.subTest(exit_code=code):
+                    master, slave = os.openpty()
+                    try:
+                        env = dict(os.environ, PATH=str(binary) + os.pathsep + os.environ['PATH'], CG_FAKE_EXIT=str(code))
+                        child = subprocess.run([shutil.which('zsh'), str(command)], cwd=root, env=env,
+                            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=slave, timeout=5)
+                        self.assertEqual(code, child.returncode)
+                        self.assertIn(b'Checking native support', child.stdout)
+                        # Darwin may discard queued PTY output on the last slave
+                        # close. Read while our slave remains open, with a deadline.
+                        readable, _, _ = select.select([master], [], [], 1)
+                        self.assertTrue(readable, 'TTY activity must be observable before closing the slave')
+                        activity = os.read(master, 8192).decode('utf-8')
+                        self.assertIn('Launching web', activity)
+                        self.assertIn('[|]', activity)
+                        self.assertIn('[/]', activity)
+                    finally:
+                        os.close(slave)
+                        os.close(master)
+
     def test_source_launcher_is_relative_and_does_not_control_terminal(self):
-        source = (ROOT / "macos/Beta/Cost-Guard-Web.command").read_text()
+        source = (ROOT / "macos/Beta/Cost-Guard-Web.command").read_text(encoding="utf-8")
         self.assertTrue(source.startswith("#!/bin/zsh\n"))
         self.assertIn('$(dirname "$0")/../..', source)
         self.assertIn("(3,11)", source)
         self.assertIn("--launch-macos", source)
         self.assertNotIn("osascript", source)
-        self.assertNotIn("kill", source)
+        self.assertEqual(source.count('kill '), 1)
+        self.assertIn('kill "$SPINNER"', source, 'Only the display-only child may be stopped')
+        self.assertIn('SPINNER=$!', source)
+        self.assertIn('trap stop_activity EXIT', source)
+        self.assertIn("trap 'exit 130' INT", source)
+        self.assertIn("trap 'exit 143' TERM", source)
+        self.assertIn('Launching web…', source)
+        self.assertIn('RESULT=$?', source)
+        self.assertIn('exit $RESULT', source)
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 'use strict';
 // Erase the one-use credential before any fetch, preserving ordinary deep links.
 let credential = new URLSearchParams(location.hash.slice(1)).get('bootstrap');
-if (credential !== null) history.replaceState(null, '', '/#/overview');
+if (credential !== null) history.replaceState(null, '', '/#/models');
 const statusLine = document.getElementById('status');
 const output = document.getElementById('result');
 const notice = document.getElementById('notice');
@@ -115,7 +115,7 @@ function show(state) {
   cancel.disabled = !hostState.writable || !state.active;
   output.setAttribute('aria-busy', state.loading ? 'true' : 'false');
   notice.textContent = hostState.writable ? state.message : 'Last known contents are retained, not updating. See connection notice above.';
-  if (state.section === 'overview' && !state.result) {
+  if (state.section === 'models' && !state.result) {
     if ((!hostState.writable && hostState.kind !== 'starting') || state.failed) {
       output.setAttribute('aria-busy', 'false');
       const error = ReportView.element('p', state.failed ? state.message : 'Report interrupted. Check the connection warning; reload to retry, or use a fresh OS launcher link.', 'error');
@@ -142,10 +142,10 @@ function show(state) {
       document.querySelector('.toolbar').append(unitChoice);
       document.getElementById('content').insertBefore(unitHelp, notice);
       ReportView.render(output, state.result, state);
-      if (state.section === 'overview') output.querySelector('.overview-explanations').append(unitChoice, unitHelp);
+      if (state.section === 'models') output.querySelector('.overview-explanations').append(unitChoice, unitHelp);
       snapshotRender = {state, result: state.result, search: state.search, first: output.firstChild};
     }
-    if (state.section === 'overview' && unitChoice.parentNode !== output.querySelector('.overview-explanations')) output.querySelector('.overview-explanations').append(unitChoice, unitHelp);
+    if (state.section === 'models' && unitChoice.parentNode !== output.querySelector('.overview-explanations')) output.querySelector('.overview-explanations').append(unitChoice, unitHelp);
   }
   else if (state.loading) {
     const activity = ReportView.element('progress');
@@ -181,7 +181,7 @@ async function acquire(state) {
         if (hostState.terminal) break;
         // Partial data is usable but never a successful 100% acquisition. Paint
         // completion only after the whole successful result has arrived.
-        if (state.section === 'overview' && job.result.source.status === 'acquired') {
+        if (state.section === 'models' && job.result.source.status === 'acquired') {
           state.percent = 100;
           if (state === current) {
             showOverviewProgress(state);
@@ -198,13 +198,13 @@ async function acquire(state) {
       // Do not redraw a retained report while polling: keep selection and scroll useful.
       if (state === current) {
         notice.textContent = state.message;
-        if (state.section === 'overview' && !state.result) show(state);
+        if (state.section === 'models' && !state.result) show(state);
       }
       await new Promise(resolve => setTimeout(resolve, 500));
     }
   } catch (error) {
     state.message = `${state.result ? 'STALE — last known snapshot retained. ' : ''}${failure(error.message)}`;
-    if (state.section === 'overview') {
+    if (state.section === 'models') {
       state.message = state.message.replaceAll('retry Refresh', 'reload to retry').replaceAll('Retry Refresh', 'Reload to retry');
       if (!/reload/i.test(state.message)) state.message += ' Reload to retry.';
     }
@@ -214,11 +214,15 @@ async function acquire(state) {
 function navigate() {
   // Replace, never push: legacy bookmarks keep their place in Back/Forward history.
   if (/^#\/live(?:\?|$)/.test(location.hash)) history.replaceState(null, '', '/#/watch' + location.hash.slice(6));
+  if (!location.hash || /^#\/(?:overview|models\/all)(?:\?|$)/.test(location.hash)) {
+    const query = location.hash.includes('?') ? location.hash.slice(location.hash.indexOf('?')) : '';
+    history.replaceState(null, '', '/#/models' + query);
+  }
   const route = ReportRoutes.resolve(location.hash), match = route.session;
   document.body.dataset.section = route.section;
   document.querySelector('.toolbar').append(unitChoice);
   document.getElementById('content').insertBefore(unitHelp, notice);
-  const key = match ? 'session/' + match[1] : location.hash || '#/overview';
+  const key = match ? 'session/' + match[1] : location.hash || '#/models';
   heading.textContent = route.title;
   ReportRoutes.controls(document.getElementById('scope-controls'), route, event => {
     event.preventDefault();
@@ -242,7 +246,7 @@ function navigate() {
       if (victim) views.delete(victim[0]);
     }
     const request = route.request;
-    // Overview, selectable Models and Accounts are projections of one finite normal report.
+    // Models and Accounts are projections of one finite normal report.
     // Reuse its timestamp, never silently reacquire accounts just to change presentation.
     const cached = request && [...views.values()].find(value => value.result && JSON.stringify(value.request) === JSON.stringify(request));
     views.set(key, {request, live: route.live, section: route.section, result: cached?.result || null,
@@ -278,7 +282,7 @@ async function connect() {
         for (const job of progress?.jobs || []) {
            if (current?.active === job.id) {
              notice.textContent = `${job.status}: ${job.progress?.phase || job.status} · ${job.progress?.completed ?? 0}${job.progress?.total == null ? '' : '/' + job.progress.total}`;
-             if (current.section === 'overview' && !current.result && ['queued', 'running'].includes(job.status)) {
+              if (current.section === 'models' && !current.result && ['queued', 'running'].includes(job.status)) {
                overviewProgress(current, job.progress || {}); show(current);
              }
            }
@@ -309,7 +313,10 @@ cancel.addEventListener('click', async () => {
     catch (_) { if (state === current) notice.textContent = 'Cancellation unavailable.'; }
   }
 });
-window.addEventListener('hashchange', navigate);
+window.addEventListener('hashchange', () => {
+  navigate();
+  if (current?.section === 'models') document.getElementById('content').focus();
+});
 window.addEventListener('pageshow', () => liveConnection?.resync());
 window.addEventListener('offline', () => connectionStatus('OFFLINE — last observation retained, not live. Check the connection and reload to retry.', {kind: 'offline', writable: false}));
 window.addEventListener('online', () => liveConnection?.resync());

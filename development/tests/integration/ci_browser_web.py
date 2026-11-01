@@ -66,7 +66,14 @@ def main():
                 assert streams, "authenticated real SSE connection was not established"
                 expect(page.locator("#host-state")).to_contain_text("source observation pending")
                 evidence["checks"].append("one-use bootstrap, HttpOnly auth cookie, actual report table, real SSE connection")
-                page.get_by_role("link", name="Models", exact=True).click()
+                assert page.url.endswith('/#/models')
+                assert page.get_by_role("link", name="Models", exact=True).count() == 1
+                for legacy in ('overview', 'models/all'):
+                    page.goto(origin + '/#/' + legacy)
+                    expect(page.locator("#heading")).to_have_text("Models")
+                    expect(page).to_have_url(re.compile(r'/#/models$'))
+                    expect(page.locator('#content')).to_be_focused()
+                    expect(page.get_by_role("link", name="Models", exact=True)).to_have_attribute('aria-current', 'page')
                 expect(page.locator("#heading")).to_contain_text("Models")
                 page.get_by_role("link", name="Accounts", exact=True).click()
                 expect(page.locator("#heading")).to_contain_text("Accounts")

@@ -39,7 +39,8 @@ class ModelComparisonRow:
 
 
 
-def model_comparison_rows(records: Iterable[PromptRecord | PricedUsage], catalog: PricingCatalog) -> tuple[ModelComparisonRow, ...]:
+def model_comparison_rows(records: Iterable[PromptRecord | PricedUsage], catalog: PricingCatalog, *,
+                          include_uncomparable: bool = False) -> tuple[ModelComparisonRow, ...]:
     """Every comparable model/tier under one pooled global workload mix.
 
     Reports pass each sampled prompt's priceable usage; the caller owns sample
@@ -56,7 +57,7 @@ def model_comparison_rows(records: Iterable[PromptRecord | PricedUsage], catalog
         tiers = ordered_tiers(model)
         units = tuple(token_mix_tier_price(sorting_mix, tier) for tier in tiers) or (None,)
         unit = units[0]
-        if sampled and unit is None:
+        if sampled and unit is None and not include_uncomparable:
             continue  # Preserve the observed-mix comparable-model selection.
         # Normalize the shared observed mix to one million tokens.  The absolute
         # number is diagnostic only; relative ordering is the important contract.

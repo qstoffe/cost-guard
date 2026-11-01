@@ -93,7 +93,7 @@ class ReportApplication:
                                         error=ReportError("invalid_request"))
                 scope = ObjectValue(scope.fields + (("start_ms", period.start_ms), ("end_ms", period.end_ms)))
             report = (service.build_token_mix_history(lambda label, _percent: observe(label))
-                      if request.kind is ReportKind.TOKEN_MIX else service.build(request))
+                      if request.kind is ReportKind.TOKEN_MIX else service.build(request, include_model_catalog=True))
             revisions = tuple(record(session_id=root, revision=identity(revision))
                               for root, revision in service.report_source_revisions())
             source = record(

@@ -1,4 +1,5 @@
 """Canonical Models fixtures shared by DOM regression and explicit browser probes."""
+from dataclasses import replace
 from decimal import Decimal as D
 from types import SimpleNamespace
 
@@ -7,11 +8,11 @@ from src.analysis.comparisons import model_comparison_rows
 from src.analysis.token_mix import TokenMix
 from src.domain import ModelPricing, ModelRef, PricingTier
 from src.pricing.catalog import PricingCatalog
-from src.reports.model_comparison import price_summary, selectable_catalog
+from src.reports.model_comparison import price_summary, selectable_catalog, web_model_catalog
 from src.reports.models import ModelComparisonProjection, ReportKind, ReportProjection
 
 
-def model_report(*, all_models=False, fallback=False, availability="verified"):
+def model_report(*, all_models=False, fallback=False, availability="verified", include_model_catalog=False):
     def tier(price, minimum=None, operator=None):
         return PricingTier(min_input_tokens=minimum, input_threshold_operator=operator,
             per_million_input=D(price), per_million_cache_read=D(price),
@@ -27,6 +28,7 @@ def model_report(*, all_models=False, fallback=False, availability="verified"):
             ("Unknown", (PricingTier(per_million_input=D("5")),)),
             ("Unselectable", (tier("100"),))))
     catalog = PricingCatalog(models)
+    full_catalog = catalog
     warnings = ()
     if not all_models:
         ids = tuple(m.model.model for m in models[:-1])
@@ -39,7 +41,15 @@ def model_report(*, all_models=False, fallback=False, availability="verified"):
         price_summary(catalog, row.model_name), row.release_date,
         promotional=row.model_name == "GPT-5.1", promotion_marker=1 if row.model_name == "GPT-5.1" else None,
         recent=row.model_name == "Z", relative_levels=row.relative_levels) for row in rows)
+    web_catalog = None
+    if include_model_catalog:
+        web_catalog = web_model_catalog(sample, full_catalog, catalog, now_ms=1793491200000, cache_repository=None)
+        web_catalog = replace(web_catalog, rows=tuple(replace(row,
+            promotional=row.model == "GPT-5.1", promotion_marker=1 if row.model == "GPT-5.1" else None,
+            recent=row.model == "Z") for row in web_catalog.rows),
+            promotion_notes=("*1 Fixture promotional terms",), recent_notices=(("Z", "✦ New Models: Z (fixture)"),))
     return ReportProjection(ReportKind.ALL_MODELS if all_models else ReportKind.NORMAL,
         "Models", "V2 fixture", model_comparison=items, model_comparison_sample_size=0 if fallback else 1,
+        model_catalog=web_catalog,
         token_mix=TokenMix(), source_warnings=warnings,
         model_comparison_promotion_notes=("*1 Fixture promotional terms",), recent_model_notice="Recent models: Z")

@@ -2,7 +2,7 @@
 
 **Monitor AI model usage, cost and quotas in OpenCode.**
 
-Cost Guard analyzes [OpenCode](https://opencode.ai/) prompts/sessions, relative model costs and account quotas locally, with real-time Watch.
+Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs and quotas locally, with real-time Watch.
 
 [Synthetic CLI text](development/tests/fixtures/token-categories/120.txt): Watch, Normal, history and detail—not Web screenshots.
 
@@ -18,9 +18,9 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) prompts/sessions, relative 
 
 ## Quick start
 
-Cost Guard changes rapidly. Use **current `main`**: the latest supported Cost Guard code.
+Use **current `main`**, the latest supported Cost Guard code.
 
-Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Extract with the folder structure intact; download again to update.
+Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
 With Git:
 
@@ -48,11 +48,11 @@ Update old shortcuts/bookmarks to the hyphenated names; no aliases ship.
 | `Cost-Guard.cmd` | Normal model comparison/account quota report. |
 | `Cost-Guard-Watch.cmd` | Live/global Watch; Ctrl+C stops Watch only. |
 
-Report, Watch and Diagnostics open a **separate, persistent console** with PowerShell 7/5.1. Completion, errors and Ctrl+C leave a usable child prompt with Python's `$LASTEXITCODE` (9009 for missing Python 3.11+). The caller returns launch status only; for synchronous use run `py -3 cost-guard.py` (optionally `--watch`). See [download trust](#open-source-license-and-windows-download-trust).
+Report, Watch and Diagnostics use a **separate, persistent PowerShell 7/5.1 console**. Completion, errors and Ctrl+C retain a child prompt with Python's `$LASTEXITCODE` (9009 for missing Python 3.11+). The caller returns launch status only; synchronous: `py -3 cost-guard.py` (optionally `--watch`). See [download trust](#open-source-license-and-windows-download-trust).
 
 ### macOS
 
-Equivalent launchers are under `macos/`:
+Launchers under `macos/`:
 
 | Launcher | Mode |
 | --- | --- |
@@ -67,7 +67,7 @@ chmod +x macos/*.command macos/Beta/*.command development/user-tools/diagnostics
 
 Use Finder's **Open** for quarantine prompts.
 
-Terminal examples: `windows\Cost-Guard.cmd`, `./macos/Cost-Guard.command`. Quote parent paths containing spaces, not these basenames.
+Terminal: `windows\Cost-Guard.cmd`, `./macos/Cost-Guard.command`. Quote parent paths containing spaces.
 
 See [CLI usage](#setup-and-usage); use `python3` on macOS or `py -3` on Windows if needed.
 
@@ -360,7 +360,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.117 (2026-10-30):** Windows OpenAI quota uses verified root-store trust instead of cached intermediates. TLS failures stay distinct; credentials and sign-in are unchanged.
+**v80.118 (2026-11-01):** Web Beta unifies Models with page scrolling, selectable/latest filters and exact multi-column sorting. Web launch consoles retain status until the browser-open request; native macOS handoff remains unverified. CLI/Watch and account acquisition are unchanged. See [Web Beta](docs/web-beta.md).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

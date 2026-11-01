@@ -156,16 +156,17 @@ class WindowsWebTests(unittest.TestCase):
         self.assertNotIn("Set-Location", script)
         self.assertIn("(3,11)", script)
         self.assertIn("--launch-windows", script)
-        self.assertIn('start "" /min', command)
-        self.assertIn('-WindowStyle Hidden', command)
-        self.assertIn('-Detached <nul >nul 2>nul', command)
-        self.assertNotIn('/wait', '\n'.join(line for line in command.splitlines() if not line.startswith('rem ')))
+        self.assertNotIn('start ""', command)
+        self.assertNotIn('-WindowStyle Hidden', command)
+        self.assertNotIn('-Detached', command)
+        self.assertIn('Launching web...', command)
+        self.assertIn('ReadLineAsync', script)
+        self.assertIn('Write-LaunchActivity', script)
         self.assertIn('if (-not $Detached -and', script)
 
-    @unittest.skipUnless(os.name == 'nt', 'Native Windows asynchronous handoff')
-    def test_batch_exits_before_slow_delegate_and_delegate_has_no_visible_console(self):
-        # Exercise the unchanged batch in a source-shaped Unicode/space fixture.
-        # The delegate is deliberately blocked; no Web host, icon or browser starts.
+    @unittest.skipUnless(os.name == 'nt', 'Windows batch status lifetime')
+    def test_batch_waits_for_status_process_then_exits_with_its_result(self):
+        # Non-UI source-shaped Unicode/space fixture. Native visibility is separate.
         with tempfile.TemporaryDirectory(prefix='web handoff å ') as directory:
             root = Path(directory)
             beta = root / 'windows/Beta'
@@ -174,48 +175,29 @@ class WindowsWebTests(unittest.TestCase):
             web.mkdir(parents=True)
             batch = beta / 'Cost-Guard-Web.cmd'
             shutil.copyfile(ROOT / 'windows/Beta/Cost-Guard-Web.cmd', batch)
-            (web / 'visibility.py').write_text('''import ctypes as c
-from pathlib import Path
-k = c.WinDLL('kernel32'); u = c.WinDLL('user32')
-k.GetConsoleWindow.restype = c.c_void_p
-u.IsWindowVisible.argtypes = [c.c_void_p]
-Path(__file__).with_name('visible').write_text(str(bool(u.IsWindowVisible(k.GetConsoleWindow()))))
-''', encoding='utf-8')
-            python = sys.executable.replace("'", "''")
             (web / 'windows_launch.ps1').write_text('''param([switch]$Detached)
 $ErrorActionPreference = 'Stop'
-if (-not $Detached) { throw 'Missing detached mode' }
+if ($Detached) { throw 'Unexpected hidden mode' }
 [IO.File]::WriteAllText((Join-Path $PSScriptRoot 'entered'), 'entered')
-& 'PYTHON' (Join-Path $PSScriptRoot 'visibility.py')
-if ($LASTEXITCODE -ne 0) { [IO.File]::WriteAllText((Join-Path $PSScriptRoot 'failed'), 'visibility_python_failed') }
 $deadline = [DateTime]::UtcNow.AddSeconds(10)
 while (-not (Test-Path (Join-Path $PSScriptRoot 'release')) -and [DateTime]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 20 }
 [IO.File]::WriteAllText((Join-Path $PSScriptRoot 'done'), 'done')
-'''.replace('PYTHON', python), encoding='utf-8-sig')
+exit 7
+''', encoding='utf-8-sig')
             child = subprocess.Popen(['cmd.exe', '/d', '/c', str(batch)], cwd=root,
                                      stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                                      stderr=subprocess.PIPE, creationflags=subprocess.CREATE_NO_WINDOW)
             try:
-                self.assertEqual(child.wait(timeout=5), 0)
-                # A loaded hosted runner can take longer to start PowerShell/Python
-                # than the product's immediate batch handoff. Do not conflate them.
-                deadline = time.monotonic() + 15
-                while not (web / 'visible').exists() and not (web / 'failed').exists() and time.monotonic() < deadline:
+                deadline = time.monotonic() + 5
+                while not (web / 'entered').exists() and time.monotonic() < deadline:
                     time.sleep(0.02)
-                self.assertFalse((web / 'failed').exists(), 'Delegate visibility interpreter failed')
-                self.assertTrue((web / 'visible').exists(),
-                                'Delegate visibility stage not reached; entered=' + str((web / 'entered').exists()))
-                self.assertEqual((web / 'visible').read_text(), 'False')
-                self.assertFalse((web / 'done').exists(), 'Batch waited for blocked delegate')
+                self.assertTrue((web / 'entered').exists())
+                self.assertIsNone(child.poll(), 'Batch must keep status alive until handoff')
+                self.assertFalse((web / 'done').exists())
             finally:
                 (web / 'release').touch()
-                if child.poll() is None:
-                    child.kill()
-                child.wait(timeout=5)
-                deadline = time.monotonic() + 12
-                while not (web / 'done').exists() and time.monotonic() < deadline:
-                    time.sleep(0.02)
-                self.assertTrue((web / 'done').exists(), 'Delegate did not finish its bounded probe')
+                self.assertEqual(child.wait(timeout=5), 7)
+                self.assertTrue((web / 'done').exists())
                 child.communicate(timeout=3)
 
     @unittest.skipUnless(os.name == "nt", "Windows PowerShell discovery contract")

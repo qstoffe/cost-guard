@@ -19,6 +19,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--detail", action="store_true", help="Also probe complete session capture/pages/freeze.")
     parser.add_argument("--reports", action="store_true", help="Also capture finite reports beside Live and cancel deep history.")
+    parser.add_argument("--models", action="store_true", help="Capture only task-focused Normal/full Models snapshots beside Live.")
     args = parser.parse_args()
     owners = []
     csrf = None
@@ -117,7 +118,7 @@ def main():
             print(json.dumps(dict(detail='ok', available_rows=page['total'],
                 page_rows=len(page['result']['view']['prompt_blocks'][0]['rows']),
                 first_latest_access=True, frozen_consistent=True, account_owners=len(owners))))
-        if args.reports:
+        if args.reports or args.models:
             # Do not emit session IDs, account details, report content or bootstrap values.
             def submit(value):
                 return get('/api/reports', value=value, cookie=cookie)[0]['id']
@@ -125,9 +126,11 @@ def main():
             def job(key):
                 return get('/api/jobs/' + key, cookie=cookie)[0]
 
-            for request in ({'kind': 'normal'}, {'kind': 'all-models'},
+            requests = ({'kind': 'normal'}, {'kind': 'all-models'}) if args.models else (
+                            {'kind': 'normal'}, {'kind': 'all-models'},
                             {'kind': 'sessions', 'session_limit': 1},
-                            {'kind': 'date', 'date_text': '2026-10-25'}):
+                            {'kind': 'date', 'date_text': '2026-10-25'})
+            for request in requests:
                 report_started = time.monotonic()
                 key = submit(request)
                 deadline = time.monotonic() + 125
@@ -144,22 +147,32 @@ def main():
                 if len(owners) != 1 or current['values']['live']['view']['started_at_ms'] != start:
                     raise RuntimeError('probe_report_changed_live_owner')
                 print(json.dumps(dict(report=request['kind'], status='complete', live_owner_preserved=True,
-                                      seconds=round(time.monotonic() - report_started, 3))))
-            key = submit({'kind': 'token-mix'})
-            deadline = time.monotonic() + 10
-            while time.monotonic() < deadline:
+                                       seconds=round(time.monotonic() - report_started, 3))))
+                if args.models:
+                    report_view = value['result']['view']
+                    rows = report_view['model_catalog']['rows']
+                    assert all('selectable' in row and 'superseded_selectable' in row for row in rows)
+                    assert report_view['model_comparison_sample_size'] <= 100
+                    print(json.dumps(dict(catalog_rows=len(rows), selectable_rows=sum(row['selectable'] for row in rows),
+                        selectable_latest_rows=sum(row['selectable'] and not row['superseded_selectable'] for row in rows),
+                        availability_unverified=report_view['model_availability_unverified'],
+                        accounts_present=report_view['accounts_quotas'] is not None)))
+            if not args.models:
+                key = submit({'kind': 'token-mix'})
+                deadline = time.monotonic() + 10
+                while time.monotonic() < deadline:
+                    value = job(key)
+                    if value['status'] not in {'queued', 'running'} or value['progress']['phase'] == 'history':
+                        break
+                    time.sleep(.05)
+                get('/api/jobs/' + key + '/cancel', value={}, cookie=cookie)
                 value = job(key)
-                if value['status'] not in {'queued', 'running'} or value['progress']['phase'] == 'history':
-                    break
-                time.sleep(.05)
-            get('/api/jobs/' + key + '/cancel', value={}, cookie=cookie)
-            value = job(key)
-            if value['status'] not in {'cancelled', 'complete'}:
-                raise RuntimeError('probe_history_cancellation_failed')
-            latest, _ = get('/api/live', cookie=cookie)
-            if len(owners) != 1 or latest['values']['live']['view']['started_at_ms'] != start:
-                raise RuntimeError('probe_cancel_changed_live_owner')
-            print(json.dumps(dict(history=value['status'], live_owner_preserved=True)))
+                if value['status'] not in {'cancelled', 'complete'}:
+                    raise RuntimeError('probe_history_cancellation_failed')
+                latest, _ = get('/api/live', cookie=cookie)
+                if len(owners) != 1 or latest['values']['live']['view']['started_at_ms'] != start:
+                    raise RuntimeError('probe_cancel_changed_live_owner')
+                print(json.dumps(dict(history=value['status'], live_owner_preserved=True)))
     finally:
         host.stop('menu')
         for connection, response in streams:

@@ -3,7 +3,12 @@ from __future__ import annotations
 
 import threading
 
+from src.analysis.comparisons import model_comparison_rows
+from .models import ModelCatalogProjection, ModelComparisonProjection
+from .semantics import active_promotion_notes, model_is_recent, recent_model_notice_details
+
 from src.pricing.catalog import PricingCatalog
+from src.pricing.publishers import model_publisher
 from src.numbers import reference_rate
 from src.sources.model_availability import ModelAvailabilitySource
 from src.sources.errors import SourceError
@@ -72,6 +77,23 @@ def selectable_catalog(
         source_revision=catalog.source_revision,
         refresh_not_after_ms=catalog.refresh_not_after_ms,
     ), warnings
+
+
+def web_model_catalog(usage, catalog, selected, *, now_ms, cache_repository):
+    """Freeze both scopes using one sample and full-catalog denominator; no new I/O."""
+    markers, notes = active_promotion_notes(catalog, now_ms)
+    rows = tuple(ModelComparisonProjection(
+        row.publisher, row.model_name, row.relative_to_lowest, price_summary(catalog, row.model_name),
+        row.release_date, row.model_name in markers, model_is_recent(row.release_date, now_ms=now_ms),
+        markers.get(row.model_name), row.relative_levels, row.evidence,
+    ) for row in model_comparison_rows(usage, catalog, include_uncomparable=True))
+    selected_names = {(model_publisher(model) or 'Unknown / unverified',
+                       model.model.display_name or model.model.model) for model in selected.models}
+    notices = tuple((row.model, recent_model_notice_details(
+        PricingCatalog((catalog.resolve_reference(row.model),)), now_ms=now_ms,
+        cache_repository=cache_repository)[0]) for row in rows if row.recent)
+    return ModelCatalogProjection(rows, tuple((row.publisher, row.model) for row in rows
+        if (row.publisher, row.model) in selected_names), notes, notices)
 
 
 def price_summary(catalog: PricingCatalog, model_name: str) -> str:
