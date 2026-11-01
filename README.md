@@ -361,7 +361,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.119 (2026-11-01):** Web Settings saves Classic/Web themes without reload; CLI palettes and report/Watch acquisition stay unchanged. See [Web Beta](docs/web-beta.md).
+**v80.120 (2026-11-02):** Web settings saves independent Theme and CCost preferences; legacy themes and CLI values survive. [Web Beta](docs/web-beta.md).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 
