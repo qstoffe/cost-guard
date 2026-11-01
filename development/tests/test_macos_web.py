@@ -4,6 +4,7 @@ import ctypes as C
 import io
 import os
 from pathlib import Path
+import select
 import shutil
 import subprocess
 import tempfile
@@ -316,11 +317,16 @@ exit "$CG_FAKE_EXIT"
                             stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=slave, timeout=5)
                         self.assertEqual(code, child.returncode)
                         self.assertIn(b'Checking native support', child.stdout)
+                        # Darwin may discard queued PTY output on the last slave
+                        # close. Read while our slave remains open, with a deadline.
+                        readable, _, _ = select.select([master], [], [], 1)
+                        self.assertTrue(readable, 'TTY activity must be observable before closing the slave')
+                        activity = os.read(master, 8192).decode('utf-8')
+                        self.assertIn('Launching web', activity)
+                        self.assertIn('[|]', activity)
+                        self.assertIn('[/]', activity)
                     finally:
                         os.close(slave)
-                    try:
-                        self.assertIn('Launching web', os.read(master, 8192).decode('utf-8'))
-                    finally:
                         os.close(master)
 
     def test_source_launcher_is_relative_and_does_not_control_terminal(self):

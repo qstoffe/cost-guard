@@ -22,6 +22,8 @@ Product: v80.118, 2026-11-01. The original FR is preserved unchanged. Implementa
 
 ## Authorized exception and residual uncertainty
 
+Initial PR CI [run 41351289503](https://github.com/qstoffe/cost-guard/actions/runs/41351289503): Windows regression/native/browser PASS; both macOS native and browser phases PASS, but regression FAIL in the new shell test because activity was read only after closing the PTY slave. Exit 0/4 and stage output assertions passed. The reader now waits boundedly and reads before the last slave close, and additionally requires two distinct spinner frames. This failure is not waived; a fresh three-platform run must pass.
+
 **Decision Delegate** explicitly approved delivery without unavailable physical Windows Explorer and macOS Terminal/Finder cold/warm/restart demonstrations, conditional on the actual Windows console verification, final Full/validator and all three normal platform CI checks passing. The new macOS zsh/PTY test must actually execute successfully on macOS, not skip. No failing gate or confirmed regression is waived.
 
 Local Windows has no macOS host/zsh; its zsh/PTY test skip is not a macOS PASS. Hosted native/API execution and fake-interpreter shell tests are not consumer desktop/Gatekeeper/default-browser acceptance. Physical input, accessibility, native macOS visual handoff and browser paint remain unverified. The OS launch-request boundary is intentional, not first-paint synchronization.

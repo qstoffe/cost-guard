@@ -38,6 +38,12 @@ FR 000522: `development/architecture/governance/verification/windows-console-own
 
 ## Next investigations
 
+FR 000537's first PR matrix passed Windows and both macOS native/browser phases,
+but the new macOS shell regression read no PTY text after closing its slave. The
+test now reads with a bounded readiness check while the slave is still open and
+requires two different spinner frames; stage/exit assertions remain. Fresh macOS
+CI must verify the correction; native-phase success alone did not waive this FAIL.
+
 The colleague's exact decorated prompt remains unverified. Physical Explorer double-click/flash duration, consumer tray appearance/accessibility and native macOS Finder/Gatekeeper remain unverified. Distinguish visible launcher lifetime from source/report readiness. Do not delete instance state or user caches to diagnose startup. If a residual flash proves unacceptable, compare a truly GUI entrypoint before adding a compiler/cache.
 
 ## Rejected hypotheses
