@@ -121,26 +121,33 @@ def main():
                 expect(theme).to_be_enabled()
                 expect(theme).to_have_value("classic")
                 theme.select_option("web")
-                expect(page.locator("#theme-feedback")).to_have_text("Theme saved.")
+                expect(page.locator("#settings-feedback")).to_have_text("Theme saved.")
                 expect(page.locator("html")).to_have_attribute("data-theme", "web")
-                assert json.loads(user_config.read_text()) == {"webTheme": "web"}
+                assert json.loads(user_config.read_text()) == {"webSettings": {"theme": "web"}}
+                ccost = page.get_by_role("combobox", name="CCost display", exact=True)
+                expect(ccost).to_have_value("credits")
+                ccost.select_option("usd")
+                expect(page.locator("#settings-feedback")).to_have_text("CCost display saved.")
+                assert json.loads(user_config.read_text()) == {"webSettings": {"theme": "web", "ccostDisplayUnit": "usd"}}
                 assert page.locator("html").evaluate("el => getComputedStyle(el).getPropertyValue('--bg').trim()") == "#eef2f8"
                 page.emulate_media(color_scheme="dark")
                 assert page.locator("html").evaluate("el => getComputedStyle(el).getPropertyValue('--bg').trim()") == "#0c1422"
                 page.reload()
                 expect(page.get_by_role("combobox", name="Theme", exact=True)).to_have_value("web")
+                expect(page.get_by_role("combobox", name="CCost display", exact=True)).to_have_value("usd")
                 expect(page.locator("html")).to_have_attribute("data-theme", "web")
                 fresh = context.new_page()
                 try:
                     fresh.goto(origin + '/#/settings')
                     expect(fresh.get_by_role("combobox", name="Theme", exact=True)).to_have_value("web")
+                    expect(fresh.get_by_role("combobox", name="CCost display", exact=True)).to_have_value("usd")
                     expect(fresh.locator("html")).to_have_attribute("data-theme", "web")
                 finally:
                     fresh.close()
                 page.get_by_role("combobox", name="Theme", exact=True).select_option("classic")
-                expect(page.locator("#theme-feedback")).to_have_text("Theme saved.")
+                expect(page.locator("#settings-feedback")).to_have_text("Theme saved.")
                 expect(page.locator("html")).to_have_attribute("data-theme", "classic")
-                assert json.loads(user_config.read_text()) == {"webTheme": "classic"}
+                assert json.loads(user_config.read_text()) == {"webSettings": {"theme": "classic", "ccostDisplayUnit": "usd"}}
                 assert not report_requests, "Settings must not acquire reports"
                 page.go_back()
                 expect(page.locator("#result")).to_contain_text("<script>PRIVATE_TEXT</script>")

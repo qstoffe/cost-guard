@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`**, the latest supported Cost Guard code.
+Use **current `main`** (v80.120, 2026-11-02), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -31,7 +31,7 @@ cd cost-guard
 git pull --ff-only
 ```
 
-Install **Python 3.11+**; standard supported OpenCode installations need no configuration.
+Install **Python 3.11+**; standard OpenCode installations need no configuration.
 
 ### Optional Web Beta
 
@@ -310,7 +310,7 @@ Quota credentials stay memory-only: V2 precedes legacy, explicit `authJsonPath` 
 
 Useful settings include:
 
-- `ccostDisplayUnit`: `credits` (default) or `usd`; CLI override: `--ccost-unit usd`. Web's CCost selector is page-memory only; reload restores configuration. 100 credits = $1.00 reference USD, not billing; small positive amounts may show $0.00. Quotas/Billed/rates are unchanged.
+- `ccostDisplayUnit`: CLI `credits` (default) / `usd`; override: `--ccost-unit usd`. Web uses independent `webSettings.ccostDisplayUnit` (Credits default), saved in Settings. 100 credits = $1.00 reference USD, not billing. Quotas/Billed/rates stay unchanged.
 - `runningPromptWarningCCost`: 1800 credits by default (0 disables), independent of display units.
 
 - `openCode.source`: `auto`, `v1` or `v2`.
@@ -324,7 +324,7 @@ Useful settings include:
 - `pricingMaxAgeHours`: pricing/model metadata cache age.
 - `thresholds`: running-cost, context, percentile and quota warning thresholds.
 - `colorScheme`, `colorSchemes`, `colors`: terminal palette selection and per-role overrides.
-- `webTheme`: `classic` (dark default) or `web` (OS light/dark); Web Settings saves it immediately, independently of terminal colors.
+- `webSettings`: saved Web-only `theme` (`classic` default / `web`) and `ccostDisplayUnit` (`credits` default / `usd`). Legacy `webTheme` is fallback; other keys stay shared.
 
 `modelComparisonNew` colors new names/dates; `modelComparisonPromotion` colors active rates/Relative CCost. Superseded colors fade; plain output is unchanged.
 
@@ -361,7 +361,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.119 (2026-11-01):** Web Settings saves Classic/Web themes without reload; CLI palettes and report/Watch acquisition stay unchanged. See [Web Beta](docs/web-beta.md).
+**v80.120 (2026-11-02):** Web settings saves independent Theme and CCost preferences; legacy themes and CLI values survive. [Web Beta](docs/web-beta.md).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

@@ -5,13 +5,17 @@
   // IANA timezone used for timestamps, "today", and workday calculations.
   "timezone": "Europe/Stockholm",
 
-  // CCost display only: credits (default) or usd (100 credits = $1 reference USD).
+  // CLI CCost display only: credits (default) or usd (100 credits = $1 reference USD).
   // Never converts native quota credits, billed money, price catalogs or ratios.
   "ccostDisplayUnit": "credits",
 
-  // Web-only appearance. Classic is dark; Web follows the OS light/dark preference.
-  // Independent of the terminal colorScheme and its custom palettes.
-  "webTheme": "classic",
+  // Only preferences promoted to editable Web controls get independent values here.
+  // Other configuration stays shared until separately promoted. No CLI changes.
+  "webSettings": {
+    // Classic is dark; Web follows the OS light/dark preference.
+    "theme": "classic",
+    "ccostDisplayUnit": "credits"
+  },
 
   // OpenCode history source. "auto" selects the highest supported healthy
   // generation (V2 first, otherwise V1). Set "v1" or "v2" only to force

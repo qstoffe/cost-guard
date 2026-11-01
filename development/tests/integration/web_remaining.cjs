@@ -65,12 +65,15 @@ for (const [kind, result] of Object.entries(input)) {
 }
 console.log('PASS date scope, configured prompt clocks/context, bounded rows/full totals, CLI historical mix columns');
 
-// Independent page contexts start from configuration, not another tab's choice.
+// A CLI/report USD default never leaks into the independent Web default.
 const freshOutput = new Node('main');
 const fresh = vm.createContext({document: {createElement: tag => new Node(tag)}, output: freshOutput,
   result: {...input.date, view: {...input.date.view, ccost_display_unit: 'usd'}}, Date});
 vm.runInContext(fs.readFileSync('src/web/assets/render.js', 'utf8'), fresh);
 vm.runInContext('ReportView.render(output, result, {pages: {}, section: "reports"})', fresh);
+assert.equal(all(freshOutput, 'tfoot')[0].children[0].children[1].textContent,
+  input.date.view.prompt_blocks[0].display.total_ccost);
+vm.runInContext('ReportView.setUnit("usd", output)', fresh);
 assert.equal(all(freshOutput, 'tfoot')[0].children[0].children[1].textContent,
   input.date.view.prompt_blocks[0].display_units.usd.total_ccost);
 

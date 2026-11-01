@@ -200,6 +200,10 @@ def _assert_color_style(value: Any, path: str, source: str, allow_null: bool = T
 
 def normalize_legacy_settings(overrides: dict[str, Any]) -> dict[str, Any]:
     result = copy.deepcopy(overrides)
+    # Promote the legacy user theme before merging shipped nested defaults.
+    web = result.get("webSettings", {})
+    if isinstance(web, dict) and "theme" not in web and "webTheme" in result:
+        result["webSettings"] = dict(web, theme=result["webTheme"])
     # A new optional Watch color must not invalidate complete pre-feature custom palettes.
     schemes = result.get("colorSchemes")
     if isinstance(schemes, dict):
@@ -222,13 +226,21 @@ def normalize_legacy_settings(overrides: dict[str, Any]) -> dict[str, Any]:
 
 
 def validate_configuration(config: dict[str, Any], defaults: dict[str, Any], overrides: dict[str, Any]) -> None:
-    root_keys = set(defaults)
+    root_keys = set(defaults) | {"webTheme"}  # Accepted legacy user fallback only.
     _assert_object(overrides, "", root_keys, "config/user-config.jsonc")
     _assert_object(config, "", root_keys, "config/default-config.jsonc")
 
     theme = config.get("webTheme", "classic")
     if not isinstance(theme, str) or theme not in {"classic", "web"}:
         raise _invalid(_setting_source("webTheme", overrides), "webTheme", theme, "classic or web")
+
+    web = config.get("webSettings", {"theme": "classic", "ccostDisplayUnit": "credits"})
+    _assert_object(web, "webSettings", {"theme", "ccostDisplayUnit"}, _setting_source("webSettings", overrides))
+    for name, allowed in (("theme", {"classic", "web"}), ("ccostDisplayUnit", {"credits", "usd"})):
+        value = web.get(name)
+        path = "webSettings." + name
+        if not isinstance(value, str) or value not in allowed:
+            raise _invalid(_setting_source(path, overrides), path, value, " or ".join(sorted(allowed)))
 
     unit = config.get("ccostDisplayUnit", "credits")
     if not isinstance(unit, str) or unit not in {"credits", "usd"}:

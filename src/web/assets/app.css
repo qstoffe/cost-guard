@@ -31,10 +31,9 @@
 :root[data-theme="classic"] .running, :root[data-theme="classic"] .new:not(tr) { color: var(--success); }
 .success { color: var(--success); }
 .settings-link { margin-inline-start: auto; }
-.theme-settings { max-width: 42rem; }
-.theme-settings select { min-width: 10rem; }
+.web-settings { max-width: 42rem; }
+.web-settings select { min-width: 10rem; max-width: 100%; }
 [data-section="settings"] #refresh, [data-section="settings"] #cancel,
-[data-section="settings"] #unit-choice, [data-section="settings"] #ccost-help,
 [data-section="settings"] .report-search, [data-section="settings"] #notice { display: none; }
 @media (max-width: 40rem) { .settings-link { margin-inline-start: 0; } }
 * { box-sizing: border-box; }
@@ -194,10 +193,9 @@ footer { border-top: 1px solid var(--line); color: var(--muted); font-size: .8re
    vertically; narrow screens may pan the full table horizontally. */
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 [data-section="models"] main { padding-top: .65rem; }
-[data-section="models"] .toolbar, [data-section="models"] #ccost-help,
+[data-section="models"] .toolbar,
 [data-section="models"] #notice, [data-section="models"] #scope-controls,
 [data-section="models"] .report-search { display: none; }
-[data-section="models"] .overview-explanations #ccost-help { display: block; }
 .overview-loading { display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 45vh; text-align: center; }
 .overview-loading progress { width: min(26rem, 90%); height: 1.1rem; }
 .overview-loading p { font-size: .9rem; margin-top: .5rem; }

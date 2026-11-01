@@ -23,6 +23,7 @@ from src.config import load_configuration
 from src.reports import ReportKind, ReportRequest, ReportService
 from src.sources.selection import SourceSelection
 from src.web.http import LoopbackServer
+from src.web.settings import WebSettings
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -153,7 +154,10 @@ class WebViewTests(unittest.TestCase):
                     return self.results.get(key)
 
             jobs = Jobs()
-            server = LoopbackServer(jobs)
+            settings_root = Path(tmp).resolve() / "settings"
+            (settings_root / "config").mkdir(parents=True)
+            shutil.copyfile(ROOT / "config/default-config.jsonc", settings_root / "config/default-config.jsonc")
+            server = LoopbackServer(jobs, settings=WebSettings(settings_root))
             stopped = Event()
 
             def serve():

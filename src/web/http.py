@@ -12,7 +12,7 @@ from threading import BoundedSemaphore, Timer
 from .jobs import parse_report
 from .security import BrowserSession
 from .instance_state import checkout_identity
-from .theme import ThemeError, ThemeSettings
+from .settings import SettingsError, WebSettings
 
 ASSETS = {"/": ("index.html", "text/html; charset=utf-8"),
            "/app.js": ("app.js", "text/javascript; charset=utf-8"),
@@ -72,7 +72,7 @@ class LoopbackServer(HTTPServer):
     def __init__(self, jobs, lifecycle=None, *, settings=None):
         self.jobs = jobs
         self.lifecycle = lifecycle
-        self.settings = settings or ThemeSettings(lifecycle.root if lifecycle else Path(__file__).resolve().parents[2])
+        self.settings = settings or WebSettings(lifecycle.root if lifecycle else Path(__file__).resolve().parents[2])
         self.session = BrowserSession(checkout_identity(lifecycle.root)[:32] if lifecycle else None)
         self.assets = {}
         root = Path(__file__).parent / "assets"
@@ -244,8 +244,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             data, content_type = self.server.assets[ASSETS[self.path][0]]
             if self.path == "/":
                 try:
-                    theme = self.server.settings.read()
-                except ThemeError:
+                    theme = self.server.settings.read()["theme"]
+                except SettingsError:
                     theme = "classic"  # Authenticated read will explain the safe config error.
                 data = data.replace(b'data-theme="classic"', f'data-theme="{theme}"'.encode(), 1)
             self.reply(200, data, content_type=content_type)
@@ -298,8 +298,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                     return
                 self.reply(202, {"id": key})
                 return
-            if self.path == "/api/settings/theme":
-                self.theme_settings(value)
+            if self.path in {"/api/settings/theme", "/api/settings/ccost"}:
+                self.web_settings(value)
                 return
             if self.path == "/api/detail" and self.server.lifecycle and self.server.lifecycle.live:
                 self.session_detail(value)
@@ -310,8 +310,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                 self.reply(200 if found else 404, {"status": "cancel_requested" if found else "not_found"})
                 return
         else:
-            if self.path == "/api/settings/theme":
-                self.theme_settings()
+            if self.path == "/api/settings":
+                self.web_settings()
                 return
             if self.path == "/api/live" and self.server.lifecycle:
                 self.reply(200, self.server.lifecycle.events.snapshot())
@@ -336,20 +336,21 @@ class RequestHandler(BaseHTTPRequestHandler):
                 return
         self.reply(404, {"error": "not_found"})
 
-    def theme_settings(self, value=None):
+    def web_settings(self, value=None):
         try:
             if value is None:
-                theme = self.server.settings.read()
+                settings = self.server.settings.read()
             else:
-                if set(value) != {"webTheme"}:
-                    raise ThemeError("invalid_request")
+                field = "theme" if self.path == "/api/settings/theme" else "ccostDisplayUnit"
+                if set(value) != {field}:
+                    raise SettingsError("invalid_request")
                 def allowed():
                     owner = self.server.lifecycle
                     return (not owner or not owner.stopping.is_set()) and self.server.session.authenticated(
                         self.headers.get("Cookie"))
-                theme = self.server.settings.write(value["webTheme"], allowed=allowed)
-            self.reply(200, {"webTheme": theme})
-        except ThemeError as error:
+                settings = self.server.settings.write(field, value[field], allowed=allowed)
+            self.reply(200, {"webSettings": settings})
+        except SettingsError as error:
             code = str(error)
             status = 400 if code == "invalid_request" else 409 if code == "settings_conflict" else 503
             self.reply(status, {"error": code})

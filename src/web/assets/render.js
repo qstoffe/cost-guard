@@ -39,11 +39,11 @@ const ReportView = (() => {
     unit = value;
     if (root) syncUnits(root);
   }
-  function defaultUnit(view) {
+  function defaultUnit() {
     if (unit !== null) return;
-    setUnit(view.ccost_display_unit || 'credits');
-    const control = document.getElementById?.('ccost-unit');
-    if (control) { control.value = unit; control.disabled = false; }
+    // The CLI/report default must never override an independent Web preference.
+    // Startup reads file-backed Settings before connecting to report publications.
+    setUnit('credits');
   }
   const ccost = (row, key = 'ccost') => display(row, key) +
     (row?.cost_estimated && key === 'ccost' ? ' (estimated)' : '');
