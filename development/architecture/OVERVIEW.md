@@ -9,7 +9,7 @@ Status: current
 
 Development contains product tests/fixtures, architecture/navigation, diagnostic tooling, engineering knowledge and backlog specifications; it defines no local process authority or verification gate. The actively loaded compatible OpenCode Toolkit shared repository skills govern layout, FR authoring, backlog work and maintenance. Historical files/FRs are evidence, not competing instructions. This overview replaces the legacy development-root README/router; the installed manifest reserves that root for adapter and applied-revision facts.
 
-Repository facts (`../repository.json`) retain opaque compatibility data; Cost Guard alone owns product versions and release checks. Applied-contract.json (`../applied-contract.json`) records revision, never proof without actual topology. Pending (`../backlog/todo/`), completed (`../backlog/complete/`), reserved human-review suggestions (`../backlog/suggestions/`) and rejected suggestions (`../backlog/rejected-suggestions/`) retain one backlog. Journal INDEX routes retained knowledge.
+Repository facts (`../repository.json`) retain opaque compatibility data; Cost Guard alone owns product versions and release checks. Applied-contract.json (`../applied-contract.json`) records the installed development contract; migration verification also checks actual topology. Ready (`../backlog/ready-to-develop/`), On Hold (`../backlog/on-hold/`), completed (`../backlog/complete/`), reserved human-review suggestions (`../backlog/suggestions/`) and rejected suggestions (`../backlog/rejected-suggestions/`) retain one backlog. Journal INDEX routes retained knowledge.
 
 Repository-relative owners: deterministic `development/tests/`, synthetic `development/tests/fixtures/`, reserved `development/tests/integration/live/`, scripts `development/tools/`, and human `development/user-tools/diagnostics/windows/` / `macos/` launchers. Development-only work has no local package gate, regression-suite mandate, structure/file budget or product version bump. Shipped product changes retain relevant tests, runtime/package/security safeguards and release facts; source changes must never be misclassified as development-only.
 
@@ -117,13 +117,13 @@ The product validator resolves absolute/relative/nested layer imports, rejects r
 
 ## Validation, review and delivery flow
 
-Observed 2026-10-28: this is a descriptive route, not a new gate or local scheduling policy. Installed Toolkit owns selection/transactions and remote lifecycle; repository scripts own product checks. No repository live-model runner or automatic PR self-review is introduced.
+Procedure checked against installed contract r5 on 2026-11-01; runtime assessment above remains dated 2026-10-28. This is a descriptive route, not a new gate or local scheduling policy. Installed Toolkit owns first-Ready selection and remote lifecycle; repository scripts own product checks. No ownership registry, automatic maintenance, repository live-model runner or automatic PR self-review is introduced. Contract Sync is a separate development-only PR before fresh FR selection.
 
 ```mermaid
 flowchart TD
     request["Authorized request"] --> author{"FR-only authoring?"}
     author -->|yes| publish["Guarded FR-only main publication; no product checks"]
-    author -->|no| select["Native backlog: fresh default, immutable selection / state"]
+    author -->|no| select["Backlog: fetched default, fixed selected FR-ID"]
     select --> scope{"Only development changes?"}
     scope -->|yes| skip["Skip product tests, validator, version / release work"]
     scope -->|no| product["Repository product verification and release facts"]
@@ -134,26 +134,26 @@ flowchart TD
     bounded --> outcome
     outcome -->|no| repair["Repair cause; retain selected work"]
     repair --> product
-    outcome -->|yes| safe["Native ownership, privacy, retention and Git verification"]
+    outcome -->|yes| safe["Permissions, privacy and ordinary Git verification"]
     skip --> safe
     safe --> pr["PR against actual default; inspect checks / blockers"]
     pr --> truth{"Confirmed merge and default read-back?"}
     truth -->|no or uncertain| preserve["Preserve pending work; reconcile actual Git truth"]
     preserve --> pr
-    truth -->|yes| delivery["Native delivery receipt then owned cleanup"]
-    delivery --> finish["Native finish / coordinator disposition; no local next-task bootstrap"]
+    truth -->|yes| delivery["Report actual delivery; optional own-scratch housekeeping"]
+    delivery --> finish["Native finish; after-response fresh worker"]
 ```
 
 ### What runs and why
 
 | Stage | Scope / activation | Disposition | Exact source owner | Failure handling |
 | --- | --- | --- | --- | --- |
-| FR publication | Approved FR-only authoring | Required safety; product checks skipped | Installed `shared-repo/references/fr-authoring.md` | Preserve pinned/foreign work; reconcile fresh default |
-| Selection / nextState | Backlog and scheduled maintenance | Required native safety | Installed `/repo-backlog`, `development/backlog/maintenance-state.json`, `identity-state.json` | Selection immutable; no invented counters |
+| FR publication | Approved FR-only authoring | Required safety; product checks skipped | Installed `shared-repo/references/fr-authoring.md` | Preserve unrelated work; reconcile fresh default |
+| Contract Sync / selection | Fresh Backlog invocation | Required installed identity check; sync-only when older, otherwise first Ready | Installed `/repo-backlog`, `shared-repo/references/contract-sync.md`, `development/applied-contract.json` | No downgrade; empty Ready ends without maintenance; keep selected permanent ID |
 | Development-only | All changed paths under development | Product checks/version disabled | Installed `shared-repo/references/contract.md`; this tree's `development/README.md` | Do not activate product gates for documentation/state |
 | Product verification | Shipped-source changes | Repository-owned applicable tests/security checks | `development/tools/run_tests.py`, `development/tools/validate_package.py`, `src/version.py`, `VERSION_HISTORY.md`, `README.md` | Investigate/repair required failures; never weaken assertions |
 | Real installation / live tests | Relevant product proof; model inference separately authorized | Read-only probes conditional; live-model default-denied | `development/tools/collect_diagnostics.py`; `development/tests/integration/live/` is reserved, not an implemented runner | Do not stop shared OpenCode; disclose unavailable proof; no invented freeze/dispatch owner |
 | PR / merge | Authorized delivery | Required Git safety; self-review not a gate | Installed `/repo-backlog` and actual GitHub default/protection/check state | No force/protection bypass; uncertain merge requires read-back, not replay |
-| Delivery / cleanup | Confirmed merge on fresh default | Required native receipt/owned cleanup | Installed native `repo_backlog` operations | Preserve recovery evidence; cleanup failure permits finish with retained leftovers |
+| Delivery / handoff | Confirmed merge and default read-back | Truthful finish required; housekeeping optional; no delivery receipt | Installed native `repo_backlog` finish | Preserve recovery evidence; no second task here; fresh worker starts after response |
 
 Milestone-40 source assessment: `development/journal/architecture.md` (runtime no-change; sampling/display owners and unmeasured risks). Native desktop proof remains separate.
