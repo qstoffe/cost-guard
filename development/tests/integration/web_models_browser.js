@@ -14,6 +14,7 @@
       const inputs = output.querySelectorAll('input[type="checkbox"]');
       const toggle = (index, value) => { inputs[index].checked = value; inputs[index].dispatchEvent(new Event('change')); };
       const header = index => table.tHead.rows[0].cells[index].querySelector('button');
+      check(inputs.length === 2 && output.querySelector('.model-filters').querySelectorAll('button').length === 0 && !('additive' in state.models), 'two filters without additive-mode control or state');
       check(table.tHead.rows[0].cells.length === 4 && controls.children.length === 0, 'one four-column view without catalog links');
       check(!inputs[0].checked && inputs[1].checked && header(2).textContent === 'Relative CCost ↓', 'fresh filter and descending sort defaults');
       check(!names().includes('GPT-5.1') && names().includes('Unknown'), 'latest-only retains unknown prices');
@@ -46,6 +47,8 @@
       header(3).dispatchEvent(new KeyboardEvent('keydown', {key: ' ', shiftKey: true, cancelable: true}));
       check(header(0).textContent === 'Publisher ↑ 2' && header(3).textContent === 'Release date ↑ 3', 'Shift mouse and keyboard additive keys');
       check(table.tHead.rows[0].cells[1].getAttribute('aria-sort') === 'ascending' && table.tHead.rows[0].cells[0].getAttribute('aria-sort') === 'none', 'primary-only aria-sort');
+      header(3).dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', shiftKey: true, cancelable: true}));
+      check(header(3).textContent === 'Release date ↓ 3', 'Shift Enter toggles tertiary direction');
       toggle(1, true);
       check(!names().includes('GPT-5.1') && header(1).textContent === 'Model ↑ 1', 'filter preserves custom sort');
     }

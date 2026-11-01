@@ -71,8 +71,8 @@ unknown and visible, not zero. Toggling never reprices or reacquires history/acc
 CLI candidate selection, ranking, denominators and Watch valuation are unchanged.
 
 Default sorting is **Relative CCost ↓**. Every header toggles its single sort;
-Shift+click or Shift+Enter/Space adds/toggles keys in priority order. **Add sort keys**
-provides the same additive mode for touch/no-Shift users. Arrows and priority numbers
+Shift+click or Shift+Enter/Space adds/toggles keys in priority order. Ordinary touch
+sorts one column; there is no separate sort-mode control. Arrows and priority numbers
 show active keys; only the primary header has ascending/descending `aria-sort`.
 Relative CCost compares unrounded decimal base, then each later ratio, **before** a
 secondary column; boundaries/operators/markers never rank prices. Dates compare
@@ -261,7 +261,7 @@ Stream writes retain a two-second timeout and ten-second heartbeats, without a f
 
 ## Windows detached launcher and tray
 
-Double-click `windows/Beta/Cost-Guard-Web.cmd`, or invoke it from an existing console. The short-lived console stays visible with **Launching web…**, indeterminate activity and sanitized startup stages while PowerShell locates Python 3.11+, checks configuration/native support, waits for validated host readiness and requests the registered default browser. Source ZIPs retain relative-path support, including spaces/Unicode. No packages, compiler, download, administrator access or global execution-policy change is needed; the override applies only to that PowerShell process.
+Double-click `windows/Beta/Cost-Guard-Web.cmd`, or invoke it from an existing console. The short-lived console shows one **Starting CostGuard web...** label and updates only its spinner cell while PowerShell locates Python 3.11+, checks configuration/native support, waits for validated host readiness and requests the registered default browser. No PowerShell progress panel or successful stage transcript is drawn. Redirected/noninteractive output is one plain startup line; failure feedback remains actionable after animation stops. Source ZIPs retain relative-path support, including spaces/Unicode. No packages, compiler, download, administrator access or global execution-policy change is needed; the override applies only to that PowerShell process.
 
 The console exits naturally after **validated host readiness and a successful OS browser-open request**, not browser paint or report completion. An existing terminal regains control at that point. The managed host remains detached from console, standard handles and launcher lifetime. Later deliberate launch restarts only this checkout's verified instance; overlapping clicks reuse a ready winner. Preflight failure preserves the existing instance. Failures after it stopped cannot restore the old code and never claim success.
 

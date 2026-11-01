@@ -220,7 +220,7 @@ const ReportView = (() => {
   function overviewModels(parent, view, state) {
     const catalog = view.model_catalog;
     const models = catalog?.rows || view.model_comparison;
-    state.models ||= {all: false, latest: true, additive: false, sorts: [{index: 2, direction: -1}]};
+    state.models ||= {all: false, latest: true, sorts: [{index: 2, direction: -1}]};
     const choice = state.models;
     const tools = element('div', undefined, 'model-tools'), notices = element('div', undefined, 'model-notices');
     const filters = element('div', undefined, 'model-filters');
@@ -232,11 +232,7 @@ const ReportView = (() => {
     }
     checkbox('Show all Copilot-priced models', 'all', 'Off: global OpenCode selectable list, not separately verified subscription entitlement. Unverified availability fails open with a warning.');
     checkbox('Latest versions only', 'latest', 'Hide only recognized older stable versions within the selected candidate set.');
-    const add = element('button', 'Add sort keys');
-    add.title = 'Toggle to add or toggle secondary keys by tapping headers. Shift+click or Shift+Enter/Space also works. Priorities appear beside arrows.';
-    add.setAttribute('aria-pressed', String(choice.additive));
-    add.addEventListener('click', () => { choice.additive = !choice.additive; add.setAttribute('aria-pressed', String(choice.additive)); });
-    filters.append(add); tools.append(notices, filters); parent.append(tools);
+    tools.append(notices, filters); parent.append(tools);
     const scroll = element('div', undefined, 'overview-models');
     scroll.tabIndex = 0;
     scroll.setAttribute('role', 'region');
@@ -260,7 +256,7 @@ const ReportView = (() => {
       function activate(event) {
         const existing = choice.sorts.find(sort => sort.index === index);
         const sort = {index, direction: existing ? -existing.direction : index === 2 ? -1 : 1};
-        if (event.shiftKey || choice.additive) {
+        if (event.shiftKey) {
           if (existing) choice.sorts[choice.sorts.indexOf(existing)] = sort;
           else choice.sorts.push(sort);
         } else choice.sorts = [sort];
@@ -301,7 +297,7 @@ const ReportView = (() => {
         cell.setAttribute('aria-sort', priority === 0 ? sort.direction === 1 ? 'ascending' : 'descending' : 'none');
         text(button, names[index] + (sort ? (sort.direction === 1 ? ' ↑' : ' ↓') + (choice.sorts.length > 1 ? ' ' + (priority + 1) : '') : ' ↕'));
         button.setAttribute('aria-label', names[index] + (sort ? `, ${sort.direction === 1 ? 'ascending' : 'descending'}, priority ${priority + 1}` : ', not sorted') + '. Activate to sort; Shift adds a key.');
-        button.title = 'Click to sort/toggle. Shift or Add sort keys keeps earlier keys. Missing values always last.';
+        button.title = 'Click to sort/toggle. Shift+click or Shift+Enter/Space keeps earlier keys. Missing values always last.';
       });
       body.replaceChildren();
       for (const model of shown) {

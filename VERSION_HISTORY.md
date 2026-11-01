@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.121 — 2026-11-02
+
+- Models: two filters, ordinary single-column sorting and Shift multi-sort, without a separate mode button.
+- Windows Beta Web: one fixed startup label and single-cell spinner; no PowerShell progress panel or successful stage transcript. Redirected output and actionable failures remain plain; host/browser handoff is unchanged.
+
 ## v80.120 — 2026-11-02
 
 - Web settings: independent `webSettings` Theme and persistent CCost Credits/USD. Legacy theme and CLI values survive. Confirmed saves update retained Python tokens without reload/acquisition; preserving JSONC/security guards remain.
@@ -187,11 +192,11 @@
 
 ## v80.81 — 2026-10-26
 
-- Added optional foreground Web Beta (`python cost-guard-web.py`) with fixed local assets and authenticated, read-only finite report APIs. Exact-host/origin checks, one-use short-lived bootstrap, HttpOnly SameSite sessions, CSRF, restrictive CSP, request/concurrency/result bounds and cancellable isolated report processes protect the loopback surface. No dependencies, browser auto-launch, native icons or background instance lifecycle; CLI and Diagnostics stay independent.
+- Added foreground Web Beta with fixed assets, authenticated read-only finite APIs, exact Host/Origin, one-use bootstrap, HttpOnly SameSite sessions, CSRF/CSP, bounded requests/results and cancellable isolated jobs. No dependencies, auto-browser, native icons or managed lifecycle; CLI/Diagnostics independent.
 
 ## v80.80 — 2026-10-26
 
-- Added an optional transport-neutral application facade over existing report modes, including all-history Token Mix. Immutable JSON-ready results preserve exact decimal strings, unknown values, report duration/context/valuation semantics and stable detail identities. Isolated serialized one-shot jobs close their account work without sharing a live scheduler. Per-root revision evidence and independent account observations do not claim cross-provider atomicity; raw source/provider diagnostics and private account locators are excluded. No HTTP server, UI, dependencies or CLI/launcher changes.
+- Added a transport-neutral report facade, including all-history Token Mix. Immutable DTOs preserve exact decimals, unknowns, duration/context/valuation and detail identities. Isolated serialized jobs close owned account work; per-root revisions/independent observations are not cross-provider atomicity. Raw diagnostics/private account locators are excluded. No HTTP/UI/dependencies or CLI/launcher changes.
 
 ## v80.79 — 2026-10-26
 

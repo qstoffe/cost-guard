@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v80.120, 2026-11-02), the supported distribution.
+Use **current `main`** (v80.121, 2026-11-02), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -361,7 +361,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.120 (2026-11-02):** Web settings saves independent Theme and CCost preferences; legacy themes and CLI values survive. [Web Beta](docs/web-beta.md).
+**v80.121 (2026-11-02):** Models keeps Shift multi-sort without an extra mode button; Windows Web startup uses one quiet spinner line. [Web Beta](docs/web-beta.md).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

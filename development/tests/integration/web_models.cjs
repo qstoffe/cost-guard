@@ -28,6 +28,9 @@ const check = (index, value) => { const input = all(output, 'input')[index]; inp
 draw();
 assert.equal(all(output, 'th').length, 4);
 assert.equal(all(output, 'input').length, 2);
+assert.equal(all(output, 'button').length, 4);
+assert.ok(!Object.hasOwn(state.models, 'additive'));
+assert.ok(!output.textContent.includes('Add sort keys'));
 assert.equal(all(output, 'input')[0].checked, false);
 assert.equal(all(output, 'input')[1].checked, true);
 assert.equal(button('Relative CCost').textContent, 'Relative CCost ↓');
@@ -76,11 +79,17 @@ click('Relative CCost', {shiftKey: true});
 assert.deepEqual(names(), ['Z lower tier', 'A higher tier', 'No tier', 'Higher base', 'Unknown']);
 check(0, true); assert.equal(button('Relative CCost').textContent, 'Relative CCost ↑ 1');
 click('Model'); assert.equal(button('Relative CCost').textContent, 'Relative CCost ↕');
-click('Add sort keys'); click('Publisher');
+click('Publisher', {shiftKey: true});
 assert.equal(button('Publisher').textContent, 'Publisher ↑ 2');
 let prevented = false;
 button('Release date').events.keydown({key: 'Enter', shiftKey: true, preventDefault() { prevented = true; }});
 assert.ok(prevented); assert.equal(button('Release date').textContent, 'Release date ↑ 3');
+button('Release date').events.keydown({key: ' ', shiftKey: true, preventDefault() {}});
+assert.equal(button('Release date').textContent, 'Release date ↓ 3');
+click('Publisher');
+assert.equal(button('Publisher').textContent, 'Publisher ↓');
+assert.equal(button('Model').textContent, 'Model ↕');
+assert.equal(all(output, 'th')[0].attrs['aria-sort'], 'descending');
 
 // Valid dates are chronological, invalid rollover and missing stay last both ways.
 view.model_catalog.rows = [row('Old', true, false, false, ['1'], '2025-12-31'),

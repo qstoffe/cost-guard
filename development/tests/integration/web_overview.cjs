@@ -33,7 +33,7 @@ assert.equal(output.children[2].children[0].textContent, 'More information');
 assert.ok(!output.children[2].open, 'explanations start collapsed');
 for (const text of ['Pricing/cache metadata', 'Snapshot:', 'Shared global comparison sample', 'full-report rows']) assert.ok(!output.textContent.includes(text));
 assert.equal(all(output, 'input').length, 2);
-assert.equal(all(output, 'button').length, 5);
+assert.equal(all(output, 'button').length, 4);
 for (const [first, second] of [['Release date', 'More information'], ['More information', 'Promotion terms'],
   ['Promotion terms', 'Final note']]) {
   assert.ok(output.textContent.indexOf(first) < output.textContent.indexOf(second));
