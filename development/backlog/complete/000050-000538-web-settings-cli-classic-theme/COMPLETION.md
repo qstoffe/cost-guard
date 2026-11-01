@@ -45,7 +45,11 @@ macOS theme tests failed and all rendered smoke tests retained an obsolete Web
 default assumption. Test-only corrections canonicalize trusted disposable roots
 (macOS `/var` alias), retain production link/reparse rejection, and exercise actual
 Settings saves/persistence plus both theme/preference contracts in hosted Chromium.
-The macOS cause remains a hypothesis until fresh hosted results confirm the repair.
+Fresh run 41357257423 passed Full/package on both macOS architectures (1,456 cases,
+seven platform skips), supporting the fixture repair. Its browser locator was then
+corrected to use Chromium's observed accessible combobox name rather than the
+wrapping label's option-inclusive raw text. Windows had one batch-status fixture
+failure in that intermediate run; that run is not PASS.
 Job-log retrieval returned HTTP 401; structured job/Checks annotations were read,
 not detailed original traces. The **Decision Delegate** authorized proceeding with
 that evidence and focused repairs, not an access bypass or CI waiver. Fresh local

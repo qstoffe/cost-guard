@@ -117,7 +117,7 @@ def main():
                 page.on("request", lambda request: report_requests.append(request.url) if request.url.endswith('/api/reports') else None)
                 page.get_by_role("link", name="Settings", exact=True).click()
                 expect(page.locator("#heading")).to_have_text("Settings")
-                theme = page.get_by_label("Theme", exact=True)
+                theme = page.get_by_role("combobox", name="Theme", exact=True)
                 expect(theme).to_be_enabled()
                 expect(theme).to_have_value("classic")
                 theme.select_option("web")
@@ -128,16 +128,16 @@ def main():
                 page.emulate_media(color_scheme="dark")
                 assert page.locator("html").evaluate("el => getComputedStyle(el).getPropertyValue('--bg').trim()") == "#0c1422"
                 page.reload()
-                expect(page.get_by_label("Theme", exact=True)).to_have_value("web")
+                expect(page.get_by_role("combobox", name="Theme", exact=True)).to_have_value("web")
                 expect(page.locator("html")).to_have_attribute("data-theme", "web")
                 fresh = context.new_page()
                 try:
                     fresh.goto(origin + '/#/settings')
-                    expect(fresh.get_by_label("Theme", exact=True)).to_have_value("web")
+                    expect(fresh.get_by_role("combobox", name="Theme", exact=True)).to_have_value("web")
                     expect(fresh.locator("html")).to_have_attribute("data-theme", "web")
                 finally:
                     fresh.close()
-                page.get_by_label("Theme", exact=True).select_option("classic")
+                page.get_by_role("combobox", name="Theme", exact=True).select_option("classic")
                 expect(page.locator("#theme-feedback")).to_have_text("Theme saved.")
                 expect(page.locator("html")).to_have_attribute("data-theme", "classic")
                 assert json.loads(user_config.read_text()) == {"webTheme": "classic"}

@@ -63,7 +63,13 @@ Settings report acquisition. It remains hosted-only, not workstation UI permissi
 
 GitHub Actions job-log retrieval returned HTTP 401; PR/jobs/Checks annotations were
 available. Detailed original macOS traces were not retrieved, so canonicalization
-is a hypothesis pending fresh hosted results, not an observed traceback diagnosis.
+was a hypothesis, not an observed traceback diagnosis. Fresh run 41357257423 then
+passed both macOS Full/package phases (1,456 passing cases, seven platform skips),
+supporting that fixture repair. Its browser test exposed a locator distinction:
+the wrapping label text includes option text, but Chromium's accessibility tree
+names the combobox exactly `Theme`; use the accessible role/name, not raw label text.
+The integrated browser confirmed this without external UI. Windows had one bounded
+batch-status fixture assertion failure in that run; it remains a failed run, not PASS.
 The **Decision Delegate** authorized this narrow repair/evidence path, with local
 Full/validator and all fresh required hosted checks still mandatory before merge.
 No alternate identity/access route or additional test waiver was authorized.
