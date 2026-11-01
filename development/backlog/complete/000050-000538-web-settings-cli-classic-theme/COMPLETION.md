@@ -56,6 +56,16 @@ that evidence and focused repairs, not an access bypass or CI waiver. Fresh loca
 Full/validator and required hosted checks remain merge gates.
 Post-repair local Full passed 120 files with zero failures (55.2s); package
 validation passed all 11 checks, retaining four existing design-budget warnings.
+After correcting the locator, local Full again passed (120 files, 51.2s), followed
+by successful hosted run
+[41358018350](https://github.com/qstoffe/cost-guard/actions/runs/41358018350): all
+three Windows/macOS ARM/macOS Intel jobs passed Full/package, isolated native and
+rendered Chromium checks, including real Settings writes/reload/new tab, adaptive
+Web and no Settings report acquisition. Windows passed 1,462 cases with one platform
+skip; macOS passed 1,456 with seven platform skips. The intermediate batch-fixture
+failure did not recur without changing its assertion/deadline or production code.
+Focused hosted smoke is not a fresh full AC6 visual matrix or physical desktop/AT
+acceptance; the exception below remains explicit.
 
 ### Existing visual exception
 

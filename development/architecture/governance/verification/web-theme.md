@@ -88,6 +88,28 @@ value versus external-browser disruption/owner interruption. Final post-change
 appearance has not been freshly visually inspected. Native OS/physical input,
 assistive-technology/screen-reader and real-source visual behavior were not proved.
 
+## Hosted CI follow-up
+
+After canonicalizing trusted disposable test roots and correcting obsolete
+default-theme/raw-label test expectations, hosted run
+[41358018350](https://github.com/qstoffe/cost-guard/actions/runs/41358018350) passed
+Windows 2025, macOS 15 ARM and macOS 15 Intel. Each job passed Full/package,
+isolated native and actual rendered Chromium phases. Browser checks now use actual
+Settings saves to disposable config, Classic in both preferences, adaptive Web,
+reload/new tab, no Settings report acquisition, network recovery and clean shutdown.
+Windows Full: 1,462 passing cases/one platform skip; macOS: 1,456/seven platform skips.
+Local Full also passed 120 files after these test-only repairs; validator passed
+11 checks with four unchanged design warnings. No production path guard changed.
+
+Original Actions job logs returned HTTP 401. Structured jobs/Checks annotations
+were retrieved; original detailed macOS traces were not. The Decision Delegate
+authorized this evidence path and narrow repairs, requiring fresh passing CI,
+not an access bypass or backend waiver. Initial run 41356409265 and intermediate
+41357257423 remain failed evidence, not PASS. A batch-status fixture failure in the
+intermediate Windows run did not recur; its assertions/deadlines were unchanged.
+Hosted headless smoke supplements, not replaces, the scoped visual exception and
+the physical-device/AT/real-source visual limits above.
+
 ## Separate read-only real-installation evidence
 
 `probe_web_live.py --models` used the installed V2 source: one acquisition owner,

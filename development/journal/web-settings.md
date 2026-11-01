@@ -75,6 +75,14 @@ Full/validator and all fresh required hosted checks still mandatory before merge
 No alternate identity/access route or additional test waiver was authorized.
 After these test-only repairs, local Full passed all 120 files (zero failures,
 55.2s); the validator passed all 11 checks with the same four design warnings.
+After the locator correction, local Full again passed (120 files, 51.2s), and
+run [41358018350](https://github.com/qstoffe/cost-guard/actions/runs/41358018350)
+passed all three platform jobs: Windows 2025, macOS 15 ARM and macOS 15 Intel.
+Full/package, isolated native and rendered Chromium phases passed, including actual
+Settings writes/reloads and no JavaScript errors. The intermediate Windows fixture
+failure did not recur; no launcher assertion, deadline or production code changed.
+This is focused hosted smoke coverage, not the waived complete visual matrix,
+physical/native-desktop, assistive-technology or real-source visual acceptance.
 
 If separately requested, inspect final appearance with Review visible and collect
 native/assistive-technology and cold first-paint evidence. No automatic external
