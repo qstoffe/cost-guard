@@ -124,15 +124,24 @@ def accounts(value):
     ))
 
 
-def project(report, timezone_id="UTC", ccost_display_unit="credits"):
+def model_rows(items, selectable=None):
     models = []
-    faded = superseded_rows([(item.publisher, item.model) for item in report.model_comparison])
-    for index, item in enumerate(report.model_comparison):
+    faded = superseded_rows([(item.publisher, item.model) for item in items])
+    selected = [item for item in items if selectable is not None and (item.publisher, item.model) in selectable]
+    selected_faded = {(selected[index].publisher, selected[index].model)
+                      for index in superseded_rows([(item.publisher, item.model) for item in selected])}
+    for index, item in enumerate(items):
         base = fields(item, "publisher model relative_cost price_summary release_date promotional recent promotion_marker")
         models.append(ObjectValue(base.fields + (("evidence", fields(item.evidence,
             "model_prompts publisher_prompts generic_prior_weight global_prompts history_exhausted observed_prompts")),
-            ("superseded", index in faded), ("relative_levels", tuple(
+            ("superseded", index in faded), ("selectable", selectable is None or (item.publisher, item.model) in selectable),
+            ("superseded_selectable", (item.publisher, item.model) in selected_faded), ("relative_levels", tuple(
             fields(level, "relative_cost threshold_tokens threshold_operator") for level in item.relative_levels)),)))
+    return tuple(models)
+
+
+def project(report, timezone_id="UTC", ccost_display_unit="credits"):
+    catalog = report.model_catalog
     return with_display(record(
         kind=report.kind, title=report.title, source_label=report.source_label,
         ccost_display_unit=ccost_display_unit,
@@ -145,7 +154,10 @@ def project(report, timezone_id="UTC", ccost_display_unit="credits"):
             "⚠ Could not verify currently selectable OpenCode models; showing all historically used models.",
             "ERROR: Model availability lookup failed internally; showing all historically used models.",
         } for warning in report.source_warnings),
-        model_comparison=tuple(models), model_comparison_sample_size=report.model_comparison_sample_size,
+        model_comparison=model_rows(report.model_comparison), model_comparison_sample_size=report.model_comparison_sample_size,
+        model_catalog=record(rows=model_rows(catalog.rows, set(catalog.selectable)),
+            promotion_notes=catalog.promotion_notes,
+            recent_notices=tuple(record(model=name, text=text) for name, text in catalog.recent_notices)) if catalog else None,
         pricing_retrieved_at_ms=report.pricing_retrieved_at_ms,
         model_comparison_promotion_notes=report.model_comparison_promotion_notes,
         session_usage=tuple(fields(item, "session_id title model multiple_models ccost prompt_count complete duration_ms archived running")

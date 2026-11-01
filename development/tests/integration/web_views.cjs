@@ -17,6 +17,7 @@ class Node {
   removeAttribute(key) { delete this.attrs[key]; }
   addEventListener(key, fn) { this.events[key] = fn; }
   click() { if (!this.disabled) return this.events.click?.(); }
+  focus() { this.focused = true; }
 }
 const all = (node, tag) => [...(!tag || node.tag === tag ? [node] : []), ...node.children.flatMap(child => all(child, tag))];
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -31,7 +32,7 @@ async function main() {
   const toolbar = new Node('div');
   toolbar.append(ids['unit-choice']); ids['unit-choice'].append(ids['ccost-unit']);
   ids['host-state'].append(ids['host-message'], ids['host-details']);
-  const nav = ['overview', 'sessions', 'watch', 'models', 'accounts', 'reports', 'token-mix'].map(key => {
+  const nav = ['models', 'sessions', 'watch', 'accounts', 'reports', 'token-mix'].map(key => {
     const node = new Node('a'); node.setAttribute('href', '#/' + key); return node;
   });
   const handlers = {};
@@ -67,14 +68,14 @@ async function main() {
     vm.runInContext(await response.text(), context);
   }
   assert.match(ids.result.textContent, /≈0%.*Authorizing browser session/, 'slow authorization has only approximate progress');
-  assert.equal(location.hash, '#/overview', 'credential erased before waiting');
+  assert.equal(location.hash, '#/models', 'credential erased before waiting');
   releaseBootstrap();
   await until(() => all(ids.result, 'progress').length === 1);
   assert.equal(all(ids.result, 'progress')[0].max, 100);
   assert.match(all(ids.result, 'progress')[0].getAttribute('aria-valuetext'), /Approximately/, 'never an invented exact global percentage');
   releaseReport();
   await until(() => ids.notice.textContent.includes('Snapshot captured'));
-  assert.equal(location.hash, '#/overview');
+  assert.equal(location.hash, '#/models');
   assert.match(ids.result.textContent, /Reference token valuation, not actual billing/);
   const creditsText = ids.result.textContent, beforeToggle = requests;
   const retainedChildren = [...ids.result.children];
@@ -100,7 +101,11 @@ async function main() {
   assert.ok(all(ids.result, 'tbody')[0].children.length, 'Overview ignores hidden legacy search state');
   ids.search.events.input({target: {value: ''}});
   assert.ok(all(ids.result, 'tbody')[0].children.length);
-  const navigate = key => { location.hash = '#/' + key; handlers.hashchange(); };
+  const navigate = key => {
+    ids.content.focused = false;
+    location.hash = '#/' + key; handlers.hashchange();
+    if (['models', 'overview', 'models/all'].includes(key)) assert.equal(ids.content.focused, true, 'Models route receives keyboard focus');
+  };
   const retainedHeartbeat = () => {
     const children = [...ids.result.children], before = requests;
     const scroll = all(ids.result, 'div').find(node => node.className === 'table-scroll');
@@ -181,15 +186,17 @@ async function main() {
   const beforePresentation = requests;
   navigate('models');
   retainedHeartbeat();
-  assert.match(ids.result.textContent, /Reference models/);
+  assert.equal(all(ids.result, 'table')[0].attrs['aria-label'], 'Reference models');
   assert.equal(vm.runInContext('current.result.observed_at_ms', context), overviewTime);
   navigate('accounts');
   retainedHeartbeat();
   assert.match(ids.result.textContent, /Accounts · independent/);
   assert.equal(requests, beforePresentation, 'normal subviews reuse one frozen acquisition');
   navigate('models/all');
-  await until(() => ids.notice.textContent.includes('Snapshot captured'));
-  assert.match(ids.result.textContent, /GitHub USD\/M I\/C\/W\/O/);
+  assert.equal(location.hash, '#/models');
+  assert.equal(requests, beforePresentation, 'legacy alias never reacquires a different catalog');
+  assert.equal(nav.find(node => node.getAttribute('href') === '#/models').attrs['aria-current'], 'page');
+  assert.doesNotMatch(ids.result.textContent, /GitHub USD\/M I\/C\/W\/O/);
   navigate('reports');
   const beforeDate = requests;
   assert.equal(all(ids['scope-controls'], 'form').length, 1);
@@ -253,6 +260,8 @@ async function main() {
   context.example = input.overview;
   vm.runInContext('ReportView.render(output, example, {pages: {}})', context);
   assert.match(ids.result.textContent, /Model availability unverified/);
+  assert.equal(all(ids.result, 'section').filter(node => node.className === 'account-card').length, 0);
+  vm.runInContext('ReportView.render(output, example, {pages: {}, section: "accounts"})', context);
   for (const account of input.overview.view.accounts_quotas.accounts) {
     assert.ok(ids.result.textContent.includes(account.observation.label));
     assert.ok(ids.result.textContent.includes(account.observation.availability));
@@ -263,9 +272,8 @@ async function main() {
   context.example = input.tier_report;
   vm.runInContext('ReportView.render(output, example, {pages: {}, section: "models"})', context);
   assert.match(ids.result.textContent, /100K/);
-  assert.match(ids.result.textContent, /GitHub USD\/M I\/C\/W\/O/);
+  assert.doesNotMatch(ids.result.textContent, /GitHub USD\/M I\/C\/W\/O/);
   for (const row of input.tier_report.view.model_comparison) {
-    assert.ok(ids.result.textContent.includes(row.display.price_summary));
     assert.ok(ids.result.textContent.includes(row.display.relative_cost));
     assert.match(row.display.relative_cost, /\d+\.\dx/);
   }

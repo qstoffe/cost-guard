@@ -19,24 +19,24 @@ const context = vm.createContext({document: {createElement: tag => new Node(tag)
 vm.runInContext(fs.readFileSync('src/web/assets/render.js', 'utf8'), context);
 vm.runInContext('ReportView.render(output, result, {pages: {}, section: "models"})', context);
 assert.ok(output.textContent.includes('I = Input; C = Cached input; W = Cache write; O = Output'));
-assert.ok(output.textContent.includes('Published prices do not imply observed tokens.'));
+assert.ok(output.textContent.includes('Reference token valuation, not actual billing.'));
 assert.ok(output.textContent.includes('0.1x'));
 assert.ok(!output.textContent.includes('0.123456789012345'));
-assert.ok(output.textContent.includes('0.000000123456789/0/0/2'), 'native rates stay exact');
+assert.ok(!output.textContent.includes('0.000000123456789/0/0/2'), 'retired native-rate column is absent');
 assert.ok(output.textContent.indexOf('Promo notice') > output.textContent.indexOf('Release date'));
-assert.ok(output.textContent.indexOf('New notice') > output.textContent.indexOf('Promo notice'));
-assert.ok(output.textContent.indexOf('Tail note') > output.textContent.indexOf('New notice'));
-assert.deepEqual(all(output, 'th').map(n => n.textContent), ['Publisher', 'Model', 'Relative CCost', 'GitHub USD/M I/C/W/O', 'Release date']);
+assert.ok(output.textContent.indexOf('New notice') < output.textContent.indexOf('Release date'));
+assert.ok(output.textContent.indexOf('Tail note') > output.textContent.indexOf('Promo notice'));
+assert.deepEqual(all(output, 'th').map(n => n.textContent), ['Publisher ↕', 'Model ↕', 'Relative CCost ↓', 'Release date ↕']);
 assert.ok(all(output, 'span').some(n => n.className?.split(' ').includes('promotion') && n.textContent.includes('0.1x')));
 assert.ok(all(output, 'span').some(n => n.className === 'new' && n.textContent.includes('M')));
 // Equal display strings cannot decide ordering; raw decimal strings still do.
 const first = view.model_comparison[0];
-view.model_comparison = [{...first, model: 'higher', relative_cost: '1.00000000000000000002'},
-  {...first, model: 'lower', relative_cost: '1.00000000000000000001'}];
+view.model_comparison = [{...first, model: 'higher', relative_cost: '1.00000000000000000002', relative_levels: []},
+  {...first, model: 'lower', relative_cost: '1.00000000000000000001', relative_levels: []}];
 vm.runInContext('ReportView.render(output, result, {pages: {}, section: "models"})', context);
-all(output, 'button').find(n => n.textContent === 'Relative CCost').events.click();
+all(output, 'button').find(n => n.textContent.startsWith('Relative CCost')).events.click({});
 assert.ok(all(output, 'tbody')[0].children[0].textContent.includes('lower'));
-all(output, 'button').find(n => n.textContent === 'Relative CCost').events.click();
+all(output, 'button').find(n => n.textContent.startsWith('Relative CCost')).events.click({});
 assert.ok(all(output, 'tbody')[0].children[0].textContent.includes('higher'));
 // Unversioned/missing display tokens fail closed, not as raw numeric cells.
 delete first.display;

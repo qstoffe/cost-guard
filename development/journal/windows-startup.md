@@ -7,7 +7,7 @@ Status: current
 
 ## Summary
 
-The Windows Web Beta batch must delegate before Python discovery and lifecycle arbitration. Batch exit acknowledges process creation, not host/tray readiness, supervisor exit or browser paint. Hidden PowerShell is a no-build route; no Windows executable cache exists. Direct PowerShell invocation retains synchronous troubleshooting status. Shared lifecycle ownership and paired pythonw report workers remain unchanged. Native probes must join their exact delegated launcher before stopping its host.
+FR 000537 deliberately supersedes the hidden-delegation policy: the Web Beta batch retains a synchronous launch-status console through Python discovery, native preflight, verified host ready and the OS browser-open result. Discovery and stage waits show indeterminate activity; the detached/tray-owned pythonw host survives status-process exit. There is no browser-first-paint guarantee, executable cache or new supervisor. Older asynchronous timings below are historical, not current launcher acceptance.
 
 CLI/Watch/Diagnostics must not asynchronously share an existing interactive console. The old START /B path returned a synthetic Git-aware parent prompt while Python was still writing in the same console. A separate persistent PowerShell console isolates readers/writers and avoids leaving a batch waiting for Ctrl+C. Feedback belongs inside the child. Batch launch status is not Python completion; the child prompt retains the native result.
 

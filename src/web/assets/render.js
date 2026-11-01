@@ -100,7 +100,6 @@ const ReportView = (() => {
   }
   function table(parent, title, columns, rows, cells, totals, state, key, values = cells) {
     const section = element('section');
-    const complete = key === 'models' && state.section === 'overview';
     const remote = key === 'sessions' ? state.result?.view?.session_page : null;
     state.filters ||= {}; state.sorts ||= {};
     const filterLabel = element('label', 'Filter ' + title + (remote ? ' (this page only) ' : ' ')), filter = element('input');
@@ -109,7 +108,7 @@ const ReportView = (() => {
     scroll.tabIndex = 0;
     scroll.setAttribute('role', 'region');
     scroll.setAttribute('aria-label', title);
-    const grid = element('table', undefined, key === 'models' ? 'models-table' : '');
+    const grid = element('table');
     grid.append(element('caption', title));
     const head = element('thead'), header = element('tr');
     const headers = [];
@@ -136,9 +135,9 @@ const ReportView = (() => {
     const label = element('span'); label.setAttribute('aria-live', 'polite');
     previous.setAttribute('aria-label', 'Previous page: ' + title);
     next.setAttribute('aria-label', 'Next page: ' + title);
-    if (!complete) pager.append(previous);
+    pager.append(previous);
     pager.append(label);
-    if (!complete) pager.append(next);
+    pager.append(next);
     section.append(pager);
     const size = 50;
     function draw() {
@@ -156,7 +155,7 @@ const ReportView = (() => {
       const page = Math.max(0, Math.min(state.pages[key] || 0, Math.ceil(shown.length / size) - 1));
       state.pages[key] = page;
       body.replaceChildren();
-      for (const item of complete ? shown : shown.slice(page * size, (page + 1) * size)) {
+      for (const item of shown.slice(page * size, (page + 1) * size)) {
         const row = element('tr');
         row.className = [...(item.display_roles || item.prompt?.display_roles || []),
           ...(item.is_compaction ? ['compaction'] : [])].join(' ');
@@ -168,7 +167,6 @@ const ReportView = (() => {
         body.append(row);
       }
       label.textContent = (shown.length ? `${page * size + 1}–${Math.min((page + 1) * size, shown.length)} of ${shown.length}` : 'No rows') + ` · ${rows.length} full-report rows; filters/pages do not change totals`;
-      if (complete) label.textContent = `${shown.length} shown · ${rows.length} full-report rows · ${queries.length ? 'FILTER ACTIVE' : 'No filters'} · ${sort ? 'CUSTOM SORT' : 'CLI default order'}`;
       previous.disabled = page === 0;
       next.disabled = (page + 1) * size >= shown.length;
       if (remote) {
@@ -190,16 +188,6 @@ const ReportView = (() => {
     if (!remote) {
       previous.addEventListener('click', () => { state.pages[key]--; draw(); });
       next.addEventListener('click', () => { state.pages[key]++; draw(); });
-    }
-    if (key === 'models') {
-      const reset = element('button', 'CLI default order');
-      reset.addEventListener('click', () => { delete state.sorts[key]; state.pages[key] = 0; draw(); });
-      pager.append(reset);
-      if (complete) {
-        const clear = element('button', 'Clear model filter');
-        clear.addEventListener('click', () => { filter.value = ''; state.filters[key] = ''; draw(); });
-        pager.append(clear);
-      }
     }
     draw();
   }
@@ -226,9 +214,29 @@ const ReportView = (() => {
       view.model_comparison_sample_size ? 'Common token-category workload price comparison: one shared pooled I/C/W/O mix from the latest up to 100 completed priceable prompts globally prices every model and tier, including untried models. Every tier uses the same cheapest positive comparable base as 1.0x. Not a same-task capability/throughput benchmark, actual billing or a forecast of specialized future jobs. Dashboard Token Mix % uses a separate usage sample. Arrows show context-tier prices; > or ≥ marks the published input-token boundary.' :
         'Relative CCost stays blank; a hidden 2/96/1/1 mix orders published prices. No synthetic multipliers are shown.');
     help.append(concepts, element('p', 'Local, read-only. This report is frozen at capture; navigation and live heartbeats never refresh it. Reload to acquire again. Closing this tab does not stop Cost Guard.', 'detail'));
+    if (view.model_catalog) help.append(element('p', 'Web uses one full Copilot-priced catalog and one shared sample at capture. The cheapest positive comparable base in that full catalog stays 1.0x for every filter combination. Selectable means global OpenCode availability, not separately verified subscription entitlement. Unknown comparison prices are not zero.', 'detail'));
     parent.append(help);
   }
-  function overviewModels(parent, view) {
+  function overviewModels(parent, view, state) {
+    const catalog = view.model_catalog;
+    const models = catalog?.rows || view.model_comparison;
+    state.models ||= {all: false, latest: true, additive: false, sorts: [{index: 2, direction: -1}]};
+    const choice = state.models;
+    const tools = element('div', undefined, 'model-tools'), notices = element('div', undefined, 'model-notices');
+    const filters = element('div', undefined, 'model-filters');
+    function checkbox(label, key, help) {
+      const wrap = element('label'), input = element('input');
+      input.type = 'checkbox'; input.checked = choice[key]; input.title = help;
+      input.addEventListener('change', () => { choice[key] = input.checked; draw(); });
+      wrap.append(input, element('span', label)); filters.append(wrap);
+    }
+    checkbox('Show all Copilot-priced models', 'all', 'Off: global OpenCode selectable list, not separately verified subscription entitlement. Unverified availability fails open with a warning.');
+    checkbox('Latest versions only', 'latest', 'Hide only recognized older stable versions within the selected candidate set.');
+    const add = element('button', 'Add sort keys');
+    add.title = 'Toggle to add or toggle secondary keys by tapping headers. Shift+click or Shift+Enter/Space also works. Priorities appear beside arrows.';
+    add.setAttribute('aria-pressed', String(choice.additive));
+    add.addEventListener('click', () => { choice.additive = !choice.additive; add.setAttribute('aria-pressed', String(choice.additive)); });
+    filters.append(add); tools.append(notices, filters); parent.append(tools);
     const scroll = element('div', undefined, 'overview-models');
     scroll.tabIndex = 0;
     scroll.setAttribute('role', 'region');
@@ -236,25 +244,68 @@ const ReportView = (() => {
     const grid = element('table', undefined, 'overview-model-table');
     // Layout widths come from prepared text, never price arithmetic. Share each
     // marker/ratio/boundary track across rows, including long or multi-tier text.
-    const levels = view.model_comparison.flatMap(row => view.model_comparison_sample_size ? display(row, 'relative_cost').split(' → ') : []);
+    const levels = models.flatMap(row => view.model_comparison_sample_size ? display(row, 'relative_cost').split(' → ') : []);
     const width = parts => Math.max(0, ...parts.map(value => value.length)) + 'ch';
     grid.style?.setProperty('--ratio-width', width(levels.map(value => value.split(' ')[0])));
     grid.style?.setProperty('--boundary-width', width(levels.map(value => value.includes(' ') ? value.slice(value.indexOf(' ')) : '')));
-    grid.style?.setProperty('--marker-width', width(view.model_comparison.map(row => row.promotion_marker == null ? '' : '*' + row.promotion_marker)));
+    grid.style?.setProperty('--marker-width', width(models.map(row => row.promotion_marker == null ? '' : '*' + row.promotion_marker)));
     grid.setAttribute('role', 'table');
     grid.setAttribute('aria-label', 'Reference models');
     const head = element('thead'), header = element('tr'), body = element('tbody');
     head.setAttribute('role', 'rowgroup'); body.setAttribute('role', 'rowgroup');
     header.setAttribute('role', 'row');
-    for (const name of ['Publisher', 'Model', 'Relative CCost', 'Release date']) {
-      const cell = element('th', name); cell.scope = 'col';
-      cell.setAttribute('role', 'columnheader'); header.append(cell);
-    }
+    const names = ['Publisher', 'Model', 'Relative CCost', 'Release date'], headers = [];
+    names.forEach((name, index) => {
+      const cell = element('th'), button = element('button', name); cell.scope = 'col';
+      function activate(event) {
+        const existing = choice.sorts.find(sort => sort.index === index);
+        const sort = {index, direction: existing ? -existing.direction : index === 2 ? -1 : 1};
+        if (event.shiftKey || choice.additive) {
+          if (existing) choice.sorts[choice.sorts.indexOf(existing)] = sort;
+          else choice.sorts.push(sort);
+        } else choice.sorts = [sort];
+        draw();
+      }
+      button.addEventListener('click', activate);
+      button.addEventListener('keydown', event => {
+        if (event.shiftKey && ['Enter', ' '].includes(event.key)) { event.preventDefault(); activate(event); }
+      });
+      cell.setAttribute('role', 'columnheader'); cell.append(button); header.append(cell); headers.push([cell, button]);
+    });
     head.append(header);
-    body.tabIndex = 0;
-    body.setAttribute('aria-label', 'Model rows — scroll vertically');
-    for (const model of view.model_comparison) {
-      const row = element('tr', undefined, (model.display_roles || []).join(' '));
+    const promotion = element('div'), empty = element('p', undefined, 'warning');
+    const collator = new Intl.Collator(undefined, {sensitivity: 'base'});
+    function dateKey(value) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(value || '')) return null;
+      const timestamp = Date.parse(value + 'T00:00:00Z');
+      return Number.isFinite(timestamp) && new Date(timestamp).toISOString().slice(0, 10) === value ? timestamp : null;
+    }
+    function key(row, index) {
+      return [row.publisher || null, row.model || null,
+        row.relative_levels?.length ? row.relative_levels.map(level => level.relative_cost) : [row.relative_cost],
+        dateKey(row.release_date)][index];
+    }
+    function draw() {
+      const candidates = models.filter(row => choice.all || row.selectable !== false);
+      const shown = candidates.filter(row => !choice.latest || !(choice.all ? row.superseded : catalog ? row.superseded_selectable : row.superseded));
+      shown.sort((a, b) => {
+        for (const sort of choice.sorts) {
+          const x = key(a, sort.index), y = key(b, sort.index);
+          const order = sort.index < 2 && x != null && y != null ? collator.compare(x, y) * sort.direction : sortedCompare(x, y, sort.direction);
+          if (order) return order;
+        }
+        return models.indexOf(a) - models.indexOf(b);
+      });
+      headers.forEach(([cell, button], index) => {
+        const priority = choice.sorts.findIndex(sort => sort.index === index), sort = choice.sorts[priority];
+        cell.setAttribute('aria-sort', priority === 0 ? sort.direction === 1 ? 'ascending' : 'descending' : 'none');
+        text(button, names[index] + (sort ? (sort.direction === 1 ? ' ↑' : ' ↓') + (choice.sorts.length > 1 ? ' ' + (priority + 1) : '') : ' ↕'));
+        button.setAttribute('aria-label', names[index] + (sort ? `, ${sort.direction === 1 ? 'ascending' : 'descending'}, priority ${priority + 1}` : ', not sorted') + '. Activate to sort; Shift adds a key.');
+        button.title = 'Click to sort/toggle. Shift or Add sort keys keeps earlier keys. Missing values always last.';
+      });
+      body.replaceChildren();
+      for (const model of shown) {
+      const row = element('tr', undefined, (model.display_roles || []).filter(role => role !== 'superseded').join(' '));
       row.setAttribute('role', 'row');
       for (const value of [model.publisher || 'N/A', element('span', model.model, model.recent ? 'new' : ''),
         modelRelative(model, view.model_comparison_sample_size, false), element('span', model.release_date || 'N/A', model.recent ? 'new' : '')]) {
@@ -262,9 +313,23 @@ const ReportView = (() => {
         cell.append(typeof value === 'object' ? value : element('span', value)); row.append(cell);
       }
       body.append(row);
+      }
+      notices.replaceChildren();
+      const visible = new Set(shown.map(row => row.model));
+      const recent = catalog?.recent_notices.filter(note => visible.has(note.model)) || [];
+      if (recent.length) notices.append(element('p', '✦ New Models: ' + recent.map(note => note.text.replace(/^✦ New Models: /, '')).join('; '), 'new'));
+      if (!catalog && view.recent_model_notice && shown.some(row => row.recent)) notices.append(element('p', view.recent_model_notice, 'new'));
+      const markers = new Set(shown.map(row => row.promotion_marker).filter(marker => marker != null));
+      promotion.replaceChildren();
+      for (const note of catalog?.promotion_notes || view.model_comparison_promotion_notes || []) {
+        const marker = /^\*(\d+)\b/.exec(note);
+        if (!marker || markers.has(Number(marker[1]))) promotion.append(element('p', note, 'promotion'));
+      }
+      text(empty, shown.length ? '' : 'No matching reference models. Availability warnings, if any, are shown below.');
     }
     grid.append(head, body); scroll.append(grid); parent.append(scroll);
-    if (!view.model_comparison.length) parent.append(element('p', 'No available reference models.', 'warning'));
+    overviewConcepts(parent, view);
+    parent.append(promotion, empty); draw();
   }
   function modelRelative(row, sampled, evidence = true) {
     const cell = element('span', undefined, 'model-relative' + (row.promotional ? ' promotion' : ''));
@@ -281,20 +346,6 @@ const ReportView = (() => {
     }
     cell.append(levels);
     return cell;
-  }
-  function modelPrices(row) {
-    const cell = element('span', undefined, 'model-prices' + (row.promotional ? ' promotion' : ''));
-    display(row, 'price_summary').split('→').forEach((tier, index) =>
-      cell.append(element('span', (index ? '→' : '') + tier.trim(), 'model-tier')));
-    return cell;
-  }
-  function modelPriceKey(row) {
-    // Published exact rate strings only; no Number coercion or price calculation.
-    if (!row.price_summary || row.price_summary === 'N/A') return null;
-    return row.price_summary.replaceAll(' -> ', '→').split('→').flatMap(tier => {
-      const [rates, boundary = ''] = tier.trim().split(' ');
-      return [...rates.split('/').map(rate => rate === '-' ? null : rate), boundary.replace(/[^0-9]/g, '') || '0'];
-    });
   }
   function accountQuota(card, quota, compact = false) {
     const row = element('div', undefined, 'quota-summary ' + (quota.display_roles || []).join(' ') +
@@ -425,17 +476,13 @@ const ReportView = (() => {
     defaultUnit(result.view);
     parent.replaceChildren();
     const view = result.view;
-    const section = state.section || 'overview';
-    const overview = section === 'overview' && view.kind === 'normal';
+    const section = state.section || 'models';
+    const overview = ['models', 'overview'].includes(section) && ['normal', 'all-models'].includes(view.kind);
     if (overview) {
-      overviewModels(parent, view);
-      overviewConcepts(parent, view);
-      for (const note of view.model_comparison_promotion_notes || []) parent.append(element('p', note, 'promotion'));
-      if (view.recent_model_notice) parent.append(element('p', view.recent_model_notice, 'new'));
+      overviewModels(parent, view, state);
       if (result.source.status !== 'acquired') parent.append(element('p', 'Partial source data. Values may be incomplete. Check the local source and reload to retry.', 'warning'));
       if (view.model_availability_unverified) parent.append(element('p', 'Model availability unverified; catalog is not a verified selectable list.', 'warning'));
       if (view.model_availability_empty) parent.append(element('p', 'No available OpenCode models match the pricing catalog.', 'warning'));
-      overviewAccounts(parent, view.accounts_quotas, 'Accounts Overview', true, true);
       for (const note of view.notes || []) parent.append(element('p', note, 'warning'));
       return;
     }
@@ -464,30 +511,6 @@ const ReportView = (() => {
     }
     view.prompt_blocks.forEach((block, index) => prompts(parent, block, state, index, view.kind === 'date'));
     if (view.kind === 'date' && !view.prompt_blocks.length) parent.append(element('p', 'No prompt rows in this local date range.'));
-    if (['overview', 'models'].includes(section) && (overview || view.model_comparison.length)) {
-      if (view.token_mix && !overview) mixSummary(parent, view.token_mix);
-      if (!overview) parent.append(element('p', view.model_comparison_sample_size ?
-        `Relative CCost · one shared global I/C/W/O mix: latest ${view.model_comparison_sample_size} completed priceable prompts (up to 100) · every model and tier · cheapest positive comparable base = 1.0x. Not a same-task capability/throughput benchmark, billing or specialized-job forecast.` :
-        'No completed priced prompts: relative cells stay blank. A hidden 2/96/1/1 mix orders published prices; no synthetic multipliers are shown.', 'detail'));
-      parent.append(element('p', `Pricing/cache metadata: ${display(view, 'pricing_retrieved_at_ms')}`, 'detail'));
-      const all = view.kind === 'all-models';
-      table(parent, overview ? 'Reference models' : 'Reference models · shared CLI sample · default exact server ranking',
-        ['Publisher', 'Model', 'Relative CCost', ...(all ? ['GitHub USD/M I/C/W/O'] : []), 'Release date'], view.model_comparison,
-         row => [row.publisher || 'N/A', element('span', row.model + (!overview && row.recent ? ' · recent' : '') + (!overview && row.superseded ? ' · older stable variant' : ''), row.recent ? 'new' : ''),
-          modelRelative(row, view.model_comparison_sample_size),
-          ...(all ? [modelPrices(row)] : []), element('span', row.release_date || 'N/A', row.recent ? 'new' : '')], null, state, 'models',
-         row => [row.publisher, row.model, row.relative_cost, ...(all ? [modelPriceKey(row)] : []), row.release_date]);
-      if (view.model_comparison_sample_size) {
-        const evidence = element('details'); evidence.append(element('summary', 'Shared global comparison sample'));
-        for (const row of view.model_comparison) evidence.append(element('p', row.model + ': ' + display(row, 'evidence')));
-        parent.append(evidence);
-      }
-      if (!overview && all) parent.append(element('p', 'GitHub USD/M I/C/W/O: exact published reference rates per million tokens, not billed spend. ' + mixLegend(view) + ' A dash means no published rate (Not applicable), not measured usage. Published prices do not imply observed tokens.', 'detail'));
-      if (!overview && view.model_comparison.some(row => row.superseded)) parent.append(element('p', 'Older stable variants are muted, not hidden. Promotions use numbered * markers; recent releases are highlighted.', 'detail'));
-      for (const note of view.model_comparison_promotion_notes || []) parent.append(element('p', note, 'promotion'));
-      if (view.recent_model_notice) parent.append(element('p', view.recent_model_notice, 'new'));
-    }
-    if (section === 'models' && !view.model_comparison.length) parent.append(element('p', 'No matching reference models. Availability warnings, if any, are shown above.'));
     const accounts = view.accounts_quotas;
     if (overview) overviewAccounts(parent, accounts, 'Accounts Overview', true);
     if (view.kind === 'normal' && section === 'accounts') {

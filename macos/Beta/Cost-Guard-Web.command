@@ -1,7 +1,29 @@
 #!/bin/zsh
 set -u
-printf 'Cost Guard Web Beta: Checking requirements (native macOS validation pending)...\n'
+printf 'Launching web… Checking requirements (native macOS validation pending).\n'
 CG_ROOT="$(cd "$(dirname "$0")/../.." && pwd)" || exit 1
+# This display-only child never owns/restarts the detached Web host.
+activity() {
+  while true; do
+    for frame in '|' '/' '-' '\\'; do
+      printf '\rLaunching web… [%s]  ' "$frame" >&2
+      sleep 0.15
+    done
+  done
+}
+SPINNER=''
+stop_activity() {
+  if [[ -n "$SPINNER" ]]; then
+    kill "$SPINNER" 2>/dev/null || true
+    wait "$SPINNER" 2>/dev/null || true
+    SPINNER=''
+    printf '\r                        \r' >&2
+  fi
+}
+trap stop_activity EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+if [[ -t 2 ]]; then activity & SPINNER=$!; fi
 
 find_python() {
   typeset -A tested
@@ -18,9 +40,14 @@ find_python() {
 }
 
 PYTHON="$(find_python)" || {
+  stop_activity
   printf 'Cost Guard Web requires macOS and already-installed Python 3.11+. Nothing was installed.\n'
   printf 'Existing CLI/Watch launchers are unchanged.\n'
+  if [[ -t 0 ]]; then read -r '?Press Return to close…'; fi
   exit 1
 }
-"$PYTHON" "$CG_ROOT/cost-guard-web.py" --launch-macos
-exit $?
+"$PYTHON" -u "$CG_ROOT/cost-guard-web.py" --launch-macos
+RESULT=$?
+stop_activity
+if [[ $RESULT -ne 0 && -t 0 ]]; then read -r '?Press Return to close…'; fi
+exit $RESULT

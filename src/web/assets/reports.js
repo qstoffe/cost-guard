@@ -2,13 +2,14 @@
 // Report scope lives in the fragment; filters never become acquisition parameters.
 const ReportRoutes = (() => {
   function resolve(hash) {
-    const [path, query = ''] = (hash.replace(/^#\//, '') || 'overview').split('?');
+    let [path, query = ''] = (hash.replace(/^#\//, '') || 'models').split('?');
+    if (['overview', 'models/all'].includes(path)) path = 'models';
     const params = new URLSearchParams(query);
     const session = /^sessions\/([A-Za-z0-9_-]{1,200})(\/live)?$/.exec(path);
     if (session) return {title: 'Session ' + session[1], section: 'sessions', session,
       request: {kind: 'session', session_id: session[1]}};
-    const routes = {overview: ['Overview', 'normal'], watch: ['Watch', null], live: ['Watch', null],
-      models: ['Models · selectable catalog', 'normal'], 'models/all': ['Models · all catalog', 'all-models'],
+    const routes = {watch: ['Watch', null], live: ['Watch', null],
+      models: ['Models', 'normal'],
       accounts: ['Accounts', 'normal'], sessions: ['Sessions', 'sessions'],
       reports: ['Date reports', null], 'token-mix': ['Token Mix · deep history', 'token-mix'],
       'cost-per-hour': ['Cost per Active Hour', 'cost-per-hour']};
@@ -33,14 +34,7 @@ const ReportRoutes = (() => {
   function controls(parent, route, restartSessions) {
     parent.replaceChildren();
     const e = ReportView.element;
-    if (route.section === 'models') {
-      parent.className = 'catalog-controls';
-      for (const [href, text] of [['#/models', 'Selectable catalog'], ['#/models/all', 'All catalog + native rates']]) {
-        const a = e('a', text); a.href = href;
-        if ((route.request?.kind === 'all-models') === (href === '#/models/all')) a.setAttribute('aria-current', 'page');
-        parent.append(a, e('span', ' '));
-      }
-    } else parent.className = '';
+    parent.className = '';
     if (route.section === 'sessions' && !route.session) {
       const advanced = e('details'); advanced.append(e('summary', 'Advanced session scope'));
       const form = e('form'), label = e('label', 'Available sessions: N (1–10000) or all '), input = e('input');

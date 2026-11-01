@@ -42,46 +42,6 @@ def until(predicate, seconds=20):
     raise RuntimeError("native_probe_timeout")
 
 
-def join_delegated_launchers(root):
-    """Readiness is not launcher completion; retain owned handles before test Exit.
-
-    Match only the exact source-shaped batch argument suffix, never all shells.
-    CIM's microsecond birth observation must match the retained process handle.
-    A timed-out owned launcher is stopped so a failed probe cannot leak a dialog.
-    """
-    suffix = '-File "' + str(root / "windows/Beta/../../src/web/windows_launch.ps1") + '" -Detached'
-    literal = "'" + suffix.replace("'", "''") + "'"
-    script = r'''
-$ErrorActionPreference = 'Stop'
-$suffix = SUFFIX
-$owned = @(Get-CimInstance Win32_Process -Filter "Name = 'powershell.exe'" | Where-Object {
-    $_.CommandLine -and $_.CommandLine.EndsWith($suffix, [StringComparison]::OrdinalIgnoreCase)
-})
-foreach ($record in $owned) {
-    try { $handle = [Diagnostics.Process]::GetProcessById($record.ProcessId) }
-    catch [ArgumentException] { continue }
-    try {
-        if ($handle.HasExited) { continue }
-        if ([Math]::Abs(($handle.StartTime - $record.CreationDate).Ticks) -ge 10) {
-            throw 'delegated_launcher_birth_changed'
-        }
-        if (-not $handle.WaitForExit(60000)) {
-            $handle.Kill()
-            $handle.WaitForExit(5000) | Out-Null
-            throw 'delegated_launcher_timeout'
-        }
-        if ($handle.ExitCode -ne 0) { throw 'delegated_launcher_failed' }
-    } finally { $handle.Dispose() }
-}
-Write-Output 'DELEGATES_JOINED'
-'''.replace('SUFFIX', literal)
-    result = subprocess.run(["powershell.exe", "-NoLogo", "-NoProfile", "-Command", script],
-                            capture_output=True, text=True, timeout=75,
-                            creationflags=subprocess.CREATE_NO_WINDOW)
-    if result.returncode or "DELEGATES_JOINED" not in result.stdout:
-        raise RuntimeError("delegated_launcher_join_failed")
-
-
 def window(pid):
     user = c.WinDLL("user32", use_last_error=True)
     callback = c.WINFUNCTYPE(w.BOOL, w.HWND, w.LPARAM)
@@ -93,6 +53,8 @@ def window(pid):
     def visit(hwnd, _):
         found = w.DWORD()
         get_pid(hwnd, c.byref(found))
+        if found.value != pid:
+            return True
         text = c.create_unicode_buffer(128)
         title(hwnd, text, 128)
         if found.value == pid and text.value == "Cost Guard Web Beta":
@@ -195,7 +157,6 @@ def detached_probe():
         state = until(store.read)
         assert control(state, "status")["ready"]
         assert window(state["pid"])
-        join_delegated_launchers(ROOT)
         # No inherited console: attempt attach in a separate no-console probe process.
         check = subprocess.run([sys.executable, "-c",
                                 "import ctypes,sys; k=ctypes.WinDLL('kernel32',use_last_error=True); "
@@ -265,7 +226,6 @@ def source_zip_probe():
             state = until(store.read, seconds=35)
             assert control(state, "status")["ready"]
             assert window(state["pid"])
-            join_delegated_launchers(snapshot)
             command(state["pid"], EXIT)
             until(lambda: process_identity(state["pid"]) != state["process"])
             assert store.read() is None
@@ -277,7 +237,7 @@ def source_zip_probe():
 
 
 def startup_timing_probe():
-    """Separate delegation latency from real native readiness, never browser paint."""
+    """Time synchronous console handoff and validated readiness, never browser paint."""
     store = InstanceStore(ROOT)
     if store.read():
         raise RuntimeError("timing_requires_no_existing_instance")
@@ -287,10 +247,9 @@ def startup_timing_probe():
             started = time.monotonic()
             previous = store.read()
             child = subprocess.Popen(["cmd.exe", "/d", "/c", str(ROOT / "windows/Beta/Cost-Guard-Web.cmd")],
-                                     cwd=ROOT, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                                     stderr=subprocess.DEVNULL)
+                                     cwd=ROOT, creationflags=subprocess.CREATE_NEW_CONSOLE)
             try:
-                assert child.wait(timeout=5) == 0
+                assert child.wait(timeout=60) == 0
                 delegated = time.monotonic() - started
 
                 def ready():
@@ -300,15 +259,14 @@ def startup_timing_probe():
 
                 until(ready, seconds=40)
                 ready_seconds = time.monotonic() - started
-                join_delegated_launchers(ROOT)
                 launcher_seconds = time.monotonic() - started
             finally:
                 if child.poll() is None:
                     child.kill()
                 child.wait(timeout=3)
             observations[mode] = {"batch_exit_seconds": round(delegated, 3),
-                                  "host_tray_ready_seconds": round(ready_seconds, 3),
-                                  "delegate_join_observed_seconds": round(launcher_seconds, 3),
+                                  "authenticated_ready_readback_seconds": round(ready_seconds, 3),
+                                  "post_exit_observation_seconds": round(launcher_seconds, 3),
                                   "browser_paint": "not_measured"}
     finally:
         state = store.read()

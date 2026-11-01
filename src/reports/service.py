@@ -42,7 +42,7 @@ from .semantics import (
     recent_model_notice_details,
 )
 
-from .model_comparison import AvailabilityPrefetch, price_summary, selectable_catalog
+from .model_comparison import AvailabilityPrefetch, price_summary, selectable_catalog, web_model_catalog
 from .prompts import build_prompt_block
 from .accounts import accounts_quota_projection, WatchAccountProjection
 from .migration_notice import migration_gap_notes
@@ -337,8 +337,8 @@ class ReportService:
         return threshold_cost_multiplier(catalog, model_id, threshold, self._comparison_mix[0])
 
     def _model_comparison(
-        self, roots: Sequence[AnalyzedRoot], *, all_models: bool = False,
-    ) -> tuple[tuple[ModelComparisonProjection, ...], int, tuple[str, ...], str, tuple[tuple[int, int], ...], tuple[str, ...]]:
+        self, roots: Sequence[AnalyzedRoot], *, all_models: bool = False, include_model_catalog: bool = False,
+    ):
         catalog = self._load_catalog()
         if all_models:
             comparison_catalog, warnings = catalog, ()
@@ -364,7 +364,9 @@ class ReportService:
         notice, highlight_spans = recent_model_notice_details(
             comparison_catalog, now_ms=self.now_ms, cache_repository=self.cache_repository,
         )
-        return tuple(rows), sample_size, promo_notes, notice, highlight_spans, warnings
+        web_catalog = web_model_catalog(usage, catalog, comparison_catalog, now_ms=self.now_ms,
+            cache_repository=self.cache_repository) if include_model_catalog else None
+        return tuple(rows), sample_size, promo_notes, notice, highlight_spans, warnings, web_catalog
 
     def _accounts_quotas(
         self,
@@ -585,7 +587,7 @@ class ReportService:
         return self._accounts_quotas(quotas, roots=tuple(self._analyze(root) for root in selected),
                                      today_start_ms=day, observed_start_ms=cutoff)
 
-    def build(self, request: ReportRequest) -> ReportProjection:
+    def build(self, request: ReportRequest, *, include_model_catalog: bool = False) -> ReportProjection:
         self.metrics.mode = request.kind.value
         try:
             if request.kind is ReportKind.COST_PER_HOUR:
@@ -595,7 +597,7 @@ class ReportService:
                 self.begin_account_refresh()
                 if self.model_availability_source is not None:
                     self._availability = AvailabilityPrefetch(self.model_availability_source)
-            return self._build(request)
+            return self._build(request, include_model_catalog=include_model_catalog)
         finally:
             self._availability = None
             self.close_accounts()
@@ -609,7 +611,7 @@ class ReportService:
         return tuple((entry.session_id, entry.parent_event_id, entry.message_id, entry.step_part_id)
                      for item in self._analyzed.values() for entry in item.bundle.trace_entries)
 
-    def _build(self, request: ReportRequest) -> ReportProjection:
+    def _build(self, request: ReportRequest, *, include_model_catalog: bool = False) -> ReportProjection:
         catalog = self._load_catalog()
         self.progress(WorkProgress("Listing OpenCode sessions", "catalog"))
         all_sessions = self.session_catalog()
@@ -623,7 +625,7 @@ class ReportService:
             return self._build_session_detail(request, all_sessions)
         if request.kind is ReportKind.DATE:
             return self._build_date_detail(request, roots, root_activity)
-        return self._build_dashboard(request, catalog, roots, root_activity)
+        return self._build_dashboard(request, catalog, roots, root_activity, include_model_catalog=include_model_catalog)
 
     def _build_session_list(self, request: ReportRequest, roots: Sequence[NormalizedSession],
                             root_activity: Mapping[str, int], revision: str) -> ReportProjection:
@@ -680,7 +682,7 @@ class ReportService:
         )
 
     def _build_date_detail(self, request: ReportRequest, roots: Sequence[NormalizedSession],
-                           root_activity: Mapping[str, int]) -> ReportProjection:
+                          root_activity: Mapping[str, int]) -> ReportProjection:
         if not request.date_text:
             raise ReportRequestError("Date report requires a date target")
         date_range = local_report_range(request.date_text, self.timezone_id)
@@ -704,12 +706,12 @@ class ReportService:
         )
 
     def _build_dashboard(self, request: ReportRequest, catalog: PricingCatalog, roots: Sequence[NormalizedSession],
-                         root_activity: Mapping[str, int]) -> ReportProjection:
+                          root_activity: Mapping[str, int], *, include_model_catalog: bool = False) -> ReportProjection:
         priceable = self._priceable()
         analyzed = recent_sample_roots(roots, root_activity, self._analyze, priceable)
         self.progress(WorkProgress("Comparing model prices", "projection"))
-        comparisons, sample, promo_notes, recent, recent_highlight_spans, availability_warnings = self._model_comparison(
-            analyzed, all_models=request.kind is ReportKind.ALL_MODELS,
+        comparisons, sample, promo_notes, recent, recent_highlight_spans, availability_warnings, web_catalog = self._model_comparison(
+            analyzed, all_models=request.kind is ReportKind.ALL_MODELS, include_model_catalog=include_model_catalog,
         )
         # Account periods have their own history scope, never the comparison sample.
         quota_projection = self._account_history(self._quotas(), roots, root_activity) if request.kind is ReportKind.NORMAL else None
@@ -728,6 +730,7 @@ class ReportService:
             self.selection.selected.upper(),
             tuple(self.selection.warnings) + availability_warnings,
             model_comparison=comparisons,
+            model_catalog=web_catalog,
             model_comparison_sample_size=sample,
             pricing_retrieved_at_ms=catalog.retrieved_at_ms,
             model_comparison_promotion_notes=promo_notes,

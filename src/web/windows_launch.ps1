@@ -1,9 +1,17 @@
-# Beta only: the normal batch delegates asynchronously; direct invocation keeps status.
+# Beta only: this short-lived status process is never the managed host's lifetime owner.
 param([switch]$Detached)
 $ErrorActionPreference = 'Stop'
 if ($Detached) { $ProgressPreference = 'SilentlyContinue' }
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $message = 'Web launcher failed. Run development\user-tools\diagnostics\windows\Cost-Guard-Diagnostics.cmd.'
+$script:frame = 0
+function Write-LaunchActivity {
+    if (-not $Detached) {
+        $glyph = @('|', '/', '-', '\')[$script:frame % 4]
+        $script:frame++
+        Write-Host ("`rLaunching web... [{0}]  " -f $glyph) -NoNewline
+    }
+}
 function Find-BetaPython {
     $tested = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
     foreach ($candidate in @(@{Name = 'py.exe'; Args = @('-3')}, @{Name = 'python.exe'; Args = @()})) {
@@ -21,7 +29,11 @@ function Find-BetaPython {
                 $info.RedirectStandardOutput = $true
                 $info.RedirectStandardError = $true
                 $probe = [Diagnostics.Process]::Start($info)
-                if (-not $probe.WaitForExit(5000)) {
+                $deadline = [Diagnostics.Stopwatch]::StartNew()
+                while (-not $probe.WaitForExit(120) -and $deadline.ElapsedMilliseconds -lt 5000) {
+                    Write-Progress -Activity 'Launching web...' -Status 'Checking Python' -PercentComplete -1
+                }
+                if (-not $probe.HasExited) {
                     $probe.Kill() # Only this exact discovery process, never a PID/name search.
                     $probe.WaitForExit(1000) | Out-Null
                     continue
@@ -50,15 +62,32 @@ try {
         # Stream flushed, fixed progress instead of buffering the entire launch.
         # Keep only allowlisted failure text; raw subprocess exceptions stay private.
         $safe = @()
-        & $python @pythonArgs -u (Join-Path $root 'cost-guard-web.py') --launch-windows 2>$null | ForEach-Object {
-            if ($_ -match '^Cost Guard startup: [A-Za-z0-9 ;,+().-]+$') {
-                Write-Host $_
-                Write-Progress -Activity 'Cost Guard Web Beta startup' -Status $_ -PercentComplete -1
-            } elseif ($_ -like 'Cost Guard Web Beta: *') {
-                $safe += $_
+        $info = [Diagnostics.ProcessStartInfo]::new()
+        $info.FileName = $python
+        $info.Arguments = (($pythonArgs + @('-u', ('"' + (Join-Path $root 'cost-guard-web.py') + '"'), '--launch-windows')) -join ' ')
+        $info.UseShellExecute = $false
+        $info.CreateNoWindow = $true
+        $info.RedirectStandardOutput = $true
+        $info.RedirectStandardError = $true
+        $child = [Diagnostics.Process]::Start($info)
+        try {
+            $errors = $child.StandardError.ReadToEndAsync()
+            while ($true) {
+                $line = $child.StandardOutput.ReadLineAsync()
+                while (-not $line.IsCompleted) { Write-LaunchActivity; Start-Sleep -Milliseconds 120 }
+                $value = $line.GetAwaiter().GetResult()
+                if ($null -eq $value) { break }
+                if ($value -match '^Cost Guard startup: [A-Za-z0-9 ;,+().-]+$') {
+                    Write-Host ("`r" + $value + '          ')
+                    Write-Progress -Activity 'Cost Guard Web Beta startup' -Status $value -PercentComplete -1
+                } elseif ($value -like 'Cost Guard Web Beta: *') {
+                    $safe += $value
+                }
             }
-        }
-        $code = $LASTEXITCODE
+            $child.WaitForExit()
+            $code = $child.ExitCode
+        } finally { $child.Dispose() }
+        Write-Host ''
         Write-Progress -Activity 'Cost Guard Web Beta startup' -Completed
         if ($code -eq 0) { exit 0 }
         # Python emits only fixed allowlisted failure text; never display raw exceptions.

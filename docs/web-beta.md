@@ -1,29 +1,55 @@
 # Web Beta
 
-## Minimal Overview
+## Unified Models
 
-v80.116 puts the complete CLI-ranked model table first: Publisher, Model,
-Relative CCost, Release date. Only the rows scroll vertically; the header stays
-fixed, and narrow screens can scroll the table horizontally. Names are not truncated.
-Overview has no search, sorting, pager, capture/refresh/cancel toolbar or snapshot
-metadata paragraph. Models and other report routes retain their own controls.
+v80.118 replaces Overview and the old separate Models view with **Models** at
+`/#/models`. Legacy `/#/overview` and `/#/models/all` bookmarks replace their current
+history entry with Models. Bootstrap credentials are still erased before requests.
+The four-column table spans the available content width: **Publisher | Model |
+Relative CCost | Release date**. All matching rows scroll with the **document**, never
+an independently scrolling/fixed-height table body. Narrow screens can pan the table
+horizontally; long names wrap without truncation. There is no model search, pager,
+catalog-tab strip, native-rate fifth column or subscription card on this page.
+
+Two independent checkboxes reset on every fresh page load:
+- **Show all Copilot-priced models**, off: intersect the parsed priced catalog with
+  the selected installation's global OpenCode selectable list. This is not separately
+  verified subscription entitlement. Unavailable/unreliable availability fails open
+  with an explicit warning; a verified empty intersection is distinct.
+- **Latest versions only**, on: hide only conservatively recognized older stable
+  versions **within that candidate set**. Variants, preview/unstable and ambiguous
+  names remain distinct. Turn it off to show older versions at normal text contrast.
+
+The Web receives one frozen full-catalog snapshot with selectable membership and the
+same global latest-100-completed-priceable-prompt sample. Its cheapest positive
+comparable full-catalog base remains 1.0x in every filter state. Unknown ratios remain
+unknown and visible, not zero. Toggling never reprices or reacquires history/accounts.
+CLI candidate selection, ranking, denominators and Watch valuation are unchanged.
+
+Default sorting is **Relative CCost ↓**. Every header toggles its single sort;
+Shift+click or Shift+Enter/Space adds/toggles keys in priority order. **Add sort keys**
+provides the same additive mode for touch/no-Shift users. Arrows and priority numbers
+show active keys; only the primary header has ascending/descending `aria-sort`.
+Relative CCost compares unrounded decimal base, then each later ratio, **before** a
+secondary column; boundaries/operators/markers never rank prices. Dates compare
+chronologically, text uses case-insensitive locale order, missing values are last
+in either direction, and ties retain original order. Filters preserve chosen sorting.
 
 First acquisition shows only branding/navigation and a centered progress bar with
 one short stage line. Its **≈ percentage is a bounded stage-weighted estimate**, not
 a measured global total; actual stage counts appear when supplied. It never moves
 backwards or reaches 100 before a complete, usable source result. Failed/partial
 acquisition stops activity and gives actionable feedback; missing data is not zero.
-Reload requests a fresh Overview; Back/Forward to a retained view and live host
+Reload requests fresh Models; Back/Forward to a retained view and live host
 heartbeats do not refresh its frozen report or reset its table scroll/selection.
 
 Below the table, **More information** starts collapsed and contains CCost, Token Mix,
 the shared global latest-100-completed-priceable-prompt Relative CCost explanation,
-and the **CCost: Credits / USD** selector. Genuine promotion/new-model notices follow,
-then compact equal-height account cards: one name, CLI-formatted costs, native quotas,
-resets/Pace and known billing/Unaccounted values. One **Details** disclosure reveals
-provenance and billing components; expanding it need not stretch neighboring cards.
-Real blocked/stale/partial/error warnings remain visible. The Accounts route retains
-its diagnostic presentation and independent observation facts.
+and the **CCost: Credits / USD** selector, followed by genuine **Price Promotion**
+notices for shown markers. Genuine **New Models** notices sit above the table at the
+left, with the two filters grouped at the right (wrapping on mobile). Partial and
+unverified-source warnings remain explicit. **Accounts** retains full supported quota,
+billing, subscription and attribution details and its canonical acquisition behavior.
 
 Healthy connections have no visible status label or banner. An unhealthy loaded page
 shows a compact, actionable warning with hover/focus/touch-accessible connection
@@ -75,18 +101,16 @@ host/source timestamps. See [real-source soak and fault evidence](../development
 v80.106 fixes real-installation Normal results that exceeded the unchanged 8 MiB
 limit because they carried unused month-wide causal request identities. Normal now
 retains per-root revision evidence without that detail-only payload; no model rows,
-account periods or totals are capped. Overview renders every reference-model row in
-one keyboard-scrollable table. v80.116 removes Overview filter/sort controls; the
-dedicated Models route retains them. Token Mix phase costs and account provenance
-are available under Overview's optional explanations/details.
+account periods or totals are capped. Models renders every matching reference-model
+row with document scrolling. Token Mix phase costs are available in More information;
+account provenance is on Accounts.
 
 v80.93 adds a shared responsive light/dark visual system and global **Watch** navigation.
 The theme follows the operating-system preference, with no saved browser settings or external fonts.
 Rounded controls, visible keyboard focus, sticky table headings, exact numeric alignment and
 local table scrolling keep data selectable at narrow widths; reduced-motion preferences disable transitions.
 The native “Reading this report” disclosure contains definitions, never report rows or totals.
-Overview now follows the minimal model-table-first hierarchy described above rather
-than v80.94's metric-first framing. Account cards show native quotas/remaining/reset,
+Models follows the model-table-first hierarchy above. Accounts cards show native quotas/remaining/reset,
 Pace and known bills without duplicate quota tables or whole-report account totals. Independent
 attribution/source/account warnings remain visible; observation/native billing detail is expandable.
 See the [synthetic before/after gallery](../development/architecture/governance/verification/web-design/index.html)
@@ -95,7 +119,8 @@ and [visual evidence/limits](../development/architecture/governance/verification
 The Web shares CLI-owned numeric display primitives through server-provided display
 tokens while retaining exact raw values for sorting. CCost, USD, quotas/Pace,
 multiplier tiers and durations no longer expose incidental Decimal precision;
-all-model native reference rates intentionally retain every meaningful digit.
+CLI all-model native reference rates intentionally retain every meaningful digit;
+the retired Web native-rate column is not restored.
 See the [display parity baseline](../development/architecture/governance/verification/web-display-parity.md)
 for per-view mapping, role/notice semantics and explicit page-specific remaining work.
 
@@ -107,28 +132,27 @@ Run `python cost-guard-web.py --foreground` using already installed Python 3.11+
 
 ## Navigation and static reports
 
-The Beta shell provides global Watch, Overview, Models (selectable or full catalog), Accounts, recent Sessions with older-page navigation, local date/range Reports, explicit historical Token Mix, and session details with Snapshot/Live modes. Global `/#/watch` is canonical; legacy `/#/live` links are replaced in the same browser-history entry, preserving Back/Forward. This does not rename a session's Live mode. Overview, selectable Models and Accounts reuse the same normal-report observation when retained; changing presentation does not multiply account acquisition. Explicit Refresh creates a new observation for that view, not a silent cross-view update.
+The Beta shell provides Models, global Watch, Accounts, recent Sessions with older-page navigation, local date/range Reports, explicit historical Token Mix, and session details with Snapshot/Live modes. Global `/#/watch` is canonical; legacy `/#/live` links replace the same history entry. Models and Accounts reuse the same normal-report observation when retained; presentation changes do not multiply account acquisition. Explicit Refresh on other views creates a new observation for that view, not a silent cross-view update.
 
 Accounts uses the shared provider/account cards with native quota windows, known-only remaining bars, configured-timezone CLI reset wording, Pace, billed USD and Normal local-month/Today CCost. Unknown, zero, unlimited, blocked, partial, rate-limited and stale observations remain distinct. Stale quota values are visibly muted and labeled as last observations, not current availability. Native-money equivalents, Copilot Unaccounted usage and attribution notes remain visible; observation/used details expand through keyboard-accessible native disclosures. Classified method failures use readable labels; arbitrary private provider reasons/warnings and credentials remain excluded. No account editing or additional acquisition is introduced.
 
 | CLI use case | Discoverable fragment route | Protected scope |
 | --- | --- | --- |
-| Normal overview | `/#/overview` | Independent comparison/token samples and account-period history |
 | Global Watch | `/#/watch` (legacy `/#/live` alias) | One host-owned live engine; source/account freshness and retained rows |
-| Models / all models | `/#/models`, `/#/models/all` | Active selectable/full-catalog control; exact CLI default ranking, aligned one-decimal `x` tiers with > / ≥ K/M boundaries, promotion/release facts and conservative older-stable fading. No priced completed sample means blank relative cells, not invented multipliers. Full catalog adds exact native USD/M I/C/W/O reference rates, not billed spend; column sorting uses unrounded numeric keys, stable ties and unknowns last. Long names wrap; narrow views scroll inside the table. |
+| Models | `/#/models` (legacy `/#/overview`, `/#/models/all` normalize here) | Independent selectable/full and latest-version filters, exact tier-aware multi-sort, four columns and full document scrolling. Blank relative cells without completed priced prompts; unknown ratios retained. No account cards or native-rate fifth column. |
 | Accounts | `/#/accounts` | Native units/windows, Remaining/Pace, independent observations and method errors, report local-month/Today CCost and Copilot Unaccounted usage; never Watch rolling substitution |
 | Sessions | `/#/sessions`, optional `/#/sessions?limit=20` | Immediate recent-first 50-root page, including available archived history; Previous/Next links carry offset/catalog revision. Optional N/all scope is collapsed under Advanced. |
 | Session report | `/#/sessions/<id>` | Complete report Snapshot/Live detail; links from session lists and global Watch |
 | Date / inclusive range | `/#/reports?date=2026-10-25`, `/#/reports?date=2026-10-24:2026-10-25` | Configured-local boundaries/DST; canonical range valuation and union duration; impossible/reversed dates fail explicitly |
 | Historical Token Mix | `/#/token-mix` | Explicit Capture/Refresh only, never navigation/prefetch; CLI Input / Cached input / Cache write / Output share-and-CCost cells, model/publisher Prompts/Calls/Tokens/CCost, exact-volume sorting with compact K/M/B labels and explicit partial/unknown telemetry, full-report total above the table and optional sample/price coverage |
 
-Outside Overview, search above the report filters the displayed tables; tables retain their own filters and sortable column buttons. Column clicks cycle ascending, descending, then original server order; Models also offers **CLI default order**. Filters/sorts are presentation-only, with filtered/page and full-report row counts; totals and source queries never change. Decimal strings are compared exactly, vector columns lexicographically I/C/W/O, and unknown scalar values sort last. Overview keeps the shared server ranking without presentation controls: one-decimal `x` multipliers with arrows/compact K/M thresholds, blank multipliers without completed priced prompts, just as CLI Normal. Complete revision-paged session detail has its own browsing controls; global search is disabled there rather than implying coverage of unloaded rows.
+Outside Models, report tables retain their search/filter/page controls. Their column clicks cycle ascending, descending, then original server order. Models uses the independent filter/multi-sort contract above, with no three-click reset. All controls are presentation-only: totals and source queries never change. Decimal strings compare exactly and unknowns sort last. Complete revision-paged session detail has its own controls; global search is disabled there rather than implying unloaded-row coverage.
 
 Token Mix shows actual phase/completed/total progress and Cancel terminates only that finite scan. Reopening a retained view reuses its timestamped result; explicit recapture checks the real source/config/pricing dependencies through the existing derived-analysis cache (`src/reports/acquisition.py`, `src/analysis/cache.py`), not a browser ledger or request-name-only cache. Deleted/pruned history stays unavailable. Timeout/cancellation/empty history are distinct; Live and its account scheduler continue independently. Date prompt links open full session detail; Back restores the retained range. URL fragments contain only scope/locators, never prompt content.
 
 Session-ID links open `/#/sessions/<id>`. Fragment routes support direct links, reload and browser Back/Forward without expanding the HTTP path allowlist. The one-use bootstrap fragment is removed before requests; ordinary session routes are preserved on reload. Names/prompts are text, never links or tooltips containing source paths. Navigation and paging never put prompt/history payloads in browser storage or history state.
 
-Every successful result retains observation time, source status and per-root revision evidence from the shared facade; Overview hides the verbose snapshot paragraph, not its provenance or partial/error warnings. A running prompt is **running at that snapshot**, with canonical provisional values and frozen duration. **Refresh snapshot** reacquires other report views; reload reacquires Overview. Source events, elapsed wall time, navigation and paging cannot update a frozen report; no Watch starts. Failed refresh preserves the last known result with **STALE** status. Missing sessions, empty sessions, partial source, independent unavailable accounts and source failures are distinct from acquired zero.
+Every result retains observation time, source status and per-root revision evidence; Models hides the verbose snapshot paragraph, not partial/error warnings. A running prompt is **running at that snapshot**, with frozen provisional values. **Refresh snapshot** reacquires other views; reload reacquires Models. Source events, elapsed time, navigation and paging cannot update a frozen report. Failed refresh preserves the last known result with **STALE** status. Missing/empty/partial/source-failure and independently unavailable accounts remain distinct from acquired zero.
 
 The session table retains Prompt, CCost, Calls, Duration, ~Ictx, ~Ictx CCost, ~Extra CCost and Token Mix %. Category names and adjacent legends come from Python's shared display tokens: **I = Input; C = Cached input; W = Cache write; O = Output**. Input is uncached, Cached input is cache read, Cache write is cache creation, and Output includes reasoning. This order also applies to compact reference-price and Watch run fields. Full-session totals and main/linked-child breakdown come from the canonical result, never from the visible page. Unknown, incomplete and estimated amounts are labeled; a published Cache write price does not imply observed tokens. Catalog `Not applicable` is an unpublished rate, not measured zero. CCost is not billing. The browser performs no valuation or token attribution.
 
@@ -136,8 +160,8 @@ Most finite report tables show 50 rows per page from **one complete immutable AP
 
 ## Complete session Snapshot/Live
 
-Overview's reference-model table is the exception to finite-table paging: all rows
-are present by default in one scrollable region. Background connection-status updates
+Models is the exception to finite-table paging: every matching row is present and
+the document scrolls. Background connection-status updates
 retain that frozen DOM, including scroll position, keyboard focus and text selection.
 
 Normal `/#/sessions/<id>` links default to Snapshot; `/#/sessions/<id>/live` explicitly requests Live. The mode button switches without stopping the shared server. Entering Live queues an authoritative source observation, not event-only continuation of an old snapshot. Snapshot freezes the whole report, including running durations and totals; Refresh requests a new capture. Leaving Live freezes one consistent current revision. Idle, abort and prompt completion never end Live.
@@ -160,7 +184,7 @@ Authenticated, CSRF-protected `/api/detail` POST actions: `open` (`session_id`, 
 
 Resource admission allows 16 distinct observed session trees per host and 32 transport handles. Abandoned handles expire after five minutes, but history does not; expiration is explicit (410), not an empty report or row eviction. Busy admission is explicit (429). Repeated refresh/mode changes release their old handle. Restarting the host discards observed history. Synthetic 100/1,000/10,000-row probes test complete first/middle/latest access, totals, page bounds, source omission/reconnect and unchanged work. `test_web_session_detail.py` also exercises real HTTP authorization and shipped assets in an optional Node VM, not a browser or model runner.
 
-Layout choices: wrapping top navigation; system light/dark palette; source/readiness separate from snapshot health; text-selectable overflow tables with sticky column headings; independently paged tables and complete totals below rows; keyboard focus outlines and a skip-to-report button. Scope forms and selectable/all catalog links sit above tables; searchable dense tables are preferred over optional charts to avoid new metric interpretations. Older stable variants remain readable with modest fading and explicit text. Refresh/status messages do not take focus. These are implementation decisions for later owner feedback, not visual approval. No user-side frontend build, Node installation, CDN, analytics, account login or editing.
+Layout choices: wrapping navigation, system light/dark palette, keyboard focus and skip-to-report. Other report tables keep sticky headings, search/paging and complete totals; Models alone uses document scrolling and its two filters. Shown older models have normal contrast. Refresh/status messages do not take focus. No frontend build, Node installation, CDN, analytics, account login or editing is needed.
 
 `test_web_views.py` exercises the shipped JavaScript and real HTTP/facade with deterministic sources through an optional developer-only Node DOM harness. It tests navigation/hash events, reload, safe hostile/Unicode text, long/running/aborted/compacted/empty/missing/partial reports, complete totals and frozen/explicit-refresh/stale behavior. It is not visual browser, CSS layout or native macOS acceptance. Owner checks: open the Beta, try narrow/wide windows and light/dark mode, tab through navigation and page controls, select prompt text, follow a session link, use Back/Forward and reload, and Refresh a running session. No new permanent release gate is added.
 
@@ -192,13 +216,13 @@ Stream writes retain a two-second timeout and ten-second heartbeats, without a f
 
 ## Windows detached launcher and tray
 
-Double-click `windows/Beta/Cost-Guard-Web.cmd`, or invoke it from an existing console. In v80.101 the batch immediately starts a separate, hidden Windows PowerShell 5.1 process, with null standard handles, and returns without waiting. That delegate locates Python 3.11+ through available `py.exe -3` / `python.exe` installations, resolves its checkout relative to the script, validates configuration and briefly exercises the in-box tray API before stopping a healthy old instance. No packages, virtual environment, Node, compiler, downloads, Windows Script Host, administrator access or global execution-policy change is needed. Only that child process has an execution-policy override. Source ZIPs work with the preserved directory structure, including spaces and Unicode.
+Double-click `windows/Beta/Cost-Guard-Web.cmd`, or invoke it from an existing console. The short-lived console stays visible with **Launching web…**, indeterminate activity and sanitized startup stages while PowerShell locates Python 3.11+, checks configuration/native support, waits for validated host readiness and requests the registered default browser. Source ZIPs retain relative-path support, including spaces/Unicode. No packages, compiler, download, administrator access or global execution-policy change is needed; the override applies only to that PowerShell process.
 
-The hidden delegate waits for HTTP shell and notification icon readiness, then opens the registered default browser using the authenticated bootstrap route and exits. Batch exit means **handoff accepted**, not host/report/browser readiness. Existing terminals regain control immediately. The host is detached from console, standard handles and launcher lifetime. Later deliberate launch restarts this checkout's verified instance; overlapping clicks reuse a ready winner. A preflight failure preserves the existing instance. Failures after it has stopped cannot restore the old code; they report the failure rather than claim success.
+The console exits naturally after **validated host readiness and a successful OS browser-open request**, not browser paint or report completion. An existing terminal regains control at that point. The managed host remains detached from console, standard handles and launcher lifetime. Later deliberate launch restarts only this checkout's verified instance; overlapping clicks reuse a ready winner. Preflight failure preserves the existing instance. Failures after it stopped cannot restore the old code and never claim success.
 
-The chosen implementation is a **no-build console-free handoff**, not a locally compiled helper or a frozen Python application. The `.cmd` can still flash briefly; the new PowerShell window starts minimized and hides before discovery. Automated process/window tests establish hidden delegation, not physical flash duration on every desktop. No visible shell remains waiting for slow host restart, browser opening or report loading. Python discovery has a five-second bound per candidate. Lifecycle lock/restart/readiness deadlines remain unchanged. There is no invented build progress or percent complete, daemon, autostart, early unauthenticated page or second acquisition engine.
+This is a **no-build status-console handoff**, not a new host worker/supervisor or frozen application. Python discovery retains its five-second per-candidate bound. Lock/restart/readiness deadlines, authentication and host ownership are unchanged. No invented percentage, autostart, early unauthenticated page or second acquisition engine is added. Native Windows cold/warm launcher checks and integrated-browser evidence are distinct from physical Explorer or first-paint proof.
 
-**Cache/build/repair:** Windows generates **zero executable artifacts (0 bytes)**. There is no executable cache directory, manifest, rebuild or compiler step on either cold or warm launch. Changed source is read from the current checkout, not copied to a stale helper; existing source-change shutdown still applies. Therefore compiler-unavailable, interrupted-build, cache-tamper and cache-reparse cases add no executable attack surface on Windows. Do not delete runtime state, user configuration or analysis caches to repair startup. If background process creation itself fails, the batch tries the visible status path. For troubleshooting at any time, run `powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File src/web/windows_launch.ps1` from the checkout: this explicitly waits and streams the existing honest stage/elapsed status. The normal hidden path shows sanitized native error dialogs and retains private logs; if a desktop cannot show a dialog, it exits rather than waiting invisibly for Enter. See [measured evidence and limits](../development/architecture/governance/verification/windows-handoff.md).
+**Cache/build/repair:** Windows generates no executable artifact or helper cache. Current source and source-change shutdown still apply. Do not delete runtime state, user configuration or analysis caches to repair startup. Direct PowerShell invocation uses the same status path. Failures retain actionable text/native feedback and private allowlisted logs; a visible interactive fallback may wait for Enter if native feedback is unavailable. Historical hidden-handoff measurements in [windows-handoff.md](../development/architecture/governance/verification/windows-handoff.md) describe the superseded design, not v80.118 behavior.
 
 The browser's static branded startup view survives slow authorization; initial report acquisition has indeterminate activity and real job phase/count notices. HTTP-shell readiness never implies source/account readiness. Failed authorization asks for tray Open Cost Guard/relaunch; unavailable reports offer Refresh and preserve stale evidence. With JavaScript blocked the static page still explains reload/fresh-link recovery. Timings and automated/native/visual limitations are recorded in the completed startup FR; actual Explorer mouse interaction and macOS desktop behavior are not inferred from tests.
 
@@ -212,7 +236,7 @@ Opt-in `development/tests/integration/probe_windows_web.py --allow-native-ui` re
 
 **Real hosted ARM64 and Intel native checks passed on 2026-10-26; consumer-desktop acceptance remains pending.** See the hosted matrix above for actual AppKit/lifecycle/compiler/browser results. Neither these offline probes nor an app-shaped directory proves Finder/Gatekeeper or physical desktop behavior. Existing root macOS CLI/Watch and development Diagnostics launchers remain the fallback.
 
-Use `macos/Beta/Cost-Guard-Web.command` with already-installed Python 3.11+ on macOS. It checks PATH Python, standard Homebrew Python locations and the Python.org framework location without installing anything. Paths are resolved relative to the checkout, not the current directory. A bounded child process preflights the actual native menu before the shared lifecycle can stop a healthy old instance. A failed/crashed/stalled preflight preserves it. The host then uses the same private records, restart/readiness, finite reports and shutdown owner as Windows. Closing the browser does not stop Web.
+Use `macos/Beta/Cost-Guard-Web.command` with already-installed Python 3.11+. Terminal shows **Launching web…**, display-only indeterminate activity and sanitized stages throughout discovery, native preflight and browser handoff. The activity child is stopped/joined at exit; it never owns the detached server. Python missing or launch failure retains actionable text and, in an interactive Terminal, waits for Return. No percentage or browser-paint guarantee is shown. It checks PATH, standard Homebrew and Python.org locations without installing anything. Paths are relative to the checkout. Bounded native preflight preserves a healthy old instance on failure; the host retains the same private lifecycle/security owner. Closing the browser does not stop Web. Physical macOS spinner/handoff behavior remains unverified.
 
 The source-only Python `ctypes` adapter binds in-box AppKit/Objective-C with explicit pointer, NSInteger, BOOL and double signatures (native-tested on hosted 64-bit Intel/Apple Silicon). It creates an accessory `NSApplication` and a **CG** status item with **Open Cost Guard** and **Exit Cost Guard**. AppKit stays on the main thread; HTTP/analysis stays off it. Callbacks only queue actions; `/usr/bin/open` runs in one bounded asynchronous browser worker, not via `$BROWSER` or shell interpolation. A failed browser retry changes the tooltip and retains Open. A main/tracking-mode timer dismisses an open menu when its HTTP owner stops so the icon can be removed. Hosted callbacks/pumping/cleanup passed; physical menu interaction remains unverified.
 
@@ -228,7 +252,7 @@ Source/version/OS/architecture/Python/check-out fingerprints select the cache. U
 
 Git records the `.command` as executable. Finder/ZIP extraction and downloaded-file quarantine behavior are **unverified**. If extraction loses executable metadata, an explicit owner action `chmod u+x macos/Beta/Cost-Guard-Web.command` restores the script bit; alternatively run `zsh macos/Beta/Cost-Guard-Web.command` from the checkout. Neither bypasses Gatekeeper. No quarantine removal, signing workaround, forced launch or security-policy change is performed. Respect any macOS security prompt; use the existing CLI/Watch path if Web is blocked.
 
-The `.command` may leave a Terminal window depending on the user's preferences; it never kills Terminal or promises to close that window. Only a real Finder launch of the generated app can establish no-Terminal behavior. Offline first launch is intended to need only installed Python and system frameworks/osacompile; ordinary source/pricing requests retain their existing network policies.
+The `.command` may leave Terminal depending on user preferences; it never scripts closing Terminal windows or requests Automation permission. The optional Finder app remains no-Terminal/no-Automation, with its existing OS app-launch cue and supported error alert; no new console or unverified notification/permission mechanism is introduced just for a spinner. Only physical Finder launch proves that behavior. Offline startup needs installed Python/system frameworks/osacompile; source/pricing keep their existing network policies.
 
 Synthetic `test_macos_web.py` / `test_macos_app.py` run without any GUI and cover typed 64-bit dispatch, main-thread enforcement, callback queuing, readiness, partial cleanup, preflight preserving a healthy instance, asynchronous Open/Exit, browser-fault handoff, app quoting, cached reuse/rebuild, tampering and compile failures. With separate current UI approval on macOS, `python development/tests/integration/probe_macos_web.py --allow-native-ui` exercises real AppKit labels/Objective-C callbacks, event pumping, browser-failure retention and HTTP-owner cleanup without opening a browser or calling a model/provider. It is never part of Quick/Full.
 
