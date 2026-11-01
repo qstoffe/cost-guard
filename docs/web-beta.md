@@ -1,5 +1,33 @@
 # Web Beta
 
+## Settings and appearance
+
+v80.119 adds **Settings** at the far right of desktop navigation (last when wrapped),
+at `/#/settings`. Its sole setting is **Theme**: **Classic**, a dark CLI-inspired
+palette independent of system preference, or **Web**, the existing adaptive
+light/dark design. CLI `colorScheme`, custom palettes and color overrides are separate.
+
+Selecting a different theme saves immediately to `config/user-config.jsonc` through
+the private authenticated/CSRF-protected API, then restyles the whole loaded page
+without reload, report acquisition or host restart. No Apply button or browser-local
+preference exists. Saving temporarily disables only the dropdown; failures restore
+the last confirmed choice and show an error. Select the desired theme again to retry.
+
+Top-level `webTheme` accepts exactly lowercase `"classic"` or `"web"`; an omitted
+override inherits Classic. No user file is created by reads. Reload, a new tab and
+relaunch use the validated effective file value; the HTML shell carries it before
+analytics loads. Reopening Settings also reads external edits; there is no polling
+or automatic cross-tab broadcast. Existing tabs retain their confirmed appearance
+until a settings read or their own successful change.
+
+Only this one field is writable. Minimal JSONC edits preserve other text/comments,
+ordering, nested settings and CLI palettes. Invalid/ambiguous JSONC, linked/reparse
+locations, hard-linked files, insufficient permissions, files over 1 MiB or detected
+concurrent edits fail without a destructive rewrite. Replacement uses a private,
+same-directory temporary file and atomic rename. Last-moment identity/byte checks
+detect ordinary editor conflicts, not hostile same-user filesystem races. Defaults,
+OpenCode, credentials, accounts, pricing and report data remain read-only.
+
 ## Unified Models
 
 v80.118 replaces Overview and the old separate Models view with **Models** at
@@ -106,7 +134,7 @@ row with document scrolling. Token Mix phase costs are available in More informa
 account provenance is on Accounts.
 
 v80.93 adds a shared responsive light/dark visual system and global **Watch** navigation.
-The theme follows the operating-system preference, with no saved browser settings or external fonts.
+That adaptive design is now the Web option; Classic is the default. Neither uses browser storage or external fonts.
 Rounded controls, visible keyboard focus, sticky table headings, exact numeric alignment and
 local table scrolling keep data selectable at narrow widths; reduced-motion preferences disable transitions.
 The native “Reading this report” disclosure contains definitions, never report rows or totals.
@@ -145,6 +173,7 @@ Accounts uses the shared provider/account cards with native quota windows, known
 | Session report | `/#/sessions/<id>` | Complete report Snapshot/Live detail; links from session lists and global Watch |
 | Date / inclusive range | `/#/reports?date=2026-10-25`, `/#/reports?date=2026-10-24:2026-10-25` | Configured-local boundaries/DST; canonical range valuation and union duration; impossible/reversed dates fail explicitly |
 | Historical Token Mix | `/#/token-mix` | Explicit Capture/Refresh only, never navigation/prefetch; CLI Input / Cached input / Cache write / Output share-and-CCost cells, model/publisher Prompts/Calls/Tokens/CCost, exact-volume sorting with compact K/M/B labels and explicit partial/unknown telemetry, full-report total above the table and optional sample/price coverage |
+| Web Settings | `/#/settings` | Theme only; authenticated narrow config read/write, no report acquisition |
 
 Outside Models, report tables retain their search/filter/page controls. Their column clicks cycle ascending, descending, then original server order. Models uses the independent filter/multi-sort contract above, with no three-click reset. All controls are presentation-only: totals and source queries never change. Decimal strings compare exactly and unknowns sort last. Complete revision-paged session detail has its own controls; global search is disabled there rather than implying unloaded-row coverage.
 
@@ -280,10 +309,11 @@ The historical synthetic parity and bounded integration inventory is [Beta stabi
 
 | Route | Method | Meaning |
 | --- | --- | --- |
-| `/`, `/app.js`, `/render.js`, `/watch.js`, `/reports.js`, `/live.js`, `/session.js`, `/app.css` | GET | Fixed public Beta shell/assets, no history |
+| `/`, `/app.js`, `/render.js`, `/watch.js`, `/reports.js`, `/live.js`, `/session.js`, `/settings.js`, `/app.css` | GET | Fixed public Beta shell/assets, no history |
 | `/health` | GET | Public HTTP-shell readiness only |
 | `/api/bootstrap` | POST | One-use `{"credential":"…"}` exchange with exact Origin |
 | `/api/session` | GET | Authenticated CSRF recovery, no control credential |
+| `/api/settings/theme` | GET / POST | Authenticated enum read; CSRF-protected `{"webTheme":"classic"}` or `{"webTheme":"web"}` write only |
 | `/api/status` | GET | Separate HTTP, analysis, source and account acquisition states |
 | `/api/live` | GET | Authenticated coherent live/progress snapshot and instance/sequence; retained terminal state while stopping |
 | `/api/events` | GET | Authenticated multiplexed SSE, bounded replay with Last-Event-ID; no query strings |

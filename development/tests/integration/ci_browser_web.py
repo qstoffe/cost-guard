@@ -1,8 +1,11 @@
 """Actual rendered Chromium against shipped HTTP/assets, synthetic report worker only."""
 from pathlib import Path
+import json
 import re
+import shutil
 import socket
 import sys
+import tempfile
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -27,9 +30,14 @@ def main():
         return original_stream(handler)
 
     stream_patch = patch.object(RequestHandler, "stream_events", record_stream)
+    temporary = tempfile.TemporaryDirectory()
     try:
         from playwright.sync_api import sync_playwright, expect
-        owner = WebHost(ROOT, jobs=ReportJobs(target=finite_report))
+        config_root = Path(temporary.name).resolve()
+        (config_root / "config").mkdir()
+        shutil.copyfile(ROOT / "config/default-config.jsonc", config_root / "config/default-config.jsonc")
+        user_config = config_root / "config/user-config.jsonc"
+        owner = WebHost(config_root, jobs=ReportJobs(target=finite_report))
         stream_patch.start()
         owner.start()
         owner.publish_ready()
@@ -96,12 +104,48 @@ def main():
                 assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
                 assert page.locator("th").first.evaluate("el => getComputedStyle(el).position") == "sticky"
                 page.emulate_media(color_scheme="dark", reduced_motion="reduce")
-                assert page.locator("html").evaluate("el => getComputedStyle(el).getPropertyValue('--bg').trim()") == "#0c1422"
+                expect(page.locator("html")).to_have_attribute("data-theme", "classic")
+                assert page.locator("html").evaluate("el => getComputedStyle(el).getPropertyValue('--bg').trim()") == "#101112"
                 assert page.locator("#refresh").evaluate("el => getComputedStyle(el).transitionDuration") == "0s"
                 page.locator("#search").focus()
                 assert page.locator("#search").evaluate("el => getComputedStyle(el).outlineStyle") != "none"
                 page.emulate_media(color_scheme="light", reduced_motion="no-preference")
-                evidence["checks"].append("360px no page overflow, keyboard focus, sticky headings, dark theme and reduced motion")
+                assert page.locator("html").evaluate("el => getComputedStyle(el).getPropertyValue('--bg').trim()") == "#101112"
+                assert not user_config.exists(), "theme reads must not create configuration"
+                evidence["checks"].append("360px no page overflow, keyboard focus, sticky headings, Classic dark in both preferences and reduced motion")
+                report_requests = []
+                page.on("request", lambda request: report_requests.append(request.url) if request.url.endswith('/api/reports') else None)
+                page.get_by_role("link", name="Settings", exact=True).click()
+                expect(page.locator("#heading")).to_have_text("Settings")
+                theme = page.get_by_role("combobox", name="Theme", exact=True)
+                expect(theme).to_be_enabled()
+                expect(theme).to_have_value("classic")
+                theme.select_option("web")
+                expect(page.locator("#theme-feedback")).to_have_text("Theme saved.")
+                expect(page.locator("html")).to_have_attribute("data-theme", "web")
+                assert json.loads(user_config.read_text()) == {"webTheme": "web"}
+                assert page.locator("html").evaluate("el => getComputedStyle(el).getPropertyValue('--bg').trim()") == "#eef2f8"
+                page.emulate_media(color_scheme="dark")
+                assert page.locator("html").evaluate("el => getComputedStyle(el).getPropertyValue('--bg').trim()") == "#0c1422"
+                page.reload()
+                expect(page.get_by_role("combobox", name="Theme", exact=True)).to_have_value("web")
+                expect(page.locator("html")).to_have_attribute("data-theme", "web")
+                fresh = context.new_page()
+                try:
+                    fresh.goto(origin + '/#/settings')
+                    expect(fresh.get_by_role("combobox", name="Theme", exact=True)).to_have_value("web")
+                    expect(fresh.locator("html")).to_have_attribute("data-theme", "web")
+                finally:
+                    fresh.close()
+                page.get_by_role("combobox", name="Theme", exact=True).select_option("classic")
+                expect(page.locator("#theme-feedback")).to_have_text("Theme saved.")
+                expect(page.locator("html")).to_have_attribute("data-theme", "classic")
+                assert json.loads(user_config.read_text()) == {"webTheme": "classic"}
+                assert not report_requests, "Settings must not acquire reports"
+                page.go_back()
+                expect(page.locator("#result")).to_contain_text("<script>PRIVATE_TEXT</script>")
+                page.emulate_media(color_scheme="light")
+                evidence["checks"].append("actual Settings saves in disposable canonical config, Classic/Web round trip, adaptive Web, reload/new tab and no Settings report acquisition")
                 owner.events.publish("live", {"state": "CI synthetic Live observation"})
                 page.get_by_role("link", name="Watch", exact=True).click()
                 expect(page.locator("#result")).to_contain_text("CI synthetic Live observation", timeout=15000)
@@ -165,6 +209,7 @@ def main():
         if owner:
             owner.close()
             assert owner.thread is None or not owner.thread.is_alive()
+        temporary.cleanup()
     save("browser", evidence)
     return int(evidence["outcome"] != "PASS")
 

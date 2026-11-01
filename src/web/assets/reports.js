@@ -12,7 +12,7 @@ const ReportRoutes = (() => {
       models: ['Models', 'normal'],
       accounts: ['Accounts', 'normal'], sessions: ['Sessions', 'sessions'],
       reports: ['Date reports', null], 'token-mix': ['Token Mix · deep history', 'token-mix'],
-      'cost-per-hour': ['Cost per Active Hour', 'cost-per-hour']};
+       'cost-per-hour': ['Cost per Active Hour', 'cost-per-hour'], settings: ['Settings', null]};
     if (!routes[path]) return {title: 'Page not found', section: '', request: null};
     const [title, kind] = routes[path];
     let request = kind ? {kind} : null;

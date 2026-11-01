@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.119 — 2026-11-01
+
+- Web Settings adds immediately saved Classic/Web appearance. Classic defaults to a dark CLI-inspired palette; Web retains adaptive light/dark. A narrow authenticated API preserves user JSONC and rejects unsafe paths, invalid configuration and detected editor conflicts. CLI palettes, reports and Watch acquisition are unchanged.
+
 ## v80.118 — 2026-11-01
 
 - Unified Web Models: page scrolling, catalog/version filters, exact tier multi-sort, legacy bookmarks; Accounts/CLI/Watch unchanged.
@@ -227,7 +231,7 @@
 
 ## v80.67–v80.70 — 2026-10-23
 
-- FR-only registrations; no production behavior changed. v80.67 added Toolkit bundle migration and OpenAI account-replacement/rejected-quota requests with sanitized diagnostics. v80.68 added Toolkit release/history and version-free FR authoring adoption requests with explicit migration prerequisites. v80.69 added FR 0130 for completed Watch recency using verified terminal/plugin-end evidence. v80.70 separately added FR 0140 for stable Watch Today, a shorter overall CCost label and current-day/native-period provider/subscription CCost with Normal explanations.
+- FR registrations only: Toolkit migration/release/history/FR authoring, OpenAI account/quota recovery, verified Watch recency (0130), and stable Today/provider-period CCost (0140). No production change.
 
 ## Earlier v80 history
 

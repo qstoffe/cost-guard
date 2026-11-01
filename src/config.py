@@ -226,6 +226,10 @@ def validate_configuration(config: dict[str, Any], defaults: dict[str, Any], ove
     _assert_object(overrides, "", root_keys, "config/user-config.jsonc")
     _assert_object(config, "", root_keys, "config/default-config.jsonc")
 
+    theme = config.get("webTheme", "classic")
+    if not isinstance(theme, str) or theme not in {"classic", "web"}:
+        raise _invalid(_setting_source("webTheme", overrides), "webTheme", theme, "classic or web")
+
     unit = config.get("ccostDisplayUnit", "credits")
     if not isinstance(unit, str) or unit not in {"credits", "usd"}:
         raise _invalid(_setting_source("ccostDisplayUnit", overrides), "ccostDisplayUnit", unit, "credits or usd")
@@ -422,6 +426,13 @@ def load_configuration(package_root: Path) -> LoadedConfig:
 
     user_present = user_path.is_file()
     overrides = read_jsonc(user_path) if user_present else {}
+    resolved = validated_values(defaults, overrides)
+    return LoadedConfig(resolved, default_path, user_path, user_present)
+
+
+def validated_values(defaults: dict[str, Any], overrides: dict[str, Any]) -> dict[str, Any]:
+    """Validate an override through the same startup pipeline before any mutation."""
+    validate_configuration(defaults, defaults, {})
     overrides = normalize_legacy_settings(overrides)
     effective = merge_config(defaults, overrides)
     if not isinstance(effective, dict):
@@ -429,4 +440,4 @@ def load_configuration(package_root: Path) -> LoadedConfig:
     validate_configuration(effective, defaults, overrides)
     resolved = resolve_colors(effective)
     validate_resolved_colors(resolved, defaults, overrides)
-    return LoadedConfig(resolved, default_path, user_path, user_present)
+    return resolved
