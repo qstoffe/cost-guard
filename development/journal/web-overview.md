@@ -34,6 +34,42 @@ new report revision. The last good value remains frozen and visibly retained.
 
 ## Evidence
 
+### FR 000537 — unified Models (2026-11-01)
+
+The older minimal-Overview/Models layouts below are historical. One `#/models`
+route now owns four columns, document scrolling, candidate-local version filtering
+and exact tier-aware multi-sort. The application opts into one immutable full-catalog
+projection from the existing acquired sample; selectable publisher/name pairs and
+separate full/selected supersession prevent a newer unselectable version from hiding
+an older selectable one. Unknown comparison prices remain visible. The fixed Web
+full-catalog denominator is disclosed; CLI selected-catalog ratios remain unchanged.
+No new acquisition owner, browser valuation or account entitlement claim is added.
+
+Integrated Chromium tested 360/1366/1920px in light/dark via explicit theme tokens,
+not OS theme switching: 41 default rows, 42 with older selected versions; all four
+columns and body/region heights 1448/1491px with equal scroll/client heights, no
+nested vertical or document horizontal overflow. The document reached More
+information and matching fixture promotion. Main-content edges matched the table
+at laptop/wide widths; narrow horizontal pan, long names, unknowns, Shift mouse/key
+multi-sort, primary-only aria-sort and filter-preserved order passed. Additional
+screenshots were unavailable because Review was not visible; earlier visual
+observations are not new captures. Synthetic fixtures are not physical input,
+screen-reader or real-source browser acceptance.
+
+Focused read-only V2 `--models` observed one owner/two streams, retained run origin,
+29 full catalog rows, 25 selectable/14 selected-latest under Normal with Accounts;
+all-models had 29 selectable/16 latest and no Accounts as before. Workers joined;
+shared OpenCode was untouched. Broad `--reports` separately failed date polling
+with WinError10054, leaving deep-history cancellation unreached; root cause is not
+established and that attempt is not PASS. Deterministic CLI/Watch/account tests and
+focused Models evidence do not certify the failed broader probe.
+
+Decision Delegate approved only unavailable physical Explorer/Terminal/Finder
+demonstrations as a scoped delivery exception, contingent on native Windows console
+observations, final Full/validator and three-platform CI PASS, including actual
+macOS zsh/PTY test execution. No failed gate was waived; platform/paint limits stay
+explicit in the [completion report](../backlog/complete/000049-000537-unified-models-table-filter-sort-launch-handoff/COMPLETION.md).
+
 FR 000535's minimal Overview uses one semantic HTML table with CSS subgrid tracks,
 native tbody-only vertical scrolling and matching header/body scrollbar gutters.
 The first Chromium attempt found a real 15px final-column width mismatch; reserving

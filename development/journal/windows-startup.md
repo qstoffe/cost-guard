@@ -13,6 +13,25 @@ CLI/Watch/Diagnostics must not asynchronously share an existing interactive cons
 
 ## Evidence
 
+FR 000537 (2026-11-01): Decision Delegate authorized one additional bounded
+cold/warm sequence over only the clone's explicitly spawned console and owned
+host/tray, with normal OS browser requests and no browser automation. Win32 console
+buffer samples observed all `| / - \\` spinner frames, Launching web and allowlisted
+discovery/readiness/browser stages. Cold/warm launchers exited naturally with code 0
+at 6.063/2.496 s, from 40/56 samples; authenticated detached host remained ready and
+warm restart changed instance nonce. Exact owned host was safely stopped; no shared
+OpenCode service or unrelated window/process was inspected/stopped. Sampling
+briefly attaches only the reader, not the host; this is console-buffer evidence,
+not a physical Explorer click, visual accessibility or browser first-paint proof.
+
+Decision Delegate explicitly approved the unavailable physical Explorer/Terminal/
+Finder cold/warm/restart demonstrations as a scoped exception, conditional on this
+Windows result, final Full/validator and all three normal platform CI checks PASS.
+The new macOS zsh/PTY feedback/exit test must execute on macOS; its local Windows
+skip is not PASS. macOS physical status/handoff/Gatekeeper and browser paint remain
+unverified. No failing gate or confirmed regression is waived. Finder's existing
+no-Terminal/no-Automation route is preserved without an invented new cue.
+
 `development/architecture/governance/verification/windows-handoff.md` retains reproduction, native results and limits for v80.101. Windows 11 AMD64/Python 3.14.7: final joined probe measured batch exit 0.028/0.026 s, host/tray readiness 2.415/3.573 s, delegate exit observed at 2.759/3.973 s. An earlier separate synchronous fallback took 1.023/1.649 s. These are single observations, not browser-paint or physical flash comparisons. That delivery's local Full passed 113 files in 59.6 s. Native tray/lifecycle/ShellExecute, bounded discovery and retained-handle delegate joins passed; final audit found zero task delegates, no managed state and no new startup-error record. OpenCode's built-in browser verified synthetic report/auth-expiry recovery without Chrome automation fallback. GitHub Actions run 40724292824 passed Windows Server 2025, macOS ARM64 and Intel regression/native/browser phases on this source revision; hosted native execution is not consumer desktop acceptance.
 
 FR 000522: `development/architecture/governance/verification/windows-console-ownership.md` retains the bounded original reproduction and separate-console probes. Explicit Windows Terminal/Console Host callers, synthetic Git prompt plus PSReadLine, cmd/Explorer-style invocation, PowerShell 7/5.1, 80/120/160-column buffers, cancellation, native results 0/1/9009 and actual report/Watch/Diagnostics input-return checks were exercised. This is native console input evidence, not a screenshot/physical keyboard or colleague-prompt claim. Diagnostics' own full-local validation passed; its generated ZIP stays private and is not committed.
