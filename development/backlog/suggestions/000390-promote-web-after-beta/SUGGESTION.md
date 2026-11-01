@@ -1,3 +1,7 @@
+> **Contract r5 migration (2026-11-01), authorized by the Decision Delegate:** folder identity 000390 identifies this same parked concept, not a new allocation or executable FR. This supersedes only the historical unnumbered-layout instruction below; the original text is retained as evidence. The suggestion remains non-executable. Future implementation still requires separate explicit owner approval and a fresh FR identity, never same-ID promotion.
+
+> The retirement suggestion referenced below now resides at `../000400-retire-legacy-after-coexistence/SUGGESTION.md`.
+
 > **Unnumbered, non-executable suggestion.** Owner explicitly parked the former FR000390 concept on 2026-10-26 pending later separate approval. The old allocated identity remains reserved and must never be reused; future approval creates a new FR number. No implementation or priority is authorized by this document.
 
 # Suggestion — Promote Web to standard launchers while preserving Legacy CLI
