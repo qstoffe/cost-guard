@@ -23,7 +23,9 @@ class ThemeTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
-        self.root = Path(temporary.name)
+        # macOS exposes its temporary directory through the /var symlink.
+        # Canonicalize the trusted fixture, not paths accepted by the write owner.
+        self.root = Path(temporary.name).resolve()
         (self.root / "config").mkdir()
         shutil.copyfile(ROOT / "config/default-config.jsonc", self.root / "config/default-config.jsonc")
         self.settings = ThemeSettings(self.root)
@@ -104,7 +106,7 @@ class ThemeTests(unittest.TestCase):
     def test_reparse_and_symlink_ancestors_are_rejected_before_read(self):
         import src.web.theme as module
         real = Path.lstat
-        for hazard in (self.path.parent, self.root):
+        for hazard in (self.path.parent, self.root, self.root.parent):
             with self.subTest(hazard=hazard):
                 def info(path, **kwargs):
                     value = real(path)
@@ -116,6 +118,9 @@ class ThemeTests(unittest.TestCase):
                 with patch.object(Path, "lstat", info):
                     with self.assertRaisesRegex(ThemeError, "settings_unsafe_path"):
                         self.settings.read()
+                    with self.assertRaisesRegex(ThemeError, "settings_unsafe_path"):
+                        self.settings.write("web")
+                self.assertFalse(self.path.exists())
 
     def test_concurrent_external_edit_and_stopping_are_not_overwritten(self):
         self.path.write_bytes(b'{}')

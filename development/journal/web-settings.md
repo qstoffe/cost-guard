@@ -50,6 +50,26 @@ Reproduction, measurements, safe file/HTTP cases, failed attempts and uncertaint
 
 ## Next investigations
 
+### PR CI repair
+
+Run 41356409265 passed Windows Full/package and native API checks but failed
+`test_web_theme.py` on both macOS architectures; all browser checks stopped at the
+old adaptive-dark-default assertion (`ci_browser_web.py:99`). Trusted disposable
+fixture roots now resolve macOS's `/var` alias, without relaxing production ancestor
+guards; deterministic read/write tests also reject a linked ancestor above the root.
+The hosted browser uses disposable canonical config and exercises actual Settings
+saves, both Classic preferences, adaptive Web, persistence/reload/new tab and no
+Settings report acquisition. It remains hosted-only, not workstation UI permission.
+
+GitHub Actions job-log retrieval returned HTTP 401; PR/jobs/Checks annotations were
+available. Detailed original macOS traces were not retrieved, so canonicalization
+is a hypothesis pending fresh hosted results, not an observed traceback diagnosis.
+The **Decision Delegate** authorized this narrow repair/evidence path, with local
+Full/validator and all fresh required hosted checks still mandatory before merge.
+No alternate identity/access route or additional test waiver was authorized.
+After these test-only repairs, local Full passed all 120 files (zero failures,
+55.2s); the validator passed all 11 checks with the same four design warnings.
+
 If separately requested, inspect final appearance with Review visible and collect
 native/assistive-technology and cold first-paint evidence. No automatic external
 browser fallback, OS-setting change or paid inference is authorized by this note.

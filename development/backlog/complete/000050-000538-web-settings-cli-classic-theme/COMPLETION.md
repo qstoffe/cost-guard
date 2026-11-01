@@ -38,6 +38,23 @@ shared OpenCode was not stopped. No model inference or native launcher was start
 
 ## Explicit test exception / remaining uncertainty
 
+### Hosted CI correction and evidence limit
+
+Initial run 41356409265 passed Windows Full/package and native API checks, but
+macOS theme tests failed and all rendered smoke tests retained an obsolete Web
+default assumption. Test-only corrections canonicalize trusted disposable roots
+(macOS `/var` alias), retain production link/reparse rejection, and exercise actual
+Settings saves/persistence plus both theme/preference contracts in hosted Chromium.
+The macOS cause remains a hypothesis until fresh hosted results confirm the repair.
+Job-log retrieval returned HTTP 401; structured job/Checks annotations were read,
+not detailed original traces. The **Decision Delegate** authorized proceeding with
+that evidence and focused repairs, not an access bypass or CI waiver. Fresh local
+Full/validator and required hosted checks remain merge gates.
+Post-repair local Full passed 120 files with zero failures (55.2s); package
+validation passed all 11 checks, retaining four existing design-budget warnings.
+
+### Existing visual exception
+
 The **Decision Delegate**, not a new user instruction, authorized omitting a fresh
 full AC6 visual matrix/screenshots after the last small Classic selector refinement.
 Prior full browser coverage plus final integrated computed styles were judged
