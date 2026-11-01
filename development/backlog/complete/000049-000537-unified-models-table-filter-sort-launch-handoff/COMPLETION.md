@@ -1,6 +1,6 @@
 # FR 000537 completion — unified Models and launch handoff
 
-Product: v80.118, 2026-11-01. The original FR is preserved unchanged. Implementation and local verification are complete; the PR's final three-platform CI disposition must be recorded before merge.
+Product: v80.118, 2026-11-01. The original FR is preserved unchanged. Product/test implementation passed local verification and all three hosted platforms. Exact-final-head CI and merge evidence are recorded in [PR #113](https://github.com/qstoffe/cost-guard/pull/113), avoiding a new documentation commit merely to record its own check run.
 
 ## Delivered scope
 
@@ -13,7 +13,7 @@ Product: v80.118, 2026-11-01. The original FR is preserved unchanged. Implementa
 
 ## Verification actually performed
 
-- Final local Full after latest-main integration: **119 files, 1,453 tests, 1,452 passed, one local zsh/PTY skip, zero failures/errors, 66.0 s**. This includes the six focused Models tests and route-focus/heartbeat regressions. No tests were weakened or deselected.
+- Final local Full after latest-main integration and PTY-reader correction: **119 files, 1,453 tests, 1,452 passed, one local zsh/PTY skip, zero failures/errors, 65.0 s**. This includes the six focused Models tests and route-focus/heartbeat regressions. No tests were weakened or deselected.
 - Working-tree validator: 11 checks PASS, four design-budget warnings, no failures. Hard caps are unchanged; README/history wording was compacted, not retired.
 - Integrated Chromium: actual iframe viewports 360/1366/1920, each light/dark using explicit CSS theme tokens, 41 default / 42 selected-all-version rows. Four columns, no document horizontal overflow, body/region client height equals scroll height, document scroll reaches collapsed More information and matching promotion. Narrow horizontal pan, complete long name, default filters, ordinary/Shift-key/additive sorting, primary-only aria-sort and filter-preserved sort passed. No OS-theme, physical-device or screen-reader proof. An additional screenshot attempt could not capture a non-visible Review tab; earlier visual inspections are retained as historical observations, not new screenshots.
 - Read-only real V2 Models probe: one owner/two streams, retained origin/advanced sequence; Normal 29 catalog/25 selectable/14 selected-latest rows with Accounts, all-models 29/29/16 without Accounts as designed; workers joined and shared OpenCode untouched. No model inference.
@@ -22,7 +22,11 @@ Product: v80.118, 2026-11-01. The original FR is preserved unchanged. Implementa
 
 ## Authorized exception and residual uncertainty
 
-Initial PR CI [run 41351289503](https://github.com/qstoffe/cost-guard/actions/runs/41351289503): Windows regression/native/browser PASS; both macOS native and browser phases PASS, but regression FAIL in the new shell test because activity was read only after closing the PTY slave. Exit 0/4 and stage output assertions passed. The reader now waits boundedly and reads before the last slave close, and additionally requires two distinct spinner frames. This failure is not waived; a fresh three-platform run must pass.
+Initial PR CI [run 41351289503](https://github.com/qstoffe/cost-guard/actions/runs/41351289503): Windows regression/native/browser PASS; both macOS native and browser phases PASS, but regression FAIL in the new shell test because activity was read only after closing the PTY slave. Exit 0/4 and stage output assertions passed. The reader now waits boundedly and reads before the last slave close, and additionally requires two distinct spinner frames. This failure was repaired, not waived.
+
+Fresh normal PR [run 41351961595](https://github.com/qstoffe/cost-guard/actions/runs/41351961595) passed regression/validator, isolated native and real Chromium phases on Windows 2025, macOS 15 ARM64 and Intel at source head `ceee83deae4101ff520adc427634e05c7df53f5d`. Windows: 1,452 passed/one zsh skip; each macOS: 1,446 passed/seven Windows-only skips, no failures/errors, complete counts across 119 files. The new zsh/PTY test actually ran successfully on both macOS architectures. Real `.command`/AppKit/cache/restart checks use an offline entry shim and remain distinct from physical/default-browser proof.
+
+Only completion/journal facts change after that source head. Decision Delegate separately authorized one existing-workflow dispatch on the final documentation-only head; its exact SHA, run link and outcome belong to PR #113 and the final handoff. The final run must pass; ancestor checks are not mislabeled as exact-final-head checks.
 
 **Decision Delegate** explicitly approved delivery without unavailable physical Windows Explorer and macOS Terminal/Finder cold/warm/restart demonstrations, conditional on the actual Windows console verification, final Full/validator and all three normal platform CI checks passing. The new macOS zsh/PTY test must actually execute successfully on macOS, not skip. No failing gate or confirmed regression is waived.
 

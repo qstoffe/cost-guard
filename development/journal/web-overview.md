@@ -70,6 +70,14 @@ observations, final Full/validator and three-platform CI PASS, including actual
 macOS zsh/PTY test execution. No failed gate was waived; platform/paint limits stay
 explicit in the [completion report](../backlog/complete/000049-000537-unified-models-table-filter-sort-launch-handoff/COMPLETION.md).
 
+The source-exact fresh [PR run 41351961595](https://github.com/qstoffe/cost-guard/actions/runs/41351961595)
+at `ceee83d` passed Full/validator, native APIs/launcher smoke and real Chromium on
+Windows/macOS ARM64/Intel. Both macOS actually passed the new zsh/PTY activity/exit
+regression after its last-slave-close reader defect was repaired; no test exception
+was used for that failure. Final documentation-only-head dispatch and merge evidence
+are recorded in [PR #113](https://github.com/qstoffe/cost-guard/pull/113). Physical
+desktop and broader failed live-report limits above remain unchanged.
+
 FR 000535's minimal Overview uses one semantic HTML table with CSS subgrid tracks,
 native tbody-only vertical scrolling and matching header/body scrollbar gutters.
 The first Chromium attempt found a real 15px final-column width mismatch; reserving

@@ -41,8 +41,15 @@ FR 000522: `development/architecture/governance/verification/windows-console-own
 FR 000537's first PR matrix passed Windows and both macOS native/browser phases,
 but the new macOS shell regression read no PTY text after closing its slave. The
 test now reads with a bounded readiness check while the slave is still open and
-requires two different spinner frames; stage/exit assertions remain. Fresh macOS
-CI must verify the correction; native-phase success alone did not waive this FAIL.
+requires two different spinner frames; stage/exit assertions remain. Fresh
+[run 41351961595](https://github.com/qstoffe/cost-guard/actions/runs/41351961595)
+passed regression/validator/native/browser on all three platforms at `ceee83d`;
+the zsh/PTY regression executed successfully on both macOS architectures, rather
+than skipping. Each macOS passed 1,446 tests with seven Windows-only skips;
+Windows passed 1,452 with one zsh skip. Native-phase success alone did not waive
+the initial FAIL. A separately authorized existing-workflow dispatch verifies the
+final documentation-only head; exact results are retained in PR #113, not in an
+endless sequence of self-reporting documentation commits.
 
 The colleague's exact decorated prompt remains unverified. Physical Explorer double-click/flash duration, consumer tray appearance/accessibility and native macOS Finder/Gatekeeper remain unverified. Distinguish visible launcher lifetime from source/report readiness. Do not delete instance state or user caches to diagnose startup. If a residual flash proves unacceptable, compare a truly GUI entrypoint before adding a compiler/cache.
 
