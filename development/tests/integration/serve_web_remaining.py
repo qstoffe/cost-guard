@@ -1,13 +1,16 @@
-"""Approval-only synthetic HTTP fixture for the shipped browser app; never a real host.
+"""Synthetic HTTP fixture for integrated-browser checks; never a product host.
 
 Fixed loopback resources, synthetic session/CSRF and finite fixture jobs only.
-No provider, source, user configuration, browser process or persistent user data.
+No provider, source, real user configuration, browser process or persistent user data.
 Exits after fifteen minutes or POST /fixture/stop. Not security/real-SSE proof.
 """
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
+import shutil
+import stat
 import sys
+import tempfile
 from threading import Event, Thread, Timer
 import unittest
 from urllib.parse import urlsplit, parse_qs
@@ -19,18 +22,29 @@ from development.tests.fixtures.remaining_views import remaining_reports, result
 from development.tests.fixtures.warning_projections import warning_prompt, warning_watch_projection
 from src.analysis.context import PriceWarningSeverity
 from src.application.live_projection import project_live
+from src.application.projection import project
+from development.tests.fixtures.model_views import model_report
+from src.web.theme import ThemeError, ThemeSettings
 
 
 def main():
+    temporary = tempfile.TemporaryDirectory(prefix="web-theme-fixture-")
+    root = Path(temporary.name)
+    (root / "config").mkdir()
+    shutil.copyfile(ROOT / "config/default-config.jsonc", root / "config/default-config.jsonc")
+    settings = ThemeSettings(root)
     owner = unittest.TestCase()
     try:
         reports = {key: result(value) for key, value in remaining_reports(owner).items()}
     finally:
         owner.doCleanups()
+    catalog = project(model_report(include_model_catalog=True)).to_json()['model_catalog']
+    reports['normal']['view']['model_catalog'] = catalog
     live_view = project_live(warning_watch_projection(warning_prompt(PriceWarningSeverity.EXCEEDED)), ZONE).to_json()
     live = dict(state="running", view=live_view, source_observed_at_ms=NOW)
     assets = ROOT / "src/web/assets"
     resources = {"/" + path.name: path.read_bytes() for path in assets.iterdir() if path.is_file()}
+    resources['/theme-review.js'] = Path(__file__).with_name('web_theme_browser.js').read_bytes()
     jobs, leases, requests = {}, {}, []
     stopped = Event()
 
@@ -47,6 +61,8 @@ def main():
             url = urlsplit(self.path)
             if url.path == "/api/session":
                 return self.send(dict(csrf="synthetic-only"))
+            if url.path == "/api/settings/theme":
+                return self.send(dict(webTheme=settings.read()))
             if url.path == "/api/status":
                 return self.send(dict(http="ready", analysis="ready", source="fixture", accounts="fixture", session_detail=True))
             if url.path == "/api/live":
@@ -69,9 +85,14 @@ def main():
             if url.path == "/fixture/requests":
                 return self.send(requests)
             if url.path == "/":
-                width = 360 if parse_qs(url.query).get("width") == ["360"] else 1200
-                return self.send(f'<!doctype html><html><title>Synthetic review only</title><iframe title="Cost Guard fixture" style="width:{width}px;height:1700px;border:0" src="/index.html"></iframe></html>'.encode(), "text/html")
+                query = parse_qs(url.query)
+                width = query.get("width", ["1366"])[0]
+                width = width if width in {"360", "1366", "1920"} else "1366"
+                scheme = "dark" if query.get("scheme") == ["dark"] else "light"
+                return self.send(f'<!doctype html><html><title>Synthetic theme review</title><iframe title="Cost Guard fixture" style="color-scheme:{scheme};width:{width}px;height:1200px;border:0" src="/index.html#/settings"></iframe></html>'.encode(), "text/html")
             content = resources.get(url.path)
+            if url.path == '/index.html':
+                content = content.replace(b'data-theme="classic"', f'data-theme="{settings.read()}"'.encode(), 1)
             if content is None:
                 self.send_error(404)
                 return
@@ -84,6 +105,15 @@ def main():
             if self.path == "/fixture/stop":
                 self.send(dict(stopped=True)); stopped.set()
                 Thread(target=self.server.shutdown).start()
+            elif self.path == "/api/settings/theme":
+                try:
+                    self.send(dict(webTheme=settings.write(value.get('webTheme'))))
+                except ThemeError as error:
+                    self.send_response(503); self.end_headers()
+                    self.wfile.write(json.dumps(dict(error=str(error))).encode())
+            elif self.path == "/fixture/theme-readonly":
+                settings.path.chmod(stat.S_IREAD if value.get('readonly') else stat.S_IREAD | stat.S_IWRITE)
+                self.send(dict(ready=True))
             elif self.path == "/api/reports":
                 key = str(len(jobs) + 1)
                 kind = value["kind"]
@@ -122,7 +152,7 @@ def main():
         print("Synthetic review ready: http://127.0.0.1:18751/index.html", flush=True)
         server.serve_forever()
     finally:
-        stopped.set(); timer.cancel(); server.server_close()
+        stopped.set(); timer.cancel(); server.server_close(); temporary.cleanup()
 
 
 if __name__ == "__main__":

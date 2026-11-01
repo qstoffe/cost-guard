@@ -19,6 +19,24 @@
     --shadow: 0 8px 28px #0003;
   }
 }
+/* Classic deliberately ignores OS preference; Web retains the tokens above. */
+:root[data-theme="classic"] {
+  color-scheme: dark;
+  --bg: #101112; --panel: #191b1d; --surface: #222528; --hover: #2c3034;
+  --ink: #e5e5e5; --muted: #adb3ba; --line: #3b4046; --control-line: #818b95;
+  --accent: #78dce8; --accent-ink: #102125; --accent-soft: #203338;
+  --warn: #ffce73; --warn-bg: #352b19; --error: #ff8d98; --success: #87ff00;
+  --shadow: 0 8px 28px #0003;
+}
+:root[data-theme="classic"] .running, :root[data-theme="classic"] .new:not(tr) { color: var(--success); }
+.success { color: var(--success); }
+.settings-link { margin-inline-start: auto; }
+.theme-settings { max-width: 42rem; }
+.theme-settings select { min-width: 10rem; }
+[data-section="settings"] #refresh, [data-section="settings"] #cancel,
+[data-section="settings"] #unit-choice, [data-section="settings"] #ccost-help,
+[data-section="settings"] .report-search, [data-section="settings"] #notice { display: none; }
+@media (max-width: 40rem) { .settings-link { margin-inline-start: 0; } }
 * { box-sizing: border-box; }
 body {
   margin: 0 auto; max-width: 110rem; min-width: 0; color: var(--ink);
@@ -56,13 +74,13 @@ a { color: var(--accent); text-underline-offset: .2em; overflow-wrap: anywhere; 
 nav a { padding: .4rem .75rem; border: 1px solid transparent; border-radius: .65rem;
   color: var(--muted); text-decoration: none; font-weight: 600; }
 nav a[aria-current="page"] { color: var(--accent); background: var(--accent-soft); border-color: var(--accent); }
-button, input { font: inherit; max-width: 100%; border: 1px solid var(--control-line); border-radius: .55rem;
+button, input, select { font: inherit; max-width: 100%; border: 1px solid var(--control-line); border-radius: .55rem;
   padding: .5rem .8rem; color: var(--ink); background: var(--panel); min-height: 2.65rem; }
 button { cursor: pointer; font-weight: 600; }
 button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-button:disabled { cursor: default; color: var(--muted); background: var(--surface); border-color: var(--line); }
+button:disabled, select:disabled { cursor: default; color: var(--muted); background: var(--surface); border-color: var(--line); }
 input::placeholder { color: var(--muted); opacity: 1; }
-button, input, a { transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease; }
+button, input, select, a { transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease; }
 @media (hover: hover) {
   button:not(:disabled):not(.primary):hover, nav a:hover { background: var(--hover); color: var(--accent); }
   button.primary:not(:disabled):hover { box-shadow: inset 0 0 0 2px var(--accent-ink); }

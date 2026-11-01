@@ -23,6 +23,7 @@ let sessionDetailAvailable = false;
 let hostState = {kind: 'starting', writable: false, terminal: false};
 let hostInstance = null;
 let snapshotRender = null;
+let settingsView = null;
 function connectionStatus(message, state = {}) {
   if (hostState.terminal && state.kind !== hostState.kind) return;
   hostState = {...hostState, ...state};
@@ -115,6 +116,11 @@ function show(state) {
   cancel.disabled = !hostState.writable || !state.active;
   output.setAttribute('aria-busy', state.loading ? 'true' : 'false');
   notice.textContent = hostState.writable ? state.message : 'Last known contents are retained, not updating. See connection notice above.';
+  if (state.section === 'settings') {
+    if (!settingsView) settingsView = new ThemeSettings.View(api);
+    settingsView.attach(output);
+    return;
+  }
   if (state.section === 'models' && !state.result) {
     if ((!hostState.writable && hostState.kind !== 'starting') || state.failed) {
       output.setAttribute('aria-busy', 'false');
@@ -219,6 +225,7 @@ function navigate() {
     history.replaceState(null, '', '/#/models' + query);
   }
   const route = ReportRoutes.resolve(location.hash), match = route.session;
+  document.title = `${route.title} · Cost Guard Web Beta`;
   document.body.dataset.section = route.section;
   document.querySelector('.toolbar').append(unitChoice);
   document.getElementById('content').insertBefore(unitHelp, notice);
@@ -262,6 +269,7 @@ function navigate() {
   }
   document.getElementById('search').disabled = !!current.detail;
   show(current);
+  if (route.section === 'settings' && csrf && !hostState.terminal) settingsView.read();
   if (csrf && hostState.writable && current.request && !current.explicit && !current.detail && !current.result && !current.attempted) {
     current.attempted = true;
     acquire(current);
@@ -271,6 +279,9 @@ async function connect() {
   try {
     const session = credential ? await api('/api/bootstrap', {credential}) : await api('/api/session');
     csrf = session.csrf;
+    // Lightweight file read precedes reports; HTML already carries the early-paint theme.
+    try { ThemeSettings.apply(await api('/api/settings/theme')); }
+    catch (_) { notice.textContent = 'Unable to read saved theme. Open Settings for details.'; }
     const state = await api('/api/status');
     sessionDetailAvailable = state.session_detail === true && typeof SessionDetail !== 'undefined';
     statusLine.textContent = `HTTP ${state.http}; analysis ${state.analysis}; source ${state.source}; accounts ${state.accounts}. Snapshot health is shown below.`;

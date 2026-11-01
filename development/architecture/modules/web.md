@@ -25,6 +25,25 @@ Status: current
 
 ## Public contract
 
+`src/web/theme.py` is the sole write exception: `webTheme` (`classic` default or
+`web`) in this checkout's `config/user-config.jsonc`. `config.validated_values`
+shares startup validation, normalization and color resolution; neither merged
+defaults nor CLI colors are serialized. Bounded JSONC token offsets preserve every
+unrelated byte; duplicate keys and malformed/unsupported settings fail safely.
+Owned/non-reparse paths, 1 MiB bounds, private same-directory temporaries, in-host
+serialization and last-moment file identity/byte comparison precede atomic replace.
+This is ordinary editor-conflict detection, not a hostile same-user race guarantee.
+
+`GET/POST /api/settings/theme` exposes only the enum and allowlisted error codes,
+behind existing Host/Origin/session/CSRF/body/stopping guards. Early HTML selects
+the effective theme before CSS paint. `assets/settings.js` owns the sole native
+dropdown and confirmed-only live CSS-variable switching, safe error rollback and
+keyboard focus recovery. `#/settings` reads on entry, never submits report jobs,
+restarts the host or polls. Other tabs converge on their next read, not a broadcast.
+CLI/Watch settings and acquisition remain unchanged. Tests: `test_web_theme.py`,
+`integration/web_theme.cjs`, and `integration/web_views.cjs`; evidence/limits:
+[Web theme verification](../governance/verification/web-theme.md).
+
 `cost-guard-web.py --foreground` is explicit icon-free developer mode, independent of managed discovery and CLI. Only 127.0.0.1 with an assigned port is supported; exact Host/Origin and authenticated sensitive reads are mandatory. Standard-library only, no installation, updater, generic proxy/shell/filesystem routes or browser-side calculator. Accounts/source/analysis readiness remain independent of HTTP-shell readiness.
 
 `windows/Beta/Cost-Guard-Web.cmd` and experimental `macos/Beta/Cost-Guard-Web.command` accept only approved adapters. Readiness requires a usable icon/event loop; GUI failure cannot advertise an unmanaged host. Native preflight precedes restart. Open uses the registered browser; Exit stops only its matching host. Detached handles/private cwd, no packages/downloaded compiler/service/autostart. macOS/Finder/Gatekeeper remains unverified; in-box osacompile is optional, never an SDK install. Mocks are not native proof.

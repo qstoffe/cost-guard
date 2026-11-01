@@ -32,7 +32,7 @@ async function main() {
   const toolbar = new Node('div');
   toolbar.append(ids['unit-choice']); ids['unit-choice'].append(ids['ccost-unit']);
   ids['host-state'].append(ids['host-message'], ids['host-details']);
-  const nav = ['models', 'sessions', 'watch', 'accounts', 'reports', 'token-mix'].map(key => {
+  const nav = ['models', 'sessions', 'watch', 'accounts', 'reports', 'token-mix', 'settings'].map(key => {
     const node = new Node('a'); node.setAttribute('href', '#/' + key); return node;
   });
   const handlers = {};
@@ -59,10 +59,10 @@ async function main() {
     status('Live connected.', {kind: 'connected', writable: true, terminal: false});
     return {resync() {}};
   }};
-  const context = vm.createContext({LiveConnection: transport, AbortController, clearTimeout, document: {body: new Node('body'), querySelector: () => toolbar, createElement: tag => new Node(tag),
+  const context = vm.createContext({LiveConnection: transport, AbortController, clearTimeout, document: {documentElement: new Node('html'), body: new Node('body'), querySelector: () => toolbar, createElement: tag => new Node(tag),
     getElementById: id => ids[id], querySelectorAll: () => nav, addEventListener() {}}, window: {addEventListener: (key, fn) => { handlers[key] = fn; }},
     location, history, URLSearchParams, fetch: wire, setTimeout, Date, console});
-  for (const path of ['/render.js', '/reports.js', '/app.js']) {
+  for (const path of ['/render.js', '/reports.js', '/settings.js', '/app.js']) {
     const response = await fetch(input.origin + path);
     assert.equal(response.status, 200);
     vm.runInContext(await response.text(), context);
@@ -119,6 +119,19 @@ async function main() {
     }
     assert.equal(requests, before, 'health must not reacquire frozen reports');
   };
+  const frozenModels = ids.result.textContent;
+  navigate('settings');
+  await until(() => all(ids.result, 'select')[0]?.disabled === false);
+  assert.equal(all(ids.result, 'select').length, 1, 'sole setting is Theme');
+  assert.equal(all(ids.result, 'button').length, 0, 'no save or apply action');
+  assert.equal(ids.heading.textContent, 'Settings');
+  assert.equal(nav.at(-1).getAttribute('aria-current'), 'page');
+  const settingsRequests = requests;
+  vm.runInContext("connectionStatus('Live connected.', {kind:'connected', writable:true})", context);
+  assert.equal(requests, settingsRequests, 'health does not poll settings');
+  navigate('models');
+  assert.equal(ids.result.textContent, frozenModels, 'settings does not discard frozen models');
+  assert.equal(requests, settingsRequests, 'settings does not reacquire models');
   navigate('sessions');
   await until(() => ids.notice.textContent.includes('Snapshot captured'));
   retainedHeartbeat();

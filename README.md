@@ -324,6 +324,7 @@ Useful settings include:
 - `pricingMaxAgeHours`: pricing/model metadata cache age.
 - `thresholds`: running-cost, context, percentile and quota warning thresholds.
 - `colorScheme`, `colorSchemes`, `colors`: terminal palette selection and per-role overrides.
+- `webTheme`: `classic` (dark default) or `web` (OS light/dark); Web Settings saves it immediately, independently of terminal colors.
 
 `modelComparisonNew` colors new names/dates; `modelComparisonPromotion` colors active rates/Relative CCost. Superseded colors fade; plain output is unchanged.
 
@@ -360,7 +361,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.118 (2026-11-01):** Web Beta unifies Models with page scrolling, selectable/latest filters and exact multi-column sorting. Web launch consoles retain status until the browser-open request; native macOS handoff remains unverified. CLI/Watch and account acquisition are unchanged. See [Web Beta](docs/web-beta.md).
+**v80.119 (2026-11-01):** Web Settings saves Classic/Web themes without reload; CLI palettes and report/Watch acquisition stay unchanged. See [Web Beta](docs/web-beta.md).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

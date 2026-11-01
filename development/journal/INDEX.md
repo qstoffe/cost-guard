@@ -15,7 +15,7 @@ Installed OpenCode Toolkit shared repository skills own development procedures. 
 - [Test system health](test-health.md): retained critical risks, real hosted cross-platform revalidation, causal fixture/runtime repairs and desktop-proof limits.
 - [Feature opportunities](feature-discovery.md): milestone-40 no-suggestion assessment, seven pending UX owners, implemented publisher history and external/platform evidence limits.
 - [Windows startup](windows-startup.md): Web delegation/readiness and CLI console ownership, native probes and remaining consumer-desktop limits.
-- [Web snapshot parity and navigation](web-overview.md): V2 result-size failure, snapshot/health DOM retention, session scroll race, browser evidence and the narrow policy-blocked launcher-test exception.
+- [Web UI knowledge](web/INDEX.md): snapshot/navigation parity and Settings/theme persistence, browser evidence, separate V2 probes and explicitly scoped Decision Delegate test exceptions.
 - [Token category presentation](token-categories.md): shared GitHub names, unchanged telemetry/valuation, synthetic CLI/DOM evidence and explicitly unverified browser layout.
 - Historical token volumes: `development/architecture/governance/verification/historical-token-volumes.md` records shared aggregation/display, exact Web sorting and a bounded real-installation scan (including the initial timeout). No architecture-boundary change or general speedup is claimed.
 
