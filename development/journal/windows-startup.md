@@ -7,11 +7,30 @@ Status: current
 
 ## Summary
 
-FR 000537 deliberately supersedes the hidden-delegation policy: the Web Beta batch retains a synchronous launch-status console through Python discovery, native preflight, verified host ready and the OS browser-open result. Discovery and stage waits show indeterminate activity; the detached/tray-owned pythonw host survives status-process exit. There is no browser-first-paint guarantee, executable cache or new supervisor. Older asynchronous timings below are historical, not current launcher acceptance.
+FR 000537 deliberately supersedes the hidden-delegation policy: the Web Beta batch retains a synchronous launch-status console through Python discovery, native preflight, verified host ready and the OS browser-open result. FR 000540 replaces the visible stages/PowerShell progress panel with one fixed `Starting CostGuard web...` label and one 120ms spinner cell; stages drain privately and redirected output stays plain. The detached/tray-owned pythonw host survives status-process exit. There is no browser-first-paint guarantee, executable cache or new supervisor. Older asynchronous timings below are historical, not current launcher acceptance.
 
 CLI/Watch/Diagnostics must not asynchronously share an existing interactive console. The old START /B path returned a synthetic Git-aware parent prompt while Python was still writing in the same console. A separate persistent PowerShell console isolates readers/writers and avoids leaving a batch waiting for Ctrl+C. Feedback belongs inside the child. Batch launch status is not Python completion; the child prompt retains the native result.
 
 ## Evidence
+
+FR 000540 (2026-11-02): Decision Delegate authorized bounded owned console/tray
+and registered-browser probes, not the full native opt-in bundle or unrelated UI.
+Actual cold/warm console buffers supplied 41/62 samples, all four glyphs and no
+other cell/attribute changes or stage accumulation; launcher exit 0 at 1.644/2.229s
+left the authenticated detached host ready and warm restart changed its nonce.
+Delayed discovery/startup fixtures supplied 169/174 animated success/browser-failure
+samples, preserved prior output and cleared animation before error/exit. Buffer
+reads are not atomic: accept the cursor inside/just after its one cell, and exclude
+the cleanup-to-newline transition, rather than treating cursor sampling races as
+repainting. A failed earlier probe retained a locked temporary fixture; no forced
+cleanup was attempted. Targeted lifecycle probes and final Full (121 files, 54.6s)
+passed; validator passed with four existing design warnings. Real redirected tests
+include missing Python and launcher exceptions with private failure records.
+These are buffer/API results, **not direct visual flicker/color, physical Explorer,
+accessibility or browser-paint acceptance**. No requirement/test waiver was used;
+the FR permits reporting unavailable visual observation as unverified. Local
+macOS synthetic tests are not native macOS proof. Normal PR CI supplies its own
+platform outcomes; this observation does not certify later heads.
 
 FR 000537 (2026-11-01): Decision Delegate authorized one additional bounded
 cold/warm sequence over only the clone's explicitly spawned console and owned

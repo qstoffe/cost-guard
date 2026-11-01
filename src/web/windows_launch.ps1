@@ -1,15 +1,46 @@
 # Beta only: this short-lived status process is never the managed host's lifetime owner.
 param([switch]$Detached)
 $ErrorActionPreference = 'Stop'
-if ($Detached) { $ProgressPreference = 'SilentlyContinue' }
+$ProgressPreference = 'SilentlyContinue'
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $message = 'Web launcher failed. Run development\user-tools\diagnostics\windows\Cost-Guard-Diagnostics.cmd.'
 $script:frame = 0
+$script:activity = $null
+function Start-LaunchActivity {
+    $label = 'Starting CostGuard web...'
+    # Redirected/hidden hosts get plain deterministic text, never terminal controls.
+    if (-not $Detached -and [Environment]::UserInteractive -and
+        -not [Console]::IsOutputRedirected -and -not [Console]::IsInputRedirected) {
+        try {
+            if ([Console]::WindowWidth -gt ($label.Length + 3)) {
+                if ([Console]::CursorLeft + $label.Length + 3 -ge [Console]::WindowWidth) { [Console]::WriteLine() }
+                [Console]::Write($label + ' ')
+                $script:activity = @{Left = [Console]::CursorLeft; Top = [Console]::CursorTop; Timer = [Diagnostics.Stopwatch]::StartNew()}
+                [Console]::Write('|')
+                return
+            }
+        } catch { $script:activity = $null }
+    }
+    Write-Host $label
+}
 function Write-LaunchActivity {
-    if (-not $Detached) {
-        $glyph = @('|', '/', '-', '\')[$script:frame % 4]
-        $script:frame++
-        Write-Host ("`rLaunching web... [{0}]  " -f $glyph) -NoNewline
+    if ($script:activity -and $script:activity.Timer.ElapsedMilliseconds -ge 120) {
+        try {
+            $script:frame++
+            [Console]::SetCursorPosition($script:activity.Left, $script:activity.Top)
+            [Console]::Write(@('|', '/', '-', '\')[$script:frame % 4])
+            $script:activity.Timer.Restart()
+        } catch { Stop-LaunchActivity }
+    }
+}
+function Stop-LaunchActivity {
+    if ($script:activity) {
+        try {
+            [Console]::SetCursorPosition($script:activity.Left, $script:activity.Top)
+            [Console]::Write(' ')
+            [Console]::WriteLine()
+        } catch { } # Console loss must not hide actionable launcher failures.
+        $script:activity = $null
     }
 }
 function Find-BetaPython {
@@ -31,7 +62,7 @@ function Find-BetaPython {
                 $probe = [Diagnostics.Process]::Start($info)
                 $deadline = [Diagnostics.Stopwatch]::StartNew()
                 while (-not $probe.WaitForExit(120) -and $deadline.ElapsedMilliseconds -lt 5000) {
-                    Write-Progress -Activity 'Launching web...' -Status 'Checking Python' -PercentComplete -1
+                    Write-LaunchActivity
                 }
                 if (-not $probe.HasExited) {
                     $probe.Kill() # Only this exact discovery process, never a PID/name search.
@@ -48,18 +79,16 @@ function Find-BetaPython {
     return $null
 }
 $code = 1
+$python = $null
 try {
-    $timer = [Diagnostics.Stopwatch]::StartNew()
-    Write-Host 'Cost Guard startup: Checking Python 3.11+...'
-    Write-Progress -Activity 'Cost Guard Web Beta startup' -Status 'Checking Python' -PercentComplete -1
+    Start-LaunchActivity
     $found = Find-BetaPython
     $python = if ($found) { $found.Executable } else { $null }
     [array]$pythonArgs = if ($found) { $found.Arguments } else { @() }
     if (-not $python) {
         $message = 'Python 3.11 or newer was not found. Install Python, then retry Cost Guard Web Beta.'
     } else {
-        Write-Host ('Cost Guard startup: Python ready ({0:N1}s elapsed)' -f $timer.Elapsed.TotalSeconds)
-        # Stream flushed, fixed progress instead of buffering the entire launch.
+        # Drain internal stages without repainting the label or accumulating lines.
         # Keep only allowlisted failure text; raw subprocess exceptions stay private.
         $safe = @()
         $info = [Diagnostics.ProcessStartInfo]::new()
@@ -77,26 +106,22 @@ try {
                 while (-not $line.IsCompleted) { Write-LaunchActivity; Start-Sleep -Milliseconds 120 }
                 $value = $line.GetAwaiter().GetResult()
                 if ($null -eq $value) { break }
-                if ($value -match '^Cost Guard startup: [A-Za-z0-9 ;,+().-]+$') {
-                    Write-Host ("`r" + $value + '          ')
-                    Write-Progress -Activity 'Cost Guard Web Beta startup' -Status $value -PercentComplete -1
-                } elseif ($value -like 'Cost Guard Web Beta: *') {
+                if ($value -like 'Cost Guard Web Beta: *') {
                     $safe += $value
                 }
             }
-            $child.WaitForExit()
+            while (-not $child.WaitForExit(120)) { Write-LaunchActivity }
             $code = $child.ExitCode
         } finally { $child.Dispose() }
-        Write-Host ''
-        Write-Progress -Activity 'Cost Guard Web Beta startup' -Completed
         if ($code -eq 0) { exit 0 }
         # Python emits only fixed allowlisted failure text; never display raw exceptions.
         if ($safe.Count -gt 0) { $message = $safe[-1] }
     }
 } catch {
     $code = 1
+} finally {
+    Stop-LaunchActivity
 }
-Write-Progress -Activity 'Cost Guard Web Beta startup' -Completed
 
 function Write-BetaStartupRecord {
     param([string]$Directory, [ValidateSet('python_unavailable', 'launcher_failed')][string]$Failure)

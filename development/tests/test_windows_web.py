@@ -159,7 +159,11 @@ class WindowsWebTests(unittest.TestCase):
         self.assertNotIn('start ""', command)
         self.assertNotIn('-WindowStyle Hidden', command)
         self.assertNotIn('-Detached', command)
-        self.assertIn('Launching web...', command)
+        self.assertNotIn('\necho ', command)
+        self.assertNotIn('Write-Progress', script)
+        self.assertNotIn('`r', script)
+        self.assertIn("$ProgressPreference = 'SilentlyContinue'", script)
+        self.assertIn('Starting CostGuard web...', script)
         self.assertIn('ReadLineAsync', script)
         self.assertIn('Write-LaunchActivity', script)
         self.assertIn('if (-not $Detached -and', script)
@@ -216,6 +220,7 @@ $tokens = $null; $errors = $null
 $ast = [Management.Automation.Language.Parser]::ParseFile($Source, [ref]$tokens, [ref]$errors)
 $function = $ast.Find({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Find-BetaPython'}, $true)
 Invoke-Expression $function.Extent.Text
+function Write-LaunchActivity { }
 function Get-Command {
     param($Name, [switch]$All, $CommandType, $ErrorAction)
     if ($Name -eq 'python.exe') { return @([pscustomobject]@{Source=$Python}) }
