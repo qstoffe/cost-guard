@@ -153,10 +153,31 @@ FULL_ONLY_PATTERNS: tuple[str, ...] = (
     "test_step9_parity_performance.py",
 )
 PROFILES: dict[str, tuple[str, ...]] = {
+    "native-web": (),  # Explicit platform cases below; never expands to Full.
     "startup": ("test_launcher_feedback.py", "test_windows_launcher.py", "test_startup_progress.py", "test_watch_screen.py", "test_watch_rendering.py", "test_watch_startup_recovery.py"),
     "sources": ("test_opencode_v1.py", "test_opencode_v2.py", "test_v2_normalization.py", "test_v2_tool_continuations.py", "test_opencode_aborts.py", "test_opencode_terminal.py", "test_source_selection.py", "test_v7814_regressions.py"),
     "analysis": ("test_analysis_core.py", "test_step6_context_comparisons.py", "test_effort_presentation.py", "test_step6_pricing_accounts.py"),
     "runtime": ("test_step7_reports_cli.py", "test_step8_watch.py", "test_watch_grouping.py", "test_watch_session_retention.py", "test_watch_idle_accounts.py", "test_watch_subtotals.py", "test_watch_today_ccost.py", "test_watch_rendering.py", "test_watch_tool_activity.py", "test_watch_skills.py", "test_watch_activity_lifecycle.py", "test_watch_source_recovery.py", "test_watch_lifecycle.py", "test_token_mix.py", "test_token_mix_economics.py", "test_priced_token_mix.py", "test_report_definitions.py", "test_session_move.py", "test_opencode_aborts.py", "test_opencode_terminal.py", "test_v786_regressions.py", "test_v788_regressions.py", "test_v7810_regressions.py", "test_v7811_regressions.py", "test_v7814_regressions.py"),
+}
+
+# Whole focused launcher files allow modest portable overlap. The lifecycle file
+# is intentionally NOT included wholesale: retain only native startup ownership.
+NATIVE_WEB_PATTERNS = {
+    "win32": ("test_windows_web.py", "test_windows_web_activity.py") + tuple(
+        "test_web_lifecycle.LifecycleTests.test_" + name for name in (
+            "managed_host_uses_gui_interpreter_for_console_free_report_children",
+            "missing_gui_interpreter_fails_without_spawning_console_host",
+            "windows_held_lifetime_file_cannot_be_deleted_or_replaced",
+            "legacy_access_denied_reaches_replacement_without_contacting_old_port",
+            "inaccessible_possibly_live_host_keeps_record_and_blocks_replacement",
+            "readable_reuse_with_busy_lifetime_is_not_retired",
+            "native_openprocess_error_mapping_and_query_rights",
+            "native_identity_query_failure_closes_handle_and_retains_access_reason",
+            "os_lock_serializes_and_crash_releases_both_locks",
+            "native_process_birth_identity_and_owned_termination")),
+    "darwin": ("test_macos_web.py",
+        "test_web_lifecycle.LifecycleTests.test_os_lock_serializes_and_crash_releases_both_locks",
+        "test_web_lifecycle.LifecycleTests.test_native_process_birth_identity_and_owned_termination"),
 }
 
 
@@ -170,6 +191,8 @@ def _run_pattern(pattern: str, *, timeout: float, verbosity: int) -> tuple[str, 
         sys.executable, "-m", "unittest", "discover",
         "-s", str(TESTS), "-p", pattern, "-t", str(ROOT), flag,
     ]
+    if not pattern.endswith(".py"):
+        command = [sys.executable, "-m", "unittest", "development.tests." + pattern, flag]
     started = time.monotonic()
     try:
         proc = subprocess.run(
@@ -202,7 +225,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.pattern:
         patterns = (args.pattern,)
     elif args.profile:
-        patterns = PROFILES[args.profile]
+        if args.profile == "native-web":
+            if sys.platform not in NATIVE_WEB_PATTERNS:
+                parser.error("native-web requires Windows or macOS")
+            patterns = NATIVE_WEB_PATTERNS[sys.platform]
+        else:
+            patterns = PROFILES[args.profile]
     elif args.suite == "full":
         patterns = FULL_ONLY_PATTERNS + QUICK_PATTERNS
     else:

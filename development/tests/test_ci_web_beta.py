@@ -6,11 +6,144 @@ from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
+from types import SimpleNamespace
 
 from development.tools import ci_web_beta, run_tests
 
 
 class CiEvidenceTests(unittest.TestCase):
+    def test_workflow_assigns_shared_work_once_without_native_browser_tools(self):
+        workflow = (ci_web_beta.ROOT / ".github/workflows/web-beta.yml").read_text()
+        common, native = workflow.split("  native:\n")
+        self.assertIn("runs-on: ubuntu-24.04", common)
+        self.assertEqual(1, workflow.count("ci_web_beta.py regression --scope common"))
+        self.assertEqual(1, workflow.count("ci_web_beta.py browser --scope common"))
+        self.assertIn("playwright install --with-deps chromium", common)
+        self.assertIn("max-parallel: 2", native)
+        self.assertIn("os: [windows-2025, macos-15, macos-15-intel]", native)
+        for forbidden in ("setup-node", "playwright", "validate_package", "--scope common", "--suite full"):
+            self.assertNotIn(forbidden, native)
+        self.assertIn("native-regression --scope native", native)
+        self.assertEqual(2, workflow.count("CI_JOB_STATUS: ${{ job.status }}"))
+
+    def test_native_facts_never_discover_node(self):
+        with patch.object(ci_web_beta.subprocess, "run", return_value=SimpleNamespace(stdout="version")) as run, \
+                patch("sys.platform", "win32"):
+            result = ci_web_beta.facts("native")
+        self.assertNotIn("node", result["tools"])
+        self.assertEqual([["git", "--version"]], [call.args[0] for call in run.call_args_list])
+
+    def test_native_profile_is_focused_and_named_cases_execute_directly(self):
+        windows = run_tests.NATIVE_WEB_PATTERNS["win32"]
+        self.assertEqual(("test_windows_web.py", "test_windows_web_activity.py"), windows[:2])
+        self.assertEqual(12, len(windows))
+        self.assertEqual(3, len(run_tests.NATIVE_WEB_PATTERNS["darwin"]))
+        self.assertNotIn("test_web_lifecycle.py", windows)
+        selector = "test_web_lifecycle.LifecycleTests.test_windows_held_lifetime_file_cannot_be_deleted_or_replaced"
+        self.assertIn(selector, windows)
+        with patch.object(run_tests.subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout="", stderr="")) as run:
+            run_tests._run_pattern(selector, timeout=240, verbosity=2)
+        self.assertEqual([run_tests.sys.executable, "-m", "unittest", "development.tests." + selector, "-v"], run.call_args.args[0])
+
+    def test_native_phase_runs_profile_without_validator(self):
+        with patch.object(ci_web_beta, "hosted_only"), patch.object(ci_web_beta, "facts", return_value={}), \
+                patch.object(ci_web_beta, "save"), patch.object(ci_web_beta, "run", return_value=0) as run, \
+                patch.object(ci_web_beta.subprocess, "run") as validator, contextlib.redirect_stdout(io.StringIO()):
+            result = ci_web_beta.main(["native-regression", "--scope", "native"])
+        self.assertEqual(0, result)
+        run.assert_called_once_with([ci_web_beta.sys.executable, "development/tools/run_tests.py", "--suite", "full",
+            "--profile", "native-web", "--jobs", "1", "--json-report", "ci-results/native-tests.json"], 300)
+        validator.assert_not_called()
+
+    def test_phase_cannot_run_under_wrong_scope(self):
+        with patch.object(ci_web_beta, "hosted_only"), contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit):
+                ci_web_beta.main(["regression", "--scope", "native"])
+
+    def test_scoped_summary_requires_expected_phases_and_complete_suite(self):
+        cases = [("PASS", 0), ("FAIL", 1), ("BLOCKED", 1), ("SKIPPED", 1), ("NOT RUN", 1),
+                 (None, 1), ("malformed", 1), ("[]", 1), ('{"outcome":[]}', 1)]
+        for scope in ("common", "native"):
+            for outcome, expected_exit in cases:
+                with self.subTest(scope=scope, outcome=outcome), tempfile.TemporaryDirectory() as temporary:
+                    results = Path(temporary)
+                    for phase in ci_web_beta.PLANS[scope]:
+                        (results / (phase + ".json")).write_text(json.dumps(dict(outcome="PASS")))
+                    required = results / (ci_web_beta.PLANS[scope][-1] + ".json")
+                    if outcome is None:
+                        required.unlink()
+                    elif outcome in ("malformed", "[]", '{"outcome":[]}'):
+                        required.write_text(outcome)
+                    else:
+                        required.write_text(json.dumps(dict(outcome=outcome)))
+                    # Unassigned phase failures must not pollute a narrower job.
+                    for other in ci_web_beta.PLANS["native" if scope == "common" else "common"]:
+                        (results / (other + ".json")).write_text('{"outcome":"FAIL"}')
+                    with patch.object(ci_web_beta, "RESULTS", results), patch.object(ci_web_beta, "facts", return_value={}), \
+                            patch.object(ci_web_beta, "suite_summary", return_value=(True, "suite counts")), \
+                            patch.dict("os.environ", {"GITHUB_STEP_SUMMARY": str(results / "summary.md"), "CI_JOB_STATUS": "success"}), \
+                            contextlib.redirect_stdout(io.StringIO()):
+                        result = ci_web_beta.summary(scope)
+                    self.assertEqual(expected_exit, result)
+                    report = json.loads((results / "summary.json").read_text())
+                    self.assertEqual(list(ci_web_beta.PLANS[scope]), report["expected"])
+                    self.assertIn("Assigned elsewhere", (results / "summary.md").read_text(encoding="utf-8"))
+
+    def test_summary_fails_closed_for_cancelled_failed_job_and_bad_suite(self):
+        for status, suite in (("cancelled", True), ("failure", True), ("success", False), ("success", ValueError())):
+            with self.subTest(status=status, suite=suite), tempfile.TemporaryDirectory() as temporary:
+                results = Path(temporary)
+                for phase in ci_web_beta.PLANS["common"]:
+                    (results / (phase + ".json")).write_text('{"outcome":"PASS"}')
+                with patch.object(ci_web_beta, "RESULTS", results), patch.object(ci_web_beta, "facts", return_value={}), \
+                        patch.object(ci_web_beta, "suite_summary", side_effect=suite if isinstance(suite, Exception) else None,
+                                     return_value=(suite, "suite status")), \
+                        patch.dict("os.environ", {"GITHUB_STEP_SUMMARY": str(results / "summary.md"), "CI_JOB_STATUS": status}), \
+                        contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(1, ci_web_beta.summary("common"))
+
+    def test_suite_report_cannot_lose_selected_files_or_counts(self):
+        for scope in ("common", "native"):
+            expected = (run_tests.FULL_ONLY_PATTERNS + run_tests.QUICK_PATTERNS if scope == "common"
+                        else run_tests.NATIVE_WEB_PATTERNS["win32"])
+            rows = [dict(file=name, tests=1, passed=1, exit_code=0, skips=[]) for name in expected]
+            for mutation in ("none", "drop", "empty", "null", "missing-count", "missing-report"):
+                with self.subTest(scope=scope, mutation=mutation), tempfile.TemporaryDirectory() as temporary:
+                    results = Path(temporary)
+                    altered = [dict(row) for row in rows]
+                    if mutation == "drop":
+                        altered.pop()
+                    if mutation == "empty":
+                        altered = []
+                    if mutation == "missing-count":
+                        altered[0]["passed"] = None
+                    report = results / ("full.json" if scope == "common" else "native-tests.json")
+                    if mutation != "missing-report":
+                        report.write_text(json.dumps(dict(files=None if mutation == "null" else altered)))
+                    with patch.object(ci_web_beta, "RESULTS", results), patch("sys.platform", "win32"), \
+                            contextlib.redirect_stdout(io.StringIO()):
+                        if mutation in ("drop", "empty", "null", "missing-report"):
+                            with self.assertRaises((ValueError, TypeError, OSError)):
+                                ci_web_beta.suite_summary(scope)
+                        else:
+                            success, _ = ci_web_beta.suite_summary(scope)
+                            self.assertEqual(mutation == "none", success)
+
+    def test_registered_browser_boundaries_preserve_url_and_return_failure_truthfully(self):
+        from src.web import native_windows, native_macos
+        url = "http://127.0.0.1:1234/#bootstrap=synthetic"
+        with patch.object(native_windows.os, "startfile", create=True) as start:
+            self.assertTrue(native_windows.open_registered_browser(url))
+        start.assert_called_once_with(url)
+        with patch.object(native_windows.os, "startfile", side_effect=OSError(), create=True):
+            with self.assertRaises(OSError):
+                native_windows.open_registered_browser(url)
+        for code in (0, 1):
+            with patch.object(native_macos.subprocess, "run", return_value=SimpleNamespace(returncode=code)) as run:
+                self.assertEqual(code == 0, native_macos.open_registered_browser(url))
+            self.assertEqual(["/usr/bin/open", url], run.call_args.args[0])
+            self.assertEqual(5, run.call_args.kwargs["timeout"])
+
     def test_regression_workers_preserve_full_suite_and_deadlines(self):
         for platform, jobs in (("win32", "1"), ("darwin", "4"), ("linux", "4")):
             with self.subTest(platform=platform), \
@@ -20,7 +153,7 @@ class CiEvidenceTests(unittest.TestCase):
                     patch.object(ci_web_beta, "run", return_value=0) as suite, \
                     patch.object(ci_web_beta.subprocess, "run") as validator, \
                     patch("sys.platform", platform), \
-                    patch("sys.argv", ["ci", "regression"]), \
+                    patch("sys.argv", ["ci", "regression", "--scope", "common"]), \
                     contextlib.redirect_stdout(io.StringIO()):
                 validator.return_value.returncode = 0
                 validator.return_value.stdout = "PASS"
@@ -44,7 +177,7 @@ class CiEvidenceTests(unittest.TestCase):
             (results / "browser.json").write_text(json.dumps(dict(outcome="BLOCKED", reason="tool unavailable")))
             with patch.object(ci_web_beta, "RESULTS", results), patch.object(ci_web_beta, "hosted_only"), \
                     patch.object(ci_web_beta, "facts", return_value={}), patch.object(ci_web_beta, "save"), \
-                    patch.object(ci_web_beta, "run", return_value=1), patch("sys.argv", ["ci", "browser"]), \
+                    patch.object(ci_web_beta, "run", return_value=1), patch("sys.argv", ["ci", "browser", "--scope", "common"]), \
                     contextlib.redirect_stdout(io.StringIO()) as output:
                 result = ci_web_beta.main()
         self.assertEqual(1, result)
