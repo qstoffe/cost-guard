@@ -44,6 +44,15 @@ was byte-for-byte unchanged before/after. Its constructor/locks/ACLs were never
 invoked or altered; no real launcher/server/tray/browser was started. The
 installation and shared OpenCode service were not modified or stopped.
 
+The existing real-source, non-UI lifecycle integration probe also passed from the
+owned clone: HTTP ready, source acquired, sessions job complete, static detail
+acquired/frozen, CLI one-shot passed, authenticated stop passed, owned host thread
+stopped and source guard unchanged; model requests zero. It started/stopped only
+its own icon-free host, not the installation's managed host. An earlier invocation
+returned only a generic RuntimeError, so its cause is unknown. An stdin-based
+diagnostic wrapper was unsuitable for Windows multiprocessing; the guarded
+file-based wrapper then passed. These failures are not counted as successful runs.
+
 ## Deterministic coverage and limits
 
 `test_web_lifecycle.py` covers access-denied legacy recovery (including a future
@@ -63,9 +72,14 @@ existing v80.100 prose resolved it without raising any budget.
 
 The first four-worker full run executed 1,478 tests in 121 files (one named skip):
 120 files passed, while the existing PowerShell discovery PATH-fallback assertion
-failed. It passed in both focused runs. A full serial rerun is being used to
-investigate concurrent-load sensitivity; neither assertion nor the five-second
-production discovery budget has been relaxed.
+failed. It passed in both focused runs. The final full serial rerun passed all
+121 files in 203.7 seconds: **1,480 tests, 1,479 passed, one named skip, zero
+failures**. The skipped macOS command-activity test requires zsh/PTY, unavailable
+on this Windows workstation. Concurrent-load sensitivity remains a possibility,
+not an established cause or repaired defect; neither assertion nor the
+five-second production discovery budget was relaxed. The initial parallel run
+also preceded addition of the final two schema/lock-file regressions; both are
+included in the passing final full run.
 
 Actual native tray/browser/dialog interaction and a forced reboot were not run or
 claimed. No desktop authorization was needed for this non-UI acceptance route.
