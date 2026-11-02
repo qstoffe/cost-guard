@@ -213,10 +213,13 @@ class ReportService:
         finally:
             self.close_accounts()
 
-    def enable_watch_accounts(self, *, record_evidence: bool = True) -> None:
+    def enable_watch_accounts(self, *, record_evidence: bool = True, history=None) -> None:
         self._watch_accounts = True
         self._record_account_evidence = record_evidence
-        self._watch_history.reset()
+        if history is None:
+            self._watch_history.reset()
+        else:
+            self._watch_history = history
 
     def _record_account_refresh(self, evidence: dict) -> None:
         if self._record_account_evidence:
@@ -552,6 +555,13 @@ class ReportService:
 
     def publish_watch_history(self) -> None:
         self._watch_quota_entries = self._watch_history.entries()
+
+    def project_watch_today(self):
+        """One retained daily population, independent of account attribution."""
+        from src.analysis.daily_usage import daily_usage
+        return daily_usage(self._watch_history.retained_entries(), self._watch_history.prompt_of,
+            day_start_ms=local_day_start_ms(self.timezone_id, now_ms=self.now_ms), now_ms=self.now_ms,
+            valuation=self.token_reference_valuation(), category_valuation=self.token_category_valuation())
 
     def watch_period_history_due(self) -> bool:
         start = self._watch_history.scope_start_ms

@@ -601,6 +601,30 @@ def watch_context_state(
     )
 
 
+def session_watch_context(snapshot, bundle, record, catalog, epochs) -> WatchContextState:
+    """Current continuation, including hidden compaction after the focal prompt.
+
+    Historical row values are deliberately not guidance. A later unknown rewrite
+    invalidates the old warning instead of falling back to a pre-rewrite row.
+    """
+    if epochs.active_prompt(record) is False:
+        return WatchContextState(None, None)
+    state = watch_context_state(snapshot, bundle, record, catalog, epochs)
+    compacted = max((item for item in bundle.compactions
+        if item.session_id == record.session_id and item.created_at_ms >= record.prompt_time_ms
+        and epochs.active_message(item.session_id, item.user_message_id) is not False),
+        key=lambda item: (item.created_at_ms, item.user_message_id), default=None)
+    if compacted is not None and max(compacted.created_at_ms, compacted.completed_at_ms) >= state.last_activity_ms:
+        tokens = None if compacted.in_progress else _post_compaction_tokens(snapshot, compacted)
+        at_ms = max(compacted.created_at_ms, compacted.completed_at_ms)
+        if tokens is None or epochs.retired(record.session_id, at_ms):
+            return WatchContextState(None, None)
+        estimate = (_estimate_context_size(tokens, compacted.entries[-1], catalog,
+            cached_tokens=tokens, fresh_tokens=0) if compacted.entries else NextContextEstimate(tokens))
+        return WatchContextState(tokens, None, compacted.model_id, at_ms, estimate.cached_ccost, estimate.fresh_ccost)
+    return WatchContextState(None, None) if epochs.retired(record.session_id, state.last_activity_ms) else state
+
+
 def build_context_timeline(
     snapshot: SessionSnapshot,
     bundle: RootAnalysisBundle,

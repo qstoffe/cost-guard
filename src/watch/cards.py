@@ -177,7 +177,9 @@ class WatchCards:
         else:
             provisional = False
         return WatchCard(capture.session_id, capture.title, focal.event_id if focal else "",
-            tuple(projected), totals, entry.state, provisional)
+            tuple(projected), totals, entry.state, provisional,
+            capture.context if (capture.context is not None and entry.state != "unavailable"
+                and (focal is None or capture.context.owner_id == focal.event_id)) else None)
 
     def project(self, now_ms):
         active = []

@@ -146,6 +146,19 @@ p.warning { border-left: 3px solid var(--warn); padding: .65rem .85rem; backgrou
 .watch-view .account-card { box-shadow: none; font-size: .85rem; }
 .watch-view .account-card p { margin-block: var(--space-2); }
 .watch-view .quota-summary { padding-block: var(--space-2); }
+.watch-account-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr)); }
+.watch-subscription { display: grid; grid-template-rows: subgrid; grid-row: span 5; gap: .5rem; }
+.watch-subscription > h4 { overflow-wrap: anywhere; }
+.watch-subscription > p { margin: 0; }
+.watch-quota-track { min-height: 1.2rem; }
+.watch-account-details { border-top: 1px solid var(--line); padding-top: .5rem; }
+.watch-secondary-quota { margin-top: .65rem; }
+.watch-quota-exhausted { accent-color: var(--warn); }
+.watch-daily { display: flex; align-items: baseline; flex-wrap: wrap; gap: .25rem 1rem; font-size: .85rem; box-shadow: none; }
+.watch-daily-category { white-space: nowrap; }
+.watch-context-warning { border-top: 1px solid var(--line); margin-top: .65rem; padding-top: .5rem; color: var(--warn); font-size: .9rem; }
+.watch-context-warning[hidden] { display: none; }
+.watch-context-warning[data-severity="exceeded"] { font-weight: 650; }
 .superseded { color: var(--muted); }
 .catalog-controls { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 #scope-controls a[aria-current="page"] { background: var(--accent-soft); outline: 1px solid var(--accent); font-weight: 650; }

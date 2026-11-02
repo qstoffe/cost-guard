@@ -38,6 +38,22 @@ Rolling account history extends the daily plan only to usable native/trailing-wi
 
 ## Allowed dependencies
 
+Web Watch's existing single background history lane retains one `WatchHistoryAcquisition`
+across isolated services. Revision-proven roots skip hydration; known request telemetry
+and causal initiating-prompt identities survive omissions. `analysis/daily_usage.py`
+filters that population by canonical request timestamp/local-day boundary, clone-deduplicates,
+and projects full-population cost/count/category mix together. The live thread publishes
+only finished matching-day groups; rollover rejects late previous-day results. It never
+scans history or prices browser-side. Native quota refresh remains independent.
+
+`reports/watch_context.py` maps `session_watch_context` and canonical price thresholds
+to one latest-prompt-owned continuation DTO, including hidden compaction rewrites and
+the Watch multiplier/cost range. Cards suppress guidance on superseded focals or source
+failure. This is separate from historical table rows and leaves CLI context semantics
+unchanged. `application/watch_accounts.py` owns Watch-only stable primary slots and Used
+display; provider-declared primary labels can preserve an absent window. Canonical
+account period projection explicitly marks provider-attributed estimated scopes.
+
 Watch depends on shared reports/analysis/domain and abstract source contracts; reports/analysis never import Watch. Presentation consumes projections without fetching history or native quotas.
 
 ## Entrypoints
