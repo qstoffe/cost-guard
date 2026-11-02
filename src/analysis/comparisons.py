@@ -142,6 +142,11 @@ def effort_model_name(catalog: PricingCatalog, model_id: str, effort: EffortSele
     return f"{name} ({_effort_label(effort.level)})" if effort.level else name
 
 
+def effort_model_parts(catalog: PricingCatalog, model_id: str, effort: EffortSelection) -> tuple[str, str]:
+    """Structured display values; consumers must not split a formatted model name."""
+    return _model_display_name(catalog, model_id), _effort_label(effort.level) if effort.level else "N/A"
+
+
 def model_timeline_name(catalog: PricingCatalog, model_id: str, provider_id: str, variant: str) -> str:
     return effort_model_name(catalog, model_id, interpret_effort(variant, attributable=bool(model_id)))
 

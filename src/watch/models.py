@@ -89,6 +89,17 @@ class WatchSessionSubtotal:
 
 
 @dataclass(frozen=True, slots=True)
+class WatchCard:
+    session_id: str
+    title: str
+    focal_id: str
+    rows: tuple[WatchRow, ...]
+    totals: object = None
+    state: str = "loading"
+    provisional: bool = False
+
+
+@dataclass(frozen=True, slots=True)
 class WatchProjection:
     title: str
     source_label: str
@@ -112,3 +123,7 @@ class WatchProjection:
     recent_promotion_notices: tuple[str, ...] = ()
     session_subtotals: Mapping[str, WatchSessionSubtotal] = field(default_factory=dict)
     recent_model_notice_highlight_spans: tuple[tuple[int, int], ...] = ()
+    active_cards: tuple[WatchCard, ...] = ()
+    history_cards: tuple[WatchCard, ...] = ()
+    cards_state: str | None = None
+    history_state: str = "loading"

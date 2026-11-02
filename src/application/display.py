@@ -161,6 +161,7 @@ def history_tokens(values, timezone_id):
     tokens = {}
     if "at_ms" in values:
         tokens["clock"] = format_local_timestamp(values["at_ms"], timezone_id, "%H:%M")
+        tokens["date_time"] = format_local_timestamp(values["at_ms"], timezone_id, "%Y-%m-%d %H:%M")
     if values.get("aborted") and values.get("abort_at_ms"):
         tokens["abort_clock"] = format_local_timestamp(values["abort_at_ms"], timezone_id, "%H:%M")
     if "next_context_tokens" in values:

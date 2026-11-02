@@ -4,6 +4,29 @@ from .projection import account, comparison, fields, prompt, token_mix
 from .display import with_display
 
 
+def card_row(row, now_ms):
+    tool = row.tool
+    projected = fields(row.prompt, """at_ms prompt_number label preview ccost cost_estimated unresolved_cost
+        calls in_progress aborted completed_successfully event_id duration_ms has_additional_model""")
+    projected = ObjectValue(projected.fields + (("has_error", row.prompt.watch_error),))
+    return record(prompt=projected, model=row.prompt.watch_model or "N/A",
+        effort=row.prompt.watch_effort or "N/A", marker=row.marker,
+        watch_duration_ms=row.prompt.duration_ms,
+        live_context=fields(row.prompt, "watch_delta_context_tokens watch_next_context_tokens"),
+        context_warning=row.prompt.watch_next_context_warning,
+        tool=None if tool is None else record(counts=tool.tool_counts, failed_count=tool.failed_count,
+            running_tool=tool.running_tool, running_ms=tool.running_ms,
+            skills=tuple(fields(skill, "skill_id failed_count") for skill in tool.skills)))
+
+
+def card(value, now_ms):
+    totals = value.totals
+    return record(session_id=value.session_id, title=value.title, focal_id=value.focal_id,
+        rows=tuple(card_row(row, now_ms) for row in value.rows), state=value.state,
+        provisional=value.provisional,
+        totals=None if totals is None else fields(totals, "total_ccost comparison_cost_complete duration_ms"))
+
+
 def watch_accounts(value):
     if value is None:
         return None
@@ -38,6 +61,9 @@ def project_live(value, timezone_id="UTC", ccost_display_unit="credits"):
                 watch_next_context_cached_ccost watch_next_context_fresh_ccost watch_delta_context_tokens""")))
     return with_display(record(source_label=value.source_label, source_warning_count=len(value.source_warnings),
         ccost_display_unit=ccost_display_unit,
+        active_cards=tuple(card(item, value.now_ms) for item in value.active_cards),
+        history_cards=tuple(card(item, value.now_ms) for item in value.history_cards),
+        cards_state=value.cards_state, history_state=value.history_state,
         rows=tuple(rows), active_count=value.active_count, status=value.status,
         now_ms=value.now_ms, started_at_ms=value.watch_started_at_ms,
         run_origin="Web live engine start (not tab open)",

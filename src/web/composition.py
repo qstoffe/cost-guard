@@ -36,7 +36,7 @@ def application(request):
 def live_acquisition():
     """Transfer one fresh service to the process-lifetime live owner."""
     from src.bootstrap import _account_providers, _model_availability_source
-    from src.watch.coordinator import WatchCoordinator
+    from src.watch.web_coordinator import WebWatchCoordinator
     from src.watch.acquisition import LiveAcquisition
 
     root = Path(__file__).resolve().parents[2]
@@ -52,4 +52,17 @@ def live_acquisition():
         account_provider=accounts[0] if accounts else None, account_providers=accounts,
         model_availability_source=_model_availability_source(selection),
         cache_repository=cache, config=config, now_ms=int(time.time() * 1000))
-    return LiveAcquisition(WatchCoordinator(selection=selection, report_service=service, config=config))
+    def card_service(now_ms):
+        # Construct on the worker: no mutable integration/SQLite connection is
+        # shared with Live, detail transport, or another card's acquisition.
+        card_selection = SourceSelector().select(selection.selected)
+        card_database = CacheDatabase(root)
+        card_database.initialize()
+        card_cache = CacheRepository(card_database)
+        return ReportService(selection=card_selection,
+            pricing_provider=GitHubCopilotPricingProvider(cache=card_cache,
+                max_age_hours=float(config.get("pricingMaxAgeHours", 1))),
+            account_provider=None, cache_repository=card_cache, config=config, now_ms=now_ms)
+
+    return LiveAcquisition(WebWatchCoordinator(selection=selection, report_service=service,
+        config=config, service_factory=card_service))

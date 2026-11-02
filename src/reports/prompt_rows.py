@@ -4,7 +4,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Callable, Mapping
 
-from src.analysis.comparisons import compaction_model_timeline_name, effort_model_name
+from src.analysis.comparisons import compaction_model_timeline_name, effort_model_name, effort_model_parts
 from src.analysis.context import (
     ContextEpochs, NextContextWarningState, build_context_timeline,
     estimate_event_context, estimate_next_context, next_context_warning_state, watch_context_state,
@@ -122,6 +122,8 @@ class PromptRowProjector:
         main = comparison_cost(record.entries[:record.root_entry_count], catalog.reference_valuation)
         subagent = comparison_cost(record.entries[record.root_entry_count:], catalog.reference_valuation)
         model_label = effort_model_name(catalog, record.main_model_id, prompt_effort(record, self.snapshot, replies=self.replies))
+        model, effort = effort_model_parts(catalog, record.main_model_id,
+            prompt_effort(record, self.snapshot, replies=self.replies))
         return PromptProjection(
             at_ms=record.prompt_time_ms,
             prompt_number=record.prompt_number,
@@ -129,6 +131,8 @@ class PromptRowProjector:
             preview=" ".join(record.prompt_text.split())[:120],
             model_effort=model_label,
             watch_model_effort=model_label,
+            watch_model=model,
+            watch_effort=effort,
             ccost=valuation.known_ccost,
             comparison_cost=valuation,
             billed_cost=billed_spend(record.entries),

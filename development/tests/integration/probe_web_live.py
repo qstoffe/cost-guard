@@ -20,6 +20,7 @@ def main():
     parser.add_argument("--detail", action="store_true", help="Also probe complete session capture/pages/freeze.")
     parser.add_argument("--reports", action="store_true", help="Also capture finite reports beside Live and cancel deep history.")
     parser.add_argument("--models", action="store_true", help="Capture only task-focused Normal/full Models snapshots beside Live.")
+    parser.add_argument("--watch-cards", action="store_true", help="Wait for independently published real Watch rows and full totals.")
     args = parser.parse_args()
     owners = []
     csrf = None
@@ -71,6 +72,33 @@ def main():
             raise RuntimeError('probe_live_timeout')
         start = live['view']['started_at_ms']
         source_seconds = time.monotonic() - started
+        card_evidence = None
+        if args.watch_cards:
+            first_rows = first_totals = None
+            deadline = time.monotonic() + 90
+            while time.monotonic() < deadline:
+                state, _ = get('/api/live', cookie=cookie)
+                live = state['values'].get('live', {})
+                view = live.get('view') or {}
+                cards = [*view.get('active_cards', []), *view.get('history_cards', [])]
+                if any(card['rows'] for card in cards) and first_rows is None:
+                    first_rows = round(time.monotonic() - started, 3)
+                if any(card['totals'] is not None for card in cards):
+                    first_totals = round(time.monotonic() - started, 3)
+                if first_rows is not None and first_totals is not None and view.get('history_cards'):
+                    card_evidence = dict(active_cards=len(view['active_cards']), history_cards=len(view['history_cards']),
+                        row_cards=sum(bool(card['rows']) for card in cards), total_cards=sum(card['totals'] is not None for card in cards),
+                        first_rows_seconds=first_rows, first_totals_seconds=first_totals,
+                        max_rows_per_card=max(len(card['rows']) for card in cards),
+                        pending_captures=len(owners[0].coordinator.card_workers.jobs))
+                    if card_evidence['max_rows_per_card'] > 5 or card_evidence['pending_captures'] > 4:
+                        raise RuntimeError('probe_watch_card_bound_failed')
+                    break
+                if live.get('state') in {'failed', 'internal_error'}:
+                    raise RuntimeError('probe_watch_cards_failed')
+                time.sleep(.25)
+            else:
+                raise RuntimeError('probe_watch_cards_timeout')
         for _ in range(2):
             connection = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=3)
             connection.request('GET', '/api/events', headers={'Cookie': cookie,
@@ -88,11 +116,14 @@ def main():
             'streams': len(streams), 'rows': len(view['rows']),
             'accounts': len((view['accounts'] or {}).get('accounts', [])),
             'run_origin_preserved': True, 'sequence_advanced': latest['sequence'] > state['sequence'],
-            'shell_seconds': round(shell_seconds, 3), 'source_view_seconds': round(source_seconds, 3)}))
+            'shell_seconds': round(shell_seconds, 3), 'source_view_seconds': round(source_seconds, 3),
+            'watch_cards': card_evidence}))
         if args.detail:
-            if not view['rows']:
+            sessions = [row['session_id'] for row in view['rows']] + [card['session_id'] for card in
+                [*view.get('active_cards', []), *view.get('history_cards', [])]]
+            if not sessions:
                 raise RuntimeError('probe_no_session_evidence')
-            session_id = view['rows'][0]['session_id']
+            session_id = sessions[0]
 
             def detail(value):
                 return get('/api/detail', value=value, cookie=cookie)[0]

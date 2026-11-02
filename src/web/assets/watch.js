@@ -1,142 +1,139 @@
 'use strict';
-// One persistent, paged Watch table over shared server truth. No acquisition or valuation.
+// Keyed, unframed cards over server-owned membership, totals and lifecycle.
 const WatchView = (() => {
   const el = (...args) => ReportView.element(...args);
   const display = (row, key) => ReportView.display(row, key);
   const text = (node, value) => ReportView.text(node, value);
+  function protectedNode(node) {
+    const selection = window.getSelection?.();
+    return node.contains(document.activeElement) || Boolean(selection && !selection.isCollapsed &&
+      (node.contains(selection.anchorNode) || node.contains(selection.focusNode)));
+  }
+  function reconcile(parent, wanted) {
+    const keep = new Set(wanted);
+    for (const node of [...parent.children]) if (!keep.has(node)) node.remove();
+    wanted.forEach((node, index) => {
+      if (parent.children[index] !== node) parent.insertBefore(node, parent.children[index] || null);
+    });
+  }
+  function disclosure() {
+    const node = el('details'), summary = el('summary'), list = el('div');
+    node.append(summary, list);
+    return {node, summary, list};
+  }
+  class Card {
+    constructor() {
+      this.root = el('article', undefined, 'watch-card');
+      this.title = el('a'); const heading = el('h3'); heading.append(this.title);
+      this.totals = el('p', undefined, 'watch-card-totals');
+      this.message = el('p', undefined, 'detail'); this.message.setAttribute('role', 'status');
+      const scroll = el('div', undefined, 'watch-table-scroll');
+      scroll.tabIndex = 0; scroll.setAttribute('role', 'region'); scroll.setAttribute('aria-label', 'Session prompts');
+      const table = el('table', undefined, 'watch-prompt-table');
+      const head = el('thead'), header = el('tr');
+      for (const name of ['Date / Time', 'Prompt', 'Model', 'Effort', 'CCost', 'Model Calls', 'Duration', 'Δ Context', 'Context']) {
+        const th = el('th', name); th.scope = 'col';
+        if (name === 'Context') th.title = 'Estimated next incoming context (CLI Watch)';
+        header.append(th);
+      }
+      head.append(header); this.body = el('tbody'); table.append(head, this.body); scroll.append(table);
+      this.activity = el('div', undefined, 'watch-activity');
+      this.tools = disclosure(); this.skills = disclosure(); this.running = el('p');
+      this.activity.append(this.tools.node, this.skills.node, this.running);
+      this.root.append(heading, this.totals, this.message, scroll, this.activity);
+    }
+    update(value, historical) {
+      this.value = value;
+      this.root.dataset.session = value.session_id;
+      text(this.title, value.title || value.session_id);
+      if (/^[A-Za-z0-9_-]{1,200}$/.test(value.session_id)) this.title.href = '#/sessions/' + value.session_id;
+      text(this.totals, () => `Session Total C Cost: ${value.totals ? display(value.totals, 'total_ccost') : value.state === 'unavailable' ? 'Unavailable' : 'Loading…'} · Session Total Duration: ${value.totals ? display(value.totals, 'duration_ms') : value.state === 'unavailable' ? 'Unavailable' : 'Loading…'}${value.provisional ? ' · provisional' : ''}${value.state === 'partial' ? ' · partial / retained evidence' : ''}`);
+      text(this.message, value.state === 'unavailable' ? 'Source unavailable; retained contents are not current.' : !value.rows.length ? 'Loading prompts…' : '');
+      if (!protectedNode(this.body)) {
+        const old = new Map([...this.body.children].map(node => [node.dataset.id, node]));
+        reconcile(this.body, value.rows.map(item => {
+          const prompt = item.prompt, row = old.get(prompt.event_id) || el('tr');
+          row.dataset.id = prompt.event_id;
+          const signature = JSON.stringify([item, historical]);
+          if (row.signature !== signature) {
+            const focal = !historical && prompt.event_id === value.focal_id;
+            row.className = focal ? prompt.in_progress ? 'watch-running' : prompt.aborted || prompt.has_error ? 'watch-error' : 'watch-success' : '';
+            const outcome = prompt.in_progress ? 'Running · provisional' : prompt.aborted ? 'Aborted' : prompt.has_error ? 'Error' : prompt.completed_successfully ? 'Completed' : 'Ended';
+            const label = el('span', `${item.marker || ''} #${prompt.prompt_number} ${prompt.preview || prompt.label || 'Prompt'}`.trim());
+            label.append(el('span', ' · ' + outcome, 'watch-outcome'));
+            if (prompt.has_additional_model) label.append(el('span', ' · Additional model contribution', 'detail'));
+            if (item.context_warning) label.append(el('span', item.context_warning, 'detail threshold'));
+            const context = display(item.live_context, 'watch_next_context_tokens');
+            const cells = [display(prompt, 'date_time'), label, item.model, item.effort,
+              () => display(prompt, 'ccost'), String(prompt.calls), display(item, 'watch_duration_ms'),
+              display(item.live_context, 'watch_delta_context_tokens'), context === 'N/A' ? context : '~' + context];
+            row.replaceChildren(...cells.map(value => { const cell = el('td'); cell.append(typeof value === 'object' ? value : el('span', value)); return cell; }));
+            row.signature = signature;
+          }
+          return row;
+        }));
+      }
+      this.activity.hidden = historical || !value.focal_id;
+      if (!historical) this.drawActivity(value.rows.find(row => row.prompt.event_id === value.focal_id)?.tool);
+    }
+    drawActivity(tool) {
+      const groups = [...(tool?.counts || [])].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+      const total = groups.reduce((sum, pair) => sum + pair[1], 0);
+      const omitted = groups.slice(5).reduce((sum, pair) => sum + pair[1], 0);
+      text(this.tools.summary, [`${total} tool calls`, ...groups.slice(0, 5).map(([name, count]) => `${count} × ${name}`), omitted && `${omitted} × other`, tool?.failed_count && `${tool.failed_count} failed / cancelled`].filter(Boolean).join(' · '));
+      const skills = tool?.skills || [];
+      const skillText = skill => skill.skill_id + (skill.failed_count ? ` (${skill.failed_count} failed)` : '');
+      text(this.skills.summary, [`${skills.length} skills`, ...skills.slice(0, 5).map(skillText), skills.length > 5 && `${skills.length - 5} other`].filter(Boolean).join(' · '));
+      for (const [target, lines, empty] of [[this.tools.list, groups.map(([name, count]) => `${count} × ${name}`), 'No tool calls'], [this.skills.list, skills.map(skillText), 'No confirmed custom skills']]) {
+        const signature = JSON.stringify(lines);
+        if (target.signature !== signature && !protectedNode(target)) {
+          target.replaceChildren(...(lines.length ? lines : [empty]).map(line => el('div', line)));
+          target.signature = signature;
+        }
+      }
+      text(this.running, tool?.running_tool ? `${tool.running_tool} · ${display(tool, 'running_ms')}` : '');
+      this.running.hidden = !tool?.running_tool;
+    }
+  }
   class View {
     constructor(state) {
       this.state = state;
-      this.page = 0;
       this.root = el('div', undefined, 'watch-view');
-      this.status = el('p', undefined, 'snapshot'); this.status.setAttribute('role', 'status');
-      this.totals = el('p', undefined, 'metric-value');
-      this.legend = el('p', undefined, 'detail');
-      this.origin = el('details'); this.origin.append(el('summary', 'Run scope / valuation'), el('p', 'Watch shares one host-owned engine across tabs; its run begins at engine start. Closing this tab does not stop Cost Guard. Search/sort/page controls never change report scope or totals. CLI remains independent.'));
-      this.scope = el('p'); this.origin.append(this.scope);
-      this.notices = el('p', undefined, 'warning');
-      const section = el('section');
-      const label = el('label', 'Filter Watch prompts '); this.filter = el('input');
-      this.filter.type = 'search'; label.append(this.filter);
-      this.scroll = el('div', undefined, 'table-scroll'); this.scroll.tabIndex = 0;
-      this.scroll.setAttribute('role', 'region'); this.scroll.setAttribute('aria-label', 'Watch prompts');
-      const table = el('table'); table.append(el('caption', 'Watch prompts · canonical CLI order'));
-      const head = el('thead'), header = el('tr');
-      for (const name of ['Session / prompt', 'Model / effort', 'CCost', 'Calls', 'Duration', 'Δctx → Next Ictx', 'Activity / context details']) {
-        const th = el('th', name); th.scope = 'col'; header.append(th);
-      }
-      head.append(header); this.body = el('tbody'); table.append(head, this.body); this.scroll.append(table);
-      this.previous = el('button', 'Previous'); this.next = el('button', 'Next');
-      this.previous.setAttribute('aria-label', 'Previous Watch page'); this.next.setAttribute('aria-label', 'Next Watch page');
-      this.pageLabel = el('span'); const pager = el('div', undefined, 'pager');
-      pager.append(this.previous, this.pageLabel, this.next);
-      section.append(label, this.scroll, pager);
-      this.accounts = el('div');
-      this.root.append(this.status, this.totals, this.legend, this.origin, this.notices, section, this.accounts);
-      this.filter.addEventListener('input', () => { this.page = 0; this.draw(); });
-      this.previous.addEventListener('click', () => { this.page--; this.draw(); });
-      this.next.addEventListener('click', () => { this.page++; this.draw(); });
+      this.earlier = el('details', undefined, 'watch-earlier');
+      this.earlier.append(el('summary', 'Earlier Prompts'));
+      this.history = el('div', undefined, 'watch-history'); this.earlier.append(this.history);
+      this.active = el('div', undefined, 'watch-active');
+      this.empty = el('p'); this.empty.setAttribute('role', 'status');
+      this.accounts = el('div'); this.cards = new Map();
+      this.root.append(this.earlier, this.empty, this.active, this.accounts);
     }
     attach(parent) {
       ReportView.syncUnits(this.root);
       if (this.root.parentNode !== parent) parent.replaceChildren(this.root);
     }
-    protected(node) {
-      const selection = window.getSelection?.();
-      return node.contains(document.activeElement) || Boolean(selection && !selection.isCollapsed &&
-        (node.contains(selection.anchorNode) || node.contains(selection.focusNode)));
-    }
     update(result) {
-      this.result = result;
-      const view = result.view;
+      const view = result.view, active = view.active_cards || [], history = view.history_cards || [];
       const fresh = result.state === 'running' && this.state.connection === 'Live connected.';
-      const lifecycle = fresh ? view.active_count ? 'Updating · active prompts' : 'Idle · no active prompts' : 'Stale / retained activity; not current lifecycle proof';
-      const observed = result.source_observed_at_ms == null ? 'not yet observed' : new Date(result.source_observed_at_ms).toLocaleString();
-      text(this.status, `${this.state.connection || 'Connecting'} · ${result.state}${result.error_code ? ' · ' + result.error_code : ''} · ${lifecycle} · ${view.source_label} · ${view.status} · Source observation ${observed} · Published ${new Date(view.now_ms).toLocaleString()}${view.source_warning_count ? ' · Source warnings ' + view.source_warning_count : ''}`);
-      text(this.totals, () => `Run CCost ${display(view, 'run_ccost')} · Requests ${view.run_total.request_count} · ${view.today_label} CCost ${display(view.today_total, 'known_ccost')}${view.today_pending ? ' · History pending' : ''}`);
-      text(this.legend, 'Token Mix % order: ' + ReportView.mixLegend(view));
-      text(this.scope, () => `Run origin: ${view.run_origin}, ${new Date(view.started_at_ms).toLocaleString()}. CCost is reference valuation, not billing. Run I/C/W/O tokens ${display(view.run_total, 'totals')} · CCost ${display(view.run_total, 'costs')} · Token Mix % ${display(view.token_mix, 'percentages')}. Session subtotals cover all retained rows, independent of filters/pages, not full historical sessions.`);
-      text(this.notices, [view.recent_model_notice, ...view.recent_promotion_notices].filter(Boolean).join(' · '));
-      if (!this.protected(this.body)) this.draw();
-      if (!this.protected(this.accounts)) this.drawAccounts(view);
-    }
-    draw() {
-      if (!this.result) return;
-      const view = this.result.view;
-      const queries = [this.state.search, this.filter.value].filter(Boolean).map(q => q.toLocaleLowerCase());
-      const shown = view.rows.filter(row => queries.every(q => this.cells(row).map(c => c.textContent ?? c).join(' ').toLocaleLowerCase().includes(q) || row.session_title.toLocaleLowerCase().includes(q) || row.session_id.toLocaleLowerCase().includes(q)));
-      this.page = Math.max(0, Math.min(this.page, Math.ceil(shown.length / 50) - 1));
-      const edge = this.scroll.getBoundingClientRect().top;
-      const first = [...this.body.children].find(row => row.getBoundingClientRect().bottom > edge) || this.body.firstElementChild;
-      const top = first?.getBoundingClientRect().top;
-      const old = new Map([...this.body.children].map(row => [row.dataset.id, row]));
-      const wanted = [];
-      let session = null;
-      for (const item of shown.slice(this.page * 50, (this.page + 1) * 50)) {
-        if (session !== item.session_id) {
-          session = item.session_id;
-          const subtotal = view.session_subtotals.find(s => s.session_id === session);
-          const title = `${item.session_title} · ${item.session_active ? 'Active / recent' : item.earlier ? 'Earlier' : 'Retained'} · Displayed rows CCost ${display(subtotal, 'ccost')} (not full session)`;
-          const group = old.get('session:' + session) || el('tr');
-          group.dataset.id = 'session:' + session; group.className = 'watch-session';
-          if (group.signature !== title) {
-            const th = el('th'); th.colSpan = 7; th.scope = 'rowgroup';
-             const link = el('a', () => `${item.session_title} · ${item.session_active ? 'Active / recent' : item.earlier ? 'Earlier' : 'Retained'} · Displayed rows CCost ${display(subtotal, 'ccost')} (not full session)`);
-            if (/^[A-Za-z0-9_-]{1,200}$/.test(session)) link.href = '#/sessions/' + session;
-            th.append(link); group.replaceChildren(th); group.signature = title;
-          }
-          wanted.push(group);
-        }
-        const key = JSON.stringify([item.session_id, item.prompt.event_id]);
-        const row = old.get(key) || el('tr'); row.dataset.id = key;
-        const signature = JSON.stringify(item);
-        if (row.signature !== signature) {
-          const open = [...row.querySelectorAll('details')].map(node => node.open);
-          row.className = [...(item.prompt.display_roles || []), ...(item.display_roles || []),
-            ...(item.prompt.is_compaction ? ['compaction'] : [])].join(' ');
-          row.replaceChildren(...this.cells(item).map((value, index) => {
-            const cell = el('td'); cell.append(typeof value === 'object' ? value : el('span', () => this.cells(item)[index])); return cell;
-          }));
-          [...row.querySelectorAll('details')].forEach((node, index) => { node.open = open[index] || false; });
-          row.signature = signature;
-        }
-        wanted.push(row);
+      text(this.empty, !fresh ? 'Source / connection unavailable; last observation retained.' : view.cards_state === 'loading' || view.cards_state == null ? 'Loading active prompts…' : view.cards_state === 'unavailable' ? 'Some prompt sources are unavailable.' : !active.some(card => card.rows.some(row => row.prompt.in_progress)) ? 'No running prompts' : '');
+      const keep = new Set();
+      for (const [parent, values, historical] of [[this.active, active, false], [this.history, history, true]]) {
+        const scroll = parent.scrollTop;
+        const wanted = values.map(value => {
+          const key = JSON.stringify([value.session_id, value.focal_id || 'history']); keep.add(key);
+          if (!this.cards.has(key)) this.cards.set(key, new Card());
+          const card = this.cards.get(key); card.update(value, historical); return card.root;
+        });
+        if (historical && !wanted.length) wanted.push(el('p', view.history_state === 'loading' ? 'Loading earlier prompts…' : view.history_state === 'unavailable' ? 'Earlier prompts unavailable' : 'No earlier prompts'));
+        reconcile(parent, wanted);
+        if (historical) parent.scrollTop = scroll;
       }
-      if (!wanted.length) {
-        const row = el('tr'), cell = el('td', view.rows.length ? 'No matching rows.' : 'No retained prompt rows. Idle is not evidence of completion.');
-        cell.colSpan = 7; row.append(cell); wanted.push(row);
-      }
-      const keep = new Set(wanted);
-      for (const row of [...this.body.children]) if (!keep.has(row)) row.remove();
-      wanted.forEach((row, index) => { if (this.body.children[index] !== row) this.body.insertBefore(row, this.body.children[index] || null); });
-      if (first?.isConnected && top !== undefined) this.scroll.scrollTop += first.getBoundingClientRect().top - top;
-      text(this.pageLabel, `${shown.length ? this.page * 50 + 1 : 0}–${Math.min((this.page + 1) * 50, shown.length)} of ${shown.length} · ${view.rows.length} retained rows; totals independent of filters/pages`);
-      this.previous.disabled = this.page === 0; this.next.disabled = (this.page + 1) * 50 >= shown.length;
-    }
-    cells(row) {
-      const cells = ReportView.detailCells({...row.prompt, model_effort: null, next_context_warning: row.next_context_warning}, true);
-      cells[0].append(el('span', `${row.marker} · ${row.is_latest_session_event ? 'Newest' : row.earlier ? 'Earlier' : 'Retained'}`, 'detail'));
-      const detail = el('span', row.next_context_warning || '', row.next_context_warning ? 'threshold' : '');
-      const extra = el('details'); extra.append(el('summary', 'Context / token detail'), el('span', () => `Incoming context ${cells[4]} · ~Ictx CCost ${display(row.prompt, 'incoming_context_ccost')} · ~Extra CCost ${display(row.prompt, 'extra_ccost')} · Token Mix % ${cells[7]} · ${ReportView.mixLegend(row.prompt)} · Next context cached/fresh CCost ${display(row.live_context, 'watch_next_context_cached_ccost')}/${display(row.live_context, 'watch_next_context_fresh_ccost')}`, 'detail'));
-      const tool = row.tool;
-      if (tool) detail.append(el('span', `${tool.running_tool || ''} ${display(tool, 'running_ms')} · Calls ${tool.counts.map(pair => pair.join(': ')).join(', ')} · Failed ${tool.failed_count} · TODO ${tool.todo_completed}/${tool.todo_total} ${tool.active_todo || ''} · Background ${tool.background_kinds.join(', ')} ${display(tool, 'background_ms')} · Skills ${tool.skills.map(s => s.skill_id + (s.failed_count ? ' (failed ' + s.failed_count + ')' : '')).join(', ')}`, 'detail ' + (tool.failed_count ? 'warning' : '')));
-      detail.append(extra);
-      const next = display(row.live_context, 'watch_next_context_tokens');
-      const context = `${display(row.live_context, 'watch_delta_context_tokens')} → ${next === 'N/A' ? next : '~' + next}`;
-      const sparse = row.watch_sparse_compaction;
-      return [cells[0], sparse && row.watch_model_effort === 'N/A' && !row.next_context_warning ? '' : row.watch_model_effort,
-        sparse ? '' : cells[1], sparse ? '' : cells[2], sparse && !row.prompt.in_progress ? '' : display(row, 'watch_duration_ms'), context, detail];
-    }
-    drawAccounts(view) {
+      for (const key of this.cards.keys()) if (!keep.has(key)) this.cards.delete(key);
       const signature = JSON.stringify([view.accounts, view.quota_stale, view.quota_recovering_count]);
-      if (this.accountSignature === signature) return;
-      // Preserve open observation disclosures when independent account observations change.
-      const open = [...this.accounts.querySelectorAll('details')].map(node => node.open);
-      this.accounts.replaceChildren();
-      ReportView.overviewAccounts(this.accounts, view.accounts,
-        `Watch accounts · ${view.quota_stale ? 'stale' : 'independent observations'} · recovering ${view.quota_recovering_count}`);
-      [...this.accounts.querySelectorAll('details')].forEach((node, index) => { node.open = open[index] || false; });
-      this.accountSignature = signature;
+      if (this.accountSignature !== signature && !protectedNode(this.accounts)) {
+        this.accounts.replaceChildren();
+        ReportView.overviewAccounts(this.accounts, view.accounts, '', true, false, true);
+        this.accountSignature = signature;
+      }
     }
   }
   return {View};

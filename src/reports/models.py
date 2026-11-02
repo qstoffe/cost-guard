@@ -68,6 +68,8 @@ class PromptProjection:
     running_cost_warning: bool = False
     ictx_price_threshold: bool = False
     watch_model_effort: str = ""
+    watch_model: str = ""
+    watch_effort: str = ""
     watch_delta_context_tokens: int | None = None
     watch_next_context_tokens: int | None = None
     watch_next_context_cached_ccost: Decimal | None = None

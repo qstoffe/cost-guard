@@ -9,6 +9,8 @@ Status: current
   payload/DOM/scroll evidence, unified Models and their original proof limits.
 - [Settings and appearance](../web-settings.md): the narrow preserving configuration
   boundary, confirmed-only UI state, actual theme checks and final visual exception.
+- [Watch cards](watch-cards.md): isolated two-phase acquisition, continuous history,
+  canonical totals, nine-case rendered-browser evidence and separate V2/detail proof.
 
 Historical observations keep their original dates and exceptions; the theme
 delivery does not refresh their validity or certify older failed probes.

@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.123 — 2026-11-02
+
+- Web Watch: unframed live prompt cards, five eligible historical sessions with five prompts each, canonical complete-session CCost/duration and focal tool/skill disclosures. Bounded isolated capture stages publish rows before full totals; account history/detail work no longer blocks Live. Watch-only report/account chrome is removed; CLI and Accounts remain unchanged.
+
 ## v80.122 — 2026-11-02
 
 - Windows Web: recover legacy stale records after reboot/PID reuse using the existing native lifetime lock, without contacting or stopping unrelated processes. Ambiguous ownership remains protected; console/dialog and Diagnostics retain specific bounded startup causes and proven-stale recovery.
