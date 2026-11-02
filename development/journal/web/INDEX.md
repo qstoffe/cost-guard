@@ -12,7 +12,8 @@ Status: current
 - [Watch cards](watch-cards.md): isolated two-phase acquisition, continuous history,
   canonical totals, nine-case rendered-browser evidence and separate V2/detail proof.
 - [Watch summary and context](watch-summary.md): retained coherent daily accounting,
-  stable subscription slots, current continuation footers, browser matrix and real V2 evidence.
+  native primary quotas, table-adjacent guidance, page-flow history, quiet Today,
+  browser matrix and scoped live evidence/Decision Delegate verification exception.
 - [Watch terminal lifecycle](watch-terminal-lifecycle.md): reproduced retention/race
   defects, shared fresh-versus-retained authority and historical-incident limits.
 - [Shared/native CI scope](ci-scope.md): measured Linux shared regression and

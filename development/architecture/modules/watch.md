@@ -60,8 +60,16 @@ to one latest-prompt-owned continuation DTO, including hidden compaction rewrite
 the Watch multiplier/cost range. Cards suppress guidance on superseded focals or source
 failure. This is separate from historical table rows and leaves CLI context semantics
 unchanged. `application/watch_accounts.py` owns Watch-only stable primary slots and Used
-display; provider-declared primary labels can preserve an absent window. Canonical
+display; native primary flags/order normalize into account-scoped labels, preserving an
+absent primary on partial/error acquisition without inventing provider-wide windows.
+Model limits never become account primary. Unavailable sign-in-method changes retain
+their existing invalidation semantics. Canonical
 account period projection explicitly marks provider-attributed estimated scopes.
+
+Watch tables own themed body/header surfaces; conditional guidance immediately follows
+the table, before activity. Sibling selectors separate cards, and outlined history has
+natural document height. Total Today presents the known integer without altering its
+completeness metadata; routine refresh-state changes preserve its DOM and valid values.
 
 Watch depends on shared reports/analysis/domain and abstract source contracts; reports/analysis never import Watch. Presentation consumes projections without fetching history or native quotas.
 

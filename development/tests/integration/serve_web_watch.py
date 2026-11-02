@@ -18,6 +18,7 @@ sys.path.insert(0, str(ROOT))
 
 from development.tests.fixtures.synthetic_month import SyntheticMonthSource
 from development.tests.fixtures.watch_runtime import make_service
+from development.tests.fixtures.watch_summary import summary_watch
 from src.application.live_projection import project_live
 from src.watch.models import SkillObservation, ToolObservation, WatchCard, WatchProjection, WatchRow
 
@@ -42,10 +43,13 @@ def fixture():
             preview="Check completed behavior\nhttps://example.test/" + "unbroken" * 200), marker="▶", tool=tool)
         active = replace(active, title="Long running session · UTF-8 Å日本語 · live prompt cards",
             focal_id=focal.prompt.event_id, rows=(focal,))
-        quota = service.build_watch_quota()
+        summary = summary_watch()
+        active = replace(active, context_warning=summary.active_cards[0].context_warning)
+        history = tuple(replace(card, context_warning=summary.history_cards[0].context_warning) for card in cards[1:])
         return dict(state="running", view=project_live(WatchProjection("Watch", "fixture", (),
-            now_ms=100_000_000, active_cards=(active,), history_cards=tuple(cards[1:]),
-            cards_state="observed", history_state="observed", quota=quota)).to_json())
+            now_ms=100_000_000, active_cards=(active, replace(active, session_id="second", title="Second running session")),
+            history_cards=history, cards_state="observed", history_state="observed", quota=summary.quota,
+            daily_usage=summary.daily_usage, daily_state="observed")).to_json())
 
 
 def main():

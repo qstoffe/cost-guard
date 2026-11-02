@@ -35,7 +35,10 @@ def normalize_quota(snapshot: QuotaSnapshot, ref: AccountRef, label: str, *, cap
         unlimited=window.unlimited, status=window.status,
         model_id=window.model_id,
         scope=window.scope,
+        primary=window.primary and window.scope == "account" and window.model_id is None,
     ) for window in snapshot.windows)
+    account_quotas = tuple(item for item in components if item.scope == "account" and item.model_id is None)
+    primary = next((item for item in account_quotas if item.primary), next(iter(account_quotas), None))
     billing = snapshot.billing_components
     if snapshot.credit_balance is not None and not billing:
         billing = (BillingComponent("Credits", snapshot.credit_balance, snapshot.credit_unit or "credits", kind="balance"),)
@@ -48,4 +51,5 @@ def normalize_quota(snapshot: QuotaSnapshot, ref: AccountRef, label: str, *, cap
         ),
         reason=snapshot.reason, observations=snapshot.observations, warnings=snapshot.warnings,
         capacity_kind=capacity_kind,
+        primary_quota_label=primary.label if primary is not None else None,
     )

@@ -81,7 +81,7 @@ const WatchView = (() => {
     parent.replaceChildren(el('strong', 'Total Today'));
     if (!value) { parent.append(el('span', state === 'unavailable' ? 'Daily activity unavailable' : 'Loading daily activity…')); return; }
     parent.append(el('span', () => value.total.observed_requests && !value.total.priced_requests ? 'N/A' : display(value.total, 'known_ccost'), 'metric-value'));
-    const count = el('span', `${value.prompt_count_complete ? '' : '≥'}${value.prompt_count} prompts${value.prompt_count_complete ? '' : ' · partial attribution'}`);
+    const count = el('span', `${value.prompt_count} prompts`);
     count.title = 'Distinct initiating user prompts with requests attributed to this local calendar day, including continuing prompts and pre-Watch activity.';
     parent.append(count, el('span', 'Token Mix %'));
     for (const [key, label] of Object.entries(value.mix.display.token_categories))
@@ -90,7 +90,6 @@ const WatchView = (() => {
       parent.append(el('span', 'Partial pricing / telemetry', 'warning'));
     if (!value.mix.request_count) parent.append(el('span', 'No recorded usage', 'detail'));
     if (state === 'unavailable') parent.append(el('span', 'Source unavailable · retained daily observation', 'warning'));
-    else if (state === 'refreshing') parent.append(el('span', 'Refreshing…', 'detail'));
   }
   class Card {
     constructor() {
@@ -111,7 +110,7 @@ const WatchView = (() => {
       this.tools = disclosure(); this.skills = disclosure(); this.running = el('p'); this.background = el('p');
       this.activity.append(this.tools.node, this.skills.node, this.running, this.background);
       this.warning = el('div', undefined, 'watch-context-warning');
-      this.root.append(heading, this.message, scroll, this.activity, this.warning);
+      this.root.append(heading, this.message, scroll, this.warning, this.activity);
     }
     update(value, historical) {
       this.value = value;
@@ -211,7 +210,6 @@ const WatchView = (() => {
       text(this.empty, !fresh ? 'Source / connection unavailable; last observation retained.' : view.cards_state === 'loading' || view.cards_state == null ? 'Loading active prompts…' : view.cards_state === 'unavailable' ? 'Some prompt sources are unavailable.' : !active.some(card => card.rows.some(row => row.prompt.in_progress)) ? 'No running prompts' : '');
       const keep = new Set();
       for (const [parent, values, historical] of [[this.active, active, false], [this.history, history, true]]) {
-        const scroll = parent.scrollTop;
         const wanted = values.map(value => {
           const key = JSON.stringify([value.session_id, value.focal_id || 'history']); keep.add(key);
           if (!this.cards.has(key)) this.cards.set(key, new Card());
@@ -219,10 +217,10 @@ const WatchView = (() => {
         });
         if (historical && !wanted.length) wanted.push(el('p', view.history_state === 'loading' ? 'Loading earlier prompts…' : view.history_state === 'unavailable' ? 'Earlier prompts unavailable' : 'No earlier prompts'));
         reconcile(parent, wanted);
-        if (historical) parent.scrollTop = scroll;
       }
       for (const key of this.cards.keys()) if (!keep.has(key)) this.cards.delete(key);
-      const dailySignature = JSON.stringify([view.daily_usage, view.daily_state]);
+      const dailyState = view.daily_usage && view.daily_state !== 'unavailable' ? 'observed' : view.daily_state;
+      const dailySignature = JSON.stringify([view.daily_usage, dailyState]);
       if (this.dailySignature !== dailySignature && !protectedNode(this.daily)) {
         daily(this.daily, view.daily_usage, view.daily_state); this.dailySignature = dailySignature;
       }

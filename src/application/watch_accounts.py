@@ -18,19 +18,14 @@ def watch_quota(quota):
 
 
 def primary_quota(native):
+    account_quotas = tuple(item for item in native.quotas if item.scope == "account" and item.model_id is None)
     if native.primary_quota_label:
-        return next((item for item in native.quotas if item.label == native.primary_quota_label),
+        return next((item for item in account_quotas if item.label == native.primary_quota_label),
                     QuotaComponent(native.primary_quota_label))
-    explicit = next((item for item in native.quotas if item.primary), None)
+    explicit = next((item for item in account_quotas if item.primary), None)
     if explicit is not None:
         return explicit
-    if native.ref.provider_id in {"github-copilot", "github-copilot-enterprise"}:
-        return next((item for item in native.quotas if item.label.casefold() in {"monthly", "month"}),
-                    QuotaComponent("Monthly"))
-    if native.ref.provider_id in {"anthropic", "claude-code", "openai"}:
-        return next((item for item in native.quotas if item.duration_seconds == 18_000 and item.scope == "account"),
-                    QuotaComponent("5-hour"))
-    return next(iter(native.quotas), QuotaComponent("Primary quota"))
+    return next(iter(account_quotas), QuotaComponent("Primary quota"))
 
 
 def watch_account(item):
