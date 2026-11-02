@@ -37,6 +37,8 @@ Equal numbers are not interchangeable. Analysis consumes capabilities/domain sem
 
 ### Analysis
 
+`analysis/period_ccost.py` resolves only native duration/reset intervals or explicit empty half-open scopes for provider-confirmed not-started windows. Empty scopes never select historical requests; contradictory evidence has no interval. Reports gate native costs on account availability. `AccountPeriodHistory` retains an immutable prefix index and acquisition boundary, not a native quota snapshot, so Web publication reprojects current accounts/windows without source I/O or repricing. Today/local month and supported UTC monthly residual accounting stay independent. Regression owners: `test_account_period_ccost.py`, `test_quota_period_lifecycle.py`, `test_watch_daily.py`, `test_copilot_unaccounted_usage.py`.
+
 `src/analysis/` owns attribution, prompt/child/synthetic/compaction semantics, clone billing de-duplication, context and comparisons over canonical domain/provider-neutral abstractions only.
 
 Usage/billing consumes all canonical providers: V2 `openai` requests must not disappear because pricing/quota integrations are Copilot-backed. Positive provider-reported cost stays authoritative; fallback and quota are separate capabilities. Provider filters are explicit lower-level/testing scopes only, never default report truth.

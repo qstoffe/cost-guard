@@ -72,6 +72,10 @@ def reconcile_accounts(
         if current is not None and observed is not None and key not in observed:
             result.append(prior or current)
             continue  # Unrelated completion cannot erase this account's stale state.
+        if (prior is not None and current is not None and current.availability in {"available", "partial"}
+                and current.fetched_at_ms < prior.fetched_at_ms):
+            result.append(prior)
+            continue  # A delayed old observation cannot restore a previous window.
         recent = prior is not None and 0 <= now_ms - timestamps.get(key, 0) <= MAX_STALE_MS
         retain = prior is not None and not durable_quota_failure(prior) and recent
         if durable_quota_failure(current):
@@ -94,7 +98,8 @@ def reconcile_accounts(
             for component in current.quotas:
                 before = older.pop(component.label, None)
                 fields = {}
-                if before and component.limit == before.limit and component.used == before.used:
+                if (before and component.window_active == before.window_active
+                        and component.limit == before.limit and component.used == before.used):
                     # Missing percentages/reset fields can be transient; changed
                     # native counters/limits must not inherit an unrelated share.
                     for name in ("remaining_fraction", "remaining", "reset_at_ms", "remaining_money", "limit_money"):

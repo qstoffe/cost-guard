@@ -9,7 +9,7 @@ from dataclasses import replace
 
 from src.pricing.base import PricingUnavailableError
 from src.sources.errors import SourceError
-from src.analysis.timezones import local_day_start_ms
+from src.analysis.timezones import local_day_start_ms, local_month_start_ms
 from src.reports.history import WatchHistoryAcquisition
 from .card_workers import CardWorkers
 from .cards import WatchCards
@@ -90,7 +90,8 @@ class WebWatchCoordinator(WatchCoordinator):
             today.schedule_history(service, sessions, now_ms, active_root_ids=active_roots, live_root_ids=active_roots)
             while today.history_pending and not self._closed:
                 today.advance_history(service, now_ms, batch_size=1)
-            return None if self._closed else (service.project_watch_accounts(snapshots)[0], service.project_watch_today())
+            service.project_watch_accounts(snapshots)
+            return None if self._closed else (service.watch_account_history(), service.project_watch_today())
         except (SourceError, PricingUnavailableError):
             return None
         finally:
@@ -135,12 +136,11 @@ class WebWatchCoordinator(WatchCoordinator):
         # Keep independently refreshed native quota observations. Canonical
         # historical cost scopes are indexed separately, never recomputed here.
         if self.history_quota is not None and frame.quota is not None:
-            costs = {item.account.key: item for item in self.history_quota.accounts}
-            accounts = tuple(replace(item, ccost_scopes=costs[item.account.key].ccost_scopes,
-                ccost_notes=costs[item.account.key].ccost_notes,
-                ccost_account_unknown=costs[item.account.key].ccost_account_unknown,
-                ccost_estimated_scopes=costs[item.account.key].ccost_estimated_scopes) if item.account.key in costs else item
-                for item in frame.quota.accounts)
+            accounts = self.history_quota.project(tuple(item.account for item in frame.quota.accounts),
+                now_ms=now_ms, today_start_ms=day,
+                month_start_ms=local_month_start_ms(self.report_service.timezone_id, now_ms=now_ms),
+                timezone_id=self.report_service.timezone_id,
+                workday_calendar=str(self.config.get("workdayCalendar") or ""))
             frame = replace(frame, quota=replace(frame.quota, accounts=accounts))
         history_pending = any(entry.latest_ms is None for entry in self.cards.sessions.values())
         history_failed = any(entry.state == "unavailable" for entry in self.cards.sessions.values())

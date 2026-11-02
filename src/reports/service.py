@@ -580,10 +580,11 @@ class ReportService:
             period_entries=self._watch_history.retained_entries(),
             observed_start_ms=(self._watch_history.published_start_ms
                                if self._watch_history.day_start_ms == day else None))
-        if self._watch_history.published_start_ms is None or self._watch_history.published_start_ms > self._watch_period_start_ms:
-            projection = replace(projection, accounts=tuple(replace(account, ccost_scopes=tuple(
-                (name, None) for name, _cost in account.ccost_scopes)) for account in projection.accounts))
         return projection, today
+
+    def watch_account_history(self):
+        """Export indexed evidence, never period costs bound to an old quota snapshot."""
+        return self._watch_account_projection.history
 
     def _account_history(self, quotas, roots, root_activity):
         from src.analysis.period_ccost import history_start

@@ -7,51 +7,26 @@ import re
 import unittest
 from unittest.mock import patch
 
-from development.tests.fixtures.accounts import account
+from development.tests.fixtures.account_periods import DAY, MONTH, NOW, HOUR, request, subscription, project
 from development.tests.fixtures.report_runtime import FakePricingProvider
 from development.tests.fixtures.quota_rendering import quotas, report_text, watch_text
 from development.tests.fixtures.session_snapshots import make_snapshot
 from development.tests.fixtures.watch_runtime import MutableSource, make_service
 from development.tests.fixtures.synthetic_month import SyntheticMonthSource, make_root_snapshot
-from src.analysis.causal import trace_entries
 from src.analysis.period_ccost import PeriodCCostIndex, quota_window
-from src.analysis.timezones import local_day_start_ms, local_month_start_ms
 from src.analysis.valuation import ComparisonCost
-from src.domain import ModelRef, QuotaComponent, TokenUsage
+from src.domain import QuotaComponent
 from src.domain.acquisition import AcquisitionMetrics
 from src.presentation.accounts import account_ccost_lines, account_ccost_text, capacity_lines
 from src.presentation.token_mix import comparison_cost_text
 from src.presentation.terminal import AnsiStyler
-from src.reports.accounts import account_projections, WatchAccountProjection
+from src.reports.accounts import WatchAccountProjection
 
 D = Decimal
-HOUR = 3_600_000
-NOW = int(datetime(2026, 10, 25, 12, tzinfo=timezone.utc).timestamp() * 1000)
-DAY = local_day_start_ms("Europe/Stockholm", now_ms=NOW)
-MONTH = local_month_start_ms("Europe/Stockholm", now_ms=NOW)
 
 
 def strip_ansi(value):
     return re.sub(r"\x1b\[[0-9;]*m", "", value)
-
-
-def request(name, when, *, provider="claude-code", amount=1_000_000, ref=None, model="gpt-test"):
-    return replace(trace_entries(make_snapshot())[0], session_id="root", message_id=name, step_part_id=None,
-                   completed_at_ms=when, model=ModelRef(provider, model), tokens=TokenUsage(input=amount),
-                   account_ref=ref)
-
-
-def subscription(provider="claude-code", identity="one"):
-    return replace(account(provider, identity=identity), quotas=(
-        QuotaComponent("5-hour", "rolling", remaining_fraction=D(1), duration_seconds=18_000, window_active=False),
-        QuotaComponent("weekly", "rolling", remaining_fraction=D("0.57"), duration_seconds=604_800,
-                       reset_at_ms=NOW + HOUR),))
-
-
-def project(accounts, entries, *, watch=False, observed_start_ms=None):
-    return account_projections(accounts, entries, FakePricingProvider().catalog, now_ms=NOW,
-                               today_start_ms=DAY, month_start_ms=MONTH, timezone_id="Europe/Stockholm", watch=watch,
-                               observed_start_ms=observed_start_ms)
 
 
 class AccountPeriodCCostTests(unittest.TestCase):
@@ -73,7 +48,7 @@ class AccountPeriodCCostTests(unittest.TestCase):
         self.assertIn("CCost this month: 300", report)
         self.assertEqual(("CCost today: 100", "CCost this month: 300"), account_ccost_lines(claude))
         notes = "\n".join(claude.ccost_notes)
-        self.assertIn("trailing lookback", notes)
+        self.assertNotIn("trailing lookback", notes)
         self.assertIn("native reset window", notes)
         self.assertIn("not verified account/billing attribution", notes)
 
@@ -131,7 +106,8 @@ class AccountPeriodCCostTests(unittest.TestCase):
         self.assertIsNone(quota_window(replace(component, reset_at_ms=None), NOW))
         self.assertIsNone(quota_window(replace(component, reset_at_ms=NOW), NOW))
         self.assertIsNone(quota_window(replace(component, reset_at_ms=NOW + 8 * 86_400_000), NOW))
-        self.assertEqual(NOW - 5 * HOUR, quota_window(subscription().quotas[0], NOW)[0])
+        inactive = replace(subscription().quotas[0], window_active=False, reset_at_ms=None)
+        self.assertEqual((NOW, NOW, "provider-confirmed empty window"), quota_window(inactive, NOW))
 
     def test_established_empty_periods_are_zero_for_every_provider_and_both_surfaces(self):
         for provider in ("openai", "github-copilot", "claude-code", "anthropic"):
@@ -264,7 +240,7 @@ class AccountPeriodCCostTests(unittest.TestCase):
                 text = "\n".join(strip_ansi(line) for line in lines)
                 self.assertIn("0% used (100)", text)
                 self.assertIn("43% used (100)", text)
-                self.assertIn("not started", " ".join(text.split()))
+                self.assertNotIn("not started", " ".join(text.split()))
                 self.assertTrue(all(len(strip_ansi(line)) <= width for line in lines))
                 self.assertNotIn("this month", text)
         native = replace(subscription("github-copilot"), quotas=(QuotaComponent("Month", "fixed", remaining=D(2483),
