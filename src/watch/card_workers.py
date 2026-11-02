@@ -18,6 +18,7 @@ class CardResult:
     generation: int
     phase: str
     value: object = None
+    captured_at_ms: int | None = None
 
 
 class CardWorkers:
@@ -42,9 +43,9 @@ class CardWorkers:
         self.jobs[key] = self.pool.submit(self._capture, root, generation, now_ms, previous, focal_ids)
         return True
 
-    def _publish(self, root, generation, phase, value=None):
+    def _publish(self, root, generation, phase, value=None, captured_at_ms=None):
         if not self.stopping.is_set():
-            self.results.put(CardResult(root.session_id, generation, phase, value))
+            self.results.put(CardResult(root.session_id, generation, phase, value, captured_at_ms))
 
     def _capture(self, root, generation, now_ms, previous, focal_ids):
         started = time.monotonic()
@@ -57,11 +58,11 @@ class CardWorkers:
             tools = tuple((row.event_id, observe_tools(snapshot, row.event_id,
                 is_compaction=False, now_ms=now_ms + RUNNING_VISIBLE_AFTER_MS,
                 skill_origins_by_session=origins)) for row in capture.rows)
-            self._publish(root, generation, "rows", (capture, tools, snapshot))
+            self._publish(root, generation, "rows", (capture, tools, snapshot), now_ms)
             if not self.stopping.is_set():
-                self._publish(root, generation, "totals", capture_totals(service, item))
+                self._publish(root, generation, "totals", capture_totals(service, item), now_ms)
         except (SourceError, PricingUnavailableError):
-            self._publish(root, generation, "unavailable")
+            self._publish(root, generation, "unavailable", captured_at_ms=now_ms)
         finally:
             if service is not None:
                 service.close_accounts()

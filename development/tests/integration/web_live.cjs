@@ -109,12 +109,13 @@ async function main() {
   const other = JSON.parse(JSON.stringify(input.view.active_cards[0]));
   other.session_id = 'other-session'; other.title = 'Other session';
   other.rows.at(-1).prompt.aborted = true; other.rows.at(-1).prompt.in_progress = false;
+  other.rows.at(-1).prompt.abort_reason = 'quota_limit';
   multiple.view.active_cards.push(other);
   context.example = multiple;
   vm.runInContext('ReportView.renderLive(parent, example, state)', context);
   assert.equal(context.parent.querySelectorAll('table').length, 2);
   assert.equal(promptRows()[0], firstRow); assert.equal(firstRow.children[0], firstCell);
-  assert.ok(context.parent.textContent.includes('Aborted'));
+  assert.ok(context.parent.textContent.includes('Aborted · quota limit'));
   assert.equal(context.parent.querySelectorAll('input').length, 0);
   assert.equal(context.parent.querySelectorAll('button').length, 0);
   // A running update cannot destroy selected text; latest data applies on a later tick.

@@ -71,7 +71,7 @@ def load_snapshots(source: OpenCodeV2Source, root_ids: Sequence[str]) -> dict[st
                                                   phase="snapshot", generation="v2")
             revision = after.revision(root_id, source._revision)
             if revision == revisions[root_id]:
-                complete[root_id] = replace(snapshots[root_id], source_revision=revision)
+                complete[root_id] = replace(snapshots[root_id], source_revision=revision, complete=True)
             else:
                 unstable.append(root_id)
         pending = tuple(unstable)

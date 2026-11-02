@@ -30,6 +30,16 @@ def retain_snapshot(previous, current):
         old, new = getattr(previous, name), getattr(current, name)
         missing |= bool({key(item) for item in old} - {key(item) for item in new})
         fields[name] = union(old, new, key)
+    # Persisted attempt ends cannot be undone by a later omission of the idle
+    # row. Keep them on that assistant identity; causal analysis still admits
+    # newer assistant attempts, later tools and genuinely active children.
+    ended = {(message.session_id, message.message_id): message.termination
+        for message in previous.messages if message.termination is not None}
+    fields["messages"] = tuple(replace(message, termination=ended[key])
+        if (key := (message.session_id, message.message_id)) in ended
+        and (message.termination is None or
+            message.termination.completed_at_ms < ended[key].completed_at_ms)
+        else message for message in fields["messages"])
     # Message-embedded parts must agree with the flat canonical parts collection.
     parts = {}
     for part in fields["parts"]:
@@ -37,7 +47,44 @@ def retain_snapshot(previous, current):
     fields["messages"] = tuple(replace(message,
         parts=tuple(parts.get((message.session_id, message.message_id), message.parts)))
         for message in fields["messages"])
-    return replace(current, **fields), missing
+    return replace(current, **fields, complete=current.complete and not missing), missing
+
+
+_LIFECYCLE_FIELDS = (
+    "in_progress", "aborted", "watch_error", "completed_successfully", "abort_reason",
+    "abort_time_ms", "terminal_time_ms", "duration_ms", "execution_duration_ms",
+    "background_kinds", "background_started_ms", "background_only", "ended_after_tool_calls",
+)
+
+
+def analyze_observed(service, previous, fresh):
+    """Retain usage, but derive execution from proven complete current evidence."""
+    snapshot, retained = retain_snapshot(previous, fresh)
+    bundle = service._analyze_snapshot(snapshot)
+    if not retained or not fresh.complete:
+        return snapshot, bundle, retained
+    # Preserve durable ends on present attempts, never omitted live children,
+    # tools or messages. Reuse causal analysis, not another lifecycle heuristic.
+    messages = {(message.session_id, message.message_id): message for message in snapshot.messages}
+    current = replace(fresh, messages=tuple(replace(message,
+        termination=messages[(message.session_id, message.message_id)].termination)
+        for message in fresh.messages))
+    authoritative = service._analyze_snapshot(current)
+    current_prompts = {record.prompt_id: record for record in authoritative.prompts}
+    prompts = []
+    for record in bundle.prompts:
+        actual = current_prompts.get(record.prompt_id)
+        if actual is not None:
+            record = replace(record, **{name: getattr(actual, name) for name in _LIFECYCLE_FIELDS})
+        elif record.in_progress:
+            # Complete reclassification, e.g. zero-call/compaction. Keep history
+            # without inventing a successful/failed outcome or end timestamp.
+            record = replace(record, in_progress=False, aborted=False, watch_error=False,
+                completed_successfully=False, abort_reason="", abort_time_ms=0,
+                terminal_time_ms=0, execution_duration_ms=None, background_kinds=(),
+                background_started_ms=0, background_only=False, ended_after_tool_calls=False)
+        prompts.append(record)
+    return snapshot, replace(bundle, prompts=tuple(prompts), cacheable=False), retained
 
 
 class SessionHistory:
@@ -71,10 +118,9 @@ class SessionHistory:
                             duration_ms=accumulated_duration((row.at_ms, row.duration_ms) for row in rows))
             self.report = replace(self.report, prompt_blocks=(block,))
             return self.report, "history_retained" if self.retained else "observed"
-        snapshot, missing = retain_snapshot(self.snapshot, fresh)
         # Analyze locally, not through the persistent derived cache: retained evidence
         # must never masquerade as a complete current source revision.
-        bundle = service._analyze_snapshot(snapshot)
+        snapshot, bundle, missing = analyze_observed(service, self.snapshot, fresh)
         item = AnalyzedRoot(root, bundle, False, snapshot)
         block = service._prompt_block(item, snapshot_running_metrics=True)
         observed = {event.event_id for event in fresh.events}
@@ -84,12 +130,16 @@ class SessionHistory:
         for row in block.rows:
             if row.event_id in observed:
                 row_observations[row.event_id] = service.now_ms
-            elif row.event_id in previous:
+            elif row.event_id in previous and not fresh.complete:
                 old = previous[row.event_id]
                 # Omitted evidence cannot advance execution time or prove an end.
                 row = replace(row, duration_ms=old.duration_ms, in_progress=old.in_progress,
                               completed_at_ms=old.completed_at_ms, aborted=old.aborted,
-                              completed_successfully=old.completed_successfully, watch_error=old.watch_error)
+                               completed_successfully=old.completed_successfully, watch_error=old.watch_error)
+            if row.event_id in previous and not row.in_progress and row.completed_at_ms is None:
+                old = previous[row.event_id]
+                row = replace(row, duration_ms=(max(old.duration_ms or 0, service.now_ms - old.at_ms)
+                    if old.in_progress else old.duration_ms))
             rows.append(row)
         block = replace(block, rows=tuple(rows),
                         duration_ms=accumulated_duration((row.at_ms, row.duration_ms) for row in rows))

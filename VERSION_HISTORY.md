@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.125 — 2026-11-02
+
+- Web Watch: authoritative terminal/quota state replaces retained live evidence; omitted attempt ends and delayed captures cannot resurrect stopped prompts. Duration/activity stop independently of terminal highlight grace; retained Session detail shares reconciliation.
+
 ## v80.124 — 2026-11-02
 
 - Web Watch: aligned Today/primary-quota subscription cards, retained full-day cost/prompt count/token mix, and current-context price guidance in each session footer. CLI/Accounts scopes unchanged.

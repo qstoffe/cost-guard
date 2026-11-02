@@ -13,6 +13,8 @@ Status: current
   canonical totals, nine-case rendered-browser evidence and separate V2/detail proof.
 - [Watch summary and context](watch-summary.md): retained coherent daily accounting,
   stable subscription slots, current continuation footers, browser matrix and real V2 evidence.
+- [Watch terminal lifecycle](watch-terminal-lifecycle.md): reproduced retention/race
+  defects, shared fresh-versus-retained authority and historical-incident limits.
 
 Historical observations keep their original dates and exceptions; the theme
 delivery does not refresh their validity or certify older failed probes.

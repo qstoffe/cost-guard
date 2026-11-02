@@ -287,6 +287,9 @@ class SessionSnapshot:
     context_boundaries: tuple[ContextBoundary, ...] = ()
     background: tuple[BackgroundActivity, ...] = ()
     active_contexts: tuple[ActiveContext, ...] = ()
+    # Full tree/history acquired consistently; absence can reclassify execution.
+    # Partial/custom sources must opt in only after proving that contract.
+    complete: bool = False
 
 
 @dataclass(frozen=True, slots=True)
