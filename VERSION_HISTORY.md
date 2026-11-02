@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.126 — 2026-11-02
+
+- Web Watch: one-row cards, ellipsized previews, Started sequence/time, framed history and CLI-like semantic colors. Removed session totals/acquisition; refresh retains metrics. Background activity and failures stay explicit.
+
 ## v80.125 — 2026-11-02
 
 - Web Watch: authoritative terminal/quota state replaces retained live evidence; omitted attempt ends and delayed captures cannot resurrect stopped prompts. Duration/activity stop independently of terminal highlight grace; retained Session detail shares reconciliation.

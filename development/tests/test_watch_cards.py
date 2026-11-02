@@ -1,4 +1,4 @@
-"""Web-only card membership, canonical two-phase capture and bounded work."""
+"""Web-only one-row card membership, canonical capture and bounded work."""
 from dataclasses import replace
 from decimal import Decimal
 from pathlib import Path
@@ -14,7 +14,7 @@ from development.tests.fixtures.synthetic_month import SyntheticMonthSource
 from development.tests.fixtures.watch_runtime import make_service
 from src.application.live_projection import project_live
 from src.reports import ReportKind, ReportRequest
-from src.reports.watch_capture import WatchCapture, capture_rows, capture_totals
+from src.reports.watch_capture import capture_rows
 from src.watch.card_workers import CardResult, CardWorkers
 from src.watch.cards import WatchCards
 from src.watch.models import WatchProjection
@@ -55,33 +55,27 @@ class WatchCardTests(unittest.TestCase):
         return CatalogObservation(roots, roots, {root.session_id: root.session_id for root in roots},
             {root.session_id: revision for root in roots}, frozenset(active))
 
-    def publish(self, cards, root, capture, now=1000, totals=None):
+    def publish(self, cards, root, capture, now=1000):
         entry = cards.sessions[root.session_id]
         capture = replace(capture, session_id=root.session_id, title=root.title)
         cards.accept(CardResult(root.session_id, entry.generation, "rows", (capture, (), None)), now)
-        if totals is not None:
-            cards.accept(CardResult(root.session_id, entry.generation, "totals", totals), now)
 
-    def test_full_ten_thousand_prompt_totals_and_five_row_window_match_canonical(self):
+    def test_ten_thousand_prompt_history_keeps_one_latest_canonical_row_and_anchors(self):
         source = SyntheticMonthSource(1, 10000, month_start_ms=1000)
         _, _, service, _ = make_service(str(Path(self.tmp.name) / "large"), source, now_ms=100_000_000)
         root = source.snapshots["root-0000"].root
         recent, item = capture_rows(service, root)
         self.assertEqual(6, len(recent.rows), "one extra context anchor, never all history")
-        total = capture_totals(service, item)
         expected = service.build(ReportRequest(ReportKind.SESSION, root.session_id)).prompt_blocks[0]
-        self.assertEqual(expected.total_ccost, total.total_ccost)
-        self.assertEqual(expected.duration_ms, total.duration_ms)
-        self.assertEqual(10000, total.total_calls)
-        self.assertEqual((), total.rows)
         cards = WatchCards(ManualWorkers())
         cards.catalog(self.catalog((root,)))
-        self.publish(cards, root, recent, totals=total)
+        self.publish(cards, root, recent)
         active, history, state = cards.project(1000)
         self.assertEqual((), active)
-        self.assertEqual(5, len(history[0].rows))
-        self.assertEqual(9996, history[0].rows[0].prompt.prompt_number)
-        self.assertGreater(history[0].totals.total_ccost, sum(row.prompt.ccost for row in history[0].rows))
+        self.assertEqual(1, len(history[0].rows))
+        actual = history[0].rows[0].prompt
+        self.assertEqual(10000, actual.prompt_number)
+        self.assertEqual((expected.rows[-1].ccost, expected.rows[-1].duration_ms), (actual.ccost, actual.duration_ms))
 
     def test_historical_ranking_ignores_metadata_and_excludes_before_limit(self):
         cards = WatchCards(ManualWorkers())
@@ -95,28 +89,28 @@ class WatchCardTests(unittest.TestCase):
         _, history, state = cards.project(2000)
         self.assertEqual([root.session_id for root in self.roots[2:7]], [card.session_id for card in history])
         self.assertEqual("observed", state)
-        self.assertTrue(all(len(card.rows) == 5 for card in history))
+        self.assertTrue(all(len(card.rows) == 1 for card in history))
 
-    def test_one_hundred_concurrent_cards_focal_slices_order_and_shared_totals(self):
+    def test_one_hundred_concurrent_cards_each_have_only_their_focal_row(self):
         root = self.roots[0]
         base = self.capture.rows[-1]
         rows = tuple(replace(base, event_id=f"p-{index:03}", at_ms=1000 + index,
             prompt_number=index + 1, in_progress=True) for index in range(100))
         capture = replace(self.capture, rows=rows, observed_at_ms=5000,
             observed_ids=frozenset(row.event_id for row in rows))
-        total = replace(capture_totals(self.service, self.item), rate_provisional=True, duration_ms=4000)
         cards = WatchCards(ManualWorkers())
         cards.catalog(self.catalog((root,), active=(root.session_id,)))
-        self.publish(cards, root, capture, totals=total)
+        self.publish(cards, root, capture)
         active, history, _ = cards.project(6000)
         self.assertEqual(100, len(active))
         self.assertEqual((), history)
         self.assertEqual(list(range(1, 101)), [card.rows[-1].prompt.prompt_number for card in active])
-        self.assertTrue(all(len(card.rows) <= 5 for card in active))
-        self.assertTrue(all(card.totals.duration_ms == 5000 for card in active), "overlap extends once, not 100 times")
+        self.assertTrue(all(len(card.rows) == 1 for card in active))
         wire = project_live(WatchProjection("Watch", "fixture", (), now_ms=6000,
             active_cards=active, cards_state="observed")).to_json()
         self.assertEqual(100, len(wire["active_cards"]))
+        self.assertNotIn("totals", wire["active_cards"][0])
+        self.assertNotIn("provisional", wire["active_cards"][0])
         self.assertLess(len(json.dumps(wire).encode()), MAX_EVENT_BYTES)
         self.assertRegex(wire["active_cards"][0]["rows"][0]["prompt"]["display"]["date_time"], r"^\d{4}-\d\d-\d\d \d\d:\d\d$")
 
@@ -157,6 +151,22 @@ class WatchCardTests(unittest.TestCase):
         self.assertFalse(cards.project(1001)[0])
         self.assertTrue(all(not row.marker for card in cards.project(1001)[1] for row in card.rows))
 
+    def test_history_revision_refresh_retains_visible_metrics_without_expansion_signal(self):
+        workers = ManualWorkers()
+        cards = WatchCards(workers)
+        cards.catalog(self.catalog())
+        for root in self.roots:
+            self.publish(cards, root, self.capture)
+        before = cards.project(1001)[1]
+        cards.catalog(self.catalog(revision="changed"))
+        cards.tick(1002)
+        self.assertEqual(before, cards.project(1002)[1])
+        self.assertEqual(4, len(workers.jobs), "history refresh needs no browser disclosure event")
+        root = self.roots[0]
+        row = replace(self.capture.rows[-1], ccost=Decimal("42"))
+        self.publish(cards, root, replace(self.capture, rows=(row,)), now=1003)
+        self.assertEqual(Decimal("42"), cards.project(1003)[1][0].rows[0].prompt.ccost)
+
     def test_concurrent_completion_keeps_its_own_grace_and_focal_acquisition_anchor(self):
         root = self.roots[0]
         rows = tuple(replace(self.capture.rows[-1], event_id=f"p-{index}", at_ms=1000 + index,
@@ -177,21 +187,23 @@ class WatchCardTests(unittest.TestCase):
         recent, _ = capture_rows(self.service, root, focal_ids=(self.item.bundle.prompts[0].prompt_id,))
         self.assertIn(self.item.bundle.prompts[0].prompt_id, [row.event_id for row in recent.rows])
 
-    def test_slow_full_aggregate_does_not_hold_rows_other_sessions_or_presentation(self):
+    def test_slow_capture_is_bounded_and_never_acquires_full_session_totals(self):
         slow_started, release = Event(), Event()
-        original = capture_totals
-        def totals(service, item):
-            if item.session.session_id == self.roots[0].session_id:
+        original = capture_rows
+        def capture(service, root, previous, focal_ids):
+            if root.session_id == self.roots[0].session_id:
                 slow_started.set()
                 if not release.wait(10):
                     raise RuntimeError("test_release_missing")
-            return original(service, item)
+            return original(service, root, previous, focal_ids)
         def factory(now_ms):
-            return make_service(str(Path(self.tmp.name) / uuid4().hex), self.source, now_ms=now_ms)[2]
+            service = make_service(str(Path(self.tmp.name) / uuid4().hex), self.source, now_ms=now_ms)[2]
+            service._prompt_block = lambda *args, **kwargs: self.fail("Watch must not project session aggregates")
+            return service
         workers = CardWorkers(factory, workers=2)
         self.addCleanup(workers.close)
         self.addCleanup(release.set)
-        with patch("src.watch.card_workers.capture_totals", side_effect=totals):
+        with patch("src.watch.card_workers.capture_rows", side_effect=capture):
             workers.submit(self.roots[0], 1, self.service.now_ms)
             self.assertTrue(slow_started.wait(3))
             workers.submit(self.roots[1], 2, self.service.now_ms)
@@ -199,18 +211,18 @@ class WatchCardTests(unittest.TestCase):
             deadline = time.monotonic() + 5
             while time.monotonic() < deadline:
                 results.extend(workers.drain())
-                if any(result.session_id == self.roots[1].session_id and result.phase == "totals" for result in results):
+                if any(result.generation == 2 and result.phase == "timing" for result in results):
                     break
                 Event().wait(.01)
-            self.assertTrue(any(result.generation == 1 and result.phase == "rows" for result in results))
-            self.assertFalse(any(result.generation == 1 and result.phase == "totals" for result in results))
-            self.assertTrue(any(result.generation == 2 and result.phase == "totals" for result in results))
+            self.assertFalse(any(result.generation == 1 and result.phase == "rows" for result in results))
+            self.assertEqual(["rows", "timing"], [result.phase for result in results if result.generation == 2])
             self.assertLessEqual(len(workers.jobs), 2)
             release.set()
 
     def test_focal_tool_threshold_elapsed_and_terminal_clearing_are_server_owned(self):
         root = self.roots[0]
-        base = replace(self.capture.rows[-1], in_progress=True, event_id="focal", at_ms=1000)
+        base = replace(self.capture.rows[-1], in_progress=True, event_id="focal", at_ms=1000,
+            background_kinds=("subagent",), background_started_ms=1000)
         capture = replace(self.capture, rows=(base,), observed_at_ms=2000, observed_ids=frozenset({"focal"}))
         cards = WatchCards(ManualWorkers())
         cards.catalog(self.catalog((root,)))
@@ -220,9 +232,15 @@ class WatchCardTests(unittest.TestCase):
         self.assertEqual("", cards.project(10999)[0][0].rows[-1].tool.running_tool)
         self.assertEqual("shell", cards.project(11000)[0][0].rows[-1].tool.running_tool)
         self.assertEqual(10000, cards.project(11000)[0][0].rows[-1].tool.running_ms)
+        wire = project_live(WatchProjection("Watch", "fixture", (), now_ms=11000,
+            active_cards=cards.project(11000)[0])).to_json()
+        activity = wire["active_cards"][0]["rows"][0]["tool"]
+        self.assertEqual(["subagent"], activity["background_kinds"])
+        self.assertEqual(10000, activity["background_ms"])
         terminal = replace(capture, rows=(replace(base, in_progress=False),))
         cards.accept(CardResult(root.session_id, entry.generation, "rows", (terminal, (("focal", tool),), None)), 12000)
         self.assertEqual("", cards.project(12001)[0][0].rows[-1].tool.running_tool)
+        self.assertEqual((), cards.project(12001)[0][0].rows[-1].tool.background_kinds)
         self.assertEqual((("shell", 1),), cards.project(12001)[0][0].rows[-1].tool.tool_counts)
 
     def test_web_coordinator_hydration_does_not_borrow_live_service(self):

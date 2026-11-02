@@ -93,11 +93,13 @@ Accounts' Normal-only detailed mode reuses `overviewAccounts` and shared card/se
 
 FR 000542 replaces Web's retained-row table with `watch.js` keyed prompt cards;
 `watch/cards.py` owns uncapped active membership, observed grace and top-five
-actual-prompt history. `reports/watch_capture.py` projects the selected row windows
-before canonical complete-session totals, with structured model/effort and the
-existing interval union. `watch/card_workers.py` admits four isolated services,
+actual-prompt history. `reports/watch_capture.py` preserves canonical row anchors/context
+evidence while `cards.py` selects exactly one focal/latest actual prompt per card.
+No dedicated complete-session totals phase/state is acquired. `watch/card_workers.py` admits four isolated services,
 sources and caches, no queued futures or per-card detail leases. One session's
-capture/analysis is shared across its concurrent cards and both projection phases.
+capture/analysis is shared across its concurrent cards. Revision refresh retains
+visible history membership and coherent metrics until replacement; collapsed history
+uses the same scheduling. Canonical prompt background fields feed activity DTOs.
 Only active/top-five snapshots are retained; catalog revisions/generations reject
 stale results. Source capture/analysis is necessary per session, not streaming.
 
@@ -107,7 +109,11 @@ detail in separate single-worker lanes; native account acquisition retains its
 existing scheduler. Live owns publication/lifecycle and the shared EMA, measured
 from actual capture work, not just catalog admission. `application/live.py` calls
 the optional detail adapter without importing Watch. `live_projection.py` exports
-minimal detached card DTOs so 100 five-row cards fit the existing SSE bound.
+minimal detached card DTOs so 100 one-row cards fit the existing SSE bound.
+`watch.js` uses Started sequence/time, preview-only ellipsized flexible cells,
+intrinsic non-Prompt subgrid tracks and horizontal overflow. History alone has a
+restrained frame/40vh cap; keyed disclosures retain focus/scroll. Running yellow,
+activity gold/brown, red failures and context gold/orange have separate theme roles.
 `render.js` scopes account-detail cleanup through its Watch-only flag; Accounts,
 Models, settings, navigation and security are unchanged. User-visible scope and
 failure semantics: `docs/web-beta.md`. Current evidence and explicit native/pixel

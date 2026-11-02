@@ -65,14 +65,19 @@ async function main() {
         const details=c.querySelectorAll('details'); details[0].open=true; details[1].open=true;
         details[0].querySelector('summary').focus({preventScroll:true}); h.scrollTop=70; const scroll=h.scrollTop, focus=document.activeElement;
         redraw(); const stable=document.activeElement===focus && details[0].open && details[1].open && h.scrollTop===scroll;
-        const table=c.querySelector('.watch-table-scroll');
+        const table=c.querySelector('.watch-table-scroll'), row=c.querySelector('tbody tr'), prompt=row.cells[1].firstChild;
         return {width:innerWidth,height:innerHeight,scrollY,activeTop:a.getBoundingClientRect().top, historyHeight:h.clientHeight,
           historyScroll:h.scrollHeight,historyCards:h.querySelectorAll('article').length,
+          rows:c.querySelectorAll('tbody tr').length, historyBorder:parseFloat(getComputedStyle(h).borderTopWidth),
+          ellipsis:getComputedStyle(prompt).textOverflow==='ellipsis' && prompt.scrollWidth>prompt.clientWidth,
+          completeMetrics:[...row.cells].filter((_,i)=>i!==1).every(cell=>cell.scrollWidth<=cell.clientWidth),
           pageOverflow:document.documentElement.scrollWidth>innerWidth,
           activeInnerScroll:a.scrollHeight>a.clientHeight,tableVerticalScroll:table.scrollHeight>table.clientHeight,
           horizontalPan:table.scrollWidth>table.clientWidth,runningColor:getComputedStyle(c.querySelector('.watch-running')).color,
           border:getComputedStyle(c).borderTopWidth,background:getComputedStyle(c).backgroundColor,stable}; })()`);
-      assert.equal(layout.historyCards, 5); assert.ok(layout.historyScroll > layout.historyHeight);
+       assert.equal(layout.historyCards, 5); assert.ok(layout.historyScroll > layout.historyHeight);
+       assert.equal(layout.rows, 1); assert.ok(layout.historyBorder > 0);
+       assert.equal(layout.ellipsis, true); assert.equal(layout.completeMetrics, true);
       assert.equal(layout.scrollY, 0, 'layout assertions use the unscrolled document');
       assert.equal(layout.pageOverflow, false); assert.equal(layout.activeInnerScroll, false);
       assert.equal(layout.tableVerticalScroll, false); assert.equal(layout.stable, true);

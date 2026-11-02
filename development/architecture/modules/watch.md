@@ -44,7 +44,7 @@ current lifecycle through ordinary causal analysis. V1's read transaction and
 V2's all-page/revision-bracket acquisition certify `SessionSnapshot.complete`;
 partial/custom sources default to unproven. Durable ends stay assistant-attempt
 scoped through omitted idle rows; complete reclassification has no invented
-outcome/end. Card generation and capture-time checks reject delayed rows, totals
+outcome/end. Card generation and capture-time checks reject delayed rows
 and failures. Terminal grace never contributes to running state or duration.
 
 Web Watch's existing single background history lane retains one `WatchHistoryAcquisition`

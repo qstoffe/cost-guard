@@ -1,9 +1,9 @@
-"""Two-phase canonical capture for Web cards; no acquisition loop or transport.
+"""Canonical prompt capture for Web cards; no acquisition loop or transport.
 
-One isolated service reads/analyzes a root once. Recent rows are published before
-the optional complete-session projection. Nothing sums the five displayed rows.
+One isolated service reads/analyzes a root once, preserving causal and context
+evidence for the focal row. No full-session aggregate projection is acquired.
 """
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
 from src.reports.sampling import AnalyzedRoot
 from .session_history import analyze_observed
@@ -45,9 +45,3 @@ def capture_rows(service, root, previous=None, focal_ids=()):
         max((record.prompt_time_ms for record in records), default=0), service.now_ms, retained,
         frozenset(event.event_id for event in fresh.events),
         card_context(projector, root.session_id, service._threshold_multiplier), fresh.complete), item
-
-
-def capture_totals(service, item):
-    # This exact full-history owner includes compaction, child attribution and
-    # accumulated_duration's overlap-safe interval union. Discard its large rows.
-    return replace(service._prompt_block(item, snapshot_running_metrics=True), rows=())

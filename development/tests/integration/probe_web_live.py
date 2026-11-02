@@ -21,7 +21,7 @@ def main():
     parser.add_argument("--detail", action="store_true", help="Also probe complete session capture/pages/freeze.")
     parser.add_argument("--reports", action="store_true", help="Also capture finite reports beside Live and cancel deep history.")
     parser.add_argument("--models", action="store_true", help="Capture only task-focused Normal/full Models snapshots beside Live.")
-    parser.add_argument("--watch-cards", action="store_true", help="Wait for independently published real Watch rows and full totals.")
+    parser.add_argument("--watch-cards", action="store_true", help="Wait for independently published real one-row Watch cards.")
     parser.add_argument("--daily", action="store_true", help="Wait for coherent full-day cost, initiating prompts and category prices.")
     args = parser.parse_args()
     owners = []
@@ -76,7 +76,7 @@ def main():
         source_seconds = time.monotonic() - started
         card_evidence = None
         if args.watch_cards:
-            first_rows = first_totals = None
+            first_rows = None
             deadline = time.monotonic() + 90
             while time.monotonic() < deadline:
                 state, _ = get('/api/live', cookie=cookie)
@@ -85,15 +85,15 @@ def main():
                 cards = [*view.get('active_cards', []), *view.get('history_cards', [])]
                 if any(card['rows'] for card in cards) and first_rows is None:
                     first_rows = round(time.monotonic() - started, 3)
-                if any(card['totals'] is not None for card in cards):
-                    first_totals = round(time.monotonic() - started, 3)
-                if first_rows is not None and first_totals is not None and view.get('history_cards'):
+                if any('totals' in card or 'provisional' in card for card in cards):
+                    raise RuntimeError('probe_watch_card_legacy_totals')
+                if first_rows is not None and view.get('history_cards'):
                     card_evidence = dict(active_cards=len(view['active_cards']), history_cards=len(view['history_cards']),
-                        row_cards=sum(bool(card['rows']) for card in cards), total_cards=sum(card['totals'] is not None for card in cards),
-                        first_rows_seconds=first_rows, first_totals_seconds=first_totals,
+                        row_cards=sum(bool(card['rows']) for card in cards),
+                        first_rows_seconds=first_rows,
                         max_rows_per_card=max(len(card['rows']) for card in cards),
                         pending_captures=len(owners[0].coordinator.card_workers.jobs))
-                    if card_evidence['max_rows_per_card'] > 5 or card_evidence['pending_captures'] > 4:
+                    if card_evidence['max_rows_per_card'] != 1 or card_evidence['pending_captures'] > 4:
                         raise RuntimeError('probe_watch_card_bound_failed')
                     break
                 if live.get('state') in {'failed', 'internal_error'}:
