@@ -74,6 +74,26 @@ release or ZIP work. The FR's requested actual hosted Full/validator/browser and
 all native architecture checks did run successfully; no requested hosted test
 was waived or labelled PASS without execution.
 
+### Documentation-head duplicate-check exception
+
+After all four implementation jobs passed, documentation-only head
+`26b5ca1fdcbef8ad6b938346a042e92cb5fbbc88` triggered duplicate
+[run 41527754941](https://github.com/qstoffe/cost-guard/actions/runs/41527754941),
+tested merge checkout `dbf7d079896b91a5bdd4351b2867fa58da353296`. Its Linux,
+Windows and Intel Mac jobs passed; ARM64 job 125559763048 remained capacity-queued
+with no executed steps at the decision, **not PASS / not verified at that head**.
+
+The **Decision Delegate** explicitly authorized merge using the unchanged
+implementation's successful ARM64 result from run 41526896465 at source
+`232fb1ae73b47c1999f13779132c58ec2209bbac` (merge checkout
+`be4ca4ee598b24e6d5ebaa523ad462d6b7cf15b7`), plus the three current-head successes.
+This is evidence equivalence, not a queue-time threshold. This reporting-only
+exception-note commit may also merge without waiting for newly triggered
+duplicate checks; those uncompleted checks are not PASS. Executable content,
+workflows, tests and acceptance scope remain unchanged. Any observed failure or
+changed base must be investigated; no cancellation, retry or protection bypass
+is authorized. Actual final statuses belong in the PR/final delivery result.
+
 ## Knowledge
 
 Updated current CI owner evidence at

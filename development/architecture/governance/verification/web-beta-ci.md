@@ -97,6 +97,18 @@ Full/Diagnostics/live-source test was run, per the scoped Decision Delegate
 resolution above. All three real OS handoffs were accepted, but browser process,
 navigation/first paint and consumer/physical desktop acceptance remain unverified.
 
+Documentation-only head `26b5ca1fdcbef8ad6b938346a042e92cb5fbbc88` triggered
+[duplicate run 41527754941](https://github.com/qstoffe/cost-guard/actions/runs/41527754941),
+merge checkout `dbf7d079896b91a5bdd4351b2867fa58da353296`. Linux, Windows and
+Intel Mac passed; ARM64 remained capacity-queued, not executed/PASS at that head.
+The Decision Delegate authorized reuse of the unchanged implementation's earlier
+successful ARM64 result, and permitted this reporting-only exception note to
+merge without waiting for further duplicate checks. This is source-equivalent
+evidence, not an elapsed-time rule or protection bypass. Uncompleted final-head
+checks remain unverified and must be reported honestly; observed failures or a
+changed base still require investigation. No test/workflow/source was changed
+to avoid execution, and no queued run was cancelled or retried.
+
 ## Historical evidence — FR 000410
 
 FR 000410 re-tests the implementation delivered through FR 000380; it does not rewrite historical completion reports or promote Beta. Verified 2026-10-26 from the successful hosted run below.
