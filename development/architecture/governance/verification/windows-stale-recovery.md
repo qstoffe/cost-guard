@@ -84,6 +84,9 @@ included in the passing final full run.
 Actual native tray/browser/dialog interaction and a forced reboot were not run or
 claimed. No desktop authorization was needed for this non-UI acceptance route.
 macOS/Linux native behavior was not freshly exercised on those operating systems;
-their unchanged policy is covered by deterministic regressions. No requirement or
-test exception was requested or delegated. Journal assessment: no-update; the
+their unchanged policy is covered by deterministic regressions. Decision Delegate
+authorized delivery without awaiting the explicitly additive optional platform CI
+(queued run 41484239761 at consultation), because mandatory local verification was
+complete. No required test or protection was waived; optional platform results
+remain unverified rather than PASS. Journal assessment: no-update; the
 module contract and this bounded evidence retain the durable facts.

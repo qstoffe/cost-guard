@@ -49,7 +49,17 @@ unsuitable for Windows multiprocessing. The guarded file-based probe passed.
 Earlier failures are retained as failures, not relabeled PASS.
 
 No real native tray/browser/dialog interaction or forced reboot was performed.
-macOS/Linux native workstation behavior was not freshly exercised here. No
-requirement/test exception was requested or delegated. This is source delivery,
+macOS/Linux native workstation behavior was not freshly exercised here.
+
+Decision Delegate explicitly authorized delivery without waiting for the additive,
+optional GitHub cross-platform workflow, which was queued on the inspected final
+implementation/completion head (run 41484239761). Reason: mandatory local full
+suite, validator and relevant native/non-UI evidence passed; optional platform
+results add confidence but are not a missing required gate. No required test was
+waived, no pending/cancelled check is PASS, and server protection must not be
+bypassed. Remaining uncertainty includes those platform results and unperformed
+physical UI/reboot checks; later delivery reporting retains the actual check state.
+
+This is source delivery,
 not an update/restart of the user's separate installation or the shared OpenCode
 service; no ZIP, release publication or plugin installation was performed.
