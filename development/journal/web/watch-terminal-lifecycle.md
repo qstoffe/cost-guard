@@ -61,3 +61,14 @@ delivery prerequisites for this lifecycle FR. Today preservation and causal
 failures remain mandatory; Full, validation, the primary cards/detail probe and
 actual PR checks must pass on the normally reconciled base. This is the
 delegate's decision, not user approval or a broad Daily waiver.
+
+The same Decision Delegate separately permitted paced foreground CI queries
+because GitHub checks have no session notification channel. Only this narrow
+interpretation of the earlier no-timers instruction was reconsidered: no
+background watcher, scheduled retry, automatic merge or time/poll-count waiver;
+actual current-head checks must pass. The user did not grant this exception.
+
+A later integrated-browser synthetic DOM check rendered `Aborted · quota limit`
+with terminal error class, no running rows, hidden running indicator and no
+console errors. It confirms supplied-state rendering, not source truth or
+physical/native-browser paint. The owned fixture was stopped afterwards.

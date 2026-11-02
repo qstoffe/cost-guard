@@ -88,6 +88,18 @@ validation, the primary live probe or actual PR checks. No source-churn diagnosi
 is asserted. The unchanged Daily pipeline and passing deterministic Today tests
 are evidence, not a substitute live-Daily PASS.
 
+The Decision Delegate separately reconsidered the no-timers instruction only
+to permit paced **foreground** current-head CI status queries: the required
+GitHub checks have no session notification channel. No background watcher,
+scheduled retry, new task or automatic merge is authorized; elapsed time/poll
+count grants no waiver. Actual current-head checks must pass. This narrow
+workflow exception is delegated, not attributed to the user.
+
+An additional integrated-browser synthetic DOM check confirmed the quota
+terminal label, terminal error styling, zero running rows and hidden running
+indicator with no console errors. It proves rendering of supplied terminal
+state, not source lifecycle or physical/native-browser paint.
+
 No model calls, prompt abort/restart/resume, model changes, account-based
 termination or service stop were performed. Rendered native/browser paint was not assessed; the visible
 change is an allowlisted text label covered by DOM integration, not layout work.
