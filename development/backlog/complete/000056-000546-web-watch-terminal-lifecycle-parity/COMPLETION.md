@@ -56,11 +56,40 @@ not a separate product gate. DOM integration verifies quota-cause presentation.
   Owned workers/HTTP host closed; shared OpenCode was untouched.
 - `git diff --check`: PASS.
 
+After normally merging the unrelated backlog-only default update `05c4dc9`,
+Full passed again (125 files, zero failures, 63.2 seconds). The primary real
+cards/detail probe also passed again: one owner/two streams/three accounts,
+preserved origin/advancing sequence, 1 active/3 history cards, 3 row/total cards,
+at most 5 rows/card and 4 captures; rows/totals at 4.616 seconds, consistent
+detail paging/freeze, owned workers closed and shared OpenCode untouched.
+
+Initial hosted Windows CI reported a failure in the existing launcher-lifetime
+test `test_batch_waits_for_status_process_then_exits_with_its_result`
+(`AssertionError: False is not true`); the new lifecycle tests were not reported
+failed. Native/browser phases passed in that job. Raw GitHub job logs returned
+HTTP 401 through the approved transport; accessible check annotations supplied
+the test identity/error. The test has a five-second startup-file assertion and
+passes locally; the precise hosted cause is not established. This initial
+failed check is not PASS or waived; final PR checks remain required.
+
 ## Limits and continuity
 
-No requirement/test exception was requested or granted. No model calls, prompt
-abort/restart/resume, model changes, account-based termination or service stop
-were performed. Rendered native/browser paint was not assessed; the visible
+An additional `probe_web_live.py --watch-cards --daily --detail` run failed with
+`probe_daily_timeout` at its 120-second daily-publication limit. Detail was not
+reached on that run. Its cause is unknown; live Daily liveness remains unverified
+by this delivery, not PASS. Inspection of the shared-source diff found only
+completeness flags, no new blocking waits/retries reachable from Daily.
+
+The foreground **Decision Delegate** explicitly authorized a scoped workflow/test
+exception: successful supplementary Daily acquisition and baseline comparison
+are not prerequisites for this lifecycle fix, given passing primary evidence.
+It did not waive preservation of Today, discovered causal failures, Full,
+validation, the primary live probe or actual PR checks. No source-churn diagnosis
+is asserted. The unchanged Daily pipeline and passing deterministic Today tests
+are evidence, not a substitute live-Daily PASS.
+
+No model calls, prompt abort/restart/resume, model changes, account-based
+termination or service stop were performed. Rendered native/browser paint was not assessed; the visible
 change is an allowlisted text label covered by DOM integration, not layout work.
 
 The owner's exact historical quota case was **not reproduced**: no affected

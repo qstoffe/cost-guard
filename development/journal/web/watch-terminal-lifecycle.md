@@ -48,3 +48,16 @@ closed; the shared OpenCode service was not stopped. This does not reproduce the
 owner's historical quota incident: no affected session/snapshot/version was
 provided, so its exact cause remains unknown. No inference, model switch,
 production prompt intervention or quota-based termination was performed.
+
+A supplementary `--watch-cards --daily --detail` real-source probe later hit
+`probe_daily_timeout`: no Daily publication within 120 seconds, and detail was
+not reached on that run. The cause is unknown; live Daily liveness is not PASS.
+Shared-source diff inspection found only completeness flags, no added waits or
+retries reachable from Daily. Do not diagnose source churn from this result.
+
+The foreground Decision Delegate authorized a scoped test/workflow exception:
+successful supplementary Daily acquisition and a baseline comparison are not
+delivery prerequisites for this lifecycle FR. Today preservation and causal
+failures remain mandatory; Full, validation, the primary cards/detail probe and
+actual PR checks must pass on the normally reconciled base. This is the
+delegate's decision, not user approval or a broad Daily waiver.
