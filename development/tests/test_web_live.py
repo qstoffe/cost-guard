@@ -24,6 +24,7 @@ from src.web.host import WebHost
 from src.web.jobs import ReportJobs
 from src.watch.acquisition import LiveAcquisition
 from src.watch.coordinator import WatchCoordinator
+from src.watch.models import WatchCard
 from src.watch.observers import LiveEventPump, PumpResult
 from src.sources.base import SourceChange
 from src.reports import ReportRequest
@@ -225,10 +226,14 @@ class LiveTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which('node'), 'optional JavaScript VM unavailable')
     def test_client_ordering_offline_terminal_and_safe_live_presentation(self):
         with tempfile.TemporaryDirectory() as tmp:
-            snapshot = make_snapshot()
+            snapshot = make_uncompacted_snapshot(running=True)
             snapshot = replace(snapshot, root=replace(snapshot.root, title='<img src=x> Å日本語'))
             _, owner = self.owner(tmp, snapshot)
             frame = owner.acquire_cycle().projection
+            actual = tuple(row for row in frame.rows if not row.prompt.is_compaction)
+            card = WatchCard(actual[0].session_id, actual[0].session_title,
+                actual[-1].prompt.event_id, actual, owner.blocks[actual[0].session_id], "observed")
+            frame = replace(frame, active_cards=(card,), cards_state="observed", history_state="observed")
             payload = {'state': 'running', 'view': project_live(frame).to_json()}
             # Identical projection, not asynchronously acquired console/browser runs.
             renderer = WatchRenderer({'timezone': 'UTC', 'colors': {}}, stream=io.StringIO(), interactive=False)

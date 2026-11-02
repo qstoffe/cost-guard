@@ -6,6 +6,7 @@
   --ink: #17253b; --muted: #51627b; --line: #d3ddea; --control-line: #7b8da6;
   --accent: #2457c5; --accent-ink: #fff; --accent-soft: #e8efff;
   --warn: #815000; --warn-bg: #fff6df; --error: #b1263b; --success: #14674e;
+  --watch-success: #3f6212;
   --shadow: 0 8px 28px #243e6510; --radius: .85rem;
   --space-1: .25rem; --space-2: .5rem; --space-3: .75rem;
   --space-4: 1rem; --space-5: 1.5rem; --space-6: 2rem;
@@ -16,6 +17,7 @@
     --ink: #e6edf8; --muted: #a6b5cc; --line: #31415b; --control-line: #7387a5;
     --accent: #9cbfff; --accent-ink: #0d2045; --accent-soft: #23385a;
     --warn: #ffcf7b; --warn-bg: #352b1a; --error: #ff9aad; --success: #7bd9b3;
+    --watch-success: #a3e635;
     --shadow: 0 8px 28px #0003;
   }
 }
@@ -26,6 +28,7 @@
   --ink: #e5e5e5; --muted: #adb3ba; --line: #3b4046; --control-line: #818b95;
   --accent: #78dce8; --accent-ink: #102125; --accent-soft: #203338;
   --warn: #ffce73; --warn-bg: #352b19; --error: #ff8d98; --success: #87ff00;
+  --watch-success: #87ff00;
   --shadow: 0 8px 28px #0003;
 }
 :root[data-theme="classic"] .running, :root[data-theme="classic"] .new:not(tr) { color: var(--success); }
@@ -140,12 +143,9 @@ p.warning { border-left: 3px solid var(--warn); padding: .65rem .85rem; backgrou
 .session-detail .pager input { width: 7rem; }
 .session-detail > p:empty, .session-detail .warning:empty { display: none; }
 .session-detail .table-scroll { overflow-anchor: auto; }
-.watch-session th { position: static; text-align: left; white-space: normal; background: var(--accent-soft); font-weight: 600; }
 .watch-view .account-card { box-shadow: none; font-size: .85rem; }
 .watch-view .account-card p { margin-block: var(--space-2); }
 .watch-view .quota-summary { padding-block: var(--space-2); }
-.watch-view td:nth-child(2), .watch-view td:nth-child(6), .watch-view td:nth-child(7) { text-align: left; }
-.watch-view td:nth-child(7) { min-width: 18rem; max-width: 30rem; white-space: normal; }
 .superseded { color: var(--muted); }
 .catalog-controls { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 #scope-controls a[aria-current="page"] { background: var(--accent-soft); outline: 1px solid var(--accent); font-weight: 650; }
@@ -229,3 +229,30 @@ footer { border-top: 1px solid var(--line); color: var(--muted); font-size: .8re
 .compact-accounts .account-card p { margin-block: .35rem; }
 .compact-accounts .quota-summary { padding-block: .35rem; }
 .compact-accounts .account-card details { margin-bottom: 0; }
+/* Watch uses the Models typography/width, without its filter/sort controls. */
+[data-section="watch"] .toolbar, [data-section="watch"] #notice,
+[data-section="watch"] #scope-controls, [data-section="watch"] .report-search,
+[data-section="watch"] #status { display: none; }
+[data-section="watch"] main { padding-top: .65rem; }
+.watch-card { margin-block: 1rem 1.5rem; min-width: 0; }
+.watch-card h3 { margin: 0; font-size: 1rem; font-weight: 600; }
+.watch-card h3 a { text-decoration: none; }
+.watch-card-totals { color: var(--muted); font-size: .8rem; font-variant-numeric: tabular-nums; margin-block: .25rem .5rem; }
+.watch-card > p:empty, .watch-view > p:empty { display: none; }
+.watch-table-scroll { overflow-x: auto; }
+.watch-prompt-table { width: 100%; }
+.watch-prompt-table th, .watch-prompt-table td { position: static; background: transparent; padding: .35rem .6rem; min-width: 0; max-width: none; }
+.watch-prompt-table th:not(:last-child), .watch-prompt-table td:not(:last-child) { border-right: 1px solid var(--line); }
+.watch-prompt-table th:first-child, .watch-prompt-table td:first-child { min-width: 9rem; white-space: nowrap; }
+.watch-prompt-table th:nth-child(2), .watch-prompt-table td:nth-child(2) { text-align: left; min-width: 14rem; max-width: 44ch; white-space: normal; overflow-wrap: anywhere; }
+.watch-prompt-table th:nth-child(3), .watch-prompt-table td:nth-child(3),
+.watch-prompt-table th:nth-child(4), .watch-prompt-table td:nth-child(4) { text-align: left; }
+.watch-outcome { color: inherit; }
+.watch-activity { font-size: .8rem; margin-top: .4rem; overflow-wrap: anywhere; }
+.watch-activity details, .watch-activity p { margin-block: .2rem; }
+.watch-activity summary { max-width: 100%; }
+.watch-history { max-height: min(65vh, max(10rem, calc(100dvh - 24rem))); overflow-y: auto; scrollbar-color: var(--control-line) transparent; }
+.watch-earlier { margin-top: 0; }
+.watch-prompt-table .watch-running, .watch-running .threshold { color: var(--warn); }
+.watch-prompt-table .watch-error, .watch-error .threshold { color: var(--error); }
+.watch-prompt-table .watch-success { color: var(--watch-success); }

@@ -74,27 +74,24 @@ async function main() {
   vm.runInContext(fs.readFileSync('src/web/assets/render.js', 'utf8'), context);
   vm.runInContext(fs.readFileSync('src/web/assets/watch.js', 'utf8'), context);
   vm.runInContext("globalThis.state = {pages: {}, connection: 'Live connected.'}; ReportView.renderLive(parent, example, state)", context);
-  assert.match(context.parent.textContent, /Web live engine start/);
-  assert.match(context.parent.textContent, /Watch prompts/);
-  assert.match(context.parent.textContent, /I = Input; C = Cached input; W = Cache write; O = Output/);
-  assert.ok(!/\b(?:Cache|Write):/.test(context.parent.textContent));
-  assert.match(context.parent.textContent, /Token Mix %/);
-  assert.match(context.parent.textContent, /Next Ictx/);
-  assert.ok(context.parent.textContent.includes(input.view.today_label + ' CCost'));
-  assert.match(context.parent.textContent, /not full session/);
-  assert.ok(context.parent.textContent.includes(input.view.rows[0].session_title));
+  assert.match(context.parent.textContent, /Earlier Prompts/);
+  assert.match(context.parent.textContent, /Session Total C Cost/);
+  assert.match(context.parent.textContent, /Session Total Duration/);
+  assert.ok(!/Run CCost|Token Mix|not full session|Observation details|Unaccounted usage|Watch accounts/.test(context.parent.textContent));
+  assert.ok(context.parent.textContent.includes(input.view.active_cards[0].title));
   function contains(node, tag) { return node.tag === tag || node.children.some(c => contains(c, tag)); }
   assert.equal(contains(context.parent, 'script'), false);
   assert.equal(contains(context.parent, 'img'), false);
   const watch = context.state.watch;
-  const promptRows = () => watch.body.children.filter(r => r.dataset.id?.startsWith('['));
-  const firstRow = promptRows()[0], filter = watch.filter, next = watch.next;
+  const firstCard = [...watch.cards.values()][0];
+  const promptRows = () => firstCard.body.children;
+  const firstRow = promptRows()[0];
   const firstCell = firstRow.children[0];
-  const canonical = input.view.rows.map(r => r.prompt.display.ccost);
-  assert.deepEqual(promptRows().map(r => r.children[2].textContent), canonical);
+  const canonical = input.view.active_cards[0].rows.map(r => r.prompt.display.ccost);
+  assert.deepEqual(promptRows().map(r => r.children[4].textContent), canonical);
   const credits = context.parent.textContent, beforeUnits = calls;
   vm.runInContext('ReportView.setUnit("usd", parent)', context);
-  assert.deepEqual(promptRows().map(r => r.children[2].textContent), input.view.rows.map(r =>
+  assert.deepEqual(promptRows().map(r => r.children[4].textContent), input.view.active_cards[0].rows.map(r =>
     r.prompt.display_units?.usd?.ccost ?? r.prompt.display.ccost));
   assert.equal(promptRows()[0], firstRow);
   assert.equal(firstRow.children[0], firstCell);
@@ -103,58 +100,70 @@ async function main() {
   vm.runInContext('ReportView.setUnit("credits", parent)', context);
   assert.equal(context.parent.textContent, credits);
   assert.equal(calls, beforeUnits, 'switching is not acquisition');
-  const normalized = value => value.replace(/\s+/g, ' ').trim();
-  assert.deepEqual(promptRows().map(r => r.children.slice(2, 6).map(c => normalized(c.textContent))),
-    input.cli_cells.map(row => row.map(normalized)), 'same projection has CLI-equivalent cost/calls/running duration/context');
-  assert.ok(!watch.body.textContent.includes('Running at snapshot'));
-  // Multiple sessions, even with quotas, share exactly one primary table and one pager.
+  assert.ok(!firstCard.body.textContent.includes('Running at snapshot'));
+  assert.deepEqual(firstCard.root.querySelectorAll('th').map(node => node.textContent),
+    ['Date / Time', 'Prompt', 'Model', 'Effort', 'CCost', 'Model Calls', 'Duration', 'Δ Context', 'Context']);
+  assert.equal(watch.earlier.open || false, false);
+  // Independent keyed cards, no filter/pager or global cap.
   const multiple = JSON.parse(JSON.stringify(input));
-  const other = JSON.parse(JSON.stringify(input.view.rows[0]));
-  other.session_id = 'other-session'; other.session_title = 'Other session';
-  other.prompt.aborted = true; other.prompt.in_progress = false;
-  multiple.view.rows.push(other);
-  multiple.view.session_subtotals.push({...multiple.view.session_subtotals[0], session_id: other.session_id});
+  const other = JSON.parse(JSON.stringify(input.view.active_cards[0]));
+  other.session_id = 'other-session'; other.title = 'Other session';
+  other.rows.at(-1).prompt.aborted = true; other.rows.at(-1).prompt.in_progress = false;
+  multiple.view.active_cards.push(other);
   context.example = multiple;
   vm.runInContext('ReportView.renderLive(parent, example, state)', context);
-  assert.equal(context.parent.querySelectorAll('table').length, 1);
-  assert.equal(watch.body.children.filter(r => r.className === 'watch-session').length, 2);
+  assert.equal(context.parent.querySelectorAll('table').length, 2);
   assert.equal(promptRows()[0], firstRow); assert.equal(firstRow.children[0], firstCell);
-  assert.equal(watch.filter, filter); assert.equal(watch.next, next);
-  assert.ok(watch.body.textContent.includes('Aborted'));
+  assert.ok(context.parent.textContent.includes('Aborted'));
+  assert.equal(context.parent.querySelectorAll('input').length, 0);
+  assert.equal(context.parent.querySelectorAll('button').length, 0);
   // A running update cannot destroy selected text; latest data applies on a later tick.
   selected = firstCell;
-  multiple.view.rows[0].prompt.preview = 'Latest running update';
-  multiple.view.rows[0].prompt.display.ccost = '123';
+  multiple.view.active_cards[0].rows[0].prompt.preview = 'Latest running update';
+  multiple.view.active_cards[0].rows[0].prompt.display.ccost = '123';
   vm.runInContext('ReportView.renderLive(parent, example, state)', context);
   assert.equal(firstRow.children[0], firstCell);
-  assert.ok(!watch.body.textContent.includes('Latest running update'));
+  assert.ok(!firstCard.body.textContent.includes('Latest running update'));
   selected = null;
   vm.runInContext('ReportView.renderLive(parent, example, state)', context);
-  assert.match(watch.body.textContent, /Latest running update/);
-  document.activeElement = filter;
+  assert.match(firstCard.body.textContent, /Latest running update/);
+  firstCard.tools.node.open = true;
+  firstCard.skills.node.open = true;
+  watch.earlier.open = true;
+  watch.history.scrollTop = 93;
+  document.activeElement = firstCard.tools.summary;
   vm.runInContext('ReportView.renderLive(parent, example, state)', context);
-  assert.equal(document.activeElement, filter);
-  filter.value = 'Other session'; filter.events.input();
-  assert.equal(promptRows().length, 1);
-  assert.match(watch.totals.textContent, /Run CCost/);
-  filter.value = ''; filter.events.input();
-  // Canonical order and bounded 50-row pages survive repeated publications.
-  multiple.view.rows = Array.from({length: 125}, (_, n) => ({...other,
-    prompt: {...other.prompt, event_id: 'event-' + n, prompt_number: n}}));
+  assert.equal(document.activeElement, firstCard.tools.summary);
+  assert.equal(firstCard.tools.node.open, true); assert.equal(firstCard.skills.node.open, true);
+  assert.equal(watch.earlier.open, true); assert.equal(watch.history.scrollTop, 93);
+  document.activeElement = null;
+  for (const count of [0, 1, 5, 7]) {
+    const tool = {counts: Array.from({length: count}, (_, n) => ['tool-' + n, n + 1]), skills: Array.from({length: count}, (_, n) => ({skill_id: 'skill-' + n, failed_count: n === 0 ? 1 : 0}))};
+    multiple.view.active_cards[0].rows.at(-1).tool = tool;
+    vm.runInContext('ReportView.renderLive(parent, example, state)', context);
+    assert.equal(firstCard.tools.list.children.length, count || 1);
+    assert.equal(firstCard.skills.list.children.length, count || 1);
+    assert.match(firstCard.skills.summary.textContent, new RegExp(count + ' skills'));
+    if (count === 7) { assert.match(firstCard.tools.summary.textContent, /3 × other/); assert.match(firstCard.skills.summary.textContent, /2 other/); }
+  }
+  multiple.view.active_cards = Array.from({length: 100}, (_, n) => ({...other, session_id: 'session-' + n}));
   vm.runInContext('ReportView.renderLive(parent, example, state)', context);
-  assert.equal(promptRows().length, 50);
-  next.events.click(); assert.equal(watch.page, 1);
-  const anchored = promptRows()[0];
+  assert.equal(watch.active.children.length, 100);
+  const anchored = watch.active.children[0];
   vm.runInContext('ReportView.renderLive(parent, example, state)', context);
-  assert.equal(watch.page, 1); assert.equal(promptRows()[0], anchored);
+  assert.equal(watch.active.children[0], anchored);
   context.state.connection = 'Live offline. Last observation retained; reconnecting.';
   vm.runInContext('ReportView.renderLive(parent, example, state)', context);
-  assert.match(watch.status.textContent, /Stale \/ retained/);
-  assert.ok(!watch.status.textContent.includes('Updating'));
+  assert.match(watch.empty.textContent, /last observation retained/);
   context.state.connection = 'source_changed: host stopped. Run the launcher again.';
   vm.runInContext('ReportView.renderLive(parent, example, state)', context);
-  assert.match(watch.status.textContent, /host stopped/);
-  assert.equal(promptRows()[0], anchored);
+  assert.match(watch.empty.textContent, /unavailable/);
+  assert.equal(watch.active.children[0], anchored);
+  multiple.view.active_cards = []; context.state.connection = 'Live connected.';
+  vm.runInContext('ReportView.renderLive(parent, example, state)', context);
+  assert.equal(watch.active.children.length, 0);
+  assert.match(watch.empty.textContent, /No running prompts/);
+  assert.match(watch.history.textContent, /No earlier prompts/);
   console.log('web live passed');
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

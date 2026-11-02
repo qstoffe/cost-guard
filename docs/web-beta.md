@@ -182,7 +182,7 @@ Accounts uses the shared provider/account cards with native quota windows, known
 
 | CLI use case | Discoverable fragment route | Protected scope |
 | --- | --- | --- |
-| Global Watch | `/#/watch` (legacy `/#/live` alias) | One host-owned live engine; source/account freshness and retained rows |
+| Global Watch | `/#/watch` (legacy `/#/live` alias) | One host-owned engine; live prompt cards, five historical sessions, full-session totals and independent account observations |
 | Models | `/#/models` (legacy `/#/overview`, `/#/models/all` normalize here) | Independent selectable/full and latest-version filters, exact tier-aware multi-sort, four columns and full document scrolling. Blank relative cells without completed priced prompts; unknown ratios retained. No account cards or native-rate fifth column. |
 | Accounts | `/#/accounts` | Native units/windows, Remaining/Pace, independent observations and method errors, report local-month/Today CCost and Copilot Unaccounted usage; never Watch rolling substitution |
 | Sessions | `/#/sessions`, optional `/#/sessions?limit=20` | Immediate recent-first 50-root page, including available archived history; Previous/Next links carry offset/catalog revision. Optional N/all scope is collapsed under Advanced. |
@@ -191,7 +191,7 @@ Accounts uses the shared provider/account cards with native quota windows, known
 | Historical Token Mix | `/#/token-mix` | Explicit Capture/Refresh only, never navigation/prefetch; CLI Input / Cached input / Cache write / Output share-and-CCost cells, model/publisher Prompts/Calls/Tokens/CCost, exact-volume sorting with compact K/M/B labels and explicit partial/unknown telemetry, full-report total above the table and optional sample/price coverage |
 | Web Settings | `/#/settings` | Theme only; authenticated narrow config read/write, no report acquisition |
 
-Outside Models, report tables retain their search/filter/page controls. Their column clicks cycle ascending, descending, then original server order. Models uses the independent filter/multi-sort contract above, with no three-click reset. All controls are presentation-only: totals and source queries never change. Decimal strings compare exactly and unknowns sort last. Complete revision-paged session detail has its own controls; global search is disabled there rather than implying unloaded-row coverage.
+Outside Models and Watch, report tables retain their search/filter/page controls. Their column clicks cycle ascending, descending, then original server order. Models uses the independent filter/multi-sort contract above, with no three-click reset; Watch keeps fixed chronological cards without report controls. All controls are presentation-only: totals and source queries never change. Decimal strings compare exactly and unknowns sort last. Complete revision-paged session detail has its own controls; global search is disabled there rather than implying unloaded-row coverage.
 
 Token Mix shows actual phase/completed/total progress and Cancel terminates only that finite scan. Reopening a retained view reuses its timestamped result; explicit recapture checks the real source/config/pricing dependencies through the existing derived-analysis cache (`src/reports/acquisition.py`, `src/analysis/cache.py`), not a browser ledger or request-name-only cache. Deleted/pruned history stays unavailable. Timeout/cancellation/empty history are distinct; Live and its account scheduler continue independently. Date prompt links open full session detail; Back restores the retained range. URL fragments contain only scope/locators, never prompt content.
 
@@ -225,7 +225,7 @@ Beta evidence, not a permanent gate or native macOS acceptance.
 
 Pages carry a revision and canonical row identities. A stale cursor rebases to the existing anchor, never silently combines pages into a report. The client caches only its current 50-row page and retains keyed DOM nodes on updates. Scrolling up or focusing controls disables follow; Jump to latest re-enables it. Background updates preserve row anchors/pixel offset and defer row replacement during text selection. Copy/selection covers the current page, not unloaded pages; use paging to reach other rows. Real-browser layout, resize and assistive-technology behavior still require owner validation; VM checks are not visual acceptance.
 
-Authenticated, CSRF-protected `/api/detail` POST actions: `open` (`session_id`, `mode: snapshot|live`) returns an opaque token; `page` takes token, nonnegative offset, optional revision/anchor and returns up to 50 rows plus full totals; `freeze` captures the live revision; `close` releases a handle. Detail polling is independent of SSE replay: every response is authoritative, so stream gaps cannot drop rows. One host-owned round-robin detail queue shares the existing source/service and account owner across tabs, with at most one due session per engine turn and five-second acquisition cadence. Stable revisions reuse analysis; timer-only ticks do no detail acquisition/valuation. The session-local retained snapshot never enters persistent source/cache state.
+Authenticated, CSRF-protected `/api/detail` POST actions: `open` (`session_id`, `mode: snapshot|live`) returns an opaque token; `page` takes token, nonnegative offset, optional revision/anchor and returns up to 50 rows plus full totals; `freeze` captures the live revision; `close` releases a handle. Detail polling is independent of SSE replay: every response is authoritative, so stream gaps cannot drop rows. One host-owned round-robin detail queue serves all tabs on an isolated single-worker lane, using fresh source/service integrations rather than borrowing Live's mutable service. It admits at most one due session per detail turn with five-second acquisition cadence; native account acquisition retains its single owner. Stable revisions reuse analysis; timer-only ticks do no detail acquisition/valuation. The session-local retained snapshot never enters persistent source/cache state.
 
 Resource admission allows 16 distinct observed session trees per host and 32 transport handles. Abandoned handles expire after five minutes, but history does not; expiration is explicit (410), not an empty report or row eviction. Busy admission is explicit (429). Repeated refresh/mode changes release their old handle. Restarting the host discards observed history. Synthetic 100/1,000/10,000-row probes test complete first/middle/latest access, totals, page bounds, source omission/reconnect and unchanged work. `test_web_session_detail.py` also exercises real HTTP authorization and shipped assets in an optional Node VM, not a browser or model runner.
 
@@ -241,17 +241,50 @@ One authenticated `/api/live` watchdog runs at ten-second intervals after the pr
 
 [Built-in browser, deterministic and real-source verification](../development/architecture/governance/verification/web-connection.md) records the tested states and explicit physical-tray/suspension/restart/macOS limits.
 
-v80.95 presents one primary prompt table in CLI Watch order: Session / prompt,
-Model / effort, CCost, Calls, Duration and Δctx → Next Ictx, plus supporting activity/context details.
-Inline session dividers link to complete session detail and label subtotals as retained rows,
-not full history. Additional incoming-context costs and token mix remain expandable per row.
-Run/Today totals never follow filters/pages; account observations use compact supporting cards,
-with warnings visible and observation detail expandable. Stable filtering/paging controls,
-unchanged row identities and scroll anchors survive publications. Selected/focused prompt content
-defers replacement until a later publication after interaction ends. Connection, source observation,
-publication and stopped/stale status remain explicit; retained running values are not current proof.
+v80.123 replaces the combined Watch table with unframed prompt cards. **Earlier
+Prompts** starts collapsed and contains five eligible distinct sessions, newest
+actual prompt start first, with their five latest actual prompts. It loads even
+while collapsed, has no age/startup cutoff, excludes active/recent sessions before
+limiting, and alone has a bounded vertical scroll region. The always-visible
+active list uses document scrolling with no card cap, filter or pager. Concurrent
+prompts in one session get separate cards, oldest focal start first. Each card's
+focal prompt follows up to four earlier prompts from its own session.
 
-Live uses one process-lifetime acquisition engine, starting with the host rather than a tab. Closing all tabs does not stop acquisition; reopening observes the same run origin and totals. The independent CLI Watch still starts its own run. Both use the shared Watch acquisition seam, revision gating, authoritative V2 resync, bounded history enrichment, account lanes, configured global retention, lifecycle/compaction/abort/error evidence, tool/skill activity and context warnings. Source hints, idle and connection loss never prove completion. Displayed session subtotals cover retained rows, not uncapped session history. Today and rolling account figures retain Watch scopes; normal-report calendar-month comparisons are not inserted into Live.
+Session title alone links to that canonical Sessions route. The separate **Session
+Total C Cost** and **Session Total Duration** line covers the complete canonical
+session, not five rows or the host run: child/compaction costs remain included and
+execution intervals are unioned without double counting overlaps or idle gaps.
+Credits/USD follows Web Settings. Loading, partial/unavailable and provisional
+values stay explicit. The nine fixed columns are Date / Time (`YYYY-MM-DD HH:mm`
+in the configured timezone), Prompt, Model, Effort, CCost, Model Calls, Duration,
+Δ Context and Context (estimated next incoming context using CLI Watch semantics).
+
+Running focal rows are amber. Observed success is lime, abort/error red, for
+`watchRecentEventSeconds` (30 seconds by default), then the session becomes
+history-eligible when no other running/grace card remains. Old history does not
+replay completion flashes. Active cards show count-first tool/custom-skill
+summaries with five named groups and truthful other totals; native disclosures
+expand every group and retain their state/focus across updates. The longest
+running tool appears at the shared ten-second threshold and clears on completion.
+Historical cards have no activity section. Narrow tables pan horizontally.
+
+Watch omits the normal heading, report/search/scope/refresh controls, status/run/
+Today/token-mix summaries, valuation disclosure and model announcements. Exceptional
+host/source/offline notices remain. Account cards stay at the bottom with primary
+identification, quotas/reset and cost/usage; only Watch removes explanatory notes,
+Observation details and Copilot Unaccounted usage. Accounts retains its detail.
+
+Four isolated session workers share each session's canonical capture/analysis and
+publish recent rows before complete-total projection, independently of other
+sessions. Generations reject superseded work; a separate bounded account-history
+lane and single detail lane cannot borrow the mutable Live service. Source capture
+and canonical analysis are still prerequisites for accurate rows, not source-level
+streaming. Captures are retained for active/top-five history cards; the catalog
+index is small metadata. No per-card detail leases or browser acquisition loops
+are created. The shared adaptive 6× EMA/clamped 5–30 second cadence measures real
+capture work; explicit intervals, buffered V2 hints and presentation wakes remain.
+
+Live uses one process-lifetime engine starting with the host, not a tab. Closing all tabs does not stop it. CLI Watch retains its separate run, startup history and row-retention policy; Web history is continuously replenished. Both reuse canonical valuation, context, tool/skill attribution and coordinator timing/recovery policies. Source hints, idle and connection loss never prove completion. Account figures retain Watch scopes, not normal-report calendar-month substitutions.
 
 Each authorized tab owns one same-origin SSE connection for live, finite-job progress and terminal runtime updates. The HttpOnly session authenticates it; no control secret/query credential is used. Instance-bound ordered IDs and full coherent publications reject duplicates/older/foreign-instance updates. Replay is bounded to 32 events and 8 MiB (2 MiB per publication); overflow or an uncovered gap requires a fresh authenticated `/api/live` snapshot, never inferred continuation. Oversized publications fail visibly rather than displaying truncated totals. Four streams are admitted; excess tabs can retry after capacity is available.
 

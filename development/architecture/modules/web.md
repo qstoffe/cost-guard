@@ -9,7 +9,7 @@ Status: current
 
 `src/web/http.py` owns bounded loopback HTTP, fixed assets and routing; `src/web/security.py` owns one-use bootstrap/HttpOnly sessions/CSRF; `src/web/jobs.py` owns finite admission, process isolation, progress, cancellation and retention; at most 64 progress messages drain per host turn to prevent scan backpressure without starving control/Live. `src/web/composition.py` creates fresh canonical ReportApplication integrations.
 
-`src/web/assets/app.js` owns finite refresh/stale/cancel state and memory-only observations; unified Models/Accounts reuse one frozen normal report. `src/web/assets/reports.js` owns scope forms and explicit-only deep-history admission. `render.js` presents DTOs with exact Decimal/vector sorting; generic reports retain presentation search/50-row paging, while Models has independent catalog/version filters and complete document-scrolling rows. Totals never come from cells. `session.js` owns Snapshot/Live detail, canonical DOM identities, anchored paging, selection/focus protection and follow-latest. `src/application/session_detail.py` round-robins captures on the live thread and returns frozen revision-aware pages/full totals. `src/reports/session_history.py` retains canonical evidence outside durable caches; omissions freeze lifecycle/time rather than falsely complete rows. Unchanged running evidence reuses attribution/valuation. Web→application→reports is unchanged; missing/archive/outage is not empty success. Scope/cache/route inventory: `docs/web-beta.md`.
+`src/web/assets/app.js` owns finite refresh/stale/cancel state and memory-only observations; unified Models/Accounts reuse one frozen normal report. `src/web/assets/reports.js` owns scope forms and explicit-only deep-history admission. `render.js` presents DTOs with exact Decimal/vector sorting; generic reports retain presentation search/50-row paging, while Models has independent catalog/version filters and complete document-scrolling rows. Totals never come from cells. `session.js` owns Snapshot/Live detail, canonical DOM identities, anchored paging, selection/focus protection and follow-latest. `src/application/session_detail.py` round-robins captures on the Web adapter's isolated single detail lane and returns frozen revision-aware pages/full totals. `src/reports/session_history.py` retains canonical evidence outside durable caches; omissions freeze lifecycle/time rather than falsely complete rows. Unchanged running evidence reuses attribution/valuation. Web→application→reports is unchanged; missing/archive/outage is not empty success. Scope/cache/route inventory: `docs/web-beta.md`.
 
 `src/web/host.py` owns shutdown of HTTP/jobs and one `src/application/live.py` thread; GUI run/close stays on main. Composition transfers the Watch service to `src/watch/acquisition.py`; tabs only read detached values. Live persists without tabs, preserving engine-start origin and independent account cadence. Finite reports never borrow/close that context. Unexpected faults reach main RuntimeErrors (managed logs outside checkout); children monitor their exact parent sentinel. OpenCode is never stopped.
 
@@ -91,19 +91,30 @@ One opt-in `ModelCatalogProjection` freezes full catalog, selectable publisher/n
 
 Accounts' Normal-only detailed mode reuses `overviewAccounts` and shared card/semantic styles, not a new acquisition owner. `src/display.py` now owns the unchanged CLI `format_reset`, re-exported by terminal accounts; `with_display` propagates frozen `now_ms` to quota reset tokens in the configured timezone. Exact raw fields remain untouched. `test_web_accounts.py`, `fixtures/account_views.py` and `integration/web_accounts.cjs` cover equivalent CLI/DTO/DOM states, native amounts, periods, Pace and private-field exclusions. Explicit synthetic browser/keyboard evidence and its limits: [Accounts parity](../governance/verification/accounts-display-parity.md). No application/presentation import, report scope, formula, freshness or source/privacy boundary change; journal assessment: no-update, these durable owner facts suffice.
 
-Web Watch's persistent table owner is `src/web/assets/watch.js`, delegated by `render.js`.
-It retains one canonical-order 50-row table, inline session dividers, controls/row identities,
-selection/focus protection and a visible-row scroll anchor. Account cards reuse the shared
-Overview presenter without report month/billing scope substitution. `app.js` retains valid rows
-across viewless source failures and feeds transport status into Watch. `live_projection.py`
-exports latest Watch model and observation-time running duration separately from frozen prompt
-metrics, matching CLI Watch without browser lifecycle/valuation calculations. No acquisition,
-security or architecture-boundary change. `test_web_live.py` compares the same projection's CLI
-cost/calls/duration/context cells with the DOM; `test_web_display.py` pins latest-progress values.
-Optional `integration/probe_web_watch.py --browser <explicit executable> --output <owned JSON>`
-checks real headless Chromium DOM/layout/selection at desktop/light and 360px/dark sizes using
-synthetic canonical data and fixture transport. This is not real-source browser SSE, physical
-input, screen-reader or macOS acceptance; independent HTTP/real-source probes retain those limits.
+FR 000542 replaces Web's retained-row table with `watch.js` keyed prompt cards;
+`watch/cards.py` owns uncapped active membership, observed grace and top-five
+actual-prompt history. `reports/watch_capture.py` projects the selected row windows
+before canonical complete-session totals, with structured model/effort and the
+existing interval union. `watch/card_workers.py` admits four isolated services,
+sources and caches, no queued futures or per-card detail leases. One session's
+capture/analysis is shared across its concurrent cards and both projection phases.
+Only active/top-five snapshots are retained; catalog revisions/generations reject
+stale results. Source capture/analysis is necessary per session, not streaming.
+
+`watch/web_coordinator.py` adapts the existing coordinator, leaving CLI hydration
+and retention unchanged. It isolates account-history aggregation and Sessions
+detail in separate single-worker lanes; native account acquisition retains its
+existing scheduler. Live owns publication/lifecycle and the shared EMA, measured
+from actual capture work, not just catalog admission. `application/live.py` calls
+the optional detail adapter without importing Watch. `live_projection.py` exports
+minimal detached card DTOs so 100 five-row cards fit the existing SSE bound.
+`render.js` scopes account-detail cleanup through its Watch-only flag; Accounts,
+Models, settings, navigation and security are unchanged. User-visible scope and
+failure semantics: `docs/web-beta.md`. Current evidence and explicit native/pixel
+limits: [Watch cards](../../journal/web/watch-cards.md). The older
+`probe_web_watch.py`/`web_watch_browser.js` table probe is historical, not current
+acceptance; use approval-only `probe_watch_cards.cjs` and the integrated-browser
+`serve_web_watch.py` fixture, plus read-only `probe_web_live.py --watch-cards --detail`.
 
 HTTP/security/assets and lifecycle/process/state/guard depend on standard library and their Web owners. Jobs consume shared application/report contracts. Composition alone wires concrete source/config/cache/pricing/providers and the Watch acquisition driver, never CLI dispatch/source wake. LiveRuntime consumes that supplied driver and exports immutable values; application/reports never import Web. CLI and Diagnostics do not import Web.
 

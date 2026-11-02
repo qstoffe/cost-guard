@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v80.122, 2026-11-02), the supported distribution.
+Use **current `main`** (v80.123, 2026-11-02), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -254,7 +254,7 @@ Reports explain daily/window/local-month CCost and provider/account provenance. 
 
 **OpenRouter** shows authenticated-key Day/Week/Month spend and genuine key limits; **DeepSeek** shows separate native balances without a fabricated bar; **MiniMax Token Plan** supports native subscription windows, not entitlement inferred from a generic key. See [account support](docs/account-support.md) for all providers, Copilot Remaining/overage semantics, alignment, resets and limitations.
 
-## Watch
+## CLI Watch
 
 Global Watch keeps history above active/recent sessions in one six-column table, with one horizontal divider only when both groups exist. A whole session stays in the lower group while any prompt runs or retains its finite completion/abort/error highlight (`watchRecentEventSeconds`). There, ordering and header time use latest prompt/`/compact` start; history uses latest supported completion/terminal time (event start if unavailable). Both groups sort oldest first with session-ID ties. Highlight expiry moves the block to history even while idle, showing the event end, never poll/expiry time; a new prompt/compaction moves it back. Session-specific Watch keeps its existing ordering and start-time header.
 
@@ -361,7 +361,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.121 (2026-11-02):** Models keeps Shift multi-sort without an extra mode button; Windows Web startup uses one quiet spinner line. [Web Beta](docs/web-beta.md).
+**v80.123 (2026-11-02):** Web Watch adds live prompt cards, five recent sessions and complete-session totals. [Web Beta](docs/web-beta.md).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

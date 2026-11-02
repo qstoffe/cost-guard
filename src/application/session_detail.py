@@ -1,6 +1,6 @@
 """Fair shared detail acquisition and immutable revision-aware 50-row pages.
 
-HTTP callers only read detached pages/enqueue captures; the live thread alone
+HTTP callers only read detached pages/enqueue captures; the host's detail lane alone
 touches the existing service. Leases bound admission, never logical history.
 """
 from collections import OrderedDict

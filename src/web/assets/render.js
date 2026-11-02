@@ -382,8 +382,8 @@ const ReportView = (() => {
     const status = obs.status === 'available' ? '' : obs.status === 'blocked' ? 'BLOCKED' : compact ? '' : 'Usage status unknown';
     return [compact && obs.availability === 'available' ? '' : availability, status, cause, obs.has_warning && 'Provider warning'].filter(Boolean).join(' · ');
   }
-  function overviewAccounts(parent, accounts, title = 'Accounts Overview', detailed = false, compact = false) {
-    if (!compact) parent.append(element('h3', title));
+  function overviewAccounts(parent, accounts, title = 'Accounts Overview', detailed = false, compact = false, watch = false) {
+    if (!compact && !watch) parent.append(element('h3', title));
     if (!accounts?.accounts.length) { parent.append(element('p', 'No configured accounts detected.')); return; }
     const group = element('div', undefined, compact ? 'account-grid compact-accounts' : 'account-grid');
     for (const account of accounts.accounts) {
@@ -396,17 +396,17 @@ const ReportView = (() => {
       if (detailed && (!compact || obs.has_error || obs.has_warning || obs.status === 'blocked' || obs.availability !== 'available')) card.append(element('p', accountStatus(obs, compact),
         obs.has_error || obs.status === 'blocked' ? 'error account-status' : obs.has_warning || obs.availability !== 'available' ? 'warning account-status' : 'account-status'));
       for (const scope of account.ccost_scopes) card.append(element('p', () => `CCost ${scope.name}: ${scope.cost == null ? '—' : display(scope.cost, 'account_ccost')}`, 'metric-value'));
-      if ((!compact && detailed) || account.billed_today != null) card.append(element('p', 'Billed today: ' + display(account, 'billed_today')));
-      if ((!compact && detailed) || account.billed_month != null) card.append(element('p', 'Billed month: ' + display(account, 'billed_month')));
+      if ((!compact && detailed && !watch) || account.billed_today != null) card.append(element('p', 'Billed today: ' + display(account, 'billed_today')));
+      if ((!compact && detailed && !watch) || account.billed_month != null) card.append(element('p', 'Billed month: ' + display(account, 'billed_month')));
       for (const quota of obs.quotas) {
         accountQuota(card, quota, compact);
       }
       for (const pace of account.pace) card.append(element('p', `${pace.label} Remaining: ${display(pace, 'per_day')} ${pace.unit}/day · ${pace.days} days · ${pace.per_workday == null ? 'no workdays left' : display(pace, 'per_workday') + ' per workday'}`, 'detail'));
-      if (['github-copilot', 'github-copilot-enterprise'].includes(obs.provider_id) || account.unaccounted_usage != null) card.append(element('p', 'Unaccounted usage (estimate): ' + display(account, 'unaccounted_usage')));
+      if (!watch && (['github-copilot', 'github-copilot-enterprise'].includes(obs.provider_id) || account.unaccounted_usage != null)) card.append(element('p', 'Unaccounted usage (estimate): ' + display(account, 'unaccounted_usage')));
       if (!detailed && (obs.has_error || obs.has_warning || ['stale', 'unavailable', 'error', 'paused', 'blocked'].includes(obs.status))) card.append(element('p', `${obs.availability} · ${obs.status} · ${obs.error_code || 'Account warning'}`, 'warning'));
       if (detailed && !obs.quotas.length) card.append(element('p', 'Quota unavailable; not zero or unlimited.', 'detail'));
       if (account.ccost_account_unknown) card.append(element('p', 'CCost account attribution unknown.', 'warning'));
-      (account.ccost_notes || []).forEach((note, index) => {
+      (watch ? [] : account.ccost_notes || []).forEach((note, index) => {
         const provider = account.provider_ccost_notes?.find(item => item.index === index);
         (compact ? details : card).append(element('p', provider ? () => `Provider-only CCost ${provider.name}: ${display(provider.cost, 'known_ccost')}${!provider.cost.complete ? ' (partial pricing)' : ''}; not allocated to accounts.` : note, 'warning'));
       });
@@ -416,7 +416,8 @@ const ReportView = (() => {
       for (const quota of obs.quotas) details.append(element('p', detailed ?
         `${quota.label} · Used ${display(quota, 'used')} ${quota.unit || 'units'} · ${quota.status}` :
         `${quota.label} · ${quota.period} · ${display(quota, 'window') || 'N/A'} window · ${quota.scope || ''} · Native money remaining/limit ${display(quota, 'remaining_money')}/${display(quota, 'limit_money')}`));
-      card.append(details); group.append(card);
+      if (!watch) card.append(details);
+      group.append(card);
     }
     parent.append(group);
   }

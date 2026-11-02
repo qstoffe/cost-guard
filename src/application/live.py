@@ -39,7 +39,10 @@ class LiveRuntime:
                 return
             while not self.stopping.is_set():
                 frame = driver.tick()
-                self.details.tick(driver.coordinator.report_service, unavailable=driver.error is not None)
+                if callable(getattr(type(driver.coordinator), "tick_details", None)):
+                    driver.coordinator.tick_details(self.details, unavailable=driver.error is not None)
+                else:
+                    self.details.tick(driver.coordinator.report_service, unavailable=driver.error is not None)
                 self.publish("live", record(state="failed" if driver.terminal else
                     "recovering" if driver.error else "running",
                     source_observed_at_ms=driver.observed_at_ms,
