@@ -1,5 +1,121 @@
 # Web Beta hosted revalidation
 
+## Current scope — FR 000548
+
+The workflow now assigns shared behavior to one `ubuntu-24.04` **common** job:
+Full's unchanged registry and package validator, followed by one rendered headless
+Chromium probe. Python 3.11, Node 22, CI-only Playwright 1.56.0, Chromium and Linux
+browser dependencies are provisioned explicitly (`playwright install --with-deps`).
+The native jobs do not install/discover Node, Playwright or Chromium.
+
+**Native** retains `windows-2025` x64, `macos-15` ARM64 and `macos-15-intel`.
+`run_tests.py --suite full --profile native-web --jobs 1` uses Full's existing
+240-second per-process deadline without running Full. The explicit selection is
+owned by `NATIVE_WEB_PATTERNS` in `development/tools/run_tests.py`:
+
+- Windows: `test_windows_web.py`, `test_windows_web_activity.py`, and ten named
+  `LifecycleTests` cases for paired/missing GUI Python, held lifetime-file
+  protection, legacy/access-denied/stale process safety, native query/handle
+  cleanup, crash-released OS locks and owned birth/termination identity.
+- Both Macs: `test_macos_web.py` (including real zsh/PTY command lifetime/status),
+  and the two lifecycle cases for crash-released locks and owned process identity.
+- Exact case names, executed counts, named skips and durations are retained in
+  `native-tests.json`; Full retains every portable/mock case once in `full.json`.
+  Legacy Windows terminal-only shell cases in `test_launcher_feedback.py` and
+  `test_windows_launcher.py` remain registered and locally available, but their
+  OS-only execution is intentionally no longer part of hosted Web CI.
+
+Native smoke still exercises real Win32/AppKit, owned HTTP readiness, restart,
+Exit/fault cleanup, Unicode/space paths, source-change shutdown and Mac app cache.
+The offline entry shim and native-menu callback probes still replace browser
+opening. Separately, exactly one initial `launch(..., opener=...)` per native job
+uses the production `os.startfile` or fixed `/usr/bin/open` against that owned
+loopback destination. Evidence records **ACCEPTED** or **UNAVAILABLE**, not a page
+load or browser-process assertion. The second launch retains the false-opener
+failure/restart check. Deterministic tests assert exact URL argument and native
+success/failure propagation without UI. No registration changes, consumer
+profiles/accounts, physical clicks or local workstation UI are authorized.
+
+The **Decision Delegate** authorized that bounded hosted handoff and resolved
+development-only verification against the user's instruction, “Development-only
+edits need no product tests/release/version work.” No product version/release or
+unrelated local Full/Diagnostics/live-source test is required for this tooling
+change; the requested actual hosted Full/native/browser checks remain required.
+An unavailable registered browser is explicitly reported, not PASS, and is not
+repaired by changing runner registration. Handoff acceptance never establishes
+consumer-desktop behavior, navigation, first paint or Beta promotion.
+
+`ci_web_beta.py ... --scope common|native` requires only its assigned phases;
+the other scope is labelled assigned elsewhere. Missing, malformed, blocked,
+unfinished or failed required evidence, incomplete suite inventories/counts,
+prior step failure and cancellation make summary exit nonzero. JSON notices retain
+sanitized failures/counts/skips and measured durations. Provisioning cannot be
+turned into PASS by summary. Public standard-runner/read-only-token/no-secrets,
+synthetic/offline data, superseded-run cancellation, relevant path triggers and
+seven-day artifacts remain. Native `max-parallel: 2` plus one common job bounds
+concurrency at three; common has 20 minutes, each native job 10 minutes.
+
+### Current measured evidence
+
+[Run 41526896465](https://github.com/qstoffe/cost-guard/actions/runs/41526896465)
+passed all four jobs on 2026-11-02 for [PR 121](https://github.com/qstoffe/cost-guard/pull/121),
+source `232fb1ae73b47c1999f13779132c58ec2209bbac`, tested PR merge checkout
+`be4ca4ee598b24e6d5ebaa523ad462d6b7cf15b7`. No portability repair or timeout
+change was needed. The actual current Full registry contains **125** files
+(121 Quick + four Full-only), not the FR's earlier 124-file inspected baseline.
+
+| Job | Whole job | Regression / validation | Native smoke | Browser |
+| --- | --- | --- | --- | --- |
+| [Linux common](https://github.com/qstoffe/cost-guard/actions/runs/41526896465/job/125556835754) | 2m 06s | 86.65s; 125 Full files; 1,506 passed / 15 named OS-only skips; validator PASS | Assigned native | Chromium PASS 10.24s; tooling/dependencies step 22s |
+| [Windows x64](https://github.com/qstoffe/cost-guard/actions/runs/41526896465/job/125556835295) | 1m 04s | 23.75s; 12 groups, 27 passed / zero skips; no validator | PASS 17.14s | One OS handoff ACCEPTED; no rendered suite |
+| [Mac ARM64](https://github.com/qstoffe/cost-guard/actions/runs/41526896465/job/125556836025) | 34s | 2.79s; three groups, 20 passed / zero skips; no validator | PASS 17.33s | One OS handoff ACCEPTED; no rendered suite |
+| [Mac Intel](https://github.com/qstoffe/cost-guard/actions/runs/41526896465/job/125556835831) | 1m 03s | 3.56s; three groups, 20 passed / zero skips; no validator | PASS 23.33s | One OS handoff ACCEPTED; no rendered suite |
+
+All executed suites reported zero failures/errors and complete passed counts.
+Linux's OS-only skips remain named in `full.json`; native jobs execute the
+retained Web-specific skipped cases. Historical CLI-only Windows cases are not
+native Web acceptance. Checks exposes bounded notices (not necessarily every
+individual skip annotation); the artifact is the complete per-file skip record.
+
+Actual images: Linux `ubuntu24` 20261026.354.1 x86_64, kernel 7.0.0-1017-azure,
+Python 3.11.17, Node 22.23.4; Windows `win25-vs2026` 20261030.294.1 AMD64,
+10.0.26100, Python 3.11.9; ARM64 `macos15` 20261028.0489.1, macOS 15.8.2
+(24H232), Python 3.11.9; Intel `macos15` 20260824.0482.1, macOS 15.7.9
+(24G830), Python 3.11.9. Both Macs use zsh 5.9 and in-box osacompile. Native
+tool facts contain no Node discovery. Shared Chromium: 141.0.7390.37.
+
+The FR baseline run 41516683348 spent 13m 17s combined across three repeated
+Full/validator steps. This run did that shared work once in 86.65s, plus the
+explicit native selections above; native selection + smoke summed to 87.90s.
+Whole-job combined execution was 4m 47s versus the baseline's 16m 58s. These are
+observations across different images/revisions/OS assignments, not a controlled
+benchmark, guaranteed saving, monetary estimate or queue/wall-clock promise.
+
+Local Windows verification: 13 CI-accounting/boundary tests passed; native-web
+passed 12 groups in 16.1s. No product version/release/ZIP or unrelated local
+Full/Diagnostics/live-source test was run, per the scoped Decision Delegate
+resolution above. All three real OS handoffs were accepted, but browser process,
+navigation/first paint and consumer/physical desktop acceptance remain unverified.
+
+Documentation-only head `26b5ca1fdcbef8ad6b938346a042e92cb5fbbc88` triggered
+[duplicate run 41527754941](https://github.com/qstoffe/cost-guard/actions/runs/41527754941),
+merge checkout `dbf7d079896b91a5bdd4351b2867fa58da353296`. Linux, Windows and
+Intel Mac passed; ARM64 remained capacity-queued, not executed/PASS at that head.
+The Decision Delegate authorized reuse of the unchanged implementation's earlier
+successful ARM64 result, and permitted this reporting-only exception note to
+merge without waiting for further duplicate checks. This is source-equivalent
+evidence, not an elapsed-time rule or protection bypass. Uncompleted final-head
+checks remain unverified and must be reported honestly; observed failures or a
+changed base still require investigation. No test/workflow/source was changed
+to avoid execution, and no run was manually cancelled or retried. Publishing the
+permitted reporting-only exception note automatically superseded run 41527754941
+under the preserved `cancel-in-progress` policy: its overall outcome is CANCELLED,
+not PASS. Its three completed successes remain attributable to that head; ARM64
+did not execute. Newly triggered reporting-head checks remain separate/unverified
+until they actually complete.
+
+## Historical evidence — FR 000410
+
 FR 000410 re-tests the implementation delivered through FR 000380; it does not rewrite historical completion reports or promote Beta. Verified 2026-10-26 from the successful hosted run below.
 
 ## Execution and cost boundary

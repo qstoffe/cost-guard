@@ -12,21 +12,15 @@ permissions:
 concurrency:
   group: web-beta-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTHONIOENCODING: utf-8
+  COST_GUARD_TEST_MODE: '1'
 jobs:
-  verify:
-    # No private-repository paid-minute fallback. Reassess terms before changing this.
+  common:
     if: github.event.repository.private == false
-    strategy:
-      fail-fast: false
-      max-parallel: 3
-      matrix:
-        os: [windows-2025, macos-15, macos-15-intel]
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
-    env:
-      PYTHONDONTWRITEBYTECODE: '1'
-      PYTHONIOENCODING: utf-8
-      COST_GUARD_TEST_MODE: '1'
     steps:
       - uses: actions/checkout@v5
         with:
@@ -37,22 +31,56 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: '22'
-      - name: Full registered suite and package validation
-        run: python development/tools/ci_web_beta.py regression
-      - name: Isolated native APIs and launcher smoke (never workstation probe)
-        if: ${{ !cancelled() }}
-        run: python development/tools/ci_web_beta.py native
-      - name: CI-only browser tooling (not a product dependency)
+      - name: Full registered suite and package validation (once)
+        run: python development/tools/ci_web_beta.py regression --scope common
+      - name: CI-only browser tooling and Linux dependencies
         if: ${{ !cancelled() }}
         run: |
           python -m pip install playwright==1.56.0
-          python -m playwright install chromium
-      - name: Rendered browser smoke
+          python -m playwright install --with-deps chromium
+      - name: Rendered browser smoke (once)
         if: ${{ !cancelled() }}
-        run: python development/tools/ci_web_beta.py browser
+        run: python development/tools/ci_web_beta.py browser --scope common
+      - name: Scoped coverage summary
+        if: always()
+        env:
+          CI_JOB_STATUS: ${{ job.status }}
+        run: python development/tools/ci_web_beta.py summary --scope common
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: web-beta-common-linux
+          path: ci-results/*.json
+          retention-days: 7
+          if-no-files-found: error
+  native:
+    # No private-repository paid-minute fallback. Reassess terms before changing this.
+    if: github.event.repository.private == false
+    strategy:
+      fail-fast: false
+      # At most three jobs including common; keep all native architectures.
+      max-parallel: 2
+      matrix:
+        os: [windows-2025, macos-15, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Focused native Web-launch regressions
+        run: python development/tools/ci_web_beta.py native-regression --scope native
+      - name: Isolated native APIs and launcher smoke (never workstation probe)
+        if: ${{ !cancelled() }}
+        run: python development/tools/ci_web_beta.py native --scope native
       - name: Coverage summary (includes missing/not-run phases)
         if: always()
-        run: python development/tools/ci_web_beta.py summary
+        env:
+          CI_JOB_STATUS: ${{ job.status }}
+        run: python development/tools/ci_web_beta.py summary --scope native
       - uses: actions/upload-artifact@v5
         if: always()
         with:

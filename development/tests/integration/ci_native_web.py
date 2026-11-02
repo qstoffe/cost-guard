@@ -1,7 +1,8 @@
 """Hosted-only native smoke using real shipped APIs with an offline entry shim.
 
 The shim replaces ONLY the disposable checkout entry: no source/provider/Watch
-composition, no system browser. Native adapter, HTTP, locks, identity, restart and
+composition. One separately recorded hosted-only system handoff is permitted.
+Native adapter, HTTP, locks, identity, restart and
 source guard are the shipped implementation. This is not the workstation probe.
 """
 import json
@@ -88,6 +89,26 @@ def detached(root, home):
     original_spawn = subprocess.Popen
     identities = {}
     identity_checks = []
+    handoff = {}
+
+    def open_once(url):
+        # One real production OS handoff, only on this disposable hosted runner.
+        # Never retain bootstrap URLs or infer that an accepted handoff painted.
+        hosted_only()
+        owned = store.read()
+        assert owned and url.startswith(f"http://127.0.0.1:{owned['port']}/#bootstrap=")
+        if os.name == "nt":
+            from src.web.native_windows import open_registered_browser
+        else:
+            from src.web.native_macos import open_registered_browser
+        try:
+            accepted = bool(open_registered_browser(url))
+            handoff.update(outcome="ACCEPTED" if accepted else "UNAVAILABLE", accepted=accepted)
+        except OSError as error:
+            handoff.update(outcome="UNAVAILABLE", accepted=False, reason=type(error).__name__)
+        handoff.update(owned_loopback_destination=True, attempts=1,
+                       page_rendering="NOT VERIFIED", browser_process="NOT VERIFIED")
+        return handoff["accepted"]
 
     def observed_identity(pid):
         current = process_identity(pid)
@@ -103,12 +124,14 @@ def detached(root, home):
     try:
         with patch("src.web.lifecycle.InstanceStore", return_value=store), patch("src.web.lifecycle.subprocess.Popen", side_effect=spawn), \
                 patch("src.web.lifecycle.process_identity", side_effect=observed_identity):
-            first = launch(root, module, opener=lambda url: False)
+            first = launch(root, module, opener=open_once)
             state = store.read()
-            assert state and control(state, "status")["ready"] and not first.browser_opened
+            assert state and control(state, "status")["ready"]
+            assert first.browser_opened == handoff["accepted"]
             assert control(state, "open")["ready"]
             assert store.read()["nonce"] == first.instance
             second = launch(root, module, opener=lambda url: False)
+            assert not second.browser_opened and control(store.read(), "status")["ready"]
             assert second.instance != first.instance
             assert process_identity(state["pid"]) != state["process"]
             state = store.read()
@@ -147,7 +170,7 @@ def detached(root, home):
         current = store.read()
         if current:
             stop_existing(store, current)
-    return dict(outcome="PASS", startup_identity_checks=identity_checks, checks=["detached native host / private OS locks / HTTP ownership",
+    return dict(outcome="PASS", registered_browser_handoff=handoff, startup_identity_checks=identity_checks, checks=["detached native host / private OS locks / HTTP ownership",
         "Open retains instance", "deliberate restart retires original PID", "owned Exit/stop",
         "spaces and Unicode source path", "source change removes native host and private record"],
         command="PASS (real .command; offline entry shim)" if sys.platform == "darwin" else "PASS (real .cmd/PowerShell; offline entry shim)")
@@ -193,8 +216,8 @@ def macos_fault(root):
 
 def main():
     hosted_only()
-    evidence = dict(outcome="NOT RUN", checks={}, limitations=["NOT VERIFIED: physical desktop clicks, visual icon/menu, Finder/Gatekeeper, default browser, accessibility",
-        "Synthetic entry bypasses real source/provider acquisition and OS default-browser launch; not an end-to-end consumer launcher proof"])
+    evidence = dict(outcome="NOT RUN", checks={}, limitations=["NOT VERIFIED: physical desktop clicks, visual icon/menu, Finder/Gatekeeper, default-browser rendering, accessibility",
+        "Synthetic entry bypasses real source/provider acquisition and stubs menu browser dispatch; one separate production OS handoff is recorded, not end-to-end consumer launcher proof"])
     try:
         with tempfile.TemporaryDirectory(prefix="cg-ci-native-") as temporary:
             base = Path(temporary).resolve()
