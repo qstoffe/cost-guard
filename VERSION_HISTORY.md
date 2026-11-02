@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.122 — 2026-11-02
+
+- Windows Web: recover legacy stale records after reboot/PID reuse using the existing native lifetime lock, without contacting or stopping unrelated processes. Ambiguous ownership remains protected; console/dialog and Diagnostics retain specific bounded startup causes and proven-stale recovery.
+
 ## v80.121 — 2026-11-02
 
 - Models: two filters, ordinary single-column sorting and Shift multi-sort, without a separate mode button.
@@ -95,8 +99,8 @@
 
 ## v80.100 — 2026-10-28
 
-- Finished remaining Web report presentation: configured-local prompt clocks and Next Ictx guidance, inclusive human-readable date ranges, and CLI-aligned historical Token Mix Input/Cache/Write/Output share-and-cost columns with full-report totals above the table. Exact backend values remain separate sort keys; historical capture stays explicit and cancellable.
-- Session Snapshot/Live summaries use shared CCost/money/duration formatting and child breakdowns, contextual warnings, clear Freeze/Follow actions and optional source/reading details. Complete revision-aware 50-row history, whole-session totals, stable anchors and selection/focus protection remain intact. No acquisition, valuation, authentication, browser persistence or CLI behavior changes.
+- Web reports: configured-local clocks/Next Ictx, inclusive dates, CLI-aligned historical Token Mix shares/costs and full totals; exact sort keys and explicit cancellable capture remain.
+- Snapshot/Live shares CCost/money/duration, child totals, warnings, Freeze/Follow and optional details; revision-aware 50-row history, anchors, selection and focus remain. No acquisition, valuation, authentication, persistence or CLI change.
 
 ## v80.99 — 2026-10-28
 

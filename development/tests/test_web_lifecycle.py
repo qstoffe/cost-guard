@@ -1,6 +1,7 @@
 """Deterministic lifecycle proof; no browser, native icon, provider or model requests."""
 import http.client
 import contextlib
+import ctypes
 import io
 import json
 import os
@@ -18,6 +19,7 @@ from src.web.change_guard import SourceGuard
 from src.web.host import WebHost
 from src.web.instance_state import InstanceStore, SCHEMA, checkout_identity
 from src.web import lifecycle
+from src.web import instance_state
 from src.web.process_identity import InstanceConflict, process_identity, terminate_owned
 
 
@@ -209,6 +211,36 @@ class LifecycleTests(unittest.TestCase):
         with store.lock(timeout=0), store.lock(timeout=0, lifetime=True):
             pass
 
+    @unittest.skipUnless(os.name == "nt", "Windows lock file identity guarantee")
+    def test_windows_held_lifetime_file_cannot_be_deleted_or_replaced(self):
+        store = self.store()
+        replacement = store.directory / "replacement.lock"
+        replacement.write_bytes(b"0")
+        path = store.directory / "host.lock"
+        with store.lock(lifetime=True, timeout=0):
+            with self.assertRaises(OSError):
+                path.unlink()
+            with self.assertRaises(OSError):
+                os.replace(replacement, path)
+            self.assertTrue(path.is_file())
+        with store.lock(lifetime=True, timeout=0):
+            pass
+
+    def test_unsupported_schema_is_preserved_and_never_admitted(self):
+        store = self.store()
+        store.write(self.state(store, schema=SCHEMA + 1))
+        original = store.state_path.read_bytes()
+        with patch.object(lifecycle, "InstanceStore", return_value=store), \
+                patch.object(lifecycle, "spawn_detached") as spawn, \
+                patch.object(lifecycle, "control") as control, \
+                patch.object(lifecycle, "terminate_owned") as terminate:
+            with self.assertRaisesRegex(InstanceConflict, "corrupt_instance_state"):
+                lifecycle.launch(self.root, "src.web.native_windows", opener=Mock())
+        self.assertEqual(original, store.state_path.read_bytes())
+        spawn.assert_not_called()
+        control.assert_not_called()
+        terminate.assert_not_called()
+
     def test_stale_and_reused_pids_never_contact_or_terminate(self):
         store = self.store()
         state = self.state(store)
@@ -232,6 +264,210 @@ class LifecycleTests(unittest.TestCase):
             lifecycle.stop_existing(store, state, grace=0)
             terminate.assert_called_once_with(state["pid"], state["process"])
         self.assertIsNone(store.read())
+
+    @unittest.skipUnless(os.name == "nt", "Windows lifetime-lock retirement proof")
+    def test_legacy_access_denied_reaches_replacement_without_contacting_old_port(self):
+        for ready_ns in (1, time.time_ns() + 10**12):
+            with self.subTest(coalesced_clock=ready_ns != 1):
+                store = self.store()
+                old = self.state(store, ready_ns=ready_ns)
+                store.write(old)  # Unextended schema 1, including a future ready clock.
+                child = Mock(pid=9876)
+                child.poll.return_value = None
+                new = self.state(store, pid=child.pid, process={"birth": "new", "image": "python"})
+                kernel = Mock()
+                kernel.OpenProcess.return_value = None
+
+                def identity(pid):
+                    if pid != old["pid"]:
+                        return new["process"]
+                    # Exercise production OpenProcess mapping, not a top-level error mock.
+                    with patch.object(ctypes, "WinDLL", return_value=kernel), \
+                            patch.object(ctypes, "get_last_error", return_value=5):
+                        return process_identity(pid)
+
+                def spawn(root, private_store, nonce, module):
+                    self.assertIsNone(store.read())
+                    # Retirement releases lifetime for the child, NOT transition
+                    # for a competing launcher; publication remains serialized.
+                    with store.lock(timeout=0, lifetime=True):
+                        pass
+                    with self.assertRaisesRegex(InstanceConflict, "instance_transition_busy"):
+                        with self.store().lock(timeout=0):
+                            pass
+                    new["nonce"] = nonce
+                    store.write(new)
+                    return child
+
+                def request(state, action):
+                    self.assertEqual(child.pid, state["pid"])
+                    self.assertNotEqual(old["nonce"], state["nonce"])
+                    return {"ready": True, "url": f"http://127.0.0.1:{state['port']}/#bootstrap=fixture"}
+
+                with patch.object(lifecycle, "InstanceStore", return_value=store), \
+                        patch.object(lifecycle, "process_identity", side_effect=identity), \
+                        patch.object(lifecycle, "spawn_detached", side_effect=spawn) as detached, \
+                        patch.object(lifecycle, "control", side_effect=request) as control, \
+                        patch.object(lifecycle, "terminate_owned") as terminate:
+                    result = lifecycle.launch(self.root, "src.web.native_windows", opener=lambda url: True)
+                self.assertTrue(result.browser_opened)
+                self.assertFalse(result.coalesced)
+                detached.assert_called_once()
+                self.assertEqual(["status", "open"], [call.args[1] for call in control.call_args_list])
+                terminate.assert_not_called()
+                child.terminate.assert_not_called()
+                self.assertEqual(new, store.read())
+                self.assertIn("stale_instance_recovered", (store.directory / "lifecycle.log").read_text())
+
+    @unittest.skipUnless(os.name == "nt", "Windows lifetime-lock retirement proof")
+    def test_inaccessible_possibly_live_host_keeps_record_and_blocks_replacement(self):
+        store = self.store()
+        state = self.state(store)
+        store.write(state)
+        for reason in ("process_identity_access_denied", "process_identity_unavailable"):
+            with self.subTest(reason=reason), store.lock(lifetime=True):
+                with patch.object(lifecycle, "InstanceStore", return_value=store), \
+                        patch.object(lifecycle, "process_identity", side_effect=InstanceConflict(reason)), \
+                        patch.object(lifecycle, "spawn_detached") as spawn, \
+                        patch.object(lifecycle, "control") as control, \
+                        patch.object(lifecycle, "terminate_owned") as terminate:
+                    with self.assertRaisesRegex(InstanceConflict, reason):
+                        lifecycle.launch(self.root, "src.web.native_windows", opener=Mock())
+                self.assertEqual(state, store.read())
+                spawn.assert_not_called()
+                control.assert_not_called()
+                terminate.assert_not_called()
+        self.assertIn("instance_lifetime_busy", (store.directory / "lifecycle.log").read_text())
+
+    @unittest.skipUnless(os.name == "nt", "Windows lifetime-lock retirement proof")
+    def test_readable_reuse_with_busy_lifetime_is_not_retired(self):
+        store = self.store()
+        state = self.state(store)
+        store.write(state)
+        with store.lock(lifetime=True), \
+                patch.object(lifecycle, "process_identity", return_value={"birth": "other", "image": "other"}), \
+                patch.object(lifecycle, "control") as control, \
+                patch.object(lifecycle, "terminate_owned") as terminate:
+            with self.assertRaisesRegex(InstanceConflict, "instance_lifetime_busy"):
+                lifecycle.stop_existing(store, state)
+        self.assertEqual(state, store.read())
+        control.assert_not_called()
+        terminate.assert_not_called()
+
+    @unittest.skipUnless(os.name == "nt", "Windows native API mapping")
+    def test_native_openprocess_error_mapping_and_query_rights(self):
+        for error, reason in ((5, "process_identity_access_denied"),
+                              (6, "process_identity_unavailable"), (87, None)):
+            kernel = Mock()
+            kernel.OpenProcess.return_value = None
+            with patch.object(ctypes, "WinDLL", return_value=kernel), \
+                    patch.object(ctypes, "get_last_error", return_value=error):
+                if reason:
+                    with self.assertRaisesRegex(InstanceConflict, reason):
+                        process_identity(1234)
+                else:
+                    self.assertIsNone(process_identity(1234))
+            kernel.OpenProcess.assert_called_once_with(0x1000, False, 1234)
+            kernel.CloseHandle.assert_not_called()
+
+    @unittest.skipUnless(os.name == "nt", "Windows native API mapping")
+    def test_native_identity_query_failure_closes_handle_and_retains_access_reason(self):
+        for failed_api in ("GetProcessTimes", "GetExitCodeProcess", "QueryFullProcessImageNameW"):
+            kernel = Mock()
+            kernel.OpenProcess.return_value = 123
+            kernel.GetProcessTimes.return_value = True
+
+            def active(handle, code):
+                code._obj.value = 259
+                return True
+
+            kernel.GetExitCodeProcess.side_effect = active
+            if failed_api == "GetExitCodeProcess":
+                kernel.GetExitCodeProcess.side_effect = None
+            getattr(kernel, failed_api).return_value = False
+            with self.subTest(api=failed_api), patch.object(ctypes, "WinDLL", return_value=kernel), \
+                    patch.object(ctypes, "get_last_error", return_value=5):
+                with self.assertRaisesRegex(InstanceConflict, "process_identity_access_denied"):
+                    process_identity(1234)
+            kernel.CloseHandle.assert_called_once_with(123)
+
+    def test_changed_record_during_identity_inspection_is_never_removed_or_contacted(self):
+        store = self.store()
+        state = self.state(store)
+        replacement = {**state, "control": "c" * 64}  # Even same nonce must not authorize removal.
+        for actual in (None, state["process"], InstanceConflict("process_identity_access_denied")):
+            store.write(state)
+
+            def identity(pid):
+                store.write(replacement)
+                if isinstance(actual, Exception):
+                    raise actual
+                return actual
+
+            with self.subTest(actual=actual), \
+                    patch.object(lifecycle, "process_identity", side_effect=identity), \
+                    patch.object(lifecycle, "control") as control, \
+                    patch.object(lifecycle, "terminate_owned") as terminate:
+                with self.assertRaises(InstanceConflict):
+                    lifecycle.stop_existing(store, state)
+            self.assertEqual(replacement, store.read())
+            control.assert_not_called()
+            terminate.assert_not_called()
+
+    def test_unavailable_or_unsafe_lifetime_proof_preserves_record_without_spawn(self):
+        store = self.store()
+        state = self.state(store)
+        store.write(state)
+        real_lock = store.lock
+        for reason in ("instance_lifetime_unavailable", "unsafe_instance_path"):
+            def lock(*args, lifetime=False, **kwargs):
+                if lifetime:
+                    raise InstanceConflict(reason)
+                return real_lock(*args, **kwargs)
+
+            with self.subTest(reason=reason), \
+                    patch.object(lifecycle, "os", SimpleNamespace(name="nt")), \
+                    patch.object(lifecycle, "InstanceStore", return_value=store), \
+                    patch.object(store, "lock", side_effect=lock), \
+                    patch.object(lifecycle, "process_identity", side_effect=InstanceConflict("process_identity_unavailable")), \
+                    patch.object(lifecycle, "spawn_detached") as spawn, \
+                    patch.object(lifecycle, "control") as control, \
+                    patch.object(lifecycle, "terminate_owned") as terminate:
+                with self.assertRaisesRegex(InstanceConflict, reason):
+                    lifecycle.launch(self.root, "src.web.native_windows", opener=Mock())
+            self.assertEqual(state, store.read())
+            spawn.assert_not_called()
+            control.assert_not_called()
+            terminate.assert_not_called()
+
+    def test_non_windows_identity_failure_does_not_use_windows_recovery(self):
+        store = self.store()
+        state = self.state(store)
+        store.write(state)
+        with patch.object(lifecycle, "os", SimpleNamespace(name="posix")), \
+                patch.object(lifecycle, "process_identity", side_effect=InstanceConflict("process_identity_unavailable")), \
+                patch.object(store, "lock") as lock, \
+                patch.object(lifecycle, "control") as control, \
+                patch.object(lifecycle, "terminate_owned") as terminate:
+            with self.assertRaisesRegex(InstanceConflict, "process_identity_unavailable"):
+                lifecycle.stop_existing(store, state)
+        self.assertEqual(state, store.read())
+        lock.assert_not_called()
+        control.assert_not_called()
+        terminate.assert_not_called()
+
+    def test_reparse_instance_state_is_refused_before_spawn(self):
+        store = self.store()
+        store.write(self.state(store))
+        info = store.state_path.lstat()
+        with patch.object(instance_state.Path, "lstat", return_value=SimpleNamespace(
+                st_mode=info.st_mode, st_file_attributes=0x400)), \
+                patch.object(lifecycle, "InstanceStore", return_value=store), \
+                patch.object(lifecycle, "spawn_detached") as spawn:
+            with self.assertRaisesRegex(InstanceConflict, "unsafe_instance_path"):
+                lifecycle.launch(self.root, "src.web.native_windows", opener=Mock())
+        spawn.assert_not_called()
+        self.assertTrue(store.state_path.exists())
 
     def test_unknown_port_occupant_is_conflict_not_kill_authority(self):
         store = self.store()
@@ -387,6 +623,8 @@ class LifecycleTests(unittest.TestCase):
 
     def test_two_simultaneous_launches_have_one_winner_and_do_not_kill_it(self):
         store = self.store()
+        if os.name == "nt":
+            store.write(self.state(store))  # Both clicks overlap access-denied legacy recovery.
         child = Mock(pid=9876)
         child.poll.return_value = None
         first_spawned = threading.Event()
@@ -407,7 +645,13 @@ class LifecycleTests(unittest.TestCase):
             return child
 
         def request(state, action):
+            self.assertEqual(9876, state["pid"])
             return {"ready": True, "url": f"http://127.0.0.1:{state['port']}/#bootstrap=short"}
+
+        def identity(pid):
+            if pid == 1234:
+                raise InstanceConflict("process_identity_access_denied")
+            return {"birth": "original", "image": "python"}
 
         def run():
             try:
@@ -418,9 +662,9 @@ class LifecycleTests(unittest.TestCase):
         with patch.object(lifecycle, "InstanceStore", return_value=store), \
                 patch.object(lifecycle.time, "time_ns", side_effect=clock), \
                 patch.object(lifecycle, "spawn_detached", side_effect=spawn) as detached, \
-                patch.object(lifecycle, "process_identity", return_value={"birth": "original", "image": "python"}), \
+                patch.object(lifecycle, "process_identity", side_effect=identity), \
                 patch.object(lifecycle, "control", side_effect=request), \
-                patch.object(lifecycle, "stop_existing") as stop:
+                patch.object(lifecycle, "terminate_owned") as terminate:
             first = threading.Thread(target=run, name="first-launch")
             second = threading.Thread(target=run, name="second-launch")
             first.start()
@@ -435,7 +679,7 @@ class LifecycleTests(unittest.TestCase):
             self.assertEqual({item.instance for item in outcomes}, {store.read()["nonce"]})
             self.assertEqual(sorted(item.coalesced for item in outcomes), [False, True])
             detached.assert_called_once()
-            stop.assert_not_called()
+            terminate.assert_not_called()
 
     def test_source_change_stops_host_closes_socket_and_manual_start_uses_new_baseline(self):
         owner = WebHost(self.root)

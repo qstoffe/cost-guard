@@ -10,6 +10,11 @@ class InstanceConflict(RuntimeError):
     """An instance cannot safely be identified or stopped (no raw diagnostic text)."""
 
 
+def _windows_identity_error():
+    return InstanceConflict("process_identity_access_denied" if ctypes.get_last_error() == 5
+                            else "process_identity_unavailable")
+
+
 def _windows_handle(pid, terminate=False):
     from ctypes import wintypes
     kernel = ctypes.WinDLL("kernel32", use_last_error=True)
@@ -18,8 +23,11 @@ def _windows_handle(pid, terminate=False):
     kernel.CloseHandle.argtypes = [wintypes.HANDLE]
     handle = kernel.OpenProcess(0x1000 | (1 if terminate else 0), False, pid)
     if not handle:
-        if ctypes.get_last_error() == 87:
+        error = ctypes.get_last_error()
+        if error == 87:
             return kernel, None
+        if error == 5:
+            raise InstanceConflict("process_identity_access_denied")
         raise InstanceConflict("process_identity_unavailable")
     return kernel, handle
 
@@ -29,11 +37,11 @@ def _windows_identity(kernel, handle):
     kernel.GetProcessTimes.argtypes = [wintypes.HANDLE] + [ctypes.POINTER(wintypes.FILETIME)] * 4
     times = [wintypes.FILETIME() for _ in range(4)]
     if not kernel.GetProcessTimes(handle, *[ctypes.byref(t) for t in times]):
-        raise InstanceConflict("process_identity_unavailable")
+        raise _windows_identity_error()
     kernel.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
     code = wintypes.DWORD()
     if not kernel.GetExitCodeProcess(handle, ctypes.byref(code)):
-        raise InstanceConflict("process_identity_unavailable")
+        raise _windows_identity_error()
     if code.value != 259:
         return None
     kernel.QueryFullProcessImageNameW.argtypes = [wintypes.HANDLE, wintypes.DWORD,
@@ -41,7 +49,7 @@ def _windows_identity(kernel, handle):
     size = wintypes.DWORD(32768)
     image = ctypes.create_unicode_buffer(size.value)
     if not kernel.QueryFullProcessImageNameW(handle, 0, image, ctypes.byref(size)):
-        raise InstanceConflict("process_identity_unavailable")
+        raise _windows_identity_error()
     return {"birth": str((times[0].dwHighDateTime << 32) | times[0].dwLowDateTime),
             "image": os.path.normcase(os.path.realpath(image.value))}
 

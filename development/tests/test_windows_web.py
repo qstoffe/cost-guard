@@ -86,6 +86,36 @@ class WindowsWebTests(unittest.TestCase):
         self.assertIn("Web is running", output.getvalue())
         store.log.assert_called_once_with("browser_open_failed")
 
+    def test_specific_ownership_failures_reach_console_and_private_diagnostics(self):
+        reasons = ("process_identity_access_denied", "process_identity_unavailable",
+                   "instance_lifetime_busy", "instance_transition_busy", "corrupt_instance_state",
+                   "unsafe_instance_path", "instance_control_conflict", "instance_not_ready")
+        for reason in reasons:
+            output, store = io.StringIO(), Mock()
+            with self.subTest(reason=reason), \
+                    patch.object(windows_launch, "InstanceStore", return_value=store), \
+                    patch.object(windows_launch, "load_configuration"), \
+                    patch("src.web.native_windows.preflight"), \
+                    patch.object(windows_launch, "launch", side_effect=InstanceConflict(reason)), \
+                    contextlib.redirect_stdout(output):
+                self.assertEqual(1, windows_launch.launch_windows(ROOT))
+            self.assertIn(windows_launch.MESSAGES[reason], output.getvalue())
+            self.assertNotIn("Existing Web instance", output.getvalue())
+            store.log.assert_called_once_with(reason)
+
+    def test_arbitrary_failure_and_failed_diagnostic_write_never_leak_exception_text(self):
+        output, store = io.StringIO(), Mock()
+        store.log.side_effect = OSError("PRIVATE_PATH_TOKEN")
+        with patch.object(windows_launch, "InstanceStore", return_value=store), \
+                patch.object(windows_launch, "load_configuration"), \
+                patch("src.web.native_windows.preflight"), \
+                patch.object(windows_launch, "launch", side_effect=InstanceConflict("PRIVATE_PATH_TOKEN")), \
+                contextlib.redirect_stdout(output):
+            self.assertEqual(1, windows_launch.launch_windows(ROOT))
+        self.assertNotIn("PRIVATE", output.getvalue())
+        self.assertIn("ownership could not be verified", output.getvalue())
+        self.assertIn("diagnostic could not be recorded", output.getvalue())
+
     def test_open_is_async_coalesced_and_exit_does_not_wait_for_browser(self):
         owner = self.owner()
         entered, release = Event(), Event()
