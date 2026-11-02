@@ -110,8 +110,11 @@ class WatchAccountRefresh:
         # A mailbox may have waited during hydration: completion, not drain time,
         # is the observation epoch. A retained/cached value cannot advance it.
         observed = dict(update.observed_at_ms)
+        incoming = {item.key: item for item in fresh}
         for item in self.snapshots:
-            if item.key in update.observed_keys and item.key in observed and item.availability in {"available", "partial"}:
+            if (item.key in update.observed_keys and item.key in observed
+                    and item.availability in {"available", "partial"} and item.key in incoming
+                    and item.fetched_at_ms == incoming[item.key].fetched_at_ms):
                 self.seen_ms[item.key] = observed[item.key]
         self.snapshots = age_accounts(self.snapshots, self.seen_ms, now_ms=completed_ms)
         self.stale = any(item.availability == "stale" for item in self.snapshots)

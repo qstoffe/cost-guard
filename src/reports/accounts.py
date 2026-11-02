@@ -2,11 +2,11 @@
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from typing import Sequence
 
 from src.analysis.models import TraceEntry
-from src.analysis.period_ccost import PeriodCCostIndex, usage_provider, quota_window, monthly_quota_window
+from src.analysis.period_ccost import PeriodCCostIndex, history_start, usage_provider, quota_window, monthly_quota_window
 from src.analysis.quota_pace import quota_pace
 from src.analysis.valuation import billed_spend, comparison_cost, unique_usage
 from src.domain import AccountSnapshot, CostDisposition
@@ -97,7 +97,8 @@ def _period_scopes(account, index, providers, explained, today_start_ms, month_s
     ranges = [("today", (today_start_ms, now_ms + 1, "configured local calendar day"), None)]
     if not watch:
         ranges.append(("this month", (month_start_ms, now_ms + 1, "configured local calendar month to date"), None))
-    ranges.extend((component.label, quota_window(component, now_ms), component.model_id)
+    ranges.extend((component.label, quota_window(component, now_ms)
+                   if account.availability in {"available", "partial"} else None, component.model_id)
                   for component in account.quotas if component.duration_seconds)
     scopes, notes, provider_notes, estimated_scopes = [], [], [], []
     account_unknown = False
@@ -107,6 +108,10 @@ def _period_scopes(account, index, providers, explained, today_start_ms, month_s
             notes.append(f"CCost {name}: period boundary unknown.")
             continue
         start, end, basis = window
+        if start == end:
+            scopes.append((name, index.cost(provider, account.key, start, end, model)))
+            notes.append(f"CCost {name}: {basis}; no requests in this period.")
+            continue
         proven = index.cost(provider, account.key, start, end, model)
         unknown = index.cost(provider, None, start, end, model)
         if unknown.observed_requests and providers[provider] == 1:
@@ -137,6 +142,31 @@ def _period_scopes(account, index, providers, explained, today_start_ms, month_s
     return tuple(scopes), tuple(notes), account_unknown, tuple(provider_notes), tuple(estimated_scopes)
 
 
+@dataclass(frozen=True)
+class AccountPeriodHistory:
+    """Immutable indexed history, rebound to current native observations at publication."""
+
+    index: PeriodCCostIndex
+    catalog: PricingCatalog
+    observed_start_ms: int | None
+
+    def project(self, accounts, *, now_ms, today_start_ms, month_start_ms, timezone_id, workday_calendar):
+        rows = account_projections(accounts, (), self.catalog, now_ms=now_ms,
+            today_start_ms=today_start_ms, month_start_ms=month_start_ms, timezone_id=timezone_id,
+            workday_calendar=workday_calendar, period_index=self.index, watch=True,
+            observed_start_ms=self.observed_start_ms)
+        required_start = history_start(accounts, today_start_ms, now_ms)
+        if self.observed_start_ms is not None and self.observed_start_ms <= required_start:
+            return rows
+        pending = []
+        for row in rows:
+            empty_labels = {component.label for component in row.account.quotas
+                            if (window := quota_window(component, now_ms)) is not None and window[0] == window[1]}
+            pending.append(replace(row, ccost_scopes=tuple(
+                (name, cost if name in empty_labels else None) for name, cost in row.ccost_scopes)))
+        return tuple(pending)
+
+
 class WatchAccountProjection:
     """Native account publication reuses unchanged local accounting, never source I/O."""
 
@@ -149,6 +179,7 @@ class WatchAccountProjection:
         self._period_index: PeriodCCostIndex | None = None
         self._period_entries: tuple[TraceEntry, ...] | None = None
         self._period_catalog: PricingCatalog | None = None
+        self.history: AccountPeriodHistory | None = None
 
     def project(self, accounts: Sequence[AccountSnapshot], entries: tuple[TraceEntry, ...], catalog: PricingCatalog, *,
                 now_ms: int, day_start_ms: int, month_start_ms: int, timezone_id: str,
@@ -165,11 +196,11 @@ class WatchAccountProjection:
             self._period_index = PeriodCCostIndex(period_entries, catalog.reference_valuation)
             self._period_entries, self._period_catalog = period_entries, catalog
         assert self._local is not None
+        self.history = AccountPeriodHistory(self._period_index, catalog, observed_start_ms)
         projection, today = self._local
-        native = account_projections(accounts, (), catalog, now_ms=now_ms, today_start_ms=day_start_ms,
-                                     month_start_ms=month_start_ms, timezone_id=timezone_id,
-                                     workday_calendar=workday_calendar, period_index=self._period_index, watch=True,
-                                     observed_start_ms=observed_start_ms)
+        native = self.history.project(accounts, now_ms=now_ms, today_start_ms=day_start_ms,
+                                      month_start_ms=month_start_ms, timezone_id=timezone_id,
+                                      workday_calendar=workday_calendar)
         return replace(projection, accounts=native, now_ms=now_ms), today
 
 

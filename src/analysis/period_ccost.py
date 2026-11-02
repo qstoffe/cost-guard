@@ -35,12 +35,22 @@ def usage_provider(provider: str) -> str:
 
 def quota_window(component: QuotaComponent, now_ms: int) -> tuple[int, int, str] | None:
     duration = component.duration_seconds
-    if not duration or duration <= 0 or (component.scope == "model" and not component.model_id):
+    if (not duration or duration <= 0 or component.scope not in {"account", "model"}
+            or (component.scope == "model" and not component.model_id)):
         return None
+    if component.origin != "provider_native":
+        return None
+    if component.window_active is False:
+        if (component.reset_at_ms is None and component.used in (None, 0)
+                and component.remaining_fraction in (None, 1)
+                and not (component.remaining is not None and component.limit is not None
+                         and component.remaining < component.limit)):
+            # An explicitly empty period has no historical interval. The empty
+            # half-open range cannot pick up requests even at the observation time.
+            return now_ms, now_ms, "provider-confirmed empty window"
+        return None  # Inactive plus a reset/nonzero usage is contradictory evidence.
     if component.reset_at_ms and component.reset_at_ms - duration * 1000 <= now_ms < component.reset_at_ms:
         return component.reset_at_ms - duration * 1000, now_ms + 1, "native reset window"
-    if component.window_active is False and not component.reset_at_ms:
-        return now_ms - duration * 1000, now_ms + 1, "observed trailing lookback; not a certified quota interval"
     return None
 
 
