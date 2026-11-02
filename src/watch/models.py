@@ -95,9 +95,7 @@ class WatchCard:
     title: str
     focal_id: str
     rows: tuple[WatchRow, ...]
-    totals: object = None
     state: str = "loading"
-    provisional: bool = False
     context_warning: object = None
 
 

@@ -216,11 +216,11 @@ class WebTerminalLifecycleTests(unittest.TestCase):
         self.terminate()
         self.capture(10_000)
         for result in old_results:
-            if result.phase in {"rows", "totals"}:
+            if result.phase == "rows":
                 self.cards.accept(result, 11_000)
         self.assertFalse(self.row(11_000).in_progress)
         self.assertEqual(2000, self.row(11_000).duration_ms)
-        self.assertFalse(self.cards.project(11_000)[0][0].totals.rate_provisional)
+        self.assertEqual(1, len(self.cards.project(11_000)[0][0].rows))
 
     def test_omitted_terminal_evidence_does_not_resurrect_same_attempt_but_later_work_can(self):
         self.unfinished()

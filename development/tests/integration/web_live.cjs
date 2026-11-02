@@ -17,7 +17,7 @@ class Node {
   contains(child) { return child === this || this.children.some(c => c.contains(child)); }
   querySelectorAll(tag) { return this.children.flatMap(c => [...(c.tag === tag ? [c] : []), ...c.querySelectorAll(tag)]); }
   getBoundingClientRect() { return {top: 100}; }
-  setAttribute() {}
+  setAttribute(name, value) { this[name] = value; }
   addEventListener(kind, fn) { this.events[kind] = fn; }
 }
 async function main() {
@@ -75,8 +75,7 @@ async function main() {
   vm.runInContext(fs.readFileSync('src/web/assets/watch.js', 'utf8'), context);
   vm.runInContext("globalThis.state = {pages: {}, connection: 'Live connected.'}; ReportView.renderLive(parent, example, state)", context);
   assert.match(context.parent.textContent, /Earlier Prompts/);
-  assert.match(context.parent.textContent, /Session Total C Cost/);
-  assert.match(context.parent.textContent, /Session Total Duration/);
+  assert.ok(!/Session Total|provisional/.test(context.parent.textContent));
   assert.ok(!/Run CCost|Token Mix|not full session|Observation details|Unaccounted usage|Watch accounts/.test(context.parent.textContent));
   assert.ok(context.parent.textContent.includes(input.view.active_cards[0].title));
   function contains(node, tag) { return node.tag === tag || node.children.some(c => contains(c, tag)); }
@@ -102,7 +101,7 @@ async function main() {
   assert.equal(calls, beforeUnits, 'switching is not acquisition');
   assert.ok(!firstCard.body.textContent.includes('Running at snapshot'));
   assert.deepEqual(firstCard.root.querySelectorAll('th').map(node => node.textContent),
-    ['Date / Time', 'Prompt', 'Model', 'Effort', 'CCost', 'Model Calls', 'Duration', 'Δ Context', 'Context']);
+    ['Started', 'Prompt', 'Model', 'Effort', 'CCost', 'Model Calls', 'Duration', 'Δ Ctx', 'Context']);
   assert.equal(watch.earlier.open || false, false);
   // Independent keyed cards, no filter/pager or global cap.
   const multiple = JSON.parse(JSON.stringify(input));
@@ -115,7 +114,7 @@ async function main() {
   vm.runInContext('ReportView.renderLive(parent, example, state)', context);
   assert.equal(context.parent.querySelectorAll('table').length, 2);
   assert.equal(promptRows()[0], firstRow); assert.equal(firstRow.children[0], firstCell);
-  assert.ok(context.parent.textContent.includes('Aborted · quota limit'));
+  assert.ok(context.parent.querySelectorAll('tr').some(row => /Aborted · quota limit/.test(row['aria-label'])));
   assert.equal(context.parent.querySelectorAll('input').length, 0);
   assert.equal(context.parent.querySelectorAll('button').length, 0);
   // A running update cannot destroy selected text; latest data applies on a later tick.

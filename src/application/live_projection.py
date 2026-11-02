@@ -16,17 +16,15 @@ def card_row(row, now_ms):
         live_context=fields(row.prompt, "watch_delta_context_tokens watch_next_context_tokens"),
         tool=None if tool is None else record(counts=tool.tool_counts, failed_count=tool.failed_count,
             running_tool=tool.running_tool, running_ms=tool.running_ms,
+            background_kinds=tool.background_kinds, background_ms=tool.background_ms,
             skills=tuple(fields(skill, "skill_id failed_count") for skill in tool.skills)))
 
 
 def card(value, now_ms):
-    totals = value.totals
     return record(session_id=value.session_id, title=value.title, focal_id=value.focal_id,
         rows=tuple(card_row(row, now_ms) for row in value.rows), state=value.state,
         context_warning=None if value.context_warning is None else fields(value.context_warning,
-            "tokens text severity multiplier cached_ccost fresh_ccost"),
-        provisional=value.provisional,
-        totals=None if totals is None else fields(totals, "total_ccost comparison_cost_complete duration_ms"))
+            "tokens text severity multiplier cached_ccost fresh_ccost"))
 
 
 def watch_accounts(value):

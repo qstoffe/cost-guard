@@ -182,7 +182,7 @@ Accounts uses the shared provider/account cards with native quota windows, known
 
 | CLI use case | Discoverable fragment route | Protected scope |
 | --- | --- | --- |
-| Global Watch | `/#/watch` (legacy `/#/live` alias) | One host-owned engine; live prompt cards, five historical sessions, full-session totals and independent account observations |
+| Global Watch | `/#/watch` (legacy `/#/live` alias) | One host-owned engine; one-prompt cards, five historical sessions and independent daily/account observations |
 | Models | `/#/models` (legacy `/#/overview`, `/#/models/all` normalize here) | Independent selectable/full and latest-version filters, exact tier-aware multi-sort, four columns and full document scrolling. Blank relative cells without completed priced prompts; unknown ratios retained. No account cards or native-rate fifth column. |
 | Accounts | `/#/accounts` | Native units/windows, Remaining/Pace, independent observations and method errors, report local-month/Today CCost and Copilot Unaccounted usage; never Watch rolling substitution |
 | Sessions | `/#/sessions`, optional `/#/sessions?limit=20` | Immediate recent-first 50-root page, including available archived history; Previous/Next links carry offset/catalog revision. Optional N/all scope is collapsed under Advanced. |
@@ -243,29 +243,38 @@ One authenticated `/api/live` watchdog runs at ten-second intervals after the pr
 
 v80.123 replaces the combined Watch table with unframed prompt cards. **Earlier
 Prompts** starts collapsed and contains five eligible distinct sessions, newest
-actual prompt start first, with their five latest actual prompts. It loads even
+actual prompt start first, with one latest actual prompt in each card. It updates even
 while collapsed, has no age/startup cutoff, excludes active/recent sessions before
-limiting, and alone has a bounded vertical scroll region. The always-visible
+limiting, and alone has a framed, padded, viewport-bounded vertical scroll region
+(at most 40% of viewport height). The always-visible
 active list uses document scrolling with no card cap, filter or pager. Concurrent
 prompts in one session get separate cards, oldest focal start first. Each card's
-focal prompt follows up to four earlier prompts from its own session.
+focal prompt is its only row, including during terminal grace.
 
-Session title alone links to that canonical Sessions route. The separate **Session
-Total C Cost** and **Session Total Duration** line covers the complete canonical
-session, not five rows or the host run: child/compaction costs remain included and
-execution intervals are unioned without double counting overlaps or idle gaps.
-Credits/USD follows Web Settings. Loading, partial/unavailable and provisional
-values stay explicit. The nine fixed columns are Date / Time (`YYYY-MM-DD HH:mm`
-in the configured timezone), Prompt, Model, Effort, CCost, Model Calls, Duration,
-Δ Context and Context (estimated next incoming context using CLI Watch semantics).
+Session title alone links to that canonical Sessions route. Watch has no session
+aggregate cost/duration or dedicated aggregate acquisition; complete-session totals
+remain available on Sessions. Canonical child/compaction/context evidence still feeds
+prompt metrics. Credits/USD follows Web Settings. Valid metrics remain visible during
+ordinary refresh; first acquisition, partial evidence and genuine failure stay explicit.
+The nine columns are Started, Prompt, Model, Effort, CCost, Model Calls, Duration,
+Δ Ctx and Context (estimated next incoming context using CLI Watch semantics).
+Started uses the real sequence and configured-timezone start: `Prompt N HH:mm` while
+active, `Prompt N YYYY-MM-DD HH:mm` in history. Prompt contains only actual preview
+text, with the full preview on hover and lifecycle state accessible on the row.
+Additional model contribution is identified on the Model field. All cells/headers
+stay one line: Prompt alone flexes without a width cap and ellipsizes long text/URLs;
+complete metric columns and a 14rem Prompt minimum pan horizontally when necessary.
 
-Running focal rows are amber. Observed success is lime, abort/error red, for
+Running focal rows and linked titles are yellow; historical/terminal titles use
+neutral heading ink. Normal activity is gold/brown, failures independently red,
+and context guidance gold/orange. Observed success is lime, abort/error red, for
 `watchRecentEventSeconds` (30 seconds by default), then the session becomes
 history-eligible when no other running/grace card remains. Old history does not
 replay completion flashes. Active cards show count-first tool/custom-skill
 summaries with five named groups and truthful other totals; native disclosures
 expand every group and retain their state/focus across updates. The longest
-running tool appears at the shared ten-second threshold and clears on completion.
+running tool appears at the shared ten-second threshold. Tool and canonical
+background/subagent lines explicitly start **Running:** and clear on completion.
 Historical cards have no activity section. Narrow tables pan horizontally.
 
 v80.124 adds one **Total Today** card immediately above subscriptions: current-local-day
@@ -293,7 +302,7 @@ The separate Accounts page retains its intended presentation.
 
 Context-price guidance appears only in each session card's conditional footer, after
 activity on active cards and after the table in history. It uses the latest valid Watch
-continuation (including hidden compaction), not a warning found among the five rows.
+continuation (including hidden compaction), not historical context from another prompt.
 Compaction removes/downgrades it, unknown/replaced contexts never revive old guidance,
 and older concurrent cards do not borrow a newer focal's warning. Approaching uses
 `thresholds.nextIctxPriceThresholdWarningPercent` (75%; zero disables approaching only);
@@ -306,7 +315,7 @@ valuation disclosure and model announcements. Exceptional host/source/offline no
 remain. No Observation details, Copilot Unaccounted usage or global warning list returns.
 
 Four isolated session workers share each session's canonical capture/analysis and
-publish recent rows before complete-total projection, independently of other
+publish coherent prompt rows without any complete-total phase, independently of other
 sessions. Generations reject superseded work; a separate bounded account-history
 lane and single detail lane cannot borrow the mutable Live service. Source capture
 and canonical analysis are still prerequisites for accurate rows, not source-level

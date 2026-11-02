@@ -30,16 +30,18 @@ def fixture():
         for root in (snapshot.root for snapshot in source.snapshots.values()):
             block, _, _ = service.build_watch_root(root)
             cards.append(WatchCard(root.session_id, "Session " + root.session_id,
-                "", tuple(WatchRow(root.session_id, root.title, row) for row in block.rows[-5:]), block, "observed"))
+                "", tuple(WatchRow(root.session_id, root.title, row) for row in block.rows[-1:]), "observed"))
         active = cards[0]
         focal = active.rows[-1]
         tool = ToolObservation(tool_counts=tuple(("long-tool-name-" + str(index), 12 - index) for index in range(7)),
             failed_count=2, skills=tuple(SkillObservation("custom-skill-" + str(index), int(index == 0)) for index in range(7)),
-            running_tool="shell-with-a-long-but-readable-name", running_ms=12000)
+            running_tool="shell-with-a-long-but-readable-name", running_ms=12000,
+            background_kinds=("subagent",), background_ms=55000)
         focal = replace(focal, prompt=replace(focal.prompt, in_progress=True,
-            watch_model="GPT model with a long readable name", watch_effort="XHigh"), marker="▶", tool=tool)
+            watch_model="GPT model with a long readable name", watch_effort="XHigh",
+            preview="Check completed behavior\nhttps://example.test/" + "unbroken" * 200), marker="▶", tool=tool)
         active = replace(active, title="Long running session · UTF-8 Å日本語 · live prompt cards",
-            focal_id=focal.prompt.event_id, rows=active.rows[:-1] + (focal,), provisional=True)
+            focal_id=focal.prompt.event_id, rows=(focal,))
         quota = service.build_watch_quota()
         return dict(state="running", view=project_live(WatchProjection("Watch", "fixture", (),
             now_ms=100_000_000, active_cards=(active,), history_cards=tuple(cards[1:]),

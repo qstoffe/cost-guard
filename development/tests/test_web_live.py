@@ -232,7 +232,7 @@ class LiveTests(unittest.TestCase):
             frame = owner.acquire_cycle().projection
             actual = tuple(row for row in frame.rows if not row.prompt.is_compaction)
             card = WatchCard(actual[0].session_id, actual[0].session_title,
-                actual[-1].prompt.event_id, actual, owner.blocks[actual[0].session_id], "observed")
+                actual[-1].prompt.event_id, actual[-1:], state="observed")
             frame = replace(frame, active_cards=(card,), cards_state="observed", history_state="observed")
             payload = {'state': 'running', 'view': project_live(frame).to_json()}
             # Identical projection, not asynchronously acquired console/browser runs.

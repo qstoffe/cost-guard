@@ -10,7 +10,7 @@ from src.analysis.token_mix import TokenMix
 from src.analysis.valuation import ComparisonCost
 from src.domain import AccountRef, AccountUsageStatus as Status, QuotaComponent
 from src.reports.watch_context import WatchContextGuidance
-from src.watch.models import WatchCard, WatchProjection, WatchRow
+from src.watch.models import SkillObservation, ToolObservation, WatchCard, WatchProjection, WatchRow
 
 
 def summary_watch():
@@ -36,10 +36,15 @@ def summary_watch():
             ccost_estimated_scopes=("today",),
             ccost_notes=("CCost today: configured local calendar day; provider-attributed estimate; not verified account/billing attribution.",)))
     item = replace(warning_prompt(PriceWarningSeverity.EXCEEDED), event_id="prompt", in_progress=True,
-        watch_model="Model", watch_effort="High")
+        watch_model="Model", watch_effort="High", prompt_number=37,
+        preview="Keep completed literally\nhttps://example.test/" + "long" * 200,
+        has_additional_model=True)
     guidance = WatchContextGuidance("prompt", 120000, "[Price threshold >100.0K exceeded]",
         PriceWarningSeverity.EXCEEDED, D("2.4"), D(2), D(12))
-    card = WatchCard("root", "Synthetic active session", "prompt", (WatchRow("root", "Session", item, "▶"),),
+    tool = ToolObservation(tool_counts=(("shell", 2), ("read", 1)), failed_count=1,
+        running_tool="shell", running_ms=41000, background_kinds=("subagent",), background_ms=55000,
+        skills=(SkillObservation("custom-skill", 1),))
+    card = WatchCard("root", "Synthetic active session", "prompt", (WatchRow("root", "Session", item, "▶", tool),),
         state="observed", context_warning=guidance)
     history = replace(card, session_id="past", title="Synthetic earlier session", focal_id="",
         rows=(WatchRow("past", "Earlier", replace(item, in_progress=False)),),

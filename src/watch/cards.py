@@ -11,7 +11,6 @@ class CardSession:
     revision: object
     generation: int
     capture: object = None
-    totals: object = None
     snapshot: object = None
     tools: dict = field(default_factory=dict)
     terminals: dict = field(default_factory=dict)
@@ -48,10 +47,11 @@ class WatchCards:
                     self.generation += 1
                     entry.revision, entry.generation = revision, self.generation
                     entry.last_ms = -1
-                    entry.latest_ms = None
+                    # Keep visible history and its coherent metrics during refresh.
+                    # Evicted captures still need fresh ranking before selection.
+                    if entry.capture is None:
+                        entry.latest_ms = None
                     entry.refresh_requested = True
-                    # No old complete total may be paired with a newer row capture.
-                    entry.totals = None
                 elif (entry.capture is not None and any(row.in_progress for row in entry.capture.rows)) or entry.state == "unavailable":
                     entry.refresh_requested = True
 
@@ -108,10 +108,6 @@ class WatchCards:
             entry.latest_ms = capture.latest_ms
             entry.last_ms = now_ms
             entry.state = "partial" if capture.retained else "observed"
-            entry.totals = None
-        elif result.phase == "totals":
-            entry.totals = (replace(result.value, comparison_cost_complete=False, duration_ms=None)
-                if entry.capture.retained else result.value)
         else:
             entry.state = "unavailable"
             entry.last_ms = now_ms
@@ -163,19 +159,14 @@ class WatchCards:
             if key not in historical and not self._focals(entry, now_ms):
                 entry.snapshot = None
                 if key not in self.workers.jobs:
-                    entry.capture = entry.totals = None
+                    entry.capture = None
 
     def _card(self, entry, focal, now_ms):
         capture = entry.capture
         if capture is None:
             return WatchCard(entry.root.session_id, entry.root.title or entry.root.session_id,
                 "", (), state=entry.state)
-        rows = capture.rows
-        if focal is not None:
-            index = next(index for index, row in enumerate(rows) if row.event_id == focal.event_id)
-            rows = rows[max(0, index - 4):index + 1]
-        else:
-            rows = rows[-5:]
+        rows = (focal,) if focal is not None else capture.rows[-1:]
         projected = []
         for row in rows:
             duration = (max(row.duration_ms or 0, now_ms - row.at_ms)
@@ -190,19 +181,13 @@ class WatchCards:
                 elapsed = max(0, tool.running_ms - RUNNING_VISIBLE_AFTER_MS + now_ms - capture.observed_at_ms)
                 show_running = row.in_progress and elapsed >= RUNNING_VISIBLE_AFTER_MS
                 tool = replace(tool, running_tool=tool.running_tool if show_running else "",
-                    running_ms=elapsed if show_running else 0)
+                    running_ms=elapsed if show_running else 0,
+                    background_kinds=row.background_kinds if row.in_progress else (),
+                    background_ms=max(0, now_ms - row.background_started_ms)
+                        if row.in_progress and row.background_kinds else 0)
             projected.append(WatchRow(capture.session_id, capture.title, row, marker, tool))
-        totals = entry.totals
-        if totals is not None and totals.rate_provisional:
-            provisional = True
-            # At capture all running intervals end at the same observation.
-            # Their union extends once, never once per concurrent prompt.
-            if totals.duration_ms is not None and not capture.retained:
-                totals = replace(totals, duration_ms=totals.duration_ms + max(0, now_ms - capture.observed_at_ms))
-        else:
-            provisional = False
         return WatchCard(capture.session_id, capture.title, focal.event_id if focal else "",
-            tuple(projected), totals, entry.state, provisional,
+            tuple(projected), entry.state,
             capture.context if (capture.context is not None and entry.state != "unavailable"
                 and (focal is None or capture.context.owner_id == focal.event_id)) else None)
 

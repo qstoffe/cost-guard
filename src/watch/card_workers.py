@@ -6,7 +6,7 @@ from threading import Event
 import time
 
 from src.pricing.base import PricingUnavailableError
-from src.reports.watch_capture import capture_rows, capture_totals
+from src.reports.watch_capture import capture_rows
 from src.sources.errors import SourceError
 from .skill_registry import active_skill_origins
 from .tools import observe_tools, RUNNING_VISIBLE_AFTER_MS
@@ -59,8 +59,6 @@ class CardWorkers:
                 is_compaction=False, now_ms=now_ms + RUNNING_VISIBLE_AFTER_MS,
                 skill_origins_by_session=origins)) for row in capture.rows)
             self._publish(root, generation, "rows", (capture, tools, snapshot), now_ms)
-            if not self.stopping.is_set():
-                self._publish(root, generation, "totals", capture_totals(service, item), now_ms)
         except (SourceError, PricingUnavailableError):
             self._publish(root, generation, "unavailable", captured_at_ms=now_ms)
         finally:

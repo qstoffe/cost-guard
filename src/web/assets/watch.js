@@ -1,5 +1,5 @@
 'use strict';
-// Keyed, unframed cards over server-owned membership, totals and lifecycle.
+// Keyed prompt cards over server-owned membership, metrics and lifecycle.
 const WatchView = (() => {
   const el = (...args) => ReportView.element(...args);
   const display = (row, key) => ReportView.display(row, key);
@@ -20,6 +20,12 @@ const WatchView = (() => {
     const node = el('details'), summary = el('summary'), list = el('div');
     node.append(summary, list);
     return {node, summary, list};
+  }
+  function fragments(target, parts) {
+    const signature = JSON.stringify(parts);
+    if (target.signature === signature || protectedNode(target)) return;
+    target.replaceChildren(...parts.map(([label, role]) => el('span', label, role)));
+    target.signature = signature;
   }
   function quotaTrack(value) {
     const quota = value.quota, summary = quota.unlimited ? 'Unlimited' : value.used_percent === '—' ? '—' : value.used_percent + ' used';
@@ -90,31 +96,30 @@ const WatchView = (() => {
     constructor() {
       this.root = el('article', undefined, 'watch-card');
       this.title = el('a'); const heading = el('h3'); heading.append(this.title);
-      this.totals = el('p', undefined, 'watch-card-totals');
       this.message = el('p', undefined, 'detail'); this.message.setAttribute('role', 'status');
       const scroll = el('div', undefined, 'watch-table-scroll');
       scroll.tabIndex = 0; scroll.setAttribute('role', 'region'); scroll.setAttribute('aria-label', 'Session prompts');
       const table = el('table', undefined, 'watch-prompt-table');
       const head = el('thead'), header = el('tr');
-      for (const name of ['Date / Time', 'Prompt', 'Model', 'Effort', 'CCost', 'Model Calls', 'Duration', 'Δ Context', 'Context']) {
+      for (const name of ['Started', 'Prompt', 'Model', 'Effort', 'CCost', 'Model Calls', 'Duration', 'Δ Ctx', 'Context']) {
         const th = el('th', name); th.scope = 'col';
         if (name === 'Context') th.title = 'Estimated next incoming context (CLI Watch)';
         header.append(th);
       }
       head.append(header); this.body = el('tbody'); table.append(head, this.body); scroll.append(table);
       this.activity = el('div', undefined, 'watch-activity');
-      this.tools = disclosure(); this.skills = disclosure(); this.running = el('p');
-      this.activity.append(this.tools.node, this.skills.node, this.running);
+      this.tools = disclosure(); this.skills = disclosure(); this.running = el('p'); this.background = el('p');
+      this.activity.append(this.tools.node, this.skills.node, this.running, this.background);
       this.warning = el('div', undefined, 'watch-context-warning');
-      this.root.append(heading, this.totals, this.message, scroll, this.activity, this.warning);
+      this.root.append(heading, this.message, scroll, this.activity, this.warning);
     }
     update(value, historical) {
       this.value = value;
       this.root.dataset.session = value.session_id;
       text(this.title, value.title || value.session_id);
       if (/^[A-Za-z0-9_-]{1,200}$/.test(value.session_id)) this.title.href = '#/sessions/' + value.session_id;
-      text(this.totals, () => `Session Total C Cost: ${value.totals ? display(value.totals, 'total_ccost') : value.state === 'unavailable' ? 'Unavailable' : 'Loading…'} · Session Total Duration: ${value.totals ? display(value.totals, 'duration_ms') : value.state === 'unavailable' ? 'Unavailable' : 'Loading…'}${value.provisional ? ' · provisional' : ''}${value.state === 'partial' ? ' · partial / retained evidence' : ''}`);
-      text(this.message, value.state === 'unavailable' ? 'Source unavailable; retained contents are not current.' : !value.rows.length ? 'Loading prompts…' : '');
+      this.title.className = !historical && value.rows.some(item => item.prompt.in_progress) ? 'watch-running-title' : '';
+      text(this.message, value.state === 'unavailable' ? 'Source unavailable; retained contents are not current.' : value.state === 'partial' ? 'Partial / retained evidence' : !value.rows.length ? 'Loading prompts…' : '');
       if (!protectedNode(this.body)) {
         const old = new Map([...this.body.children].map(node => [node.dataset.id, node]));
         reconcile(this.body, value.rows.map(item => {
@@ -124,14 +129,16 @@ const WatchView = (() => {
           if (row.signature !== signature) {
             const focal = !historical && prompt.event_id === value.focal_id;
             row.className = focal ? prompt.in_progress ? 'watch-running' : prompt.aborted || prompt.has_error ? 'watch-error' : 'watch-success' : '';
-            const outcome = prompt.in_progress ? 'Running · provisional' : prompt.aborted ? 'Aborted' : prompt.has_error ? 'Error' : prompt.completed_successfully ? 'Completed' : 'Ended';
+            const outcome = prompt.in_progress ? 'Running' : prompt.aborted ? 'Aborted' : prompt.has_error ? 'Error' : prompt.completed_successfully ? 'Completed' : 'Ended';
             const reason = !prompt.in_progress && {quota_limit: 'quota limit', rate_limit: 'rate limit',
               tool_call_limit: 'tool-call limit', step_limit: 'step limit', user: 'by user'}[prompt.abort_reason];
-            const label = el('span', `${item.marker || ''} #${prompt.prompt_number} ${prompt.preview || prompt.label || 'Prompt'}`.trim());
-            label.append(el('span', ' · ' + outcome + (reason ? ' · ' + reason : ''), 'watch-outcome'));
-            if (prompt.has_additional_model) label.append(el('span', ' · Additional model contribution', 'detail'));
+            row.setAttribute('aria-label', `Prompt ${prompt.prompt_number} · ${outcome}${reason ? ' · ' + reason : ''}`);
+            const label = el('span', prompt.preview || '');
+            label.title = prompt.preview || '';
+            const model = el('span', item.model);
+            if (prompt.has_additional_model) model.title = 'Additional model contribution included in canonical cost and calls';
             const context = display(item.live_context, 'watch_next_context_tokens');
-            const cells = [display(prompt, 'date_time'), label, item.model, item.effort,
+            const cells = [`Prompt ${prompt.prompt_number} ${display(prompt, historical ? 'date_time' : 'clock')}`, label, model, item.effort,
               () => display(prompt, 'ccost'), String(prompt.calls), display(item, 'watch_duration_ms'),
               display(item.live_context, 'watch_delta_context_tokens'), context === 'N/A' ? context : '~' + context];
             row.replaceChildren(...cells.map(value => { const cell = el('td'); cell.append(typeof value === 'object' ? value : el('span', value)); return cell; }));
@@ -151,19 +158,33 @@ const WatchView = (() => {
       const groups = [...(tool?.counts || [])].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
       const total = groups.reduce((sum, pair) => sum + pair[1], 0);
       const omitted = groups.slice(5).reduce((sum, pair) => sum + pair[1], 0);
-      text(this.tools.summary, [`${total} tool calls`, ...groups.slice(0, 5).map(([name, count]) => `${count} × ${name}`), omitted && `${omitted} × other`, tool?.failed_count && `${tool.failed_count} failed / cancelled`].filter(Boolean).join(' · '));
+      const toolParts = [[`${total} tool calls`, ''], ...groups.slice(0, 5).map(([name, count]) => [` · ${count} × ${name}`, ''])];
+      if (omitted) toolParts.push([` · ${omitted} × other`, '']);
+      if (tool?.failed_count) toolParts.push([` · ${tool.failed_count} failed / cancelled`, 'watch-activity-error']);
+      fragments(this.tools.summary, toolParts);
       const skills = tool?.skills || [];
-      const skillText = skill => skill.skill_id + (skill.failed_count ? ` (${skill.failed_count} failed)` : '');
-      text(this.skills.summary, [`${skills.length} skills`, ...skills.slice(0, 5).map(skillText), skills.length > 5 && `${skills.length - 5} other`].filter(Boolean).join(' · '));
-      for (const [target, lines, empty] of [[this.tools.list, groups.map(([name, count]) => `${count} × ${name}`), 'No tool calls'], [this.skills.list, skills.map(skillText), 'No confirmed custom skills']]) {
+      const skillParts = skill => [[skill.skill_id, ''], ...(skill.failed_count ? [[` (${skill.failed_count} failed)`, 'watch-activity-error']] : [])];
+      const summary = [[`${skills.length} skills`, '']];
+      for (const skill of skills.slice(0, 5)) summary.push([' · ', ''], ...skillParts(skill));
+      if (skills.length > 5) summary.push([` · ${skills.length - 5} other`, '']);
+      fragments(this.skills.summary, summary);
+      const toolLines = groups.map(([name, count]) => [[`${count} × ${name}`, '']]);
+      if (tool?.failed_count) toolLines.push([[`${tool.failed_count} failed / cancelled`, 'watch-activity-error']]);
+      for (const [target, lines, empty] of [[this.tools.list, toolLines, 'No tool calls'], [this.skills.list, skills.map(skillParts), 'No confirmed custom skills']]) {
         const signature = JSON.stringify(lines);
         if (target.signature !== signature && !protectedNode(target)) {
-          target.replaceChildren(...(lines.length ? lines : [empty]).map(line => el('div', line)));
+          target.replaceChildren(...(lines.length ? lines : [[[empty, '']]]).map(parts => {
+            const line = el('div'); fragments(line, parts); return line;
+          }));
           target.signature = signature;
         }
       }
-      text(this.running, tool?.running_tool ? `${tool.running_tool} · ${display(tool, 'running_ms')}` : '');
+      text(this.running, tool?.running_tool ? `Running: ${tool.running_tool} ${display(tool, 'running_ms')}` : '');
       this.running.hidden = !tool?.running_tool;
+      const kinds = tool?.background_kinds || [];
+      const background = kinds.length === 1 ? kinds[0] : new Set(kinds).size === 1 ? `${kinds.length}× ${kinds[0]}` : `${kinds.length} jobs`;
+      text(this.background, kinds.length ? `Running: ${background} ${display(tool, 'background_ms')}` : '');
+      this.background.hidden = !kinds.length;
     }
   }
   class View {
