@@ -94,6 +94,12 @@ workflows, tests and acceptance scope remain unchanged. Any observed failure or
 changed base must be investigated; no cancellation, retry or protection bypass
 is authorized. Actual final statuses belong in the PR/final delivery result.
 
+Publishing the authorized reporting-only exception note automatically superseded
+run 41527754941 through the preserved workflow `cancel-in-progress` policy. Its
+overall outcome is therefore CANCELLED, not PASS: the three completed job
+successes remain valid and ARM64 did not execute. No manual cancellation/retry
+was requested. Further reporting-head duplicates remain unverified until executed.
+
 ## Knowledge
 
 Updated current CI owner evidence at

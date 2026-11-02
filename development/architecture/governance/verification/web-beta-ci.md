@@ -107,7 +107,12 @@ merge without waiting for further duplicate checks. This is source-equivalent
 evidence, not an elapsed-time rule or protection bypass. Uncompleted final-head
 checks remain unverified and must be reported honestly; observed failures or a
 changed base still require investigation. No test/workflow/source was changed
-to avoid execution, and no queued run was cancelled or retried.
+to avoid execution, and no run was manually cancelled or retried. Publishing the
+permitted reporting-only exception note automatically superseded run 41527754941
+under the preserved `cancel-in-progress` policy: its overall outcome is CANCELLED,
+not PASS. Its three completed successes remain attributable to that head; ARM64
+did not execute. Newly triggered reporting-head checks remain separate/unverified
+until they actually complete.
 
 ## Historical evidence — FR 000410
 
