@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.129 — 2026-11-02
+
+- Web Watch: admission-order fairness prevents revision churn from starving retained running cards. Canonical termination, worker bounds, cadence and CLI behavior stay unchanged.
+
 ## v80.128 — 2026-11-02
 
 - Watch: themed tables, adjacent guidance/dividers, page-flow history, native primary quotas and quiet Today refresh/plain counts.
@@ -112,8 +116,8 @@
 
 ## v80.101 — 2026-10-28
 
-- Windows Web Beta returns immediately after delegating to hidden, separate PowerShell. Python discovery, verified host restart, tray readiness and authenticated browser handoff no longer retain the visible console. No compiler, downloaded helper or executable cache; a brief batch/minimized-window flash remains possible.
-- Bounded Python discovery probes and detached-mode error handling prevent an invisible input wait. Native failure dialogs, private allowlisted diagnostics, the visible troubleshooting fallback, pythonw report workers and shared instance/security controls remain authoritative. CLI/Watch and macOS runtime behavior are unchanged; automated native results are not physical Explorer/Finder acceptance.
+- Windows Web Beta delegates to hidden PowerShell: bounded Python discovery, verified restart/tray readiness and authenticated browser handoff release the console. No compiler/downloaded helper/executable cache; a brief window flash remains possible.
+- Detached errors avoid invisible input waits. Native dialogs, private allowlisted diagnostics, visible troubleshooting, pythonw reports and instance/security guards remain. CLI/Watch/macOS unchanged; automated native proof is not physical Explorer/Finder acceptance.
 
 ## v80.100 — 2026-10-28
 

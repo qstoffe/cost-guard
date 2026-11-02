@@ -361,7 +361,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.128 (2026-11-02):** Watch: themed tables, natural history, native quotas, quiet Today/plain counts. [Web Beta](docs/web-beta.md).
+**v80.129 (2026-11-02):** Web Watch: fair capture admission under revision churn. [Web Beta](docs/web-beta.md).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

@@ -14,7 +14,7 @@ class CardSession:
     snapshot: object = None
     tools: dict = field(default_factory=dict)
     terminals: dict = field(default_factory=dict)
-    last_ms: int = -1
+    admission_order: int = 0
     state: str = "loading"
     latest_ms: int | None = None
     refresh_requested: bool = True
@@ -46,7 +46,6 @@ class WatchCards:
                 if entry.revision != revision:
                     self.generation += 1
                     entry.revision, entry.generation = revision, self.generation
-                    entry.last_ms = -1
                     # Keep visible history and its coherent metrics during refresh.
                     # Evicted captures still need fresh ranking before selection.
                     if entry.capture is None:
@@ -106,11 +105,9 @@ class WatchCards:
                         entry.terminals.pop(key, None)
             entry.capture, entry.tools, entry.snapshot = capture, dict(tools), snapshot
             entry.latest_ms = capture.latest_ms
-            entry.last_ms = now_ms
             entry.state = "partial" if capture.retained else "observed"
         else:
             entry.state = "unavailable"
-            entry.last_ms = now_ms
 
     def _focals(self, entry, now_ms):
         if entry.capture is None:
@@ -143,7 +140,7 @@ class WatchCards:
             due = entry.refresh_requested or (key in historical and entry.capture is None)
             needed = busy or entry.latest_ms is None or key in historical
             if due and needed and key not in self.workers.jobs:
-                (active if busy else history).append((entry.last_ms, key, entry))
+                (active if busy else history).append((entry.admission_order, key, entry))
         active.sort(key=lambda item: (item[0], item[1]))
         history.sort(key=lambda item: (item[0], item[1]))
         while (active or history) and len(self.workers.jobs) < self.workers.limit:
@@ -154,6 +151,9 @@ class WatchCards:
                     tuple(row.event_id for row in self._focals(entry, now_ms))):
                 entry.refresh_requested = False
                 self.turn += 1
+                # Revisions and rejected results must not reset queue position:
+                # otherwise changing early IDs can starve a stopped running card.
+                entry.admission_order = self.turn
         # Retain full source captures only for cards that can currently appear.
         for key, entry in self.sessions.items():
             if key not in historical and not self._focals(entry, now_ms):

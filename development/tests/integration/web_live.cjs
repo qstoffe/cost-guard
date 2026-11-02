@@ -20,6 +20,43 @@ class Node {
   setAttribute(name, value) { this[name] = value; }
   addEventListener(kind, fn) { this.events[kind] = fn; }
 }
+function lifecycle(context, input) {
+  vm.runInContext(fs.readFileSync('src/web/assets/render.js', 'utf8'), context);
+  vm.runInContext(fs.readFileSync('src/web/assets/watch.js', 'utf8'), context);
+  context.parent = new Node('div');
+  context.state = {connection: 'Live connected.'};
+  let frozenDuration;
+  for (const [index, view] of input.lifecycle.entries()) {
+    context.example = {state: 'running', view};
+    vm.runInContext('ReportView.renderLive(parent, example, state)', context);
+    const watch = context.state.watch;
+    const card = [...watch.cards.values()].find(card => card.value.session_id === input.stopped);
+    assert.ok(card);
+    const row = card.body.children[0];
+    if (!index) {
+      assert.equal(row.className, 'watch-running');
+      assert.match(row['aria-label'], /Running/);
+    } else {
+      assert.notEqual(row.className, 'watch-running');
+      assert.ok(!row['aria-label'].includes('Running'));
+      if (index === 1) {
+        assert.equal(card.running.hidden, true);
+        assert.equal(card.background.hidden, true);
+      } else assert.equal(card.activity.hidden, true);
+      const duration = row.children[6].textContent;
+      if (index === 1) frozenDuration = duration;
+      else assert.equal(duration, frozenDuration);
+      assert.equal(watch.active.children.includes(card.root), index === 1);
+      assert.equal(watch.history.children.includes(card.root), index === 2);
+    }
+  }
+  context.state = {connection: 'Live connected.'};
+  vm.runInContext('ReportView.renderLive(parent, example, state)', context);
+  const reloaded = [...context.state.watch.cards.values()].find(card => card.value.session_id === input.stopped);
+  assert.notEqual(reloaded.body.children[0].className, 'watch-running');
+  assert.equal(reloaded.body.children[0].children[6].textContent, frozenDuration);
+  console.log('web lifecycle passed');
+}
 async function main() {
   const streams = [], rendered = [], statuses = [];
   let selected = null;
@@ -37,8 +74,9 @@ async function main() {
         emit(kind, number, data, instance = 'instance') {
           this.listeners[kind]({lastEventId: instance + ':' + number, data: JSON.stringify(data)});
         }};
-      streams.push(source); return source;
-    }});
+       streams.push(source); return source;
+     }});
+  if (input.lifecycle) { lifecycle(context, input); return; }
   vm.runInContext(fs.readFileSync('src/web/assets/live.js', 'utf8'), context);
   vm.runInContext('LiveConnection.connect(api, update, status, sourceFactory)', context);
   await turns();

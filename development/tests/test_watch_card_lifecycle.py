@@ -1,7 +1,11 @@
 """Persisted V2 lifecycle through isolated Web capture, retention and export."""
 import copy
+from concurrent.futures import Future
 from dataclasses import replace
+import json
 from pathlib import Path
+import shutil
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -15,7 +19,7 @@ from src.sources.opencode_v2 import OpenCodeV2Source
 from src.watch.card_workers import CardWorkers
 from src.watch.cards import WatchCards
 from src.watch.models import WatchProjection
-from src.watch.observers import CatalogObservation
+from src.watch.observers import CatalogObservation, observe_catalog
 from src.watch.tracker import WatchRowTracker
 from src.sources.errors import SourceUnavailableError
 
@@ -235,6 +239,109 @@ class WebTerminalLifecycleTests(unittest.TestCase):
         self.native.messages["ses_current"].append(newer)
         self.capture(22_000)
         self.assertTrue(self.row(22_000).in_progress)
+
+    def test_revision_churn_admits_stopped_root_through_source_capture_and_export(self):
+        original_session = copy.deepcopy(self.native.sessions[0])
+        original_messages = copy.deepcopy(self.native.messages["ses_current"])
+        for stop in ("quota", "interrupted", "abandoned-continuation"):
+            with self.subTest(stop=stop):
+                self.native.sessions = [copy.deepcopy(original_session) for _ in range(6)]
+                self.native.messages = {"ses_current": copy.deepcopy(original_messages)}
+                assistant = self.unfinished({"quota": "absent", "interrupted": "zero"}.get(stop, "positive"))
+                if stop == "abandoned-continuation":
+                    assistant.update(finish="tool-calls", time={"created": 3100, "completed": 4000})
+                messages = copy.deepcopy(self.native.messages["ses_current"][:2])
+                self.native.messages = {}
+                for index, session in enumerate(self.native.sessions):
+                    session["id"] = f"ses_{index}"
+                    self.native.messages[session["id"]] = copy.deepcopy(messages)
+                self.native.active = {session["id"]: {"type": "running"} for session in self.native.sessions}
+                cards = WatchCards(self.workers)
+                cards.catalog(observe_catalog(self.source))
+                for entry in cards.sessions.values():
+                    self.workers._capture(entry.root, entry.generation, 5000, None, ())
+                for result in self.workers.drain():
+                    if result.phase != "timing":
+                        cards.accept(result, 5000)
+                stopped = "ses_5"
+                initial_active, initial_history, state = cards.project(5000)
+                initial = project_live(WatchProjection("Watch", "fixture", (), now_ms=5000,
+                    active_cards=initial_active, history_cards=initial_history, cards_state=state)).to_json()
+                self.native.active.pop(stopped)
+                if stop != "abandoned-continuation":
+                    terminal = {"id": "idle_stopped", "type": "idle", "time": {"created": 6000},
+                        "outcome": "failed" if stop == "quota" else "interrupted"}
+                    if stop == "quota":
+                        terminal["error"] = {"code": "quota_exceeded"}
+                    self.native.messages[stopped].append(terminal)
+                cli_service = self.service(70_000)
+                root = cards.sessions[stopped].root
+                block, _, _ = cli_service.build_watch_root(root, force_fresh=True)
+                expected, = block.rows
+                self.assertFalse(expected.in_progress)
+                self.assertFalse(expected.completed_successfully)
+                scheduled = []
+                def submit(root, generation, now, previous, focal_ids):
+                    self.workers.jobs[root.session_id] = Future()
+                    scheduled.append((root, generation, now, previous, focal_ids))
+                    return True
+                self.workers.limit = 4
+                with patch.object(self.workers, "submit", side_effect=submit):
+                    for cycle in range(3):
+                        now = 70_000 + cycle * 10_000
+                        for session in self.native.sessions[:5]:
+                            session["time"]["updated"] += 1
+                        cards.catalog(observe_catalog(self.source))
+                        cards.tick(now)
+                        for args in scheduled:
+                            self.workers._capture(*args)
+                            self.workers.jobs[args[0].session_id].set_result(None)
+                        scheduled.clear()
+                        for result in self.workers.drain():
+                            if result.phase != "timing":
+                                cards.accept(result, now)
+                actual, = [row.prompt for card in cards.project(90_000)[0] + cards.project(90_000)[1]
+                    if card.session_id == stopped for row in card.rows]
+                self.assertEqual(expected.in_progress, actual.in_progress)
+                self.assertEqual(expected.abort_reason, actual.abort_reason)
+                self.assertEqual((expected.calls, expected.ccost), (actual.calls, actual.ccost))
+                self.assertFalse(actual.completed_successfully)
+                self.assertEqual(expected.duration_ms, actual.duration_ms)
+                terminal_active, terminal_history, state = cards.project(90_000)
+                terminal = project_live(WatchProjection("Watch", "fixture", (), now_ms=90_000,
+                    active_cards=terminal_active, history_cards=terminal_history, cards_state=state)).to_json()
+                entry = cards.sessions[stopped]
+                self.workers._capture(entry.root, entry.generation, 100_000, entry.snapshot, ())
+                for result in self.workers.drain():
+                    if result.phase != "timing":
+                        cards.accept(result, 100_000)
+                active, history, state = cards.project(130_000)
+                self.assertNotIn(stopped, [card.session_id for card in active])
+                wire = project_live(WatchProjection("Watch", "fixture", (), now_ms=130_000,
+                    active_cards=active, history_cards=history, cards_state=state)).to_json()
+                exported, = [row["prompt"] for card in wire["history_cards"]
+                    if card["session_id"] == stopped for row in card["rows"]]
+                self.assertFalse(exported["in_progress"])
+                self.assertEqual(actual.duration_ms, self.row_for(cards, stopped, 130_000).duration_ms)
+                cold = WatchCards(self.workers)
+                cold.catalog(observe_catalog(self.source))
+                cold_entry = cold.sessions[stopped]
+                self.workers._capture(cold_entry.root, cold_entry.generation, 130_000, None, ())
+                for result in self.workers.drain():
+                    if result.phase != "timing":
+                        cold.accept(result, 130_000)
+                self.assertEqual(actual, self.row_for(cold, stopped, 130_000))
+                detail, _ = SessionHistory().acquire(self.service(130_000), stopped)
+                self.assertFalse(detail.prompt_blocks[0].rows[-1].in_progress)
+                if shutil.which("node"):
+                    result = subprocess.run([shutil.which("node"), "development/tests/integration/web_live.cjs"],
+                        input=json.dumps(dict(lifecycle=[initial, terminal, wire], stopped=stopped)),
+                        text=True, capture_output=True, timeout=15)
+                    self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+
+    def row_for(self, cards, session_id, now):
+        active, history, _ = cards.project(now)
+        return next(row.prompt for card in active + history if card.session_id == session_id for row in card.rows)
 
 
 if __name__ == "__main__":

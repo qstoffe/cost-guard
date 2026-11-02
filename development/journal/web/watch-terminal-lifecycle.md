@@ -1,5 +1,47 @@
 # Web Watch terminal reconciliation
 
+## Follow-up: capture starvation under revision churn
+
+2026-11-02 · FR 000551 · v80.129
+
+At v80.128 (`d57760e7cd9c9070c3b9ee20f13fd2155f0ba620`), six observed
+running roots and four capture slots exposed a separate post-FR000546 defect.
+Catalog changes reset `CardSession.last_ms` to -1. Constantly changing early
+session IDs repeatedly won the timestamp/ID sort; later retained running cards
+never acquired fresh lifecycle evidence, even when their own revision stabilized.
+The first bounded scheduler regression never admitted its last two roots.
+
+Real current-V2 HTTP fixtures then reproduced CLI=False/Web=True for a stopped
+sixth root while the other five roots changed revisions: quota failure without
+usage, interruption with zero usage, and an abandoned `tool-calls` continuation
+without an idle/final/abort row after the existing continuation grace elapsed.
+Each went through isolated capture, retained history, cards and immutable export;
+the equivalent fresh CLI/report root was already not running. These are new
+failing regressions, not a restatement of the earlier quota fixture.
+
+`watch/cards.py` now orders eligible work by successful admission turn. Revision
+changes, failures and rejected generations cannot reset that queue position.
+The existing active/history rotation and four-worker cap remain. This changes
+acquisition fairness only: no inactive/age/cost/quota-based retirement, canonical
+continuation change, provider loop or browser-only lifecycle filter.
+
+Regression coverage includes rejected-generation fairness, source-to-card stop
+transitions, frozen duration/known usage, once-only grace, cold reconstruction,
+Session detail and actual exported-stage JavaScript rendering/reload. Existing
+partial/outage, missing-child/idle, later-work and stale-publication protections
+remain required. Verification results belong to the task completion.
+
+The owner's exact prompt and installed Web/CLI versions remain unknown. The
+ordinary checkout's read-only Web diagnostics returned `not_observed`; that is
+not evidence of an outdated or stopped host. The baseline real V2 cards/detail
+probe passed (first rows 3.33s, one owner/two streams), demonstrating liveness,
+not reproduction of the owner's incident. A probe interrupted by the OpenCode
+server restart has no verification result. The foreground Decision Delegate
+directed bounded starvation characterization and then normal delivery; it
+authorized no scope/test exception or desktop interaction.
+
+## Original terminal reconciliation
+
 2026-11-02 · FR 000546 · v80.125
 
 ## Reproduced mechanisms
