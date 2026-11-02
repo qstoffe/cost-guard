@@ -2,16 +2,15 @@
 
 ## v80.123 — 2026-11-02
 
-- Web Watch: unframed live prompt cards, five eligible historical sessions with five prompts each, canonical complete-session CCost/duration and focal tool/skill disclosures. Bounded isolated capture stages publish rows before full totals; account history/detail work no longer blocks Live. Watch-only report/account chrome is removed; CLI and Accounts remain unchanged.
+- Web Watch: live cards, five-session/five-prompt history, full totals and tool/skill disclosures; isolated progressive capture and quieter Watch-only chrome. CLI/Accounts unchanged.
 
 ## v80.122 — 2026-11-02
 
-- Windows Web: recover legacy stale records after reboot/PID reuse using the existing native lifetime lock, without contacting or stopping unrelated processes. Ambiguous ownership remains protected; console/dialog and Diagnostics retain specific bounded startup causes and proven-stale recovery.
+- Windows Web: lifetime-lock recovery of proven stale reboot/PID records; ambiguous identities and unrelated processes stay protected. Console/dialog/Diagnostics retain specific startup causes.
 
 ## v80.121 — 2026-11-02
 
-- Models: two filters, ordinary single-column sorting and Shift multi-sort, without a separate mode button.
-- Windows Beta Web: one fixed startup label and single-cell spinner; no PowerShell progress panel or successful stage transcript. Redirected output and actionable failures remain plain; host/browser handoff is unchanged.
+- Models: two filters and Shift multi-sort, no extra mode button. Windows Web: fixed label/single-cell spinner, no progress panel; plain redirected/errors and unchanged detached handoff.
 
 ## v80.120 — 2026-11-02
 
@@ -64,13 +63,11 @@
 
 ## v80.108 — 2026-10-28
 
-- Quota bars, percentages and native fractions now show Used / Total consistently in CLI Normal/Watch and Web Accounts/Watch. Remaining pace is unchanged; unlimited native usage stays textual, without a fabricated capacity.
-- Watch adds a compact warning for 72 hours after the first visible display, capped at 60 days after the verified implementation merge. Hidden acquisition and redirected output never start the personal timer; CCost definitions remain centralized.
+- CLI/Web quota displays use Used / Total; remaining pace and textual unlimited usage stay unchanged. Watch warns for 72h after first visible display, capped at 60 days after verified merge; hidden/redirected work does not start the timer. CCost definitions remain centralized.
 
 ## v80.107 — 2026-10-28
 
-- Web Beta keeps healthy authenticated SSE streams open instead of forcing a reconnect every sixty seconds. HTTP probes cannot label an interrupted stream healthy; recent healthy tab returns no longer invent a reconnecting state. Session expiry, identity changes, source outages and terminal shutdown remain distinct.
-- Healthy status is one compact header label, without a sticky full-width banner. Actionable connection notices remain visible with expandable observation timestamps and retained/frozen-data context.
+- Web SSE stays open while healthy; HTTP health cannot hide stream loss, and healthy tab returns do not invent reconnects. Expiry/identity/outage/shutdown stay distinct. Compact healthy status replaces the sticky banner; actionable notices retain timestamps and frozen-data context.
 
 ## v80.106 — 2026-10-28
 
@@ -79,14 +76,11 @@
 
 ## v80.105 — 2026-10-28
 
-- Relative CCost introduced 100-slot model/publisher/global prompt-weight blends independent of dashboard usage, shared by exact tiers and warnings (reversed in v80.111).
-- CLI/Web historical Token Mix added publisher rows: distinct prompts, pooled shares and original request CCost; shared Python projection, no JavaScript valuation.
-- Revision-keyed compact samples reuse stable history without deep hydrated roots; cold scans may traverse available history, never reconstruct deletions. Accounts, quotas, Watch usage and explicit Web history capture unchanged.
+- Relative CCost added 100-slot model/publisher/global prompt-weight blends for tiers/warnings (reversed in v80.111). Historical Token Mix added publisher prompts/shares/request CCost via Python, not browser valuation. Revision-keyed samples reuse history; cold scans cannot reconstruct deletions. Accounts/quotas/Watch/explicit capture unchanged.
 
 ## v80.104 — 2026-10-28
 
-- Renamed all eight Windows/macOS report, Watch, Web Beta and Diagnostics entrypoints to hyphenated filenames. Update bookmarks and shortcuts to the new names; no old-name aliases ship.
-- Updated crash guidance, launcher tests, source validation rules and macOS Finder helper fingerprint inputs. Launcher contents, console ownership, checkout-relative arguments and macOS executable modes are unchanged.
+- Eight Windows/macOS report/Watch/Web/Diagnostics launchers use hyphenated names, no aliases; update shortcuts. Guidance/tests/validation/Finder fingerprints follow. Contents, console ownership, relative arguments and executable modes are unchanged.
 
 ## v80.103 — 2026-10-28
 
