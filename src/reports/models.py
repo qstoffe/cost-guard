@@ -200,6 +200,7 @@ class AccountProjection:
     ccost_account_unknown: bool = False
     unaccounted_usage: Decimal | None = None
     provider_ccost_notes: tuple[tuple[int, str, ComparisonCost], ...] = ()
+    ccost_estimated_scopes: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

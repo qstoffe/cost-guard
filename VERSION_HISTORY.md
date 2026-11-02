@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.124 — 2026-11-02
+
+- Web Watch: aligned Today/primary-quota subscription cards, retained full-day cost/prompt count/token mix, and current-context price guidance in each session footer. CLI/Accounts scopes unchanged.
+
 ## v80.123 — 2026-11-02
 
 - Web Watch: live cards, five-session/five-prompt history, full totals and tool/skill disclosures; isolated progressive capture and quieter Watch-only chrome. CLI/Accounts unchanged.

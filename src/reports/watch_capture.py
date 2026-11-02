@@ -9,6 +9,7 @@ from src.reports.sampling import AnalyzedRoot
 from src.reports.session_history import retain_snapshot
 from .prompt_rows import PromptRowProjector
 from .prompts import _coherent_watch_deltas
+from .watch_context import card_context
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,6 +21,7 @@ class WatchCapture:
     observed_at_ms: int
     retained: bool = False
     observed_ids: frozenset = frozenset()
+    context: object = None
 
 
 def capture_rows(service, root, previous=None, focal_ids=()):
@@ -41,7 +43,8 @@ def capture_rows(service, root, previous=None, focal_ids=()):
         subtask_ids=frozenset(record.prompt_id for record in records if record.prompt_kind == "subtask"))
     return WatchCapture(root.session_id, root.title or root.session_id, tuple(rows),
         max((record.prompt_time_ms for record in records), default=0), service.now_ms, retained,
-        frozenset(event.event_id for event in fresh.events)), item
+        frozenset(event.event_id for event in fresh.events),
+        card_context(projector, root.session_id, service._threshold_multiplier)), item
 
 
 def capture_totals(service, item):

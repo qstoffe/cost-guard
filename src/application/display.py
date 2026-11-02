@@ -159,6 +159,16 @@ def roles(values):
 def history_tokens(values, timezone_id):
     """CLI prompt clocks/context guidance and historical mix cells from frozen facts."""
     tokens = {}
+    if "severity" in values and "multiplier" in values:
+        multiplier = decimal(values["multiplier"])
+        if multiplier is not None:
+            ratio = f"{multiplier.quantize(Decimal('0.1'), rounding=ROUND_HALF_UP):f}".removesuffix(".0")
+            tokens["warning_cost"] = f"({ratio}x more expensive)"
+        elif values.get("cached_ccost") is not None and values.get("fresh_ccost") is not None:
+            tokens["warning_cost"] = "(Next Ictx CCost " + ccost_range(
+                decimal(values["cached_ccost"]), decimal(values["fresh_ccost"])) + ")"
+        else:
+            tokens["warning_cost"] = ""
     if "at_ms" in values:
         tokens["clock"] = format_local_timestamp(values["at_ms"], timezone_id, "%H:%M")
         tokens["date_time"] = format_local_timestamp(values["at_ms"], timezone_id, "%Y-%m-%d %H:%M")

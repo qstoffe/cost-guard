@@ -6,6 +6,7 @@ from pathlib import Path
 import sys
 import time
 import traceback
+from decimal import Decimal
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
@@ -21,6 +22,7 @@ def main():
     parser.add_argument("--reports", action="store_true", help="Also capture finite reports beside Live and cancel deep history.")
     parser.add_argument("--models", action="store_true", help="Capture only task-focused Normal/full Models snapshots beside Live.")
     parser.add_argument("--watch-cards", action="store_true", help="Wait for independently published real Watch rows and full totals.")
+    parser.add_argument("--daily", action="store_true", help="Wait for coherent full-day cost, initiating prompts and category prices.")
     args = parser.parse_args()
     owners = []
     csrf = None
@@ -99,6 +101,27 @@ def main():
                 time.sleep(.25)
             else:
                 raise RuntimeError('probe_watch_cards_timeout')
+        if args.daily:
+            deadline = time.monotonic() + 120
+            while time.monotonic() < deadline:
+                state, _ = get('/api/live', cookie=cookie)
+                live = state['values'].get('live', {})
+                daily = (live.get('view') or {}).get('daily_usage')
+                if daily is not None:
+                    mix, total = daily['mix'], daily['total']
+                    assert mix['request_count'] == total['observed_requests']
+                    assert mix['priced_requests'] == total['priced_requests']
+                    assert sum(Decimal(cost) for cost in mix['costs']) == Decimal(total['known_ccost'])
+                    assert isinstance(daily['prompt_count'], int) and daily['prompt_count'] >= 0
+                    print(json.dumps(dict(daily='ok', requests=mix['request_count'], prompts=daily['prompt_count'],
+                        prompt_count_complete=daily['prompt_count_complete'], cost_complete=total['complete'],
+                        category_costs_reconcile=True, seconds=round(time.monotonic() - started, 3))))
+                    break
+                if live.get('state') in {'failed', 'internal_error'}:
+                    raise RuntimeError('probe_daily_failed')
+                time.sleep(.25)
+            else:
+                raise RuntimeError('probe_daily_timeout')
         for _ in range(2):
             connection = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=3)
             connection.request('GET', '/api/events', headers={'Cookie': cookie,

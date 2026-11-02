@@ -9,6 +9,7 @@ from src.reports.models import AccountsQuotasProjection, PromptProjection
 from src.analysis.token_mix import TokenMix
 from src.analysis.valuation import ComparisonCost
 from src.analysis.context import PriceWarningSeverity
+from src.analysis.daily_usage import DailyUsage
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,6 +98,7 @@ class WatchCard:
     totals: object = None
     state: str = "loading"
     provisional: bool = False
+    context_warning: object = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -127,3 +129,5 @@ class WatchProjection:
     history_cards: tuple[WatchCard, ...] = ()
     cards_state: str | None = None
     history_state: str = "loading"
+    daily_usage: DailyUsage | None = None
+    daily_state: str = "loading"

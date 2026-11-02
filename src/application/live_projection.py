@@ -2,6 +2,7 @@
 from .contracts import ObjectValue, record
 from .projection import account, comparison, fields, prompt, token_mix
 from .display import with_display
+from .watch_accounts import watch_account
 
 
 def card_row(row, now_ms):
@@ -13,7 +14,6 @@ def card_row(row, now_ms):
         effort=row.prompt.watch_effort or "N/A", marker=row.marker,
         watch_duration_ms=row.prompt.duration_ms,
         live_context=fields(row.prompt, "watch_delta_context_tokens watch_next_context_tokens"),
-        context_warning=row.prompt.watch_next_context_warning,
         tool=None if tool is None else record(counts=tool.tool_counts, failed_count=tool.failed_count,
             running_tool=tool.running_tool, running_ms=tool.running_ms,
             skills=tuple(fields(skill, "skill_id failed_count") for skill in tool.skills)))
@@ -23,6 +23,8 @@ def card(value, now_ms):
     totals = value.totals
     return record(session_id=value.session_id, title=value.title, focal_id=value.focal_id,
         rows=tuple(card_row(row, now_ms) for row in value.rows), state=value.state,
+        context_warning=None if value.context_warning is None else fields(value.context_warning,
+            "tokens text severity multiplier cached_ccost fresh_ccost"),
         provisional=value.provisional,
         totals=None if totals is None else fields(totals, "total_ccost comparison_cost_complete duration_ms"))
 
@@ -30,10 +32,7 @@ def card(value, now_ms):
 def watch_accounts(value):
     if value is None:
         return None
-    allowed = {"observation", "ccost_scopes", "pace", "ccost_notes", "ccost_account_unknown"}
-    return record(now_ms=value.now_ms, accounts=tuple(
-        ObjectValue(tuple((name, field) for name, field in account(item).fields if name in allowed))
-        for item in value.accounts))
+    return record(now_ms=value.now_ms, accounts=tuple(watch_account(item) for item in value.accounts))
 
 
 def project_live(value, timezone_id="UTC", ccost_display_unit="credits"):
@@ -70,6 +69,11 @@ def project_live(value, timezone_id="UTC", ccost_display_unit="credits"):
         run_total=token_mix(value.run_total), token_mix=token_mix(value.token_mix),
         run_ccost=None if value.run_total.costs is None else sum(value.run_total.costs),
         today_total=comparison(value.today_total), today_label=value.today_label,
+        daily_usage=None if value.daily_usage is None else record(
+            day_start_ms=value.daily_usage.day_start_ms, observed_at_ms=value.daily_usage.observed_at_ms,
+            total=comparison(value.daily_usage.total), mix=token_mix(value.daily_usage.mix),
+            prompt_count=value.daily_usage.prompt_count, prompt_count_complete=value.daily_usage.prompt_count_complete),
+        daily_state=value.daily_state,
         today_pending=value.today_pending, accounts=watch_accounts(value.quota), quota_stale=value.quota_stale,
         quota_recovering_count=len(value.quota_recovering_accounts),
         recent_model_notice=value.recent_model_notice,

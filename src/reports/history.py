@@ -11,6 +11,7 @@ from src.domain.session_tree import root_activity
 from src.analysis.models import RootAnalysisBundle, TraceEntry
 from src.analysis.timezones import local_day_start_ms
 from src.analysis.period_ccost import reconcile_usage
+from src.analysis.daily_usage import prompt_attributions
 from src.sources.base import SessionSource
 
 
@@ -66,6 +67,7 @@ class WatchHistoryAcquisition:
         self._retained: dict[tuple, TraceEntry] = {}
         self._retained_publication: tuple[TraceEntry, ...] = ()
         self._stepped: set[tuple] = set()
+        self.prompt_of: dict[tuple, tuple | None] = {}
 
     def reset(self) -> None:
         self.entries_by_root.clear()
@@ -77,6 +79,7 @@ class WatchHistoryAcquisition:
         self._retained.clear()
         self._stepped.clear()
         self._retained_publication = ()
+        self.prompt_of.clear()
 
     def candidates(self, source: SessionSource, sessions: Sequence[NormalizedSession], *,
                    timezone_id: str, now_ms: int, active_root_ids: Sequence[str] = (),
@@ -86,9 +89,11 @@ class WatchHistoryAcquisition:
         if self.day_start_ms != day or self.scope_start_ms is None or start < self.scope_start_ms:
             retained = dict(self._retained)
             stepped = set(self._stepped)
+            prompts = dict(self.prompt_of)
             self.reset()
             self._retained = {key: entry for key, entry in retained.items() if start <= entry.completed_at_ms <= now_ms}
             self._stepped = {key[:3] for key in self._retained if key[3] is not None} & stepped
+            self.prompt_of = {key: value for key, value in prompts.items() if key in self._retained}
             self.day_start_ms = day
             self.scope_start_ms = start
         roots = daily_roots(sessions, self.scope_start_ms)
@@ -113,6 +118,8 @@ class WatchHistoryAcquisition:
         assert self.scope_start_ms is not None
         entries = tuple(entry for entry in bundle.trace_entries if self.scope_start_ms <= entry.completed_at_ms <= now_ms)
         self._retain(bundle.trace_entries, now_ms)
+        self.prompt_of.update((key, value) for key, value in prompt_attributions(bundle).items()
+                              if key in self._retained)
         self._dirty = self._dirty or self.entries_by_root.get(root_id) != entries
         self.entries_by_root[root_id] = entries
         if bundle.cacheable and all(entry.completed_at_ms <= now_ms for entry in bundle.trace_entries):

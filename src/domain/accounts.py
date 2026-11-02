@@ -50,6 +50,7 @@ class QuotaComponent:
     # False only when the provider proves a rolling window has not started yet
     # (no usage, hence no reset time); None means unknown.
     window_active: bool | None = None
+    primary: bool = False  # Explicit adapter-owned comparison window, never depletion-ranked.
 
     def __post_init__(self) -> None:
         if self.remaining_fraction is not None and not (0 <= self.remaining_fraction <= 1):
@@ -90,6 +91,7 @@ class AccountSnapshot:
     usage_attribution_complete: bool = False
     # Adapter-owned capacity class, independent of remaining/availability.
     capacity_kind: str = "usage_limit"  # credit, usage_limit
+    primary_quota_label: str | None = None  # Stable adapter-declared slot, including an absent window.
 
     @property
     def key(self) -> tuple[str, str, str]:

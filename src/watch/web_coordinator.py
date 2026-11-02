@@ -9,6 +9,8 @@ from dataclasses import replace
 
 from src.pricing.base import PricingUnavailableError
 from src.sources.errors import SourceError
+from src.analysis.timezones import local_day_start_ms
+from src.reports.history import WatchHistoryAcquisition
 from .card_workers import CardWorkers
 from .cards import WatchCards
 from .coordinator import WatchCoordinator, WatchCycle
@@ -26,6 +28,10 @@ class WebWatchCoordinator(WatchCoordinator):
         self.history_job = None
         self.history_due_ms = 0
         self.history_quota = None
+        self.daily_history = WatchHistoryAcquisition()
+        self.daily_usage = None
+        self.daily_failed = False
+        self.history_revision = None
         self.detail_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cost-guard-detail")
         self.detail_job = None
 
@@ -74,16 +80,17 @@ class WebWatchCoordinator(WatchCoordinator):
     def _hydrate_startup(self, roots, *, now_ms):
         return ()
 
-    def _account_history(self, sessions, snapshots, now_ms):
+    def _account_history(self, sessions, snapshots, now_ms, active_roots=()):
         service = None
         try:
             service = self.history_factory(now_ms)
-            service.enable_watch_accounts(record_evidence=False)
+            service.enable_watch_accounts(record_evidence=False, history=self.daily_history)
+            service.project_watch_accounts(snapshots)  # Establish provider period requirements before admission.
             today = WatchTodayCCost(service.timezone_id)
-            today.schedule_history(service, sessions, now_ms)
+            today.schedule_history(service, sessions, now_ms, active_root_ids=active_roots, live_root_ids=active_roots)
             while today.history_pending and not self._closed:
                 today.advance_history(service, now_ms, batch_size=1)
-            return None if self._closed else service.project_watch_accounts(snapshots)[0]
+            return None if self._closed else (service.project_watch_accounts(snapshots)[0], service.project_watch_today())
         except (SourceError, PricingUnavailableError):
             return None
         finally:
@@ -91,25 +98,37 @@ class WebWatchCoordinator(WatchCoordinator):
                 service.close_accounts()
 
     def _refresh_quota(self, observation, *, now_ms, force=False, allow_history=True, fresh_root_ids=()):
+        revision = tuple(sorted(observation.revisions.items()))
+        if revision != self.history_revision:
+            self.history_due_ms = 0
+            self.history_revision = revision
         changed = self.accounts.refresh(now_ms=now_ms)
         self.report_service.record_account_display(self.accounts.diagnostics())
         if changed or self.quota is None:
             self.quota = self.report_service.project_watch_accounts(self.accounts.snapshots)[0]
         if self.history_job is not None and self.history_job.done():
             value = self.history_job.result()
-            if value is not None:
-                self.history_quota = value
+            self.daily_failed = value is None
+            if value is not None and value[1].day_start_ms == local_day_start_ms(self.report_service.timezone_id, now_ms=now_ms):
+                self.history_quota, self.daily_usage = value
+            elif value is not None:
+                self.history_due_ms = 0
             self.history_job = None
         if self.history_job is None and now_ms >= self.history_due_ms:
             self.history_due_ms = now_ms + 60_000
             self.history_job = self.history_pool.submit(self._account_history,
-                observation.sessions, tuple(self.accounts.snapshots), now_ms)
+                observation.sessions, tuple(self.accounts.snapshots), now_ms,
+                observation.active_candidates | observation.live_candidates)
 
     def enrich_once(self):
         return WatchCycle(self.status_projection(), (), ())
 
     def _build_projection(self, *, now_ms, status="", status_active=False, scanned=False):
         self.cards.tick(now_ms)
+        day = local_day_start_ms(self.report_service.timezone_id, now_ms=now_ms)
+        if self.daily_usage is not None and self.daily_usage.day_start_ms != day:
+            self.daily_usage = self.history_quota = None
+            self.history_due_ms = 0
         active, history, state = self.cards.project(now_ms)
         frame = super()._build_projection(now_ms=now_ms, status=status,
             status_active=status_active, scanned=scanned)
@@ -118,12 +137,17 @@ class WebWatchCoordinator(WatchCoordinator):
         if self.history_quota is not None and frame.quota is not None:
             costs = {item.account.key: item for item in self.history_quota.accounts}
             accounts = tuple(replace(item, ccost_scopes=costs[item.account.key].ccost_scopes,
-                ccost_notes=costs[item.account.key].ccost_notes) if item.account.key in costs else item
+                ccost_notes=costs[item.account.key].ccost_notes,
+                ccost_account_unknown=costs[item.account.key].ccost_account_unknown,
+                ccost_estimated_scopes=costs[item.account.key].ccost_estimated_scopes) if item.account.key in costs else item
                 for item in frame.quota.accounts)
             frame = replace(frame, quota=replace(frame.quota, accounts=accounts))
         history_pending = any(entry.latest_ms is None for entry in self.cards.sessions.values())
         history_failed = any(entry.state == "unavailable" for entry in self.cards.sessions.values())
         frame = replace(frame, active_cards=active, history_cards=history, cards_state=state,
+            daily_usage=self.daily_usage,
+            daily_state="unavailable" if self.daily_failed else "loading" if self.daily_usage is None
+                else "refreshing" if self.history_job is not None else "observed",
             history_state="unavailable" if history_failed else "loading" if history_pending else "observed",
             active_count=sum(row.prompt.in_progress for card in active for row in card.rows if row.prompt.event_id == card.focal_id)
                 + sum(not card.rows for card in active))

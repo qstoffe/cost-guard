@@ -268,11 +268,42 @@ expand every group and retain their state/focus across updates. The longest
 running tool appears at the shared ten-second threshold and clears on completion.
 Historical cards have no activity section. Narrow tables pan horizontally.
 
-Watch omits the normal heading, report/search/scope/refresh controls, status/run/
-Today/token-mix summaries, valuation disclosure and model announcements. Exceptional
-host/source/offline notices remain. Account cards stay at the bottom with primary
-identification, quotas/reset and cost/usage; only Watch removes explanatory notes,
-Observation details and Copilot Unaccounted usage. Accounts retains its detail.
+v80.124 adds one **Total Today** card immediately above subscriptions: current-local-day
+reference cost, initiating user prompts and Input / Cached input / Cache write / Output
+token-volume shares with per-category costs. It includes available pre-Watch history,
+running prompts' recorded requests and unassigned-account usage, not just visible cards
+or a sum of subscriptions. Requests use completion/attribution dates; a continuing prompt
+counts once on each day with relevant requests. Child work counts under its initiating
+prompt; compaction contributes usage but not a prompt. Missing attribution qualifies
+the count; missing telemetry/prices stay partial. Known empty days differ from loading.
+History reconciliation retains known observations through omissions, updates on source
+changes/the existing minute fallback, and atomically publishes cost/count/mix. Midnight
+resets the group; yesterday's late results cannot repopulate it. The label stays Total
+Today even before 03:00. All amounts follow Web Credits/USD; CLI scopes remain unchanged.
+
+Watch subscriptions align title, **CCost Today**, stable primary Used percentage and
+progress tracks across each responsive row. Copilot keeps Monthly and Claude keeps
+5-hour, even when temporarily unavailable; exhaustion does not promote another window.
+Titles appear once, retaining account distinctions. A divider separates per-window
+resets, secondary quotas and actual rolling/fixed descriptions. Missing utilization
+is unavailable, Unlimited stays distinct, and sub-100% values never round to exhaustion.
+Raw status suffixes are absent; genuine restrictions/freshness errors remain visible.
+Estimated account Today attribution is marked; hover its amount for the canonical basis.
+The separate Accounts page retains its intended presentation.
+
+Context-price guidance appears only in each session card's conditional footer, after
+activity on active cards and after the table in history. It uses the latest valid Watch
+continuation (including hidden compaction), not a warning found among the five rows.
+Compaction removes/downgrades it, unknown/replaced contexts never revive old guidance,
+and older concurrent cards do not borrow a newer focal's warning. Approaching uses
+`thresholds.nextIctxPriceThresholdWarningPercent` (75%; zero disables approaching only);
+exact tier boundaries use unrounded counts. Gold/orange exceeded guidance includes the
+canonical relative price factor or supported cached/fresh cost fallback, not a bill
+prediction. Prompt cells contain no context-warning stars, footnotes or threshold color.
+
+Watch still omits the normal heading, report/search/scope/refresh controls, run summaries,
+valuation disclosure and model announcements. Exceptional host/source/offline notices
+remain. No Observation details, Copilot Unaccounted usage or global warning list returns.
 
 Four isolated session workers share each session's canonical capture/analysis and
 publish recent rows before complete-total projection, independently of other
