@@ -40,6 +40,15 @@ server restart has no verification result. The foreground Decision Delegate
 directed bounded starvation characterization and then normal delivery; it
 authorized no scope/test exception or desktop interaction.
 
+Post-fix Full passed all 126 files; validation passed with four existing design
+warnings and unchanged caps. Integrated-browser source-derived stages verified
+Aborted/quota, Aborted and unknown Ended labels, non-running history and frozen
+3s/3s/1s duration across reload, with no console errors. The real V2 service was
+2.2.5; the serial v80.129 cards/detail probe passed with first rows at 5.84s and
+clean owned shutdown. An earlier concurrent-with-Full probe reached cards/detail
+but hit `web_shutdown_timeout`; its cause remains unknown and that run is not
+PASS. Serial success does not establish a timeout root cause or repair.
+
 ## Original terminal reconciliation
 
 2026-11-02 · FR 000546 · v80.125
