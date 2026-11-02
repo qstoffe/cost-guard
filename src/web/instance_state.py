@@ -1,6 +1,7 @@
 """User-private, checkout-keyed instance records and OS-held transition locks."""
 from contextlib import contextmanager
 import ctypes
+import errno
 import hashlib
 import json
 import os
@@ -101,9 +102,13 @@ class InstanceStore:
                         import fcntl
                         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
                     break
-                except OSError:
+                except OSError as error:
+                    if error.errno not in {errno.EACCES, errno.EAGAIN, errno.EDEADLK}:
+                        raise InstanceConflict("instance_lifetime_unavailable" if lifetime else
+                                               "instance_transition_unavailable") from None
                     if time.monotonic() >= deadline:
-                        raise InstanceConflict("instance_transition_busy") from None
+                        raise InstanceConflict("instance_lifetime_busy" if lifetime else
+                                               "instance_transition_busy") from None
                     time.sleep(0.05)
             try:
                 yield
@@ -173,8 +178,16 @@ class InstanceStore:
         if code not in {"starting", "ready", "stopped", "source_changed",
                         "source_check_unavailable", "runtime_fault", "gui_unavailable",
                         "tray_unavailable", "instance_start_timeout", "browser_open_failed",
-                        "configuration_unavailable", "instance_conflict", "gui_or_server_start_failed",
-                        "app_preparation_failed"}:
+                         "configuration_unavailable", "instance_conflict", "gui_or_server_start_failed",
+                         "app_preparation_failed", "process_identity_access_denied",
+                         "process_identity_unavailable", "process_identity_changed",
+                         "instance_lifetime_busy", "instance_lifetime_unavailable",
+                         "instance_transition_busy", "instance_transition_unavailable",
+                         "corrupt_instance_state", "unsafe_instance_path", "foreign_instance_path",
+                         "private_state_unavailable", "instance_state_changed", "stale_instance_recovered",
+                         "instance_control_conflict", "instance_control_unavailable", "instance_not_ready",
+                         "instance_start_conflict", "instance_stop_timeout", "process_stop_unavailable",
+                         "safe_force_stop_unavailable"}:
             code = "runtime_fault"
         path = self.directory / "lifecycle.log"
         if path.exists():

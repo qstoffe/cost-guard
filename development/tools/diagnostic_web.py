@@ -15,7 +15,14 @@ SOURCE_STATES = {"loading", "running", "recovering", "source_unavailable", "fail
 CODES = {"starting", "ready", "stopped", "source_changed", "source_check_unavailable",
          "runtime_fault", "gui_unavailable", "tray_unavailable", "instance_start_timeout",
          "browser_open_failed", "configuration_unavailable", "instance_conflict",
-         "gui_or_server_start_failed", "app_preparation_failed"}
+         "gui_or_server_start_failed", "app_preparation_failed", "process_identity_access_denied",
+         "process_identity_unavailable", "process_identity_changed", "instance_lifetime_busy",
+         "instance_lifetime_unavailable", "instance_transition_busy", "instance_transition_unavailable",
+         "corrupt_instance_state", "unsafe_instance_path", "foreign_instance_path",
+         "private_state_unavailable", "instance_state_changed", "stale_instance_recovered",
+         "instance_control_conflict", "instance_control_unavailable", "instance_not_ready",
+         "instance_start_conflict", "instance_stop_timeout", "process_stop_unavailable",
+         "safe_force_stop_unavailable"}
 
 
 def _read(path, limit):
@@ -76,6 +83,8 @@ def web_evidence(root, *, data_home=None):
             fields = line.split()
             if len(fields) == 2 and fields[0].isdigit() and fields[1] in CODES:
                 counts[fields[1]] = min(1_000_000, counts[fields[1]] + 1)
+                if len(fields[0]) <= 10:
+                    result["latest_lifecycle"] = {"observed_at": int(fields[0]), "code": fields[1]}
         result["lifecycle_codes"] = dict(counts)
     except FileNotFoundError:
         pass

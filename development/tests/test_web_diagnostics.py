@@ -94,6 +94,36 @@ class WebDiagnosticsTests(unittest.TestCase):
             self.host.close()
         self.assertEqual("not_observed", self.evidence()["status"])
 
+    def test_startup_cause_and_recovery_export_without_new_host_or_control_record_read(self):
+        for reason in ("process_identity_access_denied", "process_identity_unavailable",
+                       "instance_lifetime_busy", "instance_transition_busy", "corrupt_instance_state",
+                       "unsafe_instance_path", "instance_control_unavailable", "stale_instance_recovered"):
+            self.store.log(reason)
+            with patch.object(self.store, "read", side_effect=AssertionError("Never read control state")):
+                evidence = self.evidence()
+            self.assertEqual("not_observed", evidence["status"])
+            self.assertIsNone(evidence["snapshot"])
+            self.assertEqual(reason, evidence["latest_lifecycle"]["code"])
+            self.assertIn(reason, evidence["lifecycle_codes"])
+            self.assertFalse(self.store.state_path.exists())
+
+    def test_old_ready_snapshot_does_not_hide_later_startup_failure(self):
+        self.host.observations.persist(self.host)
+        path = self.store.directory / "diagnostics.json"
+        snapshot = json.loads(path.read_bytes())
+        snapshot.update(state="ready", observed_at=1)
+        path.write_text(json.dumps(snapshot))
+        (self.store.directory / "lifecycle.log").write_text(
+            "1 ready\n2 process_identity_access_denied\n3 PRIVATE_TOKEN\n"
+            + "9" * 100 + " ready\n")
+        evidence = self.evidence()
+        self.assertEqual("ready", evidence["snapshot"]["state"])
+        self.assertGreater(evidence["age_seconds"], 0)
+        self.assertEqual({"observed_at": 2, "code": "process_identity_access_denied"},
+                         evidence["latest_lifecycle"])
+        self.assertIn("do not prove current readiness", evidence["action"])
+        self.assertNotIn("PRIVATE", json.dumps(evidence))
+
 
 if __name__ == "__main__":
     unittest.main()

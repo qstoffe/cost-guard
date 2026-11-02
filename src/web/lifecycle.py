@@ -37,18 +37,67 @@ def control(state, action):
         return value
     except (ValueError, TypeError, AttributeError) as exc:
         raise InstanceConflict("instance_control_conflict") from exc
+    except (OSError, http.client.HTTPException) as exc:
+        raise InstanceConflict("instance_control_unavailable") from exc
     finally:
         connection.close()
 
 
-def stop_existing(store, state, *, grace=GRACE_SECONDS):
-    actual = process_identity(state["pid"])
-    if actual is None or actual != state["process"]:
-        # Stale PID, including reuse: never contact/kill that process or its port.
+def _retire_stale(store, state):
+    # Caller holds transition.lock through replacement admission. On Windows an
+    # open host.lock cannot be unlinked/replaced; every schema-1 managed host
+    # holds it BEFORE publication and through final cleanup. Owning this same
+    # byte lock proves no old managed host can still use the recorded secret,
+    # even when its recycled PID is inaccessible. No boot/clock/schema change.
+    def retire():
+        if store.read() != state:
+            raise InstanceConflict("instance_state_changed")
         store.remove(state["nonce"])
+        store.log("stale_instance_recovered")
+
+    if os.name == "nt":
+        try:
+            with store.lock(timeout=0, lifetime=True):
+                retire()
+        except OSError:
+            raise InstanceConflict("instance_lifetime_unavailable") from None
+    else:
+        retire()
+
+
+def _existing_process(store, state):
+    try:
+        actual = process_identity(state["pid"])
+    except InstanceConflict as error:
+        if os.name != "nt" or str(error) not in {
+                "process_identity_access_denied", "process_identity_unavailable"}:
+            raise
+        store.log(str(error))
+        try:
+            _retire_stale(store, state)
+        except InstanceConflict as proof_error:
+            if str(proof_error) != "instance_lifetime_busy":
+                raise
+            store.log("instance_lifetime_busy")
+            raise error from None  # Access denied is not absence; retain both facts.
+        return False
+    if actual is None or actual != state["process"]:
+        _retire_stale(store, state)
+        return False
+    if store.read() != state:
+        raise InstanceConflict("instance_state_changed")
+    return True
+
+
+def stop_existing(store, state, *, grace=GRACE_SECONDS):
+    """Caller must hold transition.lock until the replacement is admitted."""
+    if not _existing_process(store, state):
         return
     try:
         control(state, "stop")
+    except InstanceConflict as error:
+        if str(error) != "instance_control_unavailable":
+            raise
     except (OSError, http.client.HTTPException):
         pass  # Unresponsive, but private recorded birth identity still must match.
     deadline = time.monotonic() + grace
@@ -110,9 +159,11 @@ def launch(root, gui_module, *, opener=webbrowser.open, progress=lambda stage: N
         state = store.read()
         coalesced = bool(state and state["ready_ns"] >= invoked_ns)
         if coalesced:
-            if process_identity(state["pid"]) != state["process"] or not control(state, "status")["ready"]:
+            if not _existing_process(store, state):
+                state, coalesced = None, False
+            elif not control(state, "status")["ready"]:
                 raise InstanceConflict("instance_not_ready")
-        else:
+        if not coalesced:
             if state:
                 progress("restart")
                 stop_existing(store, state)
