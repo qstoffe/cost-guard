@@ -2,7 +2,7 @@
 from dataclasses import dataclass, field, replace
 
 from .models import WatchCard, WatchRow
-from .tools import RUNNING_VISIBLE_AFTER_MS
+from .tools import RUNNING_VISIBLE_AFTER_MS, without_live_activity
 
 
 @dataclass(slots=True)
@@ -59,13 +59,36 @@ class WatchCards:
         entry = self.sessions.get(result.session_id)
         if entry is None or entry.generation != result.generation:
             return
+        if (entry.capture is not None and result.captured_at_ms is not None
+                and result.captured_at_ms < entry.capture.observed_at_ms):
+            return
         if result.phase == "rows":
             capture, tools, snapshot = result.value
+            if entry.capture is not None and capture.observed_at_ms < entry.capture.observed_at_ms:
+                return
             previous = {row.event_id: row for row in entry.capture.rows} if entry.capture else {}
-            if capture.retained:
+            if capture.retained and not capture.authoritative:
                 current_rows = {row.event_id: row for row in capture.rows}
                 current_rows.update((key, row) for key, row in previous.items() if key not in capture.observed_ids)
                 capture = replace(capture, rows=tuple(sorted(current_rows.values(), key=lambda row: (row.at_ms, row.event_id))))
+            elif capture.authoritative:
+                current_rows = {row.event_id: row for row in capture.rows}
+                for key, old in previous.items():
+                    row = current_rows.get(key)
+                    if row is None and (old.in_progress or key in entry.terminals or not capture.rows):
+                        # Complete analysis reclassified the prompt; retain its
+                        # observed history, not a made-up successful outcome.
+                        current_rows[key] = (replace(old, in_progress=False,
+                            duration_ms=max(old.duration_ms or 0, now_ms - old.at_ms),
+                            completed_at_ms=None, completed_successfully=False,
+                            aborted=False, watch_error=False, abort_reason="",
+                            abort_at_ms=0, ended_after_tool_calls=False, running_cost_warning=False,
+                            background_kinds=(), background_started_ms=0, background_only=False)
+                            if old.in_progress else old)
+                    elif row is not None and not row.in_progress and row.completed_at_ms is None and not old.in_progress:
+                        current_rows[key] = replace(row, duration_ms=old.duration_ms)
+                capture = replace(capture, rows=tuple(sorted(current_rows.values(), key=lambda row: (row.at_ms, row.event_id))),
+                    latest_ms=capture.latest_ms or entry.latest_ms or 0)
             current = {row.event_id: row for row in capture.rows}
             for key, old in previous.items():
                 row = current.get(key)
@@ -162,6 +185,8 @@ class WatchCards:
             marker = ("▶" if row.in_progress else "!" if row.aborted or row.watch_error else "✓") if is_focal else ""
             tool = entry.tools.get(row.event_id) if is_focal else None
             if tool is not None:
+                if not row.in_progress:
+                    tool = without_live_activity(tool)
                 elapsed = max(0, tool.running_ms - RUNNING_VISIBLE_AFTER_MS + now_ms - capture.observed_at_ms)
                 show_running = row.in_progress and elapsed >= RUNNING_VISIBLE_AFTER_MS
                 tool = replace(tool, running_tool=tool.running_tool if show_running else "",
@@ -191,7 +216,9 @@ class WatchCards:
                 active.append((entry.root.created_at_ms, key, "", self._card(entry, None, now_ms)))
         history = tuple(self._card(self.sessions[key], None, now_ms) for key in self.historical_ids(now_ms))
         pending = any(key in self.active_candidates and entry.latest_ms is None for key, entry in self.sessions.items())
-        failed = any(key in self.active_candidates and entry.state == "unavailable"
-            for key, entry in self.sessions.items())
-        state = "unavailable" if failed else "loading" if pending else "observed"
+        visible = [entry for key, entry in self.sessions.items()
+            if key in self.active_candidates or self._focals(entry, now_ms)]
+        failed = any(entry.state == "unavailable" for entry in visible)
+        partial = any(entry.state == "partial" for entry in visible)
+        state = "unavailable" if failed else "loading" if pending else "partial" if partial else "observed"
         return tuple(item[-1] for item in sorted(active, key=lambda item: item[:3])), history, state

@@ -1,4 +1,4 @@
-# Watch lifecycle and activity — v80.73
+# Watch lifecycle and activity — v80.125
 
 Watch derives prompt activity from already-hydrated normalized snapshots and existing causal prompt scope, including attributed task children. It does not run tools, scan skill files, mutate OpenCode data, or change usage, billing, token accounting or quota refresh.
 
@@ -19,6 +19,10 @@ Unknown ends retain the deterministic event-start fallback for both history memb
 V1 assistant completion/error times and V2 causally matched assistant/idle terminal evidence flow through the same source-neutral projection. A plugin-driven stop with a native interruption has the same abort semantics as other interruptions; a plugin/tool call or session status alone proves neither success nor a prompt-specific end. No stop initiator is guessed. Startup `[Earlier]` representatives keep their start-based selection/one-shot eviction, marker, date-aware timestamp format and exclusion from run usage; their header uses the supported end or the same stable event-start fallback. Session-specific Watch keeps its ordering and start-time header; ordinary reports, Duration and accounting are unchanged.
 
 ## Prompt activity rows
+
+Web cards reconcile execution against the first accepted complete authoritative capture, separately from retained usage/history. Persisted quota/interruption causes survive omitted idle rows for the same assistant attempt; later real work remains possible. A proven full-tree reclassification can end a retained row without inventing success or an end timestamp. Partial omissions and outages instead retain explicitly partial/unavailable observations, not proof of completion. Old generations and delayed captures cannot overwrite a newer publication.
+
+The 30-second default terminal highlight starts once when running work is observed to end. It does not mean the card is still running: duration growth and live tool/background/TODO indicators stop immediately, and the prompt contributes nothing to running-only projections. Refreshes do not renew grace; cold-start terminal history does not flash as new activity. The distinct 60-second tool-call continuation rule remains unchanged; neither grace is a timeout for quiet work.
 
 Tool-call summaries and verified custom Skills rows follow the owning prompt's existing status marker. They appear while the prompt runs and retain final counts, per-tool breakdowns, verified failures and distinct custom Skills while a terminal marker remains visible. They disappear on the same update that removes the green completion or red abort/error marker, and immediately when a newer prompt supersedes them in that session. Activity from other sessions is independent; persistent abort/error evidence alone cannot recreate an expired marker. Individual failed tool calls do not establish prompt failure.
 

@@ -6,7 +6,7 @@ the optional complete-session projection. Nothing sums the five displayed rows.
 from dataclasses import dataclass, replace
 
 from src.reports.sampling import AnalyzedRoot
-from src.reports.session_history import retain_snapshot
+from .session_history import analyze_observed
 from .prompt_rows import PromptRowProjector
 from .prompts import _coherent_watch_deltas
 from .watch_context import card_context
@@ -22,12 +22,12 @@ class WatchCapture:
     retained: bool = False
     observed_ids: frozenset = frozenset()
     context: object = None
+    authoritative: bool = False
 
 
 def capture_rows(service, root, previous=None, focal_ids=()):
     fresh = service.source.load_session_snapshot(root.session_id)
-    snapshot, retained = retain_snapshot(previous, fresh)
-    bundle = service._analyze_snapshot(snapshot)
+    snapshot, bundle, retained = analyze_observed(service, previous, fresh)
     item = AnalyzedRoot(root, bundle, False, snapshot)
     projector = PromptRowProjector(snapshot=snapshot, bundle=bundle, catalog=service._load_catalog(),
         config=service.config, watch_duration=True, snapshot_running_metrics=True)
@@ -44,7 +44,7 @@ def capture_rows(service, root, previous=None, focal_ids=()):
     return WatchCapture(root.session_id, root.title or root.session_id, tuple(rows),
         max((record.prompt_time_ms for record in records), default=0), service.now_ms, retained,
         frozenset(event.event_id for event in fresh.events),
-        card_context(projector, root.session_id, service._threshold_multiplier)), item
+        card_context(projector, root.session_id, service._threshold_multiplier), fresh.complete), item
 
 
 def capture_totals(service, item):

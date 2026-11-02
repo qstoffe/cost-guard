@@ -630,4 +630,5 @@ class OpenCodeV1Source:
             events=events,
             invocations=invocations,
             source_revision=revision_from_rows(revision_state),
+            complete=True,
         )

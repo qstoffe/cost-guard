@@ -125,8 +125,10 @@ const WatchView = (() => {
             const focal = !historical && prompt.event_id === value.focal_id;
             row.className = focal ? prompt.in_progress ? 'watch-running' : prompt.aborted || prompt.has_error ? 'watch-error' : 'watch-success' : '';
             const outcome = prompt.in_progress ? 'Running · provisional' : prompt.aborted ? 'Aborted' : prompt.has_error ? 'Error' : prompt.completed_successfully ? 'Completed' : 'Ended';
+            const reason = !prompt.in_progress && {quota_limit: 'quota limit', rate_limit: 'rate limit',
+              tool_call_limit: 'tool-call limit', step_limit: 'step limit', user: 'by user'}[prompt.abort_reason];
             const label = el('span', `${item.marker || ''} #${prompt.prompt_number} ${prompt.preview || prompt.label || 'Prompt'}`.trim());
-            label.append(el('span', ' · ' + outcome, 'watch-outcome'));
+            label.append(el('span', ' · ' + outcome + (reason ? ' · ' + reason : ''), 'watch-outcome'));
             if (prompt.has_additional_model) label.append(el('span', ' · Additional model contribution', 'detail'));
             const context = display(item.live_context, 'watch_next_context_tokens');
             const cells = [display(prompt, 'date_time'), label, item.model, item.effort,

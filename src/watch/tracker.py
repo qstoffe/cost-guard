@@ -9,7 +9,7 @@ from src.reports.models import PromptProjection, SessionPromptBlock
 
 from .models import ToolObservation, WatchRow
 from .session_retention import select_rows, session_order
-from .tools import observe_tools
+from .tools import observe_tools, without_live_activity
 
 
 def _event_key(prompt: PromptProjection) -> str:
@@ -25,14 +25,6 @@ def _marker(prompt: PromptProjection, *, recent_completion: bool) -> str:
     return "✓" if recent_completion else ""
 
 
-def _without_live_activity(tool: ToolObservation) -> ToolObservation:
-    """Keep final counts while removing every indicator of ongoing execution."""
-    return replace(
-        tool, running_tool="", running_ms=0, todo_completed=0, todo_total=0,
-        active_todo="", background_kinds=(), background_ms=0,
-    )
-
-
 def _activity(
     snapshot: SessionSnapshot, prompt: PromptProjection, event_id: str, now_ms: int,
     skill_origins_by_session: Mapping[str, Mapping[str, str]],
@@ -41,7 +33,7 @@ def _activity(
     tool = observe_tools(snapshot, event_id, is_compaction=prompt.is_compaction, now_ms=now_ms,
                          skill_origins_by_session=skill_origins_by_session)
     if not prompt.in_progress:
-        return _without_live_activity(tool)
+        return without_live_activity(tool)
     if not prompt.background_kinds:
         return tool
     return replace(tool, background_kinds=prompt.background_kinds,
@@ -268,11 +260,11 @@ class WatchRowTracker:
             ):
                 tool = observed.last_tool
             if not row.prompt.in_progress:
-                tool = _without_live_activity(tool)
+                tool = without_live_activity(tool)
             observed.last_tool = tool
             observed.last_tool_revision = snapshot.source_revision
         elif not row.prompt.in_progress:
-            tool = _without_live_activity(tool)
+            tool = without_live_activity(tool)
         return tool
 
     def _attach_activity(

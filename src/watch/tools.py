@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import replace
 
 from src.analysis.causal import prompt_parent_ids
 from src.domain import EventKind, MessageRole, NormalizedMessage, NormalizedPart, SessionSnapshot
@@ -11,6 +12,12 @@ from .tool_contracts import (
     executed_skill_script, failure_skill, is_skill_tool, loaded_skill, skill_tool_id,
     structured_outcome, verified_skill_origin,
 )
+
+
+def without_live_activity(tool: ToolObservation) -> ToolObservation:
+    """Keep final counts, removing every indicator of ongoing execution."""
+    return replace(tool, running_tool="", running_ms=0, todo_completed=0, todo_total=0,
+        active_todo="", background_kinds=(), background_ms=0)
 
 
 def _parent_ids(snapshot: SessionSnapshot, event_id: str, *, is_compaction: bool) -> set[str]:
