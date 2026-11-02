@@ -1,20 +1,23 @@
 # Web UI knowledge
 
-Source revision: 9ba5faa68788a85ec96e685d72d8e1c5f00788f9
-Checked revision: 9ba5faa68788a85ec96e685d72d8e1c5f00788f9
-Last checked: 2026-11-01
+Source revision: 232fb1ae73b47c1999f13779132c58ec2209bbac
+Checked revision: 232fb1ae73b47c1999f13779132c58ec2209bbac
+Last checked: 2026-11-02
 Status: current
 
-- [Snapshots and navigation](../web-overview.md): retained historical acquisition,
-  payload/DOM/scroll evidence, unified Models and their original proof limits.
-- [Settings and appearance](../web-settings.md): the narrow preserving configuration
-  boundary, confirmed-only UI state, actual theme checks and final visual exception.
+- Snapshots and navigation: `development/journal/web-overview.md` retains historical
+  acquisition, payload/DOM/scroll evidence, unified Models and original proof limits.
+- Settings and appearance: `development/journal/web-settings.md` retains the narrow
+  preserving config boundary, confirmed-only UI, theme checks and visual exception.
 - [Watch cards](watch-cards.md): isolated two-phase acquisition, continuous history,
   canonical totals, nine-case rendered-browser evidence and separate V2/detail proof.
 - [Watch summary and context](watch-summary.md): retained coherent daily accounting,
   stable subscription slots, current continuation footers, browser matrix and real V2 evidence.
 - [Watch terminal lifecycle](watch-terminal-lifecycle.md): reproduced retention/race
   defects, shared fresh-versus-retained authority and historical-incident limits.
+- [Shared/native CI scope](ci-scope.md): measured Linux shared regression and
+  focused three-architecture native startup, scoped handoff permission and proof limits.
 
-Historical observations keep their original dates and exceptions; the theme
-delivery does not refresh their validity or certify older failed probes.
+Historical observations keep their original dates and exceptions; this routing
+update does not refresh their validity or certify older failed probes. Parent
+topics use explicit repository paths rather than noncanonical upward links.
