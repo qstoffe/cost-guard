@@ -241,15 +241,12 @@ One authenticated `/api/live` watchdog runs at ten-second intervals after the pr
 
 [Built-in browser, deterministic and real-source verification](../development/architecture/governance/verification/web-connection.md) records the tested states and explicit physical-tray/suspension/restart/macOS limits.
 
-v80.123 replaces the combined Watch table with unframed prompt cards. **Earlier
-Prompts** starts collapsed and contains five eligible distinct sessions, newest
-actual prompt start first, with one latest actual prompt in each card. It updates even
-while collapsed, has no age/startup cutoff, excludes active/recent sessions before
-limiting, and alone has a framed, padded, viewport-bounded vertical scroll region
-(at most 40% of viewport height). The always-visible
-active list uses document scrolling with no card cap, filter or pager. Concurrent
-prompts in one session get separate cards, oldest focal start first. Each card's
-focal prompt is its only row, including during terminal grace.
+Watch uses unframed prompt cards. **Earlier Prompts** starts collapsed: five eligible
+distinct sessions, newest actual prompt start first, one latest prompt each. It updates
+while collapsed, without an age/startup cutoff, excluding active/recent sessions before
+limiting. Its outlined container grows in normal page flow, with no nested vertical
+scrolling or height cap. The active list has no cap/filter/pager; concurrent prompts
+get separate cards, oldest focal first, with one row even during terminal grace.
 
 Session title alone links to that canonical Sessions route. Watch has no session
 aggregate cost/duration or dedicated aggregate acquisition; complete-session totals
@@ -264,6 +261,7 @@ text, with the full preview on hover and lifecycle state accessible on the row.
 Additional model contribution is identified on the Model field. All cells/headers
 stay one line: Prompt alone flexes without a width cap and ellipsizes long text/URLs;
 complete metric columns and a 14rem Prompt minimum pan horizontally when necessary.
+Tables use theme-aware body/header surfaces and edges; compact dividers separate siblings.
 
 Running focal rows and linked titles are yellow; historical/terminal titles use
 neutral heading ink. Normal activity is gold/brown, failures independently red,
@@ -277,22 +275,24 @@ running tool appears at the shared ten-second threshold. Tool and canonical
 background/subagent lines explicitly start **Running:** and clear on completion.
 Historical cards have no activity section. Narrow tables pan horizontally.
 
-v80.124 adds one **Total Today** card immediately above subscriptions: current-local-day
-reference cost, initiating user prompts and Input / Cached input / Cache write / Output
-token-volume shares with per-category costs. It includes available pre-Watch history,
-running prompts' recorded requests and unassigned-account usage, not just visible cards
-or a sum of subscriptions. Requests use completion/attribution dates; a continuing prompt
-counts once on each day with relevant requests. Child work counts under its initiating
-prompt; compaction contributes usage but not a prompt. Missing attribution qualifies
-the count; missing telemetry/prices stay partial. Known empty days differ from loading.
-History reconciliation retains known observations through omissions, updates on source
-changes/the existing minute fallback, and atomically publishes cost/count/mix. Midnight
-resets the group; yesterday's late results cannot repopulate it. The label stays Total
-Today even before 03:00. All amounts follow Web Credits/USD; CLI scopes remain unchanged.
+**Total Today**, four pixels above subscriptions, shows current-local-day reference cost,
+initiating prompts and Input / Cached input / Cache write / Output shares/category costs.
+It includes pre-Watch history, running requests and unassigned-account usage, not just
+visible cards or subscription sums. Requests use completion/attribution dates; continuing
+prompts count once per relevant day, children under their initiator, compaction as usage
+only. The known integer displays **N prompts**, retaining incomplete attribution internally
+and all unassigned cost/tokens. Missing telemetry/prices remain partial; empty differs from
+loading. Source changes/minute fallback update retained history and publish cost/count/mix
+coherently. Routine refresh silently retains figures; only a scope without valid data
+loads. Real failures remain visible. Midnight resets, rejecting yesterday's late results;
+Total Today keeps its label before 03:00. Web Credits/USD and CLI scopes are unchanged.
 
 Watch subscriptions align title, **CCost Today**, stable primary Used percentage and
-progress tracks across each responsive row. Copilot keeps Monthly and Claude keeps
-5-hour, even when temporarily unavailable; exhaustion does not promote another window.
+progress tracks across each responsive row. Native primary declarations and account-window
+order choose the primary, never provider identity or depletion. A weekly-only OpenAI
+account shows Weekly, without a fabricated five-hour slot or duplicate weekly secondary.
+An established primary retains its slot when partial/error acquisition omits it;
+missing usage remains honestly unavailable rather than promoting a secondary.
 Titles appear once, retaining account distinctions. A divider separates per-window
 resets, secondary quotas and actual rolling/fixed descriptions. Missing utilization
 is unavailable, Unlimited stays distinct, and sub-100% values never round to exhaustion.
@@ -300,8 +300,8 @@ Raw status suffixes are absent; genuine restrictions/freshness errors remain vis
 Estimated account Today attribution is marked; hover its amount for the canonical basis.
 The separate Accounts page retains its intended presentation.
 
-Context-price guidance appears only in each session card's conditional footer, after
-activity on active cards and after the table in history. It uses the latest valid Watch
+Context-price guidance appears directly below each session table, before active activity,
+without a separate divider/frame or empty reserved space. It uses the latest valid Watch
 continuation (including hidden compaction), not historical context from another prompt.
 Compaction removes/downgrades it, unknown/replaced contexts never revive old guidance,
 and older concurrent cards do not borrow a newer focal's warning. Approaching uses
@@ -314,15 +314,12 @@ Watch still omits the normal heading, report/search/scope/refresh controls, run 
 valuation disclosure and model announcements. Exceptional host/source/offline notices
 remain. No Observation details, Copilot Unaccounted usage or global warning list returns.
 
-Four isolated session workers share each session's canonical capture/analysis and
-publish coherent prompt rows without any complete-total phase, independently of other
-sessions. Generations reject superseded work; a separate bounded account-history
-lane and single detail lane cannot borrow the mutable Live service. Source capture
-and canonical analysis are still prerequisites for accurate rows, not source-level
-streaming. Captures are retained for active/top-five history cards; the catalog
-index is small metadata. No per-card detail leases or browser acquisition loops
-are created. The shared adaptive 6× EMA/clamped 5–30 second cadence measures real
-capture work; explicit intervals, buffered V2 hints and presentation wakes remain.
+Four isolated session workers publish coherent canonical rows independently, without a
+complete-total phase; generations reject superseded work. Account-history and detail
+lanes cannot borrow mutable Live service. Accurate rows still require capture/analysis,
+not source-level streaming. Active/top-five captures and a small catalog index are
+retained; no per-card leases/browser acquisition loops. Adaptive 6× EMA/clamped 5–30s
+cadence measures capture work; explicit intervals, buffered V2 hints and presentation wakes remain.
 
 Live uses one process-lifetime engine starting with the host, not a tab. Closing all tabs does not stop it. CLI Watch retains its separate run, startup history and row-retention policy; Web history is continuously replenished. Both reuse canonical valuation, context, tool/skill attribution and coordinator timing/recovery policies. Source hints, idle and connection loss never prove completion. Account figures retain Watch scopes, not normal-report calendar-month substitutions.
 

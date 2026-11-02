@@ -329,6 +329,7 @@ class QuotaWindow:
     scope: str = "account"
     # Window-specific native evidence only; account availability stays on the snapshot.
     status: AccountUsageStatus = AccountUsageStatus.UNKNOWN
+    primary: bool = False  # Explicit native declaration, independent of tuple fallback order.
 
     def __post_init__(self) -> None:
         for name in ("used_fraction", "remaining_fraction"):

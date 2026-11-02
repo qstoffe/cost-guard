@@ -4,6 +4,8 @@ from decimal import Decimal as D
 
 from development.tests.fixtures.account_views import account_report, NOW
 from development.tests.fixtures.warning_projections import warning_prompt
+from src.accounts.base import normalize_quota
+from src.accounts.openai_subscription import convert_usage_payload
 from src.analysis.context import PriceWarningSeverity
 from src.analysis.daily_usage import DailyUsage
 from src.analysis.token_mix import TokenMix
@@ -30,11 +32,16 @@ def summary_watch():
         ("anthropic", "Claude Pro · Primary temporarily missing", (weekly,)),
     )):
         native = replace(base.account, ref=AccountRef("fixture", provider, account_id=str(index)),
-            provider_label=label, plan=None, quotas=windows, billing=(), warnings=(), status=Status.UNKNOWN)
+            provider_label=label, plan=None, quotas=windows, billing=(), warnings=(), status=Status.UNKNOWN,
+            primary_quota_label="5-hour" if provider == "anthropic" else None)
         accounts.append(replace(base, account=native, label=label,
             ccost_scopes=(("today", ComparisonCost(D("12.5"), 2, 2)),),
             ccost_estimated_scopes=("today",),
-            ccost_notes=("CCost today: configured local calendar day; provider-attributed estimate; not verified account/billing attribution.",)))
+             ccost_notes=("CCost today: configured local calendar day; provider-attributed estimate; not verified account/billing attribution.",)))
+    native = normalize_quota(convert_usage_payload({"plan_type": "pro_lite", "rate_limit": {
+        "primary_window": {"limit_window_seconds": 604800, "used_percent": 42, "reset_after_seconds": 86400}}},
+        fetched_at_ms=NOW), AccountRef("fixture", "openai", account_id="weekly"), "OpenAI Pro Lite")
+    accounts.append(replace(base, account=native, label="OpenAI Pro Lite"))
     item = replace(warning_prompt(PriceWarningSeverity.EXCEEDED), event_id="prompt", in_progress=True,
         watch_model="Model", watch_effort="High", prompt_number=37,
         preview="Keep completed literally\nhttps://example.test/" + "long" * 200,

@@ -1,28 +1,32 @@
 # Cost Guard version history
 
+## v80.128 — 2026-11-02
+
+- Watch: themed tables, adjacent guidance/dividers, page-flow history, native primary quotas and quiet Today refresh/plain counts.
+
 ## v80.127 — 2026-11-02
 
 - Quota CCost: native/empty windows, no trailing history. Delayed Web costs rebind current accounts; Today/month unchanged.
 
 ## v80.126 — 2026-11-02
 
-- Web Watch: one-row cards, ellipsized previews, Started sequence/time, framed history, CLI colors; no session totals/acquisition. Refresh retains metrics; background activity/failures stay explicit.
+- Web Watch: one-row cards, ellipsis, Started sequence/time, framed history and CLI colors; no session totals. Refresh retains metrics; activity/failures stay explicit.
 
 ## v80.125 — 2026-11-02
 
-- Web Watch: terminal/quota authority prevents resurrection from omitted attempt ends/delayed captures. Duration/activity stop independently of highlight grace; retained Session detail shares reconciliation.
+- Watch terminal/quota authority prevents resurrection from omissions/delayed captures. Duration/activity stop before highlight grace ends; Session detail shares reconciliation.
 
 ## v80.124 — 2026-11-02
 
-- Web Watch: aligned Today/primary-quota subscription cards, retained full-day cost/prompt count/token mix, and current-context price guidance in each session footer. CLI/Accounts scopes unchanged.
+- Watch: aligned Today/primary quotas, retained daily cost/prompts/token mix and current-context guidance. CLI/Accounts scopes unchanged.
 
 ## v80.123 — 2026-11-02
 
-- Web Watch: live cards, five-session/five-prompt history, full totals and tool/skill disclosures; isolated progressive capture and quieter Watch-only chrome. CLI/Accounts unchanged.
+- Watch: live cards, five-session/five-prompt history, totals, tool/skill disclosures, isolated progressive capture and quiet chrome. CLI/Accounts unchanged.
 
 ## v80.122 — 2026-11-02
 
-- Windows Web: lifetime-lock recovery of proven stale reboot/PID records; ambiguous identities and unrelated processes stay protected. Console/dialog/Diagnostics retain specific startup causes.
+- Windows Web: lifetime-lock recovery of proven stale reboot/PID records; ambiguous/unrelated processes protected. Startup feedback retains specific causes.
 
 ## v80.121 — 2026-11-02
 

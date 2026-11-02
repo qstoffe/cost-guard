@@ -78,6 +78,10 @@ def reconcile_accounts(
             continue  # A delayed old observation cannot restore a previous window.
         recent = prior is not None and 0 <= now_ms - timestamps.get(key, 0) <= MAX_STALE_MS
         retain = prior is not None and not durable_quota_failure(prior) and recent
+        if (prior and current and prior.primary_quota_label and current.availability in {"partial", "error"}
+                and not any(item.primary and item.scope == "account" and item.model_id is None for item in current.quotas)):
+            # Retain the established slot, not its usage, when acquisition omits it.
+            current = replace(current, primary_quota_label=prior.primary_quota_label)
         if durable_quota_failure(current):
             result.append(current)
             continue

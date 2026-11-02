@@ -327,7 +327,7 @@ def convert_usage_payload(payload: object, *, fetched_at_ms: int) -> QuotaSnapsh
     for name in ("primary_window", "secondary_window", "five_hour", "weekly"):
         item = _convert_window(name, rate_map.get(name), fetched_at_ms)
         if item is not None and not any(existing.name == item.name for existing in windows):
-            windows.append(item)
+            windows.append(replace(item, primary=name == "primary_window"))
     additional = payload.get("additional_rate_limits")
     if isinstance(additional, list):
         for index, raw in enumerate(additional, start=1):
@@ -344,7 +344,7 @@ def convert_usage_payload(payload: object, *, fetched_at_ms: int) -> QuotaSnapsh
                 continue
             item = _convert_window(f"additional {index}", raw, fetched_at_ms)
             if item is not None:
-                windows.append(item)
+                windows.append(replace(item, scope="model"))
     credits = payload.get("credits")
     credit_map = credits if isinstance(credits, Mapping) else {}
     balance = _decimal(credit_map.get("balance"))
@@ -368,7 +368,8 @@ def convert_usage_payload(payload: object, *, fetched_at_ms: int) -> QuotaSnapsh
     if not windows and not billing and not isinstance(allowed, bool) and not isinstance(reached, bool):
         return replace(_unavailable("OpenAI usage returned no recognized quota data", fetched_at_ms),
                        availability="error", observations={"parser_reason": "parser_failure"})
-    partial = not windows or any(w.remaining_fraction is None for w in windows)
+    partial = (not windows or any(w.remaining_fraction is None for w in windows)
+               or isinstance(rate_map.get("secondary_window"), Mapping) and not isinstance(rate_map.get("primary_window"), Mapping))
     return QuotaSnapshot(
         provider="openai",
         fetched_at_ms=fetched_at_ms,

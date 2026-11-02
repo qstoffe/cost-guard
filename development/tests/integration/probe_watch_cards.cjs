@@ -1,4 +1,4 @@
-// Approval-only external headless Chromium, fresh owned profile, synthetic origin only.
+// Hidden headless Chromium, fresh owned profile, synthetic origin only.
 // Node 22+ built-ins, no package install, personal profile or existing browser attachment.
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
@@ -63,11 +63,24 @@ async function main() {
       const layout = await evaluate(`(() => {
         const h=document.querySelector('.watch-history'), a=document.querySelector('.watch-active'), c=a.querySelector('.watch-card');
         const details=c.querySelectorAll('details'); details[0].open=true; details[1].open=true;
-        details[0].querySelector('summary').focus({preventScroll:true}); h.scrollTop=70; const scroll=h.scrollTop, focus=document.activeElement;
-        redraw(); const stable=document.activeElement===focus && details[0].open && details[1].open && h.scrollTop===scroll;
+        details[0].querySelector('summary').focus({preventScroll:true}); const focus=document.activeElement;
+        redraw(); const stable=document.activeElement===focus && details[0].open && details[1].open && document.querySelector('.watch-earlier').open;
         const table=c.querySelector('.watch-table-scroll'), row=c.querySelector('tbody tr'), prompt=row.cells[1].firstChild;
+        const warning=c.querySelector('.watch-context-warning'), daily=document.querySelector('.watch-daily'), grid=document.querySelector('.watch-account-grid');
+        const style=node=>getComputedStyle(node), rect=node=>node.getBoundingClientRect();
+        const separators=parent=>[...parent.children].map(node=>parseFloat(style(node).borderTopWidth));
         return {width:innerWidth,height:innerHeight,scrollY,activeTop:a.getBoundingClientRect().top, historyHeight:h.clientHeight,
           historyScroll:h.scrollHeight,historyCards:h.querySelectorAll('article').length,
+          historyMaxHeight:style(h).maxHeight,historyOverflow:style(h).overflowY,
+          activeSeparators:separators(a),historySeparators:separators(h),
+          bodySurface:style(table).backgroundColor,headerSurface:style(c.querySelector('th')).backgroundColor,
+          pageSurface:style(document.body).backgroundColor,tableBorder:parseFloat(style(table).borderTopWidth),
+          warningAdjacent:warning.previousElementSibling===table && warning.nextElementSibling.className==='watch-activity',
+          warningBorder:parseFloat(style(warning).borderTopWidth),warningPadding:parseFloat(style(warning).paddingTop),
+          warningGap:rect(warning).top-rect(table).bottom,warningOverflow:warning.scrollWidth>warning.clientWidth,
+          dailyGap:rect(grid).top-rect(daily).bottom,
+          detailDividers:[...grid.querySelectorAll('.watch-account-details')].every(node=>parseFloat(style(node).borderTopWidth)===1),
+          activityColor:style(c.querySelector('.watch-activity')).color,warningColor:style(warning).color,
           rows:c.querySelectorAll('tbody tr').length, historyBorder:parseFloat(getComputedStyle(h).borderTopWidth),
           ellipsis:getComputedStyle(prompt).textOverflow==='ellipsis' && prompt.scrollWidth>prompt.clientWidth,
           completeMetrics:[...row.cells].filter((_,i)=>i!==1).every(cell=>cell.scrollWidth<=cell.clientWidth),
@@ -75,17 +88,39 @@ async function main() {
           activeInnerScroll:a.scrollHeight>a.clientHeight,tableVerticalScroll:table.scrollHeight>table.clientHeight,
           horizontalPan:table.scrollWidth>table.clientWidth,runningColor:getComputedStyle(c.querySelector('.watch-running')).color,
           border:getComputedStyle(c).borderTopWidth,background:getComputedStyle(c).backgroundColor,stable}; })()`);
-       assert.equal(layout.historyCards, 5); assert.ok(layout.historyScroll > layout.historyHeight);
+       assert.equal(layout.historyCards, 5); assert.equal(layout.historyScroll, layout.historyHeight);
+       assert.equal(layout.historyMaxHeight, 'none'); assert.equal(layout.historyOverflow, 'visible');
+       assert.deepEqual(layout.activeSeparators, [0,1]); assert.deepEqual(layout.historySeparators, [0,1,1,1,1]);
+       assert.notEqual(layout.bodySurface, layout.pageSurface); assert.notEqual(layout.headerSurface, layout.bodySurface);
+       assert.equal(layout.tableBorder, 1); assert.equal(layout.warningAdjacent, true);
+       assert.equal(layout.warningBorder, 0); assert.equal(layout.warningPadding, 0);
+       assert.ok(layout.warningGap >= 0 && layout.warningGap <= 4); assert.equal(layout.warningOverflow, false);
+       assert.equal(layout.dailyGap, 4); assert.equal(layout.detailDividers, true);
+       assert.notEqual(layout.activityColor, layout.runningColor); assert.notEqual(layout.warningColor, layout.runningColor);
        assert.equal(layout.rows, 1); assert.ok(layout.historyBorder > 0);
        assert.equal(layout.ellipsis, true); assert.equal(layout.completeMetrics, true);
       assert.equal(layout.scrollY, 0, 'layout assertions use the unscrolled document');
       assert.equal(layout.pageOverflow, false); assert.equal(layout.activeInnerScroll, false);
       assert.equal(layout.tableVerticalScroll, false); assert.equal(layout.stable, true);
       assert.equal(layout.border, '0px'); assert.equal(layout.background, 'rgba(0, 0, 0, 0)');
-      if (width === 1920) assert.ok(layout.activeTop < height - 120, 'expanded history leaves useful active content');
-      if (width === 360) assert.equal(layout.horizontalPan, true);
+       if (width === 360) assert.equal(layout.horizontalPan, true);
       const screenshot = await command('Page.captureScreenshot', {format: 'png', captureBeyondViewport: false}, sessionId);
-      await fs.writeFile(path.join(output, `watch-${theme}-${width}.png`), Buffer.from(screenshot.data, 'base64'));
+       await fs.writeFile(path.join(output, `watch-${theme}-${width}.png`), Buffer.from(screenshot.data, 'base64'));
+       const transitions = await evaluate(`(() => {
+         const a=document.querySelector('.watch-active'), h=document.querySelector('.watch-history');
+         const originals=[...INPUT.view.active_cards], node=a.children[1];
+         INPUT.view.active_cards.reverse();redraw();
+         const reordered=a.children[0]===node && getComputedStyle(node).borderTopWidth==='0px';
+         INPUT.view.active_cards.pop();redraw();
+         const removed=a.children.length===1 && getComputedStyle(a.firstChild).borderTopWidth==='0px';
+         const moved=INPUT.view.active_cards.pop(); INPUT.view.history_cards.unshift({...moved,focal_id:''});redraw();
+         const transitioned=a.children.length===0 && [...h.children].every((card,i)=>getComputedStyle(card).borderTopWidth===(i?'1px':'0px'));
+         INPUT.view.active_cards=originals;INPUT.view.history_cards.shift();redraw();
+         window.scrollTo(0,100); const before=scrollY, focus=document.activeElement;
+         INPUT.view.daily_state='refreshing';const daily=document.querySelector('.watch-daily').firstChild;redraw();
+         const stable=scrollY===before && document.activeElement===focus && document.querySelector('.watch-daily').firstChild===daily;
+         return {reordered,removed,transitioned,stable}; })()`);
+       assert.deepEqual(transitions, {reordered:true,removed:true,transitioned:true,stable:true});
       const scale = await evaluate(`(() => {
         const base=INPUT.view.active_cards[0];
         INPUT.view.active_cards=Array.from({length:100},(_,i)=>({...base,session_id:'scale-'+i}));redraw();
@@ -98,7 +133,7 @@ async function main() {
         return {count,scroll,success,error}; })()`);
       assert.equal(scale.count, 100); assert.equal(scale.scroll, false);
       assert.notEqual(scale.success, layout.runningColor); assert.notEqual(scale.error, layout.runningColor);
-      cases.push({theme, ...layout, scale, screenshot: `watch-${theme}-${width}.png`, outcome: 'PASS'});
+       cases.push({theme, ...layout, transitions, scale, screenshot: `watch-${theme}-${width}.png`, outcome: 'PASS'});
       await command('Target.closeTarget', {targetId});
     }
     await fs.writeFile(path.join(output, 'browser.json'), JSON.stringify({outcome: 'PASS', browser: version.product, userAgent: version.userAgent, cases,

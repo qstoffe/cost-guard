@@ -15,14 +15,18 @@ from unittest.mock import patch
 from development.tests.fixtures.synthetic_month import SyntheticMonthSource
 from development.tests.fixtures.watch_runtime import make_service
 from development.tests.fixtures.watch_summary import summary_watch
+from src.accounts.base import normalize_quota
+from src.accounts.openai_subscription import convert_usage_payload
 from src.analysis.daily_usage import daily_usage, prompt_attributions, request_identity
 from src.analysis.models import TraceEntry
 from src.analysis.timezones import local_day_start_ms
 from src.application.live_projection import project_live
-from src.application.watch_accounts import primary_quota, watch_quota
-from src.domain import ModelRef, TokenUsage
+from src.application.watch_accounts import primary_quota, watch_account, watch_quota
+from src.domain import AccountRef, ModelRef, TokenUsage
 from src.reports.history import WatchHistoryAcquisition
+from src.presentation.accounts import account_capacity_parts
 from src.watch.web_coordinator import WebWatchCoordinator
+from src.watch.accounts import reconcile_accounts
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -168,6 +172,56 @@ class WatchDailyTests(unittest.TestCase):
             self.assertIsNone(owner.history_quota)
             self.assertEqual(86_400_001, submit.call_args.args[3])
             pending.cancel()
+
+    def test_native_weekly_primary_matches_cli_population_and_is_not_duplicated(self):
+        payload = {"plan_type": "pro_lite", "rate_limit": {"primary_window": {
+            "limit_window_seconds": 604800, "used_percent": 42, "reset_after_seconds": 1000}},
+            "additional_rate_limits": [{"limit_name": "Model", "model_id": "test",
+                "rate_limit": {"primary_window": {"limit_window_seconds": 18000, "used_percent": 99}}}]}
+        snapshot = convert_usage_payload(payload, fetched_at_ms=1000)
+        native = normalize_quota(snapshot, AccountRef("fixture", "openai", account_id="weekly"), "OpenAI Pro Lite")
+        projection = replace(summary_watch().quota.accounts[0], account=native)
+
+        wire = watch_account(projection).to_json()
+
+        self.assertEqual("weekly", native.primary_quota_label)
+        self.assertTrue(native.quotas[0].primary)
+        self.assertIs(primary_quota(native), native.quotas[0])
+        self.assertEqual("weekly", wire['primary']['quota']['label'])
+        self.assertEqual("42%", wire['primary']['used_percent'])
+        self.assertEqual(["Model 5-hour"], [item['quota']['label'] for item in wire['secondary']])
+        self.assertEqual(["weekly"], [item.label for item in native.quotas if item.scope == "account"])
+        self.assertEqual(1001000, wire['primary']['quota']['reset_at_ms'])
+        cli = " ".join(str(part) for part in account_capacity_parts(replace(projection, pace=()), "UTC", now_ms=1000))
+        self.assertIn("Week", cli)
+        self.assertNotIn("5h", cli)
+        # Provider identity and depletion never invent/promote an account window.
+        self.assertEqual("weekly", primary_quota(replace(native, primary_quota_label=None, quotas=tuple(reversed(native.quotas)))).label)
+        self.assertEqual("Primary quota", primary_quota(replace(native, primary_quota_label=None, quotas=(native.quotas[1],))).label)
+
+    def test_native_primary_order_and_partial_error_contract_stability(self):
+        def native(rate, when):
+            return normalize_quota(convert_usage_payload({"rate_limit": rate}, fetched_at_ms=when),
+                AccountRef("fixture", "openai", account_id="both"), "OpenAI")
+        five = {"limit_window_seconds": 18000, "used_percent": 10}
+        weekly = {"limit_window_seconds": 604800, "used_percent": 90}
+        prior = native({"primary_window": five, "secondary_window": weekly}, 1000)
+        partial = native({"secondary_window": weekly}, 2000)
+
+        reconciled, _, _ = reconcile_accounts((prior,), (partial,), {prior.key: 1000}, now_ms=2000)
+
+        self.assertEqual("partial", partial.availability)
+        self.assertEqual(("5-hour", None), (primary_quota(reconciled[0]).label, primary_quota(reconciled[0]).remaining_fraction))
+        self.assertEqual("weekly", reconciled[0].quotas[0].label)
+        error = replace(partial, quotas=(), primary_quota_label=None, availability="error")
+        failed, _, _ = reconcile_accounts(reconciled, (error,), {prior.key: 1000}, now_ms=3000)
+        self.assertEqual(("5-hour", None), (primary_quota(failed[0]).label, primary_quota(failed[0]).remaining_fraction))
+        # A newly explicit native contract wins, even if its usage is missing.
+        changed = native({"primary_window": {"limit_window_seconds": 604800}}, 4000)
+        updated, _, _ = reconcile_accounts(failed, (changed,), {prior.key: 1000}, now_ms=4000)
+        self.assertEqual("weekly", primary_quota(updated[0]).label)
+        self.assertEqual("5-hour", primary_quota(replace(prior, quotas=tuple(reversed(prior.quotas)))).label)
+        self.assertEqual("5-hour", primary_quota(replace(prior, primary_quota_label=None, quotas=tuple(reversed(prior.quotas)))).label)
 
     @unittest.skipUnless(shutil.which('node'), 'node unavailable')
     def test_daily_and_account_dom_uses_canonical_display_units_and_warning_footers(self):

@@ -1,6 +1,6 @@
 # Watch daily summary and continuation guidance
 
-FR 000543, v80.124, 2026-11-02; implemented after FR 000542. Source and focused tests own current behavior.
+FR 000543, v80.124, with FR 000547/v80.128 amendments below, 2026-11-02. Source and focused tests own current behavior.
 
 ## Accounting and publication
 
@@ -12,7 +12,7 @@ Native quota observation remains separately refreshed. Matching-day historical c
 
 `session_watch_context` is current guidance, not a rewrite of historical row context. A hidden compaction may replace/remove/downgrade the latest prompt's footer state. Unknown or retired epochs cannot revive an older warning. `watch_context.card_context` carries structured severity and the multiplier belonging to that Watch model/context; only its latest owning focal (or historical session card) receives it. No severity is parsed from prose and no pricing is calculated in JavaScript.
 
-Watch-only account subgrid tracks align within each responsive row without clipping titles. Primary slot selection is provider/adapter-owned, never sorted by depletion. Ordinary Accounts/CLI rendering remains separate. The compact Total Today group uses prepared Credits/USD tokens and distinguishes initial loading, empty evidence, partial attribution/telemetry/pricing and retained acquisition failure.
+Watch-only account subgrid tracks align within each responsive row without clipping titles. Primary slot selection follows native declarations/account-window order, never provider identity or depletion. Ordinary Accounts/CLI rendering remains separate. Total Today uses prepared Credits/USD tokens and distinguishes initial loading, empty evidence, partial telemetry/pricing and retained acquisition failure; attribution completeness remains internal.
 
 ## Observed verification and limits
 
@@ -21,3 +21,53 @@ Watch-only account subgrid tracks align within each responsive row without clipp
 - Real V2: one owner/two streams/three accounts; full-day 1,582 retained requests and 131 attributed initiating prompts with incomplete attribution explicitly reported. Per-category reference costs exactly reconciled with total; daily acquisition 44.461s, independent cards 7.643s. Owned workers closed and shared OpenCode remained running.
 - Intermediate extended probe during source edits failed with HTTP timeout and live shutdown timeout; the later source-frozen repeat passed. Do not promote this sequence into a general shutdown diagnosis or performance guarantee.
 - No model inference, external browser process, physical macOS/mobile acceptance or real clock/source mutation. Deterministic tests cover midnight/DST, omissions, hidden compaction and delayed results. No delegated exception was needed.
+
+## FR 000547 — tables, native primary and quiet daily updates
+
+v80.128 moves conditional guidance immediately below its table and before activity,
+without a warning separator. Tables use shared panel/surface/line roles; sibling-only
+rules separate cards. Outlined history expands in document flow, with no vertical cap
+or internal scroll restoration. Daily-to-account spacing is Watch-scoped, 4px.
+
+`QuotaWindow.primary` carries explicit native primary declarations. `normalize_quota`
+preserves those flags and canonical account-window order in `primary_quota_label`.
+Watch excludes model-only limits and no longer invents a five-hour quota from OpenAI/
+Claude identity. Partial/error reconciliation retains an established slot, not its old
+usage; explicit replacement native contracts win. Unavailable method switches keep
+their prior invalidation behavior. Real secondary limits/reset details appear once.
+The resolver is shared application input for future Mini Watch, not a Mini-only default.
+
+The displayed prompt count is the known integer regardless of completeness, without
+changing canonical attribution/cost/mix. Routine refresh is silent and does not replace
+unchanged daily DOM. Loading is still used when the current scope lacks a valid value;
+genuine acquisition failures retain their truthful warning.
+
+### Verification and explicitly limited live proof
+
+- Final Full: 126 files, 1,535 tests, no failures; one existing zsh/PTY-unavailable skip
+  (1,534 passed). Validator passed, with four existing soft design-budget warnings;
+  hard limits unchanged. Initial Full failures exposed documentation caps and an
+  over-broad metadata retention on unavailable method switches; both were repaired,
+  not waived. No ZIP, model inference, credentials/clock mutation or shared-service stop.
+- Hidden Edge 156: nine Classic/light/dark × 1920/1366/360px cases passed. Natural
+  five-card history, distinct surfaces, warning adjacency, 4px account gap, ellipsis,
+  complete metrics/horizontal panning, focus/disclosures and sibling lines through
+  reorder/removal/history transitions were measured. Three synthetic screenshots were
+  inspected; no physical-input, screen-reader or macOS acceptance is claimed.
+- The broad real `probe_web_live.py --watch-cards --daily` **failed** with
+  `probe_daily_timeout`, then `web_shutdown_timeout` during owned-host cleanup.
+  Phase timings were not retained. No root cause or performance guarantee is inferred.
+- Decision Delegate directed a final-source focused check instead of a blind longer
+  retry: 120s work budget plus at most 30s forced cleanup, only attempt-owned processes.
+  It passed in 3.225s: three usable current native accounts; one real root/20 sampled
+  current-day requests/one initiating prompt; category costs reconciled; CLI/native/Web
+  primary population, model-scope exclusion, no invented five-hour/duplicate primary,
+  hidden-browser primary placement/plain count/quiet refresh all passed. Assertions
+  finished at 3.057s, normal resource cleanup at 3.134s; watchdog never forced termination.
+  Private detached projections stayed in memory; only sanitized aggregate results retained.
+- **Decision Delegate verification exception:** conditional on that focused pass,
+  delivery may omit another broad full-day probe. Full real-data daily completion/
+  accounting parity, loaded-host shutdown and the unreached two-stream checks remain
+  unverified. This is not owner approval, a reduced implementation, a broad live PASS,
+  or real-provider refresh/day-rollover proof. Deterministic cases cover those semantics;
+  the focused sum is only the acquired subset, never complete daily/account history.
