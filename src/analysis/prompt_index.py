@@ -42,6 +42,13 @@ class PromptIndex:
         index = bisect_right(self.times, at_ms) - 1
         return self.meaningful[index] if index >= 0 else None
 
+    def attempt_messages(self, parent_ids, messages):
+        """Assistant work plus failed pre-response attempts in this prompt window."""
+        result = [message for parent in parent_ids for message in self.assistants.get(parent, ())]
+        result.extend(messages[parent] for parent in parent_ids
+                      if parent in messages and messages[parent].termination is not None)
+        return sorted(result, key=lambda message: self.message_order[message.message_id])
+
     def before_entry(self, entry):
         index = bisect_left(self.keys, (entry.completed_at_ms, entry.sort_order)) - 1
         return self.meaningful[index] if index >= 0 else None

@@ -43,9 +43,10 @@ class TerminalOutcome(str, Enum):
 class TerminalEvidence:
     """Persisted end of a logical attempt, independent of inference completion.
 
-    Sources bind this to the attempt's final assistant message, not to an entire
-    session. Native completion/usage timestamps remain untouched. An optional
-    live actor may supplement this evidence, but its analysis is not persisted.
+    Sources bind this to the attempt's final assistant, or its initiating message
+    when failure preceded any response, never an entire session. Native usage and
+    completion timestamps stay untouched. A live actor can supplement evidence,
+    but its analysis is not persisted.
     """
 
     completed_at_ms: int

@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.139 — 2026-11-03
+
+- Watch: recognize persisted failures before a response, including synthetic continuations separated by system notices. Attempt-scoped ends survive retention, freeze duration and exclude terminal prompts from Web/Mini running metrics without inventing success, quota causes or usage.
+
 ## v80.138 — 2026-11-03
 
 - Web Watch: ten-column prompt tables with canonical #N previews, local start clocks, accessible header explanations and live observed I/C/W/O Token Mix %. Expanded history is unframed with one section divider; incomplete token telemetry stays unknown without changing CLI reports.

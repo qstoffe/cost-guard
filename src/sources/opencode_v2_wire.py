@@ -594,17 +594,18 @@ def normalize_terminal_lifecycle(
     items: Sequence[Mapping[str, Any]], messages: Sequence[NormalizedMessage], *, session_id: str,
     interruptions: LiveInterruptionReasons | None = None,
 ) -> tuple[NormalizedMessage, ...]:
-    """Bind persisted idle outcomes to the preceding assistant attempt only.
+    """Bind persisted idle outcomes to the immediately preceding run attempt.
 
-    User/synthetic/compaction boundaries prevent cross-run attribution. Later
-    assistant or tool work wins over old terminal evidence. Never manufacture
-    inference completion, errors or usage from session inactivity/status hints.
+    A failed run can end before producing an assistant. Keep that end on its
+    initiating user/synthetic message, never an earlier assistant. System notices
+    are not execution boundaries; compaction and ambiguous ordering remain so.
     """
     outcomes = {"succeeded": TerminalOutcome.SUCCESS, "failed": TerminalOutcome.FAILURE,
                 "interrupted": TerminalOutcome.CANCELLATION}
     result = list(messages)
+    notices = {item.get("id") for item in items if item.get("type") == "system"}
     ordered = sorted((message.created_at_ms, index) for index, message in enumerate(messages)
-                     if message.session_id == session_id)
+                     if message.session_id == session_id and message.message_id not in notices)
     times = [at for at, _index in ordered]
     for item in items:
         outcome = item.get("outcome")
@@ -626,7 +627,9 @@ def normalize_terminal_lifecycle(
             continue
         index = ordered[position - 1][1]
         message = result[index]
-        if message.role is not MessageRole.ASSISTANT:
+        pre_response = (message.role is MessageRole.USER and outcome in {"failed", "interrupted"}
+                        and not any(part.kind == "compaction" for part in message.parts))
+        if message.role is not MessageRole.ASSISTANT and not pre_response:
             continue
         activity = [message.completed_at_ms or message.created_at_ms]
         for part in message.parts:

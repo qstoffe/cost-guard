@@ -52,10 +52,13 @@ Rolling account history extends the daily plan only to usable native/trailing-wi
 
 Web cards and Session detail share `reports/session_history.py::analyze_observed`:
 retained objects preserve usage, while a source-certified complete snapshot owns
-current lifecycle through ordinary causal analysis. V1's read transaction and
+current lifecycle through ordinary causal analysis. Failed pre-response starts
+join assistant work only within their canonical prompt window; a newer assistant
+still wins. V1's read transaction and
 V2's all-page/revision-bracket acquisition certify `SessionSnapshot.complete`;
 partial/custom sources default to unproven. Durable ends stay assistant-attempt
-scoped through omitted idle rows; complete reclassification has no invented
+scoped through omitted idle rows. A failed start retains its initiating boundary
+if omitted, without restoring stale active children/tools; complete reclassification has no invented
 outcome/end. Card generation and capture-time checks reject delayed rows
 and failures. Terminal grace never contributes to running state or duration.
 

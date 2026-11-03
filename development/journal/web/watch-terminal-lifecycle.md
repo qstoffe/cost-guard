@@ -1,5 +1,67 @@
 # Web Watch terminal reconciliation
 
+## Follow-up: failed continuation before an assistant response
+
+2026-11-03 · FR 000559 · v80.139
+
+A bounded, read-only V2 metadata search found a candidate starting at
+2026-11-02 20:09:34.491 CET with Sonnet 5.5/Low, matching the report but not
+owner-confirmed. The complete source had an unfinished assistant with no usage,
+then a synthetic continuation, a system notice and a persisted failed idle at
+22:25:11.524 CET. The normalized error type was `provider.no-route`, with no
+verified quota cause. Baseline v80.138 classified this prompt as Running despite
+that explicit failed run. No private prompt text, paths or source IDs are needed
+in the regression. The earlier successful prompt remained independent.
+
+The source previously accepted terminal evidence only immediately after an
+assistant. Earlier FR000546/551 fixtures had an assistant directly before idle;
+they did not cover a continuation failing before its first response, especially
+with an intervening system notice. Source normalization now keeps failed or
+interrupted pre-response ends on the initiating user/synthetic identity, never
+reassigning them to an older assistant. Explicit system notices are transparent;
+compaction, success without a response, invalid/equal timestamps and unqualified
+status remain conservative. Shared causal prompt windows include these failed
+starts; a genuinely newer assistant remains eligible. Retention preserves an
+omitted failed-start boundary without reviving omitted active children/tools.
+
+The same live source now yields nonrunning/Error, not Completed or quota-aborted,
+with a frozen 8,137,033ms duration to that later supported failure. This is **not**
+the original quota-stop time or proof of 22 hours of processing. Native completion,
+usage and billing were not fabricated. No timeout, quota polling, frontend filter,
+real prompt intervention or shared-service restart was introduced.
+
+Evidence: the new regression failed before the repair; Full passed all 133 files,
+including prior lifecycle/fairness tests. Six native HTTP roots through actual
+isolated four-slot captures cover churn, quota/no-route/interruption, retained
+known CCost/calls, CLI/Mini state, complete/partial omissions, cold reconstruction,
+stale capture, finite grace and later live work. Fresh owned headless Edge
+156.0.4314.58 consumed scheduled exports through shipped SSE/presenters and actual
+DOM: Running → Aborted/quota → Earlier Prompts, frozen 3s, known usage unchanged,
+running count 6→5, reload/reconnect and duplicate-active rejection. This synthetic
+probe is not native desktop or the owner's original browser-state proof.
+
+The existing real-installation cards/detail probe passed on corrected code:
+V2 2.2.5, one owner/two streams, first rows 4.927s, four captures, consistent
+detail/freeze and clean owned shutdown (zero owned threads/processes). Optional
+Daily was not asserted and is not PASS; cancellation-phase read errors at owned
+shutdown do not establish a Daily result. Working-tree validation passed with
+six advisory prose/design warnings and unchanged hard caps. Authenticated status
+from an owned host reported v80.139; worker CLI was v80.138→v80.139. The known
+ordinary checkout CLI reported v80.66, not proof of the owner's actual invocation.
+Its Web diagnostics were `not_observed`, and integrated browsing was disconnected;
+the historical running host/version and original browser state remain unknown.
+
+**Decision Delegate exception, this FR/delivery only:** after inspecting the
+distinct defect and evidence, the foreground delegate authorized bounded delivery
+and Complete without owner-confirmed incident identity, historical WebHost/CLI
+versions, original browser state, original quota event/time, precise historical
+disappearance/reappearance mechanism or conclusive explanation of that particular
+mismatch. This is the delegate's decision, not user approval or a future waiver.
+It does not establish the reported incident fully solved. No extra installation
+search, visible desktop test or repetition of completed checks is required solely
+for that decision. Unavailable historical verification and optional Daily are not
+PASS. Physical desktop acceptance was not performed or claimed.
+
 ## Follow-up: capture starvation under revision churn
 
 2026-11-02 · FR 000551 · v80.129

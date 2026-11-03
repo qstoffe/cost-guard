@@ -3,6 +3,14 @@
 After authentication, **Web Beta v…** shows the running server's CLI product version,
 not a release lookup or newly edited source. Offline views retain their original version.
 
+v80.139 recognizes persisted failed/interrupted runs that ended before producing an
+assistant response, including resumed work followed by a system notice. The server
+retires the correct prompt, freezes duration and preserves known usage through
+refresh/retention and Earlier Prompts. Web and Mini Watch exclude terminal grace
+from running metrics. A later real attempt can still run; age, inactivity, missing
+usage and quota percentages alone never establish an end. Generic failures stay
+errors unless the source supports a specific abort/quota cause.
+
 ## Web settings
 
 v80.120 groups exactly two controls under **Settings → Web settings**, at
