@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.142 — 2026-11-03
+
+- Full Web Watch: compact 450px subscription cards, slimmer square-ended quota bars, inline independent period CCost and adjacent resets. Context cells show plain numbers with owner-scoped price-warning triangles while retaining full guidance below the table; Mini Watch and accounting are unchanged.
+
 ## v80.141 — 2026-11-03
 
 - Web Watch: Earlier selects and orders five sessions by canonical finish, with truthful unknowns and DST-aware clock help. Mini uses keyed per-prompt tables and thin primary-quota bars, independent 5/3-row scrolling, highlighted On and native-only close; accounting and shared lifecycle remain unchanged.

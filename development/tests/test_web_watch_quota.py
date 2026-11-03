@@ -93,6 +93,8 @@ class WebWatchQuotaTests(unittest.TestCase):
         known = ComparisonCost(D(1814), 2, 2)
         base = QuotaComponent('Monthly', used=D(2088), limit=D(25000), unit='AI credits')
         cases = (
+            ('owner example', QuotaComponent('5 hours', used=D(120), limit=D(750), unit='AI credits'),
+                ComparisonCost(D(94), 2, 2), '16%', '120/750 AI credits'),
             ('zero', replace(base, used=D(0)), known, '0%', '0/25000 AI credits'),
             ('49.9%', replace(base, used=D(12475)), known, '49.9%', '12475/25000 AI credits'),
             ('50%', replace(base, used=D(12500)), known, '50%', '12500/25000 AI credits'),
@@ -117,7 +119,7 @@ class WebWatchQuotaTests(unittest.TestCase):
         for name, quota, cost, percent, native in cases:
             with self.subTest(name=name):
                 wire = with_display(watch_quota(quota, QuotaPeriodProjection(quota, cost, None),
-                    estimated=name == 'estimated period')).to_json()
+                    estimated=name == 'estimated period'), now_ms=1000).to_json()
                 self.assertEqual(percent, wire['used_percent'])
                 self.assertEqual(name == 'full', wire['exhausted'])
                 self.assertEqual(native, wire['quota']['display']['quota_used'])

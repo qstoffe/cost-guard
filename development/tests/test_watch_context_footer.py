@@ -14,6 +14,7 @@ from src.reports.prompt_rows import PromptRowProjector
 from src.reports.watch_capture import capture_rows
 from src.reports.watch_context import card_context
 from src.watch.cards import CardSession, WatchCards
+from src.watch.card_workers import CardResult
 from src.watch.models import WatchProjection
 
 
@@ -41,6 +42,11 @@ class WatchContextFooterTests(unittest.TestCase):
                 capture, _ = self.capture(tokens, approach=approach)
                 self.assertEqual(severity, capture.context.severity)
                 self.assertEqual(tokens, capture.context.tokens)
+                entry = CardSession(self.source.snapshot.root, 'revision', 1, capture=capture, state='observed')
+                card = WatchCards(None)._card(entry, capture.rows[-1], 4000)
+                cell = project_live(WatchProjection('Watch', 'fixture', (), active_cards=(card,))).to_json()['active_cards'][0]['rows'][0]['context_cell']
+                self.assertEqual(severity, cell['warning']['severity'])
+                self.assertEqual(tokens, cell['watch_next_context_tokens'])
                 if severity != 'none':
                     self.assertEqual(Decimal(2), capture.context.multiplier)
         self.service._threshold_multiplier = lambda model, boundary: None
@@ -49,7 +55,7 @@ class WatchContextFooterTests(unittest.TestCase):
         self.assertIsNotNone(capture.context.cached_ccost)
 
     def test_hidden_compaction_removes_downgrades_and_invalidates_old_guidance(self):
-        _, item = self.capture(120000, snapshot=make_snapshot(running=True))
+        capture, item = self.capture(120000, snapshot=make_snapshot(running=True))
         for tokens, severity in ((20000, 'none'), (80000, 'approaching'), (120000, 'exceeded'), (None, 'none')):
             with self.subTest(tokens=tokens):
                 compact = replace(item.bundle.compactions[-1], result_context_tokens=tokens)
@@ -60,6 +66,12 @@ class WatchContextFooterTests(unittest.TestCase):
                 self.assertEqual(severity, guidance.severity)
                 self.assertEqual(tokens, guidance.tokens)
                 self.assertEqual('u_next', guidance.owner_id)
+                current = replace(capture, context=guidance)
+                entry = CardSession(item.session, 'revision', 1, capture=current, state='observed')
+                card = WatchCards(None)._card(entry, current.rows[-1], 4000)
+                cell = project_live(WatchProjection('Watch', 'fixture', (), history_cards=(card,))).to_json()['history_cards'][0]['rows'][0]['context_cell']
+                self.assertEqual(tokens, cell['watch_next_context_tokens'])
+                self.assertEqual(severity, cell['warning']['severity'])
 
     def test_context_boundary_never_revives_historical_row_guidance(self):
         snapshot = moved_location(make_uncompacted_snapshot(running=False), 3500)
@@ -82,8 +94,34 @@ class WatchContextFooterTests(unittest.TestCase):
         wire = project_live(WatchProjection('Watch', 'fixture', (), active_cards=(current,))).to_json()
         self.assertIn('2x more expensive', wire['active_cards'][0]['context_warning']['display']['warning_cost'])
         self.assertNotIn('context_warning', wire['active_cards'][0]['rows'][0])
+        cell = wire['active_cards'][0]['rows'][0]['context_cell']
+        self.assertEqual('u_next', cell['warning']['owner_id'])
+        self.assertEqual('exceeded', cell['warning']['severity'])
+        self.assertEqual(120000, cell['watch_next_context_tokens'])
+        multi = replace(current, rows=superseded.rows + current.rows)
+        rows = project_live(WatchProjection('Watch', 'fixture', (), active_cards=(multi,))).to_json()['active_cards'][0]['rows']
+        self.assertIsNone(rows[0]['context_cell']['warning'])
+        self.assertEqual('u_next', rows[1]['context_cell']['warning']['owner_id'])
         entry.state = 'unavailable'
         self.assertIsNone(cards._card(entry, focal, 4000).context_warning)
+
+    def test_out_of_order_capture_cannot_revive_pre_compaction_cell_warning(self):
+        capture, item = self.capture(120000)
+        cards = WatchCards(None)
+        entry = CardSession(item.session, 'revision', 7, capture=capture, state='observed')
+        cards.sessions[capture.session_id] = entry
+        compacted = replace(capture, observed_at_ms=capture.observed_at_ms + 1,
+            context=replace(capture.context, tokens=None, text='', severity=PriceWarningSeverity.NONE))
+
+        cards.accept(CardResult(capture.session_id, 7, 'rows', (compacted, (), None)), 5000)
+        cards.accept(CardResult(capture.session_id, 7, 'rows', (capture, (), None)), 5001)
+        cards.accept(CardResult(capture.session_id, 6, 'rows', (capture, (), None)), 5002)
+        card = cards._card(entry, entry.capture.rows[-1], 5002)
+        wire = project_live(WatchProjection('Watch', 'fixture', (), active_cards=(card,))).to_json()
+
+        cell = wire['active_cards'][0]['rows'][0]['context_cell']
+        self.assertIsNone(cell['watch_next_context_tokens'])
+        self.assertEqual('none', cell['warning']['severity'])
 
 
 if __name__ == '__main__':

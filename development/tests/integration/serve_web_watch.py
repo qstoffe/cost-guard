@@ -44,8 +44,10 @@ def fixture():
         active = replace(active, title="Long running session · UTF-8 Å日本語 · live prompt cards",
             focal_id=focal.prompt.event_id, rows=(focal,))
         summary = summary_watch()
-        active = replace(active, context_warning=summary.active_cards[0].context_warning)
-        history = tuple(replace(card, context_warning=summary.history_cards[0].context_warning) for card in cards[1:])
+        active = replace(active, context_warning=replace(summary.active_cards[0].context_warning,
+            owner_id=focal.prompt.event_id))
+        history = tuple(replace(card, context_warning=replace(summary.history_cards[0].context_warning,
+            owner_id=card.rows[-1].prompt.event_id)) for card in cards[1:])
         return dict(state="running", view=project_live(WatchProjection("Watch", "fixture", (),
             now_ms=summary.now_ms, active_cards=(active, replace(active, session_id="second", title="Second running session")),
             history_cards=history, cards_state="observed", history_state="observed", quota=summary.quota,

@@ -31,8 +31,18 @@ const WatchView = (() => {
     const quota = value.quota, summary = quota.unlimited ? 'Unlimited' : value.used_percent === '—' ? '—' : value.used_percent + ' used';
     const native = display(quota, 'quota_used');
     const usage = native.startsWith('N/A') ? '' : ` · ${native}${quota.unlimited || value.used_fraction == null ? ' used' : ''}`;
-    const label = el('div', `${quota.label} · ${summary}${usage}`,
+    const label = el('div', `${quota.label} · ${summary}`,
       'watch-quota-summary metric-value' + (value.exhausted ? ' watch-quota-exhausted' : ''));
+    if (!quota.unlimited && value.used_fraction != null && value.cost != null &&
+        (!value.cost.observed_requests || value.cost.priced_requests)) {
+      const cost = el('span', () => ` (${display(value.cost, 'account_ccost')})`, 'watch-period-cost');
+      const provenance = [!value.cost.complete ? 'partial attribution' : '', value.estimated ? 'estimated attribution' : ''].filter(Boolean);
+      cost.title = `Observed CCost for ${quota.label}; independent of provider-native Used.` +
+        (provenance.length ? ' ' + provenance.join('; ') + '.' : '') + (value.note ? ' ' + value.note : '');
+      cost.tabIndex = 0; cost.setAttribute('aria-description', cost.title);
+      label.append(cost);
+    }
+    label.append(el('span', usage));
     const track = el('div', undefined, 'watch-quota-track');
     if (!quota.unlimited && value.used_fraction != null) {
       const bar = el('progress'); bar.max = 1; bar.value = value.used_fraction;
@@ -44,10 +54,6 @@ const WatchView = (() => {
   }
   function quotaDetails(parent, value) {
     const quota = value.quota;
-    const provenance = [value.cost && !value.cost.complete ? 'partial' : '', value.estimated ? 'estimated' : ''].filter(Boolean);
-    const cost = el('p', () => `CCost: ${value.cost == null ? '—' : display(value.cost, 'account_ccost')}${provenance.length ? ' · ' + provenance.join(' · ') : ''}`, 'detail');
-    cost.title = value.note || 'Observed CCost for this quota window; independent of provider-native usage.';
-    parent.append(cost);
     const reset = el('p', display(value, 'watch_reset'), 'detail');
     if (quota.reset_at_ms != null) { reset.title = display(quota, 'reset_at_ms'); reset.tabIndex = 0; }
     parent.append(reset);
@@ -122,6 +128,21 @@ const WatchView = (() => {
     ['Context', 'Estimated next incoming context (CLI Watch); approximate tokens for the next model call, not a usage total.']
   ];
   let helpSequence = 0;
+  function contextCell(item, node = el('span'), warningId) {
+    const value = item.context_cell, context = display(value, 'watch_next_context_tokens');
+    const warning = value?.warning, visible = context !== 'N/A' && warning?.owner_id === item.prompt.event_id &&
+      ['approaching', 'exceeded'].includes(warning.severity);
+    if (!node.children.length) node.append(el('span', undefined, 'watch-warning-icon'), el('span'));
+    const [icon, number] = node.children;
+    icon.hidden = !visible; icon.tabIndex = visible ? 0 : -1;
+    text(icon, visible ? '⚠ ' : ''); text(number, context);
+    icon.title = visible ? `${warning.severity === 'approaching' ? 'Approaching' : 'Exceeded'} context price threshold. ` +
+      warning.text.replace(/^\[|\]$/g, '') + '. See the full warning below this table.' : '';
+    icon.setAttribute('aria-label', icon.title);
+    icon.setAttribute('role', 'img'); icon.setAttribute('aria-describedby', warningId);
+    node.dataset.severity = visible ? warning.severity : 'none';
+    return node;
+  }
   function columnHeader(name, explanation) {
     const th = el('th'); th.scope = 'col';
     const button = el('button', name, 'watch-column-help'), help = el('div', explanation, 'watch-column-description');
@@ -154,6 +175,7 @@ const WatchView = (() => {
       this.tools = disclosure(); this.skills = disclosure(); this.running = el('p'); this.background = el('p');
       this.activity.append(this.tools.node, this.skills.node, this.running, this.background);
       this.warning = el('div', undefined, 'watch-context-warning');
+      this.warning.id = 'watch-warning-' + ++helpSequence;
       this.warningIcon = el('span', '⚠ ', 'watch-warning-icon'); this.warningText = el('span');
       this.warning.append(this.warningIcon, this.warningText);
       this.root.append(heading, this.message, scroll, this.warning, this.activity);
@@ -188,15 +210,20 @@ const WatchView = (() => {
             started.setAttribute('aria-label', started.title);
             const model = el('span', item.model);
             if (prompt.has_additional_model) model.title = 'Additional model contribution included in canonical cost and calls';
-            const context = display(item.live_context, 'watch_next_context_tokens');
             const cells = [started, display(item, 'watch_duration_ms'), label, model, item.effort,
               () => display(prompt, 'ccost'), String(prompt.calls), display(prompt, 'token_mix_percent'),
-              display(item.live_context, 'watch_delta_context_tokens'), context === 'N/A' ? context : '~' + context];
+              display(item.live_context, 'watch_delta_context_tokens'), contextCell(item, undefined, this.warning.id)];
             row.replaceChildren(...cells.map(value => { const cell = el('td'); cell.append(typeof value === 'object' ? value : el('span', value)); return cell; }));
             row.signature = signature;
           }
           return row;
         }));
+      }
+      // A focused/selected table may defer row replacement, never warning invalidation.
+      const current = new Map(value.rows.map(item => [item.prompt.event_id, item]));
+      for (const row of this.body.children) {
+        const item = current.get(row.dataset.id);
+        if (item) contextCell(item, row.children[9].children[0], this.warning.id);
       }
       this.activity.hidden = historical || !value.focal_id;
       if (!historical) this.drawActivity(value.rows.find(row => row.prompt.event_id === value.focal_id)?.tool);

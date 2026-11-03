@@ -34,7 +34,10 @@ remaining owned worker, not just a live serving/publisher thread.
 
 Full Watch's `watch_accounts.py` quota slots export native amount/limit/unit inputs
 to the shared application display tokens. `watch.js` keeps Used/Total with the native
-percentage/bar and labels independent period CCost below it, before reset/pace.
+percentage/bar and appends independent period CCost in bare parentheses after Used.
+Focusable provenance explains the window, independence and partial/estimated attribution;
+unavailable costs are omitted, while known zero remains numeric. Reset sits directly
+under its own bar, followed by pace; there is no separate cost/provenance row.
 Primary and secondary slots share this presentation; currency switches only CCost.
 Acquisition, period accounting, CLI/Accounts and Mini Watch semantics are unchanged.
 
@@ -199,14 +202,23 @@ limits: [Watch cards](../../journal/web/watch-cards.md). The older
 acceptance; use approval-only `probe_watch_cards.cjs` and the integrated-browser
 `serve_web_watch.py` fixture, plus read-only `probe_web_live.py --watch-cards --detail`.
 
-Full Watch subscription tracks cap at 30rem with slimmer title padding and 1.25rem
-teal bars. Canonical per-quota exhaustion alone colors that summary/fill red and
+Full Watch subscription tracks and cards cap at 450 CSS pixels, independently of root
+font size, and shrink below that cap. Slim .83rem teal bars use 2px track/fill corners
+in Chromium/WebKit and Gecko selectors. Canonical per-quota exhaustion alone colors that summary/fill red and
 tints only its subscription header; stale/restriction warnings remain independent.
 Application display prepares Watch-only reset tokens using shared `duration_text`
 and canonical deadline/local-clock timestamps. Live's existing publication time
 advances these tokens without provider polling or browser timers. The nested generic
 reset token remains unchanged for Accounts, CLI and Mini Watch. Focused formatting,
 DOM and rendered responsive evidence: [Watch polish](../../journal/web/watch-polish.md).
+`live_projection.card_row` additionally exports a full-Watch-only `context_cell`:
+the canonical guidance owner supplies its current tokens and structured warning;
+other rows never inherit its severity. This includes unknown/compacted continuation
+state rather than falling back to obsolete row tokens. Existing `live_context` stays
+unchanged for Mini. `watch.js` renders plain Context numbers and a focusable inline
+gold/orange triangle for approaching/exceeded only, retaining the complete footer.
+In-place cell updates invalidate warnings even while focus/selection defers replacing
+the surrounding row. No JavaScript thresholds, valuation or lifecycle rules are added.
 
 Watch capture already opts into canonical observed running metrics. Its minimal card
 export now retains `token_mix_percent`; no client attribution, rounding or acquisition
