@@ -1,14 +1,18 @@
 """Canonical running aggregates and app-owned Mini lifecycle without a browser dependency."""
 from dataclasses import replace
+from datetime import datetime, timezone
 from decimal import Decimal as D
 from pathlib import Path
 import json
 import shutil
 import subprocess
 import unittest
+from unittest.mock import patch
+from zoneinfo import ZoneInfoNotFoundError
 
 from development.tests.fixtures.watch_summary import summary_watch
 from src.application.live_projection import project_live
+from src.analysis.timezones import resolve_timezone
 from src.watch.models import WatchCard, WatchRow
 from src.watch.running import running_prompts
 
@@ -20,8 +24,9 @@ class MiniWatchTests(unittest.TestCase):
         self.frame = summary_watch()
         base = self.frame.active_cards[0].rows[0].prompt
         self.first = replace(base, event_id="one", ccost=D("1.25"), duration_ms=600_000,
-            cost_estimated=False, unresolved_cost=False)
-        self.second = replace(self.first, event_id="two", ccost=D("2.75"), duration_ms=1_200_000)
+            prompt_number=23, at_ms=1000, cost_estimated=False, unresolved_cost=False)
+        self.second = replace(self.first, event_id="two", prompt_number=24, at_ms=2000,
+            ccost=D("2.75"), duration_ms=1_200_000)
         self.cards = tuple(WatchCard("same-session", "Concurrent", row.event_id,
             (WatchRow("same-session", "Concurrent", row),), "observed") for row in (self.first, self.second))
 
@@ -73,6 +78,39 @@ class MiniWatchTests(unittest.TestCase):
         result = subprocess.run([shutil.which("node"), "development/tests/integration/mini_watch.cjs"],
             cwd=ROOT, input=json.dumps(payload), text=True, encoding="utf-8", capture_output=True, timeout=15)
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+
+    def test_finish_export_uses_terminal_evidence_local_date_and_dst_offset(self):
+        for when, clock, full in (
+                ((2026, 11, 3, 23, 30), '00:30', '2026-11-04 00:30 +0100'),
+                ((2026, 10, 25, 0, 30), '02:30', '2026-10-25 02:30 +0200'),
+                ((2026, 10, 25, 1, 30), '02:30', '2026-10-25 02:30 +0100')):
+            finished = int(datetime(*when, tzinfo=timezone.utc).timestamp() * 1000)
+            row = replace(self.first, completed_at_ms=finished, in_progress=False,
+                aborted=True, abort_reason='quota_limit', completed_successfully=False)
+            card = replace(self.cards[0], rows=(WatchRow('same-session', 'Concurrent', row),))
+
+            wire = project_live(replace(self.frame, history_cards=(card,)), 'Europe/Stockholm').to_json()
+            prompt = wire['history_cards'][0]['rows'][0]['prompt']
+
+            with self.subTest(when=when):
+                self.assertEqual((finished, clock, full), (prompt['completed_at_ms'],
+                    prompt['display']['finished_clock'], prompt['display']['finished_date_time']))
+                self.assertEqual(600_000, prompt['duration_ms'])
+                self.assertFalse(prompt['completed_successfully'])
+        unknown = replace(row, completed_at_ms=None)
+        card = replace(card, rows=(WatchRow('same-session', 'Concurrent', unknown),))
+        prompt = project_live(replace(self.frame, history_cards=(card,))).to_json()['history_cards'][0]['rows'][0]['prompt']
+        self.assertEqual(('—', 'Unknown finish time'),
+            (prompt['display']['finished_clock'], prompt['display']['finished_date_time']))
+
+    def test_windows_timezone_fallback_preserves_repeated_hour_identity(self):
+        with patch('src.analysis.timezones.ZoneInfo', side_effect=ZoneInfoNotFoundError):
+            zone = resolve_timezone('Europe/Stockholm')
+        for hour, fold, expected in ((0, 0, '+0200'), (1, 1, '+0100')):
+            utc = datetime(2026, 10, 25, hour, 30, tzinfo=timezone.utc)
+            local = utc.astimezone(zone)
+            self.assertEqual(('02:30', expected, fold), (local.strftime('%H:%M'), local.strftime('%z'), local.fold))
+            self.assertEqual(utc.timestamp(), local.timestamp())
 
 
 if __name__ == "__main__":

@@ -18,6 +18,7 @@ class CardSession:
     admission_order: int = 0
     state: str = "loading"
     latest_ms: int | None = None
+    finished_ms: int = 0
     refresh_requested: bool = True
     source_status: SourceStatus = field(default_factory=SourceStatus)
 
@@ -110,6 +111,8 @@ class WatchCards:
                         entry.terminals.pop(key, None)
             entry.capture, entry.tools, entry.snapshot = capture, dict(tools), snapshot
             entry.latest_ms = capture.latest_ms
+            representative = capture.history_row
+            entry.finished_ms = (representative.completed_at_ms or 0) if representative else 0
             entry.state = "partial" if capture.retained else "observed"
             if not capture.retained:
                 entry.source_status.clear()
@@ -126,7 +129,9 @@ class WatchCards:
         return tuple(running + recent)
 
     def historical_ids(self, now_ms):
-        eligible = [(entry.latest_ms, key) for key, entry in self.sessions.items()
+        # Unknown-ended history sorts before known finishes and fills spare slots;
+        # neither source receipt nor start time is passed off as a finish clock.
+        eligible = [(entry.finished_ms, key) for key, entry in self.sessions.items()
             if entry.latest_ms and not self._focals(entry, now_ms)]
         return tuple(key for _, key in sorted(eligible, key=lambda pair: (-pair[0], pair[1]))[:5])
 
@@ -174,7 +179,8 @@ class WatchCards:
         if capture is None:
             return WatchCard(entry.root.session_id, entry.root.title or entry.root.session_id,
                 "", (), state=state)
-        rows = (focal,) if focal is not None else capture.rows[-1:]
+        representative = focal if focal is not None else capture.history_row
+        rows = (representative,) if representative is not None else ()
         projected = []
         for row in rows:
             observed_ms = capture.observed_at_ms if state in {"retrying", "unavailable"} else now_ms
@@ -209,7 +215,7 @@ class WatchCards:
             if not focals and key in self.active_candidates and entry.capture is None and entry.latest_ms is None:
                 active.append((entry.root.created_at_ms, key, "", self._card(entry, None, now_ms)))
         history = [self._card(self.sessions[key], None, now_ms) for key in self.historical_ids(now_ms)]
-        history.sort(key=lambda card: (card.rows[-1].prompt.at_ms if card.rows else 0,
+        history.sort(key=lambda card: ((card.rows[-1].prompt.completed_at_ms or 0) if card.rows else 0,
             card.session_id, card.rows[-1].prompt.event_id if card.rows else ""))
         pending = any(key in self.active_candidates and entry.latest_ms is None for key, entry in self.sessions.items())
         visible = [entry for key, entry in self.sessions.items()

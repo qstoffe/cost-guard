@@ -30,6 +30,18 @@ def main():
                 time.sleep(.25)
                 continue
             wire = project_live(frame).to_json()
+            history = wire['history_cards']
+            assert len(history) <= 5 and len({card['session_id'] for card in history}) == len(history)
+            finishes = []
+            for card in history:
+                assert len(card['rows']) == 1
+                prompt = card['rows'][0]['prompt']
+                assert not prompt['in_progress']
+                finished = prompt['completed_at_ms']
+                finishes.append(finished or 0)
+                if finished is None:
+                    assert prompt['display']['finished_clock'] == '—'
+            assert finishes == sorted(finishes)
             running = wire["running"]
             expected = {(card["session_id"], row["prompt"]["event_id"]): row
                 for card in wire["active_cards"] for row in card["rows"]
@@ -46,6 +58,7 @@ def main():
                     "running_count": running["count"], "running_complete": running["complete"],
                     "running_cost_complete": not running["unresolved_cost"], "accounts": len(accounts),
                     "primary_period_costs_available": sum(item["primary"]["cost"] is not None for item in accounts),
+                    "finished_history_cards": len(history), "known_finish_times": sum(bool(value) for value in finishes),
                     "single_acquisition_owner": True, "seconds": round(time.monotonic() - started, 3)}))
                 break
             time.sleep(.25)

@@ -49,7 +49,8 @@ class _EuropeStockholm(tzinfo):
         naive_utc = dt.replace(tzinfo=timezone.utc)
         start, end = self._utc_bounds(dt.year)
         offset = self._daylight if start <= naive_utc < end else self._standard
-        return (naive_utc + offset).replace(tzinfo=self)
+        fold = int(end <= naive_utc < end + timedelta(hours=1))
+        return (naive_utc + offset).replace(tzinfo=self, fold=fold)
 
     def utcoffset(self, dt: datetime | None) -> timedelta:
         if dt is None:
@@ -61,6 +62,10 @@ class _EuropeStockholm(tzinfo):
         local = dt.replace(tzinfo=None)
         start = datetime.combine(start_day, datetime.min.time()) + timedelta(hours=2)
         end = datetime.combine(end_day, datetime.min.time()) + timedelta(hours=3)
+        if end - timedelta(hours=1) <= local < end:
+            return self._standard if dt.fold else self._daylight
+        if start <= local < start + timedelta(hours=1):
+            return self._daylight if dt.fold else self._standard
         return self._daylight if start <= local < end else self._standard
 
     def dst(self, dt: datetime | None) -> timedelta:

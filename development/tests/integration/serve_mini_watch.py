@@ -34,7 +34,8 @@ def main():
         frame = summary_watch()
         base = frame.active_cards[0]
         cards = tuple(replace(base, focal_id=str(index), rows=(WatchRow(base.session_id, base.title,
-            replace(base.rows[0].prompt, event_id=str(index), duration_ms=duration,
+            replace(base.rows[0].prompt, event_id=str(index), prompt_number=22 + index,
+                at_ms=frame.now_ms - duration, duration_ms=duration,
                 ccost=Decimal(cost), unresolved_cost=False, cost_estimated=False)),))
             for index, duration, cost in ((1, 600_000, "1.25"), (2, 1_200_000, "2.75")))
         frame = replace(frame, active_cards=cards, running=running_prompts(cards, "observed"))
@@ -57,7 +58,7 @@ def main():
                     break
                 if command == "terminal":
                     ended = replace(cards[1], rows=(replace(cards[1].rows[0],
-                        prompt=replace(cards[1].rows[0].prompt, in_progress=False)),))
+                        prompt=replace(cards[1].rows[0].prompt, in_progress=False, completed_successfully=True)),))
                     current = (cards[0], ended)
                     publish(value=replace(frame, active_cards=current, running=running_prompts(current, "observed")))
                 elif command == "empty":
@@ -66,6 +67,16 @@ def main():
                     publish(state="recovering")
                 elif command == "running":
                     publish()
+                elif command.startswith('density-'):
+                    _, prompts, accounts = command.split('-')
+                    current = tuple(replace(cards[0], focal_id=str(index),
+                        rows=(replace(cards[0].rows[0], prompt=replace(cards[0].rows[0].prompt,
+                            event_id=str(index), prompt_number=index + 23, at_ms=frame.now_ms - 10000 + index)),))
+                        for index in range(int(prompts)))
+                    quota = replace(frame.quota, accounts=tuple(replace(item, label=f'Subscription {index + 1}')
+                        for index, item in enumerate(frame.quota.accounts[:int(accounts)])))
+                    publish(value=replace(frame, active_cards=current, quota=quota,
+                        running=running_prompts(current, 'observed')))
                 else:
                     raise ValueError("unsupported_probe_command")
                 print('{"ok":true}', flush=True)

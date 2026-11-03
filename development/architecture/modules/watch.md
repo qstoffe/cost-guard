@@ -38,8 +38,12 @@ successful relevant acquisition alone clears it. Initial/non-retryable failures
 are immediate. Cards freeze observed duration while retrying; daily uses the existing
 single history lane for a five-second retry. Browser HTTP/SSE health remains separate;
 no CLI recovery/cadence or source-acquisition limits change. Web history first selects
-the five latest eligible sessions, then orders displayed prompt start/session/prompt IDs
-ascending. Context warnings retain canonical severity; only icon/text emphasis changes.
+the five sessions with the latest supported terminal times, then orders exact representative
+finish/session/event IDs ascending. `WatchCapture.history_row` owns the representative;
+capture retains its bounded context anchor even outside the six most recent starts.
+Unknown-ended history fills spare slots before known finishes with deterministic identity,
+never inventing a timestamp or displacing a known finish. Running start order, grace and CLI
+history semantics remain unchanged. Context warnings retain canonical severity.
 
 `sources/connectivity.py` observes complete operations, not harmless compatibility probes; `connectivity_events.py` owns the existing bounded source transition file (24 events/30 days, whitelist/no raw endpoints/auth/payloads). Watch and selection share it; Diagnostics archives without deleting live history. Metadata TLS certificate failures are distinct from other TLS; its existing cache/backoff owner is unchanged.
 

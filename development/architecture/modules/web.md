@@ -52,6 +52,16 @@ refresh its epoch. External `mini.css` reuses `app.css` theme tokens under uncha
 CSP. Primary subscription costs reuse the indexed native-period history lane and
 stable server primary selection, with estimated/partial attribution retained.
 
+Mini renders canonical active/focal card identities, not the running aggregate: one
+keyed row per prompt with prompt-local cost/duration/context and shared terminal grace.
+Its two unframed regions scroll independently beyond five prompts/three subscriptions;
+primary Used bars stay thin and cyan until authoritative exhaustion. Estimated costs
+have accessible provenance without a visible approximation glyph. Native close and
+the filled Watch toggle own closing; the title still returns to the existing tab.
+Healthy Live text is omitted, not failure/freshness warnings. Earlier exports canonical
+`completed_at_ms` and local finished display tokens; the Windows Stockholm fallback
+preserves repeated-hour fold/offset identity. No source, accounting or lifecycle owner moves.
+
 `src/web/lifecycle.py` owns deliberate launcher restart, overlap coalescing, bounded readiness/stop and detached spawn. `src/web/instance_state.py` owns canonical checkout/user identity, transition and lifetime OS locks, private atomic records and bounded allowlisted lifecycle diagnostics. `src/web/process_identity.py` owns native birth/image proof and safe termination handles. `src/web/change_guard.py` owns the allowlisted five-second runtime metadata baseline and terminal source_changed state; it never reloads/restarts code.
 
 `src/web/native_windows.py` owns same-process main-thread GUI integration and one asynchronous registered-browser handoff. `src/web/win32_tray.py` owns typed in-box Win32 resources/message dispatch and Explorer taskbar recovery; `src/web/tray_icon.py` owns the original source-rendered artwork. `src/web/windows_launch.py` and `src/web/windows_launch.ps1` own Beta-only Python/configuration/native preflight and sanitized failure feedback; stable terminal launchers do not import them. The Windows Beta batch waits synchronously for PowerShell's launch status; indeterminate activity spans bounded Python discovery and streamed startup stages until validated ready plus the OS browser-open result. The managed pythonw host remains detached/tray-owned, never console-owned; exit does not prove browser first paint. No compiler/cache/daemon is added. [Earlier hidden-delegation evidence](../governance/verification/windows-handoff.md) is historical, superseded by FR 000537.

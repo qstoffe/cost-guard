@@ -19,9 +19,10 @@ Status: current
   and historical-incident limits/FR000559's scoped delivery exception.
 - [Shared/native CI scope](ci-scope.md): measured Linux shared regression and
   focused three-architecture native startup, scoped handoff permission and proof limits.
-- [Mini Watch](mini-watch.md): canonical running aggregate, shared native-period
-  costs, actual headless Chrome/Edge PiP/hidden-page updates, real V2 evidence and
-  explicit Decision Delegate physical-desktop/shutdown verification exceptions.
+- [Mini Watch and finished history](mini-watch.md): finish-based representatives,
+  Windows repeated-hour offsets, keyed prompt tables/thin native quota bars,
+  actual Chrome/Edge PiP/5+3/hidden-page and V2 evidence; physical proof remains
+  unverified. Historical FR 000544 exceptions remain scoped to that earlier task.
 - [Models loading progress](models-progress.md): real Normal stage ownership,
   before/after synthetic observations, bounded process/browser updates and separate
   V2 probe timings/availability limits.

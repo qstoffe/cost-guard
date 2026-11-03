@@ -83,7 +83,7 @@ class WatchCardTests(unittest.TestCase):
         cards.catalog(self.catalog(active=active_ids))
         for index, root in enumerate(self.roots):
             capture = replace(self.capture, latest_ms=9000 - index,
-                rows=(replace(self.capture.rows[-1], at_ms=9000 - index),))
+                rows=(replace(self.capture.rows[-1], at_ms=1000 + index, completed_at_ms=9000 - index),))
             if index < 2:
                 capture = replace(capture, rows=(replace(capture.rows[-1], in_progress=True),))
             self.publish(cards, root, capture)
@@ -96,7 +96,7 @@ class WatchCardTests(unittest.TestCase):
         cards = WatchCards(ManualWorkers())
         cards.catalog(self.catalog())
         for index, root in enumerate(self.roots):
-            row = replace(self.capture.rows[-1], at_ms=1000 + index // 2)
+            row = replace(self.capture.rows[-1], at_ms=1000 + index, completed_at_ms=2000 + index // 2)
             self.publish(cards, root, replace(self.capture, rows=(row,), latest_ms=row.at_ms))
         expected = [root.session_id for root in self.roots[2:3] + self.roots[4:]]
         self.assertEqual(expected, [card.session_id for card in cards.project(2000)[1]])
@@ -106,8 +106,49 @@ class WatchCardTests(unittest.TestCase):
         row = replace(self.capture.rows[-1], at_ms=2000, in_progress=True)
         self.publish(cards, root, replace(self.capture, rows=(row,), latest_ms=2000))
         self.assertNotIn(root.session_id, [card.session_id for card in cards.project(2002)[1]])
-        self.publish(cards, root, replace(self.capture, rows=(replace(row, in_progress=False),), latest_ms=2000), now=2003)
+        self.publish(cards, root, replace(self.capture, rows=(replace(row, in_progress=False, completed_at_ms=3000),), latest_ms=2000), now=2003)
         self.assertEqual(root.session_id, cards.project(32003)[1][-1].session_id)
+
+    def test_latest_finish_outside_recent_start_slice_keeps_its_exact_prompt(self):
+        root = self.roots[0]
+        snapshot = self.source.snapshots[root.session_id]
+        first = snapshot.invocations[0]
+        self.source.snapshots[root.session_id] = replace(snapshot,
+            messages=tuple(replace(message, completed_at_ms=99000) if message.message_id == first.message_id else message
+                for message in snapshot.messages),
+            invocations=(replace(first, completed_at_ms=99000),) + snapshot.invocations[1:])
+
+        capture, _ = capture_rows(self.service, root)
+        cards = WatchCards(ManualWorkers())
+        cards.catalog(self.catalog((root,)))
+        self.publish(cards, root, capture)
+        row = cards.project(100000)[1][0].rows[0].prompt
+
+        self.assertEqual((1, first.initiating_event_id, 99000, 'prompt 0-0'),
+            (row.prompt_number, row.event_id, row.completed_at_ms, row.preview))
+        self.assertEqual(capture.rows[0].ccost, row.ccost)
+        self.assertFalse(row.in_progress)
+
+    def test_unknown_history_fills_spare_slots_without_displacing_known_finishes(self):
+        cards = WatchCards(ManualWorkers())
+        cards.catalog(self.catalog())
+        for index, root in enumerate(self.roots):
+            row = replace(self.capture.rows[-1], completed_at_ms=None if index < 4 else 10000 - index,
+                completed_successfully=index >= 4, at_ms=9000 + index)
+            self.publish(cards, root, replace(self.capture, rows=(row,), latest_ms=row.at_ms))
+
+        history = cards.project(20000)[1]
+
+        self.assertEqual([self.roots[index].session_id for index in (0, 7, 6, 5, 4)],
+            [card.session_id for card in history])
+        unknown = history[0].rows[0].prompt
+        self.assertIsNone(unknown.completed_at_ms)
+        self.assertFalse(unknown.completed_successfully)
+        # Timestamp ties use event identity, never a different start-selected row.
+        a = replace(unknown, event_id='a', completed_at_ms=20000, at_ms=15000)
+        z = replace(unknown, event_id='z', completed_at_ms=20000, at_ms=1000)
+        self.publish(cards, self.roots[1], replace(self.capture, rows=(z, a)))
+        self.assertEqual('z', cards.project(20001)[1][-1].rows[0].prompt.event_id)
 
     def test_retryable_card_failure_retains_rows_confirms_once_and_requires_success(self):
         clock = [0.0]

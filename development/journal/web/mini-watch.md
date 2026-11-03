@@ -1,4 +1,66 @@
-# Mini Watch — FR 000544
+# Mini Watch and finished history
+
+## FR 000561 — v80.141, 2026-11-03
+
+Implementation base: `5a2fe691ba8c8bd5701b4beada8863d50930754c`.
+
+### Current ownership and edge cases
+
+- `WatchCapture.history_row` chooses the exact supported latest terminal prompt;
+  capture also keeps its bounded context anchor when it falls outside the six most
+  recent starts. `WatchCards` ranks membership and display by that finish, not
+  catalog activity/start. Unknown-ended sessions fill spare slots before known
+  finishes with stable identity ordering and an unknown clock. No usage is deleted.
+- `live_projection` exports the canonical terminal timestamp; display owns localized
+  Finished tokens and full date/time/UTC offset. The new DST regression found that
+  the dependency-free Windows Stockholm fallback lost autumn fold identity. It now
+  preserves the repeated hour and offset without changing observed terminal times.
+- Mini renders shared focal identities and display tokens directly, never aggregate
+  counts as rows, source reads or lifecycle guesses. Rows/cells and provider-aware
+  account identities stay keyed across SSE/units/reordering. Final metrics remain
+  visible for shared terminal grace; success/abort/error/unknown endings stay distinct.
+- Mini's independent five-prompt/three-account scroll areas use a sticky header,
+  title ellipsis and thin primary native Used bars. Cost attribution/completeness is
+  accessible without a visible cost approximation glyph. Healthy Live text and the
+  custom frame/close are removed; health/freshness and native identity guards remain.
+  The old canonical running aggregate remains available, with no accounting change.
+- Session-current continuation guidance remains under its existing owner; it is
+  not reconstructed from the historical representative's old context. A transient
+  implementation change broke that existing footer regression and was removed.
+
+### Executed evidence and limits
+
+- **PASS:** final local Full, 133 files, 75.2s. Validator: 11 passes, zero failures,
+  six advisory warnings (existing README/Web guide/history and three Python design
+  budgets); no hard-cap changes. No archive or model inference.
+- **PASS:** final headless Chrome **156.0.8078.80** and Edge **156.0.4314.58** using
+  owned fresh profiles, shipped HTTP/CSP/assets/authorization/SSE and disposable
+  settings. Actual request initially grants **560×450**; five prompt/three one-line
+  subscription rows have no outer or internal overflow. Native resize yields
+  **538×405**, still fitting 5/3, with **9.75px** thin bars. Rows 6/4 scroll independently;
+  account counts 1/2/3/4/6, long labels, 125% fonts, narrow native resize, sticky
+  headers, Classic/Web light/dark, Credits/USD and keyboard activation pass.
+- Native API close/replacement, Watch toggle/reload to Off, retained navigation and
+  return-to-existing-tab pass. Actual hidden opener/visible PiP SSE updates preserve
+  completed prompt-local metrics, then empty/recovery/host-stopped warnings, with
+  exactly one EventSource. VM tests cover cancel/reject/races, source/auth/offline
+  states, canonical ordinals, deduplication, row identity, abort/quota/error/unknown,
+  partial costs, Unlimited/near-100/exhausted bars and provider-aware reordering.
+- **PASS:** installed V2 read-only probe: three coherent publications, one running
+  prompt, two correctly ordered known-finish history cards, three accounts/one
+  available period cost; **7.83s**, owned close **0.089s**. Shared OpenCode untouched.
+- Earlier failures were repaired: cost test expectations now follow existing integer
+  CCost rounding; default 800×600 headless screen clamped PiP. The final test explicitly
+  uses a synthetic **1920×1080** screen, not `--window-size` (which overrides popup
+  geometry). Initial and native-resized dimensions are independently measured.
+- **Unverified:** physical native close/return chrome, minimized OS restoration,
+  always-on-top/z-order/OS geometry, screen-reader output and macOS. Browser automation
+  is real hidden Chromium with CDP test activation, not physical clicking. No external
+  desktop interaction or security-relaxing flag was used. Small browser/OS bounds
+  may force internal scrolling. No scoped exception is claimed or reused for this FR;
+  the specification explicitly requests evidence within safe available limits.
+
+## Historical FR 000544
 
 Date: 2026-11-03. Implementation base: `dd9507f5561dcc9e624baa64f07dd4555f84391b`.
 Product: v80.131. These observations apply to this feature, not every desktop/browser.
