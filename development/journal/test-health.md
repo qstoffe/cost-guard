@@ -73,7 +73,7 @@ Watch Today rollover remains in watch/today_ccost and test_watch_today_ccost. Re
 - Darwin ENOTCONN can follow wire rejection at write-half-close; tolerate only that race, assert actual response bytes and retain EPERM propagation. [40413855775](https://github.com/qstoffe/cost-guard/actions/runs/40413855775), with a deterministic canary; never infer rejection by swallowing all errors.
 - Historical README CRLF hard-cap failures motivated prose shortening. FR 000553 supersedes only the three named product-prose caps with advisory warnings; source/config/artifact and agent-context caps remain hard.
 
-Actions raw-log download through the installed transport returned HTTP 401; it was not bypassed with another identity. Supported Checks annotations supply sanitized totals/failure/skip notices, with bounded JSON artifacts. Keep notices below GitHub's observed truncation boundary by splitting totals and failures. Failed/cancelled runs are never PASS. Consumer Windows, physical clicks/status visibility, Finder/Gatekeeper, default-browser integration and accessibility remain separate manual acceptance.
+Historical raw-log download returned HTTP 401; no identity bypass. Checks provide sanitized totals/failures/skips; split notices below truncation bounds. Failed/cancelled is not PASS; physical desktop/default-browser/accessibility remain separate acceptance.
 
 ### Historical causes retained
 
@@ -85,13 +85,13 @@ FR 000370: product IPC backpressure, retain 64-message drain canary. FR 000380: 
 
 Inspect per-file durations/skips before changing Quick deadlines, especially Node/HTTP/spawn/PowerShell. The VM child permits 60 seconds while Quick bounds its whole file at 25 seconds: a known tighter outer limit, not authority to loosen it. Reproduce probe interference sequentially. Legacy static shape guards/import edges remain refactor-sensitive debt; move coupling into its responsibility-owned fixture when that area changes, preserving behavioral canaries. Hosted API success does not close desktop/Finder/Gatekeeper/accessibility/suspend/soak acceptance.
 
-Architecture assessment: no-update to diagrams or dependency contracts; existing Web/HTTP/lifecycle owners remain. The workflow is additive evidence, not a permanent all-project gate. Final native delivery preserves immutable selected specifications, new concurrent FRs and the identity high watermark; no evidence depends on disposable private exports.
+Architecture: no-update; runtime/validation ownership and triggers are unchanged.
 
 ## Rejected hypotheses
 
-- Historical/local green or mock platform tests prove current native/desktop readiness. Platform, revision and NOT VERIFIED limits remain binding.
+- Historical/local green or platform mocks prove consumer desktop readiness. Revision/platform limits remain binding.
 - Slow AppKit initialization explained the Mac readiness timeout: measured native phases were subsecond; numeric-loopback DNS was the identified blocker.
 - Browser offline mode necessarily closes SSE TCP connections. Verify real disconnection/reconnect.
 - Fixing timing means raising product/suite deadlines or weakening ownership. Keep causal fixtures and PID/birth/current-image guards.
-- Monolithic discovery, automatic glob admission or a generic DOM framework is simpler without measured benefit. Retain distinct risks and per-file cleanup bounds.
+- Monolithic discovery/glob admission/generic DOM fixtures are simpler without measured benefit. Retain per-file bounds and distinct risks.
 - Quota 401 proves model login failed, or development-only audits require product gates. Neither follows from the evidence.
