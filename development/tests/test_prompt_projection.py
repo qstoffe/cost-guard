@@ -133,3 +133,31 @@ class PromptProjectionTests(unittest.TestCase):
         self.assertEqual(2, compact.prompt_number)
         record = next(item for item in bundle.compactions if item.user_message_id == compact.event_id)
         self.assertEqual(record.completed_at_ms, compact.completed_at_ms)
+
+    def test_compaction_mix_requires_every_category_even_after_completion(self):
+        record = self.bundle.compactions[0]
+        self.assertEqual((80, 6, 4, 10), self.projector().compaction(record, 1).token_mix_percent)
+        for running in (False, True):
+            partial = replace(record, in_progress=running, entries=tuple(
+                replace(entry, tokens=replace(entry.tokens, known_fields=("input", "output")))
+                for entry in record.entries))
+
+            row = self.projector().compaction(partial, 1)
+
+            self.assertIsNone(row.token_mix_percent)
+            self.assertEqual((record.model_calls, self.projector().compaction(record, 1).ccost),
+                (row.calls, row.ccost))
+
+    def test_completed_partial_rows_do_not_leave_an_unlabelled_subset_total_or_change_other_totals(self):
+        original = self.block()
+        for name in ("prompts", "compactions"):
+            records = tuple(replace(record, entries=tuple(replace(entry,
+                tokens=replace(entry.tokens, known_fields=("input", "output")))
+                for entry in record.entries)) for record in getattr(self.bundle, name))
+
+            block = self.block(replace(self.bundle, **{name: records}))
+
+            self.assertEqual("N/A", block.total_mix_text)
+            self.assertEqual((original.total_ccost, original.total_calls, original.total_ictx_cost_text,
+                original.total_extra_cost_text), (block.total_ccost, block.total_calls,
+                block.total_ictx_cost_text, block.total_extra_cost_text))

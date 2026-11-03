@@ -74,19 +74,19 @@ async function tokenMix(context, frames) {
   for (let index=1; index<frames.length; index++) {
     snapshot = {instance_id:'mix', sequence:index, values:{live:frames[index]}};
     stream.emit(index, frames[index]);
-    assert.equal(mix(), ['100/0/0/0','25/75/0/0','20/60/0/20'][index]);
+    assert.equal(mix(), ['100/0/0/0','25/75/0/0','20/60/0/20','running','25/75/0/0','N/A'][index]);
     assert.equal(card.body.children[0], row, 'same keyed row updates without reload');
     stream.emit(index-1, frames[0]);
     assert.notEqual(mix(), '100/0/0/0', 'stale event cannot roll back usage');
   }
   stream.onerror();
   assert.match(context.state.connection, /interrupted/);
-  assert.equal(mix(), '20/60/0/20', 'disconnect retains last observation, not invented current usage');
+  assert.equal(mix(), 'N/A', 'disconnect retains last observation, not invented current usage');
   stream.onopen(); await turns();
-  assert.equal(mix(), '20/60/0/20');
+  assert.equal(mix(), 'N/A');
   snapshot.sequence = 10;
   stream.emit(10, frames[0]); await turns();
-  assert.equal(mix(), '20/60/0/20', 'gap accepts HTTP snapshot, not unverified event body');
+  assert.equal(mix(), 'N/A', 'gap accepts HTTP snapshot, not unverified event body');
   console.log('web token mix SSE passed');
 }
 async function main() {

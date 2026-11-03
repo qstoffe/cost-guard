@@ -12,7 +12,7 @@ from src.domain import EventKind, SessionSnapshot
 from src.pricing.catalog import PricingCatalog
 
 from .models import PromptProjection, SessionPromptBlock
-from .prompt_rows import PromptRowProjector, ThresholdMultiplier, mix_percent
+from .prompt_rows import PromptRowProjector, ThresholdMultiplier, mix_known, mix_percent
 
 
 def _coherent_watch_deltas(rows: list[PromptProjection], *, epochs: ContextEpochs,
@@ -145,6 +145,8 @@ def build_prompt_block(
             continue
         row = projector.prompt(record)
         rows.append(row)
+        if record.entries and not mix_known(record):
+            mix_complete = False
         if row.token_mix_percent is not None:
             for index, value in enumerate((record.input_tokens, record.cache_read_tokens, record.cache_write_tokens, record.output_tokens)):
                 mix_values[index] += value
@@ -152,6 +154,8 @@ def build_prompt_block(
         elif snapshot_running_metrics and record.in_progress:
             mix_complete = False
             diagnostic_parts.append((None, None))
+        elif not record.in_progress and record.total_token_volume > 0:
+            diagnostic_parts.append((row.incoming_context_ccost, row.extra_ccost))
     for record in bundle.compactions:
         if start_ms is not None and record.created_at_ms < start_ms:
             continue
@@ -159,6 +163,8 @@ def build_prompt_block(
             continue
         row = projector.compaction(record, event_numbers[record.user_message_id])
         rows.append(row)
+        if record.entries and not mix_known(record):
+            mix_complete = False
         raw_mix = (record.input_tokens, record.cache_read_tokens, record.cache_write_tokens, record.output_tokens)
         if sum(raw_mix) > 0:
             for index, value in enumerate(raw_mix):

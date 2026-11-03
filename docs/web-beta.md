@@ -282,9 +282,11 @@ not cost shares; reasoning is folded into Output. It uses canonical prompt-attri
 physical requests, including child/model contributions, and CLI prompt rounding.
 Accepted captures update the cumulative mix at the existing cadence/SSE publication,
 not client ticks or intra-call streaming. Zero/partial/missing telemetry is `N/A` or
-`running`, never invented zero percentages. A Watch-only coverage guard suppresses
-completed partial-telemetry mixes; the CLI's historical numeric partial behavior
-is unchanged (the documented FR 000558 Decision Delegate parity exception).
+`running`, never invented zero percentages. CLI reports and Web Watch use the same
+coverage rule: every attributed call must report all four categories and their pooled
+total must be positive. Missing fields make the denominator unknown, not a known-token
+subset percentage. Completed rows show `N/A`; active rows without a supported share
+show `running`. The FR 000558 completed-partial parity exception is closed by FR 000564.
 Additional model contribution is identified on the Model field. All cells/headers
 stay one line: Prompt alone flexes without a width cap and ellipsizes long text/URLs;
 complete metric columns and a 14rem Prompt minimum pan horizontally when necessary.

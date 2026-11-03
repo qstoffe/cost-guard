@@ -1,0 +1,62 @@
+{
+  "feature": "FR 000564",
+  "date": "2026-11-03",
+  "version": "80.144",
+  "baseline_red": {
+    "test_file": "test_watch_token_mix.py",
+    "tests": 8,
+    "failed_assertions": 4,
+    "errors": 0,
+    "completed_partial_cli_examples": ["100/0/0/0", "25/75/0/0", "79/0/0/21"],
+    "same_source_web_value": null,
+    "notes": "Captured before production edits after repairing fixture invalidation and canonical row selection. Failures cover child, late correction, single partial and multi-call partial coverage."
+  },
+  "full": {
+    "command": "py -3 development/tools/run_tests.py --suite full",
+    "files": 136,
+    "tests": 1613,
+    "passed": 1612,
+    "skipped": 1,
+    "failures": 0,
+    "errors": 0,
+    "seconds": 93.5,
+    "platform_skip": "test_macos_web.MacWebTests.test_command_activity_and_exit_codes_without_native_or_browser_work: zsh/PTY unavailable; native macOS CI owns shell execution"
+  },
+  "validation": {
+    "command": "py -3 development/tools/validate_package.py --working-tree",
+    "passes": 11,
+    "failures": 0,
+    "advisory_warnings": 6
+  },
+  "real_source": {
+    "command": "py -3 development/tests/integration/probe_web_live.py --watch-cards --prompt-token-mix --detail",
+    "status": "ok",
+    "generation": "V2",
+    "owners": 1,
+    "streams": 2,
+    "sequence_advanced": true,
+    "stream_ids_verified": true,
+    "prompt_mix_observation_seconds": 12,
+    "observed_rows": 5,
+    "known_rows": 5,
+    "call_count_changes": 0,
+    "mix_changes": 0,
+    "model_calls_started_by_probe": 0,
+    "max_rows_per_card": 1,
+    "max_pending_captures_observed": 4,
+    "detail_frozen_consistent": true,
+    "host_close_seconds": 0.0717,
+    "elapsed_seconds": 26.8065,
+    "remaining_tracked_threads": 0,
+    "remaining_tracked_multiprocessing_children": 0,
+    "cleanup_failures": [],
+    "daily_published": false,
+    "daily_cancellation_errors": {"ReportService.watch_history_batch": 1, "WatchTodayCCost.advance_history": 1},
+    "limits": [
+      "No natural call-count, token-category coverage or mix transition observed; controlled regression fixtures cover them separately.",
+      "Not a complete Daily campaign or an inventory of untracked OS helpers.",
+      "No native desktop, physical input or macOS proof."
+    ]
+  },
+  "exceptions": []
+}

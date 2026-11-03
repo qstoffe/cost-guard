@@ -123,7 +123,7 @@ const WatchView = (() => {
     ['Effort', 'Observed model reasoning effort; N/A means unavailable.'],
     ['CCost', 'Reference-price comparison cost, not billed money or provider quota usage; follows the selected display unit and coverage.'],
     ['Calls', 'Attributed physical model requests, including child contributions; not tool calls.'],
-    ['Token Mix %', '1 = Input (ordinary input tokens); 2 = Cached input (cache-read tokens); 3 = Cache write (tokens written to cache); 4 = Output (including reasoning tokens under canonical rules). I/C/W/O are percentages of observed tokens, not billed cost. Updates on accepted usage observations, not intra-call streaming; N/A or running means insufficient telemetry.'],
+    ['Token Mix %', '1 = Input (ordinary input tokens); 2 = Cached input (cache-read tokens); 3 = Cache write (tokens written to cache); 4 = Output (including reasoning tokens under canonical rules). Shares cover all attributed calls, not billed cost: every call must report all four categories and the total must be positive. Missing is not zero. Updates on accepted usage observations, not intra-call streaming; N/A or running means no supported percentage.'],
     ['Δ Ctx', 'Change in observed context since the preceding canonical context anchor; not total context size.'],
     ['Context', 'Estimated next incoming context (CLI Watch); approximate tokens for the next model call, not a usage total.']
   ];

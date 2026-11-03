@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v80.143, 2026-11-03), the supported distribution.
+Use **current `main`** (v80.144, 2026-11-03), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -230,7 +230,7 @@ Passing a session ID prints one snapshot and exits, even with active work; use `
 | `~Ictx` | Incoming context or `Δctx -> Next Ictx` when the chronological context state is available. |
 | `~Ictx CCost` | Incoming-context reference valuation, not billing. |
 | `~Extra CCost` | Additional causal usage reference valuation beyond incoming context, not billing. |
-| `Token Mix %` | Input / Cached input / Cache write / Output shares, including supported running session usage; otherwise unknown/running. |
+| `Token Mix %` | Input / Cached input / Cache write / Output shares across all attributed calls, including supported running session usage. Any missing category or zero total makes the mix unknown/running on CLI and Web alike. |
 
 Known causal splits show **Main / Subagents / Total**; running prompts may show `running - consider ABORT`. `(Next Ictx CCost 0.3–3)` is the next input's cached–fresh CCost range; price-threshold warnings show `(1.9x more expensive)`, the model table's Relative CCost ratio across that threshold. Amber `nextIctxWarning`: approaching highlights the marker; exceeded the full explanation.
 
@@ -361,7 +361,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.143 (2026-11-03):** Historical date reports overlap at most four V2 tree reads, retaining every eligible root and before/after revision checks. Phase-specific progress distinguishes unverified reads from analysis; the Web job deadline remains 120 seconds, with explicit timeout guidance and independent Live/cancellation.
+**v80.144 (2026-11-03):** CLI session reports and Web Watch share one per-prompt Token Mix coverage policy: every contributing call must report all four categories and the total must be positive. Missing counters never imply zero; fully known rounding, live updates and accounting are unchanged.
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 
