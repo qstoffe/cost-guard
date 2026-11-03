@@ -54,8 +54,13 @@ function setup() {
   assert.equal(button.textContent, 'Mini Watch: On'); assert.equal(button.attributes['aria-pressed'], 'true');
   let view = controller.view;
   assert.equal(view.doc.documentElement.dataset.theme, 'classic');
-  assert.equal(view.values[0].textContent, '2'); assert.equal(view.values[1].textContent, '4'); assert.equal(view.values[2].textContent, '20m');
-  assert.equal(view.health.textContent, 'Live');
+  assert.equal(view.body.children.length, 2);
+  assert.equal(view.body.children[0].children[1].textContent, '#23');
+  assert.equal(view.body.children[0].children[2].textContent, '2');
+  assert.equal(view.body.children[1].children[2].textContent, '3');
+  assert.equal(view.body.children[1].children[3].textContent, '20m');
+  assert.equal(view.health.textContent, ''); assert.equal(view.health.hidden, true);
+  assert.ok(!/Running prompts|Running CCost|Longest running|×/.test(view.root.textContent));
   assert.equal(child.document.head.children.length, 2);
   assert.deepEqual(child.document.head.children.map(n => n.href), ['http://127.0.0.1:1234/app.css', 'http://127.0.0.1:1234/mini.css']);
   assert.equal(view.accounts.children.length, 6);
@@ -65,29 +70,64 @@ function setup() {
   assert.ok(!/Reset|Weekly|Today|Provisional/.test(view.accounts.textContent));
   const retained = view.accounts.children[0]; controller.update(input);
   assert.equal(view.accounts.children[0], retained, 'independent keyed DOM survives refresh');
+  const firstRow = view.body.children[0], firstCell = firstRow.children[0], originals = input.view.active_cards;
+  const prompt = originals[1].rows[0].prompt;
+  input.view.active_cards = [originals[1], originals[0], originals[0], {session_id:'pending',focal_id:'',rows:[]}];
+  controller.update(input);
+  assert.equal(view.body.children.length, 2, 'deduplicated by source session and event, not aggregate count');
+  assert.equal(view.body.children[0], firstRow, 'canonical ascending start order and keyed row');
+  assert.equal(firstRow.children[0], firstCell, 'focusable title cell survives updates');
+  for (const [outcome, className, label] of [
+    [{in_progress:false,completed_successfully:true},'mini-success','Completed'],
+    [{in_progress:false,completed_successfully:false,aborted:true,abort_reason:'quota_limit'},'mini-error','Aborted · quota limit'],
+    [{in_progress:false,completed_successfully:false,aborted:false,has_error:true},'mini-error','Error'],
+    [{in_progress:false,completed_successfully:false,aborted:false,has_error:false},'','Ended']]) {
+    const saved = {...prompt}; Object.assign(prompt, outcome); controller.update(input);
+    const terminal = view.body.children[1];
+    assert.equal(terminal.className,className); assert.ok(terminal.title.startsWith(label));
+    assert.equal(terminal.children[3].textContent,'20m'); Object.assign(prompt,saved);
+  }
+  input.view.active_cards = []; controller.update(input);
+  assert.match(view.body.textContent,/No running or recently ended prompts/);
+  input.view.active_cards = originals; controller.update(input);
+  const accountItems = input.view.accounts.accounts;
+  input.view.accounts.accounts = [...accountItems].reverse(); controller.update(input);
+  assert.equal(view.accounts.children.at(-1),retained,'provider-aware account key survives reorder');
+  input.view.accounts.accounts = accountItems; controller.update(input);
   const primary = input.view.accounts.accounts[0].primary, savedCost = primary.cost;
   primary.estimated = true; primary.cost = {...savedCost,complete:false,display:{known_ccost:'?1814'}};
-  controller.update(input); assert.match(retained.textContent,/8.4% used \(~\?1814\)/);
-  assert.match(retained.title,/estimated account attribution.*partial pricing/);
+  controller.update(input); assert.match(retained.textContent,/8.4% used \(\?1814\)/);
+  assert.match(retained.title,/Estimated account attribution.*partial pricing/);
+  assert.ok(!retained.textContent.includes('~'));
+  assert.equal(retained.children[1].value, primary.used_fraction);
+  const quota = {...primary.quota}, saved = {...primary};
+  for (const [fraction, exhausted] of [['0',false],['0.5',false],['0.99999',false],['1',true],[null,false]]) {
+    primary.used_fraction = fraction; primary.exhausted = exhausted; controller.update(input);
+    assert.equal(retained.children[1].hidden,fraction == null);
+    assert.equal(retained.children[1].className,exhausted ? 'mini-exhausted' : '');
+  }
+  primary.quota.unlimited = true; controller.update(input);
+  assert.equal(retained.children[1].hidden,true); assert.match(retained.textContent,/Unlimited/);
+  Object.assign(primary,saved); Object.assign(primary.quota,quota);
   primary.cost = {...savedCost,priced_requests:0};
   controller.update(input); assert.match(retained.textContent,/8.4% used \(—\)/,'known percentage survives unknown pricing');
   primary.estimated = false; primary.cost = savedCost; controller.update(input);
   vm.runInContext('ReportView.setUnit("usd")', context); owner.document.documentElement.dataset.theme = 'web'; controller.settings();
-  assert.equal(view.values[1].textContent, '$0.04'); assert.match(retained.textContent, /\(\$18.14\)/);
+  assert.equal(view.body.children[0].children[2].textContent, '$0.01'); assert.match(retained.textContent, /\(\$18.14\)/);
   assert.equal(child.document.documentElement.dataset.theme, 'web');
   for (const kind of ['reconnecting', 'offline', 'source_unavailable', 'authorization_required', 'identity_changed', 'stopped']) {
-    controller.health({kind}); assert.match(view.health.textContent, /not live/); assert.equal(view.values[2].textContent, '20m');
+    controller.health({kind}); assert.match(view.health.textContent, /not live/); assert.equal(view.body.children[1].children[3].textContent, '20m');
   }
   controller.health({kind: 'connected'}); now += 16000;
   [...child.timers][0](); assert.match(view.health.textContent, /Waiting for live update · not live/);
   controller.update(input); assert.match(view.health.textContent, /not live/, 'progress/repeated snapshot is not new Live evidence');
   input.view.now_ms++;
-  controller.update(input); assert.equal(view.health.textContent, 'Live');
+  controller.update(input); assert.equal(view.health.textContent, '');
   controller.update({...input, state: 'recovering'}); assert.match(view.health.textContent, /not live/);
   controller.update(input);
   view.summary.fire('click'); assert.equal(test.returned(), 1); assert.equal(test.focused(), 1);
   assert.equal(child.closed, false, 'return selects existing tab without closing Mini');
-  view.doc.body.children[0].children[0].children[1].fire('click');
+  await controller.toggle();
   assert.equal(child.closed, true); assert.equal(test.focused(), 1, 'close does not also focus the owner');
   assert.equal(child.timers.size, 0); assert.equal(button.textContent, 'Mini Watch: Off');
   const reopen = controller.toggle(), second = win(); test.opened(second); await reopen;

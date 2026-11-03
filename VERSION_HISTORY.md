@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.141 — 2026-11-03
+
+- Web Watch: Earlier selects and orders five sessions by canonical finish, with truthful unknowns and DST-aware clock help. Mini uses keyed per-prompt tables and thin primary-quota bars, independent 5/3-row scrolling, highlighted On and native-only close; accounting and shared lifecycle remain unchanged.
+
 ## v80.140 — 2026-11-03
 
 - Web Watch: cap subscription widths, slim header padding and double progress thickness; only canonically exhausted quotas turn red, with a muted header-only tint. Watch-only resets reuse Duration notation and the live publication clock. Each Running/Earlier session has its own rounded frame; shared CLI, Accounts and Mini Watch formatting stays unchanged.

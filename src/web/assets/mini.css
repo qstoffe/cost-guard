@@ -1,19 +1,41 @@
-/* Shared theme tokens come from app.css; only compact-document geometry lives here. */
-body { padding: .45rem; max-width: none; }
-.mini-card { padding: .65rem; border: 1px solid var(--line); border-radius: var(--radius);
-  background: var(--panel); min-width: 0; }
-.mini-top { display: flex; align-items: flex-start; gap: .35rem; }
-.mini-summary { flex: 1; min-width: 0; text-align: left; padding: .35rem; border-color: transparent; }
-.mini-brand { display: block; color: var(--accent); font-size: .8rem; margin-bottom: .55rem; }
-.mini-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .6rem; }
-.mini-metrics > span { min-width: 0; overflow-wrap: anywhere; }
-.mini-label { display: block; font-size: .7rem; color: var(--muted); font-weight: 400; line-height: 1.25; }
-.mini-metrics strong { display: block; font-size: 1.1rem; font-variant-numeric: tabular-nums; }
-.mini-close { flex: none; min-height: 1.9rem; padding: 0 .5rem; }
-.mini-summary, .mini-close { transition: none; }
-.mini-health { font-size: .75rem; color: var(--muted); margin: .4rem .35rem; }
-[data-live="false"] .mini-health, .mini-warning { color: var(--warn); }
-.mini-accounts { list-style: none; padding: .5rem .35rem 0; margin: .5rem 0 0; border-top: 1px solid var(--line);
-  font-size: .8rem; max-height: 55vh; overflow-y: auto; overflow-wrap: anywhere; }
-.mini-accounts li { margin-bottom: .35rem; }
-@media (max-width: 19rem) { .mini-metrics { grid-template-columns: 1fr; gap: .4rem; } }
+/* Shared semantic colors; PiP chrome is browser-owned, not another inner card. */
+html, body { height: 100%; overflow: hidden; }
+body { padding: .5rem; max-width: none; }
+.mini-watch { padding: 0; min-width: 0; height: 100%; display: flex; flex-direction: column; gap: .4rem; }
+.mini-summary { align-self: flex-start; min-height: 1.6rem; padding: .1rem .25rem; border-color: transparent;
+  color: var(--accent); font-size: .8rem; transition: none; }
+.mini-health { flex: 0 1 auto; min-height: 0; max-height: 25%; overflow: auto;
+  font-size: .75rem; color: var(--warn); margin: 0; }
+.mini-health[hidden] { display: none; }
+.mini-prompts { min-height: 3.6rem; max-height: 10.8rem; overflow: auto; flex: 0 1 auto; }
+.mini-prompt-table { table-layout: fixed; border-collapse: separate; border-spacing: 0; width: 100%;
+  margin: 0; font-size: .9rem; line-height: 1.5; background: var(--panel); }
+.mini-prompt-table th, .mini-prompt-table td { padding: .15rem .25rem; border: 0;
+  border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); overflow-wrap: anywhere;
+  min-width: 0; max-width: none; white-space: normal; }
+.mini-prompt-table th { position: sticky; top: 0; z-index: 1; background: var(--surface); text-align: left; }
+.mini-prompt-table th:first-child, .mini-prompt-table td:first-child { border-left: 1px solid var(--line); }
+.mini-prompt-table th { border-top: 1px solid var(--line); }
+.mini-prompt-table th:first-child { width: 34%; }
+.mini-prompt-table th:nth-child(2) { width: 10%; }
+.mini-prompt-table th:nth-child(3) { width: 18%; }
+.mini-prompt-table th:nth-child(4) { width: 21%; }
+.mini-prompt-table th:nth-child(5) { width: 17%; }
+.mini-prompt-table td:first-child:not([colspan]) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mini-prompt-table td { font-variant-numeric: tabular-nums; }
+.mini-running { color: var(--watch-running); }
+.mini-success { color: var(--watch-success); }
+.mini-error { color: var(--error); }
+.mini-accounts { list-style: none; padding: .2rem; margin: 0; min-height: 2.8rem; max-height: 8.4rem;
+  flex: 0 1 auto; overflow: auto; font-size: .8rem; line-height: 1.4; overflow-wrap: anywhere; }
+.mini-accounts li { min-height: 2.65rem; padding-bottom: .4rem; }
+.mini-accounts progress { display: block; appearance: none; border: 0; border-radius: 1rem; overflow: hidden;
+  width: 100%; height: .65rem; margin-top: .2rem; color: var(--watch-quota-fill); accent-color: var(--watch-quota-fill); }
+.mini-accounts progress[hidden] { display: none; }
+.mini-accounts progress::-webkit-progress-bar { background: var(--surface); border-radius: 1rem; }
+.mini-accounts progress::-webkit-progress-value { background: currentColor; border-radius: 1rem; }
+.mini-accounts progress::-moz-progress-bar { background: currentColor; border-radius: 1rem; }
+.mini-accounts progress.mini-exhausted { color: var(--error); accent-color: var(--error); }
+.mini-warning { color: var(--warn); }
+.mini-prompt-table :focus-visible { outline-offset: -3px; }
+@media (max-height: 15rem) { .mini-prompts, .mini-accounts { min-height: 2rem; flex-shrink: 1; } }

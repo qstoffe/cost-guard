@@ -37,9 +37,13 @@ assert.equal(card.skills.list.children[0].children.at(-1).className, 'watch-acti
 const earlier = [...watch.cards.values()][1];
 assert.equal(earlier.title.className, '');
 assert.equal(earlier.body.children[0].children[0].textContent,
-   context.input.view.history_cards[0].rows[0].prompt.display.clock);
+   context.input.view.history_cards[0].rows[0].prompt.display.finished_clock);
 assert.equal(earlier.body.children[0].children[0].children[0].title,
-   context.input.view.history_cards[0].rows[0].prompt.display.date_time);
+   context.input.view.history_cards[0].rows[0].prompt.display.finished_date_time);
+assert.equal(earlier.root.querySelectorAll('th')[0].children[0].textContent, 'Finished');
+assert.equal(card.root.querySelectorAll('th')[0].children[0].textContent, 'Started');
+assert.equal(earlier.root.querySelectorAll('th')[1].children[0].textContent, 'Duration');
+assert.match(earlier.root.querySelectorAll('th')[0].children[0].title, /abort\/error.*not elapsed Duration/);
 const saved = card.body.children[0];
 vm.runInContext('ReportView.renderLive(parent, input, state)', context);
 assert.equal(card.body.children[0], saved, 'unchanged refresh retains row and valid metrics');

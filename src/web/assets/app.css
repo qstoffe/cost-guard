@@ -41,6 +41,7 @@
 #mini-watch-controls { display: none; }
 [data-section="watch"] #mini-watch-controls { display: flex; align-items: center; flex-wrap: wrap; gap: .65rem; margin-bottom: .75rem; }
 #mini-watch-toggle { min-height: 2rem; padding: .25rem .65rem; font-size: .8rem; }
+#mini-watch-toggle[aria-pressed="true"]:not(:disabled) { color: var(--accent); background: var(--accent-soft); border-color: var(--accent); }
 #mini-watch-feedback { color: var(--muted); font-size: .8rem; }
 .web-settings { max-width: 42rem; }
 .web-settings select { min-width: 10rem; max-width: 100%; }

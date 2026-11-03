@@ -25,6 +25,13 @@ class WatchCapture:
     context: object = None
     authoritative: bool = False
 
+    @property
+    def history_row(self):
+        """Latest supported finish; unknown endings fill spare history slots only."""
+        terminal = [row for row in self.rows if not row.in_progress]
+        return max(terminal, key=lambda row: (row.completed_at_ms or 0,
+            0 if row.completed_at_ms else row.at_ms, row.event_id), default=None)
+
 
 def capture_rows(service, root, previous=None, focal_ids=()):
     fresh = service.source.load_session_snapshot(root.session_id)
@@ -36,6 +43,11 @@ def capture_rows(service, root, previous=None, focal_ids=()):
     # One shared slice per session, including each concurrent focal prompt's
     # context and its preceding anchor for coherent CLI Watch deltas.
     selected = set(range(max(0, len(records) - 6), len(records)))
+    finished = [(record.terminal_time_ms, record.prompt_id, index)
+        for index, record in enumerate(records) if not record.in_progress and record.terminal_time_ms]
+    if finished:
+        index = max(finished)[-1]
+        selected.update(range(max(0, index - 5), index + 1))
     for index, record in enumerate(records):
         if record.in_progress or record.prompt_id in focal_ids:
             selected.update(range(max(0, index - 5), index + 1))

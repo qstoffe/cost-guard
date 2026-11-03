@@ -1,8 +1,8 @@
 # Mini Watch
 
 On **Watch**, click **Mini Watch: Off** to request a compact Document
-Picture-in-Picture window. The control changes to **On** only after it opens.
-Click On again, the small **×**, or the browser's native close control to close it.
+Picture-in-Picture window. The whole control is highlighted **On** only while it is open.
+Click On again or the browser's native close control to close it; Mini has no custom ×.
 It never opens automatically on minimization or reload and has no saved On preference.
 
 Mini stays open across in-app navigation. Its summary is a keyboard-accessible action
@@ -14,18 +14,21 @@ Mini; a fresh page starts Off. Browser PiP replacement may also close it.
 
 ## What the figures mean
 
-- **Running prompts:** distinct canonical initiating prompts genuinely in progress,
-  including concurrent prompts in one session. Placeholders, context/history rows,
-  compaction events and terminal highlight/grace cards do not add running prompts.
-- **Running CCost:** accumulated canonical prompt CCost of just that running set,
-  counted once each. It is not session cost, Today or a cumulative Watch-run total.
-  A finished prompt's cost leaves immediately in the next canonical publication.
-- **Longest running:** maximum canonical duration, not the sum. Two prompts running
-  for 10 and 20 minutes show 2 and 20m. The maximum may decrease on completion.
+- **Session:** actual session title, truncated to fit; focus/hover for the full title.
+- **#:** canonical session-local prompt ordinal, not a Mini list index. Concurrent
+  prompts within one session remain separate rows, ordered by actual start.
+- **CCost:** accumulated reference-price cost of that one prompt, not session/Today
+  cost or billed spending. Missing/partial pricing retains N/A or `?` conventions;
+  focus a row for estimated/partial provenance without a distracting cost `~` glyph.
+- **Duration:** that prompt's canonical elapsed execution time, frozen when ended.
+- **CTX:** estimated next incoming context for the prompt (`~` means approximate;
+  N/A means unknown), with the same meaning as Watch's Context column.
 
-An acquired empty set shows **0**, zero cost in the selected unit, and **—** duration.
-Initial/partial/unavailable acquisition is not an empty success. Missing/partial
-pricing follows the existing N/A or `?` conventions; `~` identifies an estimate.
+Running rows use Watch's yellow tone, successful endings green, abort/error red;
+outcome and known stop cause remain accessible without color. Ended rows retain
+their final prompt-local metrics for Watch's existing ~30-second grace, then leave.
+An acquired empty set shows a compact empty message, never dummy zero-cost rows.
+Initial/partial/unavailable acquisition is not an empty success.
 Retained numbers are explicitly **not live** during connection/source/auth/host
 failures or missing publication updates. No browser timer invents cost, completion
 or indefinitely growing elapsed time.
@@ -33,9 +36,12 @@ or indefinitely growing elapsed time.
 Each subscription appears once as **name · N% used (same-period CCost)**. The
 provider-declared stable primary wins; a missing primary never promotes a more
 depleted secondary. Names retain account distinctions. Unlimited and exhausted
-values retain native semantics. There are no reset/secondary-window paragraphs.
-Hover a row for its period/attribution basis; unavailable cost does not hide a
-known percentage. `~` means estimated attribution; `?` means partial pricing.
+values retain native semantics. Each text row has a thin full-width primary Used
+bar below it: cyan/teal below exhaustion, red only for authoritative finite 100%.
+Unlimited/unknown quota has no fabricated bar. Stale, partial and restricted states
+remain disclosed; there are no reset/secondary-window paragraphs.
+Focus/hover a row for its period/estimated-attribution basis; unavailable cost does
+not hide a known percentage. `?` retains partial pricing; cost has no visible `~`.
 
 Cost uses verified native boundaries and acquired history **before Watch/Mini
 opened**, including earlier days of a supported fixed UTC calendar month.
@@ -52,9 +58,13 @@ loopback HTTP is a browser-trusted context. Unsupported, policy-disabled or reje
 requests stay Off with a reason. There is no popup fallback advertised as always-on-top,
 extension, flag, notification permission, native helper or second sign-in flow.
 
-The compact card follows the effective **Classic / Web light/dark** theme and live
-**Credits / USD** setting. Resize using the browser's window controls; long account
-names wrap and the account list scrolls without hiding the main summary. The browser
+The unframed compact tables follow **Classic / Web light/dark** and live
+**Credits / USD**. Healthy Live text is omitted; meaningful health warnings remain.
+Mini requests 560×450 CSS px; browsers may clamp it. Up to five prompt rows and three
+one-line subscriptions fit the normal default; rows 6/4 scroll in independent regions
+with a sticky prompt header. Short lists shrink. Resize with the browser's controls;
+long labels/larger fonts and unusually small windows may require internal scrolling.
+The browser
 owns outer chrome, origin/security indication, positioning, native return controls
 and final geometry; this is not a frameless, arbitrarily positioned tooltip.
 

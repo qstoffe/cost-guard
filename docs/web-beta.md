@@ -6,8 +6,8 @@ not a release lookup or newly edited source. Offline views retain their original
 v80.139 recognizes persisted failed/interrupted runs that ended before producing an
 assistant response, including resumed work followed by a system notice. The server
 retires the correct prompt, freezes duration and preserves known usage through
-refresh/retention and Earlier Prompts. Web and Mini Watch exclude terminal grace
-from running metrics. A later real attempt can still run; age, inactivity, missing
+refresh/retention and Earlier Prompts. The running aggregate excludes terminal grace;
+Mini retains those final rows briefly without labeling them running. A later real attempt can still run; age, inactivity, missing
 usage and quota percentages alone never establish an end. Generic failures stay
 errors unless the source supports a specific abort/quota cause.
 
@@ -250,8 +250,9 @@ One authenticated `/api/live` watchdog runs at ten-second intervals after the pr
 [Built-in browser, deterministic and real-source verification](../development/architecture/governance/verification/web-connection.md) records the tested states and explicit physical-tray/suspension/restart/macOS limits.
 
 Watch gives each prompt/session card a subtle rounded frame. **Earlier Prompts** starts collapsed: five eligible
-distinct sessions selected by newest actual prompt start, then displayed oldest first,
-newest last, one latest prompt each with deterministic ID ties. It updates
+distinct sessions selected by newest supported prompt finish, then displayed oldest finished first,
+newest finished last, one exact latest-finished prompt each with deterministic ID ties. Unknown-ended
+history fills spare slots before known finishes, ordered by stable identity; it never displaces a known finish. It updates
 while collapsed, without an age/startup cutoff, excluding active/recent sessions before
 limiting. Expanded history is unframed in normal page flow, with one theme-aware divider
 before running cards and no nested vertical scrolling or height cap. Collapsed/empty
@@ -265,8 +266,11 @@ prompt metrics. Credits/USD follows Web Settings. Valid metrics remain visible d
 ordinary refresh; first acquisition, partial evidence and genuine failure stay explicit.
 The ten columns are **Started, Duration, Prompt, Model, Effort, CCost, Calls,
 Token Mix %, Δ Ctx, Context** (estimated next incoming context using CLI Watch semantics).
-Started shows only configured-timezone `HH:mm` in both tables, with the full local
-date/time disclosed on hover and to assistive technology on focus. Prompt starts with
+Running keeps **Started** and start-ascending order. Earlier replaces only column 1 with
+**Finished**; Duration stays column 2. Both clocks show configured-timezone `HH:mm`,
+with full local date/time on hover/accessible focus; Finished includes the UTC offset
+for repeated DST hours. Unknown supported endings show **—**, never start plus duration
+or observation time. Prompt starts with
 its canonical session-local `#N`, never a visible-row index. Only preview text ellipsizes;
 the number stays visible, the full preview is available on hover/accessible focus,
 and lifecycle state remains accessible on the row. Every header explains its metric
@@ -373,8 +377,9 @@ Watch still omits the normal heading, report/search/scope/refresh controls, run 
 valuation disclosure and model announcements. Exceptional host/source/offline notices
 remain. No Observation details, Copilot Unaccounted usage or global warning list returns.
 
-**[Mini Watch](web-mini-watch.md)** is an explicit On/Off floating status card on supported
-desktop browsers. It reuses this tab's live publication, not another Watch engine.
+**[Mini Watch](web-mini-watch.md)** is an explicit, highlighted-while-On floating view with
+compact per-prompt tables and thin primary-subscription bars on supported desktop browsers.
+It reuses this tab's live publication, not another Watch engine.
 
 Four isolated session workers publish coherent canonical rows independently, without a
 complete-total phase; generations reject superseded work. Account-history and detail

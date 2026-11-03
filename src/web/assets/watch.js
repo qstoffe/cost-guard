@@ -138,7 +138,7 @@ const WatchView = (() => {
     th.append(button, help); return th;
   }
   class Card {
-    constructor() {
+    constructor(historical) {
       this.root = el('article', undefined, 'watch-card');
       this.title = el('a'); const heading = el('h3'); heading.append(this.title);
       this.message = el('p', undefined, 'detail'); this.message.setAttribute('role', 'status');
@@ -146,7 +146,9 @@ const WatchView = (() => {
       scroll.tabIndex = 0; scroll.setAttribute('role', 'region'); scroll.setAttribute('aria-label', 'Session prompts');
       const table = el('table', undefined, 'watch-prompt-table');
       const head = el('thead'), header = el('tr');
-      for (const [name, explanation] of columns) header.append(columnHeader(name, explanation));
+      for (const [index, [name, explanation]] of columns.entries()) header.append(columnHeader(
+        historical && index === 0 ? 'Finished' : name,
+        historical && index === 0 ? 'Canonical local end or termination time, including abort/error; not elapsed Duration. Unknown finish times are shown as —. Full local date, time and UTC offset are available on the time cell.' : explanation));
       head.append(header); this.body = el('tbody'); table.append(head, this.body); scroll.append(table);
       this.activity = el('div', undefined, 'watch-activity');
       this.tools = disclosure(); this.skills = disclosure(); this.running = el('p'); this.background = el('p');
@@ -181,8 +183,8 @@ const WatchView = (() => {
             preview.title = prompt.preview || ''; preview.tabIndex = 0;
             preview.setAttribute('aria-label', prompt.preview || 'Empty prompt preview');
             label.append(el('span', '#' + prompt.prompt_number, 'watch-prompt-number'), preview);
-            const started = el('span', display(prompt, 'clock'));
-            started.title = display(prompt, 'date_time'); started.tabIndex = 0;
+            const started = el('span', display(prompt, historical ? 'finished_clock' : 'clock'));
+            started.title = display(prompt, historical ? 'finished_date_time' : 'date_time'); started.tabIndex = 0;
             started.setAttribute('aria-label', started.title);
             const model = el('span', item.model);
             if (prompt.has_additional_model) model.title = 'Additional model contribution included in canonical cost and calls';
@@ -266,7 +268,7 @@ const WatchView = (() => {
       for (const [parent, values, historical] of [[this.active, active, false], [this.history, history, true]]) {
         const wanted = values.map(value => {
           const key = JSON.stringify([value.session_id, value.focal_id || 'history']); keep.add(key);
-          if (!this.cards.has(key)) this.cards.set(key, new Card());
+          if (!this.cards.has(key)) this.cards.set(key, new Card(historical));
           const card = this.cards.get(key); card.update(value, historical); return card.root;
         });
         if (historical && !wanted.length) wanted.push(el('p', view.history_state === 'loading' ? 'Loading earlier prompts…' : view.history_state === 'unavailable' ? 'Earlier prompts unavailable' : 'No earlier prompts'));
