@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v80.142, 2026-11-03), the supported distribution.
+Use **current `main`** (v80.143, 2026-11-03), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -361,7 +361,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.140 (2026-11-03):** Web Watch has capped-width subscription cards, slimmer headers, thicker teal quota bars and red quota/header emphasis only on actual exhaustion. Reset countdowns use compact Duration notation; Running and Earlier sessions each have their own rounded frame.
+**v80.143 (2026-11-03):** Historical date reports overlap at most four V2 tree reads, retaining every eligible root and before/after revision checks. Phase-specific progress distinguishes unverified reads from analysis; the Web job deadline remains 120 seconds, with explicit timeout guidance and independent Live/cancellation.
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

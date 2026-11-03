@@ -181,10 +181,16 @@ function show(state) {
     output.replaceChildren(activity, ReportView.element('p', state.message));
   } else output.replaceChildren(ReportView.element('p', state.message));
 }
+function reportWork(progress) {
+  const labels = {'date-cache': 'Checking date-history cache', 'date-load': 'Loading date history',
+    'date-catalog-before': 'Reading before-catalog', 'date-messages': 'Reading session trees (not yet revision-verified)',
+    'date-catalog-after': 'Verifying after-catalog', 'date-analysis': 'Analyzing date-history roots'};
+  return `${labels[progress.stage] || progress.phase} · ${progress.completed ?? 0}${progress.total == null ? '' : '/' + progress.total}`;
+}
 function failure(code) {
   const errors = {session_not_found: 'No matching session. It may have been removed or is unavailable in this source.',
     result_too_large: 'Report exceeds the finite result size limit; no truncated totals are shown. Use a specific session or the CLI.',
-    report_timeout: 'Report timed out; no empty result was substituted.', cancelled: 'Report cancelled.',
+    report_timeout: 'Report reached its 120-second limit; no empty result was substituted. Live continues. The CLI can scan without the Web job deadline.', cancelled: 'Report cancelled.',
     invalid_request: 'Invalid report scope. Check dates/limits; no alternate range was substituted.',
     session_catalog_changed: 'Session catalog changed. Use Latest sessions / restart browsing to avoid skipped or duplicate rows.',
      pricing_unavailable: 'Reference pricing unavailable.', busy: 'Report service busy. Retry Refresh.'};
@@ -195,6 +201,7 @@ async function acquire(state) {
   state.loading = true;
   state.failed = false;
   Object.assign(state, {percent: 0, progressSequence: 0, progressStart: 0, stagedProgress: false});
+  state.lastWork = null;
   overviewProgress(state, {phase: 'queued'});
   state.message = state.result ? 'Refreshing; last known snapshot retained until success.' : 'Loading snapshot…';
   show(state);
@@ -203,6 +210,7 @@ async function acquire(state) {
     show(state);
     while (true) {
       const job = await api('/api/jobs/' + state.active);
+      if (job.progress?.stage?.startsWith('date-')) state.lastWork = reportWork(job.progress);
       if (!['queued', 'running'].includes(job.status)) {
         if (job.status !== 'complete' || !job.result || job.result.error) {
           throw new Error(job.result?.error?.code || job.error || job.status);
@@ -222,7 +230,7 @@ async function acquire(state) {
         state.message = 'Snapshot captured. Navigation and source activity do not update it.';
         break;
       }
-       state.message = `${job.status}: ${job.progress.phase} · ${job.progress.completed ?? 0}${job.progress.total == null ? '' : '/' + job.progress.total}. ${state.result ? 'Last known snapshot retained.' : ''}`;
+       state.message = `${job.status}: ${reportWork(job.progress)}. ${state.result ? 'Last known snapshot retained.' : ''}`;
        overviewProgress(state, job.progress);
       // Do not redraw a retained report while polling: keep selection and scroll useful.
       if (state === current) {
@@ -233,6 +241,7 @@ async function acquire(state) {
     }
   } catch (error) {
     state.message = `${state.result ? 'STALE — last known snapshot retained. ' : ''}${failure(error.message)}`;
+    if (error.message === 'report_timeout' && state.lastWork) state.message += ` Last observed work: ${state.lastWork}.`;
     if (state.section === 'models') {
       state.message = state.message.replaceAll('retry Refresh', 'reload to retry').replaceAll('Retry Refresh', 'Reload to retry');
       if (!/reload/i.test(state.message)) state.message += ' Reload to retry.';

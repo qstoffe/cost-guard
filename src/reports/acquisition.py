@@ -82,7 +82,10 @@ class RootAcquisition:
             observe("Session cache ready", "analysis", len(roots), len(roots))
             return frozenset()
         observe("Loading session snapshots", "load")
-        snapshots = batch(tuple(root.session_id for root in pending))
+        observed_batch = getattr(self.source, "load_session_snapshots_observed", None)
+        ids = tuple(root.session_id for root in pending)
+        snapshots = (observed_batch(ids, lambda step, done, total: observe("Loading session snapshots", step, done, total))
+                     if progress_scope == "date" and callable(observed_batch) else batch(ids))
         observe("Analyzing sessions", "analysis", 0, len(pending))
         for index, root in enumerate(pending):
             snapshot = snapshots[root.session_id]

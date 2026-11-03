@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.143 — 2026-11-03
+
+- Date reports: bounded four-tree V2 read overlap removes serial source waits without dropping roots or relaxing revision proofs. Safe cache/read/verification/analysis progress and actionable timeout guidance retain the 120-second limit, explicit failures and isolated cancellation; Daily acquisition is unchanged.
+
 ## v80.142 — 2026-11-03
 
 - Full Web Watch: compact 450px subscription cards, slimmer square-ended quota bars, inline independent period CCost and adjacent resets. Context cells show plain numbers with owner-scoped price-warning triangles while retaining full guidance below the table; Mini Watch and accounting are unchanged.

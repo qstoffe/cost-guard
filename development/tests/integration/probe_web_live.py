@@ -25,6 +25,7 @@ def main():
     parser.add_argument("--watch-cards", action="store_true", help="Wait for independently published real one-row Watch cards.")
     parser.add_argument("--prompt-token-mix", action="store_true", help="Observe card token mix over twelve seconds; no inference or extra capture.")
     parser.add_argument("--daily", action="store_true", help="Wait for coherent full-day cost, initiating prompts and category prices.")
+    parser.add_argument("--report-timings", action="store_true", help="Print sanitized child-process acquisition timings.")
     args = parser.parse_args()
     owners = []
     csrf = None
@@ -35,7 +36,11 @@ def main():
         return driver
 
     started = time.monotonic()
-    host = WebHost(ROOT, jobs=ReportJobs(), live_factory=factory)
+    jobs = ReportJobs()
+    if args.report_timings:
+        from development.tests.integration.historical_report_observations import measured_report
+        jobs = ReportJobs(target=measured_report)
+    host = WebHost(ROOT, jobs=jobs, live_factory=factory)
     streams = []
     observations = ProbeObservations()
     with observations.installed(), probe_lifecycle(host, streams, observations):
@@ -248,8 +253,10 @@ def main():
                     time.sleep(.25)
                 if value['status'] != 'complete' or value['result']['error']:
                     print(json.dumps(dict(report=request['kind'], status=value['status'],
-                                          error=value.get('error'), progress=value.get('progress'))))
-                    raise RuntimeError('probe_finite_report_failed_' + str(value.get('error') or value['status']))
+                                          error=value.get('error'), result_error=(value.get('result') or {}).get('error'),
+                                          progress=value.get('progress'))))
+                    code = value.get('error') or ((value.get('result') or {}).get('error') or {}).get('code') or value['status']
+                    raise RuntimeError('probe_finite_report_failed_' + str(code))
                 current, _ = get('/api/live', cookie=cookie)
                 if len(owners) != 1 or current['values']['live']['view']['started_at_ms'] != start:
                     raise RuntimeError('probe_report_changed_live_owner')

@@ -55,6 +55,8 @@ QUICK_PATTERNS: tuple[str, ...] = (
     "test_web_accounts.py",
     "test_application_reports.py",
     "test_history_loading.py",
+    "test_historical_reports.HistoricalReportTests",
+    "test_historical_reports.HistoricalReportSourceTests",
     "test_source_history_loading.py",
     "test_foundation_quick.py",
     "test_config.py",
@@ -154,6 +156,7 @@ QUICK_PATTERNS: tuple[str, ...] = (
     "test_claude_transport.py",
 )
 FULL_ONLY_PATTERNS: tuple[str, ...] = (
+    "test_historical_reports.HistoricalReportScaleTests",
     "test_web_session_detail.py",
     # Slowest first: Full starts these before the quick files.
     "test_foundation.py",
