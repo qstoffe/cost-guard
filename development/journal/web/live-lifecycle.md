@@ -56,3 +56,19 @@ catalog or source operation caused every old failure; do not invent that detail
 or claim immunity to arbitrary source outages. Real-source verification and exact
 commands/counts belong in the task's completion and PR. Native desktop/macOS proof
 is separate from Windows/headless ownership evidence.
+
+## Representative competing work is not every historical report
+
+Final real `--watch-cards --daily --detail --reports` passed Daily/cards/detail/SSE
+and Normal/All-models/Sessions reports but FAILED overall: its fixed historical-date
+job hit the existing 120s limit at 868/872 roots. Cleanup still reaped every owned
+resource in 0.0884s. Do not call that whole campaign PASS, infer the complete cause
+of the date-report slowdown, or assume the slowdown predates the candidate.
+
+For FR 000555, Decision Delegate independently confirmed the existing `--models`
+variant as representative concurrent work under §3.4, without an exception: real
+Normal and All-models report processes run sequentially beside continuing Live,
+not simultaneously with each other. That whole run passed, as did three consecutive
+full serial source runs and final 10+10 synthetic cycles. Exact commands, failures,
+phase timings and platform limits are in the
+[completion evidence](../../backlog/complete/000068-000555-web-live-daily-shutdown-timeouts/COMPLETION.md).
