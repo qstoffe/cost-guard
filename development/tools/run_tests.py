@@ -76,6 +76,7 @@ QUICK_PATTERNS: tuple[str, ...] = (
     "test_watch_stop_reasons.py",
     "test_live_stop_reasons.py",
     "test_opencode_terminal.py",
+    "test_pre_response_terminal.py",
     "test_source_selection.py",
     "test_analysis_core.py",
     "test_step6_context_comparisons.py",

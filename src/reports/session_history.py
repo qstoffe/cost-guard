@@ -7,6 +7,7 @@ from dataclasses import replace
 
 from src.analysis.duration import accumulated_duration, execution_duration
 from src.analysis.causal import TOOL_CALLS_CONTINUATION_GRACE_MS
+from src.domain import MessageRole
 
 from .sampling import AnalyzedRoot
 
@@ -66,9 +67,19 @@ def analyze_observed(service, previous, fresh):
     # Preserve durable ends on present attempts, never omitted live children,
     # tools or messages. Reuse causal analysis, not another lifecycle heuristic.
     messages = {(message.session_id, message.message_id): message for message in snapshot.messages}
-    current = replace(fresh, messages=tuple(replace(message,
+    current_messages = tuple(replace(message,
         termination=messages[(message.session_id, message.message_id)].termination)
-        for message in fresh.messages))
+        for message in fresh.messages)
+    present = {(message.session_id, message.message_id) for message in fresh.messages}
+    ended_starts = tuple(message for key, message in messages.items() if key not in present
+        and message.role is MessageRole.USER and message.termination is not None)
+    ended_ids = {(message.session_id, message.message_id) for message in ended_starts}
+    # A failed pre-response attempt has no assistant to carry its durable end.
+    # Keep only that boundary, not omitted active tools/children or their status.
+    current = replace(fresh, messages=current_messages + ended_starts,
+        events=union(fresh.events, tuple(event for event in snapshot.events
+            if (event.session_id, event.event_id) in ended_ids),
+            lambda event: (event.session_id, event.event_id)))
     authoritative = service._analyze_snapshot(current)
     current_prompts = {record.prompt_id: record for record in authoritative.prompts}
     prompts = []

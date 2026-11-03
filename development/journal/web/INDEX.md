@@ -15,7 +15,8 @@ Status: current
   native primary quotas, table-adjacent guidance, page-flow history, quiet Today,
   browser matrix and scoped live evidence/Decision Delegate verification exception.
 - [Watch terminal lifecycle](watch-terminal-lifecycle.md): reproduced retention/race
-  defects, shared fresh-versus-retained authority and historical-incident limits.
+  defects, failed pre-response continuations, shared fresh-versus-retained authority
+  and historical-incident limits/FR000559's scoped delivery exception.
 - [Shared/native CI scope](ci-scope.md): measured Linux shared regression and
   focused three-architecture native startup, scoped handoff permission and proof limits.
 - [Mini Watch](mini-watch.md): canonical running aggregate, shared native-period

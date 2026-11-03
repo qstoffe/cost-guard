@@ -145,11 +145,12 @@ def prompt_references(
         if event.created_at_ms < since_ms:
             continue
         message = messages.get(event.event_id)
-        assistant_messages = timeline.index.assistants.get(event.event_id, ())
+        attempt_messages = timeline.index.attempt_messages(
+            timeline.index.windows[event.event_id], messages)
         latest_visible = event is visible_events[-1]
         window = timeline.index.windows[event.event_id]
         has_error_or_live = (
-            any(item.termination or item.error_name or item.completed_at_ms is None for item in assistant_messages)
+            any(item.termination or item.error_name or item.completed_at_ms is None for item in attempt_messages)
             or bool(snapshot.root.active is True and latest_visible)
         )
         if not window & parent_ids and not has_error_or_live:
@@ -217,7 +218,7 @@ def _is_aborted_message(message: NormalizedMessage) -> bool:
     return message.error_name in {"AbortedError", "AbortError", "MessageAbortedError"}
 
 
-def _latest_assistant(messages: Sequence[NormalizedMessage]) -> NormalizedMessage | None:
+def _latest_attempt_message(messages: Sequence[NormalizedMessage]) -> NormalizedMessage | None:
     values = sorted(messages, key=lambda item: (
         item.created_at_ms,
         bool(item.completed_at_ms is not None and item.finish_reason not in {None, "tool-calls"} and not item.error_name),
@@ -226,11 +227,11 @@ def _latest_assistant(messages: Sequence[NormalizedMessage]) -> NormalizedMessag
     return values[-1] if values else None
 
 
-def _assistant_in_progress(
+def _attempt_in_progress(
     messages: Sequence[NormalizedMessage], *, now_ms: int, continuation_superseded: bool,
     active_work: bool = False,
 ) -> bool:
-    latest = _latest_assistant(messages)
+    latest = _latest_attempt_message(messages)
     if active_work and not continuation_superseded:
         return True
     if latest is None or latest.termination or latest.error_name:
@@ -270,7 +271,7 @@ def _prompt_has_active_work(
         return False
     if snapshot.root.active is True:
         return True
-    latest = _latest_assistant(messages)
+    latest = _latest_attempt_message(messages)
     terminal_at = latest.termination.completed_at_ms if latest and latest.termination else 0
     if any(_part_is_running(part) and (not terminal_at or max(
         part.created_at_ms, part.updated_at_ms, _part_time(part)[0]) > terminal_at)
@@ -485,12 +486,10 @@ def build_prompt_record(
     now_ms = int(time.time() * 1000) if now_ms is None else now_ms
     timeline = timeline or _root_timeline(snapshot, subscription_providers, tracked_provider)
     parent_ids = _synthetic_parent_ids(snapshot, ref, timeline)
-    assistant_messages = sorted((message for parent in parent_ids
-        for message in timeline.index.assistants.get(parent, ())),
-        key=lambda message: timeline.index.message_order[message.message_id])
-    # Earlier failed attempts remain in the same prompt's history. Only the
-    # terminal assistant outcome determines whether the logical prompt aborted.
-    latest = _latest_assistant(assistant_messages)
+    attempt_messages = timeline.index.attempt_messages(parent_ids, timeline.messages)
+    # A continuation may fail before producing an assistant. The newest attempt,
+    # not an earlier response or session inactivity, owns the logical outcome.
+    latest = _latest_attempt_message(attempt_messages)
     evidence = latest.termination if latest else None
     explicitly_aborted = bool(evidence.outcome is TerminalOutcome.CANCELLATION if evidence
                               else latest and _is_aborted_message(latest))
@@ -498,15 +497,15 @@ def build_prompt_record(
     compacting = timeline.compacting
     superseded = superseded or bool(compacting and compacting.created_at_ms > ref.prompt_time_ms)
     foreground_work = _prompt_has_active_work(
-        snapshot, assistant_messages, continuation_superseded=superseded
+        snapshot, attempt_messages, continuation_superseded=superseded
     )
-    background = _outstanding_background(snapshot, assistant_messages, superseded=superseded)
+    background = _outstanding_background(snapshot, attempt_messages, superseded=superseded)
 
     def running(active_work: bool) -> bool:
         return (not explicitly_aborted or bool(evidence and active_work)) and not bool(
             compacting and compacting.created_at_ms > ref.prompt_time_ms
-        ) and _assistant_in_progress(
-            assistant_messages, now_ms=now_ms, continuation_superseded=superseded, active_work=active_work,
+        ) and _attempt_in_progress(
+            attempt_messages, now_ms=now_ms, continuation_superseded=superseded, active_work=active_work,
         )
 
     in_progress = running(foreground_work or bool(background))
@@ -541,13 +540,13 @@ def build_prompt_record(
     aborted = (explicitly_aborted and not in_progress) or (zero_usage_abort and not successful_final and not terminal_error)
     watch_error = not aborted and terminal_error
     abort_time = max(
-        (message.completed_at_ms or 0 for message in assistant_messages if not explicitly_aborted or _is_aborted_message(message)),
+        (message.completed_at_ms or 0 for message in attempt_messages if not explicitly_aborted or _is_aborted_message(message)),
         default=0,
     ) if aborted else 0
     if aborted and evidence:
         abort_time = evidence.completed_at_ms
     terminal_time = 0 if in_progress else _prompt_activity_end(
-        snapshot, assistant_messages, fallback=ref.prompt_time_ms
+        snapshot, attempt_messages, fallback=ref.prompt_time_ms
     )
 
     if not root_entries:
@@ -555,7 +554,7 @@ def build_prompt_record(
             return None
         # Before its first completed request a running prompt may already have a
         # request-bound in-flight assistant; never borrow mutable session selection.
-        bound = next((m.model for m in reversed(assistant_messages) if m.model is not None and not m.summary), None)
+        bound = next((m.model for m in reversed(attempt_messages) if m.model is not None and not m.summary), None)
         main_model = ref.model_id or (bound.model if bound else "")
         main_provider = ref.provider_id or (bound.provider if bound else "")
         return PromptRecord(
@@ -575,7 +574,7 @@ def build_prompt_record(
             in_progress=in_progress,
             completed_successfully=successful_final,
             duration_ms=max(0, terminal_time - ref.prompt_time_ms) if evidence else 0,
-            execution_duration_ms=prompt_duration(ref, assistant_messages, latest, (), timeline.messages,
+            execution_duration_ms=prompt_duration(ref, attempt_messages, latest, (), timeline.messages,
                                                   in_progress=in_progress, now_ms=now_ms, background=snapshot.background),
             **background_fields,
         )
@@ -588,10 +587,10 @@ def build_prompt_record(
     if not in_progress and terminal_time <= 0:
         terminal_time = abort_time or prompt_end
     causal_end = now_ms if in_progress else max(prompt_end, terminal_time)
-    local_intervals = _local_intervals(assistant_messages, prompt_start, causal_end)
+    local_intervals = _local_intervals(attempt_messages, prompt_start, causal_end)
     entries = list(root_entries)
     visited: set[tuple[str, int, int]] = set()
-    for child_id, start, end in _task_invocations(assistant_messages, prompt_start, causal_end, in_progress):
+    for child_id, start, end in _task_invocations(attempt_messages, prompt_start, causal_end, in_progress):
         child_entries, child_local = _child_work(
             snapshot, timeline.entries, child_id, start, end, visited, in_progress, tracked_provider
         )
@@ -630,7 +629,7 @@ def build_prompt_record(
         output_tokens=output_total, cache_read_tokens=billed.cache_read_tokens,
         cache_write_tokens=billed.cache_write_tokens, input_context_tokens=meaningful_first.request_input_approx,
         total_token_volume=total_volume, model_costs=billed.model_costs, duration_ms=duration,
-        execution_duration_ms=prompt_duration(ref, assistant_messages, latest, entries, timeline.messages,
+        execution_duration_ms=prompt_duration(ref, attempt_messages, latest, entries, timeline.messages,
                                               in_progress=in_progress, now_ms=now_ms, background=snapshot.background),
         local_duration_ms=local_ms, model_wait_ms=max(0, duration - local_ms),
         prompt_context_tokens_approx=prompt_context_approx, previous_entry=previous,
