@@ -33,9 +33,12 @@ def usage_provider(provider: str) -> str:
             "github-copilot-enterprise": "github-copilot"}.get(provider, provider)
 
 
-def quota_window(component: QuotaComponent, now_ms: int) -> tuple[int, int, str] | None:
+def quota_window(component: QuotaComponent, now_ms: int, *, include_monthly: bool = False) -> tuple[int, int, str] | None:
     duration = component.duration_seconds
-    if (not duration or duration <= 0 or component.scope not in {"account", "model"}
+    monthly = (include_monthly and duration is None and component.period == "fixed"
+               and component.scope == "account" and component.model_id is None
+               and component.label.casefold() in {"monthly", "month"})
+    if ((not monthly and (not duration or duration <= 0)) or component.scope not in {"account", "model"}
             or (component.scope == "model" and not component.model_id)):
         return None
     if component.origin != "provider_native":
@@ -49,6 +52,9 @@ def quota_window(component: QuotaComponent, now_ms: int) -> tuple[int, int, str]
             # half-open range cannot pick up requests even at the observation time.
             return now_ms, now_ms, "provider-confirmed empty window"
         return None  # Inactive plus a reset/nonzero usage is contradictory evidence.
+    if monthly:
+        window = monthly_quota_window(component, now_ms)
+        return (*window, "native UTC calendar month") if window is not None else None
     if component.reset_at_ms and component.reset_at_ms - duration * 1000 <= now_ms < component.reset_at_ms:
         return component.reset_at_ms - duration * 1000, now_ms + 1, "native reset window"
     return None
@@ -72,15 +78,13 @@ def monthly_quota_window(component: QuotaComponent, now_ms: int) -> tuple[int, i
 
 
 def history_start(accounts: Iterable[AccountSnapshot], today_start_ms: int, now_ms: int, *,
-                  include_copilot_month: bool = False) -> int:
+                  include_copilot_month: bool = False, include_native_month: bool = False) -> int:
     starts = [today_start_ms]
     for account in accounts:
         for component in account.quotas:
-            if (window := quota_window(component, now_ms)) is not None:
+            monthly = include_native_month or (include_copilot_month and usage_provider(account.ref.provider_id) == "github-copilot")
+            if (window := quota_window(component, now_ms, include_monthly=monthly)) is not None:
                 starts.append(window[0])
-            if include_copilot_month and usage_provider(account.ref.provider_id) == "github-copilot":
-                if (window := monthly_quota_window(component, now_ms)) is not None:
-                    starts.append(window[0])
     return min(starts)
 
 

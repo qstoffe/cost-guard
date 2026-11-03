@@ -571,7 +571,7 @@ class ReportService:
         """Publish new quota evidence over cached local usage, without source I/O."""
         from src.analysis.period_ccost import history_start
         day = local_day_start_ms(self.timezone_id, now_ms=self.now_ms)
-        self._watch_period_start_ms = history_start(quotas, day, self.now_ms)
+        self._watch_period_start_ms = history_start(quotas, day, self.now_ms, include_native_month=True)
         projection, today = self._watch_account_projection.project(
             quotas, self._watch_quota_entries, self._load_comparison_catalog(), now_ms=self.now_ms,
             day_start_ms=day,

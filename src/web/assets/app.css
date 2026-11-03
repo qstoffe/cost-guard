@@ -58,6 +58,7 @@ h1 small { display: inline-block; margin-left: .4rem; padding: .2rem .55rem; ver
   border: 1px solid var(--line); border-radius: 2rem; font-size: .65rem; letter-spacing: .06em;
   text-transform: uppercase; color: var(--muted); font-weight: 650; }
 header p { margin: var(--space-2) 0 0; font-size: .85rem; color: var(--muted); }
+#product-version { text-transform: none; white-space: nowrap; }
 #status { color: var(--ink); overflow-wrap: anywhere; }
 .host-state { padding: .25rem clamp(.85rem, 3vw, 2.5rem);
   background: var(--warn-bg); color: var(--warn); font-weight: 600;
@@ -148,12 +149,16 @@ p.warning { border-left: 3px solid var(--warn); padding: .65rem .85rem; backgrou
 .watch-view .account-card p { margin-block: var(--space-2); }
 .watch-view .quota-summary { padding-block: var(--space-2); }
 .watch-account-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr)); }
-.watch-subscription { display: grid; grid-template-rows: subgrid; grid-row: span 5; gap: .5rem; }
-.watch-subscription > h4 { overflow-wrap: anywhere; }
-.watch-subscription > p { margin: 0; }
+.watch-view .watch-subscription { display: grid; grid-template-rows: subgrid; grid-row: span 6;
+  gap: .5rem; padding: 0 0 .8rem; text-align: left; }
+.watch-subscription > h4 { overflow-wrap: anywhere; text-align: center; padding: .65rem .9rem;
+  background: var(--accent-soft); color: var(--accent); font-weight: 750; border-bottom: 1px solid var(--line);
+  border-radius: calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0; }
+.watch-subscription > :not(h4) { margin-inline: .9rem; min-width: 0; }
+.watch-view .watch-subscription > p { margin-block: 0; }
 .watch-quota-track { min-height: 1.2rem; }
 .watch-account-details { border-top: 1px solid var(--line); padding-top: .5rem; }
-.watch-secondary-quota { margin-top: .65rem; }
+.watch-secondary-quota + .watch-secondary-quota { margin-top: .65rem; }
 .watch-quota-exhausted { accent-color: var(--warn); }
 .watch-daily { display: flex; align-items: baseline; flex-wrap: wrap; gap: .25rem 1rem; font-size: .85rem; box-shadow: none; margin-bottom: 4px; }
 .watch-daily-category { white-space: nowrap; }

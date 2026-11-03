@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.130 — 2026-11-03
+
+- Web: running server version in the header; centered Watch subscription title bands, per-quota native-period CCost including supported monthly history, complete primary reset/Remaining rows and secondary-only dividers. Today attribution remains unchanged without its visible estimate suffix.
+
 ## v80.129 — 2026-11-02
 
 - Web Watch: admission-order fairness prevents revision churn from starving retained running cards. Canonical termination, worker bounds, cadence and CLI behavior stay unchanged.
@@ -38,7 +42,7 @@
 
 ## v80.120 — 2026-11-02
 
-- Web settings: independent `webSettings` Theme and persistent CCost Credits/USD. Legacy theme and CLI values survive. Confirmed saves update retained Python tokens without reload/acquisition; preserving JSONC/security guards remain.
+- Web Settings: independent persistent Theme/CCost Credits/USD; preserving JSONC saves update retained Python tokens without acquisition. Legacy/CLI values survive.
 
 ## v80.119 — 2026-11-01
 
@@ -46,12 +50,11 @@
 
 ## v80.118 — 2026-11-01
 
-- Unified Web Models: page scrolling, catalog/version filters, exact tier multi-sort, legacy bookmarks; Accounts/CLI/Watch unchanged.
-- Web launch activity lasts through host/browser handoff; host detached. Physical macOS handoff unverified.
+- Unified Web Models: page scrolling, catalog/version filters, exact tier multi-sort and legacy bookmarks; Accounts/CLI/Watch unchanged. Launch activity covers detached-host/browser handoff; physical macOS proof pending.
 
 ## v80.117 — 2026-10-30
 
-- Windows OpenAI quota: verified ROOT trust; safe TLS failures and bounded refresh.
+- Windows OpenAI quota: verified ROOT trust, safe TLS failures, bounded refresh.
 
 ## v80.116 — 2026-10-30
 
@@ -151,9 +154,9 @@
 
 ## v80.94 — 2026-10-27
 
-- Rebuilt Web Overview around Normal report's CCost / Token Mix % / Relative CCost definitions, reference model table, contextual notices and Accounts Overview. Compact account cards retain native remaining/used/reset/Pace and attribution warnings; observation/billing detail is expandable rather than a DTO prose dump. Missing bills are not fabricated as zero.
-- Preserved exact CLI default model/tier ranking and shared one-decimal multiplier/threshold formatting; empty comparison samples show no synthetic multipliers. Column sorting cycles ascending, descending, default; a CLI default order button restores server order. Added rendered CLI/Overview regression fixtures. No valuation, sample, quota-cadence or CLI changes.
-- Compacted finite-report JSON without dropping provenance or raising the 8 MiB ceiling, repairing a real-installation Normal report that crossed the limit solely because of serialization whitespace.
+- Web Overview: Normal CCost/Token Mix/Relative CCost definitions, reference models/notices and compact native account/Pace/attribution cards with expandable billing/observations; missing bills stay unknown.
+- Preserved CLI ranking, one-decimal multipliers/thresholds and blank empty-sample ratios. Sorting cycles ascending/descending/default with CLI-order restore; CLI/DOM fixtures cover parity. Valuation, samples, cadence and CLI unchanged.
+- Compact JSON fixes a real Normal-report overflow without losing provenance or raising 8 MiB.
 
 ## v80.93 — 2026-10-27
 

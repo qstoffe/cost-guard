@@ -252,7 +252,11 @@ class ReportProjectionTests(unittest.TestCase):
         self.assertGreater(quota.included_subscription_requests, 0)
         openai = next(item for item in quota.accounts if item.account.ref.provider_id == "openai")
         self.assertEqual("plus", openai.account.plan)
-        self.assertIsNone(openai.ccost_scopes[0][1], "Quota login alone cannot attribute historical CCost")
+        self.assertEqual(5, openai.ccost_scopes[0][1].observed_requests)
+        self.assertIn('today', openai.ccost_estimated_scopes)
+        self.assertIn('not verified account/billing attribution', openai.ccost_notes[0])
+        # Acquired Today remains independent of an unavailable longer quota period;
+        # a sole-provider estimate still does not establish historical account proof.
         report = service.build(ReportRequest())
         stream = io.StringIO()
         ReportRenderer(self.config, stream=stream, color_enabled=False, terminal_width=160).render(report)

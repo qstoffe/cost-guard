@@ -28,7 +28,7 @@ async function until(condition) {
 }
 async function main() {
   const input = JSON.parse(fs.readFileSync(0, 'utf8'));
-  const ids = Object.fromEntries(['host-state', 'host-message', 'host-details', 'status', 'result', 'notice', 'refresh', 'cancel', 'heading', 'skip', 'content', 'scope-controls', 'search'].map(id => [id, new Node('div')]));
+  const ids = Object.fromEntries(['product-version', 'host-state', 'host-message', 'host-details', 'status', 'result', 'notice', 'refresh', 'cancel', 'heading', 'skip', 'content', 'scope-controls', 'search'].map(id => [id, new Node('div')]));
   const toolbar = new Node('div');
   ids['host-state'].append(ids['host-message'], ids['host-details']);
   const nav = ['models', 'sessions', 'watch', 'accounts', 'reports', 'token-mix', 'settings'].map(key => {
@@ -68,9 +68,12 @@ async function main() {
   }
   assert.match(ids.result.textContent, /≈0%.*Authorizing browser session/, 'slow authorization has only approximate progress');
   assert.equal(location.hash, '#/models', 'credential erased before waiting');
+  assert.equal(ids['product-version'].textContent, '', 'no invented version before authentication');
   releaseBootstrap();
   await until(() => all(ids.result, 'progress').length === 1);
   assert.equal(all(ids.result, 'progress')[0].max, 100);
+  await until(() => ids['product-version'].textContent !== '');
+  assert.equal(ids['product-version'].textContent, ' v91.7', 'running fixture version appears while Models loads');
   assert.match(all(ids.result, 'progress')[0].getAttribute('aria-valuetext'), /Approximately/, 'never an invented exact global percentage');
   releaseReport();
   await until(() => ids.notice.textContent.includes('Snapshot captured'));
@@ -103,6 +106,7 @@ async function main() {
   const navigate = key => {
     ids.content.focused = false;
     location.hash = '#/' + key; handlers.hashchange();
+    assert.equal(ids['product-version'].textContent, ' v91.7', 'persistent server version across routes');
     if (['models', 'overview', 'models/all'].includes(key)) assert.equal(ids.content.focused, true, 'Models route receives keyboard focus');
   };
   const retainedHeartbeat = () => {
@@ -354,6 +358,7 @@ async function main() {
   assert.equal(ids.cancel.disabled, true);
   assert.equal(ids['scope-controls'].inert, true);
   assert.equal(ids.result.textContent, retained, 'terminal state retains the exact frozen report');
+  assert.equal(ids['product-version'].textContent, ' v91.7', 'retained view keeps its original server version');
   ids.refresh.click();
   await delay(20);
   assert.equal(requests, terminalRequests, 'disabled terminal refresh cannot start acquisition');

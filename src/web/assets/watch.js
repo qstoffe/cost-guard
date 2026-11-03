@@ -29,7 +29,8 @@ const WatchView = (() => {
   }
   function quotaTrack(value) {
     const quota = value.quota, summary = quota.unlimited ? 'Unlimited' : value.used_percent === '—' ? '—' : value.used_percent + ' used';
-    const label = el('div', `${quota.label} · ${summary}`, value.exhausted ? 'warning metric-value' : 'metric-value');
+    const label = el('div', () => `${quota.label} · ${summary} (${value.cost == null ? '—' : display(value.cost, 'account_ccost')})`,
+      value.exhausted ? 'warning metric-value' : 'metric-value');
     const track = el('div', undefined, 'watch-quota-track');
     if (!quota.unlimited && value.used_fraction != null) {
       const bar = el('progress'); bar.max = 1; bar.value = value.used_fraction;
@@ -41,10 +42,12 @@ const WatchView = (() => {
   }
   function quotaDetails(parent, value) {
     const quota = value.quota;
-    parent.append(el('p', `${quota.label} · ${display(quota, 'reset')}`, 'detail'));
-    if (quota.period === 'rolling' && quota.duration_seconds) parent.append(el('p',
-      `Rolling ${display(quota, 'window')} window`, 'detail'));
-    else if (quota.period && quota.period !== 'unknown') parent.append(el('p', quota.period + ' window', 'detail'));
+    parent.append(el('p', quota.window_active === false && quota.reset_at_ms == null ? 'Reset: not started' : display(quota, 'reset'), 'detail'));
+    if (value.pace) {
+      parent.append(el('p', `Remaining: ${display(value.pace, 'per_day')}/day`, 'detail'));
+      parent.append(el('p', value.pace.workdays === 0 ? 'Remaining: no workdays left' :
+        `Remaining: ${display(value.pace, 'per_workday')}/workday`, 'detail'));
+    }
     if (value.restricted) parent.append(el('p', quota.label + ' · Provider restriction reported', 'warning'));
   }
   function accounts(parent, value) {
@@ -54,14 +57,17 @@ const WatchView = (() => {
       const obs = item.observation, card = el('section', undefined, 'account-card watch-subscription');
       card.dataset.availability = obs.availability;
       const today = item.ccost_scopes.find(scope => scope.name === 'today');
-      const cost = el('p', () => `CCost Today: ${today?.cost == null ? '—' : display(today.cost, 'account_ccost')}${item.today_estimated && today?.cost != null ? ' (estimated)' : ''}`, 'metric-value');
+      const cost = el('p', () => `CCost Today: ${today?.cost == null ? '—' : display(today.cost, 'account_ccost')}`, 'metric-value');
       cost.title = item.today_note;
-      const [label, track] = quotaTrack(item.primary), lower = el('div', undefined, 'watch-account-details');
-      quotaDetails(lower, item.primary);
+      const [label, track] = quotaTrack(item.primary), primary = el('div', undefined, 'watch-primary-details');
+      quotaDetails(primary, item.primary);
+      const lower = el('div', undefined, 'watch-account-footer');
+      const secondary = el('div', undefined, 'watch-account-details');
       for (const quota of item.secondary) {
         const group = el('div', undefined, 'watch-secondary-quota');
-        group.append(...quotaTrack(quota)); quotaDetails(group, quota); lower.append(group);
+        group.append(...quotaTrack(quota)); quotaDetails(group, quota); secondary.append(group);
       }
+      if (item.secondary.length) lower.append(secondary);
       const cause = {auth_failure: 'Authentication unavailable', transport_failure: 'Connection failed',
         unsupported_auth_method: 'Unsupported authentication method', format_changed: 'Provider format changed',
         software_failure: 'Account refresh failed', discovery_failure: 'Account metadata unavailable',
@@ -73,7 +79,9 @@ const WatchView = (() => {
         lower.append(el('p', 'Provider restriction reported; utilization not established', 'warning'));
       if (obs.has_warning) lower.append(el('p', 'Provider warning', 'warning'));
       if (item.ccost_account_unknown) lower.append(el('p', 'CCost account attribution unavailable', 'detail'));
-      card.append(el('h4', obs.label), cost, label, track, lower); grid.append(card);
+      card.append(el('h4', obs.label), cost, label, track, primary);
+      if (lower.children.length) card.append(lower);
+      grid.append(card);
     }
     parent.append(grid);
   }

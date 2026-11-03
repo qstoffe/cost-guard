@@ -18,7 +18,7 @@ from src.analysis.valuation import ComparisonCost
 from src.analysis.token_mix import TokenMix
 from src.analysis.workload_mix import MixEvidence
 from src.analysis.comparisons import RelativePriceLevel
-from src.domain import AccountSnapshot
+from src.domain import AccountSnapshot, QuotaComponent
 
 
 class ReportKind(str, Enum):
@@ -189,6 +189,13 @@ class PublisherTokenMixProjection:
 
 
 @dataclass(frozen=True, slots=True)
+class QuotaPeriodProjection:
+    quota: QuotaComponent
+    cost: ComparisonCost | None
+    pace: QuotaPace | None
+
+
+@dataclass(frozen=True, slots=True)
 class AccountProjection:
     account: AccountSnapshot
     label: str
@@ -201,6 +208,7 @@ class AccountProjection:
     unaccounted_usage: Decimal | None = None
     provider_ccost_notes: tuple[tuple[int, str, ComparisonCost], ...] = ()
     ccost_estimated_scopes: tuple[str, ...] = ()
+    quota_periods: tuple[QuotaPeriodProjection, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

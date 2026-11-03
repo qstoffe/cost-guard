@@ -1,5 +1,8 @@
 # Web Beta
 
+After authentication, **Web Beta v…** shows the running server's CLI product version,
+not a release lookup or newly edited source. Offline views retain their original version.
+
 ## Web settings
 
 v80.120 groups exactly two controls under **Settings → Web settings**, at
@@ -36,13 +39,11 @@ Only these two nested fields are writable. A setting stays shared while Web only
 consumes it; promotion to an editable Web control requires a separate approved
 feature and an independent value in `webSettings`. No other settings migrate here.
 CLI `colorScheme`, custom palettes and unpromoted shared settings are unchanged.
-Minimal JSONC edits preserve the other Web preference, legacy keys, text/comments,
-ordering, nested settings and CLI palettes. Invalid/ambiguous JSONC, linked/reparse
-locations, hard-linked files, insufficient permissions, files over 1 MiB or detected
-concurrent edits fail without a destructive rewrite. Replacement uses a private,
-same-directory temporary file and atomic rename. Last-moment identity/byte checks
-detect ordinary editor conflicts, not hostile same-user filesystem races. Defaults,
-OpenCode, credentials, accounts, pricing and report data remain read-only.
+Minimal JSONC edits preserve other preferences, legacy keys, comments/order and CLI
+palettes. Invalid/ambiguous JSONC, links/reparse points, hard links, permission errors,
+files over 1 MiB and detected editor conflicts fail closed. Private same-directory
+temporary files and atomic replacement protect ordinary edits, not hostile same-user
+races. Defaults, OpenCode, credentials, accounts, prices and reports remain read-only.
 
 ## Unified Models
 
@@ -287,18 +288,19 @@ coherently. Routine refresh silently retains figures; only a scope without valid
 loads. Real failures remain visible. Midnight resets, rejecting yesterday's late results;
 Total Today keeps its label before 03:00. Web Credits/USD and CLI scopes are unchanged.
 
-Watch subscriptions align title, **CCost Today**, stable primary Used percentage and
-progress tracks across each responsive row. Native primary declarations and account-window
-order choose the primary, never provider identity or depletion. A weekly-only OpenAI
-account shows Weekly, without a fabricated five-hour slot or duplicate weekly secondary.
-An established primary retains its slot when partial/error acquisition omits it;
-missing usage remains honestly unavailable rather than promoting a secondary.
-Titles appear once, retaining account distinctions. A divider separates per-window
-resets, secondary quotas and actual rolling/fixed descriptions. Missing utilization
-is unavailable, Unlimited stays distinct, and sub-100% values never round to exhaustion.
-Raw status suffixes are absent; genuine restrictions/freshness errors remain visible.
-Estimated account Today attribution is marked; hover its amount for the canonical basis.
-The separate Accounts page retains its intended presentation.
+Subscription cards align centered title bands, **CCost Today**, native primary percentage
+and bars; body values stay left aligned. Native declarations/order, never depletion or
+provider identity, select the primary. Missing primary stays unavailable; weekly-only
+accounts have no invented five-hour slot or duplicate secondary.
+
+Each quota shows **period · N% used (CCost)**, its bar/reset and applicable canonical
+**Remaining: …/day** and **Remaining: …/workday** (or **no workdays left**). Only real
+secondaries follow a divider. No routine rolling/fixed boilerplate appears. Exact
+account/window/model costs include pre-Watch native-month history, never Today/30-day
+substitutions. Unknown/stale/unacquired boundaries show **(—)**; confirmed empty windows
+show zero independently of Today. Unlimited, sub-100% precision and genuine warnings
+remain distinct. Today keeps daily scope/attribution without an estimate suffix (basis
+on hover). Credits/USD changes CCost, not native Remaining. Accounts is unchanged.
 
 Context-price guidance appears directly below each session table, before active activity,
 without a separate divider/frame or empty reserved space. It uses the latest valid Watch
