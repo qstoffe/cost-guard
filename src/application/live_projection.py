@@ -8,7 +8,7 @@ from .watch_accounts import watch_account
 def card_row(row, now_ms):
     tool = row.tool
     projected = fields(row.prompt, """at_ms prompt_number label preview ccost cost_estimated unresolved_cost
-        calls in_progress is_compaction aborted abort_reason completed_successfully event_id duration_ms has_additional_model""")
+        calls token_mix_percent in_progress is_compaction aborted abort_reason completed_successfully event_id duration_ms has_additional_model""")
     projected = ObjectValue(projected.fields + (("has_error", row.prompt.watch_error),))
     return record(prompt=projected, model=row.prompt.watch_model or "N/A",
         effort=row.prompt.watch_effort or "N/A", marker=row.marker,

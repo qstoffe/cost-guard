@@ -23,6 +23,7 @@ def main():
     parser.add_argument("--reports", action="store_true", help="Also capture finite reports beside Live and cancel deep history.")
     parser.add_argument("--models", action="store_true", help="Capture only task-focused Normal/full Models snapshots beside Live.")
     parser.add_argument("--watch-cards", action="store_true", help="Wait for independently published real one-row Watch cards.")
+    parser.add_argument("--prompt-token-mix", action="store_true", help="Observe card token mix over twelve seconds; no inference or extra capture.")
     parser.add_argument("--daily", action="store_true", help="Wait for coherent full-day cost, initiating prompts and category prices.")
     args = parser.parse_args()
     owners = []
@@ -130,6 +131,32 @@ def main():
                 time.sleep(.25)
             else:
                 raise RuntimeError('probe_daily_timeout')
+        if args.prompt_token_mix:
+            observations.stage = 'prompt_token_mix'
+            previous, known, changes, usage_changes = {}, set(), 0, 0
+            for _ in range(12):
+                state, _ = get('/api/live', cookie=cookie)
+                current = (state['values'].get('live') or {}).get('view') or {}
+                for card in [*current.get('active_cards', []), *current.get('history_cards', [])]:
+                    for item in card['rows']:
+                        row = item['prompt']
+                        key = (card['session_id'], row['event_id'])
+                        mix = row['token_mix_percent']
+                        if mix is not None:
+                            assert len(mix) == 4 and sum(mix) == 100
+                            assert row['display']['token_mix_percent'] == '/'.join(map(str, mix))
+                            known.add(key)
+                        else:
+                            assert row['display']['token_mix_percent'] in {'N/A', 'running'}
+                        value = (row['calls'], mix)
+                        if key in previous:
+                            usage_changes += value[0] != previous[key][0]
+                            changes += value[1] != previous[key][1]
+                        previous[key] = value
+                time.sleep(1)
+            print(json.dumps(dict(prompt_token_mix='ok', observed_rows=len(previous), known_rows=len(known),
+                call_count_changes=usage_changes, mix_changes=changes, observation_seconds=12,
+                model_calls_started_by_probe=0)))
         observations.stage = 'streams'
         for _ in range(2):
             connection = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=3)

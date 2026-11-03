@@ -135,6 +135,43 @@ class WebTerminalLifecycleTests(unittest.TestCase):
         self.assertFalse(self.row(30_000).in_progress)
         self.assertEqual("quota_limit", self.row(30_000).abort_reason)
 
+    def test_native_usage_observations_update_mix_then_terminal_matches_cli(self):
+        first = self.unfinished()
+        first["tokens"] = {"input": 100, "output": 0, "reasoning": 0, "cache": {"read": 0, "write": 0}}
+        self.native.sessions = self.native.sessions[:1]
+        self.native.active = {"ses_current": {"type": "running"}}
+        self.capture(4000)
+        self.assertEqual((100, 0, 0, 0), self.row(4000).token_mix_percent)
+        first.update(finish="stop", time={"created": 3100, "completed": 4100})
+        second = copy.deepcopy(first)
+        second.update(id="second-observed-call", time={"created": 4200},
+            tokens={"input": 0, "output": 0, "reasoning": 0, "cache": {"read": 300, "write": 0}})
+        second.pop("finish")
+        self.native.messages["ses_current"].append(second)
+        self.capture(5000)
+        self.assertEqual((25, 75, 0, 0), self.row(5000).token_mix_percent)
+        self.assertEqual(2, self.row(5000).calls)
+        second.update(finish="stop", time={"created": 4200, "completed": 5100})
+        third = copy.deepcopy(second)
+        third.update(id="third-observed-call", time={"created": 5200},
+            tokens={"input": 0, "output": 80, "reasoning": 20, "cache": {"read": 0, "write": 0}})
+        third.pop("finish")
+        self.native.messages["ses_current"].append(third)
+        self.capture(6000)
+        self.assertEqual((20, 60, 0, 20), self.row(6000).token_mix_percent)
+        self.assertEqual(3, self.row(6000).calls)
+        self.capture(7000)
+        self.assertEqual(3, self.row(7000).calls, "repeated observations cannot duplicate calls")
+        third.update(finish="stop", time={"created": 5200, "completed": 7100})
+        self.native.active = {}
+        self.capture(8000)
+        cli, = self.service(8000).build(ReportRequest(ReportKind.SESSION, self.root.session_id)).prompt_blocks[0].rows
+        self.assertFalse(self.row(8000).in_progress)
+        self.assertEqual(cli.token_mix_percent, self.row(8000).token_mix_percent)
+        active, _, _ = self.cards.project(8000)
+        wire = project_live(WatchProjection("Watch", "fixture", (), active_cards=active)).to_json()
+        self.assertEqual("20/60/0/20", wire["active_cards"][0]["rows"][0]["prompt"]["display"]["token_mix_percent"])
+
     def test_complete_zero_call_reclassification_matches_cli_retained_history(self):
         self.native.messages["ses_current"] = self.native.messages["ses_current"][:1]
         self.native.active = {"ses_current": {"type": "running"}}

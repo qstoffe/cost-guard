@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.138 — 2026-11-03
+
+- Web Watch: ten-column prompt tables with canonical #N previews, local start clocks, accessible header explanations and live observed I/C/W/O Token Mix %. Expanded history is unframed with one section divider; incomplete token telemetry stays unknown without changing CLI reports.
+
 ## v80.137 — 2026-11-03
 
 - Web Watch: native Used/Total and units accompany each quota percentage; independent period CCost has its own explicit label and provenance. CCost currency switching leaves native usage unchanged.

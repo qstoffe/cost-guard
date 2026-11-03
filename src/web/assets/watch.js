@@ -106,6 +106,34 @@ const WatchView = (() => {
     if (state === 'unavailable') parent.append(el('span', 'Source unavailable · retained daily observation', 'warning'));
     if (state === 'retrying') parent.append(el('span', 'Retrying daily refresh · retained observation, not current', 'detail'));
   }
+  const columns = [
+    ['Started', 'Local prompt start time (HH:mm), not elapsed duration. Full local date and time are available on the time cell.'],
+    ['Duration', 'Elapsed prompt duration; advances only for observed active work and freezes when ended or unavailable.'],
+    ['Prompt', 'Canonical session-local prompt number followed by the prompt preview; the full preview is available on focus.'],
+    ['Model', 'Canonical focal model; additional model contributions remain included in cost, calls and token mix.'],
+    ['Effort', 'Observed model reasoning effort; N/A means unavailable.'],
+    ['CCost', 'Reference-price comparison cost, not billed money or provider quota usage; follows the selected display unit and coverage.'],
+    ['Calls', 'Attributed physical model requests, including child contributions; not tool calls.'],
+    ['Token Mix %', '1 = Input (ordinary input tokens); 2 = Cached input (cache-read tokens); 3 = Cache write (tokens written to cache); 4 = Output (including reasoning tokens under canonical rules). I/C/W/O are percentages of observed tokens, not billed cost. Updates on accepted usage observations, not intra-call streaming; N/A or running means insufficient telemetry.'],
+    ['Δ Ctx', 'Change in observed context since the preceding canonical context anchor; not total context size.'],
+    ['Context', 'Estimated next incoming context (CLI Watch); approximate tokens for the next model call, not a usage total.']
+  ];
+  let helpSequence = 0;
+  function columnHeader(name, explanation) {
+    const th = el('th'); th.scope = 'col';
+    const button = el('button', name, 'watch-column-help'), help = el('div', explanation, 'watch-column-description');
+    button.type = 'button'; button.title = explanation;
+    help.id = 'watch-column-' + ++helpSequence; help.setAttribute('popover', 'auto');
+    help.setAttribute('role', 'tooltip');
+    button.setAttribute('aria-describedby', help.id);
+    const show = () => { if (help.showPopover && help.isConnected && !help.matches(':popover-open')) help.showPopover(); };
+    const hide = () => help.hidePopover?.();
+    button.addEventListener('pointerenter', show);
+    button.addEventListener('pointerleave', () => { if (document.activeElement !== button) hide(); });
+    button.addEventListener('focus', show); button.addEventListener('blur', hide);
+    button.addEventListener('click', show); // Touch has the same explanation; Escape/light-dismiss are native.
+    th.append(button, help); return th;
+  }
   class Card {
     constructor() {
       this.root = el('article', undefined, 'watch-card');
@@ -115,11 +143,7 @@ const WatchView = (() => {
       scroll.tabIndex = 0; scroll.setAttribute('role', 'region'); scroll.setAttribute('aria-label', 'Session prompts');
       const table = el('table', undefined, 'watch-prompt-table');
       const head = el('thead'), header = el('tr');
-      for (const name of ['Started', 'Prompt', 'Model', 'Effort', 'CCost', 'Model Calls', 'Duration', 'Δ Ctx', 'Context']) {
-        const th = el('th', name); th.scope = 'col';
-        if (name === 'Context') th.title = 'Estimated next incoming context (CLI Watch)';
-        header.append(th);
-      }
+      for (const [name, explanation] of columns) header.append(columnHeader(name, explanation));
       head.append(header); this.body = el('tbody'); table.append(head, this.body); scroll.append(table);
       this.activity = el('div', undefined, 'watch-activity');
       this.tools = disclosure(); this.skills = disclosure(); this.running = el('p'); this.background = el('p');
@@ -149,13 +173,19 @@ const WatchView = (() => {
             const reason = !prompt.in_progress && {quota_limit: 'quota limit', rate_limit: 'rate limit',
               tool_call_limit: 'tool-call limit', step_limit: 'step limit', user: 'by user'}[prompt.abort_reason];
             row.setAttribute('aria-label', `Prompt ${prompt.prompt_number} · ${outcome}${reason ? ' · ' + reason : ''}`);
-            const label = el('span', prompt.preview || '');
-            label.title = prompt.preview || '';
+            const label = el('span', undefined, 'watch-prompt-label');
+            const preview = el('span', prompt.preview || '', 'watch-prompt-preview');
+            preview.title = prompt.preview || ''; preview.tabIndex = 0;
+            preview.setAttribute('aria-label', prompt.preview || 'Empty prompt preview');
+            label.append(el('span', '#' + prompt.prompt_number, 'watch-prompt-number'), preview);
+            const started = el('span', display(prompt, 'clock'));
+            started.title = display(prompt, 'date_time'); started.tabIndex = 0;
+            started.setAttribute('aria-label', started.title);
             const model = el('span', item.model);
             if (prompt.has_additional_model) model.title = 'Additional model contribution included in canonical cost and calls';
             const context = display(item.live_context, 'watch_next_context_tokens');
-            const cells = [`Prompt ${prompt.prompt_number} ${display(prompt, historical ? 'date_time' : 'clock')}`, label, model, item.effort,
-              () => display(prompt, 'ccost'), String(prompt.calls), display(item, 'watch_duration_ms'),
+            const cells = [started, display(item, 'watch_duration_ms'), label, model, item.effort,
+              () => display(prompt, 'ccost'), String(prompt.calls), display(prompt, 'token_mix_percent'),
               display(item.live_context, 'watch_delta_context_tokens'), context === 'N/A' ? context : '~' + context];
             row.replaceChildren(...cells.map(value => { const cell = el('td'); cell.append(typeof value === 'object' ? value : el('span', value)); return cell; }));
             row.signature = signature;
@@ -224,6 +254,7 @@ const WatchView = (() => {
     }
     update(result) {
       const view = result.view, active = view.active_cards || [], history = view.history_cards || [];
+      this.earlier.dataset.hasHistory = String(history.length > 0);
       const connected = this.state.connection === 'Live connected.';
       const sourceState = result.state === 'retrying' ? 'Retrying source read; last observation retained, not current.' :
         result.state !== 'running' ? 'Source unavailable; last observation retained, not current.' : '';

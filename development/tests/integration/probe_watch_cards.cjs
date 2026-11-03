@@ -65,7 +65,7 @@ async function main() {
         const details=c.querySelectorAll('details'); details[0].open=true; details[1].open=true;
         details[0].querySelector('summary').focus({preventScroll:true}); const focus=document.activeElement;
         redraw(); const stable=document.activeElement===focus && details[0].open && details[1].open && document.querySelector('.watch-earlier').open;
-        const table=c.querySelector('.watch-table-scroll'), row=c.querySelector('tbody tr'), prompt=row.cells[1].firstChild;
+        const table=c.querySelector('.watch-table-scroll'), row=c.querySelector('tbody tr'), prompt=row.querySelector('.watch-prompt-preview');
         const warning=c.querySelector('.watch-context-warning'), daily=document.querySelector('.watch-daily'), grid=document.querySelector('.watch-account-grid');
         const style=node=>getComputedStyle(node), rect=node=>node.getBoundingClientRect();
         const separators=parent=>[...parent.children].map(node=>parseFloat(style(node).borderTopWidth));
@@ -83,7 +83,10 @@ async function main() {
           activityColor:style(c.querySelector('.watch-activity')).color,warningColor:style(warning).color,
           rows:c.querySelectorAll('tbody tr').length, historyBorder:parseFloat(getComputedStyle(h).borderTopWidth),
           ellipsis:getComputedStyle(prompt).textOverflow==='ellipsis' && prompt.scrollWidth>prompt.clientWidth,
-          completeMetrics:[...row.cells].filter((_,i)=>i!==1).every(cell=>cell.scrollWidth<=cell.clientWidth),
+           completeMetrics:[...row.cells].filter((_,i)=>i!==2).every(cell=>cell.scrollWidth<=cell.clientWidth),
+           ordinalVisible:rect(row.querySelector('.watch-prompt-number')).width>0 && row.querySelector('.watch-prompt-number').textContent==='#12',
+           historyDivider:parseFloat(style(document.querySelector('.watch-earlier')).borderBottomWidth),
+           historyBackground:style(h).backgroundColor,
           pageOverflow:document.documentElement.scrollWidth>innerWidth,
           activeInnerScroll:a.scrollHeight>a.clientHeight,tableVerticalScroll:table.scrollHeight>table.clientHeight,
           horizontalPan:table.scrollWidth>table.clientWidth,runningColor:getComputedStyle(c.querySelector('.watch-running')).color,
@@ -97,13 +100,42 @@ async function main() {
        assert.ok(layout.warningGap >= 0 && layout.warningGap <= 4); assert.equal(layout.warningOverflow, false);
        assert.equal(layout.dailyGap, 4); assert.equal(layout.detailDividers, true);
        assert.notEqual(layout.activityColor, layout.runningColor); assert.notEqual(layout.warningColor, layout.runningColor);
-       assert.equal(layout.rows, 1); assert.ok(layout.historyBorder > 0);
+        assert.equal(layout.rows, 1); assert.equal(layout.historyBorder, 0);
+        assert.equal(layout.historyBackground, 'rgba(0, 0, 0, 0)'); assert.equal(layout.historyDivider, 2);
+        assert.equal(layout.ordinalVisible, true);
        assert.equal(layout.ellipsis, true); assert.equal(layout.completeMetrics, true);
       assert.equal(layout.scrollY, 0, 'layout assertions use the unscrolled document');
       assert.equal(layout.pageOverflow, false); assert.equal(layout.activeInnerScroll, false);
-      assert.equal(layout.tableVerticalScroll, false); assert.equal(layout.stable, true);
+       assert.equal(layout.tableVerticalScroll, false); assert.equal(layout.stable, true);
        assert.equal(layout.border, '0px'); assert.equal(layout.background, 'rgba(0, 0, 0, 0)');
-        if (width === 360) assert.equal(layout.horizontalPan, true);
+         if (width === 360) assert.equal(layout.horizontalPan, true);
+       const headers = await evaluate(`(() => {
+         const names=['Started','Duration','Prompt','Model','Effort','CCost','Calls','Token Mix %','Δ Ctx','Context'];
+         return [...document.querySelectorAll('table')].every(table=>[...table.querySelectorAll('th')]
+           .every((th,i)=>th.querySelector('button').textContent===names[i] && th.querySelector('button').title.length>20))
+           && [...document.querySelectorAll('tbody tr')].every(row=>row.cells.length===10 && /^\\d\\d:\\d\\d$/.test(row.cells[0].textContent)
+             && /^\\d{4}-\\d\\d-\\d\\d \\d\\d:\\d\\d$/.test(row.cells[0].firstChild.title)); })()`);
+       assert.equal(headers, true, 'both tables share the ten columns and local clock disclosures');
+       const hover = await evaluate(`(() => { const r=document.querySelector('.watch-history th button').getBoundingClientRect(); return {x:r.x+r.width/2,y:r.y+r.height/2}; })()`);
+       await command('Input.dispatchMouseEvent', {type:'mouseMoved',...hover}, sessionId);
+       assert.equal(await evaluate(`document.querySelectorAll(':popover-open').length`), 1, 'pointer hover opens header explanation');
+       await command('Input.dispatchMouseEvent', {type:'mouseMoved',x:0,y:0}, sessionId);
+       assert.equal(await evaluate(`document.querySelectorAll(':popover-open').length`), 0);
+       // Real focus, Escape and touch-style click exercise native top-layer help.
+       await evaluate(`document.querySelector('.watch-active th:nth-child(8) button').focus({preventScroll:true})`);
+       const help = await evaluate(`(() => {
+         const button=document.activeElement, panel=document.getElementById(button.getAttribute('aria-describedby'));
+         return {open:panel.matches(':popover-open'),text:panel.textContent,within:panel.getBoundingClientRect().right<=innerWidth}; })()`);
+       assert.equal(help.open, true); assert.equal(help.within, true);
+       assert.match(help.text, /1 = Input.*2 = Cached input.*3 = Cache write.*4 = Output.*reasoning.*not billed cost/);
+       await command('Input.dispatchKeyEvent', {type:'keyDown',key:'Escape',code:'Escape',windowsVirtualKeyCode:27}, sessionId);
+       await command('Input.dispatchKeyEvent', {type:'keyUp',key:'Escape',code:'Escape',windowsVirtualKeyCode:27}, sessionId);
+       assert.equal(await evaluate(`document.querySelectorAll(':popover-open').length`), 0);
+       await evaluate(`document.activeElement.click()`);
+       assert.equal(await evaluate(`document.querySelectorAll(':popover-open').length`), 1);
+       await evaluate(`document.activeElement.blur(); document.querySelector('.watch-earlier').open=false`);
+       assert.equal(await evaluate(`parseFloat(getComputedStyle(document.querySelector('.watch-earlier')).borderBottomWidth)`), 0);
+       await evaluate(`document.querySelector('.watch-earlier').open=true`);
        const quotas = await evaluate(`(() => {
          const cards=[...document.querySelectorAll('.watch-subscription')], monthly=cards[0];
          const summary=monthly.querySelector('.watch-quota-summary'), details=monthly.querySelector('.watch-primary-details');
@@ -141,11 +173,23 @@ async function main() {
          const moved=INPUT.view.active_cards.pop(); INPUT.view.history_cards.unshift({...moved,focal_id:''});redraw();
          const transitioned=a.children.length===0 && [...h.children].every((card,i)=>getComputedStyle(card).borderTopWidth===(i?'1px':'0px'));
          INPUT.view.active_cards=originals;INPUT.view.history_cards.shift();redraw();
+          const row=a.querySelector('tbody tr'), oldMix=row.cells[7].textContent;
+          INPUT.view.active_cards[0].rows[0].prompt.token_mix_percent=[25,75,0,0];
+          INPUT.view.active_cards[0].rows[0].prompt.display.token_mix_percent='25/75/0/0';redraw();
+          const updated=row===a.querySelector('tbody tr') && row.cells[7].textContent==='25/75/0/0' && oldMix!=='25/75/0/0';
+          const number=row.querySelector('.watch-prompt-number'), preview=row.querySelector('.watch-prompt-preview');
+          const selection=window.getSelection(),range=document.createRange();range.selectNodeContents(preview);selection.removeAllRanges();selection.addRange(range);
+          INPUT.view.active_cards[0].rows[0].prompt.preview='New preview';redraw();
+          const selected=row.querySelector('.watch-prompt-preview')===preview && selection.toString().length>0;
+          selection.removeAllRanges();redraw();
+          const previewUpdated=row.querySelector('.watch-prompt-preview').textContent==='New preview';
+          INPUT.view.history_cards=[];redraw();
+          const noEmptyDivider=parseFloat(getComputedStyle(document.querySelector('.watch-earlier')).borderBottomWidth)===0;
          window.scrollTo(0,100); const before=scrollY, focus=document.activeElement;
          INPUT.view.daily_state='refreshing';const daily=document.querySelector('.watch-daily').firstChild;redraw();
          const stable=scrollY===before && document.activeElement===focus && document.querySelector('.watch-daily').firstChild===daily;
-         return {reordered,removed,transitioned,stable}; })()`);
-       assert.deepEqual(transitions, {reordered:true,removed:true,transitioned:true,stable:true});
+          return {reordered,removed,transitioned,updated,selected,previewUpdated,noEmptyDivider,stable}; })()`);
+        assert.deepEqual(transitions, {reordered:true,removed:true,transitioned:true,updated:true,selected:true,previewUpdated:true,noEmptyDivider:true,stable:true});
       const scale = await evaluate(`(() => {
         const base=INPUT.view.active_cards[0];
         INPUT.view.active_cards=Array.from({length:100},(_,i)=>({...base,session_id:'scale-'+i}));redraw();

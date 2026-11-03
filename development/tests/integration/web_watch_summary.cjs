@@ -2,7 +2,7 @@
 const assert = require('node:assert/strict'), vm = require('node:vm'), fs = require('node:fs');
 const input = JSON.parse(fs.readFileSync(0, 'utf8'));
 class Node {
-  constructor(tag) { this.tag = tag; this.children = []; this.text = ''; this.dataset = {}; this.attributes = {}; }
+  constructor(tag) { this.tag = tag; this.children = []; this.text = ''; this.dataset = {}; this.attributes = {}; this.events = {}; }
   set textContent(value) { this.text = String(value); this.children = []; }
   get textContent() { return this.text + this.children.map(c => c.textContent).join(''); }
   append(...items) { for (const item of items) { item.remove(); this.children.push(item); item.parentNode = this; } }
@@ -12,6 +12,7 @@ class Node {
   contains(node) { return node === this || this.children.some(child => child.contains(node)); }
   querySelectorAll(tag) { return this.children.flatMap(child => [...(child.tag === tag ? [child] : []), ...child.querySelectorAll(tag)]); }
   setAttribute(name, value) { this.attributes[name] = value; }
+  addEventListener(kind, handler) { this.events[kind] = handler; }
 }
 const context = vm.createContext({document: {createElement: tag => new Node(tag)}, window: {}, console,
   input, parent: new Node('div')});
@@ -20,11 +21,11 @@ vm.runInContext("globalThis.state = {connection:'Live connected.'}; ReportView.r
 const watch = context.state.watch, card = [...watch.cards.values()][0];
 const row = card.body.children[0], prompt = context.input.view.active_cards[0].rows[0].prompt;
 assert.equal(card.body.children.length, 1);
-assert.equal(row.children[0].textContent, 'Prompt 37 ' + prompt.display.clock);
-assert.equal(row.children[1].textContent, prompt.preview);
-assert.equal(row.children[1].children[0].title, prompt.preview);
+assert.equal(row.children[0].textContent, prompt.display.clock);
+assert.equal(row.children[2].textContent, '#37' + prompt.preview);
+assert.equal(row.children[2].children[0].children[1].title, prompt.preview);
 assert.equal(row.attributes['aria-label'], 'Prompt 37 · Running');
-assert.match(row.children[2].children[0].title, /Additional model contribution/);
+assert.match(row.children[3].children[0].title, /Additional model contribution/);
 assert.equal(card.title.className, 'watch-running-title');
 assert.ok(!/Session Total|provisional|Loading/.test(card.root.textContent));
 assert.equal(card.running.textContent, 'Running: shell 41s');
@@ -36,7 +37,9 @@ assert.equal(card.skills.list.children[0].children.at(-1).className, 'watch-acti
 const earlier = [...watch.cards.values()][1];
 assert.equal(earlier.title.className, '');
 assert.equal(earlier.body.children[0].children[0].textContent,
-  'Prompt 37 ' + context.input.view.history_cards[0].rows[0].prompt.display.date_time);
+   context.input.view.history_cards[0].rows[0].prompt.display.clock);
+assert.equal(earlier.body.children[0].children[0].children[0].title,
+   context.input.view.history_cards[0].rows[0].prompt.display.date_time);
 const saved = card.body.children[0];
 vm.runInContext('ReportView.renderLive(parent, input, state)', context);
 assert.equal(card.body.children[0], saved, 'unchanged refresh retains row and valid metrics');

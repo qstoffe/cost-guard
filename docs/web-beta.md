@@ -245,8 +245,9 @@ Watch uses unframed prompt cards. **Earlier Prompts** starts collapsed: five eli
 distinct sessions selected by newest actual prompt start, then displayed oldest first,
 newest last, one latest prompt each with deterministic ID ties. It updates
 while collapsed, without an age/startup cutoff, excluding active/recent sessions before
-limiting. Its outlined container grows in normal page flow, with no nested vertical
-scrolling or height cap. The active list has no cap/filter/pager; concurrent prompts
+limiting. Expanded history is unframed in normal page flow, with one theme-aware divider
+before running cards and no nested vertical scrolling or height cap. Collapsed/empty
+history has no divider. The active list has no cap/filter/pager; concurrent prompts
 get separate cards, oldest focal first, with one row even during terminal grace.
 
 Session title alone links to that canonical Sessions route. Watch has no session
@@ -254,11 +255,22 @@ aggregate cost/duration or dedicated aggregate acquisition; complete-session tot
 remain available on Sessions. Canonical child/compaction/context evidence still feeds
 prompt metrics. Credits/USD follows Web Settings. Valid metrics remain visible during
 ordinary refresh; first acquisition, partial evidence and genuine failure stay explicit.
-The nine columns are Started, Prompt, Model, Effort, CCost, Model Calls, Duration,
-Δ Ctx and Context (estimated next incoming context using CLI Watch semantics).
-Started uses the real sequence and configured-timezone start: `Prompt N HH:mm` while
-active, `Prompt N YYYY-MM-DD HH:mm` in history. Prompt contains only actual preview
-text, with the full preview on hover and lifecycle state accessible on the row.
+The ten columns are **Started, Duration, Prompt, Model, Effort, CCost, Calls,
+Token Mix %, Δ Ctx, Context** (estimated next incoming context using CLI Watch semantics).
+Started shows only configured-timezone `HH:mm` in both tables, with the full local
+date/time disclosed on hover and to assistive technology on focus. Prompt starts with
+its canonical session-local `#N`, never a visible-row index. Only preview text ellipsizes;
+the number stays visible, the full preview is available on hover/accessible focus,
+and lifecycle state remains accessible on the row. Every header explains its metric
+on hover, keyboard focus or touch/click; Escape or leaving focus dismisses the explanation.
+Token Mix % is raw observed **Input / Cached input / Cache write / Output** token volume,
+not cost shares; reasoning is folded into Output. It uses canonical prompt-attributed
+physical requests, including child/model contributions, and CLI prompt rounding.
+Accepted captures update the cumulative mix at the existing cadence/SSE publication,
+not client ticks or intra-call streaming. Zero/partial/missing telemetry is `N/A` or
+`running`, never invented zero percentages. A Watch-only coverage guard suppresses
+completed partial-telemetry mixes; the CLI's historical numeric partial behavior
+is unchanged (the documented FR 000558 Decision Delegate parity exception).
 Additional model contribution is identified on the Model field. All cells/headers
 stay one line: Prompt alone flexes without a width cap and ellipsizes long text/URLs;
 complete metric columns and a 14rem Prompt minimum pan horizontally when necessary.
