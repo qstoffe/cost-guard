@@ -2,7 +2,7 @@
 const assert = require('node:assert/strict'), fs = require('node:fs'), vm = require('node:vm');
 const input = JSON.parse(fs.readFileSync(0, 'utf8'));
 class Node {
-  constructor(tag) { this.tag = tag; this.children = []; this.dataset = {}; this.attributes = {}; this.events = {}; this.text = ''; }
+  constructor(tag) { this.tag = tag; this.children = []; this.dataset = {}; this.attributes = {}; this.events = {}; this.text = ''; this.style = {setProperty() {}}; }
   set textContent(value) { this.text = String(value); this.children = []; }
   get textContent() { return this.text + this.children.map(child => child.textContent).join(''); }
   append(...children) { for (const child of children) { child.remove(); child.parentNode = this; this.children.push(child); } }
@@ -22,10 +22,11 @@ function win() {
   node.clearInterval = callback => node.timers.delete(callback);
   node.close = () => {node.closed = true;}; // Deliberately defer pagehide to reproduce stale callbacks.
   node.resizeTo = () => {throw new Error('Opening consumes activation; resizeTo requires a new PiP gesture');};
+  node.matchMedia = () => ({addEventListener() {},removeEventListener() {}});
   return node;
 }
 let now = 1000;
-const context = vm.createContext({document: doc(), window: {}, URL, Date: {now: () => now}, input});
+const context = vm.createContext({document: doc(), window: win(), URL, Date: {now: () => now}, input});
 for (const file of ['render', 'watch', 'mini']) vm.runInContext(fs.readFileSync(`src/web/assets/${file}.js`, 'utf8'), context);
 const Controller = vm.runInContext('MiniWatch.Controller', context);
 function setup() {

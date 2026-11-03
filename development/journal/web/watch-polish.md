@@ -1,5 +1,9 @@
 # Full Web Watch cards, reset display and context markers
 
+The historical 450 CSS-pixel cap below is superseded by FR000566's
+[scale-aware physical-width correction](watch-account-pixels.md). Historical DPR1
+and root-font evidence is not proof of a 450-physical-pixel cap at Windows150%.
+
 ## v80.142 — FR 000562 (2026-11-03)
 
 `watch.js` now places each finite quota's own observed-period CCost in numeric

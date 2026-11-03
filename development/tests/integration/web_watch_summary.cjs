@@ -2,7 +2,7 @@
 const assert = require('node:assert/strict'), vm = require('node:vm'), fs = require('node:fs');
 const input = JSON.parse(fs.readFileSync(0, 'utf8'));
 class Node {
-  constructor(tag) { this.tag = tag; this.children = []; this.text = ''; this.dataset = {}; this.attributes = {}; this.events = {}; }
+  constructor(tag) { this.tag = tag; this.children = []; this.text = ''; this.dataset = {}; this.attributes = {}; this.events = {}; this.style = {setProperty(name, value) {this[name] = value;}}; }
   set textContent(value) { this.text = String(value); this.children = []; }
   get textContent() { return this.text + this.children.map(c => c.textContent).join(''); }
   append(...items) { for (const item of items) { item.remove(); this.children.push(item); item.parentNode = this; } }
@@ -14,11 +14,26 @@ class Node {
   setAttribute(name, value) { this.attributes[name] = value; }
   addEventListener(kind, handler) { this.events[kind] = handler; }
 }
-const context = vm.createContext({document: {createElement: tag => new Node(tag)}, window: {}, console,
+const media = [], windowEvents = {}, viewportEvents = {};
+const window = {devicePixelRatio:1.5,visualViewport:{scale:1,addEventListener(kind, fn) {viewportEvents[kind]=fn;}},
+  addEventListener(kind, fn) {windowEvents[kind]=fn;},matchMedia(query) {
+    const value={query,addEventListener(kind,fn) {this.callback=fn;},removeEventListener() {this.callback=null;}};
+    media.push(value);return value;
+  }};
+const context = vm.createContext({document: {createElement: tag => new Node(tag)}, window, console,
   input, parent: new Node('div')});
 for (const name of ['render', 'watch']) vm.runInContext(fs.readFileSync(`src/web/assets/${name}.js`, 'utf8'), context);
 vm.runInContext("globalThis.state = {connection:'Live connected.'}; ReportView.renderLive(parent, input, state)", context);
 const watch = context.state.watch, card = [...watch.cards.values()][0];
+assert.equal(watch.root.style['--watch-account-width'],'298px');
+window.devicePixelRatio=1.875;
+media.at(-1).callback();
+assert.equal(watch.root.style['--watch-account-width'],'238px');
+assert.equal(media[0].callback,null,'obsolete resolution listener is removed');
+window.visualViewport.scale=1.25;viewportEvents.resize();
+assert.equal(watch.root.style['--watch-account-width'],'191px','pinch factor applies once');
+window.devicePixelRatio=1;window.visualViewport.scale=1;windowEvents.resize();
+assert.equal(watch.root.style['--watch-account-width'],'448px');
 const row = card.body.children[0], prompt = context.input.view.active_cards[0].rows[0].prompt;
 assert.equal(card.body.children.length, 1);
 assert.equal(row.children[0].textContent, prompt.display.clock);
