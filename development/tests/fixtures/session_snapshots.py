@@ -12,6 +12,7 @@ from src.domain import (
 
 CAP = SessionCapabilities(native_cost=True, child_sessions=True, compaction_events=True)
 MODEL = ModelRef("github-copilot", "gpt-test")
+DAY = 86_400_000
 
 
 def prov(session: str, event: str | None = None, gen: str = "v1") -> Provenance:
@@ -28,6 +29,23 @@ def message(mid: str, sid: str, role: MessageRole, created: int, *, parent: str 
             error: str | None = None) -> NormalizedMessage:
     return NormalizedMessage(mid, sid, role, created, prov(sid, mid), parts, completed, parent,
                              model, None, None, summary, finish, error)
+
+
+def history(spans, *, archived=False, generation="v1"):
+    """Root-only canonical history: spans are explicit start/end evidence."""
+    base = make_snapshot(generation=generation)
+    root = replace(base.root, archived_at_ms=DAY * 9 if archived else None, updated_at_ms=DAY * 8)
+    events, messages, invocations = [], [], []
+    for index, (start, end) in enumerate(spans):
+        uid, aid = f"u{index}", f"a{index}"
+        events.append(NormalizedEvent(uid, "root", EventKind.USER_PROMPT, start, prov("root", uid), "work"))
+        messages.extend((message(uid, "root", MessageRole.USER, start),
+                         message(aid, "root", MessageRole.ASSISTANT, start + 1, parent=uid,
+                                 completed=end, model=MODEL, finish="stop" if end is not None else None)))
+        invocations.append(ModelInvocation(aid, "root", start + 1, MODEL, TokenUsage(input=30, output=4),
+                                           prov("root", aid), completed_at_ms=end, initiating_event_id=uid, message_id=aid))
+    return replace(base, root=root, sessions=(root,), messages=tuple(messages), parts=(), events=tuple(events),
+                   invocations=tuple(invocations), source_revision=f"duration-{generation}-{spans}")
 
 
 def make_snapshot(*, generation: str = "v1", running: bool = False) -> SessionSnapshot:
