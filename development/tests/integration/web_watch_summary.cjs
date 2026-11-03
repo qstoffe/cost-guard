@@ -59,35 +59,49 @@ assert.match(watch.accounts.textContent, /Usage unavailable/);
 assert.match(watch.accounts.textContent, /CCost Today: 13/);
 assert.ok(!/\(estimated\)|Rolling|Fixed window|rolling window/.test(watch.accounts.textContent));
 const monthlyCard = watch.accounts.children[0].children[0];
-assert.equal(monthlyCard.children[2].textContent, 'Monthly · 8.4% used · 2088/25000 AI credits');
+assert.equal(monthlyCard.children[2].textContent, 'Monthly · 8.4% used (1814) · 2088/25000 AI credits');
 assert.equal(monthlyCard.children[3].children[0].value, '0.08352');
-assert.equal(monthlyCard.children[4].children[0].textContent, 'CCost: 1814');
-assert.equal(monthlyCard.children[4].children.length, 4, 'separate CCost, reset and two pace rows');
-assert.match(monthlyCard.children[4].children[2].textContent, /^Remaining: .*\/day$/);
-assert.match(monthlyCard.children[4].children[3].textContent, /^Remaining: .*\/workday$/);
+const periodCost = monthlyCard.children[2].children[0];
+assert.equal(periodCost.tabIndex, 0);
+assert.match(periodCost.attributes['aria-description'], /Observed CCost for Monthly.*independent of provider-native Used/);
+assert.equal(monthlyCard.children[4].children.length, 3, 'reset and two pace rows; no period cost row');
+assert.match(monthlyCard.children[4].children[0].textContent, /^Reset/);
+assert.match(monthlyCard.children[4].children[1].textContent, /^Remaining: .*\/day$/);
+assert.match(monthlyCard.children[4].children[2].textContent, /^Remaining: .*\/workday$/);
 assert.equal(monthlyCard.children.length, 5, 'monthly-only has no secondary section or divider');
 const fiveCard = watch.accounts.children[0].children[1];
-assert.equal(fiveCard.children[2].textContent, '5-hour · 25% used');
-assert.equal(fiveCard.children[4].children[0].textContent, 'CCost: 420');
+assert.equal(fiveCard.children[2].textContent, '5-hour · 25% used (420)');
 assert.match(fiveCard.children[4].textContent, /Reset/);
 assert.equal(fiveCard.children[5].children[0].className, 'watch-account-details');
-assert.match(fiveCard.children[5].textContent, /Weekly · 100% used · 100\/100 requestsCCost: 420.*Reset/);
+assert.match(fiveCard.children[5].textContent, /Weekly · 100% used \(840\) · 100\/100 requestsReset/);
 const weeklyCard = watch.accounts.children[0].children.at(-1);
 assert.equal(weeklyCard.children[2].textContent, 'weekly · 42% used');
-assert.equal(weeklyCard.children[4].children[0].textContent, 'CCost: —');
+assert.match(weeklyCard.children[4].children[0].textContent, /^Reset/);
 assert.ok(!/5-hour|Usage unavailable/.test(weeklyCard.textContent));
-assert.equal(weeklyCard.children[4].children.length, 2, 'CCost and primary reset; no window boilerplate');
+assert.equal(weeklyCard.children[4].children.length, 1, 'primary reset only; unavailable cost omitted');
 assert.equal(weeklyCard.children.length, 5, 'weekly-only has no secondary section or divider');
 assert.ok(!/BLOCKED|Unknown|Available|Observation details|Unaccounted usage/.test(watch.accounts.textContent));
 assert.match(card.warning.textContent, /⚠ Price threshold.*2.4x more expensive/);
 assert.equal(card.warningIcon.className, 'watch-warning-icon');
-for (const severity of ['approaching', 'exceeded', 'approaching']) {
+for (const severity of ['none', 'approaching', 'exceeded', 'none']) {
   context.input.view.active_cards[0].context_warning.severity = severity;
+  context.input.view.active_cards[0].rows[0].context_cell.warning.severity = severity;
   vm.runInContext('ReportView.renderLive(parent, input, state)', context);
   assert.equal(card.warning.dataset.severity, severity);
-  assert.equal(card.warningIcon.textContent, '⚠ ');
-  assert.match(card.warningText.textContent, /Price threshold/);
+  const cell = card.body.children[0].children[9].children[0], icon = cell.children[0];
+  assert.equal(cell.dataset.severity, severity);
+  assert.equal(icon.hidden, severity === 'none');
+  assert.equal(icon.textContent, severity === 'none' ? '' : '⚠ ');
+  assert.ok(!/[~≈]/.test(cell.textContent));
+  if (severity !== 'none') {
+    assert.equal(icon.tabIndex, 0);
+    assert.match(icon.attributes['aria-label'], /context price threshold/);
+    assert.equal(card.warningIcon.textContent, '⚠ ');
+    assert.match(card.warningText.textContent, /Price threshold/);
+  }
 }
+assert.match(earlier.body.children[0].children[9].textContent, /^⚠ /);
+assert.ok(!/[~≈]/.test(earlier.body.children[0].children[9].textContent));
 assert.equal(card.root.children.indexOf(card.warning), card.root.children.indexOf(card.activity) - 1);
 assert.equal(card.root.children[card.root.children.indexOf(card.warning) - 1].className, 'watch-table-scroll');
 assert.equal(earlier.root.children[earlier.root.children.indexOf(earlier.warning) - 1].className, 'watch-table-scroll');
@@ -97,23 +111,22 @@ const nativeSummary = monthlyCard.children[2].textContent;
 const nativePace = monthlyCard.children[4].children.slice(1).map(node => node.textContent).join('');
 vm.runInContext('ReportView.setUnit("usd", parent)', context);
 assert.match(watch.daily.textContent, /\$/);
-assert.equal(monthlyCard.children[2].textContent, nativeSummary);
-assert.equal(monthlyCard.children[4].children[0].textContent, 'CCost: $18.14');
+assert.equal(monthlyCard.children[2].textContent, 'Monthly · 8.4% used ($18.14) · 2088/25000 AI credits');
 assert.match(monthlyCard.children[1].textContent, /\$/);
 assert.equal(monthlyCard.children[4].children.slice(1).map(node => node.textContent).join(''), nativePace,
   'CCost unit does not convert native pace');
 vm.runInContext('ReportView.setUnit("credits", parent)', context);
 assert.equal(totals, watch.daily.textContent);
 assert.equal(monthlyCard.children[2].textContent, nativeSummary);
-assert.equal(monthlyCard.children[4].children[0].textContent, 'CCost: 1814');
+assert.equal(periodCost.textContent, ' (1814)');
 const monthly = context.input.view.accounts.accounts[0];
 monthly.primary.pace.workdays = 0; monthly.primary.pace.per_workday = null;
 monthly.primary.quota.window_active = false; monthly.primary.quota.reset_at_ms = null;
 monthly.primary.display.watch_reset = 'Window not started';
 vm.runInContext('ReportView.renderLive(parent, input, state)', context);
 const inactiveCard = watch.accounts.children[0].children[0];
-assert.equal(inactiveCard.children[4].children[1].textContent, 'Window not started');
-assert.equal(inactiveCard.children[4].children[3].textContent, 'Remaining: no workdays left');
+assert.equal(inactiveCard.children[4].children[0].textContent, 'Window not started');
+assert.equal(inactiveCard.children[4].children[2].textContent, 'Remaining: no workdays left');
 context.input.view.active_cards[0].context_warning = null;
 vm.runInContext('ReportView.renderLive(parent, input, state)', context);
 assert.equal(card.warning.hidden, true);
@@ -177,8 +190,8 @@ for (const fixture of context.input.quota_cases || []) {
   const expected = fixture.percent === '—' ? '—' : fixture.percent + ' used';
   assert.ok(label.includes(fixture.value.quota.unlimited ? 'Unlimited' : expected), fixture.name);
   assert.equal(label.includes(fixture.native), !fixture.native.startsWith('N/A'), fixture.name);
-  assert.ok(!label.includes('1814'), 'period CCost never masquerades as native usage');
-  assert.match(account.children[4].children[0].textContent, /^CCost: /);
+  assert.ok(!/CCost:|estimated|partial|[~≈]/.test(label), 'compact value has no visible provenance marker');
+  assert.equal(account.children[4].children[0].textContent, 'Reset unknown');
   assert.match(account.textContent, /Stale.*not current/);
   assert.equal(account.querySelectorAll('progress').length,
     fixture.value.used_fraction == null || fixture.value.quota.unlimited ? 0 : 1, fixture.name);
@@ -186,10 +199,12 @@ for (const fixture of context.input.quota_cases || []) {
   assert.equal(account.children[2].className.includes('watch-quota-exhausted'), fixture.value.exhausted, fixture.name);
   for (const bar of account.querySelectorAll('progress'))
     assert.equal(bar.className === 'watch-quota-exhausted', fixture.value.exhausted, fixture.name);
-  if (fixture.name === 'empty period') assert.equal(account.children[4].children[0].textContent, 'CCost: 0');
+  if (fixture.name === 'empty period') assert.ok(label.includes('used (0)'));
   if (['unknown cost', 'unpriced period'].includes(fixture.name))
-    assert.match(account.children[4].children[0].textContent, /^CCost: —/);
-  if (fixture.name === 'partial period') assert.match(account.children[4].children[0].textContent, /1814 · partial/);
-  if (fixture.name === 'estimated period') assert.match(account.children[4].children[0].textContent, /1814 · estimated/);
+    assert.ok(!/[()]/.test(label));
+  if (fixture.name === 'partial period') assert.match(account.children[2].children[0].title, /partial attribution/);
+  if (fixture.name === 'estimated period') assert.match(account.children[2].children[0].title, /estimated attribution/);
+  if (fixture.name === 'owner example') assert.equal(label, '5 hours · 16% used (94) · 120/750 AI credits');
+  if (fixture.value.used_fraction == null || fixture.value.quota.unlimited) assert.ok(!/[()]/.test(label));
 }
 console.log('watch summary passed');

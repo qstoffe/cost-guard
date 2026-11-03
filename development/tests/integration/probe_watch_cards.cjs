@@ -5,6 +5,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const {spawn} = require('node:child_process');
 const {once} = require('node:events');
+const checkContext = require('../fixtures/watch_context_browser.cjs');
 const args = process.argv.slice(2);
 const argument = key => args[args.indexOf(key) + 1];
 const browser = argument('--browser'), output = argument('--output');
@@ -111,10 +112,10 @@ async function main() {
          if (width === 360) assert.equal(layout.horizontalPan, true);
        const headers = await evaluate(`(() => {
          const names=['Started','Duration','Prompt','Model','Effort','CCost','Calls','Token Mix %','Δ Ctx','Context'];
-         return [...document.querySelectorAll('table')].every(table=>[...table.querySelectorAll('th')]
-           .every((th,i)=>th.querySelector('button').textContent===names[i] && th.querySelector('button').title.length>20))
-           && [...document.querySelectorAll('tbody tr')].every(row=>row.cells.length===10 && /^\\d\\d:\\d\\d$/.test(row.cells[0].textContent)
-             && /^\\d{4}-\\d\\d-\\d\\d \\d\\d:\\d\\d$/.test(row.cells[0].firstChild.title)); })()`);
+          return [...document.querySelectorAll('table')].every(table=>[...table.querySelectorAll('th')]
+            .every((th,i)=>th.querySelector('button').textContent===(i===0&&table.closest('.watch-history')?'Finished':names[i]) && th.querySelector('button').title.length>20))
+            && [...document.querySelectorAll('tbody tr')].every(row=>row.cells.length===10 && /^\\d\\d:\\d\\d$/.test(row.cells[0].textContent)
+              && (row.closest('.watch-history')?/^\\d{4}-\\d\\d-\\d\\d \\d\\d:\\d\\d [+-]\\d{4}$/:/^\\d{4}-\\d\\d-\\d\\d \\d\\d:\\d\\d$/).test(row.cells[0].firstChild.title)); })()`);
        assert.equal(headers, true, 'both tables share the ten columns and local clock disclosures');
        const hover = await evaluate(`(() => { const r=document.querySelector('.watch-history th button').getBoundingClientRect(); return {x:r.x+r.width/2,y:r.y+r.height/2}; })()`);
        await command('Input.dispatchMouseEvent', {type:'mouseMoved',...hover}, sessionId);
@@ -139,24 +140,34 @@ async function main() {
        const quotas = await evaluate(`(() => {
          const cards=[...document.querySelectorAll('.watch-subscription')], monthly=cards[0];
          const summary=monthly.querySelector('.watch-quota-summary'), details=monthly.querySelector('.watch-primary-details');
-         const native=summary.textContent, cost=details.firstChild.textContent, fill=monthly.querySelector('progress').value;
-         ReportView.setUnit('usd', document.getElementById('result'));
-         const usd=details.firstChild.textContent, unchanged=summary.textContent===native && monthly.querySelector('progress').value===fill;
-         ReportView.setUnit('credits', document.getElementById('result'));
+          const native=summary.lastChild.textContent, cost=summary.querySelector('.watch-period-cost').textContent, fill=monthly.querySelector('progress').value;
+          summary.querySelector('.watch-period-cost').focus({preventScroll:true});
+          const costHelp=document.activeElement.title.includes('independent of provider-native Used') &&
+            document.activeElement.getAttribute('aria-description')===document.activeElement.title;
+          ReportView.setUnit('usd', document.getElementById('result'));
+          const usd=summary.querySelector('.watch-period-cost').textContent, unchanged=summary.lastChild.textContent===native && monthly.querySelector('progress').value===fill;
+          ReportView.setUnit('credits', document.getElementById('result'));
+          document.activeElement.blur();
          const rect=node=>node.getBoundingClientRect();
          const aligned=cards.every((card,i)=>cards.slice(0,i).filter(other=>rect(other).top===rect(card).top)
            .every(other=>[0,1,2,3,4].every(track=>Math.abs(rect(card.children[track]).top-rect(other.children[track]).top)<1)));
-         return {native,cost,fill,usd,unchanged,aligned,
+          const resetGaps=cards.flatMap(card=>[...card.querySelectorAll('.watch-quota-track')].map(track=> {
+            const next=track.nextElementSibling, reset=next.className==='watch-primary-details'?next.firstChild:next;
+            return rect(reset).top-rect(track.querySelector('progress')||track).bottom;
+          }));
+          return {native,cost,fill,usd,unchanged,aligned,costHelp,resetGaps,
            legible:cards.every(card=>[...card.querySelectorAll('.watch-quota-summary,.watch-primary-details,.watch-secondary-quota')]
              .every(node=>node.scrollWidth<=node.clientWidth)),
            monthlyDivider:monthly.querySelector('.watch-account-details')!==null,
            secondary:cards[1].querySelector('.watch-secondary-quota').textContent}; })()`);
-       assert.equal(quotas.native, 'Monthly · 8.4% used · 2088/25000 AI credits');
-       assert.equal(quotas.cost, 'CCost: 1814'); assert.equal(quotas.usd, 'CCost: $18.14');
-       assert.equal(quotas.fill, .08352); assert.equal(quotas.unchanged, true);
+        assert.equal(quotas.native, ' · 2088/25000 AI credits');
+        assert.equal(quotas.cost, ' (1814)'); assert.equal(quotas.usd, ' ($18.14)');
+        assert.equal(quotas.fill, .08352); assert.equal(quotas.unchanged, true);
+        assert.equal(quotas.costHelp, true);
+        assert.ok(quotas.resetGaps.every(gap=>gap>=0 && gap<=4), JSON.stringify(quotas.resetGaps));
        assert.equal(quotas.aligned, true); assert.equal(quotas.legible, true);
         assert.equal(quotas.monthlyDivider, false);
-        assert.match(quotas.secondary, /Weekly · 100% used · 100\/100 requestsCCost: 420/);
+         assert.match(quotas.secondary, /Weekly · 100% used \(840\) · 100\/100 requestsReset/);
        const polish = await evaluate(`(() => {
          const style=n=>getComputedStyle(n), rect=n=>n.getBoundingClientRect();
          const cards=[...document.querySelectorAll('.watch-subscription')], first=cards[0], grid=first.parentNode;
@@ -166,9 +177,10 @@ async function main() {
            accessible:cards.every(n=>[n.querySelector('h4'),...n.querySelectorAll('p,.watch-quota-summary')]
              .every(v=>v.scrollWidth<=v.clientWidth && v.scrollHeight<=v.clientHeight)),
            firstLeft:rect(first).left,gridLeft:rect(grid).left});
-         const normal=snapshot(), header=style(first.querySelector('h4')), bar=style(first.querySelector('progress'));
-         const dimensions={headerFont:header.fontSize,headerLineHeight:header.lineHeight,padding:parseFloat(header.paddingTop),
-           barHeight:parseFloat(bar.height),radius:parseFloat(bar.borderRadius)};
+          const normal=snapshot(), header=style(first.querySelector('h4')), bar=style(first.querySelector('progress'));
+          const dimensions={headerFont:header.fontSize,headerLineHeight:header.lineHeight,padding:parseFloat(header.paddingTop),
+            barHeight:parseFloat(bar.height),radius:parseFloat(bar.borderRadius),root:style(document.documentElement).fontSize,
+            viewportScale:visualViewport.scale,devicePixelRatio};
          const framing=[...document.querySelectorAll('.watch-card')].every(n=>parseFloat(style(n).borderRadius)>0 &&
            parseFloat(style(n).paddingLeft)>0 && rect(n).width===rect(n.parentNode).width);
          const zoom=[];
@@ -176,7 +188,14 @@ async function main() {
            document.documentElement.style.fontSize=(15*percent/100)+'px';
            zoom.push({percent,root:parseFloat(style(document.documentElement).fontSize),...snapshot()});
          }
-         document.documentElement.style.fontSize='';
+          document.documentElement.style.fontSize='';
+          // Reproduce the previous effective 30rem rule using real layout at 150% text size.
+          document.documentElement.style.fontSize='22.5px';
+          grid.style.gridTemplateColumns='repeat(auto-fit,minmax(0,min(100%,30rem)))';
+          cards.forEach(card=>card.style.maxWidth='none');
+          const priorRule150=snapshot();
+          document.documentElement.style.fontSize=''; grid.style.gridTemplateColumns='';
+          cards.forEach(card=>card.style.maxWidth='');
          const singleNode=first.cloneNode(true); grid.replaceChildren(singleNode);
          const single={width:rect(singleNode).width,left:rect(singleNode).left,gridLeft:rect(grid).left};
          // Force a fresh accepted publication to restore the original cards.
@@ -215,16 +234,16 @@ async function main() {
          const contrast=(a,b)=>{const x=luminance(a),y=luminance(b);return (Math.max(x,y)+.05)/(Math.min(x,y)+.05)};
          const exhausted=outcomes.find(v=>v.p===1), contrastHeader=contrast(exhausted.head,exhausted.band), contrastUsage=contrast(exhausted.colors[0],body);
          INPUT.view.accounts.accounts=original; redraw();
-         return {normal,zoom,single,framing,outcomes,unlimited,contrastHeader,contrastUsage,...dimensions,theme:originalTheme}; })()`);
+          return {normal,zoom,single,priorRule150,framing,outcomes,unlimited,contrastHeader,contrastUsage,...dimensions,theme:originalTheme}; })()`);
        assert.equal(polish.framing, true);
        for (const sample of [polish.normal,...polish.zoom]) {
          assert.equal(sample.overflow, false); assert.equal(sample.accessible, true);
-         assert.ok(sample.widths.every(value=>value<=30*(sample.root||15)+1));
+          assert.ok(sample.widths.every(value=>value<=450));
          assert.ok(Math.abs(sample.firstLeft-sample.gridLeft)<1);
        }
        assert.ok(polish.single.width<=451 && Math.abs(polish.single.left-polish.single.gridLeft)<1);
        assert.ok(polish.padding>=6 && polish.padding<=7); assert.equal(polish.headerFont,'12.75px');
-       assert.equal(polish.barHeight,18.75); assert.ok(polish.radius>0);
+        assert.equal(polish.barHeight,12.4375); assert.equal(polish.radius,2);
        assert.ok(polish.contrastHeader>=4.5 && polish.contrastUsage>=4.5);
        const cyan=polish.outcomes[0].colors, normalBand=polish.outcomes[0].band;
        // Summary text normally inherits ink, whereas non-exhausted bars retain teal.
@@ -243,7 +262,8 @@ async function main() {
        }
        assert.equal(polish.outcomes.at(-2).warning,true);
        assert.equal(polish.outcomes.at(-1).restriction,true);
-       assert.equal(polish.unlimited,true);
+        assert.equal(polish.unlimited,true);
+       const context = await checkContext(evaluate);
       const screenshot = await command('Page.captureScreenshot', {format: 'png', captureBeyondViewport: false}, sessionId);
         await fs.writeFile(path.join(output, `watch-${theme}-${width}.png`), Buffer.from(screenshot.data, 'base64'));
        await evaluate('document.querySelector(".watch-account-grid").scrollIntoView()');
@@ -289,7 +309,7 @@ async function main() {
         return {count,scroll,success,error}; })()`);
       assert.equal(scale.count, 100); assert.equal(scale.scroll, false);
       assert.notEqual(scale.success, layout.runningColor); assert.notEqual(scale.error, layout.runningColor);
-         cases.push({theme, ...layout, quotas, polish, transitions, scale, screenshot: `watch-${theme}-${width}.png`, outcome: 'PASS'});
+          cases.push({theme, ...layout, quotas, polish, context, transitions, scale, screenshot: `watch-${theme}-${width}.png`, outcome: 'PASS'});
       await command('Target.closeTarget', {targetId});
     }
     await fs.writeFile(path.join(output, 'browser.json'), JSON.stringify({outcome: 'PASS', browser: version.product, userAgent: version.userAgent, cases,

@@ -328,26 +328,27 @@ on the existing single history lane after five seconds rather than waiting a min
 Browser reconnect/offline/host-stop notices remain separate from source acquisition.
 
 Subscription cards align centered title bands, **CCost Today**, native primary usage
-and bars; body values stay left aligned. Each card caps at 30rem (about 450px at
-standard text size), wraps naturally and narrows with the viewport. Title padding is
+and bars; body values stay left aligned. Each card caps at 450 CSS pixels, including
+enlarged text, wraps naturally and narrows with the viewport. Title padding is
 slimmer without smaller text. Native declarations/order, never depletion or
 provider identity, select the primary. Missing primary stays unavailable; weekly-only
 accounts have no invented five-hour slot or duplicate secondary.
 
-Each quota shows **period · N% used · Used/Total native units**, its bar, separately
-labeled **CCost: …**, reset and applicable canonical
+Each finite known quota shows **period · N% used (period CCost) · Used/Total native units**,
+its bar, a tightly adjacent reset and applicable canonical
 **Remaining: …/day** and **Remaining: …/workday** (or **no workdays left**). Only real
 secondaries follow a divider. No routine rolling/fixed boilerplate appears. Exact
 account/window/model costs include pre-Watch native-month history, never Today/30-day
-substitutions. Unknown/stale/unacquired boundaries show **CCost: —**; confirmed empty windows
-show zero independently of Today. Unlimited, sub-100% precision and genuine warnings
+substitutions. Unavailable period costs omit the parentheses; confirmed empty windows
+show **(0)** independently of Today. Unlimited, sub-100% precision and genuine warnings
 remain distinct. Today keeps daily scope/attribution without an estimate suffix (basis
-on hover). Period CCost retains partial/estimated provenance. Native Used/Total comes
+on hover). Period CCost's focusable parentheses describe the independent window and
+partial/estimated provenance nonvisually, without an extra cost row. Native Used/Total comes
 from the same quota observation as the percentage, never from observed CCost; the two
 amounts need not agree. Missing native usage never borrows CCost. Credits/USD changes
 CCost, not native Used/Total or Remaining. Accounts and Mini Watch are unchanged.
 
-Watch's thicker, rounded quota bars stay teal throughout the non-exhausted range,
+Watch's slim .83rem quota bars have subtle 2px corners and stay teal throughout the non-exhausted range,
 including **<100%**. Canonical numeric exhaustion alone makes that quota's entire
 usage summary and fill red; any exhausted window adds a muted red tint to only the
 subscription header. Other windows, CCost and the card body remain unchanged.
@@ -371,7 +372,12 @@ exceeded keeps both gold/orange. Approaching uses
 `thresholds.nextIctxPriceThresholdWarningPercent` (75%; zero disables approaching only);
 exact tier boundaries use unrounded counts. Gold/orange exceeded guidance includes the
 canonical relative price factor or supported cached/fresh cost fallback, not a bill
-prediction. Prompt cells contain no context-warning stars, footnotes or threshold color.
+prediction. Full-Watch Context cells show the plain estimated number (no approximation
+prefix), with a focusable gold/orange triangle only for that continuation's approaching
+or exceeded warning. Its accessible label points to the retained full footer. Other
+rows keep plain numbers; unknown context stays N/A. Focus/selection cannot freeze an
+invalidated cell warning. Prompt outcome colors, Δ Ctx and Mini Watch are unchanged;
+no warning stars, footnotes or extra column are added.
 
 Watch still omits the normal heading, report/search/scope/refresh controls, run summaries,
 valuation disclosure and model announcements. Exceptional host/source/offline notices

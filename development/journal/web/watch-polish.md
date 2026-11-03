@@ -1,4 +1,74 @@
-# Full Web Watch cards and reset display — FR 000560
+# Full Web Watch cards, reset display and context markers
+
+## v80.142 — FR 000562 (2026-11-03)
+
+`watch.js` now places each finite quota's own observed-period CCost in numeric
+parentheses immediately after Used, preserving native Used/Total and units.
+Unavailable/unpriced cost is omitted; a known empty window shows (0). Focusable
+provenance retains the specific window, numerical independence and partial/estimated
+attribution. Reset is the first detail directly below its matching bar, then pace.
+Today/global daily scopes, acquisition, accounting and Mini are unchanged.
+
+`live_projection.py` adds a full-Watch-only `context_cell`, explicitly matching
+canonical guidance's owner ID. Its current continuation tokens include hidden
+compaction/epoch invalidation; unrelated rows retain their own numbers without a
+borrowed warning. The old `live_context` is unchanged for Mini. Full Context numbers
+have no approximation prefix; approaching/exceeded use the same gold/orange triangle
+and retain the complete footer. Focusable named icons describe severity and reference
+that footer. In-place updates prevent focus/selection from freezing a stale warning.
+No browser threshold calculation or new analysis/acquisition owner is introduced.
+
+### Measured browser geometry
+
+Windows headless Edge 156.0.4314.58, current assets, synthetic loopback fixture,
+Classic/Web light/Web dark: all 12 viewport/theme cases passed. Every account in
+each case had these widths (CSS px):
+
+| Viewport | Default 15px root | 150% text (22.5px) | 200% text (30px) | Singleton/default |
+| --- | ---: | ---: | ---: | ---: |
+| 360 | 315 | 300 | 285 | 315 |
+| 1366 | 450 | 450 | 450 | 450 |
+| 1920 | 450 | 450 | 450 | 450 |
+| 2560 | 450 | 450 | 450 | 450 |
+
+Restoring the former effective 30rem rule/max-width behavior in actual DOM layout
+at 150% text reproduced **675px** desktop cards in all themes. This explains a
+plausible 670–680px overgrowth mechanism, not proof of the owner's exact browser
+configuration. New grid tracks and card caps both use 450px; narrow cards shrink.
+Font enlargement is text-size emulation, not physical browser zoom; viewport scale
+and device-pixel ratio were 1. Browser zoom may enlarge physical pixels while CSS
+pixels remain the layout unit. No page overflow or clipped account text occurred.
+
+At the default root, bars measured **12.4375px** (.83rem), versus the previous
+18.75px: 66.3% of their former height. Track radius is **2px**, with matching
+Chromium/WebKit/Gecko fill selectors. Primary Reset gaps were **3.75px** and
+secondary gaps **0px**. The probe checks per-window native/cost currency independence,
+aligned subgrid tracks, singleton cap, exhausted/partial/unlimited/reset recovery,
+theme contrast, keyboard focus, warning transitions and ownership, unknown compaction,
+multiple rows, preserved selection, history transitions and 100-card layout.
+Representative Classic desktop, Web light subscriptions and Web dark mobile
+screenshots were inspected. Firefox/Safari engines, physical zoom, screen readers,
+native desktop input and real-account browser paint were not executed or claimed.
+
+### Real installation and verification
+
+Fresh `probe_web_live.py --watch-cards` passed against read-only V2: one owner,
+two advancing streams, three accounts, preserved run origin, one active/two history
+cards, three cards with rows, one row/card and four bounded pending captures.
+First rows appeared at 6.459s. All owned workers closed without cleanup failures;
+shared OpenCode was untouched. Shutdown interrupted account-history work, so Daily
+publication/completeness is not claimed. No inference, quota manipulation or extra
+provider polling was added. Synthetic browser and real-source HTTP proofs remain
+complementary, not an end-to-end real-account UI claim.
+
+Focused tests cover exact thresholds/disabled approaching, per-window identity in
+reversed source order, known zero/unavailable/unpriced/partial/estimated cost,
+compaction/epoch changes, owning versus unrelated/concurrent rows, and rejection
+of older captures/generations. Full passed all 133 files; the working-tree validator
+passed all 11 checks with six advisory/pre-existing warnings. No requirement/test
+exception, release ZIP, model call or provider mutation was requested or performed.
+
+## Historical v80.140 — FR 000560
 
 2026-11-03, v80.140. No acquisition, quota-accounting or lifecycle change.
 

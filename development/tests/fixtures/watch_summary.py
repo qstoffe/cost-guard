@@ -40,7 +40,7 @@ def summary_watch():
         native = replace(base.account, ref=AccountRef("fixture", provider, account_id=str(index)),
             provider_label=label, plan=None, quotas=windows, billing=(), warnings=(), status=Status.UNKNOWN,
             primary_quota_label="5-hour" if provider == "anthropic" else None)
-        periods = tuple(QuotaPeriodProjection(quota, ComparisonCost(D(1814) if quota is monthly else D(420), 2, 2),
+        periods = tuple(QuotaPeriodProjection(quota, ComparisonCost(D(1814) if quota is monthly else D(840) if quota is weekly else D(420), 2, 2),
             quota_pace(quota, now_ms=NOW, timezone_id="UTC", workday_calendar="SE")) for quota in windows)
         accounts.append(replace(base, account=native, label=label, quota_periods=periods,
             ccost_scopes=(("today", ComparisonCost(D("12.5"), 2, 2)),),
