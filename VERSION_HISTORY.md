@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.144 — 2026-11-03
+
+- Per-prompt Token Mix: CLI reports and Web Watch now both withhold percentages when any attributed call lacks I/C/W/O coverage. Completed partial data no longer looks complete in CLI; fully observed rounding, live corrections, Calls, CCost and context are unchanged.
+
 ## v80.143 — 2026-11-03
 
 - Date reports: bounded four-tree V2 read overlap removes serial source waits without dropping roots or relaxing revision proofs. Safe cache/read/verification/analysis progress and actionable timeout guidance retain the 120-second limit, explicit failures and isolated cancellation; Daily acquisition is unchanged.

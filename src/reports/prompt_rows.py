@@ -32,6 +32,12 @@ def mix_percent(values: tuple[int, int, int, int]) -> tuple[int, int, int, int] 
     return tuple(rounded)  # type: ignore[return-value]
 
 
+def mix_known(record: PromptRecord | CompactionRecord) -> bool:
+    """Missing counters are placeholders, not zero evidence for a full-row share."""
+    return bool(record.entries) and all(
+        all(name in entry.tokens.known_fields for name in MIX_FIELDS) for entry in record.entries)
+
+
 def _context_ccost(catalog: PricingCatalog, record: PromptRecord | CompactionRecord) -> Decimal | None:
     if not record.entries:
         return None
@@ -63,15 +69,15 @@ def _extra_ccost(catalog: PricingCatalog, record: PromptRecord | CompactionRecor
 def _prompt_metrics(catalog: PricingCatalog, record: PromptRecord, provisional: bool
                     ) -> tuple[tuple[int, int, int, int] | None, Decimal | None, Decimal | None]:
     """Use completed-report definitions, withholding unsupported active estimates."""
-    mix_known = all(all(name in entry.tokens.known_fields for name in MIX_FIELDS) for entry in record.entries)
+    coverage_known = mix_known(record)
     active = record.in_progress
     supported = provisional and record.breakdown_known
     mix = (mix_percent((record.input_tokens, record.cache_read_tokens, record.cache_write_tokens, record.output_tokens))
-           if not active or supported and mix_known else None)
+           if coverage_known and (not active or supported) else None)
     context_known = bool(record.entries) and all(
         name in record.entries[0].tokens.known_fields for name in MIX_FIELDS[:3])
     ictx = _context_ccost(catalog, record) if not active or supported and context_known else None
-    extra = _extra_ccost(catalog, record) if not active or supported and mix_known else None
+    extra = _extra_ccost(catalog, record) if not active or supported and coverage_known else None
     return mix, ictx, extra
 
 
@@ -203,7 +209,8 @@ class PromptRowProjector:
             incoming_context_tokens=record.input_context_tokens or None,
             incoming_context_ccost=_context_ccost(catalog, record),
             extra_ccost=_extra_ccost(catalog, record),
-            token_mix_percent=mix_percent((record.input_tokens, record.cache_read_tokens, record.cache_write_tokens, record.output_tokens)),
+            token_mix_percent=(mix_percent((record.input_tokens, record.cache_read_tokens,
+                record.cache_write_tokens, record.output_tokens)) if mix_known(record) else None),
             is_compaction=True,
             in_progress=record.in_progress,
             delta_context_tokens=state.delta_tokens if state else None,

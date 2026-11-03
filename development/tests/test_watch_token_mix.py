@@ -9,11 +9,15 @@ import tempfile
 import unittest
 
 from development.tests.fixtures.session_snapshots import make_snapshot, make_uncompacted_snapshot
+from development.tests.fixtures.compact_reports import rendered
 from development.tests.fixtures.watch_runtime import MutableSource, make_service
 from src.application.live_projection import project_live
+from src.application.display import with_display
+from src.application.projection import prompt
 from src.domain import ModelRef, TokenUsage
 from src.reports import ReportKind, ReportRequest
 from src.reports.watch_capture import capture_rows
+from src.sources.opencode_tokens import token_usage
 from src.watch.card_workers import CardResult
 from src.watch.cards import WatchCards
 from src.watch.models import WatchProjection
@@ -30,10 +34,11 @@ class WatchTokenMixTests(unittest.TestCase):
         self.cards.catalog(CatalogObservation((self.root,), (self.root,), {},
             {self.root.session_id: "initial"}, frozenset({self.root.session_id})))
 
-    def capture(self, snapshot, now=4000):
+    def capture(self, snapshot, now=4000, previous=None):
         self.source.snapshot = snapshot
+        self.service.invalidate_roots((self.root.session_id,))
         self.service.set_now_ms(now)
-        capture, item = capture_rows(self.service, self.root)
+        capture, item = capture_rows(self.service, self.root, previous)
         return capture, item
 
     def publish(self, capture, generation=None):
@@ -111,7 +116,7 @@ class WatchTokenMixTests(unittest.TestCase):
         self.assertGreater(child.calls, 1)
         self.assertIsNotNone(child.token_mix_percent)
 
-    def test_completed_partial_child_is_unknown_without_changing_cli_or_other_metrics(self):
+    def test_completed_partial_child_is_unknown_in_cli_and_web_without_changing_other_metrics(self):
         snapshot = make_uncompacted_snapshot()
         invocations = tuple(replace(item, tokens=TokenUsage(input=20, output=5,
             known_fields=("input", "output")))
@@ -120,8 +125,62 @@ class WatchTokenMixTests(unittest.TestCase):
         actual = next(row for row in capture.rows if row.event_id == "u_sub")
         cli = self.report_row("u_sub")
         self.assertIsNone(actual.token_mix_percent)
-        self.assertIsNotNone(cli.token_mix_percent, "approved Watch-only exception; CLI behavior stays unchanged")
-        self.assertEqual((cli.calls, cli.ccost), (actual.calls, actual.ccost))
+        self.assertIsNone(cli.token_mix_percent)
+        self.assertEqual((cli.calls, cli.ccost, cli.delta_context_tokens),
+            (actual.calls, actual.ccost, actual.delta_context_tokens))
+
+    def test_same_source_coverage_and_rounding_agree_in_completed_and_running_presentations(self):
+        partial = token_usage({"input": 100}, context="fixture", source="fixture")
+        self.assertEqual(("input",), partial.known_fields)
+        self.assertEqual(0, partial.output, "normalization placeholder is not observed zero")
+        cases = (
+            ("known", (TokenUsage(input=100, cache_read=300, output=80, reasoning=20),), (20, 60, 0, 20)),
+            ("rounding", (TokenUsage(input=1, cache_read=1, cache_write=1, output=3),), (17, 17, 17, 49)),
+            ("partial", (partial,), None),
+            ("multi-call-partial", (TokenUsage(cache_read=300), partial), None),
+            ("known-zero", (TokenUsage(),), None),
+            ("missing", (TokenUsage(known_fields=()),), None),
+        )
+        for running in (False, True):
+            for name, usages, expected in cases:
+                with self.subTest(name=name, running=running):
+                    capture, _ = self.capture(self.usage_snapshot(usages, running=running,
+                        revision=f"{name}-{running}"))
+                    web = next(row for row in capture.rows if row.event_id == "u_next")
+                    cli = self.report_row("u_next")
+                    self.assertEqual(expected, cli.token_mix_percent)
+                    self.assertEqual(expected, web.token_mix_percent)
+                    self.assertEqual((len(usages), cli.ccost), (web.calls, web.ccost))
+                    report = self.service.build(ReportRequest(ReportKind.SESSION, self.root.session_id))
+                    line = next(line for line in rendered(report, width=250).splitlines()
+                        if f"#{cli.prompt_number} " in line)
+                    label = "/".join(map(str, expected)) if expected else "running" if running else "N/A"
+                    self.assertIn(label, line)
+                    self.assertEqual(label, with_display(prompt(web), "UTC").to_json()["display"]["token_mix_percent"])
+
+    def test_late_coverage_corrections_replace_same_prompt_in_both_surfaces(self):
+        cases = (
+            (TokenUsage(input=100, known_fields=("input",)), None),
+            (TokenUsage(input=100, cache_read=300), (25, 75, 0, 0)),
+            (TokenUsage(input=100, cache_read=100), (50, 50, 0, 0)),
+            (TokenUsage(input=100, known_fields=("input",)), None),
+        )
+        for running in (False, True):
+            previous = None
+            for index, (usage, expected) in enumerate(cases):
+                snapshot = self.usage_snapshot((usage,), running=running,
+                    revision=f"correction-{running}-{index}")
+                capture, item = self.capture(snapshot, now=4000 + index * 600_000, previous=previous)
+                previous = item.snapshot
+                cli = self.report_row("u_next")
+                web = next(row for row in capture.rows if row.event_id == "u_next")
+                self.assertEqual(expected, cli.token_mix_percent)
+                self.assertEqual(expected, web.token_mix_percent)
+                self.assertEqual((1, 1), (cli.calls, web.calls))
+                repeated, _ = self.capture(snapshot, now=604_000 + index * 600_000, previous=previous)
+                same = next(row for row in repeated.rows if row.event_id == "u_next")
+                self.assertEqual((web.token_mix_percent, web.calls, web.ccost),
+                    (same.token_mix_percent, same.calls, same.ccost), "elapsed time cannot manufacture tokens")
 
     def test_zero_and_absent_usage_never_invent_zero_percentages(self):
         for usage in (TokenUsage(), TokenUsage(known_fields=())):
@@ -136,8 +195,11 @@ class WatchTokenMixTests(unittest.TestCase):
     def test_accepted_sse_updates_dom_without_reload_and_rejects_stale_mix(self):
         frames = []
         usages = (TokenUsage(input=100), TokenUsage(cache_read=300), TokenUsage(output=100))
-        for index in range(3):
-            capture, _ = self.capture(self.usage_snapshot(usages[:index + 1], revision=str(index)), now=4000 + index * 1000)
+        partial = TokenUsage(input=100, known_fields=("input",))
+        observations = (usages[:1], usages[:2], usages, (partial,), usages[:2], (partial,))
+        for index, observed in enumerate(observations):
+            capture, _ = self.capture(self.usage_snapshot(observed, running=index != 5,
+                revision=str(index)), now=4000 + index * 1000)
             self.publish(capture)
             frames.append(dict(state="running", view=self.wire(4000 + index * 1000)))
         result = subprocess.run([shutil.which("node"), "development/tests/integration/web_live.cjs"],
