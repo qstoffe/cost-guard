@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.140 — 2026-11-03
+
+- Web Watch: cap subscription widths, slim header padding and double progress thickness; only canonically exhausted quotas turn red, with a muted header-only tint. Watch-only resets reuse Duration notation and the live publication clock. Each Running/Earlier session has its own rounded frame; shared CLI, Accounts and Mini Watch formatting stays unchanged.
+
 ## v80.139 — 2026-11-03
 
 - Watch: recognize persisted failures before a response, including synthetic continuations separated by system notices. Attempt-scoped ends survive retention, freeze duration and exclude terminal prompts from Web/Mini running metrics without inventing success, quota causes or usage.

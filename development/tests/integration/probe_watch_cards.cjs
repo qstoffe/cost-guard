@@ -15,7 +15,7 @@ async function main() {
   const profile = await fs.mkdtemp(path.join(output, 'watch-owned-profile-'));
   const child = spawn(browser, ['--headless=new', '--no-first-run', '--no-default-browser-check',
     '--disable-extensions', '--disable-background-networking', '--remote-debugging-pipe',
-    '--user-data-dir=' + profile, 'about:blank'], {stdio: ['ignore', 'ignore', 'ignore', 'pipe', 'pipe']});
+    '--user-data-dir=' + profile, 'about:blank'], {stdio: ['ignore', 'ignore', 'ignore', 'pipe', 'pipe'], windowsHide: true});
   const pending = new Map(), listeners = new Map(); let sequence = 0, buffer = '';
   child.stdio[4].on('data', chunk => {
     buffer += chunk.toString();
@@ -41,7 +41,7 @@ async function main() {
   let version;
   try {
     version = await command('Browser.getVersion');
-    for (const theme of ['classic', 'light', 'dark']) for (const [width, height] of [[1920, 1080], [1366, 768], [360, 800]]) {
+    for (const theme of ['classic', 'light', 'dark']) for (const [width, height] of [[2560, 1080], [1920, 1080], [1366, 768], [360, 800]]) {
       const {targetId} = await command('Target.createTarget', {url: 'about:blank'});
       const {sessionId} = await command('Target.attachToTarget', {targetId, flatten: true});
       await command('Page.enable', {}, sessionId);
@@ -93,7 +93,7 @@ async function main() {
           border:getComputedStyle(c).borderTopWidth,background:getComputedStyle(c).backgroundColor,stable}; })()`);
        assert.equal(layout.historyCards, 5); assert.equal(layout.historyScroll, layout.historyHeight);
        assert.equal(layout.historyMaxHeight, 'none'); assert.equal(layout.historyOverflow, 'visible');
-       assert.deepEqual(layout.activeSeparators, [0,1]); assert.deepEqual(layout.historySeparators, [0,1,1,1,1]);
+        assert.deepEqual(layout.activeSeparators, [1,1]); assert.deepEqual(layout.historySeparators, [1,1,1,1,1]);
        assert.notEqual(layout.bodySurface, layout.pageSurface); assert.notEqual(layout.headerSurface, layout.bodySurface);
        assert.equal(layout.tableBorder, 1); assert.equal(layout.warningAdjacent, true);
        assert.equal(layout.warningBorder, 0); assert.equal(layout.warningPadding, 0);
@@ -107,7 +107,7 @@ async function main() {
       assert.equal(layout.scrollY, 0, 'layout assertions use the unscrolled document');
       assert.equal(layout.pageOverflow, false); assert.equal(layout.activeInnerScroll, false);
        assert.equal(layout.tableVerticalScroll, false); assert.equal(layout.stable, true);
-       assert.equal(layout.border, '0px'); assert.equal(layout.background, 'rgba(0, 0, 0, 0)');
+        assert.equal(layout.border, '1px'); assert.equal(layout.background, 'rgba(0, 0, 0, 0)');
          if (width === 360) assert.equal(layout.horizontalPan, true);
        const headers = await evaluate(`(() => {
          const names=['Started','Duration','Prompt','Model','Effort','CCost','Calls','Token Mix %','Δ Ctx','Context'];
@@ -155,8 +155,95 @@ async function main() {
        assert.equal(quotas.cost, 'CCost: 1814'); assert.equal(quotas.usd, 'CCost: $18.14');
        assert.equal(quotas.fill, .08352); assert.equal(quotas.unchanged, true);
        assert.equal(quotas.aligned, true); assert.equal(quotas.legible, true);
-       assert.equal(quotas.monthlyDivider, false);
-       assert.match(quotas.secondary, /Weekly · 100% used · 100\/100 requestsCCost: 420/);
+        assert.equal(quotas.monthlyDivider, false);
+        assert.match(quotas.secondary, /Weekly · 100% used · 100\/100 requestsCCost: 420/);
+       const polish = await evaluate(`(() => {
+         const style=n=>getComputedStyle(n), rect=n=>n.getBoundingClientRect();
+         const cards=[...document.querySelectorAll('.watch-subscription')], first=cards[0], grid=first.parentNode;
+         const original=INPUT.view.accounts.accounts, originalTheme=document.documentElement.dataset.theme;
+         const snapshot=()=>({widths:cards.map(n=>rect(n).width),
+           overflow:document.documentElement.scrollWidth>innerWidth,
+           accessible:cards.every(n=>[n.querySelector('h4'),...n.querySelectorAll('p,.watch-quota-summary')]
+             .every(v=>v.scrollWidth<=v.clientWidth && v.scrollHeight<=v.clientHeight)),
+           firstLeft:rect(first).left,gridLeft:rect(grid).left});
+         const normal=snapshot(), header=style(first.querySelector('h4')), bar=style(first.querySelector('progress'));
+         const dimensions={headerFont:header.fontSize,headerLineHeight:header.lineHeight,padding:parseFloat(header.paddingTop),
+           barHeight:parseFloat(bar.height),radius:parseFloat(bar.borderRadius)};
+         const framing=[...document.querySelectorAll('.watch-card')].every(n=>parseFloat(style(n).borderRadius)>0 &&
+           parseFloat(style(n).paddingLeft)>0 && rect(n).width===rect(n.parentNode).width);
+         const zoom=[];
+         for (const percent of [150,200]) {
+           document.documentElement.style.fontSize=(15*percent/100)+'px';
+           zoom.push({percent,root:parseFloat(style(document.documentElement).fontSize),...snapshot()});
+         }
+         document.documentElement.style.fontSize='';
+         const singleNode=first.cloneNode(true); grid.replaceChildren(singleNode);
+         const single={width:rect(singleNode).width,left:rect(singleNode).left,gridLeft:rect(grid).left};
+         // Force a fresh accepted publication to restore the original cards.
+         INPUT.view.accounts.accounts=[...original]; INPUT.view.accounts.now_ms++; redraw();
+         const account=structuredClone(original[1]), primary=account.primary, secondary=account.secondary[0];
+         const outcomes=[];
+         function render(p,s,availability='available',restricted=false) {
+           for (const [slot,fraction] of [[primary,p],[secondary,s]]) {
+             slot.used_fraction=fraction;slot.used_percent=fraction===null?'—':fraction<1&&fraction>=.9995?'<100%':String(fraction*100)+'%';
+             slot.exhausted=fraction===1;slot.restricted=restricted;
+             slot.quota.unlimited=false;
+           }
+           account.observation.availability=availability;
+           account.observation.status=restricted?'blocked':'unknown';
+           INPUT.view.accounts.accounts=[account]; redraw();
+           const card=document.querySelector('.watch-subscription'), head=card.querySelector('h4');
+           const bars=[...card.querySelectorAll('progress')], labels=[...card.querySelectorAll('.watch-quota-summary')];
+           return {p,s,availability,restricted,flag:card.dataset.exhausted,
+             colors:labels.map(n=>style(n).color),barColors:bars.map(n=>style(n).color),
+             fractions:bars.map(n=>n.value),aria:bars.map(n=>n.getAttribute('aria-valuetext')),
+             head:style(head).color,band:style(head).backgroundColor,body:style(card).backgroundColor,
+             error:style(card).getPropertyValue('--error').trim(),
+             cost:style(card.children[1]).color,warning:card.textContent.includes('not current'),
+             restriction:card.textContent.includes('Provider restriction reported')};
+         }
+         for (const fraction of [0,.499,.5,.75,.999,.99999,1,.25]) outcomes.push(render(fraction,.25));
+         outcomes.push(render(.25,1),render(1,1),render(.25,.25),render(1,.25,'stale'),render(null,null,'partial',true));
+         // An unlimited quota never has a bar or exhaustion; provider warnings stay separate.
+         primary.quota.unlimited=true;primary.used_fraction=null;primary.exhausted=false;redraw();
+         const unlimited=document.querySelectorAll('.watch-subscription progress').length===0 &&
+           document.querySelector('.watch-subscription').dataset.exhausted==='false';
+         const card=document.querySelector('.watch-subscription'), body=style(card).backgroundColor;
+         const rgb=color=>color.match(/[\\d.]+/g).slice(0,3).map(Number);
+         const luminance=color=>rgb(color).map(v=>v/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4)
+           .reduce((sum,v,i)=>sum+v*[.2126,.7152,.0722][i],0);
+         const contrast=(a,b)=>{const x=luminance(a),y=luminance(b);return (Math.max(x,y)+.05)/(Math.min(x,y)+.05)};
+         const exhausted=outcomes.find(v=>v.p===1), contrastHeader=contrast(exhausted.head,exhausted.band), contrastUsage=contrast(exhausted.colors[0],body);
+         INPUT.view.accounts.accounts=original; redraw();
+         return {normal,zoom,single,framing,outcomes,unlimited,contrastHeader,contrastUsage,...dimensions,theme:originalTheme}; })()`);
+       assert.equal(polish.framing, true);
+       for (const sample of [polish.normal,...polish.zoom]) {
+         assert.equal(sample.overflow, false); assert.equal(sample.accessible, true);
+         assert.ok(sample.widths.every(value=>value<=30*(sample.root||15)+1));
+         assert.ok(Math.abs(sample.firstLeft-sample.gridLeft)<1);
+       }
+       assert.ok(polish.single.width<=451 && Math.abs(polish.single.left-polish.single.gridLeft)<1);
+       assert.ok(polish.padding>=6 && polish.padding<=7); assert.equal(polish.headerFont,'12.75px');
+       assert.equal(polish.barHeight,18.75); assert.ok(polish.radius>0);
+       assert.ok(polish.contrastHeader>=4.5 && polish.contrastUsage>=4.5);
+       const cyan=polish.outcomes[0].colors, normalBand=polish.outcomes[0].band;
+       // Summary text normally inherits ink, whereas non-exhausted bars retain teal.
+       const teal=polish.outcomes[0].barColors;
+       for (const result of polish.outcomes) {
+         const flags=[result.p===1,result.s===1];
+         assert.equal(result.flag,String(flags.some(Boolean)));
+         assert.equal(result.body,polish.outcomes[0].body);
+         assert.equal(result.cost,polish.outcomes[0].cost);
+         flags.forEach((full,i)=> {
+           assert.equal(result.colors[i],full?polish.outcomes[6].colors[0]:cyan[i]);
+           if (result.p!==null) assert.equal(result.barColors[i],full?polish.outcomes[6].barColors[0]:teal[i]);
+         });
+         if (!flags.some(Boolean)) assert.equal(result.band,normalBand);
+         else assert.notEqual(result.band,normalBand);
+       }
+       assert.equal(polish.outcomes.at(-2).warning,true);
+       assert.equal(polish.outcomes.at(-1).restriction,true);
+       assert.equal(polish.unlimited,true);
       const screenshot = await command('Page.captureScreenshot', {format: 'png', captureBeyondViewport: false}, sessionId);
         await fs.writeFile(path.join(output, `watch-${theme}-${width}.png`), Buffer.from(screenshot.data, 'base64'));
        await evaluate('document.querySelector(".watch-account-grid").scrollIntoView()');
@@ -167,11 +254,11 @@ async function main() {
          const a=document.querySelector('.watch-active'), h=document.querySelector('.watch-history');
          const originals=[...INPUT.view.active_cards], node=a.children[1];
          INPUT.view.active_cards.reverse();redraw();
-         const reordered=a.children[0]===node && getComputedStyle(node).borderTopWidth==='0px';
+          const reordered=a.children[0]===node && getComputedStyle(node).borderTopWidth==='1px';
          INPUT.view.active_cards.pop();redraw();
-         const removed=a.children.length===1 && getComputedStyle(a.firstChild).borderTopWidth==='0px';
+          const removed=a.children.length===1 && getComputedStyle(a.firstChild).borderTopWidth==='1px';
          const moved=INPUT.view.active_cards.pop(); INPUT.view.history_cards.unshift({...moved,focal_id:''});redraw();
-         const transitioned=a.children.length===0 && [...h.children].every((card,i)=>getComputedStyle(card).borderTopWidth===(i?'1px':'0px'));
+          const transitioned=a.children.length===0 && [...h.children].every(card=>getComputedStyle(card).borderTopWidth==='1px');
          INPUT.view.active_cards=originals;INPUT.view.history_cards.shift();redraw();
           const row=a.querySelector('tbody tr'), oldMix=row.cells[7].textContent;
           INPUT.view.active_cards[0].rows[0].prompt.token_mix_percent=[25,75,0,0];
@@ -202,7 +289,7 @@ async function main() {
         return {count,scroll,success,error}; })()`);
       assert.equal(scale.count, 100); assert.equal(scale.scroll, false);
       assert.notEqual(scale.success, layout.runningColor); assert.notEqual(scale.error, layout.runningColor);
-        cases.push({theme, ...layout, quotas, transitions, scale, screenshot: `watch-${theme}-${width}.png`, outcome: 'PASS'});
+         cases.push({theme, ...layout, quotas, polish, transitions, scale, screenshot: `watch-${theme}-${width}.png`, outcome: 'PASS'});
       await command('Target.closeTarget', {targetId});
     }
     await fs.writeFile(path.join(output, 'browser.json'), JSON.stringify({outcome: 'PASS', browser: version.product, userAgent: version.userAgent, cases,

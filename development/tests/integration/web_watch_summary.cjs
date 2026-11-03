@@ -105,9 +105,10 @@ assert.equal(monthlyCard.children[4].children[0].textContent, 'CCost: 1814');
 const monthly = context.input.view.accounts.accounts[0];
 monthly.primary.pace.workdays = 0; monthly.primary.pace.per_workday = null;
 monthly.primary.quota.window_active = false; monthly.primary.quota.reset_at_ms = null;
+monthly.primary.display.watch_reset = 'Window not started';
 vm.runInContext('ReportView.renderLive(parent, input, state)', context);
 const inactiveCard = watch.accounts.children[0].children[0];
-assert.equal(inactiveCard.children[4].children[1].textContent, 'Reset: not started');
+assert.equal(inactiveCard.children[4].children[1].textContent, 'Window not started');
 assert.equal(inactiveCard.children[4].children[3].textContent, 'Remaining: no workdays left');
 context.input.view.active_cards[0].context_warning = null;
 vm.runInContext('ReportView.renderLive(parent, input, state)', context);
@@ -177,6 +178,10 @@ for (const fixture of context.input.quota_cases || []) {
   assert.match(account.textContent, /Stale.*not current/);
   assert.equal(account.querySelectorAll('progress').length,
     fixture.value.used_fraction == null || fixture.value.quota.unlimited ? 0 : 1, fixture.name);
+  assert.equal(account.dataset.exhausted, String(fixture.value.exhausted), fixture.name);
+  assert.equal(account.children[2].className.includes('watch-quota-exhausted'), fixture.value.exhausted, fixture.name);
+  for (const bar of account.querySelectorAll('progress'))
+    assert.equal(bar.className === 'watch-quota-exhausted', fixture.value.exhausted, fixture.name);
   if (fixture.name === 'empty period') assert.equal(account.children[4].children[0].textContent, 'CCost: 0');
   if (['unknown cost', 'unpriced period'].includes(fixture.name))
     assert.match(account.children[4].children[0].textContent, /^CCost: —/);

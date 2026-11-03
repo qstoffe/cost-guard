@@ -84,6 +84,18 @@ def quota_tokens(values):
             "quota_used": native + " " + unit, "used_money": money(used_money)}
 
 
+def watch_reset(quota, timezone_id, now_ms):
+    """Full Web Watch alone uses Duration notation; all other reset tokens stay CLI-owned."""
+    values = dict(quota.fields)
+    deadline = values["reset_at_ms"]
+    if values.get("window_active") is False and deadline is None:
+        return "Window not started"
+    if (isinstance(deadline, bool) or not isinstance(deadline, (int, float)) or deadline <= 0
+            or not 0 < deadline - now_ms < 604_800_000):
+        return format_reset(deadline, timezone_id, now_ms=now_ms)
+    return f"Reset in {duration_text(deadline - now_ms)}, {format_local_timestamp(deadline, timezone_id, '%H:%M')}"
+
+
 def metric_tokens(values, timezone_id, now_ms=None):
     tokens = {}
     if "source_label" in values or "token_mix_percent" in values or ("totals" in values and "shares" in values):
@@ -104,6 +116,8 @@ def metric_tokens(values, timezone_id, now_ms=None):
     if "reset_at_ms" in values and now_ms is not None:
         tokens["reset"] = ("Window not started" if values.get("window_active") is False and values["reset_at_ms"] is None
                            else format_reset(values["reset_at_ms"], timezone_id, now_ms=now_ms))
+    if "used_percent" in values and "quota" in values and now_ms is not None:
+        tokens["watch_reset"] = watch_reset(values["quota"], timezone_id, now_ms)
     if "duration_seconds" in values:
         tokens["window"] = "" if values["duration_seconds"] is None else duration_text(values["duration_seconds"] * 1000)
     if "relative_cost" in values:

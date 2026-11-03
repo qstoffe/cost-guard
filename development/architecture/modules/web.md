@@ -177,7 +177,8 @@ Duration, canonical #N Prompt, Model, Effort, CCost, Calls, Token Mix %, Δ Ctx,
 The number does not ellipsize; only the preview flexes. Intrinsic non-Prompt subgrid
 tracks pan horizontally. All headers provide native top-layer explanations on
 hover/focus/click, outside table clipping; time cells retain accessible full dates.
-History is unframed/uncapped page flow with an expanded/nonempty-only section divider;
+Running and Earlier sessions share individual rounded frames. History remains an
+unframed/uncapped section with one expanded/nonempty-only section divider;
 keyed disclosures retain focus/scroll. Running yellow,
 activity gold/brown, red failures and context gold/orange have separate theme roles.
 `render.js` scopes account-detail cleanup through its Watch-only flag; Accounts,
@@ -187,6 +188,15 @@ limits: [Watch cards](../../journal/web/watch-cards.md). The older
 `probe_web_watch.py`/`web_watch_browser.js` table probe is historical, not current
 acceptance; use approval-only `probe_watch_cards.cjs` and the integrated-browser
 `serve_web_watch.py` fixture, plus read-only `probe_web_live.py --watch-cards --detail`.
+
+Full Watch subscription tracks cap at 30rem with slimmer title padding and 1.25rem
+teal bars. Canonical per-quota exhaustion alone colors that summary/fill red and
+tints only its subscription header; stale/restriction warnings remain independent.
+Application display prepares Watch-only reset tokens using shared `duration_text`
+and canonical deadline/local-clock timestamps. Live's existing publication time
+advances these tokens without provider polling or browser timers. The nested generic
+reset token remains unchanged for Accounts, CLI and Mini Watch. Focused formatting,
+DOM and rendered responsive evidence: [Watch polish](../../journal/web/watch-polish.md).
 
 Watch capture already opts into canonical observed running metrics. Its minimal card
 export now retains `token_mix_percent`; no client attribution, rounding or acquisition

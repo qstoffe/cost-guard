@@ -249,7 +249,7 @@ One authenticated `/api/live` watchdog runs at ten-second intervals after the pr
 
 [Built-in browser, deterministic and real-source verification](../development/architecture/governance/verification/web-connection.md) records the tested states and explicit physical-tray/suspension/restart/macOS limits.
 
-Watch uses unframed prompt cards. **Earlier Prompts** starts collapsed: five eligible
+Watch gives each prompt/session card a subtle rounded frame. **Earlier Prompts** starts collapsed: five eligible
 distinct sessions selected by newest actual prompt start, then displayed oldest first,
 newest last, one latest prompt each with deterministic ID ties. It updates
 while collapsed, without an age/startup cutoff, excluding active/recent sessions before
@@ -282,7 +282,7 @@ is unchanged (the documented FR 000558 Decision Delegate parity exception).
 Additional model contribution is identified on the Model field. All cells/headers
 stay one line: Prompt alone flexes without a width cap and ellipsizes long text/URLs;
 complete metric columns and a 14rem Prompt minimum pan horizontally when necessary.
-Tables use theme-aware body/header surfaces and edges; compact dividers separate siblings.
+Tables use theme-aware body/header surfaces and edges inside each session's frame.
 
 Running focal rows and linked titles are yellow; historical/terminal titles use
 neutral heading ink. Normal activity is gold/brown, failures independently red,
@@ -324,7 +324,9 @@ on the existing single history lane after five seconds rather than waiting a min
 Browser reconnect/offline/host-stop notices remain separate from source acquisition.
 
 Subscription cards align centered title bands, **CCost Today**, native primary usage
-and bars; body values stay left aligned. Native declarations/order, never depletion or
+and bars; body values stay left aligned. Each card caps at 30rem (about 450px at
+standard text size), wraps naturally and narrows with the viewport. Title padding is
+slimmer without smaller text. Native declarations/order, never depletion or
 provider identity, select the primary. Missing primary stays unavailable; weekly-only
 accounts have no invented five-hour slot or duplicate secondary.
 
@@ -340,6 +342,20 @@ on hover). Period CCost retains partial/estimated provenance. Native Used/Total 
 from the same quota observation as the percentage, never from observed CCost; the two
 amounts need not agree. Missing native usage never borrows CCost. Credits/USD changes
 CCost, not native Used/Total or Remaining. Accounts and Mini Watch are unchanged.
+
+Watch's thicker, rounded quota bars stay teal throughout the non-exhausted range,
+including **<100%**. Canonical numeric exhaustion alone makes that quota's entire
+usage summary and fill red; any exhausted window adds a muted red tint to only the
+subscription header. Other windows, CCost and the card body remain unchanged.
+Provider restrictions without numeric exhaustion and stale/unavailable observations
+keep their separate truthful warnings. Accepted recovery clears the emphasis.
+
+For resets under seven days, full Watch uses the same Duration notation as prompt
+rows: **Reset in 1h28m, 20:09**, or **Reset in 1d3h, 14:30**. The local clock comes
+from the actual deadline; its full date/time is available on hover/focus. Seven days
+or more keeps the calendar date. Expired, unknown and not-started windows remain
+explicit. Existing Live publications update countdowns without browser clocks or
+additional provider polls; CLI, Accounts and Mini Watch retain their reset wording.
 
 Context-price guidance appears directly below each session table, before active activity,
 without a separate divider/frame or empty reserved space. It uses the latest valid Watch
