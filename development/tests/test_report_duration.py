@@ -8,35 +8,16 @@ from unittest.mock import patch
 from development.tests.fixtures.compact_reports import rendered, report_service
 from development.tests.fixtures.report_runtime import FakeSource
 from development.tests.fixtures.session_snapshots import (
-    MODEL, make_snapshot, make_native_v2_compaction_snapshot, message, part, prov,
+    DAY, MODEL, history, make_snapshot, make_native_v2_compaction_snapshot, message, part, prov,
 )
 from src.analysis.core import analyze_snapshot
 from src.analysis.duration import accumulated_duration
 from src.bootstrap import _report_request
 from src.cli import parse_command
-from src.domain import BackgroundActivity, EventKind, MessageRole, ModelInvocation, NormalizedEvent, TokenUsage, TerminalEvidence, TerminalOutcome
+from src.domain import BackgroundActivity, EventKind, MessageRole, NormalizedEvent, TerminalEvidence, TerminalOutcome
 from src.presentation.duration import duration_text
 from src.presentation.watch import _duration as watch_duration
 from src.reports import ReportKind, ReportRequest
-
-DAY = 86_400_000
-
-
-def history(spans, *, archived=False, generation="v1"):
-    """Root-only canonical history: spans are explicit start/end evidence."""
-    base = make_snapshot(generation=generation)
-    root = replace(base.root, archived_at_ms=DAY * 9 if archived else None, updated_at_ms=DAY * 8)
-    events, messages, invocations = [], [], []
-    for index, (start, end) in enumerate(spans):
-        uid, aid = f"u{index}", f"a{index}"
-        events.append(NormalizedEvent(uid, "root", EventKind.USER_PROMPT, start, prov("root", uid), "work"))
-        messages.extend((message(uid, "root", MessageRole.USER, start),
-                         message(aid, "root", MessageRole.ASSISTANT, start + 1, parent=uid,
-                                 completed=end, model=MODEL, finish="stop" if end is not None else None)))
-        invocations.append(ModelInvocation(aid, "root", start + 1, MODEL, TokenUsage(input=30, output=4),
-                                           prov("root", aid), completed_at_ms=end, initiating_event_id=uid, message_id=aid))
-    return replace(base, root=root, sessions=(root,), messages=tuple(messages), parts=(), events=tuple(events),
-                   invocations=tuple(invocations), source_revision=f"duration-{generation}-{spans}")
 
 
 def cells(line):

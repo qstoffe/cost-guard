@@ -14,7 +14,8 @@ import unittest
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
 
-from development.tests.test_active_hour import clean_service, history, hourly_result
+from development.tests.fixtures.active_hour import clean_service, hourly_result
+from development.tests.fixtures.session_snapshots import history
 from development.tests.fixtures.warning_projections import warning_prompt, warning_watch_projection
 from src.analysis.context import PriceWarningSeverity
 from src.application.live_projection import project_live

@@ -74,7 +74,8 @@ All paths in this table are relative to the repository root. Test names live und
 
 Quota Used display is shared by `src/display.py`, `src/presentation/accounts.py` and `src/application/display.py`; `test_quota_used.py` covers parity and the temporary `src/presentation/quota_migration.py` visible-Watch state owner. Web Watch's native Used/Total versus independent inline period CCost is covered by `test_web_watch_quota.py`, `integration/web_watch_summary.cjs` and the headless `integration/probe_watch_cards.cjs` layout/currency matrix. `test_watch_context_footer.py` and `fixtures/watch_context_browser.cjs` pin full-Watch cell/footer ownership, compaction, stale captures and focus-safe invalidation; Mini keeps the original live-context fields. Remove only the temporary notice per the [cleanup note](../../backlog/quota-used-warning-cleanup.md), never the permanent Used conversion.
 
-- `development/tests/fixtures/session_snapshots.py`: canonical root/child/task/continuation/compaction/running snapshots (also without the /compact work, or after a location move) and message/part/provenance builders.
+- `development/tests/fixtures/session_snapshots.py`: canonical root/child/task/continuation/compaction/running snapshots (also without the /compact work, or after a location move), explicit start/end `history` snapshots and message/part/provenance builders.
+- `development/tests/fixtures/active_hour.py`: finite hourly-cost service/capture setup shared by rate tests and the synthetic browser probe, without importing test modules.
 - `development/tests/fixtures/pricing_catalog.py`: the small deterministic two-model reference catalog and a two-tier 100K-threshold catalog.
 - `development/tests/fixtures/warning_projections.py`: single-prompt report/Watch projections carrying one Next-Ictx warning severity.
 - `development/tests/fixtures/report_runtime.py`: in-memory source/pricing/quota boundaries and a stale-root/recent-child scenario.

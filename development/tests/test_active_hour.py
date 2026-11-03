@@ -1,6 +1,5 @@
 """Web-only hourly reference cost: canonical timing, accounting and finite capture."""
 from dataclasses import replace
-from datetime import datetime, timezone
 from decimal import Decimal
 import json
 from pathlib import Path
@@ -9,14 +8,12 @@ import subprocess
 import unittest
 from unittest.mock import patch
 
-from development.tests.fixtures.compact_reports import report_service, rendered
-from development.tests.fixtures.report_runtime import FakeSource
-from development.tests.fixtures.session_snapshots import make_snapshot, make_native_v2_compaction_snapshot
-from development.tests.test_report_duration import history
+from development.tests.fixtures.active_hour import clean_service, epoch, hourly_result
+from development.tests.fixtures.compact_reports import rendered
+from development.tests.fixtures.session_snapshots import history, make_snapshot, make_native_v2_compaction_snapshot
 from src.analysis.active_hour import active_hour, period_active_hours, period_windows, ROLLING_MS, HOUR_MS
 from src.analysis.core import analyze_snapshot
-from src.application import ReportApplication
-from src.application.projection import project, hourly
+from src.application.projection import hourly
 from src.application.display import with_display
 from src.application.session_detail import SessionDetails
 from src.domain import TokenUsage, BackgroundActivity, TerminalEvidence, TerminalOutcome
@@ -27,27 +24,8 @@ ROOT = Path(__file__).resolve().parents[2]
 DAY = 24 * HOUR_MS
 
 
-def epoch(text):
-    return int(datetime.fromisoformat(text).timestamp() * 1000)
-
-
 def bundle(snapshot, now):
     return analyze_snapshot(snapshot, tracked_provider=None, estimator=lambda *_: Decimal(1), now_ms=now)
-
-
-def clean_service(owner, snapshot=None, *, now=DAY * 40, zone="UTC"):
-    service = report_service(owner, FakeSource(snapshot), now_ms=now, timezone_id=zone)
-    service.selection = replace(service.selection, warnings=())
-    return service
-
-
-def hourly_result(owner):
-    now = epoch("2026-10-30T12:00:00+00:00")
-    snapshot = history(((now - HOUR_MS, now - HOUR_MS // 2), (now - HOUR_MS // 4, now)))
-    root = replace(snapshot.root, updated_at_ms=now)
-    snapshot = replace(snapshot, root=root, sessions=(root,))
-    app = ReportApplication(lambda clock, progress: clean_service(owner, snapshot, now=clock), clock=lambda: now)
-    return app.execute(ReportRequest(ReportKind.COST_PER_HOUR)).to_json()
 
 
 class ActiveHourTests(unittest.TestCase):
