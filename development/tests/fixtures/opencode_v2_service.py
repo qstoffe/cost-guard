@@ -229,6 +229,7 @@ class CurrentV2Service:
             "ses_current_child": [],
         }
         self.context_messages: dict[str, list[dict]] = {}
+        self.before_catalog = None
 
     def __enter__(self):
         owner = self
@@ -275,6 +276,8 @@ class CurrentV2Service:
                     self._json({"location": {"directory": "/private/repo"}, "data": owner.shells if here else []})
                     return
                 if parsed.path == "/api/session":
+                    if owner.before_catalog is not None:
+                        owner.before_catalog(query)
                     cursor = query.get("cursor", [None])[0]
                     if cursor is None or cursor == "sessions:end" or (cursor.startswith("sessions:") and cursor[9:].isdigit()):
                         offset = 0 if cursor is None else len(owner.sessions) if cursor == "sessions:end" else int(cursor[9:]) - 1

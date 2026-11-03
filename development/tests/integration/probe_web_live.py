@@ -142,12 +142,27 @@ def main():
         time.sleep(2)
         latest, _ = get('/api/live', cookie=cookie)
         view = latest['values']['live']['view']
+        if latest['instance_id'] != state['instance_id'] or latest['sequence'] <= state['sequence']:
+            raise RuntimeError('probe_stream_continuity_failed')
+        for _, response in streams:
+            for _ in range(128):
+                line = response.readline()
+                if not line:
+                    raise RuntimeError('probe_stream_ended')
+                if line.startswith(b'id: '):
+                    instance, sequence = line.decode().strip()[4:].rsplit(':', 1)
+                    if instance != state['instance_id'] or int(sequence) <= state['sequence']:
+                        raise RuntimeError('probe_stream_continuity_failed')
+                    break
+            else:
+                raise RuntimeError('probe_stream_continuity_failed')
         if len(owners) != 1 or view['started_at_ms'] != start:
             raise RuntimeError('probe_duplicate_owner')
         print(json.dumps({'status': 'ok', 'source': view['source_label'], 'owners': len(owners),
             'streams': len(streams), 'rows': len(view['rows']),
             'accounts': len((view['accounts'] or {}).get('accounts', [])),
             'run_origin_preserved': True, 'sequence_advanced': latest['sequence'] > state['sequence'],
+            'stream_ids_verified': True,
             'shell_seconds': round(shell_seconds, 3), 'source_view_seconds': round(source_seconds, 3),
             'watch_cards': card_evidence}))
         if args.detail:
@@ -244,6 +259,9 @@ def main():
             for frame in traceback.extract_tb(host.failure.__traceback__)]}))
     if host.live.thread.is_alive() or host.thread.is_alive() or host.failure:
         raise RuntimeError('probe_shutdown_failed')
+    final = observations.snapshot(host)
+    if final['owned_threads'] or final['owned_processes']:
+        raise RuntimeError('probe_owned_workers_remaining')
     print('PASS owned live and HTTP workers closed; shared OpenCode untouched')
 
 

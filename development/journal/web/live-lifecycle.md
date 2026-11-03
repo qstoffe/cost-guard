@@ -14,6 +14,10 @@ FR 000555, investigated on Windows/Python 3.14, baseline
   Four-root slices require 16 fetches/32s in the same causal work model, retaining
   all 64 requests/prompts and the same revision checks. This is a controlled work
   model, not an observed 128-second real-source run or a provider latency promise.
+  A second actual-HTTP regression gates the redundant second catalog response:
+  baseline publication blocks, while the bounded shared bracket publishes all four
+  requests/prompts without needing that response. Both baseline-owner tests are RED
+  and both candidate tests GREEN, not just a modeled performance comparison.
 - Stop set flags then joined pools whose in-flight source reads could continue
   across whole trees. Real serial/control shutdown spent 4.968/6.030s in card-pool
   joins. A held real HTTP header/body read reproduced the mechanism deterministically:
@@ -21,6 +25,13 @@ FR 000555, investigated on Windows/Python 3.14, baseline
   Cross-thread `socket.shutdown` alone also remained RED on this Windows runtime.
   Cancellable raw read waits now preserve the original timeout and abort on owner
   cancellation. No unjoined executor/daemon replacement or longer deadline is used.
+- The first three candidate real runs also exposed idle account workers still in
+  their 100ms queue wait after host close. These were not accepted as leak-free
+  runs. A third RED/GREEN regression requires reaping them before return; account
+  close now joins against one shared 200ms budget. In-flight external-provider
+  HTTP keeps its existing bounded daemon contract, rather than extending host
+  shutdown or altering provider timeouts. The real probe now rejects any remaining
+  owned thread/process instead of printing PASS based only on Live/HTTP threads.
 - The probe's former `finally: host.close()` could replace the primary exception
   with a cleanup exception. The probe now retains both original objects in a group
   and exports their separate sanitized phase/classification and pre-cleanup state.

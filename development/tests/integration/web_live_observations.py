@@ -58,6 +58,8 @@ class ProbeObservations:
     @contextmanager
     def installed(self):
         from src.application.live import LiveRuntime
+        from src.accounts.acquisition import AccountAcquisition
+        from src.accounts.refresh_loop import AccountRefreshLoop
         from src.reports.service import ReportService
         from src.watch.today_ccost import WatchTodayCCost
         from src.watch.web_coordinator import WebWatchCoordinator
@@ -69,6 +71,7 @@ class ProbeObservations:
         with ExitStack() as stack:
             for owner, methods in (
                 (WebHost, ('close',)), (LiveRuntime, ('close', '_publish_frame')),
+                (AccountAcquisition, ('close',)), (AccountRefreshLoop, ('close',)),
                 (WebWatchCoordinator, ('_account_history', '_detail_capture', 'close')),
                 (CardWorkers, ('_capture', 'close')), (ReportJobs, ('tick', 'close')),
                 (EventHub, ('close',)), (LoopbackServer, ('server_close',)),

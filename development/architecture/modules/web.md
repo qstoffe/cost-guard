@@ -26,6 +26,9 @@ history, native periods, revision proof and CLI cadence are unchanged. Probe-onl
 phase observations and primary-plus-cleanup exceptions are development evidence,
 not a production telemetry or timeout/retry system. See
 [lifecycle findings](../../journal/web/live-lifecycle.md).
+Account close additionally reaps idle quota workers within one shared 200ms budget;
+it does not extend or wait out external-provider HTTP. The real probe rejects any
+remaining owned worker, not just a live serving/publisher thread.
 
 `src/web/events.py` publishes immutable full live/progress/terminal state with instance-bound IDs, 32-event/8 MiB replay and 2 MiB publications. `src/application/live_projection.py` allowlists Watch/tool/skill/context, subtotals and run/Today (not normal month/billing). `src/web/assets/live.js` owns one cookie-authenticated EventSource per tab. Gaps require HTTP resync; duplicates/older events cannot reset values; old instances require authorization. Terminal notices stop retry across gaps; offline retains evidence, never invents completion or launches servers.
 

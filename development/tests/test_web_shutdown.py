@@ -10,8 +10,11 @@ import threading
 import time
 import traceback
 import unittest
+from unittest.mock import patch
 
+from development.tests.fixtures.account_workers import Provider
 from development.tests.fixtures.watch_runtime import MutableSource, make_service
+from src.accounts.acquisition import AccountAcquisition
 from src.sources.opencode_v2_transport import V2Endpoint, V2HttpClient
 from src.watch.acquisition import LiveAcquisition
 from src.watch.web_coordinator import WebWatchCoordinator
@@ -39,6 +42,30 @@ class PendingSource(MutableSource):
 
 
 class WebShutdownTests(unittest.TestCase):
+    def test_close_joins_owned_idle_account_workers_before_returning(self):
+        idle = Event()
+        provider = Provider('fixture')
+        engine = AccountAcquisition((provider,), 'fixture')
+        original = engine._jobs.get
+        calls = []
+
+        def get(*args, **kwargs):
+            calls.append(1)
+            if len(calls) == 2:
+                idle.set()
+            return original(*args, **kwargs)
+
+        try:
+            with patch.object(engine._jobs, 'get', side_effect=get):
+                engine.start(1000)
+                self.assertTrue(idle.wait(1))
+                engine.close()
+                self.assertTrue(all(not worker.is_alive() for worker in engine._threads))
+        finally:
+            engine.close()
+            for worker in engine._threads:
+                worker.join(1)
+
     def test_stop_interrupts_pending_history_and_card_http_reads_before_join(self):
         self.pending_reads('headers', 1)
 
