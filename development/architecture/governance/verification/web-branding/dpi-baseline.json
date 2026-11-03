@@ -1,0 +1,14 @@
+{
+  "python": "pythonw.exe",
+  "windows": 26300,
+  "process_awareness": 0,
+  "thread_before": 0,
+  "thread_during": 0,
+  "window_awareness": 0,
+  "window_dpi": 96,
+  "virtualized_system_dpi": 96,
+  "actual_monitor_scale_percent": 150,
+  "icon_installed": false,
+  "menu_created": true,
+  "thread_after": 0
+}

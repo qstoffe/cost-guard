@@ -30,12 +30,13 @@ class ConnectionTests(unittest.TestCase):
         handler.deadline = None
         handler.headers = {}
         slots = BoundedSemaphore(4)
-        handler.server = SimpleNamespace(_streams=slots,
+        handler.server = SimpleNamespace(_streams=slots, origin='http://127.0.0.1:12345',
             lifecycle=SimpleNamespace(events=hub),
             session=SimpleNamespace(authenticated=lambda cookie: True))
         handler.wfile = io.BytesIO()
         handler.send_response_only = lambda code: None
-        handler.send_header = lambda key, value: None
+        headers = {}
+        handler.send_header = lambda key, value: headers.update({key: value})
         handler.end_headers = lambda: None
         elapsed = iter(range(0, 1000, 30))
 
@@ -46,6 +47,8 @@ class ConnectionTests(unittest.TestCase):
         self.assertIn(b': heartbeat', handler.wfile.getvalue())
         self.assertIn(b'event: terminal', handler.wfile.getvalue())
         self.assertEqual(4, slots._value, 'stream admission is released on exit')
+        self.assertIn('img-src http://127.0.0.1:12345/favicon-cg1.ico http://127.0.0.1:12345/favicon.ico;',
+                      headers['Content-Security-Policy'])
 
     def test_terminal_close_after_empty_read_still_reaches_browser(self):
         hub = EventHub('fixture')
@@ -58,7 +61,7 @@ class ConnectionTests(unittest.TestCase):
         handler = RequestHandler.__new__(RequestHandler)
         handler.deadline = None
         handler.headers = {}
-        handler.server = SimpleNamespace(_streams=BoundedSemaphore(4),
+        handler.server = SimpleNamespace(_streams=BoundedSemaphore(4), origin='http://127.0.0.1:12345',
             lifecycle=SimpleNamespace(events=hub),
             session=SimpleNamespace(authenticated=lambda cookie: True))
         handler.wfile = io.BytesIO()

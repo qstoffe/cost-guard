@@ -1,0 +1,48 @@
+{
+  "mode": "product",
+  "pid": 2756,
+  "owner": {
+    "awareness": 2,
+    "pmv2": true
+  },
+  "thread": {
+    "awareness": 2,
+    "pmv2": true
+  },
+  "ownerDpi": 144,
+  "captures": [
+    {
+      "rectPhysical": [
+        100,
+        100,
+        370,
+        176
+      ],
+      "dpi": 144,
+      "context": {
+        "awareness": 2,
+        "pmv2": true
+      },
+      "capture": {
+        "file": "menu-candidate-capture-menu.png",
+        "widthPhysical": 270,
+        "heightPhysical": 76,
+        "method": "screen BitBlt CAPTUREBLT exact owned rectangle, no rescaling"
+      },
+      "printWindow": {
+        "file": "menu-candidate-capture-menu-print.png",
+        "widthPhysical": 270,
+        "heightPhysical": 76,
+        "method": "PrintWindow owned HWND"
+      }
+    }
+  ],
+  "menuOnly": true,
+  "foregroundRestored": true,
+  "errors": [],
+  "cleanup": {
+    "iconRemoved": true,
+    "windowDestroyed": true,
+    "menuDestroyed": true
+  }
+}
