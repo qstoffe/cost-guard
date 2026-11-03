@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v80.132, 2026-11-03), the supported distribution.
+Use **current `main`** (v80.133, 2026-11-03), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -361,7 +361,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.132 (2026-11-03):** Web Models: finer work-based loading progress, separate history stages and bounded updates.
+**v80.133 (2026-11-03):** Lower verification overhead: advisory product-prose budgets, behavioral launcher/startup checks and coordinated Windows test fixtures. Runtime behavior is unchanged.
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 
@@ -384,3 +384,5 @@ python development/tools/collect_diagnostics.py
 
 Hosted/web AI runs Quick + validation; local sessions run Full + validation + live checks. No local product-release ZIP is routinely generated; current `main` remains the supported source distribution. Diagnostics bundles are separate troubleshooting artifacts.
 `--working-tree` excludes root `.vs/` generated IDE state without reading or deleting it. It does not ignore nested `.vs/` directories or arbitrary project files. Without that flag, an explicit distributable containing root `.vs/` fails validation; normal path, size, encoding, security and Python checks remain active.
+
+Only this public product README, `VERSION_HISTORY.md` and `docs/web-beta.md` have advisory prose-size warnings. Their 2 MiB artifact cap and all other source/configuration/agent-context safeguards remain hard. Historical release information stays in place; a prose warning needs no approval or unrelated shortening.

@@ -1,16 +1,18 @@
 from __future__ import annotations
 
 import io
+from contextlib import ExitStack, redirect_stderr, redirect_stdout
 import os
 import subprocess
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 from pathlib import Path
 
 from src.presentation import StartupProgress
-from src.version import DISPLAY_VERSION, VERSION
+from src.version import DISPLAY_VERSION, RELEASE_DATE, VERSION
 
 ROOT = Path(__file__).resolve().parents[2]
 ENTRYPOINT = ROOT / "cost-guard.py"
@@ -63,9 +65,22 @@ class BootstrapQuickTests(unittest.TestCase):
         self.assertEqual(f"Cost Guard {DISPLAY_VERSION}", proc.stdout.strip())
 
     def test_entrypoint_guards_minimum_python_before_bootstrap(self) -> None:
-        text = ENTRYPOINT.read_text(encoding="utf-8")
-        self.assertIn("sys.version_info < (3, 11)", text)
-        self.assertLess(text.index("sys.version_info"), text.index("from src.bootstrap import main"))
+        import runpy
+
+        # Execute the entry guard as an unsupported interpreter. A runtime import
+        # would fail this test, even if its source spelling/placement changes.
+        original_import = __import__
+        def guarded_import(name, *args, **kwargs):
+            if name.startswith("src"):
+                self.fail("Unsupported Python reached a runtime integration")
+            return original_import(name, *args, **kwargs)
+
+        output = io.StringIO()
+        with patch.object(sys, "version_info", (3, 10)), patch("builtins.__import__", guarded_import), \
+                redirect_stderr(output), self.assertRaises(SystemExit) as exit:
+            runpy.run_path(str(ENTRYPOINT), run_name="__main__")
+        self.assertEqual(1, exit.exception.code)
+        self.assertIn("Python 3.11", output.getvalue())
 
     def test_help_documents_python_cli_shapes(self) -> None:
         proc = run_python(str(ENTRYPOINT), "--help")
@@ -74,16 +89,52 @@ class BootstrapQuickTests(unittest.TestCase):
         self.assertIn("YYYY-MM-DD:YYYY-MM-DD", proc.stdout)
 
     def test_watch_runtime_is_wired_to_single_startup_dashboard(self) -> None:
-        bootstrap = (ROOT / "src/bootstrap.py").read_text(encoding="utf-8")
-        self.assertIn("render_initializing", bootstrap)
-        self.assertIn("initial_cycle = coordinator.initialize_with_recovery(watch_renderer, before_recovery=progress.stop)", bootstrap)
-        self.assertEqual(1, bootstrap.count("watch_renderer.render_initializing("))
-        self.assertIn("run_forever(watch_renderer, initial_cycle=initial_cycle)", bootstrap)
+        from src import bootstrap
+
+        runtime = self.bootstrap_runtime()
+        renderer = runtime.WatchRenderer.return_value
+        coordinator = runtime.WatchCoordinator.return_value
+        with redirect_stdout(io.StringIO()):
+            result = bootstrap.main(["--watch"])
+        self.assertEqual(0, result)
+        renderer.render_initializing.assert_called_once()
+        coordinator.initialize_with_recovery.assert_called_once_with(
+            renderer, before_recovery=runtime.StartupProgress.return_value.stop)
+        coordinator.run_forever.assert_called_once_with(
+            renderer, initial_cycle=coordinator.initialize_with_recovery.return_value)
+        runtime.ReportRenderer.assert_not_called()
 
     def test_one_shot_header_is_rendered_once_with_selected_source(self) -> None:
-        bootstrap = (ROOT / "src/bootstrap.py").read_text(encoding="utf-8")
-        self.assertNotIn('print(f"{PRODUCT_NAME} {DISPLAY_VERSION} ({RELEASE_DATE})")', bootstrap)
-        self.assertIn("ReportRenderer(config).render(projection)", bootstrap)
+        from src import bootstrap
+
+        runtime = self.bootstrap_runtime()
+        output = io.StringIO()
+        with redirect_stdout(output):
+            result = bootstrap.main([])
+        self.assertEqual(0, result)
+        self.assertEqual("", output.getvalue(), "Only the report renderer owns report output")
+        runtime.ReportRenderer.return_value.render.assert_called_once_with(
+            runtime.ReportService.return_value.build.return_value)
+        self.assertIs(runtime._select_or_wait.return_value,
+                      runtime.ReportService.call_args.kwargs["selection"])
+        runtime.WatchRenderer.assert_not_called()
+        self.assertEqual(f"Cost Guard {DISPLAY_VERSION} ({RELEASE_DATE}) — Report",
+                         runtime.StartupProgress.call_args.kwargs["heading"])
+
+    def bootstrap_runtime(self):
+        """Replace I/O boundaries, not the composition path being exercised."""
+        from src import bootstrap
+
+        stack = ExitStack()
+        self.addCleanup(stack.close)
+        names = ("load_configuration", "_select_or_wait", "CacheDatabase", "CacheRepository",
+                 "GitHubCopilotPricingProvider", "_account_providers", "_model_availability_source",
+                 "ReportService", "WatchCoordinator", "WatchRenderer", "ReportRenderer", "StartupProgress")
+        runtime = SimpleNamespace(**{name: stack.enter_context(patch.object(bootstrap, name)) for name in names})
+        runtime.load_configuration.return_value.values = {"openCode": {"source": "auto"}}
+        runtime._account_providers.return_value = ()
+        runtime._select_or_wait.return_value = SimpleNamespace(selected="v2", source=Mock())
+        return runtime
 
     def test_startup_progress_supports_runtime_and_explicit_percentages(self) -> None:
         stream = io.StringIO()
@@ -126,8 +177,6 @@ class BootstrapQuickTests(unittest.TestCase):
         progress.update("Analyzing", 57)
         progress.stop()
         self.assertEqual("Cost Guard: Analyzing\n", quiet.getvalue())
-        bootstrap = (ROOT / "src/bootstrap.py").read_text(encoding="utf-8")
-        self.assertIn('StartupProgress(mode=startup_mode(command), heading=mode_heading(startup_mode(command)))', bootstrap)
 
 
 if __name__ == "__main__":

@@ -1,8 +1,11 @@
 """CI evidence accounting and fail-closed workstation UI boundary; no UI invocation."""
 import contextlib
+import argparse
 import io
 import json
 from pathlib import Path
+import re
+import shlex
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -14,17 +17,51 @@ from development.tools import ci_web_beta, run_tests
 class CiEvidenceTests(unittest.TestCase):
     def test_workflow_assigns_shared_work_once_without_native_browser_tools(self):
         workflow = (ci_web_beta.ROOT / ".github/workflows/web-beta.yml").read_text()
-        common, native = workflow.split("  native:\n")
-        self.assertIn("runs-on: ubuntu-24.04", common)
-        self.assertEqual(1, workflow.count("ci_web_beta.py regression --scope common"))
-        self.assertEqual(1, workflow.count("ci_web_beta.py browser --scope common"))
-        self.assertIn("playwright install --with-deps chromium", common)
-        self.assertIn("max-parallel: 2", native)
-        self.assertIn("os: [windows-2025, macos-15, macos-15-intel]", native)
-        for forbidden in ("setup-node", "playwright", "validate_package", "--scope common", "--suite full"):
+        equivalent = workflow.replace('common:', 'shared-checks:').replace('native:', 'platform-checks:')
+        equivalent = equivalent.replace('[windows-2025, macos-15, macos-15-intel]',
+                                        '[macos-15-intel, windows-2025, macos-15]')
+        equivalent = re.sub(r'(ci_web_beta.py) (\S+) --scope (\S+)', r'\1 --scope=\3 \2', equivalent)
+        equivalent = re.sub(r'(?m)^( +)', lambda match: match[0] * 2, equivalent)
+        for text in (workflow, equivalent):
+            self.assert_workflow_topology(text)
+        for broken in (workflow.replace('native-regression --scope native', 'regression --scope common'),
+                       workflow.replace('cancel-in-progress: true', 'cancel-in-progress: false'),
+                       workflow.replace('os: [windows-2025, macos-15, macos-15-intel]', 'os: [windows-2025]')):
+            with self.assertRaises(AssertionError):
+                self.assert_workflow_topology(broken)
+
+    def assert_workflow_topology(self, workflow):
+        # A narrow static topology guard is useful here. Ignore indentation width,
+        # matrix order, flag spelling/order, step names and job-local identifiers.
+        jobs = workflow.split('jobs:', 1)[1]
+        indent = min(len(line) - len(line.lstrip()) for line in jobs.splitlines()
+                     if line.strip() and not line.lstrip().startswith('#'))
+        blocks = re.split(r'(?m)^ {' + str(indent) + r'}[\w-]+:\s*$', jobs)[1:]
+        self.assertEqual(2, len(blocks))
+        common = next(block for block in blocks if re.search(r'runs-on:\s*[\'\"]?ubuntu-', block))
+        native = next(block for block in blocks if re.search(r'matrix\s*:', block))
+        commands = []
+        for block, scope in ((common, 'common'), (native, 'native')):
+            for line in block.splitlines():
+                if 'run:' not in line or 'ci_web_beta.py' not in line:
+                    continue
+                tokens = shlex.split(line.split('run:', 1)[1].strip().strip('\'\"'))
+                parser = argparse.ArgumentParser()
+                parser.add_argument('phase')
+                parser.add_argument('--scope')
+                command = parser.parse_args(tokens[tokens.index('development/tools/ci_web_beta.py') + 1:])
+                self.assertEqual(scope, command.scope)
+                commands.append((scope, command.phase))
+            self.assertRegex(block, r'CI_JOB_STATUS:\s*[\'\"]?\$\{\{\s*job\.status\s*\}\}')
+        self.assertCountEqual([('common', phase) for phase in ('regression', 'browser', 'summary')] +
+                              [('native', phase) for phase in ('native-regression', 'native', 'summary')], commands)
+        for forbidden in ('setup-node', 'playwright', 'validate_package', '--suite full'):
             self.assertNotIn(forbidden, native)
-        self.assertIn("native-regression --scope native", native)
-        self.assertEqual(2, workflow.count("CI_JOB_STATUS: ${{ job.status }}"))
+        self.assertLessEqual(int(re.search(r'max-parallel:\s*(\d+)', native)[1]), 2)
+        self.assertEqual({'windows-2025', 'macos-15', 'macos-15-intel'},
+                         set(re.findall(r'windows-\d+|macos-[\d]+(?:-intel)?', native)))
+        self.assertRegex(common, r'playwright\s+install\s+--with-deps\s+chromium')
+        self.assertRegex(workflow, r'cancel-in-progress:\s*true\b')
 
     def test_native_facts_never_discover_node(self):
         with patch.object(ci_web_beta.subprocess, "run", return_value=SimpleNamespace(stdout="version")) as run, \

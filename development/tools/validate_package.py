@@ -141,6 +141,8 @@ def file_kind(root: Path, path: Path) -> str:
         return "rootReadme"
     if rp == "VERSION_HISTORY.md":
         return "versionHistory"
+    if rp == "docs/web-beta.md":
+        return "webUserGuide"  # Product prose only; never agent instructions/references.
     if rp == "config/default-config.jsonc":
         return "defaultConfig"
     if path.suffix == ".py":
@@ -243,9 +245,12 @@ def check_budgets(root: Path, results: Results) -> None:
             results.fail("file budgets", f"missing budget class {kind} for {rp}")
             continue
         hard = spec.get("hardBytes")
+        warning = spec.get("warningBytes")
         design = spec.get("designBytes")
         if isinstance(hard, int) and size > hard:
             results.fail(f"{kind} hard cap", f"{rp}: {size} > {hard} bytes")
+        elif isinstance(warning, int) and size > warning:
+            results.warn(f"{kind} prose budget", f"{rp}: {size} > {warning} bytes (advisory)")
         elif isinstance(design, int) and size > design:
             results.warn(f"{kind} design budget", f"{rp}: {size} > {design} bytes")
     results.ok("machine-enforced file budgets checked")

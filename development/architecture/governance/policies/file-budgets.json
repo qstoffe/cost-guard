@@ -7,13 +7,16 @@
     },
     "rootReadme": {
       "designBytes": 24576,
-      "hardBytes": 32768
+      "warningBytes": 32768
     },
     "versionHistory": {
-      "hardBytes": 32768,
+      "warningBytes": 32768,
       "majorMaxBullets": 10,
       "maxExplicitMajors": 5,
       "summaryMaxBytes": 4096
+    },
+    "webUserGuide": {
+      "warningBytes": 65536
     },
     "defaultConfig": {
       "designBytes": 24576,

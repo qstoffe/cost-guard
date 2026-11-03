@@ -9,6 +9,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from development.tests.fixtures.windows_shell import CONSOLE_STUB
 from src.launcher_feedback import release_launcher_status
 from src.presentation.progress import StartupProgress
 
@@ -16,12 +17,6 @@ ROOT = Path(__file__).resolve().parents[2]
 
 # Discovery/argument tests do not own cold Roslyn compilation or Win32 Ctrl+C.
 # The real console boundary is exercised by the native launcher/Watch probe.
-CONSOLE_STUB = (
-    "class CostGuardLauncherConsole { static [bool] SetConsoleCtrlHandler("
-    "[IntPtr]$handler, [bool]$add) { return $true } }\n"
-)
-
-
 class LauncherFeedbackTests(unittest.TestCase):
     def test_all_eight_launchers_have_whitespace_free_names_without_aliases(self):
         expected = {

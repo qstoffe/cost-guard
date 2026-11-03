@@ -11,6 +11,39 @@ Milestone-40 audit retains isolated files, responsibility-owned fixtures and har
 
 ## Evidence
 
+### Focused verification cleanup — FR 000553 (2026-11-03)
+
+The former public README/release-history/Web-guide prose caps now warn at their
+original thresholds; the universal artifact cap, other text/source/config caps,
+Toolkit/agent instruction/context enforcement and mirrored development guide are
+unchanged. Broken-package tests cross all three prose thresholds successfully
+and still reject oversized instructions, configuration/source, arbitrary Markdown
+and universal artifacts. Dormant history-structure rules remain dormant.
+
+Foundation tests execute the minimum-Python guard and mocked-I/O bootstrap path,
+checking one initial Watch dashboard, recovered-cycle handoff and one-shot output
+ownership without pinning local variable names or expressions. Hidden Windows
+shells execute old/minimum Python selection, multiple-candidate fallback,
+launcher arguments, shell fallback and exit propagation. The status fixture uses
+explicit readiness/release, a 30s cmd/cold-shell startup budget and a separate 10s
+join, plus a 60s emergency fixture lifetime. Published child identities support
+bounded cleanup on failed readiness; normal handoff verifies actual child exit.
+Product readiness and discovery deadlines are unchanged; no rerun/skip is added.
+
+CI retains narrow static topology/security checks but accepts renamed jobs,
+different indentation, matrix ordering and equivalent argument formatting. It
+still rejects misplaced common work, lost native architectures or cancellation.
+Detailed current execution results stay in the delivery PR/CI, not a new tracked
+reporting commit. The [current evidence route](../architecture/governance/verification/web-beta-ci.md)
+records the remaining cumulative-PR-path limitation. No evidence cache or phase
+skip is implemented, and no earlier-head result is relabelled as final-head PASS.
+
+No runtime layer/architecture diagram changes are needed. Additional live probes
+are risk-scoped: shell/validator work is not evidence for unrelated providers,
+history, native tray/browser appearance or consumer desktop acceptance. Explicit
+live/platform acceptance remains required when in scope. No new process manual,
+framework, numerical test-removal target or instruction-limit exception is added.
+
 ### Runner and retained critical risks
 
 `development/tools/run_tests.py` defaults to four isolated workers, Quick's 25-second and Full's 240-second per-file bounds. Hosted Windows CI selects one worker to isolate shell-startup fixtures from cross-file contention; no deadline/assertion changes. Its JSON report distinguishes named skips, failures/errors and incomplete known-passed counts. A method inventory is not an executed count. CI supplies Node; Chromium smoke remains separate from DOM substitutes. `test_ci_web_beta.py` covers hosted-only admission and sanitized reporting.
@@ -51,7 +84,7 @@ Reproduce with the committed `.github/workflows/web-beta.yml`: real hosted full 
 - NSApplication is process-global: test a second HTTP-fault case in a fresh bounded process after native readiness, not another adapter or a pre-install HTTP fault.
 - Wait for owned identity retirement before reading a Windows record being removed, avoiding fixture read handles during unlink.
 - Darwin may report ENOTCONN at a raw HTTP fixture's write-half-close after the server has already rejected the request. Tolerate only that shutdown race, then read/assert the actual response bytes; do not swallow other errors or replace wire-limit/security assertions with an assumed rejection. Deterministic canary verifies both retained response and EPERM propagation. Observed in [run 40413855775](https://github.com/qstoffe/cost-guard/actions/runs/40413855775).
-- Validate README's hard byte budget under CRLF too; shorten prose, never raise the cap to admit a checkout-conversion failure.
+- Historical README CRLF hard-cap failures motivated prose shortening. FR 000553 supersedes only the three named product-prose caps with advisory warnings; source/config/artifact and agent-context caps remain hard.
 
 Actions raw-log download through the installed transport returned HTTP 401; it was not bypassed with another identity. Supported Checks annotations supply sanitized totals/failure/skip notices, with bounded JSON artifacts. Keep notices below GitHub's observed truncation boundary by splitting totals and failures. Failed/cancelled runs are never PASS. Consumer Windows, physical clicks/status visibility, Finder/Gatekeeper, default-browser integration and accessibility remain separate manual acceptance.
 

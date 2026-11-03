@@ -22,7 +22,9 @@ class WindowsWebActivityTests(unittest.TestCase):
                 source = source.replace("[Environment]::GetFolderPath('LocalApplicationData')", '$env:LOCALAPPDATA')
                 (web / 'windows_launch.ps1').write_text(source, encoding='utf-8-sig')
                 (root / 'cost-guard-web.py').write_text(f'''
-import time
+import sys, time
+if sys.argv[1:] != ['--launch-windows']:
+    raise SystemExit(99)
 print('Cost Guard startup: Checking safe configuration (0.0s elapsed)', flush=True)
 print('untrusted raw exception https://private/#secret', flush=True)
 time.sleep(0.4)
