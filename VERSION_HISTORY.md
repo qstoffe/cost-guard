@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.136 — 2026-11-03
+
+- Web Watch: bounded four-root Daily batches share source catalog proofs; Stop cancels owned V2 reads before joining capture/history/detail workers. Read timeouts, truthful Daily values and the ten-second host bound are unchanged. Live probes retain separate primary/cleanup failures and bounded phase evidence.
+
 ## v80.135 — 2026-11-03
 
 - Watch: operational failures in optional model-notice SQLite history no longer terminate polling. Short-timeout, backed-off retries retain in-memory discoveries, report sanitized degradation/recovery and preserve first-sighting evidence; SQL/schema/programming defects remain fatal.

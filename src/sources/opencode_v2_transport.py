@@ -11,6 +11,7 @@ from __future__ import annotations
 import base64
 import http.client
 import json
+import select
 import socket
 import threading
 import time
@@ -83,6 +84,43 @@ def _decode_event_data(text: str) -> Mapping[str, Any] | None:
     return value if isinstance(value, Mapping) else None
 
 
+class _ReadSocket(socket.socket):
+    """Poll cancellation without shortening or extending the source read timeout.
+
+    Windows does not reliably wake a timed buffered recv when another thread
+    calls shutdown. Keep HTTPResponse's normal buffering, but make its raw read
+    wait cancellable. This owns the detached socket, never a duplicated handle.
+    """
+    def __init__(self, sock, cancelled):
+        timeout = sock.gettimeout()
+        super().__init__(sock.family, sock.type, sock.proto, fileno=sock.detach())
+        self.settimeout(timeout)
+        self.cancelled = cancelled
+
+    def recv_into(self, buffer, nbytes=0, flags=0):
+        timeout = self.gettimeout()
+        deadline = None if timeout is None else time.monotonic() + timeout
+        while not self.cancelled():
+            remaining = None if deadline is None else deadline - time.monotonic()
+            if remaining is not None and remaining <= 0:
+                raise TimeoutError()
+            if select.select([self], [], [], min(0.1, remaining) if remaining is not None else 0.1)[0]:
+                return super().recv_into(buffer, nbytes, flags)
+        raise ConnectionAbortedError()
+
+
+class _ReadConnection(http.client.HTTPConnection):
+    def __init__(self, *args, cancelled, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.cancelled = cancelled
+
+    def connect(self):
+        if self.cancelled():
+            raise ConnectionAbortedError()
+        super().connect()
+        self.sock = _ReadSocket(self.sock, self.cancelled)
+
+
 class V2HttpClient:
     """Plain loopback HTTP; never routed through ambient proxies (http.client has none)."""
 
@@ -100,6 +138,7 @@ class V2HttpClient:
         self._idle: list[http.client.HTTPConnection] = []
         self._lock = threading.Lock()
         self._generation = 0
+        self._cancelled = False
         self._streams: set[http.client.HTTPConnection] = set()
         self._stream_stops: dict[http.client.HTTPConnection, threading.Event] = {}
         weakref.finalize(self, _close_idle, self._idle, self._lock)
@@ -129,7 +168,7 @@ class V2HttpClient:
         return target
 
     def _new_connection(self, timeout: float) -> http.client.HTTPConnection:
-        return http.client.HTTPConnection(self._host, self._port, timeout=timeout)
+        return _ReadConnection(self._host, self._port, timeout=timeout, cancelled=lambda: self._cancelled)
 
     def close(self) -> None:
         """Close idle keep-alive connections; later requests reconnect."""
@@ -137,6 +176,16 @@ class V2HttpClient:
             self._generation += 1
         _close_idle(self._idle, self._lock)
         self.close_events(intentional=False)
+
+    def cancel(self) -> None:
+        """Retire this owner's reads; never stop or mutate the shared service.
+
+        The reading thread alone closes its response/connection after the raw
+        read observes cancellation, including detached HTTP/1.0 response bodies.
+        """
+        with self._lock:
+            self._cancelled = True
+        self.close()
 
     def close_events(self, *, intentional: bool = True) -> None:
         """Wake blocked SSE readers without stopping the shared service."""
@@ -159,6 +208,8 @@ class V2HttpClient:
     def _get(self, target: str, *, allow_reuse: bool = True) -> tuple[int, bytes]:
         timeout = self.request_timeout() if self.request_timeout is not None else self.timeout_seconds
         with self._lock:
+            if self._cancelled:
+                raise ConnectionAbortedError()
             generation = self._generation
             connection = self._idle.pop() if allow_reuse and self._idle else None
         reused = connection is not None
@@ -175,7 +226,7 @@ class V2HttpClient:
             result = response.status, response.read()
         except _STALE_CONNECTION_ERRORS:
             connection.close()
-            if not reused:
+            if not reused or self._cancelled:
                 raise
             self._count("stale_retries")
             return self._get(target, allow_reuse=False)  # the service closed an idle socket
@@ -185,7 +236,7 @@ class V2HttpClient:
         with self._lock:
             self.stats["requests"] += 1
             self.stats["request_ms"] += round((time.perf_counter() - started) * 1000, 3)
-            if generation == self._generation and len(self._idle) < _MAX_IDLE_CONNECTIONS and not response.will_close:
+            if not self._cancelled and generation == self._generation and len(self._idle) < _MAX_IDLE_CONNECTIONS and not response.will_close:
                 self._idle.append(connection)
                 return result
         connection.close()
@@ -209,6 +260,8 @@ class V2HttpClient:
         if stopped.is_set():
             return
         connection = self._new_connection(self.timeout_seconds)
+        generation = self._generation
+        connection.cancelled = lambda: self._cancelled or stopped.is_set() or generation != self._generation
         with self._lock:
             self._streams.add(connection)
             self._stream_stops[connection] = stopped

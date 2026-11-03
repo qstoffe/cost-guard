@@ -17,6 +17,7 @@ from .coordinator import WatchCoordinator, WatchCycle
 from .today_ccost import WatchTodayCCost
 from .running import running_prompts
 from .source_status import SourceStatus, SOURCE_CONFIRM_SECONDS
+from .source_reads import SourceReads, cancel_source
 
 
 class WebWatchCoordinator(WatchCoordinator):
@@ -36,6 +37,7 @@ class WebWatchCoordinator(WatchCoordinator):
         self.history_revision = None
         self.detail_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cost-guard-detail")
         self.detail_job = None
+        self.reads = SourceReads()
 
     def _record_refresh_duration(self, seconds):
         if not self.card_timing_observed:
@@ -62,7 +64,8 @@ class WebWatchCoordinator(WatchCoordinator):
         service = None
         try:
             service = self.history_factory(now_ms)
-            details.tick(service, unavailable=unavailable)
+            with self.reads.using(service.source):
+                details.tick(service, unavailable=unavailable)
         except (SourceError, PricingUnavailableError):
             details.tick(None, unavailable=True)
         finally:
@@ -86,14 +89,19 @@ class WebWatchCoordinator(WatchCoordinator):
         service = None
         try:
             service = self.history_factory(now_ms)
-            service.enable_watch_accounts(record_evidence=False, history=self.daily_history)
-            service.project_watch_accounts(snapshots)  # Establish provider period requirements before admission.
-            today = WatchTodayCCost(service.timezone_id)
-            today.schedule_history(service, sessions, now_ms, active_root_ids=active_roots, live_root_ids=active_roots)
-            while today.history_pending and not self._closed:
-                today.advance_history(service, now_ms, batch_size=1)
-            service.project_watch_accounts(snapshots)
-            return None if self._closed else (service.watch_account_history(), service.project_watch_today())
+            with self.reads.using(service.source):
+                service.enable_watch_accounts(record_evidence=False, history=self.daily_history)
+                service.project_watch_accounts(snapshots)  # Establish provider period requirements before admission.
+                today = WatchTodayCCost(service.timezone_id)
+                today.schedule_history(service, sessions, now_ms, active_root_ids=active_roots, live_root_ids=active_roots)
+                while today.history_pending and not self._closed:
+                    # Share authoritative V2 brackets across the existing bounded
+                    # four-root slice instead of relisting all history per root.
+                    today.advance_history(service, now_ms)
+                if self._closed:
+                    return None
+                service.project_watch_accounts(snapshots)
+                return service.watch_account_history(), service.project_watch_today()
         except (SourceError, PricingUnavailableError) as error:
             return error
         finally:
@@ -120,7 +128,7 @@ class WebWatchCoordinator(WatchCoordinator):
             elif value is not None:
                 self.history_due_ms = 0
             self.history_job = None
-        if self.history_job is None and now_ms >= self.history_due_ms:
+        if not self._closed and self.history_job is None and now_ms >= self.history_due_ms:
             self.history_due_ms = now_ms + 60_000
             self.history_job = self.history_pool.submit(self._account_history,
                 observation.sessions, tuple(self.accounts.snapshots), now_ms,
@@ -161,7 +169,14 @@ class WebWatchCoordinator(WatchCoordinator):
         self._last_projection = frame
         return frame
 
+    def cancel(self):
+        self._closed = True
+        cancel_source(self.source)
+        self.reads.cancel()
+        self.card_workers.cancel()
+
     def close(self):
+        self.cancel()
         super().close()
         try:
             self.card_workers.close()

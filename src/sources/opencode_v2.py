@@ -39,7 +39,7 @@ from .discovery import (
     read_v2_service_registration,
 )
 from .errors import (FailureCode, SourceConcurrentChangeError, SourceDataError, SourceError,
-                     SourceSchemaError, SourceUnavailableError, compatibility_failure)
+                     SourceSchemaError, SourceUnavailableError, compatibility_failure, transport_failure)
 from .connectivity import SourceConnectivity, observed
 from .model_availability import settled_v2_model_ids
 from .opencode_v2_normalization import (
@@ -146,6 +146,7 @@ class OpenCodeV2Source:
         self._connectivity = SourceConnectivity("v2")
         self.read_recovery = None
         self._connection_lock = threading.RLock()
+        self._reads_cancelled = threading.Event()
         self._timeout_seconds = timeout_seconds
         self._endpoint: V2Endpoint | None = None
         self._endpoint_marker: tuple[int, ...] | None = None
@@ -218,11 +219,16 @@ class OpenCodeV2Source:
     def _client(self) -> V2HttpClient:
         """One client (and keep-alive connection per thread) per registered endpoint."""
         with self._connection_lock:
+            if self._reads_cancelled.is_set():
+                raise transport_failure(ConnectionAbortedError(), phase="shutdown")
             endpoint = self._current_endpoint()
             client = self._http
             if client is None or client.endpoint is not endpoint:
                 client = self._http = V2HttpClient(endpoint, timeout_seconds=self._timeout_seconds,
-                                                   stats=self._diagnostics["transport"])
+                                                    stats=self._diagnostics["transport"])
+            if self._reads_cancelled.is_set():
+                client.cancel()
+                raise transport_failure(ConnectionAbortedError(), phase="shutdown")
             client.request_timeout = self.read_recovery.request_timeout if self.read_recovery is not None else None
             return client
 
@@ -592,6 +598,15 @@ class OpenCodeV2Source:
     def close_changes(self) -> None:
         if self._http is not None:
             self._http.close_events()
+
+    def cancel_reads(self) -> None:
+        self._reads_cancelled.set()
+        if self._http is not None:
+            self._http.cancel()
+
+    def close_reads(self) -> None:
+        if self._http is not None:
+            self._http.close()
 
     def iter_changes_until(self, stop_event: threading.Event) -> Iterator[SourceChange]:
         """Register cancellation before the first stream connection can start."""

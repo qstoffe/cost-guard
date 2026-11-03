@@ -13,6 +13,23 @@ Status: current
 
 `src/web/host.py` owns shutdown of HTTP/jobs and one `src/application/live.py` thread; GUI run/close stays on main. Composition transfers the Watch service to `src/watch/acquisition.py`; tabs only read detached values. Live persists without tabs, preserving engine-start origin and independent account cadence. Finite reports never borrow/close that context. Unexpected faults reach main RuntimeErrors (managed logs outside checkout); children monitor their exact parent sentinel. OpenCode is never stopped.
 
+LiveRuntime requests optional driver cancellation before joining. Web's
+`watch/source_reads.py` tracks only its isolated in-flight sources; cancellation
+retires their V2 transports before pool joins, including late service admission.
+V2 buffered reads use a cancellation-aware raw socket wait because cross-thread
+socket shutdown alone did not wake a timed Windows read in the causal fixture.
+Original per-read timeouts remain intact; idle connections and response bodies
+remain owner-closed, without a daemon escape or shared-service stop. Daily history
+uses the existing four-root slices and authoritative shared V2 brackets, rather
+than one complete catalog fetch per root. Finished-plan publication, retained
+history, native periods, revision proof and CLI cadence are unchanged. Probe-only
+phase observations and primary-plus-cleanup exceptions are development evidence,
+not a production telemetry or timeout/retry system. See
+[lifecycle findings](../../journal/web/live-lifecycle.md).
+Account close additionally reaps idle quota workers within one shared 200ms budget;
+it does not extend or wait out external-provider HTTP. The real probe rejects any
+remaining owned worker, not just a live serving/publisher thread.
+
 `src/web/events.py` publishes immutable full live/progress/terminal state with instance-bound IDs, 32-event/8 MiB replay and 2 MiB publications. `src/application/live_projection.py` allowlists Watch/tool/skill/context, subtotals and run/Today (not normal month/billing). `src/web/assets/live.js` owns one cookie-authenticated EventSource per tab. Gaps require HTTP resync; duplicates/older events cannot reset values; old instances require authorization. Terminal notices stop retry across gaps; offline retains evidence, never invents completion or launches servers.
 
 `watch/running.py` aggregates distinct canonical in-progress focal prompts once per

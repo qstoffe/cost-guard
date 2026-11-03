@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v80.135, 2026-11-03), the supported distribution.
+Use **current `main`** (v80.136, 2026-11-03), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -361,7 +361,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.133 (2026-11-03):** Lower verification overhead: advisory product-prose budgets, behavioral launcher/startup checks and coordinated Windows test fixtures. Runtime behavior is unchanged.
+**v80.136 (2026-11-03):** Web Watch batches Daily acquisition without repeated per-root catalog scans and cancels its own pending source reads during shutdown. Existing data semantics and time limits are unchanged.
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

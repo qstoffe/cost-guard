@@ -354,6 +354,18 @@ Stream writes retain a two-second timeout and ten-second heartbeats, without a f
 
 `test_web_live.py` covers canonical live/CLI parity, lifecycle/source recovery, hints/overflow, account-only publication, midnight/DST/partial pricing, detached exports, replay/gap/instance handling, actual HTTP stream admission/terminal delivery, fatal fault ownership and stop beside an occupied finite-report process. Its optional JavaScript VM checks safe presentation and ordering without automating a browser. `development/tests/integration/probe_web_live.py` is an opt-in, read-only real-source check (no UI/model calls): two streams, one acquisition owner, retained run origin and owned shutdown. Native visual/browser/macOS acceptance is not claimed by these probes.
 
+For Daily/shutdown investigations, run `probe_web_live.py --watch-cards --daily --detail`
+from `development/tests/integration/` using the repository's Python runtime. Add
+`--reports` for finite-report competition. The probe records bounded monotonic
+acquisition/projection/publication, HTTP and cleanup phases, pending work and owned
+resource counts without source identities or credentials. Primary and cleanup
+failures are retained together, never replaced by a green rerun. Daily still has
+its 120-second wait, HTTP requests three seconds and host join ten seconds. Stop
+cancels the host's own V2 capture/history/detail reads before joining; it neither
+stops OpenCode nor converts delayed/missing Daily data into empty success.
+`probe_web_repeat.py --cycles 10 [--competing]` is an explicit synthetic lifecycle
+campaign, not a new recurring CI or live-provider loop.
+
 ## Windows detached launcher and tray
 
 Double-click `windows/Beta/Cost-Guard-Web.cmd`, or invoke it from an existing console. The short-lived console shows one **Starting CostGuard web...** label and updates only its spinner cell while PowerShell locates Python 3.11+, checks configuration/native support, waits for validated host readiness and requests the registered default browser. No PowerShell progress panel or successful stage transcript is drawn. Redirected/noninteractive output is one plain startup line; failure feedback remains actionable after animation stops. Source ZIPs retain relative-path support, including spaces/Unicode. No packages, compiler, download, administrator access or global execution-policy change is needed; the override applies only to that PowerShell process.

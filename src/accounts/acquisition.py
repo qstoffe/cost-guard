@@ -339,8 +339,14 @@ class AccountAcquisition:
                 except Empty:
                     break
         self.discovery.close()
-        # No join of in-flight HTTP. Idle workers exit in <=0.1s; bounded
-        # daemon workers cannot keep the process/terminal alive at shutdown.
+        # Reap idle owned workers instead of returning while their queue wait is
+        # still live. One shared budget, not a wait multiplied by provider count.
+        # In-flight provider HTTP retains its existing bounded daemon contract;
+        # closing a report must never wait for an unresponsive external provider.
+        deadline = time.monotonic() + 0.2
+        for worker in self._threads:
+            if worker.ident is not None and worker is not threading.current_thread():
+                worker.join(timeout=max(0.0, deadline - time.monotonic()))
 
     def diagnostics(self, *, include_observations: bool = True) -> dict[str, object]:
         """Allowlisted performance evidence only; jobs are not HTTP-call counts."""
