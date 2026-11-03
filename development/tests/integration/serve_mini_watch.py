@@ -68,14 +68,17 @@ def main():
                 elif command == "running":
                     publish()
                 elif command.startswith('density-'):
-                    _, prompts, accounts = command.split('-')
+                    _, prompts, accounts, *flags = command.split('-')
                     current = tuple(replace(cards[0], focal_id=str(index),
+                        title='Long session title ' * 30 if flags else cards[0].title,
                         rows=(replace(cards[0].rows[0], prompt=replace(cards[0].rows[0].prompt,
                             event_id=str(index), prompt_number=index + 23, at_ms=frame.now_ms - 10000 + index)),))
                         for index in range(int(prompts)))
                     quota = replace(frame.quota, accounts=tuple(replace(item, label=f'Subscription {index + 1}')
                         for index, item in enumerate(frame.quota.accounts[:int(accounts)])))
-                    publish(value=replace(frame, active_cards=current, quota=quota,
+                    publish(state='recovering' if flags else 'running', value=replace(frame,
+                        active_cards=current, quota=quota, quota_stale=bool(flags),
+                        daily_state='retrying' if flags else frame.daily_state,
                         running=running_prompts(current, 'observed')))
                 else:
                     raise ValueError("unsupported_probe_command")

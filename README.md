@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v80.144, 2026-11-03), the supported distribution.
+Use **current `main`** (v80.145, 2026-11-03), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -361,7 +361,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.144 (2026-11-03):** CLI session reports and Web Watch share one per-prompt Token Mix coverage policy: every contributing call must report all four categories and the total must be positive. Missing counters never imply zero; fully known rounding, live updates and accounting are unchanged.
+**v80.145 (2026-11-03):** Mini Watch opens smaller (native geometry verified at 150% Windows scaling), centers prompt headings and shows the same global Total Today as full Watch in a separate right-aligned header. Accounting, live units and manual resizing are unchanged.
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

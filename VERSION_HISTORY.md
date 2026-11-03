@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.145 — 2026-11-03
+
+- Mini Watch: measured smaller opening/reopening at 150% Windows scaling, centered prompt headings and a separate right-aligned canonical Total Today summary. Live units, partial/stale evidence, independent scrolling and manual resizing remain intact; no new data owner.
+
 ## v80.144 — 2026-11-03
 
 - Per-prompt Token Mix: CLI reports and Web Watch now both withhold percentages when any attributed call lacks I/C/W/O coverage. Completed partial data no longer looks complete in CLI; fully observed rounding, live corrections, Calls, CCost and context are unchanged.

@@ -57,13 +57,23 @@ stable server primary selection, with estimated/partial attribution retained.
 
 Mini renders canonical active/focal card identities, not the running aggregate: one
 keyed row per prompt with prompt-local cost/duration/context and shared terminal grace.
-Its two unframed regions scroll independently beyond five prompts/three subscriptions;
+Its two unframed regions scroll independently, including shorter lists at compact height;
 primary Used bars stay thin and cyan until authoritative exhaustion. Estimated costs
 have accessible provenance without a visible approximation glyph. Native close and
 the filled Watch toggle own closing; the title still returns to the existing tab.
 Healthy Live text is omitted, not failure/freshness warnings. Earlier exports canonical
 `completed_at_ms` and local finished display tokens; the Windows Stockholm fallback
 preserves repeated-hour fold/offset identity. No source, accounting or lifecycle owner moves.
+
+The separate, non-navigating right header reuses `daily_usage.total`/`prompt_count`,
+the full Watch display tokens and daily pricing/source state; app health also marks
+retained daily figures not current. Loading is not zero. The left title alone returns
+to Watch. Mini-only header alignment never changes full Watch tables. Chromium's
+560×250 opening request uses screen DIPs, not physical or zoomed document pixels;
+native Windows 150% measurements establish the <=470-physical-pixel opening cap on
+that setup, including reopen after manual enlargement. There is no automatic
+post-open resize or extra permission. Native geometry on other scales/platforms
+remains separately qualified in the Mini journal; browser security chrome is intact.
 
 `src/web/lifecycle.py` owns deliberate launcher restart, overlap coalescing, bounded readiness/stop and detached spawn. `src/web/instance_state.py` owns canonical checkout/user identity, transition and lifetime OS locks, private atomic records and bounded allowlisted lifecycle diagnostics. `src/web/process_identity.py` owns native birth/image proof and safe termination handles. `src/web/change_guard.py` owns the allowlisted five-second runtime metadata baseline and terminal source_changed state; it never reloads/restarts code.
 
