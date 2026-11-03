@@ -357,6 +357,14 @@ cancel.addEventListener('click', async () => {
   }
 });
 window.addEventListener('hashchange', () => {
+  // Pasting into an already-open unauthorized tab can be same-document navigation.
+  // Erase first, exchange through the existing guard, then reload only the clean URL.
+  const handoff = new URLSearchParams(location.hash.slice(1)).get('bootstrap');
+  if (handoff !== null) {
+    history.replaceState(null, '', '/#/models');
+    return fetch('/api/bootstrap', {method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({credential: handoff})}).catch(() => {}).then(() => location.reload());
+  }
   navigate();
   if (current?.section === 'models') document.getElementById('content').focus();
 });

@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v80.147, 2026-11-04), the supported distribution.
+Use **current `main`** (v80.148, 2026-11-04), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -361,7 +361,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.147 (2026-11-04):** Web Beta shares an original CG icon between Windows tray and browser tabs. Native Windows menus use an early, tray-thread-only DPI context; browser section titles are unchanged. Physical notification-area appearance and full menu visual acceptance remain unverified; see the [branding evidence](development/journal/web/branding.md).
+**v80.148 (2026-11-04):** Windows Web Beta's tray menu adds **Copy Cost Guard link** to authorize another browser on the same running server, without opening a browser. Links expire after two minutes and work once; pending handoffs and existing sessions remain independent. See [usage and clipboard privacy](docs/web-beta.md#open-in-another-browser-windows).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

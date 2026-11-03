@@ -3,6 +3,29 @@
 After authentication, **Web Beta v…** shows the running server's CLI product version,
 not a release lookup or newly edited source. Offline views retain their original version.
 
+## Open in another browser (Windows)
+
+Right-click the Windows notification-area **Cost Guard** icon and choose
+**Copy Cost Guard link** (between **Open Cost Guard** and **Exit Cost Guard**).
+Paste it into Edge, Firefox, another browser profile or a private window within
+**two minutes**. It authorizes that browser once, normally opening Models on the
+**same running server**; navigate to Watch as usual. Copy never opens a browser,
+changes the default browser or restarts the server. Existing tabs stay connected.
+The notification confirms copying/expiry or asks you to retry if copying failed.
+
+The clipboard holds a temporary **bearer secret** until overwritten: do not share
+the link, and overwrite it after pasting if desired. Cost Guard marks it ineligible
+for Windows clipboard history/cloud sync; other clipboard-monitoring software is
+outside this protection. Expired, used or previous-instance links cannot authorize
+a fresh browser. Repeating Open/Copy creates independent links; up to 16 can be
+pending at once, with a retryable failure rather than revoking an unexpired link.
+
+A normal page URL/bookmark works only in an already-authorized browser while that
+host/port/session remains valid. Pasting the plain URL into a fresh browser still
+requires authorization. There is no webpage Copy button, new browser API or macOS
+copy-menu action. Physical Windows menu/clipboard acceptance is separately qualified
+in the [verification notes](../development/journal/web/browser-links.md).
+
 v80.139 recognizes persisted failed/interrupted runs that ended before producing an
 assistant response, including resumed work followed by a system notice. The server
 retires the correct prompt, freezes duration and preserves known usage through

@@ -4,6 +4,13 @@ import secrets
 from threading import Lock
 import time
 
+BOOTSTRAP_LIMIT = 16
+BOOTSTRAP_SECONDS = 120
+
+
+class BrowserLinkUnavailable(RuntimeError):
+    """The native handoff cannot be issued now; retry without stopping the host."""
+
 
 class BrowserSession:
     def __init__(self, cookie_scope=None):
@@ -11,30 +18,46 @@ class BrowserSession:
         # prevents another checkout's bootstrap from replacing this credential.
         self.cookie_name = "cg_session_" + (cookie_scope or secrets.token_hex(16))
         self._lock = Lock()
-        self._bootstrap = secrets.token_urlsafe(32)
-        self._bootstrap_until = time.monotonic() + 120
+        self._bootstrap = None
+        self._pending = {}
         self._session = None
         self._csrf = None
         self._until = 0
 
     def bootstrap(self, *, renew=False):
         with self._lock:
-            if renew:
+            now = time.monotonic()
+            self._prune(now)
+            if renew or self._bootstrap not in self._pending:
+                # Refuse excess handoffs rather than revoke an unexpired link.
+                if len(self._pending) >= BOOTSTRAP_LIMIT:
+                    raise BrowserLinkUnavailable("bootstrap_capacity")
                 self._bootstrap = secrets.token_urlsafe(32)
-                self._bootstrap_until = time.monotonic() + 120
+                self._pending[self._bootstrap] = now + BOOTSTRAP_SECONDS
             return self._bootstrap
+
+    def _prune(self, now):
+        self._pending = {token: until for token, until in self._pending.items() if now < until}
+
+    def discard_bootstrap(self, token):
+        with self._lock:
+            self._pending.pop(token, None)
 
     def exchange(self, token):
         with self._lock:
-            if (not isinstance(token, str) or not token.isascii() or self._bootstrap is None
-                    or time.monotonic() > self._bootstrap_until
-                    or not secrets.compare_digest(token, self._bootstrap)):
+            now = time.monotonic()
+            self._prune(now)
+            if not isinstance(token, str) or not token.isascii():
                 return None
-            self._bootstrap = None
-            if self._session is None or time.monotonic() >= self._until:
+            matched = next((pending for pending in self._pending
+                            if secrets.compare_digest(token, pending)), None)
+            if matched is None:
+                return None
+            del self._pending[matched]
+            if self._session is None or now >= self._until:
                 self._session = secrets.token_urlsafe(32)
                 self._csrf = secrets.token_urlsafe(32)
-            self._until = time.monotonic() + 8 * 60 * 60
+            self._until = now + 8 * 60 * 60
             return self._session, self._csrf
 
     def authenticated(self, cookie):

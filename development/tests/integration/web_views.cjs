@@ -38,18 +38,23 @@ async function main() {
   const location = {hash: '#bootstrap=' + input.credential};
   const history = {replaceState: (_, __, value) => { location.hash = value.slice(value.indexOf('#')); }};
   let cookie = '', requests = 0, offline = false;
+  const bootstrapStatuses = [];
   let releaseBootstrap, releaseReport;
   const bootstrapGate = new Promise(resolve => { releaseBootstrap = resolve; });
   const reportGate = new Promise(resolve => { releaseReport = resolve; });
   ids.result.textContent = 'Starting Cost Guard'; // Server-rendered startup shell.
   const wire = async (path, options = {}) => {
     if (offline) throw new Error('offline');
-    if (path === '/api/bootstrap') await bootstrapGate;
+    if (path === '/api/bootstrap') {
+      assert.equal(location.hash, '#/models', 'erase bootstrap before any exchange request');
+      await bootstrapGate;
+    }
     if (path === '/api/reports') await reportGate;
     const headers = {...options.headers, Origin: input.origin};
     if (cookie) headers.Cookie = cookie;
     requests++;
     const response = await fetch(input.origin + path, {...options, headers});
+    if (path === '/api/bootstrap') bootstrapStatuses.push(response.status);
     if (response.headers.get('set-cookie')) cookie = response.headers.get('set-cookie').split(';')[0];
     return response;
   };
@@ -398,6 +403,28 @@ async function main() {
   assert.equal(ids.result.getAttribute('aria-busy'), 'false');
   assert.match(ids.result.textContent, /tray Open Cost Guard/);
   assert.equal(all(ids.result, 'progress').length, 0, 'failed startup is not an endless activity indicator');
+  // A pasted handoff can change only the hash of an already-terminal error page.
+  // It must bypass that page's terminal API guard, never the HTTP security guards.
+  let reloads = 0;
+  location.reload = () => { reloads++; assert.equal(location.hash, '#/models'); };
+  vm.runInContext("hostState = {kind:'authorization_required',terminal:true,writable:false}", unavailable);
+  offline = false; cookie = '';
+  location.hash = '#bootstrap=' + input.handoff_credential;
+  await handlers.hashchange();
+  assert.equal(bootstrapStatuses.at(-1), 200, 'fresh pasted handoff authorizes previously unauthorized tab');
+  assert.notEqual(cookie, '', 'existing endpoint issues normal cookie');
+  assert.equal(reloads, 1);
+  cookie = '';
+  location.hash = '#bootstrap=' + input.handoff_credential;
+  await handlers.hashchange();
+  assert.equal(bootstrapStatuses.at(-1), 401, 'replay still rejected in a fresh browser');
+  assert.equal(cookie, '');
+  assert.equal(reloads, 2);
+  offline = true;
+  location.hash = '#bootstrap=synthetic-network-failure';
+  await handlers.hashchange();
+  assert.equal(reloads, 3, 'network failure also leaves only the clean URL');
+  assert.doesNotMatch(ids.result.textContent, /synthetic-network-failure/);
   console.log('web views passed: real HTTP, facade, pagination, frozen/refresh/stale, missing/empty, deep links, safe text');
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

@@ -17,6 +17,7 @@ Installed OpenCode Toolkit shared repository skills own development procedures. 
 - [Feature opportunities](feature-discovery.md): milestone-40 no-suggestion assessment, seven pending UX owners, implemented publisher history and external/platform evidence limits.
 - [Windows startup](windows-startup.md): Web delegation/readiness and CLI console ownership, native probes and remaining consumer-desktop limits.
 - [Shared CG branding and native DPI](web/branding.md): canonical icon generation, scoped UI-thread context, browser/native-resource evidence and explicitly unverified physical appearance.
+- [Windows browser links](web/browser-links.md): independent one-use native handoffs, bounded Unicode clipboard ownership/privacy and actual verification limits.
 - [Web UI knowledge](web/INDEX.md): snapshot/navigation parity and Settings/theme persistence, browser evidence, separate V2 probes and explicitly scoped Decision Delegate test exceptions.
 - [Web Daily and shutdown lifecycle](web/live-lifecycle.md): catalog-bracket amplification, Windows buffered-read cancellation, causal regressions and bounded probe diagnostics.
 - [Historical date reports](web/historical-reports.md): serial V2 read cost, bounded date-only overlap, revision-safe progress, deadline/cancellation and retained live-source failures.

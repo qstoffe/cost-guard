@@ -42,6 +42,8 @@ QUICK_PATTERNS: tuple[str, ...] = (
     "test_macos_web.py",
     "test_macos_app.py",
     "test_windows_web.py",
+    "test_windows_clipboard.py",
+    "test_web_browser_links.py",
     "test_windows_web_activity.py",
     "test_web_lifecycle.py",
     "test_web_runtime.py",
@@ -174,7 +176,8 @@ PROFILES: dict[str, tuple[str, ...]] = {
 # Whole focused launcher files allow modest portable overlap. The lifecycle file
 # is intentionally NOT included wholesale: retain only native startup ownership.
 NATIVE_WEB_PATTERNS = {
-    "win32": ("test_windows_web.py", "test_windows_web_activity.py") + tuple(
+    "win32": ("test_windows_web.py", "test_windows_web_activity.py", "test_windows_clipboard.py",
+              "test_web_browser_links.py") + tuple(
         "test_web_lifecycle.LifecycleTests.test_" + name for name in (
             "managed_host_uses_gui_interpreter_for_console_free_report_children",
             "missing_gui_interpreter_fails_without_spawning_console_host",
