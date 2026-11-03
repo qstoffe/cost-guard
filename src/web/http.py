@@ -23,6 +23,8 @@ ASSETS = {"/": ("index.html", "text/html; charset=utf-8"),
             "/live.js": ("live.js", "text/javascript; charset=utf-8"),
              "/session.js": ("session.js", "text/javascript; charset=utf-8"),
              "/settings.js": ("settings.js", "text/javascript; charset=utf-8"),
+             "/mini.js": ("mini.js", "text/javascript; charset=utf-8"),
+             "/mini.css": ("mini.css", "text/css; charset=utf-8"),
           "/app.css": ("app.css", "text/css; charset=utf-8")}
 JOB_PATH = re.compile(r"/api/jobs/([a-f0-9]{32})(/cancel)?\Z")
 CSP = ("default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; "

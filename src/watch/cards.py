@@ -169,7 +169,8 @@ class WatchCards:
         rows = (focal,) if focal is not None else capture.rows[-1:]
         projected = []
         for row in rows:
-            duration = (max(row.duration_ms or 0, now_ms - row.at_ms)
+            observed_ms = capture.observed_at_ms if entry.state == "unavailable" else now_ms
+            duration = (max(row.duration_ms or 0, observed_ms - row.at_ms)
                 if row.in_progress and row.event_id in capture.observed_ids else row.duration_ms)
             row = replace(row, duration_ms=duration)
             is_focal = focal is not None and row.event_id == focal.event_id

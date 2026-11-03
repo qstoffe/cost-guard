@@ -7,7 +7,7 @@ from .contracts import record
 from .projection import account, comparison, fields
 
 
-def watch_quota(quota, period=None):
+def watch_quota(quota, period=None, *, estimated=False, note=""):
     fraction, _used, _money = quota_usage(**{key: getattr(quota, key) for key in
         ("used", "limit", "remaining", "remaining_fraction", "unlimited", "remaining_money", "limit_money")})
     percent = "—" if fraction is None else ("<100%" if fraction < 1 and fraction * 100 >= Decimal("99.95")
@@ -16,6 +16,7 @@ def watch_quota(quota, period=None):
         used_fraction=fraction, used_percent=percent, exhausted=fraction == 1,
         restricted=quota.status == "blocked" and fraction != 1,
         cost=comparison(period.cost) if period is not None else None,
+        estimated=estimated, note=note,
         pace=fields(period.pace, "unit per_day days workdays per_workday")
             if period is not None and period.pace is not None else None)
 
@@ -37,7 +38,8 @@ def watch_account(item):
     base = account(item)
     def projected(quota):
         period = next((period for period in item.quota_periods if period.quota is quota), None)
-        return watch_quota(quota, period)
+        note = next((note for note in item.ccost_notes if note.startswith(f"CCost {quota.label}:")), "")
+        return watch_quota(quota, period, estimated=quota.label in item.ccost_estimated_scopes, note=note)
     allowed = {"observation", "ccost_scopes", "ccost_account_unknown"}
     return record(**{name: value for name, value in base.fields if name in allowed},
         primary=projected(primary), secondary=tuple(projected(quota) for quota in native.quotas if quota is not primary),

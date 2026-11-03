@@ -19,6 +19,7 @@ from src.sources.opencode_v2 import OpenCodeV2Source
 from src.watch.card_workers import CardWorkers
 from src.watch.cards import WatchCards
 from src.watch.models import WatchProjection
+from src.watch.running import running_prompts
 from src.watch.observers import CatalogObservation, observe_catalog
 from src.watch.tracker import WatchRowTracker
 from src.sources.errors import SourceUnavailableError
@@ -85,6 +86,8 @@ class WebTerminalLifecycleTests(unittest.TestCase):
         self.native.active = {"ses_current_child": {"type": "running"}}
         self.capture(4000)
         self.assertTrue(self.row(4000).in_progress)
+        active, _, state = self.cards.project(4000)
+        self.assertEqual(1, running_prompts(active, state).count)
         self.terminate()
         self.native.sessions = self.native.sessions[:1]
         reports = self.service(10_000)
@@ -101,6 +104,11 @@ class WebTerminalLifecycleTests(unittest.TestCase):
         self.assertEqual(("", 0, (), 0, ""), (tool.running_tool, tool.running_ms,
             tool.background_kinds, tool.todo_total, tool.active_todo))
         self.assertEqual(2000, actual.duration_ms)
+        active, _, state = self.cards.project(10_000)
+        aggregate = running_prompts(active, state)
+        self.assertEqual("partial", state, "removed child history remains explicitly partial")
+        self.assertEqual((None, None, None), (aggregate.count, aggregate.ccost, aggregate.duration_ms))
+        self.assertFalse(aggregate.complete)
         self.assertEqual(2000, self.row(39_999).duration_ms)
         self.assertEqual("!", self.cards.project(39_999)[0][0].rows[-1].marker)
         self.capture(20_000)
@@ -121,6 +129,7 @@ class WebTerminalLifecycleTests(unittest.TestCase):
             self.capture(20_000)
         self.assertTrue(self.row(20_000).in_progress, "last known state is not invented success")
         self.assertEqual("unavailable", self.cards.project(20_000)[0][0].state)
+        self.assertEqual(self.row(20_000).duration_ms, self.row(90_000).duration_ms)
         self.terminate()
         self.capture(30_000)
         self.assertFalse(self.row(30_000).in_progress)

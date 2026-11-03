@@ -8,7 +8,7 @@ from .watch_accounts import watch_account
 def card_row(row, now_ms):
     tool = row.tool
     projected = fields(row.prompt, """at_ms prompt_number label preview ccost cost_estimated unresolved_cost
-        calls in_progress aborted abort_reason completed_successfully event_id duration_ms has_additional_model""")
+        calls in_progress is_compaction aborted abort_reason completed_successfully event_id duration_ms has_additional_model""")
     projected = ObjectValue(projected.fields + (("has_error", row.prompt.watch_error),))
     return record(prompt=projected, model=row.prompt.watch_model or "N/A",
         effort=row.prompt.watch_effort or "N/A", marker=row.marker,
@@ -61,6 +61,7 @@ def project_live(value, timezone_id="UTC", ccost_display_unit="credits"):
         active_cards=tuple(card(item, value.now_ms) for item in value.active_cards),
         history_cards=tuple(card(item, value.now_ms) for item in value.history_cards),
         cards_state=value.cards_state, history_state=value.history_state,
+        running=fields(value.running, "count ccost duration_ms complete unresolved_cost cost_estimated state"),
         rows=tuple(rows), active_count=value.active_count, status=value.status,
         now_ms=value.now_ms, started_at_ms=value.watch_started_at_ms,
         run_origin="Web live engine start (not tab open)",

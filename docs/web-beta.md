@@ -150,14 +150,11 @@ account periods or totals are capped. Models renders every matching reference-mo
 row with document scrolling. Token Mix phase costs are available in More information;
 account provenance is on Accounts.
 
-v80.93 adds a shared responsive light/dark visual system and global **Watch** navigation.
-That adaptive design is now the Web option; Classic is the default. Neither uses browser storage or external fonts.
-Rounded controls, visible keyboard focus, sticky table headings, exact numeric alignment and
-local table scrolling keep data selectable at narrow widths; reduced-motion preferences disable transitions.
-The native “Reading this report” disclosure contains definitions, never report rows or totals.
-Models follows the model-table-first hierarchy above. Accounts cards show native quotas/remaining/reset,
-Pace and known bills without duplicate quota tables or whole-report account totals. Independent
-attribution/source/account warnings remain visible; observation/native billing detail is expandable.
+Classic defaults to dark; Web follows system light/dark. Both use local fonts, visible
+keyboard focus, sticky headings and narrow-table scrolling; reduced motion disables
+transitions. “Reading this report” contains definitions, not rows/totals. Accounts keeps
+native quotas, Remaining/Pace, known bills and independent warnings; observation/billing
+detail is expandable. Models follows the hierarchy above.
 See the [synthetic before/after gallery](../development/architecture/governance/verification/web-design/index.html)
 and [visual evidence/limits](../development/architecture/governance/verification/web-design.md).
 
@@ -315,6 +312,9 @@ prediction. Prompt cells contain no context-warning stars, footnotes or threshol
 Watch still omits the normal heading, report/search/scope/refresh controls, run summaries,
 valuation disclosure and model announcements. Exceptional host/source/offline notices
 remain. No Observation details, Copilot Unaccounted usage or global warning list returns.
+
+**[Mini Watch](web-mini-watch.md)** is an explicit On/Off floating status card on supported
+desktop browsers. It reuses this tab's live publication, not another Watch engine.
 
 Four isolated session workers publish coherent canonical rows independently, without a
 complete-total phase; generations reject superseded work. Account-history and detail

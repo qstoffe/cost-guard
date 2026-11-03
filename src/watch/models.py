@@ -100,6 +100,18 @@ class WatchCard:
 
 
 @dataclass(frozen=True, slots=True)
+class RunningPrompts:
+    """One coherent canonical running population, never visible-card totals."""
+    count: int | None = None
+    ccost: Decimal | None = None
+    duration_ms: int | None = None
+    complete: bool = False
+    unresolved_cost: bool = True
+    cost_estimated: bool = False
+    state: str = "loading"
+
+
+@dataclass(frozen=True, slots=True)
 class WatchProjection:
     title: str
     source_label: str
@@ -129,3 +141,4 @@ class WatchProjection:
     history_state: str = "loading"
     daily_usage: DailyUsage | None = None
     daily_state: str = "loading"
+    running: RunningPrompts = field(default_factory=RunningPrompts)
