@@ -50,6 +50,7 @@ def latest_token_prompts(roots: Sequence[AnalyzedRoot], priceable: RequestFilter
 def recent_sample_roots(
     roots: Sequence[NormalizedSession], root_activity: Mapping[str, int],
     analyze: Callable[[NormalizedSession], AnalyzedRoot], priceable: RequestFilter,
+    *, progress: Callable[[int], None] | None = None,
 ) -> tuple[AnalyzedRoot, ...]:
     """Hydrate roots in descending tree activity until BOTH sample cutoffs hold.
 
@@ -72,4 +73,6 @@ def recent_sample_roots(
                               key=_newest_first, reverse=True)[:SAMPLE_SIZE])
         mix_sample = tuple(sorted((*mix_sample, *latest_token_prompts((item,), priceable)),
                                   key=_newest_first, reverse=True)[:SAMPLE_SIZE])
+        if progress is not None:
+            progress(len(analyzed))
     return tuple(analyzed)

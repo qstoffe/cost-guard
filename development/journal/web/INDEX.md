@@ -21,6 +21,9 @@ Status: current
 - [Mini Watch](mini-watch.md): canonical running aggregate, shared native-period
   costs, actual headless Chrome/Edge PiP/hidden-page updates, real V2 evidence and
   explicit Decision Delegate physical-desktop/shutdown verification exceptions.
+- [Models loading progress](models-progress.md): real Normal stage ownership,
+  before/after synthetic observations, bounded process/browser updates and separate
+  V2 probe timings/availability limits.
 
 Historical observations keep their original dates and exceptions; this routing
 update does not refresh their validity or certify older failed probes. Parent

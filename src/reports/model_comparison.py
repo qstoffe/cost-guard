@@ -79,20 +79,25 @@ def selectable_catalog(
     ), warnings
 
 
-def web_model_catalog(usage, catalog, selected, *, now_ms, cache_repository):
+def web_model_catalog(usage, catalog, selected, *, now_ms, cache_repository, progress=None):
     """Freeze both scopes using one sample and full-catalog denominator; no new I/O."""
     markers, notes = active_promotion_notes(catalog, now_ms)
-    rows = tuple(ModelComparisonProjection(
-        row.publisher, row.model_name, row.relative_to_lowest, price_summary(catalog, row.model_name),
-        row.release_date, row.model_name in markers, model_is_recent(row.release_date, now_ms=now_ms),
-        markers.get(row.model_name), row.relative_levels, row.evidence,
-    ) for row in model_comparison_rows(usage, catalog, include_uncomparable=True))
+    candidates = model_comparison_rows(usage, catalog, include_uncomparable=True)
+    rows = []
+    for index, row in enumerate(candidates):
+        rows.append(ModelComparisonProjection(
+            row.publisher, row.model_name, row.relative_to_lowest, price_summary(catalog, row.model_name),
+            row.release_date, row.model_name in markers, model_is_recent(row.release_date, now_ms=now_ms),
+            markers.get(row.model_name), row.relative_levels, row.evidence,
+        ))
+        if progress is not None:
+            progress(index + 1, len(candidates))
     selected_names = {(model_publisher(model) or 'Unknown / unverified',
                        model.model.display_name or model.model.model) for model in selected.models}
     notices = tuple((row.model, recent_model_notice_details(
         PricingCatalog((catalog.resolve_reference(row.model),)), now_ms=now_ms,
         cache_repository=cache_repository)[0]) for row in rows if row.recent)
-    return ModelCatalogProjection(rows, tuple((row.publisher, row.model) for row in rows
+    return ModelCatalogProjection(tuple(rows), tuple((row.publisher, row.model) for row in rows
         if (row.publisher, row.model) in selected_names), notes, notices)
 
 

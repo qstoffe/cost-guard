@@ -55,15 +55,19 @@ class RootAcquisition:
         return analyzed
 
     def prepare(self, roots: Sequence[NormalizedSession], *, now_ms: int, detail: bool = False,
-                force_fresh_ids: Sequence[str] = ()) -> frozenset[str]:
+                force_fresh_ids: Sequence[str] = (), progress_scope: str | None = None) -> frozenset[str]:
         """Batch only required snapshots; stable derived hits need no message reads."""
         batch = getattr(self.source, "load_session_snapshots", None)
         if not callable(batch):
             return frozenset()
         force = set(force_fresh_ids)
         pending = []
-        self.progress(WorkProgress("Checking session cache", "history"))
-        for root in roots:
+        def observe(label, step, completed=0, total=None):
+            self.progress(WorkProgress(label, "history", completed, total,
+                                      stage=f"{progress_scope}-{step}" if progress_scope else None))
+
+        observe("Checking session cache", "cache", 0, len(roots))
+        for index, root in enumerate(roots):
             existing = self.analyzed.get(root.session_id)
             if root.session_id not in force and existing is None:
                 _, bundle = cached_analysis(self.source, root, self.cache, self.dependencies())
@@ -73,12 +77,13 @@ class RootAcquisition:
                     self.revisions[root.session_id] = bundle.source_revision
             if root.session_id in force or existing is None or (detail and existing.snapshot is None):
                 pending.append(root)
+            observe("Checking session cache", "cache", index + 1, len(roots))
         if not pending:
-            self.progress(WorkProgress("Session cache ready", "history", len(roots), len(roots)))
+            observe("Session cache ready", "analysis", len(roots), len(roots))
             return frozenset()
-        self.progress(WorkProgress("Loading session snapshots", "history"))
+        observe("Loading session snapshots", "load")
         snapshots = batch(tuple(root.session_id for root in pending))
-        self.progress(WorkProgress("Analyzing sessions", "history", 0, len(pending)))
+        observe("Analyzing sessions", "analysis", 0, len(pending))
         for index, root in enumerate(pending):
             snapshot = snapshots[root.session_id]
             existing = self.analyzed.get(root.session_id)
@@ -88,5 +93,5 @@ class RootAcquisition:
                 self.analyzed.pop(root.session_id, None)
                 self.analyze(root, now_ms=now_ms, detail=detail, force_fresh=root.session_id in force,
                              snapshot=snapshot, report_progress=False)
-            self.progress(WorkProgress("Analyzing sessions", "history", index + 1, len(pending)))
+            observe("Analyzing sessions", "analysis", index + 1, len(pending))
         return frozenset(snapshots)

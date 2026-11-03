@@ -14,6 +14,7 @@ from src.reports.service import ReportRequestError, SessionNotFoundError, Sessio
 from src.pricing.base import PricingUnavailableError
 from src.runtime_errors import recoverable, recovered
 from src.sources.errors import SourceError
+from src.domain.progress import WorkProgress
 
 from .contracts import ObjectValue, ProgressEvent, ReportError, ReportResult, record
 from .projection import identity, project
@@ -22,6 +23,8 @@ from .projection import identity, project
 ServiceFactory = Callable[[int, Callable[[str], None]], ReportService]
 ProgressSink = Callable[[ProgressEvent], None]
 _PHASES = frozenset({"pricing", "catalog", "history", "projection", "quotas", "availability", "finalizing"})
+_STAGES = frozenset({"sampling", "availability", "comparison", "models", "quotas", "account-cache",
+                     "account-load", "account-analysis", "account-projection", "finalizing"})
 
 
 class ReportApplication:
@@ -61,8 +64,10 @@ class ReportApplication:
             def observe(label):
                 if progress is not None:
                     phase = getattr(label, "phase", "working")
+                    stage = getattr(label, "stage", None)
                     progress(ProgressEvent(phase if phase in _PHASES else "working",
-                                           getattr(label, "completed", 0), getattr(label, "total", None)))
+                                           getattr(label, "completed", 0), getattr(label, "total", None),
+                                           stage if stage in _STAGES else None))
 
             service = self._factory(now, observe)
             # Reject ownership mistakes without closing someone else's scheduler.
@@ -93,7 +98,8 @@ class ReportApplication:
                                         error=ReportError("invalid_request"))
                 scope = ObjectValue(scope.fields + (("start_ms", period.start_ms), ("end_ms", period.end_ms)))
             report = (service.build_token_mix_history(lambda label, _percent: observe(label))
-                      if request.kind is ReportKind.TOKEN_MIX else service.build(request, include_model_catalog=True))
+                       if request.kind is ReportKind.TOKEN_MIX else service.build(request, include_model_catalog=True))
+            observe(WorkProgress("Preparing report", "finalizing", 0, 2, stage="finalizing"))
             revisions = tuple(record(session_id=root, revision=identity(revision))
                               for root, revision in service.report_source_revisions())
             source = record(
@@ -108,8 +114,10 @@ class ReportApplication:
                              # dwarf the report; per-root revision evidence stays above.
                              for parts in (() if request.session_page_size or request.kind in {ReportKind.NORMAL, ReportKind.COST_PER_HOUR}
                                            else service.report_request_identities()))
+            observe(WorkProgress("Preparing report", "finalizing", 1, 2, stage="finalizing"))
             view = project(report, service.timezone_id, service.config.get("ccostDisplayUnit", "credits"))
             view = ObjectValue(view.fields + (("request_identities", requests),))
+            observe(WorkProgress("Preparing report", "finalizing", 2, 2, stage="finalizing"))
             recovered("application-report")
             return ReportResult(self._instance_id, sequence, now, scope, source, view)
         except SourceError as exc:

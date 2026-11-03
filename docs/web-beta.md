@@ -85,6 +85,8 @@ one short stage line. Its **≈ percentage is a bounded stage-weighted estimate*
 a measured global total; actual stage counts appear when supplied. It never moves
 backwards or reaches 100 before a complete, usable source result. Failed/partial
 acquisition stops activity and gives actionable feedback; missing data is not zero.
+Completed units advance separate sample/account-history/preparation bands. Unknown
+sampling totals stay estimated; blocked I/O can pause. No extra scan or timed advance.
 Reload requests fresh Models; Back/Forward to a retained view and live host
 heartbeats do not refresh its frozen report or reset its table scroll/selection.
 
@@ -435,7 +437,7 @@ Reports select `kind`: `normal` (overview/Models/Accounts), `all-models` (catalo
 - At most four queued/running reports and one spawned analysis process. Identical in-flight requests coalesce. Sixteen jobs retained; old completed/cancelled entries are evicted, so a missing ID is not an empty report.
 - A fresh ReportApplication/ReportService owns each job's mutable integrations and one-shot account cleanup. Existing integration request timeouts apply; a 120-second hard process deadline bounds whole-job work. Cancellation/shutdown terminate and join only that owned process. No live scheduler is shared or cleaned by these one-shot jobs.
 - Each finite report child monitors multiprocessing's exact parent kernel sentinel. A crashed/force-stopped Web parent or lost ownership proof exits that child nonzero, including a blocked scan; PID reuse is not a liveness signal. This child-only safety monitor stops/joins on ordinary completion.
-- Results are limited to 8 MiB per job. Oversize results return `result_too_large`; scope the request instead. Long historical Token Mix may time out; it never requires waiting for the scan to finish before shutdown. Job progress contains only approved phase/count values, not source text.
+- Results are limited to 8 MiB per job. Oversize: `result_too_large`; scope the request. Long Token Mix may time out but never blocks shutdown. Progress exports only approved phase/stage/counts and a stale-safe job sequence, not source text. Child IPC coalesces at 100ms; host drains at most 64 messages/turn.
 
 The shell remains reachable with offline/loading sources. There is no autostart. Tests use synthetic read-only sources; local read-only source probes are separate from paid/live-model tests.
 
