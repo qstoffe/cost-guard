@@ -12,6 +12,8 @@ class Node {
   setAttribute(name, value) { this.attributes[name] = value; }
   addEventListener(name, callback) { (this.events[name] ||= []).push(callback); }
   fire(name) { for (const callback of this.events[name] || []) callback(); }
+  contains(node) { return node === this || this.children.some(child => child.contains(node)); }
+  querySelectorAll(tag) { return this.children.flatMap(child => [...(child.tag === tag ? [child] : []), ...child.querySelectorAll(tag)]); }
 }
 function doc() { return {createElement: tag => new Node(tag), head: new Node('head'), body: new Node('body'), documentElement: new Node('html')}; }
 function win() {
@@ -19,19 +21,20 @@ function win() {
   node.setInterval = callback => {node.timers.add(callback); return callback;};
   node.clearInterval = callback => node.timers.delete(callback);
   node.close = () => {node.closed = true;}; // Deliberately defer pagehide to reproduce stale callbacks.
+  node.resizeTo = () => {throw new Error('Opening consumes activation; resizeTo requires a new PiP gesture');};
   return node;
 }
 let now = 1000;
 const context = vm.createContext({document: doc(), window: {}, URL, Date: {now: () => now}, input});
-for (const file of ['render', 'mini']) vm.runInContext(fs.readFileSync(`src/web/assets/${file}.js`, 'utf8'), context);
+for (const file of ['render', 'watch', 'mini']) vm.runInContext(fs.readFileSync(`src/web/assets/${file}.js`, 'utf8'), context);
 const Controller = vm.runInContext('MiniWatch.Controller', context);
 function setup() {
   const owner = win(); owner.top = owner; owner.isSecureContext = true; owner.location = {href: 'http://127.0.0.1:1234/#/watch'};
   let resolve, reject, calls = 0, focused = 0, returned = 0;
   owner.focus = () => focused++;
   owner.document.documentElement.dataset.theme = 'classic';
-  const api = owner.documentPictureInPicture = {window: null, requestWindow() {
-    calls++; return new Promise((yes, no) => {resolve = yes; reject = no;});
+  const api = owner.documentPictureInPicture = {window: null, requests: [], requestWindow(options) {
+    api.requests.push(options); calls++; return new Promise((yes, no) => {resolve = yes; reject = no;});
   }};
   const button = new Node('button'), feedback = new Node('span');
   const controller = new Controller(owner, button, feedback, () => returned++);
@@ -60,6 +63,39 @@ function setup() {
   assert.equal(view.body.children[1].children[2].textContent, '3');
   assert.equal(view.body.children[1].children[3].textContent, '20m');
   assert.equal(view.health.textContent, ''); assert.equal(view.health.hidden, true);
+  assert.equal(view.daily.textContent, 'Total Today 34 · 37 prompts', 'prior activity is not the two prompt rows or account-period costs');
+  assert.notEqual(view.daily.parentNode, view.summary, 'daily metric is outside the navigation target');
+  view.daily.fire('click'); view.daily.fire('keydown'); assert.equal(test.returned(),0);
+  assert.equal(api.requests[0].height,250); assert.equal(api.requests[0].width,560);
+  assert.equal(api.requests[0].preferInitialWindowPlacement,true);
+  context.fullParent = new Node('div'); context.fullState = {connection:'Live connected.'};
+  const daily = input.view.daily_usage;
+  function parity() {
+    controller.update(input);
+    const full = vm.runInContext('ReportView.renderLive(fullParent, input, fullState); fullState.watch.daily',context);
+    assert.ok(view.daily.textContent.startsWith(`Total Today ${full.children[1].textContent} · ${full.children[2].textContent}`));
+  }
+  parity();
+  for (const [value,count,credit,usd] of [['6152',106,'6 152','$61.52'],['0',0,'0','$0.00']]) {
+    input.view.daily_usage = {...daily,prompt_count:count,total:{...daily.total,known_ccost:value,observed_requests:count,priced_requests:count,
+      display:{known_ccost:credit},display_units:{credits:{known_ccost:credit},usd:{known_ccost:usd}}}};
+    parity(); assert.equal(view.daily.textContent,`Total Today ${credit} · ${count} prompts`);
+    vm.runInContext('ReportView.setUnit("usd")', context); controller.settings(); parity();
+    assert.equal(view.daily.textContent,`Total Today ${usd} · ${count} prompts`);
+    vm.runInContext('ReportView.setUnit("credits")', context);
+  }
+  input.view.daily_usage = {...daily,total:{...daily.total,priced_requests:0,complete:false}};
+  parity(); assert.match(view.daily.textContent,/Total Today N\/A · 37 prompts · Partial/);
+  input.view.daily_usage = {...daily,total:{...daily.total,complete:false}};
+  parity(); assert.match(view.daily.textContent,/34 · 37 prompts · Partial/);
+  for (const state of ['retrying','unavailable','loading','partial']) {
+    input.view.daily_state=state; parity(); assert.match(view.daily.textContent,/Not current/);
+  }
+  input.view.daily_usage=null; input.view.daily_state='unavailable'; controller.update(input); assert.equal(view.daily.textContent,'Total Today · Unavailable');
+  input.view.daily_state='loading'; controller.update(input); assert.equal(view.daily.textContent,'Total Today · Loading…');
+  input.view.daily_usage={...daily,start_ms:daily.start_ms+86400000,prompt_count:0,total:{...daily.total,observed_requests:0,priced_requests:0,display:{known_ccost:'0'},display_units:{credits:{known_ccost:'0'}}}};
+  input.view.daily_state='observed'; parity(); assert.equal(view.daily.textContent,'Total Today 0 · 0 prompts','new canonical local day replaces the old daily observation');
+  input.view.daily_usage=daily; parity(); assert.equal(view.daily.textContent,'Total Today 34 · 37 prompts','later source corrections replace, never accumulate');
   assert.ok(!/Running prompts|Running CCost|Longest running|×/.test(view.root.textContent));
   assert.equal(child.document.head.children.length, 2);
   assert.deepEqual(child.document.head.children.map(n => n.href), ['http://127.0.0.1:1234/app.css', 'http://127.0.0.1:1234/mini.css']);
@@ -95,7 +131,7 @@ function setup() {
   assert.equal(view.accounts.children.at(-1),retained,'provider-aware account key survives reorder');
   input.view.accounts.accounts = accountItems; controller.update(input);
   const primary = input.view.accounts.accounts[0].primary, savedCost = primary.cost;
-  primary.estimated = true; primary.cost = {...savedCost,complete:false,display:{known_ccost:'?1814'}};
+  primary.estimated = true; primary.cost = {...savedCost,complete:false,display:{known_ccost:'?1814'},display_units:{credits:{known_ccost:'?1814'}}};
   controller.update(input); assert.match(retained.textContent,/8.4% used \(\?1814\)/);
   assert.match(retained.title,/Estimated account attribution.*partial pricing/);
   assert.ok(!retained.textContent.includes('~'));
@@ -115,11 +151,14 @@ function setup() {
   vm.runInContext('ReportView.setUnit("usd")', context); owner.document.documentElement.dataset.theme = 'web'; controller.settings();
   assert.equal(view.body.children[0].children[2].textContent, '$0.01'); assert.match(retained.textContent, /\(\$18.14\)/);
   assert.equal(child.document.documentElement.dataset.theme, 'web');
+  assert.equal(view.daily.textContent,'Total Today $0.34 · 37 prompts');
   for (const kind of ['reconnecting', 'offline', 'source_unavailable', 'authorization_required', 'identity_changed', 'stopped']) {
     controller.health({kind}); assert.match(view.health.textContent, /not live/); assert.equal(view.body.children[1].children[3].textContent, '20m');
+    assert.match(view.daily.textContent,/Not current/); assert.match(view.daily.title,/retained observation/);
   }
   controller.health({kind: 'connected'}); now += 16000;
   [...child.timers][0](); assert.match(view.health.textContent, /Waiting for live update · not live/);
+  assert.match(view.daily.textContent,/Not current/);
   controller.update(input); assert.match(view.health.textContent, /not live/, 'progress/repeated snapshot is not new Live evidence');
   input.view.now_ms++;
   controller.update(input); assert.equal(view.health.textContent, '');
@@ -131,6 +170,7 @@ function setup() {
   assert.equal(child.closed, true); assert.equal(test.focused(), 1, 'close does not also focus the owner');
   assert.equal(child.timers.size, 0); assert.equal(button.textContent, 'Mini Watch: Off');
   const reopen = controller.toggle(), second = win(); test.opened(second); await reopen;
+  assert.equal(api.requests.at(-1).height,250,'reopening requests the compact size again');
   child.fire('pagehide'); assert.equal(button.textContent, 'Mini Watch: On', 'late old pagehide cannot retire a new window');
   second.close(); second.fire('pagehide'); assert.equal(button.textContent, 'Mini Watch: Off', 'native close');
   const replaceOpen = controller.toggle(), replaced = win(); test.opened(replaced); await replaceOpen;

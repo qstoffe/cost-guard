@@ -2,9 +2,12 @@
 html, body { height: 100%; overflow: hidden; }
 body { padding: .5rem; max-width: none; }
 .mini-watch { padding: 0; min-width: 0; height: 100%; display: flex; flex-direction: column; gap: .4rem; }
+.mini-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .2rem .5rem;
+  flex: 0 0 auto; min-width: 0; padding: 0; background: none; }
 .mini-summary { align-self: flex-start; min-height: 1.6rem; padding: .1rem .25rem; border-color: transparent;
   color: var(--accent); font-size: .8rem; transition: none; }
-.mini-health { flex: 0 1 auto; min-height: 0; max-height: 25%; overflow: auto;
+.mini-daily { margin: 0 0 0 auto; min-width: 0; max-width: 100%; text-align: right; font-size: .8rem; overflow-wrap: anywhere; color: var(--ink); }
+.mini-health { flex: 0 0 auto; min-height: 0; max-height: 25%; overflow: auto;
   font-size: .75rem; color: var(--warn); margin: 0; }
 .mini-health[hidden] { display: none; }
 .mini-prompts { min-height: 3.6rem; max-height: 10.8rem; overflow: auto; flex: 0 1 auto; }
@@ -13,7 +16,7 @@ body { padding: .5rem; max-width: none; }
 .mini-prompt-table th, .mini-prompt-table td { padding: .15rem .25rem; border: 0;
   border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); overflow-wrap: anywhere;
   min-width: 0; max-width: none; white-space: normal; }
-.mini-prompt-table th { position: sticky; top: 0; z-index: 1; background: var(--surface); text-align: left; }
+.mini-prompt-table th { position: sticky; top: 0; z-index: 1; background: var(--surface); text-align: center; }
 .mini-prompt-table th:first-child, .mini-prompt-table td:first-child { border-left: 1px solid var(--line); }
 .mini-prompt-table th { border-top: 1px solid var(--line); }
 .mini-prompt-table th:first-child { width: 34%; }
@@ -22,7 +25,8 @@ body { padding: .5rem; max-width: none; }
 .mini-prompt-table th:nth-child(4) { width: 21%; }
 .mini-prompt-table th:nth-child(5) { width: 17%; }
 .mini-prompt-table td:first-child:not([colspan]) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mini-prompt-table td { font-variant-numeric: tabular-nums; }
+.mini-prompt-table td { font-variant-numeric: tabular-nums; text-align: right; }
+.mini-prompt-table td:first-child { text-align: left; }
 .mini-running { color: var(--watch-running); }
 .mini-success { color: var(--watch-success); }
 .mini-error { color: var(--error); }

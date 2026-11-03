@@ -2,16 +2,17 @@
 // Explicit browser/output, no package installs, personal profiles or desktop input.
 const assert = require('node:assert/strict'), fs = require('node:fs/promises'), path = require('node:path');
 const {spawn} = require('node:child_process'), readline = require('node:readline');
-const [browser, output] = process.argv.slice(2);
+const [browser, output, scale = '1'] = process.argv.slice(2);
 async function main() {
   assert.ok(path.isAbsolute(browser) && path.isAbsolute(output));
+  assert.ok(['1','1.5','2'].includes(scale));
   await fs.stat(browser); await fs.stat(path.dirname(output));
   const profile = await fs.mkdtemp(path.join(path.dirname(output), 'mini-browser-'));
   const server = spawn('py', ['-3', 'development/tests/integration/serve_mini_watch.py'], {windowsHide:true, stdio:['pipe','pipe','pipe']});
   const lines = readline.createInterface({input:server.stdout})[Symbol.asyncIterator]();
   const next = async () => JSON.parse((await lines.next()).value);
   const fixture = async command => {server.stdin.write(JSON.stringify({command})+'\n'); return next();};
-   const child = spawn(browser, ['--headless=new', '--screen-info={1920x1080}', '--no-first-run', '--no-default-browser-check',
+   const child = spawn(browser, ['--headless=new', `--screen-info={${1920*Number(scale)}x${1080*Number(scale)}}`, '--force-device-scale-factor='+scale, '--no-first-run', '--no-default-browser-check',
     '--disable-extensions', '--disable-background-networking', '--remote-debugging-pipe',
     '--user-data-dir=' + profile, 'about:blank'], {windowsHide:true, stdio:['ignore','ignore','ignore','pipe','pipe']});
   const pending = new Map(); let sequence = 0, buffer = '', errors = [];
@@ -64,17 +65,30 @@ async function main() {
     assert.deepEqual((await metrics()).map(row=>row.slice(1,4)),[['#24','3','20m'],['#23','2','10m']]);
     assert.equal(await evaluate(`documentPictureInPicture.window === miniWatch.window`),true);
     await until(`miniWatch.window.getComputedStyle(miniWatch.view.prompts).overflowY === 'auto'`);
+    const alignment = await evaluate(`(() => {const w=miniWatch.window,v=miniWatch.view;return {
+      headers:[...v.root.querySelectorAll('th')].map(cell=>w.getComputedStyle(cell).textAlign),
+      cells:[...v.body.rows[0].cells].map(cell=>w.getComputedStyle(cell).textAlign),
+      daily:v.daily.textContent,full:[...document.querySelector('.watch-daily').children].slice(1,3).map(cell=>cell.textContent),
+      separate:!v.summary.contains(v.daily),headerPadding:w.getComputedStyle(v.root.firstElementChild).padding,
+      sameRow:Math.abs(v.summary.getBoundingClientRect().top-v.daily.getBoundingClientRect().top)<8};})()`);
+    assert.deepEqual(alignment.headers,Array(5).fill('center'));
+    assert.deepEqual(alignment.cells,['left','right','right','right','right']);
+    assert.equal(alignment.daily,`Total Today ${alignment.full[0]} · ${alignment.full[1]}`);
+    assert.equal(alignment.separate,true); assert.equal(alignment.sameRow,true); assert.equal(alignment.headerPadding,'0px');
+    await evaluate(`miniWatch.view.daily.click()`);
+    assert.equal(await evaluate(`location.hash`),'#/watch','daily summary is non-navigating');
     assert.equal(await evaluate(`miniWatch.window.getComputedStyle(miniWatch.view.root).borderTopWidth`),'0px');
     assert.equal(await evaluate(`miniWatch.view.root.querySelector('.mini-close')`),null);
     await until(`getComputedStyle(miniWatch.button).backgroundColor === getComputedStyle(document.querySelector('nav a[aria-current="page"]')).backgroundColor`);
     checks.push('Real user-activated Document PiP opens prompt-local table with external CSP styles, no inner frame/close and selected On fill');
     const pip = () => evaluate(`!!miniWatch.window && !miniWatch.window.closed`);
     await fixture('density-5-3'); await until(`miniWatch.view.body.rows.length === 5 && miniWatch.view.accounts.children.length === 3`);
-    const initial = await evaluate(`(() => {const w=miniWatch.window,v=miniWatch.view;return {width:w.innerWidth,height:w.innerHeight,
+    const initial = await evaluate(`(() => {const w=miniWatch.window,v=miniWatch.view;return {width:w.innerWidth,height:w.innerHeight,outerHeight:w.outerHeight,dpr:w.devicePixelRatio,
       prompts:v.prompts.scrollHeight>v.prompts.clientHeight,accounts:v.accounts.scrollHeight>v.accounts.clientHeight,
+      promptHeight:v.prompts.clientHeight,accountHeight:v.accounts.clientHeight,
       outer:w.document.documentElement.scrollHeight>w.innerHeight};})()`);
     layouts.push({case:'initial-unattached-5-3',...initial});
-    assert.equal(initial.outer,false); assert.equal(initial.prompts,false,JSON.stringify(initial)); assert.equal(initial.accounts,false,JSON.stringify(initial));
+    assert.equal(initial.outer,false); assert.ok(initial.promptHeight>=32 && initial.accountHeight>=32,JSON.stringify(initial));
     await fixture('running'); await until(`miniWatch.view.body.rows.length === 2 && miniWatch.view.accounts.children.length === 6`);
     const targets = await command('Target.getTargets');
     let pipSession = null;
@@ -112,7 +126,10 @@ async function main() {
     const normal = await geometry();
     layouts.push({case:'native-resize-5-3',...normal});
     assert.equal(normal.outer,false); assert.equal(normal.horizontal,false);
-    assert.equal(normal.prompts,false,JSON.stringify(normal)); assert.equal(normal.accounts,false,JSON.stringify(normal)); assert.equal(normal.healthyHidden,true);
+    if (Number(scale)<=1.5) {
+      assert.equal(normal.prompts,false,JSON.stringify(normal)); assert.equal(normal.accounts,false,JSON.stringify(normal));
+    } else assert.ok(normal.promptHeight>=32 && normal.accountHeight>=32,'clamped higher-scale window retains reachable scroll regions');
+    assert.equal(normal.healthyHidden,true);
     assert.equal(normal.header,'sticky'); assert.ok(normal.barHeight>=9 && normal.barHeight<=11);
     await fixture('density-6-4');
     await until(`miniWatch.view.body.rows.length === 6 && miniWatch.view.accounts.children.length === 4`);
@@ -124,10 +141,11 @@ async function main() {
     assert.equal(await evaluate(`miniWatch.view.prompts.scrollTop`),promptScroll);
     for (const count of [1,2,3,4,6]) {
       await fixture('density-1-'+count); await until(`miniWatch.view.accounts.children.length === ${count}`);
-      assert.equal((await geometry()).accounts,count>3);
+      const layout = await geometry(); assert.equal(layout.outer,false);
+      if (Number(scale)<=1.5 || count>3) assert.equal(layout.accounts,count>3);
     }
     await fixture('running'); await until(`miniWatch.view.body.rows.length === 2 && miniWatch.view.accounts.children.length === 6`);
-    checks.push('Requested default geometry fits 5 prompt/3 subscription rows without outer scroll; 6/4 scroll independently; 1/2/3/4/6 accounts, thin bars and sticky header');
+    checks.push('Compact opening and higher-scale browser clamps keep reachable independent scroll regions; enlarged 5/3 fits at 100/150%, 6/4 scroll; centered headers, semantic data alignment, canonical separate daily summary');
     for (const [theme,scheme,background] of [['classic','light','#101112'],['web','light','#eef2f8'],['web','dark','#0c1422']]) {
       await evaluate(`document.documentElement.dataset.theme='${theme}'; miniWatch.settings()`);
       await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:scheme}]},pipSession);
@@ -195,9 +213,9 @@ async function main() {
     assert.equal(await pip(),true,'host shutdown marks retained figures not live without pretending window close');
     checks.push('Real terminal shutdown reaches open Mini as not live');
     assert.deepEqual(errors,[]);
-     evidence = {outcome:'PASS',browser:version.product,checks,layouts,screenshots,
+      evidence = {outcome:'PASS',browser:version.product,emulatedDeviceScale:Number(scale),checks,layouts,screenshots,
       limitations:['Headless Chromium only; no physical/native X, native return/replacement chrome, minimized-opener restoration, always-on-top OS geometry or screen-reader proof.']};
-   } catch (error) {console.error(error.stack);evidence={outcome:'FAIL',checks,screenshots,reason:error.message};process.exitCode=1;}
+   } catch (error) {console.error(error.stack);evidence={outcome:'FAIL',checks,layouts,screenshots,reason:error.message};process.exitCode=1;}
   finally {
     clearTimeout(deadline);
     try {await command('Browser.close');} catch {}

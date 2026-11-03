@@ -1,5 +1,126 @@
 # Mini Watch and finished history
 
+## FR 000565 — v80.145, 2026-11-03
+
+Base: `6c99e65cc9e4dc0dccd9d2302f50fbd89392a8d9`. Only Mini presentation changes;
+the full Watch layout, accounting, acquisition and one EventSource remain unchanged.
+The right, non-clickable header reads the exact full Watch `daily_usage.total` and
+`prompt_count`, including pre-Watch activity, through existing unit display tokens.
+Missing pricing is N/A, real zero stays zero, partial coverage and retained/not-current
+states remain explicit. Corrections and the next canonical local day replace values.
+All five headings are centered; title data stays left and numeric data right. The
+compact header overrides full-page header padding/background, preserving readable
+health text and independently scrollable prompt/account regions at reduced height.
+
+### Native physical geometry, not requested-height proof
+
+Executed on this workstation's actual **Windows DPI 144 / 150%**, installed
+**Chrome 156.0.8078.80**, with an owned disposable profile and synthetic loopback data.
+No display settings or personal browser state were changed. Genuine browser zoom was
+set/read through Chrome's own `settingsPrivate` default-zoom API, not CSS/pinch/DPR
+emulation. Fresh profiles have no per-origin override. `visualViewport.scale` was 1.
+The visible native PiP HWND inherited the owner page title, not its document title;
+the helper identifies a new visible HWND in the launched browser's exact PID.
+
+| Case | Requested height (screen DIPs) | Browser zoom | DOM innerHeight (CSS px) | DOM outerHeight (screen DIPs) | DPR | GetWindowRect / capture height (physical px) | DWM visible height (physical px) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Unchanged baseline | 450 | 100% | 451 | 492 | 1.5 | 738 | **729** |
+| Unchanged baseline | 450 | 80% | 562 | 492 | 1.2000000477 | 737 | **728** |
+| Corrected first open | 250 | 80% | 312 | 292 | 1.2000000477 | 437 | **428** |
+| Corrected first open | 250 | 100% | 250 | 292 | 1.5 | 437 | **428** |
+| Corrected first open | 250 | 125% | 201 | 292 | 1.875 | 438 | **429** |
+| Corrected first open | 250 | 150% | 167 | 292 | 2.25 | 438 | **429** |
+| Reopen, dense/warnings | 250 | 80/100/125/150% | 312/250/200/166 | 292 | as above | 437 | **428** |
+
+Native measurement runs per-monitor-DPI-aware. Baseline client geometry was
+841×727 physical px; corrected 100%-zoom client geometry was 839×426. Win32 client
+area includes browser-drawn PiP chrome, not just the document. At baseline 100% zoom,
+451 CSS px × DPR 1.5 = 676.5 physical document pixels; the 729px visible frame adds
+about **52.5 physical pixels** of native chrome/frame. At corrected 100% zoom,
+250×1.5 = 375 physical document pixels, plus about **53** = 428 visible pixels.
+GetWindowRect/capture includes an additional 9px invisible bottom resize border.
+Rounding explains roughly 1px variation; it is not subtracted to manufacture a pass.
+Even the larger raw capture bounds remain <=438, safely below 470.
+
+This reproduces and explains the owner's ~725–730px report. Chromium's opening
+request is in **screen DIPs**, independent of page zoom; zoom changes CSS innerHeight
+and DPR together, while the physical footprint stays stable. The measured 150%
+scale plus native chrome, not an unexplained 450→730 API enlargement, causes it.
+250 DIPs was derived from those native measurements, not relabeled as 250 physical px.
+
+Window-only `PrintWindow` captures were visually inspected: full origin/security,
+return and close controls, frame, content and bottom boundary are present; not a
+blank/cropped DOM image. Retained synthetic evidence, all including raw native bounds:
+
+- [Before, 863×738 physical pixels](../../architecture/governance/verification/mini-watch-geometry/baseline-150-scale-100-zoom.png)
+- [After, 861×437 physical pixels](../../architecture/governance/verification/mini-watch-geometry/compact-150-scale-100-zoom.png)
+- [Reopened warnings at 150% page zoom, 863×437 physical pixels](../../architecture/governance/verification/mini-watch-geometry/compact-150-scale-150-zoom-warnings.png)
+
+Each corrected native batch measured initial open before any resize, then manually
+enlarged the owned PiP to 700×600 through a new test user activation, closed and
+reopened with six long-title prompts, four subscriptions and retained/source/quota
+warnings. Reopening honors 560×250 with `preferInitialWindowPlacement:true`, not the
+last manual size. A bounded 20ms native sampling loop observed no oversized opening
+frame; sampling is not an assertion of every unsampled compositor instant. Header,
+warning line, sticky headings and independent scroll areas remain readable without
+document/horizontal overflow, including 150% browser zoom. Manual resizing is free.
+
+### Executed regressions and limits
+
+- **PASS:** final local Full, all 136 bounded runner units, **290.0s**, one worker
+  without simultaneous browser/native probes. All original assertions are intact.
+- VM/Python regression: full Watch/Mini exact daily parity despite visible-row totals
+  differing, Credits/USD, known zero, unavailable pricing, partial data, loading,
+  retry/source/offline/auth/stale states, canonical day replacement/corrections,
+  separate non-navigating daily metric, keyed rows, lifecycle races and settings.
+- Real headless Chrome and Edge **156.0.4314.58**: served CSP/assets, one SSE,
+  centered headings and semantic data alignment, separate canonical daily header,
+  sticky/independent scrolling, Classic/Web light/dark, currency, focus/keyboard,
+  narrow resize, hidden-opener updates, terminal/empty/recovering/native close/reopen.
+  Chrome emulated device scales 1/1.5/2 pass layout/lifecycle; higher-scale browser
+  clamps may scroll even five/three rows. Virtual screen size scales with DPR so
+  tests do not accidentally change available logical screen size. This is **not**
+  actual Windows 100% or 200% native outer-window proof. In particular, a 250-DIP
+  request can exceed 470 physical pixels at higher OS scaling; no universal cap is
+  claimed and no platform support was silently removed.
+- Read-only installed V2 acquisition: 80 coherent running publications before Daily
+  became available, one running prompt, five known-finish history cards, three
+  accounts/one primary-period cost; **28.282s**, owned close **0.106s**. No inference
+  or shared OpenCode stop. This is not a WebHost shutdown or OS restoration test.
+- The initial concurrent Full run failed one pre-existing 872-root historical-report
+  catalog-count assertion (4 rather than allowed 2/3); a focused run with the default
+  25s harness timed out after its first large test passed. A subsequent isolated run
+  with a 120s per-file bound passed all historical-report tests in **25.71s**. The
+  source has real-time catalog-hint expiry; concurrent native/browser probes changed
+  runtime load. That is a timing sensitivity, not a proven causal source defect, and
+  no assertion, source timeout or product behavior was weakened to hide it.
+
+### Decision Delegate authorization and diagnostic exception
+
+The active Decision Delegate authorized the crucial, finite **visible own-profile
+Chrome/PiP measurements only**, after integrated Electron lacked Document PiP and
+headless geometry could not establish physical acceptance. Helpers remained hidden;
+CDP touched only owned targets, with no shared mouse/keyboard/clipboard, personal
+profiles, login, display-setting changes or unrelated foreground cycling. Owned
+windows closed between batches and while editing. This was **not owner desktop
+permission** or future blanket authority.
+
+An attempted minimal open then automatic resize was rejected by real Chrome:
+`NotAllowedError: resizeTo() requires user activation in document picture-in-picture`.
+Opening consumes activation. The approach was removed, not bypassed; the mock now
+throws on any automatic resize so it cannot falsely approve this again. The final
+implementation uses one direct 250-DIP request, no post-open resize or new permission.
+
+After the native baseline and actual 80%/100% zoom results, the **Decision Delegate**
+explicitly replaced the FR's personal-profile original-zoom inspection requirement
+with controlled genuine **80/100/125/150% browser-zoom verification on the same
+150%-scaled workstation**. This superseded the earlier withholding of that exception.
+The owner's original personal-profile zoom remains **unknown**, not verified; the
+470-physical-pixel cap at actual 150% OS scaling was **not waived**. This exception
+applies to FR 000565/same-task delivery only unless superseded. Actual alternate
+Windows scales, macOS/Linux native frames, minimized restoration, OS z-order and
+screen-reader speech remain unverified, not PASS.
+
 ## FR 000561 — v80.141, 2026-11-03
 
 Implementation base: `5a2fe691ba8c8bd5701b4beada8863d50930754c`.

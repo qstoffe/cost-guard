@@ -5,7 +5,7 @@ Picture-in-Picture window. The whole control is highlighted **On** only while it
 Click On again or the browser's native close control to close it; Mini has no custom ×.
 It never opens automatically on minimization or reload and has no saved On preference.
 
-Mini stays open across in-app navigation. Its summary is a keyboard-accessible action
+Mini stays open across in-app navigation. Its left **Cost Guard · Watch** title is a keyboard-accessible action
 that selects Watch and requests focus of the **existing** owning Cost Guard tab; it
 does not open a new tab or deliberately close Mini. Focus/restoring a minimized
 window depends on the browser/OS. If that request cannot restore it, use the native
@@ -14,6 +14,12 @@ Mini; a fresh page starts Off. Browser PiP replacement may also close it.
 
 ## What the figures mean
 
+- **Total Today**, on the right, is the same global configured-local-day CCost and
+  distinct initiating-prompt count as full Watch, including earlier pre-Watch activity
+  across sessions/providers. It is not a sum of Mini rows or subscription periods.
+  Only the left title navigates; the daily summary is non-clickable. Loading, unknown
+  pricing, partial data and retained/not-current observations stay explicit. Genuine
+  observed zero is zero; the next canonical day/correction replaces the prior value.
 - **Session:** actual session title, truncated to fit; focus/hover for the full title.
 - **#:** canonical session-local prompt ordinal, not a Mini list index. Concurrent
   prompts within one session remain separate rows, ordered by actual start.
@@ -60,10 +66,17 @@ extension, flag, notification permission, native helper or second sign-in flow.
 
 The unframed compact tables follow **Classic / Web light/dark** and live
 **Credits / USD**. Healthy Live text is omitted; meaningful health warnings remain.
-Mini requests 560×450 CSS px; browsers may clamp it. Up to five prompt rows and three
-one-line subscriptions fit the normal default; rows 6/4 scroll in independent regions
-with a sticky prompt header. Short lists shrink. Resize with the browser's controls;
-long labels/larger fonts and unusually small windows may require internal scrolling.
+Mini requests 560×250 **screen DIPs**, not physical screen pixels or zoomed document
+CSS pixels. On the tested Windows 150% display, its complete visible native frame
+opens/reopens at **428–429 physical pixels** high, below 470, including native chrome.
+The previous 450-DIP request measured 729 physical pixels. Chrome page zoom changes
+document dimensions, not that request's screen units. Other scales/platforms can
+produce different outer geometry; a universal 470-physical-pixel cap is not verified.
+Prompt headings are centered; titles remain left-aligned and numeric values right.
+Prompt and account regions scroll independently with a sticky prompt header; larger
+lists may scroll immediately at the smaller opening size. Resize with the browser's
+controls; narrow widths wrap the header instead of overlapping it. Reopening requests
+the compact initial size again; later manual resizing is never forcibly undone.
 The browser
 owns outer chrome, origin/security indication, positioning, native return controls
 and final geometry; this is not a frameless, arbitrarily positioned tooltip.

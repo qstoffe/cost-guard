@@ -34,6 +34,8 @@ const MiniWatch = (() => {
       this.summary.title = 'Return to Watch. If the browser cannot restore a minimized window, use its native return-to-tab control.';
       this.summary.addEventListener('click', returnToWatch);
       this.summary.append(el('span', 'Cost Guard · Watch', 'mini-brand'));
+      this.daily = el('p', 'Total Today · Loading…', 'mini-daily'); this.daily.tabIndex = 0;
+      const top = el('header', undefined, 'mini-header'); top.append(this.summary, this.daily);
       this.health = el('p', 'Acquiring live prompts…', 'mini-health'); this.health.setAttribute('role', 'status');
       this.prompts = el('div', undefined, 'mini-prompts'); this.prompts.tabIndex = 0;
       this.prompts.setAttribute('role', 'region'); this.prompts.setAttribute('aria-label', 'Active and recently ended prompts');
@@ -51,7 +53,7 @@ const MiniWatch = (() => {
       const empty = el('td', 'No running or recently ended prompts'); empty.colSpan = 5; this.emptyPrompts.append(empty);
       this.accounts = el('ul', undefined, 'mini-accounts'); this.lines = new Map();
       this.accounts.tabIndex = 0; this.accounts.setAttribute('aria-label', 'Primary subscription usage and same-period observed CCost');
-      this.root.append(this.summary, this.health, this.prompts, this.accounts); doc.body.replaceChildren(this.root);
+      this.root.append(top, this.health, this.prompts, this.accounts); doc.body.replaceChildren(this.root);
     }
     update(publication, health, overdue) {
       const view = publication?.view, running = view?.running;
@@ -66,8 +68,28 @@ const MiniWatch = (() => {
       this.health.hidden = !this.health.textContent;
       this.root.dataset.live = fresh && running?.state === 'observed' ? 'true' : 'false';
       this.health.title = 'Figures use the last canonical publication; elapsed time is never extrapolated while disconnected.';
+      this.drawDaily(view, fresh);
       this.drawPrompts(view);
       this.drawAccounts(view);
+    }
+    drawDaily(view, fresh) {
+      const value = view?.daily_usage, state = view?.daily_state;
+      let label = 'Total Today · ' + (state === 'unavailable' ? 'Unavailable' : 'Loading…');
+      const notes = [];
+      if (value) {
+        const cost = value.total.observed_requests && !value.total.priced_requests ? 'N/A' : ReportView.display(value.total, 'known_ccost');
+        label = `Total Today ${cost} · ${value.prompt_count} prompts`;
+        if (!value.total.complete || !value.mix.cost_complete || value.mix.request_count && value.mix.totals.some(amount => amount == null))
+          notes.push('Partial pricing / telemetry');
+        if (state === 'unavailable') notes.push('Source unavailable · retained daily observation');
+        else if (state === 'retrying') notes.push('Retrying daily refresh · retained observation, not current');
+        else if (state !== 'observed') notes.push('Partial daily observation');
+        if (!fresh) notes.push('Not live · retained observation');
+      }
+      ReportView.text(this.daily, label + (notes.length ? ' · ' + (fresh && state === 'observed' ? 'Partial' : 'Not current') : ''));
+      this.daily.title = 'Global configured local-day CCost and distinct initiating prompts, including pre-Watch activity; not visible-row totals. ' + notes.join('. ');
+      this.daily.setAttribute('aria-label', this.daily.textContent + '. ' + this.daily.title);
+      this.daily.className = 'mini-daily' + (notes.length ? ' mini-warning' : '');
     }
     drawPrompts(view) {
       const wanted = [], seen = new Set(), text = ReportView.text, display = ReportView.display;
@@ -175,7 +197,11 @@ const MiniWatch = (() => {
       let win = null;
       try {
         // Called synchronously inside the explicit click's user activation.
-        win = await this.owner.documentPictureInPicture.requestWindow({width: 560, height: 450});
+        // Chromium requests screen DIPs, independent of page zoom. Measured on
+        // Windows at 150%: 450 DIPs produced a 729-physical-pixel visible frame.
+        // 250 leaves room for native chrome below the 470px target on that setup.
+        // Do not resize after opening: Chrome requires a NEW PiP user activation.
+        win = await this.owner.documentPictureInPicture.requestWindow({width: 560, height: 250, preferInitialWindowPlacement: true});
         if (request.cancelled || this.ended || win.closed || this.owner.documentPictureInPicture.window !== win) {
           win.close(); return;
         }
