@@ -12,6 +12,7 @@ from dataclasses import dataclass
 import threading
 from typing import Callable
 
+from src.cache.model_notices import NOTICE_BUSY_TIMEOUT_MS, NoticeCacheHealth
 from src.pricing.catalog import PricingCatalog, canonical_model_name
 from src.pricing.release_metadata import valid_date
 from src.reports.semantics import (
@@ -100,6 +101,9 @@ class WatchModelDiscovery:
         self._check_active = False
         self._check_pending = _CheckRequest()
         self._check_results: list[_CheckResult] = []
+        self._cache_health = NoticeCacheHealth("watch-model-notice-cache")
+        self._history_pending = True
+        self._cache_dirty = False
 
     def _repository(self):
         return getattr(self.service, "cache_repository", None)
@@ -114,47 +118,57 @@ class WatchModelDiscovery:
                 self._sightings[model_id] = first_seen
         return self._sightings.get(model_id)
 
-    def _persist_known(self) -> None:
+    def _persist_known(self, now_ms: int) -> None:
         repository = self._repository()
-        if repository is None:
+        if repository is None or self._history_pending or not self._cache_dirty:
             return
-        try:
+
+        def write():
             repository.put(_CACHE_NAMESPACE, "known-catalog-ids",
-                           sorted(self._catalog_keys), algorithm_version="v1")
+                           sorted(self._catalog_keys), algorithm_version="v1",
+                           busy_timeout_ms=NOTICE_BUSY_TIMEOUT_MS)
             repository.put(_CACHE_NAMESPACE, "recent-discoveries",
-                           {key: [name, seen] for key, (name, seen) in self._first_seen.items()},
-                           algorithm_version="v1")
-        except (OSError, ValueError):
-            pass  # optional, non-authoritative notice history
+                            {key: [name, seen] for key, (name, seen) in self._first_seen.items()},
+                            algorithm_version="v1", busy_timeout_ms=NOTICE_BUSY_TIMEOUT_MS)
+        ok, _ = self._cache_health.attempt(write, now_ms, phase="write")
+        if ok:
+            self._cache_dirty = False
+
+    def _read_history(self, now_ms: int, *, startup: bool = False) -> None:
+        repository = self._repository()
+        if repository is None or not self._history_pending:
+            return
+
+        def read():
+            return tuple(repository.get(_CACHE_NAMESPACE, key, busy_timeout_ms=NOTICE_BUSY_TIMEOUT_MS)
+                         for key in ("known-catalog-ids", "recent-discoveries"))
+        ok, entries = self._cache_health.attempt(read, now_ms, phase="read")
+        if not ok:
+            return
+        self._history_pending = False
+        known, discoveries = (entry.payload if entry is not None else None for entry in entries)
+        if isinstance(discoveries, dict):
+            for key, value in list(discoveries.items())[:256]:
+                if (isinstance(key, str) and isinstance(value, list)
+                    and len(value) == 2 and isinstance(value[0], str)
+                    and type(value[1]) is int and 0 <= now_ms - value[1] < NEW_NOTICE_MS):
+                    self._first_seen.setdefault(key, (value[0], value[1]))
+        # A delayed first read cannot establish which startup models were new.
+        if startup and isinstance(known, list):
+            known_ids = {key for key in known if isinstance(key, str)}
+            for model in self.catalog.models:
+                key = _key(model)
+                if key and key not in known_ids and _priced(model) and not _released(model):
+                    first_seen = self._first_sighting_ms(model, now_ms)
+                    self._first_seen[key] = (_name(model), first_seen if first_seen is not None else now_ms)
 
     def _initialize(self, now_ms: int) -> None:
         self.catalog = self.service._load_catalog()
         self._catalog_keys = {_key(model) for model in self.catalog.models}
-        repository = self._repository()
-        if repository is not None:
-            try:
-                entry = repository.get(_CACHE_NAMESPACE, "known-catalog-ids")
-                known = entry.payload if entry is not None else None
-                entry = repository.get(_CACHE_NAMESPACE, "recent-discoveries")
-                discoveries = entry.payload if entry is not None else None
-                if isinstance(discoveries, dict):
-                    for key, value in list(discoveries.items())[:256]:
-                        if (isinstance(key, str) and isinstance(value, list)
-                            and len(value) == 2 and isinstance(value[0], str)
-                            and type(value[1]) is int and 0 <= now_ms - value[1] < NEW_NOTICE_MS):
-                            self._first_seen[key] = (value[0], value[1])
-                # Without earlier history a first read proves nothing new.
-                if isinstance(known, list):
-                    known_ids = {key for key in known if isinstance(key, str)}
-                    for model in self.catalog.models:
-                        key = _key(model)
-                        if key and key not in known_ids and _priced(model) and not _released(model):
-                            first_seen = self._first_sighting_ms(model, now_ms)
-                            self._first_seen[key] = (_name(model), first_seen if first_seen is not None else now_ms)
-            except (OSError, ValueError):
-                pass
+        self._cache_dirty = True
+        self._read_history(now_ms, startup=True)
         self._last_price_check_ms = now_ms
-        self._persist_known()
+        self._persist_known(now_ms)
 
     def _observe(self, latest: PricingCatalog, now_ms: int) -> None:
         """Catalog-diff evidence is needed only while no verified date exists."""
@@ -165,7 +179,8 @@ class WatchModelDiscovery:
                 self._first_seen[key] = (_name(model), first_seen if first_seen is not None else now_ms)
         self._catalog_keys.update(_key(model) for model in latest.models)
         self.catalog = latest
-        self._persist_known()
+        self._cache_dirty = True
+        self._persist_known(now_ms)
 
     def _availability_reader(self):
         return getattr(getattr(getattr(self.service, "selection", None), "source", None), "available_model_ids", None)
@@ -305,10 +320,14 @@ class WatchModelDiscovery:
             self._request_check(_CheckRequest(availability=True))
             self._adopt_checks(now_ms)
 
-        self._first_seen = {
+        retained = {
             key: item for key, item in self._first_seen.items()
             if 0 <= now_ms - item[1] < NEW_NOTICE_MS
         }
+        self._cache_dirty |= retained != self._first_seen
+        self._first_seen = retained
+        self._read_history(now_ms)
+        self._persist_known(now_ms)
 
     def _observe_availability(self, result, now_ms: int) -> None:
         ids = {item.lower(): item for item in result if isinstance(item, str)}
@@ -353,7 +372,9 @@ class WatchModelDiscovery:
                 if not 0 <= now_ms - seen < NEW_NOTICE_MS:
                     continue
                 shared_seen = self._first_sighting_ms(model, now_ms)
-                names[key] = (name, "", shared_seen if shared_seen is not None else seen)
+                # Local catalog-diff eligibility is valid through an outage, but
+                # an unavailable shared timestamp must not become persisted proof.
+                names[key] = (name, "", shared_seen if self._repository() is not None else seen)
         if not names:
             return "", ()
         values = sorted(names.values(), key=lambda item: item[0].lower())
@@ -397,6 +418,10 @@ class WatchModelDiscovery:
             "pricing_status": self.last_price_error or "ok",
             "availability_status": self.last_availability_error or ("ok" if self._availability_known else "unknown"),
             "new_catalog_model_count": len(self._first_seen),
+            "notice_cache": (self._cache_health.diagnostics() if self._repository() is not None
+                             else {"status": "disabled"}),
+            "first_sighting_cache": (self._repository().model_sightings.health.diagnostics()
+                                     if self._repository() is not None else {"status": "disabled"}),
             "v2_price_refresh_triggers": self._v2_price_triggers,
             "last_v2_price_refresh_ms": self._last_v2_price_trigger_ms,
             "metadata_refresh_runs": self._metadata_runs,

@@ -220,6 +220,9 @@ class WatchEvidenceTests(unittest.TestCase):
             record.assert_not_called()
         self.assertEqual(1, result["running_rows"])
         self.assertEqual(1, result["rendered_accounts"])
+        cache = result.pop("model_notice_cache")
+        self.assertEqual({"notice_cache": {"status": "ok", "failed_attempts": 0, "next_retry_ms": None},
+                          "first_sighting_cache": {"status": "unknown", "failed_attempts": 0, "next_retry_ms": None}}, cache)
         self.assertEqual({"80", "120", "160"}, set(result["renders"]))
         for width, render in result["renders"].items():
             self.assertEqual(0, render["flowing_overflow_lines"], width)
@@ -237,6 +240,30 @@ class WatchEvidenceTests(unittest.TestCase):
         # Only explicit mode/generation enums add text; other leaves remain
         # numbers/flags, never title, prompt, model, session or path text.
         self.assertTrue(all(value is None or isinstance(value, (bool, int, float)) for value in leaves(result)))
+
+    def test_headless_watch_discloses_unavailable_optional_history(self) -> None:
+        import sqlite3
+        from development.tests.fixtures.report_runtime import FakePricingProvider
+        from development.tests.fixtures.watch_runtime import MutableSource, make_service
+        from development.tools.diagnostic_watch import watch_evidence
+
+        with tempfile.TemporaryDirectory() as tmp:
+            config, selection, service, _ = make_service(tmp, MutableSource())
+            get = service.cache_repository.get
+
+            def unavailable(namespace, *args, **kwargs):
+                if namespace == "watch.model-discovery":
+                    raise sqlite3.OperationalError("private path/account")
+                return get(namespace, *args, **kwargs)
+
+            with mock.patch.object(service.cache_repository, "get", unavailable):
+                result = watch_evidence(selection, config, service.cache_repository,
+                                        pricing_provider=FakePricingProvider())
+
+        health = result["model_notice_cache"]["notice_cache"]
+        self.assertEqual(("unavailable", "read", 1), (health["status"], health["phase"], health["failed_attempts"]))
+        self.assertNotIn("private path/account", repr(result))
+        self.assertGreater(result["rows"], 0)
 
     def test_terminal_facts_are_booleans_and_sizes_only(self) -> None:
         from development.tools.diagnostic_watch import terminal_facts

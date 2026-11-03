@@ -92,6 +92,7 @@ def watch_evidence(selection: Any, config: Mapping[str, Any], repository: Any, *
     projection = polled.projection if quota is None else replace(polled.projection, quota=quota)
     metadata = getattr(selection.source, "diagnostic_metadata", None)
     transport = (metadata() or {}).get("transport") if callable(metadata) else None
+    discovery = watch.model_discovery.diagnostics(int(time.time() * 1000))
     return {
         "initialize_ms": initialize_ms, "poll_ms": poll_ms, "status_projection_ms": status_ms,
         "roots": len(initial.changed_roots), "hydrated_roots": len(initial.hydrated_roots),
@@ -104,4 +105,5 @@ def watch_evidence(selection: Any, config: Mapping[str, Any], repository: Any, *
         "acquisition": service.metrics.snapshot(),
         "initial_today_pending": initial.projection.today_pending,
         "fully_populated_today_pending": enriched.projection.today_pending,
+        "model_notice_cache": {key: discovery[key] for key in ("notice_cache", "first_sighting_cache")},
     }

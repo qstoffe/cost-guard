@@ -4,9 +4,13 @@ import shutil
 import tempfile
 import threading
 import unittest
+import sqlite3
+import time
 from pathlib import Path
 
+from development.tests.fixtures.sqlite_faults import SQLiteFaults
 from src.cache import CACHE_FILENAME, CacheDatabase, CacheRepository
+from src.cache.model_notices import NOTICE_BUSY_TIMEOUT_MS, NoticeCacheHealth
 
 
 class CacheFoundationTests(unittest.TestCase):
@@ -46,6 +50,49 @@ class CacheFoundationTests(unittest.TestCase):
                 busy_timeout = connection.execute("PRAGMA busy_timeout").fetchone()[0]
             self.assertEqual("wal", journal_mode.lower())
             self.assertGreaterEqual(busy_timeout, 5000)
+            with db.connect() as connection:
+                self.assertEqual(1, connection.execute("PRAGMA synchronous").fetchone()[0])
+                self.assertEqual(1, connection.execute("PRAGMA foreign_keys").fetchone()[0])
+
+    def test_transaction_failure_preserves_raw_error_phase_rollback_and_close(self):
+        for phase in ("pragma", "write", "commit"):
+            with self.subTest(phase=phase), tempfile.TemporaryDirectory() as tmp:
+                database = CacheDatabase(Path(tmp))
+                database.initialize()
+                repository = CacheRepository(database)
+                faults = SQLiteFaults(database)
+                faults.phase = phase
+                with faults.install(), self.assertRaises(sqlite3.OperationalError) as raised:
+                    repository.put("test", "failed", {"value": 1})
+                self.assertIs(faults.error, raised.exception)
+                self.assertEqual(phase, raised.exception.cache_phase)
+                self.assertEqual((1, 1, 1), (faults.opened, faults.closed, faults.rollbacks))
+                self.assertIsNone(repository.get("test", "failed"))
+
+    def test_optional_busy_budget_preserves_wal_readers_and_recovers_after_writer_releases(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            database = CacheDatabase(Path(tmp))
+            database.initialize()
+            repository = CacheRepository(database)
+            repository.put("test", "existing", 1)
+            health = NoticeCacheHealth("watch-model-notice-cache")
+            with database.connect() as writer:
+                writer.execute("BEGIN IMMEDIATE")
+                writer.execute("UPDATE cache_entries SET payload_json='2' WHERE cache_key='existing'")
+                # A second CLI/Web/Diagnostics-style short-lived reader sees the
+                # committed snapshot in WAL while the other writer holds its lock.
+                self.assertEqual(1, CacheRepository(CacheDatabase(Path(tmp))).get("test", "existing").payload)
+                started = time.monotonic()
+                ok, _ = health.attempt(lambda: repository.put(
+                    "test", "optional", 3, busy_timeout_ms=NOTICE_BUSY_TIMEOUT_MS), 1000, phase="write")
+                self.assertLess(time.monotonic() - started, 0.5)
+                self.assertFalse(ok)
+                self.assertEqual(sqlite3.SQLITE_BUSY, health.error["sqlite_code"] & 255)
+            ok, _ = health.attempt(lambda: repository.put(
+                "test", "optional", 3, busy_timeout_ms=NOTICE_BUSY_TIMEOUT_MS), 61_000, phase="write")
+            self.assertTrue(ok)
+            self.assertEqual(3, repository.get("test", "optional").payload)
+            self.assertEqual(2, repository.get("test", "existing").payload)
 
     def test_first_sighting_is_insert_only_and_provider_qualified(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
