@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.146 — 2026-11-03
+
+- Full Web Watch: scale-aware account-card tracks reserve a small raster-rounding margin below the 450-pixel ceiling, updating on display/page/pinch scale changes without shrinking text. Accounts, Mini Watch and quota accounting are unchanged. Native owner-desktop physical verification remains unverified under a scoped Decision Delegate exception.
+
 ## v80.145 — 2026-11-03
 
 - Mini Watch: measured smaller opening/reopening at 150% Windows scaling, centered prompt headings and a separate right-aligned canonical Total Today summary. Live units, partial/stale evidence, independent scrolling and manual resizing remain intact; no new data owner.

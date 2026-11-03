@@ -270,6 +270,22 @@ const WatchView = (() => {
     constructor(state) {
       this.state = state;
       this.root = el('div', undefined, 'watch-view');
+      // DPR already includes desktop page zoom. Only pinch zoom adds a separate
+      // visual-viewport factor. Keep text unscaled and reserve two raster pixels
+      // for fractional border/layout rounding beneath the 450-pixel ceiling.
+      let resolution;
+      const updateWidth = () => {
+        const ratio = window.devicePixelRatio || 1;
+        const scale = ratio * (window.visualViewport?.scale || 1);
+        this.root.style.setProperty('--watch-account-width', Math.floor(448 / scale) + 'px');
+        resolution?.removeEventListener('change', updateWidth);
+        resolution = window.matchMedia(`(resolution: ${ratio}dppx)`);
+        resolution.addEventListener('change', updateWidth);
+      };
+      // One retained View per document; also works while Watch is detached.
+      window.addEventListener('resize', updateWidth);
+      window.visualViewport?.addEventListener('resize', updateWidth);
+      updateWidth();
       this.earlier = el('details', undefined, 'watch-earlier');
       this.earlier.append(el('summary', 'Earlier Prompts'));
       this.history = el('div', undefined, 'watch-history'); this.earlier.append(this.history);

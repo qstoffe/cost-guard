@@ -212,8 +212,14 @@ limits: [Watch cards](../../journal/web/watch-cards.md). The older
 acceptance; use approval-only `probe_watch_cards.cjs` and the integrated-browser
 `serve_web_watch.py` fixture, plus read-only `probe_web_live.py --watch-cards --detail`.
 
-Full Watch subscription tracks and cards cap at 450 CSS pixels, independently of root
-font size, and shrink below that cap. Slim .83rem teal bars use 2px track/fill corners
+Full Watch's retained View gives subscription tracks/cards a scoped CSS width of
+floor(448 / (devicePixelRatio × visualViewport.scale)) pixels. DPR includes desktop
+page zoom; only pinch adds the visual-viewport factor. Resolution media changes and
+window/visual-viewport resize update the cap without replacing focused cards or
+changing text size, acquisition, Accounts or Mini. Both grid/card selectors share
+the cap, and narrow tracks shrink. Headless raster proof and the scoped unverified
+native-desktop exception are in [physical-width findings](../../journal/web/watch-account-pixels.md).
+Slim .83rem teal bars use 2px track/fill corners
 in Chromium/WebKit and Gecko selectors. Canonical per-quota exhaustion alone colors that summary/fill red and
 tints only its subscription header; stale/restriction warnings remain independent.
 Application display prepares Watch-only reset tokens using shared `duration_text`

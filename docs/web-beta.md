@@ -332,9 +332,12 @@ on the existing single history lane after five seconds rather than waiting a min
 Browser reconnect/offline/host-stop notices remain separate from source acquisition.
 
 Subscription cards align centered title bands, **CCost Today**, native primary usage
-and bars; body values stay left aligned. Each card caps at 450 CSS pixels, including
-enlarged text, wraps naturally and narrows with the viewport. Title padding is
-slimmer without smaller text. Native declarations/order, never depletion or
+and bars; body values stay left aligned. Full Watch divides a 448-pixel budget by
+effective display/page/pinch scale, leaving a rounding margin below the requested
+450-screen-pixel ceiling. Cards wrap without smaller text and narrow with the viewport.
+Headless Chrome raster checks cover the correction; native owner-desktop physical
+measurements and actual page zoom remain unverified. Title padding is slimmer
+without smaller text. Native declarations/order, never depletion or
 provider identity, select the primary. Missing primary stays unavailable; weekly-only
 accounts have no invented five-hour slot or duplicate secondary.
 

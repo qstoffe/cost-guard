@@ -156,9 +156,9 @@ p.warning { border-left: 3px solid var(--warn); padding: .65rem .85rem; backgrou
 .watch-view .account-card { box-shadow: none; font-size: .85rem; }
 .watch-view .account-card p { margin-block: var(--space-2); }
 .watch-view .quota-summary { padding-block: var(--space-2); }
-.account-grid.watch-account-grid { grid-template-columns: repeat(auto-fit, minmax(0, min(100%, 450px))); justify-content: start; }
+.account-grid.watch-account-grid { grid-template-columns: repeat(auto-fit, minmax(0, min(100%, var(--watch-account-width, 448px)))); justify-content: start; }
 .watch-view .watch-subscription { display: grid; grid-template-rows: subgrid; grid-row: span 6;
-  gap: .25rem; max-width: 450px; padding: 0 0 .8rem; text-align: left; }
+  gap: .25rem; max-width: var(--watch-account-width, 448px); min-width: 0; padding: 0 0 .8rem; text-align: left; overflow-wrap: anywhere; }
 .watch-subscription > h4 { overflow-wrap: anywhere; text-align: center; padding: .43rem .9rem;
   background: var(--accent-soft); color: var(--accent); font-weight: 750; border-bottom: 1px solid var(--line);
   border-radius: calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0; }

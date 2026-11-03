@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v80.145, 2026-11-03), the supported distribution.
+Use **current `main`** (v80.146, 2026-11-03), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -361,7 +361,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.145 (2026-11-03):** Mini Watch opens smaller (native geometry verified at 150% Windows scaling), centers prompt headings and shows the same global Total Today as full Watch in a separate right-aligned header. Accounting, live units and manual resizing are unchanged.
+**v80.146 (2026-11-03):** Full Watch account cards compensate for effective display/zoom scale instead of treating 450 CSS pixels as 450 screen pixels. Text size, accounting, Accounts and Mini Watch are unchanged. Headless raster checks cover the cap; owner-desktop physical verification remains unverified.
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

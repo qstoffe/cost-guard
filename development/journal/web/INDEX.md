@@ -11,6 +11,9 @@ Status: current
   preserving config boundary, confirmed-only UI, theme checks and visual exception.
 - [Watch cards](watch-cards.md): isolated two-phase acquisition, continuous history,
   canonical totals, nine-case rendered-browser evidence and separate V2/detail proof.
+- [Watch account physical-width correction](watch-account-pixels.md): CSS/raster
+  mismatch, scale-aware cap, independent screenshot measurements and the scoped
+  unverified native/owner-desktop acceptance exception.
 - [Watch summary and context](watch-summary.md): retained coherent daily accounting,
   native primary quotas, table-adjacent guidance, page-flow history, quiet Today,
   browser matrix and scoped live evidence/Decision Delegate verification exception.

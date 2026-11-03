@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const input = JSON.parse(fs.readFileSync(0, 'utf8'));
 const turns = async () => { for (let n = 0; n < 12; n++) await Promise.resolve(); };
 class Node {
-  constructor(tag) { this.tag = tag; this.children = []; this.text = ''; this.dataset = {}; this.events = {}; this.value = ''; this.scrollTop = 0; }
+  constructor(tag) { this.tag = tag; this.children = []; this.text = ''; this.dataset = {}; this.events = {}; this.value = ''; this.scrollTop = 0; this.style = {setProperty() {}}; }
   set textContent(value) { this.text = String(value); this.children = []; }
   get textContent() { return this.text + this.children.map(c => c.textContent).join(''); }
   get firstElementChild() { return this.children[0]; }
@@ -96,7 +96,8 @@ async function main() {
   let calls = 0;
   const document = {createElement: tag => new Node(tag), activeElement: null};
   const context = vm.createContext({document, console, setTimeout: () => 1, clearTimeout: () => {},
-    window: {getSelection: () => ({isCollapsed: !selected, anchorNode: selected, focusNode: selected})},
+    window: {getSelection: () => ({isCollapsed: !selected, anchorNode: selected, focusNode: selected}),
+      addEventListener() {},matchMedia: () => ({addEventListener() {},removeEventListener() {}})},
     api: async path => { assert.equal(path, '/api/live'); calls++; return JSON.parse(JSON.stringify(snapshot)); },
     update: live => rendered.push(live), status: text => statuses.push(text),
     sourceFactory: url => {
