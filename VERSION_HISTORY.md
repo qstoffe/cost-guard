@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.133 — 2026-11-03
+
+- Verification: advisory budgets for the public README, release history and Web guide; behavioral startup/launcher tests and bounded readiness/release Windows fixtures. Product deadlines and security/context caps stay hard. Concise completion records link detailed PR/CI evidence instead of creating reporting-only rerun loops.
+
 ## v80.132 — 2026-11-03
 
 - Web Models: finer work-based progress, separate history stages, bounded/stale-safe updates; acquired success alone reaches 100%.

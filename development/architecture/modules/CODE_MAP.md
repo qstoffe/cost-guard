@@ -82,6 +82,7 @@ Quota Used display is shared by `src/display.py`, `src/presentation/accounts.py`
 - `development/tests/fixtures/accounts.py` and `quota_rendering.py`: normalized account snapshots/fixed providers; fixed-time rolling quota projections with report/Watch account-section text.
 - `development/tests/fixtures/watch_runtime.py`: mutable/live synthetic sources, deterministic account scheduler and Watch service composition. It preserves the existing report/account seam without depending on test modules.
 - `development/tests/fixtures/terminal_buffer.py`: in-memory VT cursor/erase/wrap and scrollback replay for Watch overflow redraws; no terminal process or UI automation.
+- `development/tests/fixtures/windows_shell.py`: hidden synthetic shell readiness/release, bounded owned-child cleanup and the terminal console stub; no native tray/browser/desktop proof.
 - `development/tests/fixtures/account_workers.py`: finite gated provider calls, virtual-latency quota observations and bounded worker synchronization.
 - `development/tests/fixtures/openai-tls/`: disposable localhost chain/key reproducing expired cached-intermediate shadowing and rejecting expired leaves, untrusted chains and hostname mismatch; no workstation/provider certificates or credentials.
 - `development/tests/fixtures/watch_rows.py`: synthetic neutral prompt blocks/canonical snapshots for global grouping, chronological lifecycle order and divider regression tests (`test_watch_session_groups.py`).

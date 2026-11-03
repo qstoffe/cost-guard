@@ -1,6 +1,25 @@
 # Web Beta hosted revalidation
 
-## Current scope — FR 000548
+## Current scope and reporting — FR 000553 / FR 000548
+
+FR 000553 keeps this common/native plan and its cancellation behavior unchanged.
+Concise completion records describe delivered behavior, known limits and the PR;
+detailed counts, tested revisions, effective merge base and hosted results belong
+in that PR/CI run. Updating a PR description does not create another tested head.
+This avoids a commit solely to copy results back into a tracked evidence table.
+
+Limitation: path filters distinguish an entirely documentation-only PR/push, not
+a report-only follow-up on an already code-changing PR. Such a commit still runs
+the existing checks. No skip/cache/receipt mechanism is added; changed or uncertain
+implementation, tests, configuration, workflow or effective base needs fresh
+applicable verification. Earlier results retain their own tested revision, never
+become PASS for another head, and do not bypass actual required GitHub statuses.
+
+Additional live evidence follows the change's risks and approved acceptance:
+fixture/validator edits use hidden real-shell and broken-package checks here,
+not unrelated history/provider/browser campaigns. A platform behavior change or
+explicit live acceptance still needs its real-platform evidence. Synthetic shell
+contracts do not establish native tray/browser/consumer-desktop acceptance.
 
 The workflow now assigns shared behavior to one `ubuntu-24.04` **common** job:
 Full's unchanged registry and package validator, followed by one rendered headless

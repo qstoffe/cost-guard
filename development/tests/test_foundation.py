@@ -15,6 +15,41 @@ VALIDATOR = ROOT / "development/tools/validate_package.py"
 
 
 class ValidationTests(unittest.TestCase):
+    def test_only_named_product_prose_can_cross_former_caps(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            copy = copy_package(Path(tmp))
+            for relative, threshold in (("README.md", 32768), ("VERSION_HISTORY.md", 32768),
+                                        ("docs/web-beta.md", 65536)):
+                path = copy / relative
+                with path.open("a", encoding="utf-8") as stream:
+                    stream.write("\n" + "x" * (threshold + 1))
+            validation = run_python(str(VALIDATOR), "--root", str(copy), "--working-tree")
+            self.assertEqual(0, validation.returncode, validation.stdout + validation.stderr)
+            for kind in ("rootReadme", "versionHistory", "webUserGuide"):
+                self.assertIn(f"WARN  {kind} prose budget", validation.stdout)
+
+            # Neither Markdown nor operational-context names inherit the prose exception.
+            for relative in ("AGENTS.md", "skills/example/SKILL.md", "commands/example.md",
+                             "docs/agent-reference.md", "docs/example/README.md", "docs/example.md"):
+                path = copy / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"x" * 65537)
+            config = copy / "config/default-config.jsonc"
+            config.write_bytes(b"x" * 32769)
+            module = copy / "src/oversize.py"
+            module.write_bytes(b"x" * 65537)
+            results = validate_package.Results()
+            validate_package.check_budgets(copy, results)
+            details = "\n".join(detail for _, detail in results.failures)
+            for relative in ("AGENTS.md", "skills/example/SKILL.md", "commands/example.md",
+                             "docs/agent-reference.md", "docs/example/README.md", "docs/example.md",
+                             "config/default-config.jsonc", "src/oversize.py"):
+                self.assertIn(relative + ":", details)
+            (copy / "README.md").write_bytes(b"x" * 2097153)
+            results = validate_package.Results()
+            validate_package.check_budgets(copy, results)
+            self.assertIn(("universal file cap", "README.md: 2097153 > 2097152 bytes"), results.failures)
+
     def test_root_visual_studio_cache_is_local_not_distributable(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             copy = copy_package(Path(tmp))

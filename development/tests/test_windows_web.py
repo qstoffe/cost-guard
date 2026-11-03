@@ -7,14 +7,14 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import time
 from threading import Event
 import unittest
 from unittest.mock import Mock, patch
 
+from development.tests.fixtures.windows_shell import owned_shell, shell_output, wait_for_marker
 from src.web import windows_launch
 from src.web.native_windows import WindowsHost, preflight
-from src.web.process_identity import InstanceConflict
+from src.web.process_identity import InstanceConflict, process_identity
 from src.web.tray_icon import icon_bits
 from src.web.win32_tray import OPEN, EXIT
 from src.web.startup import StartupProgress
@@ -180,23 +180,15 @@ class WindowsWebTests(unittest.TestCase):
         command = (ROOT / "windows/Beta/Cost-Guard-Web.cmd").read_text()
         script = (ROOT / "src/web/windows_launch.ps1").read_text()
         self.assertIn('%~dp0..\\..\\src\\web\\windows_launch.ps1', command)
-        self.assertIn("exit /b %errorlevel%", command)
         self.assertNotIn("-NoExit", command)
         self.assertNotIn("Set-ExecutionPolicy", script)
         self.assertNotIn("Set-Location", script)
-        self.assertIn("(3,11)", script)
-        self.assertIn("--launch-windows", script)
-        self.assertNotIn('start ""', command)
         self.assertNotIn('-WindowStyle Hidden', command)
         self.assertNotIn('-Detached', command)
-        self.assertNotIn('\necho ', command)
         self.assertNotIn('Write-Progress', script)
         self.assertNotIn('`r', script)
-        self.assertIn("$ProgressPreference = 'SilentlyContinue'", script)
-        self.assertIn('Starting CostGuard web...', script)
-        self.assertIn('ReadLineAsync', script)
-        self.assertIn('Write-LaunchActivity', script)
-        self.assertIn('if (-not $Detached -and', script)
+        # Redirected activity, argument forwarding and result propagation execute
+        # in test_windows_web_activity; batch/status lifetime executes below.
 
     @unittest.skipUnless(os.name == 'nt', 'Windows batch status lifetime')
     def test_batch_waits_for_status_process_then_exits_with_its_result(self):
@@ -212,27 +204,45 @@ class WindowsWebTests(unittest.TestCase):
             (web / 'windows_launch.ps1').write_text('''param([switch]$Detached)
 $ErrorActionPreference = 'Stop'
 if ($Detached) { throw 'Unexpected hidden mode' }
+$fixture = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+[IO.File]::WriteAllText((Join-Path $fixture 'pid'), [string]$PID)
 [IO.File]::WriteAllText((Join-Path $PSScriptRoot 'entered'), 'entered')
-$deadline = [DateTime]::UtcNow.AddSeconds(10)
-while (-not (Test-Path (Join-Path $PSScriptRoot 'release')) -and [DateTime]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 20 }
+$deadline = [DateTime]::UtcNow.AddSeconds(60)
+while (-not (Test-Path (Join-Path $fixture 'release'))) {
+    if ([DateTime]::UtcNow -ge $deadline) { exit 98 }
+    Start-Sleep -Milliseconds 20
+}
 [IO.File]::WriteAllText((Join-Path $PSScriptRoot 'done'), 'done')
 exit 7
 ''', encoding='utf-8-sig')
-            child = subprocess.Popen(['cmd.exe', '/d', '/c', str(batch)], cwd=root,
-                                     stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                                     stderr=subprocess.PIPE, creationflags=subprocess.CREATE_NO_WINDOW)
-            try:
-                deadline = time.monotonic() + 5
-                while not (web / 'entered').exists() and time.monotonic() < deadline:
-                    time.sleep(0.02)
-                self.assertTrue((web / 'entered').exists())
+            with owned_shell(['cmd.exe', '/d', '/c', str(batch)], root) as (child, remember):
+                wait_for_marker(child, web / 'entered', remember)
+                # Deliberately hold beyond readiness; no independent expiry may
+                # release the status child while these assertions are pending.
                 self.assertIsNone(child.poll(), 'Batch must keep status alive until handoff')
                 self.assertFalse((web / 'done').exists())
-            finally:
-                (web / 'release').touch()
-                self.assertEqual(child.wait(timeout=5), 7)
+                (root / 'release').touch()
+                self.assertEqual(child.wait(timeout=10), 7)
                 self.assertTrue((web / 'done').exists())
-                child.communicate(timeout=3)
+                self.assertIsNone(process_identity(int((root / 'pid').read_text())))
+
+    @unittest.skipUnless(os.name == 'nt', 'Windows fixture cleanup')
+    def test_readiness_failure_releases_and_joins_fixture_child(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            script = root / 'status.ps1'
+            script.write_text('''[IO.File]::WriteAllText((Join-Path $PSScriptRoot 'pid'), [string]$PID)
+$deadline = [DateTime]::UtcNow.AddSeconds(60)
+while (-not (Test-Path (Join-Path $PSScriptRoot 'release')) -and [DateTime]::UtcNow -lt $deadline) {
+    Start-Sleep -Milliseconds 20
+}
+''', encoding='utf-8-sig')
+            with self.assertRaisesRegex(AssertionError, 'Harness startup failed before entered; shell exit=None'):
+                with owned_shell(['powershell.exe', '-NoProfile', '-File', str(script)], root) as (child, remember):
+                    wait_for_marker(child, root / 'pid', remember)
+                    wait_for_marker(child, root / 'entered', remember, timeout=0.1)
+            self.assertIsNotNone(child.poll())
+            self.assertIsNone(process_identity(int((root / 'pid').read_text())))
 
     @unittest.skipUnless(os.name == "nt", "Windows PowerShell discovery contract")
     def test_stalled_python_discovery_is_bounded_and_joins_only_its_probe(self):
@@ -241,7 +251,9 @@ exit 7
             (root / 'sitecustomize.py').write_text('''import os, time
 from pathlib import Path
 Path(__file__).with_name('pid').write_text(str(os.getpid()))
-time.sleep(30)
+deadline = time.monotonic() + 60
+while not Path(__file__).with_name('release').exists() and time.monotonic() < deadline:
+    time.sleep(0.02)
 ''', encoding='utf-8')
             probe = root / 'probe.ps1'
             probe.write_text('''param($Source, $Python)
@@ -265,9 +277,16 @@ try { $process = [Diagnostics.Process]::GetProcessById($ownedPid) } catch { $pro
 if ($process -and -not $process.HasExited) { throw 'Owned stalled probe leaked' }
 Write-Output 'STALL_PASS'
 ''', encoding='utf-8-sig')
-            result = subprocess.run(['powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass',
-                                     '-File', str(probe), str(ROOT / 'src/web/windows_launch.ps1'),
-                                     sys.executable], capture_output=True, text=True, timeout=15)
+            with owned_shell(['powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass',
+                              '-File', str(probe), str(ROOT / 'src/web/windows_launch.ps1'),
+                              sys.executable], root) as (child, remember):
+                wait_for_marker(child, root / 'pid', remember)
+                try:
+                    stdout, stderr = shell_output(child, remember, timeout=15)
+                except subprocess.TimeoutExpired:
+                    self.fail('Bounded stalled-discovery harness timeout after interpreter readiness')
+                result = subprocess.CompletedProcess(child.args, child.returncode,
+                                                     stdout.decode(errors='replace'), stderr.decode(errors='replace'))
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('STALL_PASS', result.stdout)
 
@@ -275,12 +294,18 @@ Write-Output 'STALL_PASS'
     def test_real_powershell_discovery_missing_old_then_supported_and_multiple_paths(self):
         # Extract the one production function using PowerShell's AST. Do not run UI.
         with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'sitecustomize.py').write_text('''import os
+from pathlib import Path
+Path(__file__).with_name('pid').write_text(str(os.getpid()))
+''', encoding='utf-8')
             old = Path(directory) / "old python.ps1"
             old.write_text("$global:LASTEXITCODE = 1\n")
             probe = Path(directory) / "probe.ps1"
             probe.write_text(r'''
 param($Source, $OldPython, $Python)
 $ErrorActionPreference = 'Stop'
+$env:PYTHONPATH = $PSScriptRoot
 Write-Output 'STAGE:parse'
 $tokens = $null; $errors = $null
 $ast = [Management.Automation.Language.Parser]::ParseFile($Source, [ref]$tokens, [ref]$errors)
@@ -312,11 +337,6 @@ if ($realLauncher) {
     } elseif ($found.Executable -ne $Python -or $found.Arguments.Count -ne 0) {
         throw 'Unusable real launcher must fall back to the supported interpreter'
     }
-    $python = $found.Executable
-    $assignment = $ast.Find({param($node) $node -is [Management.Automation.Language.AssignmentStatementAst] -and $node.Left.Extent.Text -like '*$pythonArgs'}, $true)
-    Invoke-Expression $assignment.Extent.Text
-    $result = & $python @pythonArgs -c 'print(1234567)'
-    if ($result -ne '1234567') { throw 'Selected native interpreter command lost arguments' }
 }
 $logging = $ast.Find({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Write-BetaStartupRecord'}, $true)
 Write-Output 'STAGE:private-log'
@@ -331,16 +351,18 @@ Write-Output 'DISCOVERY_PASS'
 ''', encoding="utf-8")
             # This harness includes shell/AST startup, several real Python
             # processes and private DACL I/O, not the product's 15s host wait.
-            try:
-                result = subprocess.run(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass",
-                                         "-File", str(probe), str(ROOT / "src/web/windows_launch.ps1"),
-                                         str(old), sys.executable], input="", capture_output=True, text=True, timeout=30)
-            except subprocess.TimeoutExpired as error:
-                output = error.stdout or b""
-                if isinstance(output, bytes):
-                    output = output.decode('utf-8', errors='replace')
-                stages = [line for line in output.splitlines() if line.startswith('STAGE:')]
-                self.fail('Bounded PowerShell discovery harness timeout; ' + ', '.join(stages))
+            with owned_shell(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                              "-File", str(probe), str(ROOT / "src/web/windows_launch.ps1"),
+                              str(old), sys.executable], root) as (child, remember):
+                try:
+                    stdout, stderr = shell_output(child, remember)
+                    result = subprocess.CompletedProcess(child.args, child.returncode,
+                                                         stdout.decode(errors='replace'), stderr.decode(errors='replace'))
+                except subprocess.TimeoutExpired as error:
+                    output = (error.stdout or b"").decode('utf-8', errors='replace')
+                    stages = [line for line in output.splitlines() if line in (
+                        'STAGE:parse', 'STAGE:direct-python', 'STAGE:py-launcher', 'STAGE:private-log')]
+                    self.fail('Bounded PowerShell discovery harness timeout; ' + ', '.join(stages))
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("DISCOVERY_PASS", result.stdout)
 
