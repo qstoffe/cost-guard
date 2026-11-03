@@ -426,6 +426,19 @@ campaign, not a new recurring CI or live-provider loop.
 
 ## Windows detached launcher and tray
 
+The Windows notification icon and browser favicon use the same original cyan/navy
+CG artwork. The offline ICO includes 16/20/24/32/48px variants; the fixed, versioned
+`/favicon-cg1.ico` declaration avoids the former generic tab icon, with intentional
+`/favicon.ico` compatibility. CSP permits images only at those two same-origin
+paths. Existing page-specific tab titles and the in-page CG badge are unchanged.
+The native tray UI thread enters Per-Monitor v2 before creating its hidden owner
+window/menu and restores its previous context on close. Icon pixels follow native
+small-icon metrics; the hidden owner follows the popup's physical cursor monitor.
+This changes neither the Python process default nor machine display settings.
+Actual notification-area appearance, full 150% menu visual acceptance, other
+physical scales/themes and mixed-monitor interaction remain unverified; see
+[checks and limitations](../development/journal/web/branding.md).
+
 Double-click `windows/Beta/Cost-Guard-Web.cmd`, or invoke it from an existing console. The short-lived console shows one **Starting CostGuard web...** label and updates only its spinner cell while PowerShell locates Python 3.11+, checks configuration/native support, waits for validated host readiness and requests the registered default browser. No PowerShell progress panel or successful stage transcript is drawn. Redirected/noninteractive output is one plain startup line; failure feedback remains actionable after animation stops. Source ZIPs retain relative-path support, including spaces/Unicode. No packages, compiler, download, administrator access or global execution-policy change is needed; the override applies only to that PowerShell process.
 
 The console exits naturally after **validated host readiness and a successful OS browser-open request**, not browser paint or report completion. An existing terminal regains control at that point. The managed host remains detached from console, standard handles and launcher lifetime. Later deliberate launch restarts only this checkout's verified instance; overlapping clicks reuse a ready winner. Preflight failure preserves the existing instance. Failures after it stopped cannot restore the old code and never claim success.

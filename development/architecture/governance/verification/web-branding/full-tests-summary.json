@@ -1,0 +1,7 @@
+{
+  "suite": "full",
+  "runner_units": 136,
+  "total_tests": 1617,
+  "skipped_tests": 1,
+  "all_unit_exit_codes_zero": true
+}

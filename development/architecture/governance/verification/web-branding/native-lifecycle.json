@@ -1,0 +1,28 @@
+{
+  "nativeMenuCount": 2,
+  "openFailureRetry": true,
+  "failureNotificationSuppressed": true,
+  "exitStopsOwnHost": true,
+  "simulatedTaskbarRecovery": true,
+  "actualExplorerRestart": false,
+  "notifications": [
+    {
+      "action": 0,
+      "hiconMatches": true,
+      "success": true
+    },
+    {
+      "action": 0,
+      "hiconMatches": true,
+      "success": true
+    },
+    {
+      "action": 2,
+      "hiconMatches": true,
+      "success": true
+    }
+  ],
+  "errors": [],
+  "resourcesClosed": true,
+  "modelCalls": 0
+}

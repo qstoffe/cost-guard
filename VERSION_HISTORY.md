@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.147 — 2026-11-04
+
+- Web Beta: one original CG source supplies DPI-sized Windows tray icons and the offline multi-resolution browser favicon. Native menu resources are created under a scoped Per-Monitor v2 UI-thread context, restored on cleanup, without changing interpreter process defaults. Section titles and lifecycle actions stay intact. Physical notification-area appearance and full menu visual acceptance remain unverified; evidence and any scoped exception are recorded with FR 000567.
+
 ## v80.146 — 2026-11-03
 
 - Full Web Watch: scale-aware account-card tracks reserve a small raster-rounding margin below the 450-pixel ceiling, updating on display/page/pinch scale changes without shrinking text. Accounts, Mini Watch and quota accounting are unchanged. Native owner-desktop physical verification remains unverified under a scoped Decision Delegate exception.

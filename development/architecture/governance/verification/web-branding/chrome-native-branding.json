@@ -1,0 +1,13 @@
+{
+  "outcome": "FAIL",
+  "reason": "Error: CDP timeout Runtime.evaluate\n    at Timeout._onTimeout (scratch:/probe_branding.cjs:17:146)\n    at listOnTimeout (node:internal/timers:685:17)\n    at process.processTimers (node:internal/timers:618:7)",
+  "errors": [],
+  "nativeCapture": {
+    "dpi": 144,
+    "widthPhysical": 1000,
+    "heightPhysical": 75,
+    "file": "chrome-native-branding.png",
+    "method": "screen BitBlt CAPTUREBLT owned native tab strip",
+    "foregroundRestored": true
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "outcome": "PASS",
+  "browser": "Edg/156.0.4314.58",
+  "mode": "headless",
+  "initial": {
+    "path": "/favicon-cg1.ico",
+    "width": 48,
+    "height": 48,
+    "type": "image/x-icon",
+    "csp": "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src http://127.0.0.1:60609/favicon-cg1.ico http://127.0.0.1:60609/favicon.ico; font-src 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'; worker-src 'none'",
+    "title": "Models · Cost Guard Web Beta"
+  },
+  "sections": [
+    {
+      "section": "models",
+      "title": "Models · Cost Guard Web Beta"
+    },
+    {
+      "section": "watch",
+      "title": "Watch · Cost Guard Web Beta"
+    },
+    {
+      "section": "sessions",
+      "title": "Sessions · Cost Guard Web Beta"
+    },
+    {
+      "section": "accounts",
+      "title": "Accounts · Cost Guard Web Beta"
+    },
+    {
+      "section": "reports",
+      "title": "Date reports · Cost Guard Web Beta"
+    },
+    {
+      "section": "token-mix",
+      "title": "Token Mix · deep history · Cost Guard Web Beta"
+    },
+    {
+      "section": "cost-per-hour",
+      "title": "Cost per Active Hour · Cost Guard Web Beta"
+    },
+    {
+      "section": "settings",
+      "title": "Settings · Cost Guard Web Beta"
+    }
+  ],
+  "reload": true,
+  "newTab": true,
+  "serverRestart": true,
+  "externalRequests": [],
+  "errors": []
+}

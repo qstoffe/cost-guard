@@ -1,0 +1,22 @@
+{
+  "selectedSize": 24,
+  "draws": [
+    {
+      "theme": "light",
+      "file": "native-hicon-light.png",
+      "sizePhysicalPixels": 24,
+      "DrawIconEx": true
+    },
+    {
+      "theme": "dark",
+      "file": "native-hicon-dark.png",
+      "sizePhysicalPixels": 24,
+      "DrawIconEx": true
+    }
+  ],
+  "hiconBitmap": {
+    "width": 24,
+    "height": 24,
+    "bits": 32
+  }
+}

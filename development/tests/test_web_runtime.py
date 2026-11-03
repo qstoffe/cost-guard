@@ -170,6 +170,27 @@ class WebRuntimeTests(unittest.TestCase):
         self.assertEqual(130, jobs.snapshot(key)["progress"]["sequence"])
         receiver.close.assert_called_once()
 
+    def test_shared_favicon_is_fixed_public_offline_and_narrowly_allowed_by_csp(self):
+        artwork = (Path(__file__).resolve().parents[2] / 'src/web/assets/favicon.ico').read_bytes()
+        for path in ('/favicon-cg1.ico', '/favicon.ico'):
+            status, headers, body = self.request(path, authenticated=False)
+            self.assertEqual(status, 200)
+            self.assertEqual(headers['Content-Type'], 'image/x-icon')
+            self.assertEqual(headers['Cache-Control'], 'no-store')
+            self.assertNotIn('Set-Cookie', headers)
+            self.assertEqual(body, artwork)
+            self.assertIn(f"img-src {self.server.origin}/favicon-cg1.ico {self.server.origin}/favicon.ico;",
+                          headers['Content-Security-Policy'])
+        status, _, html = self.request('/')
+        self.assertEqual(status, 200)
+        self.assertIn(b'rel="icon" href="/favicon-cg1.ico"', html)
+        self.assertIn(b'<title>Cost Guard Web Beta</title>', html)
+        self.assertEqual(self.request('/favicon-cg1.ico?anything')[0], 400)
+        self.assertEqual(self.request('/favicon.ico', headers={'Sec-Fetch-Site': 'cross-site'})[0], 403)
+        self.assertEqual(self.request('/api/status', authenticated=False)[0], 401)
+        self.login()
+        self.assertEqual(self.request('/assets/favicon.ico')[0], 404)
+
     def test_producer_progress_retains_latest_without_a_growing_ipc_queue(self):
         from src.application.contracts import ProgressEvent
         sender = Mock()

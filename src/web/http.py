@@ -16,6 +16,8 @@ from .instance_state import checkout_identity
 from .settings import SettingsError, WebSettings
 
 ASSETS = {"/": ("index.html", "text/html; charset=utf-8"),
+           "/favicon.ico": ("favicon.ico", "image/x-icon"),
+           "/favicon-cg1.ico": ("favicon.ico", "image/x-icon"),
            "/app.js": ("app.js", "text/javascript; charset=utf-8"),
             "/render.js": ("render.js", "text/javascript; charset=utf-8"),
             "/watch.js": ("watch.js", "text/javascript; charset=utf-8"),
@@ -28,7 +30,8 @@ ASSETS = {"/": ("index.html", "text/html; charset=utf-8"),
           "/app.css": ("app.css", "text/css; charset=utf-8")}
 JOB_PATH = re.compile(r"/api/jobs/([a-f0-9]{32})(/cancel)?\Z")
 CSP = ("default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; "
-       "img-src 'none'; font-src 'none'; object-src 'none'; base-uri 'none'; "
+        "img-src {origin}/favicon-cg1.ico {origin}/favicon.ico; "
+        "font-src 'none'; object-src 'none'; base-uri 'none'; "
        "frame-ancestors 'none'; form-action 'none'; worker-src 'none'")
 
 
@@ -187,7 +190,8 @@ class RequestHandler(BaseHTTPRequestHandler):
         data = value if isinstance(value, bytes) else json.dumps(value, allow_nan=False).encode("utf-8")
         self.send_response_only(status)
         for key, val in {"Content-Type": content_type, "Content-Length": str(len(data)),
-                         "Connection": "close", "Cache-Control": "no-store", "Content-Security-Policy": CSP,
+                         "Connection": "close", "Cache-Control": "no-store",
+                         "Content-Security-Policy": CSP.format(origin=self.server.origin),
                          "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer",
                          "X-Frame-Options": "DENY", "Cross-Origin-Resource-Policy": "same-origin",
                          "Permissions-Policy": "camera=(), microphone=(), geolocation=()"}.items():
@@ -407,7 +411,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             for key, value in {"Content-Type": "text/event-stream; charset=utf-8",
                                "Cache-Control": "no-store", "Connection": "close",
                                "X-Content-Type-Options": "nosniff",
-                               "Content-Security-Policy": CSP}.items():
+                                "Content-Security-Policy": CSP.format(origin=self.server.origin)}.items():
                 self.send_header(key, value)
             self.end_headers()
             self.wfile.write(b"retry: 3000\n\n")

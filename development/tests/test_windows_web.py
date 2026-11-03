@@ -1,13 +1,16 @@
 """Synthetic Windows Beta contracts; no real icon, browser or UI is started."""
 import contextlib
+import ctypes as c
+from ctypes import wintypes as w
 import io
 import os
 from pathlib import Path
 import shutil
 import subprocess
 import sys
+import struct
 import tempfile
-from threading import Event
+from threading import Event, Thread
 import unittest
 from unittest.mock import Mock, patch
 
@@ -15,8 +18,8 @@ from development.tests.fixtures.windows_shell import owned_shell, shell_output, 
 from src.web import windows_launch
 from src.web.native_windows import WindowsHost, preflight
 from src.web.process_identity import InstanceConflict, process_identity
-from src.web.tray_icon import icon_bits
-from src.web.win32_tray import OPEN, EXIT
+from src.web.tray_icon import ICON_SIZES, favicon_bytes, icon_bits
+from src.web.win32_tray import OPEN, EXIT, NotifyData, Tray, _bind
 from src.web.startup import StartupProgress
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -49,12 +52,104 @@ class WindowsWebTests(unittest.TestCase):
     def owner(self):
         return Mock(stopping=Event(), stopped=Event())
 
-    def test_original_icon_has_transparent_margin_and_opaque_shield(self):
-        mask, pixels = icon_bits()
-        self.assertEqual(len(mask), 128)
-        self.assertEqual(len(pixels), 4096)
-        self.assertIn(255, pixels[3::4])
-        self.assertEqual(pixels[:128], bytes(128))
+    def test_canonical_cg_icon_has_transparent_edges_and_shared_ico_pixels(self):
+        ico = favicon_bytes()
+        self.assertEqual((ROOT / 'src/web/assets/favicon.ico').read_bytes(), ico)
+        self.assertEqual(struct.unpack_from('<HHH', ico), (0, 1, 5))
+        for index, size in enumerate(ICON_SIZES):
+            mask, pixels = icon_bits(size)
+            self.assertEqual(len(mask), ((size + 15) // 16) * 2 * size)
+            self.assertEqual(len(pixels), size * size * 4)
+            self.assertEqual(pixels[:size * 4], bytes(size * 4))
+            self.assertEqual(set(pixels[3::4]), {0, 255})
+            entry = struct.unpack_from('<BBBBHHII', ico, 6 + 16 * index)
+            self.assertEqual(entry[:6], (size, size, 0, 0, 1, 32))
+            self.assertEqual(ico[entry[7] + 40:entry[7] + 40 + len(pixels)], pixels)
+        _, pixels = icon_bits(16)
+        def pixel(x, y):
+            start = ((15 - y) * 16 + x) * 4
+            return tuple(pixels[start:start + 4])
+        self.assertEqual(pixel(2, 8), (232, 220, 120, 255))  # C stem
+        self.assertEqual(pixel(6, 8), (37, 33, 16, 255))  # open C counter
+        self.assertEqual(pixel(12, 8), (232, 220, 120, 255))  # G crossbar
+        with self.assertRaises(ValueError):
+            icon_bits(17)
+
+    def test_popup_keeps_physical_negative_monitor_coordinates_and_commands(self):
+        tray = object.__new__(Tray)
+        tray.user, tray.shell = Mock(), Mock()
+        tray.hwnd, tray.menu, tray.events = 100, 200, []
+        def cursor(pointer):
+            pointer._obj.x, pointer._obj.y = -1400, 310
+            return True
+        tray.user.GetCursorPos.side_effect = cursor
+        tray.user.TrackPopupMenu.return_value = EXIT
+        tray.shell.Shell_NotifyIconGetRect.return_value = -1
+
+        tray._popup()
+
+        tray.user.SetWindowPos.assert_called_once_with(100, None, -1400, 310, 0, 0, 0x15)
+        tray.user.TrackPopupMenu.assert_called_once_with(200, 0x102, -1400, 310, 0, 100, None)
+        self.assertEqual(tray.events, [EXIT])
+
+    def test_dpi_icon_replacement_updates_shell_before_destroy_and_rolls_back_failure(self):
+        tray = object.__new__(Tray)
+        tray.user, tray.shell = Mock(), Mock()
+        tray.hwnd, tray.instance, tray.icon, tray.icon_size = 100, 1, 300, 16
+        tray.installed = True
+        tray.data = NotifyData(hIcon=300, uFlags=7)
+        tray.user.GetDpiForWindow.return_value = 144
+        tray.user.GetSystemMetricsForDpi.return_value = 24
+        tray.user.CreateIcon.return_value = 301
+        operations = []
+        tray.shell.Shell_NotifyIconW.side_effect = lambda *_: operations.append('update') or True
+        tray.user.DestroyIcon.side_effect = lambda *_: operations.append('destroy')
+
+        tray._refresh_icon()
+
+        self.assertEqual((tray.icon, tray.icon_size, tray.data.hIcon, tray.data.uFlags), (301, 24, 301, 7))
+        self.assertEqual(tray.user.CreateIcon.call_args.args[1:5], (24, 24, 1, 32))
+        self.assertEqual(operations, ['update', 'destroy'])
+        tray.user.DestroyIcon.assert_called_once_with(300)
+        tray.user.GetSystemMetricsForDpi.return_value = 32
+        tray.user.CreateIcon.return_value = 302
+        tray.shell.Shell_NotifyIconW.side_effect = lambda *_: False
+        with self.assertRaisesRegex(InstanceConflict, 'tray_unavailable'):
+            tray._refresh_icon()
+        self.assertEqual((tray.icon, tray.icon_size, tray.data.hIcon, tray.data.uFlags), (301, 24, 301, 7))
+        self.assertEqual(tray.user.DestroyIcon.call_args.args, (302,))
+
+    @unittest.skipUnless(os.name == 'nt', 'Hidden Win32 resources, no icon installation')
+    def test_native_dpi_scope_precedes_resources_restores_and_leaves_other_threads_unchanged(self):
+        user = c.WinDLL('user32', use_last_error=True)
+        get_context = _bind(user, 'GetThreadDpiAwarenessContext', c.c_void_p, [])
+        equal = _bind(user, 'AreDpiAwarenessContextsEqual', w.BOOL, [c.c_void_p, c.c_void_p])
+        get_window = _bind(user, 'GetWindowDpiAwarenessContext', c.c_void_p, [w.HWND])
+        previous = get_context()
+        others = []
+        def read_other():
+            others.append(get_context())
+        thread = Thread(target=read_other)
+        thread.start(); thread.join(3)
+        tray = Tray()
+        try:
+            self.assertTrue(equal(get_context(), c.c_void_p(-4)))
+            self.assertTrue(equal(get_window(tray.hwnd), c.c_void_p(-4)))
+            self.assertGreater(tray.user.GetDpiForWindow(tray.hwnd), 0)
+            self.assertIn(tray.icon_size, ICON_SIZES)
+            self.assertFalse(tray.installed)
+            thread = Thread(target=read_other)
+            thread.start(); thread.join(3)
+            self.assertTrue(equal(*others))
+        finally:
+            tray.close()
+        self.assertTrue(equal(get_context(), previous))
+        self.assertIsNone(tray.hwnd)
+        # Constructor failure also restores the UI thread's original context.
+        with patch.object(Tray, '_create', side_effect=InstanceConflict('tray_unavailable')):
+            with self.assertRaises(InstanceConflict):
+                Tray()
+        self.assertTrue(equal(get_context(), previous))
 
     def test_preflight_failure_releases_native_resources(self):
         tray = Mock()
