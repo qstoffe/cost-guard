@@ -11,6 +11,8 @@ Status: current
 
 The coordinator owns lifecycle, cadence/rendering and provider refreshes over abstract source/report contracts; lower layers never import Watch. Watch shares `ReportService` analysis/cache/context, never a second billing implementation or recurring subprocess. New Models shares the 12-hour first-sighting accent; existing seven-day eligibility is unchanged.
 
+Optional notice history uses `cache/model_notices.py` for resource-error classification, short lock waits and bounded retry/health evidence. Discovery retains dirty catalog/notice state, retries failed startup reads before writing, and never infers startup novelty from a delayed read. Shared first-sighting failures remain unavailable, preserving the original in-run observation for retry rather than fabricating a persisted timestamp. General cache transactions still propagate errors. Connection-local `synchronous=NORMAL`, WAL and ordinary callers' busy timeout remain unchanged.
+
 ## Public contract
 
 `WatchCoordinator.acquire_cycle` is the shared renderer-independent initialize/poll/history-slice seam. CLI keeps its terminal wait/render adapter; `src/watch/acquisition.py:LiveAcquisition` supplies headless cadence, hint buffering, selected-source recovery and source-free account wakes to one application-owned Web runtime. Both reuse the same tracker, valuation, retention, Today and account mechanisms. Web run origin is engine start, never tab open; live/account mutable state is not shared with finite report cleanup. The source hint pump bounds its queue to 1024, converting overflow to authoritative resync rather than blocking acquisition or inventing usage. Browser disconnect is independent of source state and never a terminal prompt event.

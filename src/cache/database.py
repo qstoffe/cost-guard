@@ -66,22 +66,31 @@ class CacheDatabase:
         return self.paths.database
 
     @contextmanager
-    def connect(self) -> Iterator[sqlite3.Connection]:
+    def connect(self, *, operation: str = "execute", busy_timeout_ms: int = DEFAULT_BUSY_TIMEOUT_MS) -> Iterator[sqlite3.Connection]:
         """Yield one configured connection and always close it after commit/rollback."""
-        self.paths.directory.mkdir(parents=True, exist_ok=True)
-        connection = sqlite3.connect(
-            self.paths.database,
-            timeout=DEFAULT_BUSY_TIMEOUT_MS / 1000,
-            isolation_level="DEFERRED",
-        )
+        connection = None
+        phase = "connect"
         try:
-            connection.execute(f"PRAGMA busy_timeout={DEFAULT_BUSY_TIMEOUT_MS}")
+            self.paths.directory.mkdir(parents=True, exist_ok=True)
+            connection = sqlite3.connect(
+                self.paths.database, timeout=busy_timeout_ms / 1000, isolation_level="DEFERRED",
+            )
+            phase = "pragma"
+            connection.execute(f"PRAGMA busy_timeout={busy_timeout_ms}")
+            # synchronous is connection-local, not persisted with journal_mode.
+            # Keep NORMAL on every connection, before any transaction starts.
             connection.execute("PRAGMA synchronous=NORMAL")
             connection.execute("PRAGMA foreign_keys=ON")
+            phase = operation
             yield connection
+            phase = "commit"
             connection.commit()
-        except BaseException:
-            connection.rollback()
+        except BaseException as exc:
+            if isinstance(exc, (sqlite3.Error, OSError)):
+                exc.cache_phase = phase
+            if connection is not None:
+                connection.rollback()
             raise
         finally:
-            connection.close()
+            if connection is not None:
+                connection.close()

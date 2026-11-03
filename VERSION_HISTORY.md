@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.135 — 2026-11-03
+
+- Watch: operational failures in optional model-notice SQLite history no longer terminate polling. Short-timeout, backed-off retries retain in-memory discoveries, report sanitized degradation/recovery and preserve first-sighting evidence; SQL/schema/programming defects remain fatal.
+
 ## v80.134 — 2026-11-03
 
 - Web Watch: severity-specific warning emphasis, five-second retry confirmation with truthful retained-data status, separate browser reconnect feedback and chronological display of the five latest eligible historical sessions.

@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 import platform
 import re
+import sqlite3
 import sys
 import threading
 import time
@@ -21,6 +22,16 @@ from typing import Callable
 _active: RuntimeErrors | None = None
 _OWNED = re.compile(r"cost-guard-(?:(?:errors|metadata)-\d{4}-\d{2}-\d{2}\.log|crash-\d{8}-\d{6}-\d+(?:-\d+)?\.txt)\Z")
 _RECOVERY_FILES = frozenset({"watch-recovery.json"})  # Legacy metadata state is never disposable log history.
+
+
+def _cache_details(exc: BaseException) -> str:
+    phase = getattr(exc, "cache_phase", None)
+    if phase not in {"connect", "pragma", "read", "write", "commit"}:
+        return ""
+    code = getattr(exc, "sqlite_errorcode", None)
+    if isinstance(exc, sqlite3.Error) and type(code) is int and 0 <= code <= 65535:
+        return f"Cache phase: {phase}\nSQLite code: {code}\nSQLite primary code: {code & 255}\n"
+    return f"Cache phase: {phase}\nSQLite code: unavailable\n"
 
 
 def diagnostics_hint(root: Path | None = None) -> str:
@@ -106,7 +117,9 @@ class RuntimeErrors:
                 local_frame = frame
             tb = tb.tb_next
         frame = local_frame or frame
-        digest = hashlib.sha256(f"{component}|{type(exc).__name__}|{frame}".encode()).hexdigest()[:16]
+        cache_details = _cache_details(exc)
+        identity = f"{component}|{type(exc).__name__}|{frame}" + ("|" + cache_details if cache_details else "")
+        digest = hashlib.sha256(identity.encode()).hexdigest()[:16]
         return digest, frame
 
     def _log_path(self) -> Path:
@@ -130,7 +143,7 @@ class RuntimeErrors:
         return (f"Timestamp: {datetime.now().astimezone().isoformat()}\nCost Guard: {self.version}\n"
                 f"Mode: {self.mode}\nPhase: {self.phase}\nSeverity: {severity}\nComponent: {component}\n"
                 f"Execution root: {thread}\nException: {type(exc).__name__}\nLocation: {frame}\n"
-                f"Fingerprint: {fingerprint}\nOccurrence: 1\n{self._stack(exc)}")
+                f"Fingerprint: {fingerprint}\nOccurrence: 1\n{_cache_details(exc)}{self._stack(exc)}")
 
     def _close(self, component: str, outcome: str) -> None:
         episode = self._episodes.get(component)

@@ -36,6 +36,7 @@ This v80.10 audit covers every production broad catch, including those removed o
 | --- | --- |
 | Config `read_jsonc` | Only I/O, encoding and JSONC ValueError become sanitized ConfigError; other defects propagate |
 | Cache transaction | BaseException rollback, then rethrow; never swallowed |
+| Optional model-notice/first-sighting cache | `cache/model_notices.py` isolates structured resource failures and unstructured OperationalError only; known SQL/schema/programming/invariant/corruption defects propagate. Watch retains dirty in-memory notices and retries unread history before writes. Per-component 50 ms lock budget and 1/5/15/60-minute backoff bound polling impact; diagnostics stay unavailable until a proven operation succeeds. RuntimeErrors records sanitized phase/code, bounded episodes and recovery; no DB replacement or authoritative pricing/analysis isolation |
 | Accounts auth JSON and OpenAI JWT | Narrow file/encoding/JSON/token-shape failures; unexpected implementation faults propagate |
 | Copilot/OpenAI request adapters | Expected OSError/network/auth states retain normal handling; unexpected acquisition faults discard this account result, log and produce ERROR |
 | HTTP account response parsing | Expected transport and bounded JSON-tree validation are handled at those calls; internal normalization faults log and replace only that account with ERROR |

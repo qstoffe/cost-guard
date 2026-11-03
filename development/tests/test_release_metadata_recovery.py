@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import socket
+import sqlite3
 import ssl
 import tempfile
 import threading
@@ -19,6 +20,7 @@ from unittest.mock import patch
 from zipfile import ZipFile
 
 from src.cache import CacheDatabase, CacheRepository
+from development.tests.fixtures.sqlite_faults import SQLiteFaults
 from src.cache.metadata_state import STATE_FILE, LEGACY_STATE_FILE
 from src.runtime_errors import RuntimeErrors
 from development.tools.diagnostic_logs import create_bundle
@@ -32,7 +34,7 @@ from src.pricing.metadata_health import MetadataHealthStore, read_state, recent_
 from src.pricing.release_metadata import (
     MetadataAttempt, SourceResult, enrich_release_dates, merge_release_dates, stage_flags,
 )
-from src.reports.semantics import provider_qualified_model_id
+from src.reports.semantics import model_first_sighting_ms, provider_qualified_model_id, recent_model_notice_details
 from src.watch.model_discovery import NEW_NOTICE_MS, WatchModelDiscovery
 
 NOW = int(datetime(2026, 10, 8, 12, tzinfo=timezone.utc).timestamp() * 1000)
@@ -456,6 +458,30 @@ class WatchIntegrationTests(unittest.TestCase):
 
 
 class NoticeTests(unittest.TestCase):
+    def test_report_first_sighting_outage_has_no_false_accent_and_recovers_original_observation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            database = CacheDatabase(Path(tmp))
+            database.initialize()
+            repository = CacheRepository(database)
+            prices = PricingCatalog(models=(model("Fresh", date="2026-10-08"),), retrieved_at_ms=NOW)
+            faults = SQLiteFaults(database)
+            faults.phase = "commit"
+            with faults.install():
+                text, spans = recent_model_notice_details(prices, now_ms=NOW, cache_repository=repository)
+                self.assertIn("Fresh", text)
+                self.assertEqual((), spans)
+                for offset in range(1, 20):
+                    recent_model_notice_details(prices, now_ms=NOW + offset, cache_repository=repository)
+                self.assertEqual(1, faults.failures)
+                faults.phase = ""
+                self.assertEqual(NOW, model_first_sighting_ms(prices.models[0], repository, NOW + 60_000))
+            self.assertEqual("ok", repository.model_sightings.health.status)
+            self.assertEqual(faults.opened, faults.closed)
+            faults.phase = "write"
+            faults.error = sqlite3.ProgrammingError("fixture defect")
+            with faults.install(), self.assertRaises(sqlite3.ProgrammingError):
+                model_first_sighting_ms(model("Other"), repository, NOW + 60_000)
+
     def watch(self, catalog, repository=None):
         provider = SimpleNamespace(current=catalog)
         provider.get_catalog = lambda force=False: provider.current

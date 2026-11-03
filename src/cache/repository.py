@@ -5,7 +5,8 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
-from .database import CacheDatabase
+from .database import CacheDatabase, DEFAULT_BUSY_TIMEOUT_MS
+from .model_notices import ModelSightings
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,6 +21,7 @@ class CacheEntry:
 class CacheRepository:
     def __init__(self, database: CacheDatabase) -> None:
         self.database = database
+        self.model_sightings = ModelSightings(self)
 
     def put(
         self,
@@ -29,9 +31,10 @@ class CacheRepository:
         *,
         source_revision: str | None = None,
         algorithm_version: str | None = None,
+        busy_timeout_ms: int = DEFAULT_BUSY_TIMEOUT_MS,
     ) -> None:
         payload_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
-        with self.database.connect() as connection:
+        with self.database.connect(operation="write", busy_timeout_ms=busy_timeout_ms) as connection:
             connection.execute(
                 """INSERT INTO cache_entries(
                        namespace, cache_key, payload_json, source_revision, algorithm_version, updated_at_utc
@@ -44,8 +47,8 @@ class CacheRepository:
                 (namespace, key, payload_json, source_revision, algorithm_version),
             )
 
-    def get(self, namespace: str, key: str) -> CacheEntry | None:
-        with self.database.connect() as connection:
+    def get(self, namespace: str, key: str, *, busy_timeout_ms: int = DEFAULT_BUSY_TIMEOUT_MS) -> CacheEntry | None:
+        with self.database.connect(operation="read", busy_timeout_ms=busy_timeout_ms) as connection:
             row = connection.execute(
                 """SELECT payload_json, source_revision, algorithm_version
                    FROM cache_entries WHERE namespace=? AND cache_key=?""",
@@ -59,11 +62,13 @@ class CacheRepository:
             return None
         return CacheEntry(namespace, key, payload, row[1], row[2])
 
-    def get_or_create_model_first_seen_at(self, model_id: str, first_seen_at: str) -> str:
+    def get_or_create_model_first_seen_at(
+        self, model_id: str, first_seen_at: str, *, busy_timeout_ms: int = DEFAULT_BUSY_TIMEOUT_MS,
+    ) -> str:
         """Atomically keep the first UTC sighting for one provider-qualified model ID."""
         if not model_id:
             raise ValueError("model_id must not be empty")
-        with self.database.connect() as connection:
+        with self.database.connect(operation="write", busy_timeout_ms=busy_timeout_ms) as connection:
             connection.execute(
                 """INSERT OR IGNORE INTO model_first_sightings(model_id, first_seen_at)
                    VALUES(?, ?)""",

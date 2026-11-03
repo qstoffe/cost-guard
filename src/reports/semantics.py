@@ -7,7 +7,6 @@ from __future__ import annotations
 
 from decimal import Decimal
 from datetime import date, datetime, timedelta, timezone
-import sqlite3
 
 from src.cache.repository import CacheRepository
 from src.analysis.models import PromptRecord
@@ -90,11 +89,8 @@ def model_first_sighting_ms(model, repository: CacheRepository | None, now_ms: i
     model_id = provider_qualified_model_id(model)
     if repository is None or not model_id:
         return None
-    try:
-        value = repository.get_or_create_model_first_seen_at(model_id, _utc_timestamp(now_ms))
-    except (OSError, ValueError, sqlite3.Error):
-        return None
-    return _timestamp_ms(value)
+    value = repository.model_sightings.first_seen_at(model_id, _utc_timestamp(now_ms), now_ms)
+    return _timestamp_ms(value) if value is not None else None
 
 
 def first_sighting_is_highlighted(first_seen_ms: int | None, now_ms: int) -> bool:
