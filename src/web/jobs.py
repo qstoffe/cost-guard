@@ -58,12 +58,34 @@ def parse_report(value):
                          session_page_size=size, session_offset=offset, session_catalog_revision=revision)
 
 
+class ProgressRelay:
+    """Keep only the latest callback between bounded IPC publications; no timer/queue."""
+
+    def __init__(self, sender, *, clock=time.monotonic):
+        self.sender = sender
+        self.clock = clock
+        self.last_sent = float("-inf")
+        self.pending = None
+
+    def observe(self, event):
+        self.pending = event.to_json()
+        if self.clock() - self.last_sent >= 0.1:
+            self.flush()
+
+    def flush(self):
+        if self.pending is not None:
+            self.sender.send(("progress", self.pending))
+            self.pending = None
+            self.last_sent = self.clock()
+
+
 def run_report(sender, request):
     """Spawn entry: own all mutable service/account/source state; no inherited hooks."""
     try:
         from .composition import application
-        result = application(request).execute(request,
-            progress=lambda event: sender.send(("progress", event.to_json()))).to_json()
+        relay = ProgressRelay(sender)
+        result = application(request).execute(request, progress=relay.observe).to_json()
+        relay.flush()
         payload = json.dumps(result, ensure_ascii=True, allow_nan=False, separators=(",", ":")).encode("ascii")
         if len(payload) > MAX_RESULT_BYTES:
             sender.send(("error", "result_too_large"))
@@ -206,7 +228,8 @@ class ReportJobs:
                             kind, payload = receiver.recv()
                             if kind != "progress":
                                 break
-                            job["progress"] = payload
+                            sequence = (job["progress"] or {}).get("sequence", 0) + 1
+                            job["progress"] = dict(payload, sequence=sequence)
                             if not receiver.poll():
                                 return
                         else:

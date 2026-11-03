@@ -36,6 +36,13 @@ Normal Copilot reports reconcile native used credits with indexed CCost over a v
 
 ## Transport-neutral application boundary and parity inventory
 
+Normal progress additionally distinguishes early-stopping sample roots, availability,
+model rows/catalog, account cache/batch/analysis and account projection. Application
+packaging owns finalizing observations. `WorkProgress.stage` is optional and separately
+allowlisted alongside the established phase/count metadata; labels/identifiers remain
+private and CLI consumes the original phase/string contract. Each count follows its
+completed unit. Source batch I/O remains opaque until return and prefetch stays parallel.
+
 `src/application/service.py` owns isolated one-shot jobs: `ReportApplication(factory, clock=...)`, then `execute(ReportRequest, progress=...)`. The composition root must transfer a **fresh** `ReportService` per call using canonical sources, validated config, pricing/cache and account providers. It must not pass the live scheduler or share mutable source/provider context with another owner. No CLI subprocess, web import, alternate analysis or account scheduler is involved. A nonblocking serialized owner rejects concurrent/reentrant requests with `busy`; the host owns admission bounds/retry. The factory owns any extra resources outside ReportService. Every admitted job closes its accounts, including acquisition/projection failures; live/already-owned services are rejected without closing foreign work. Services cannot be reused across jobs. Live retains its own scheduler and exports immutable snapshots.
 
 `src/application/contracts.py` defines frozen result/error/progress DTOs and detached JSON export. `src/application/projection.py` explicitly selects known fields, never introspects/dumps arbitrary dataclasses. Decimal amounts/ratios are exact strings; null, zero, incomplete coverage, provisional status and existing precomputed shares/warnings stay distinct. Consumers sort/display values without revaluing usage. Scope includes configured timezone, local day/month starts, resolved date bounds, history policy and **report execution** duration, not Watch duration.

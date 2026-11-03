@@ -17,7 +17,7 @@ from unittest.mock import Mock
 from development.tests.fixtures.web_reports import finite_report
 from src.reports import ReportKind, ReportRequest
 from src.web.http import LoopbackServer
-from src.web.jobs import MAX_RESULT_BYTES, ReportJobs, parse_report, run_report
+from src.web.jobs import MAX_RESULT_BYTES, ProgressRelay, ReportJobs, parse_report, run_report
 from src.web.security import BrowserSession
 
 
@@ -167,7 +167,30 @@ class WebRuntimeTests(unittest.TestCase):
         jobs.tick()
         self.assertEqual("complete", jobs.snapshot(key)["status"])
         self.assertEqual(129, jobs.snapshot(key)["progress"]["completed"])
+        self.assertEqual(130, jobs.snapshot(key)["progress"]["sequence"])
         receiver.close.assert_called_once()
+
+    def test_producer_progress_retains_latest_without_a_growing_ipc_queue(self):
+        from src.application.contracts import ProgressEvent
+        sender = Mock()
+        clock = Mock(return_value=0)
+        relay = ProgressRelay(sender, clock=clock)
+
+        for completed in range(10_000):
+            relay.observe(ProgressEvent("history", completed, 10_000, "account-analysis"))
+
+        sender.send.assert_called_once_with(("progress", {
+            "phase": "history", "completed": 0, "total": 10_000, "stage": "account-analysis"}))
+        self.assertEqual(9999, relay.pending["completed"])
+        clock.return_value = 0.11
+        relay.observe(ProgressEvent("finalizing", 1, 2, "finalizing"))
+        self.assertEqual(2, sender.send.call_count)
+        self.assertEqual("finalizing", sender.send.call_args.args[0][1]["stage"])
+        relay.observe(ProgressEvent("finalizing", 2, 2, "finalizing"))
+        relay.flush()
+        self.assertEqual(3, sender.send.call_count)
+        self.assertEqual(2, sender.send.call_args.args[0][1]["completed"])
+        self.assertIsNone(relay.pending)
 
     def test_bootstrap_is_one_use_expiring_and_session_is_instance_scoped(self):
         token = self.server.session.bootstrap()

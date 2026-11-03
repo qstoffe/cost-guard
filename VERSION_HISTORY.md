@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.132 — 2026-11-03
+
+- Web Models: finer work-based progress, separate history stages, bounded/stale-safe updates; acquired success alone reaches 100%.
+
 ## v80.131 — 2026-11-03
 
 - Web Mini Watch: explicit PiP, canonical running count/cost/max, primary same-period subscription CCost and shared live health/settings; no extra acquisition.
@@ -269,7 +273,7 @@
 
 ## v80.71 — 2026-10-25
 
-- Adopted Toolkit's development layout and six-digit backlog bundles while preserving test membership, repository facts and pending requests. Product versions and release checks remain Cost Guard-owned; legacy adapter data is opaque to Toolkit. Relocated human Diagnostics launchers and updated software-failure hints; Watch, account and cost semantics are unchanged.
+- Adopted Toolkit development layout/six-digit bundles, retaining tests, facts and pending FRs. Cost Guard owns versions/release checks; legacy adapter data stays opaque. Relocated Diagnostics launchers/failure hints; Watch/accounts/costs unchanged.
 
 ## v80.67–v80.70 — 2026-10-23
 

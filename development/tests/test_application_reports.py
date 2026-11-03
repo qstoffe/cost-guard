@@ -17,6 +17,7 @@ from development.tests.fixtures.opencode_v2_service import source_with_current_s
 from development.tests.fixtures.report_runtime import FakeSource, FakePricingProvider, FakeAccountProvider
 from development.tests.fixtures.session_snapshots import make_snapshot
 from development.tests.fixtures.synthetic_month import SyntheticMonthSource
+from development.tests.fixtures.models_progress import ModelsWorkload
 from src.analysis.token_mix import TokenMix
 from src.analysis.valuation import ComparisonCost
 from src.application import ReportApplication
@@ -67,6 +68,55 @@ class ApplicationReportTests(unittest.TestCase):
         self.assertTrue(exported["source"]["revisions"])
         self.assertTrue(exported["view"]["model_comparison"])
         self.assertLess(len(json.dumps(exported)), 8 * 1024 * 1024)
+
+    def test_normal_progress_owns_repeated_history_and_finishes_real_units(self):
+        for batched in (False, True):
+            with self.subTest(batched=batched), tempfile.TemporaryDirectory() as root:
+                workload = ModelsWorkload(root, batched=batched)
+                events = []
+                observations = []
+
+                def observe(event):
+                    events.append(event.to_json())
+                    if event.stage in {"sampling", "account-analysis"} and event.completed:
+                        observations.append((event.stage, event.completed, workload.analyzed))
+
+                result = workload.application().execute(ReportRequest(), progress=observe)
+
+                self.assertIsNone(result.error)
+                stages = list(dict.fromkeys(event["stage"] for event in events if "stage" in event))
+                expected = ["sampling", "availability", "comparison", "models", "quotas"]
+                if batched:
+                    expected += ["account-cache", "account-load"]
+                expected += ["account-analysis", "account-projection", "finalizing"]
+                self.assertEqual(expected, stages)
+                sample = [event for event in events if event.get("stage") == "sampling"]
+                self.assertEqual(list(range(11)), [event["completed"] for event in sample])
+                self.assertTrue(all(event["total"] is None for event in sample))
+                self.assertEqual(28, workload.source.load_count)
+                self.assertEqual(28, workload.analyzed)
+                self.assertTrue(all(done <= analyzed for _stage, done, analyzed in observations))
+                self.assertEqual({"phase": "finalizing", "completed": 2, "total": 2, "stage": "finalizing"}, events[-1])
+                # A second job uses the same exact cache and performs no extra hydration/analysis.
+                cached = workload.application().execute(ReportRequest())
+                self.assertIsNone(cached.error)
+                self.assertEqual(result.view, cached.view)
+                self.assertEqual(28, workload.source.load_count)
+                self.assertEqual(28, workload.analyzed)
+
+    def test_progress_stage_allowlist_does_not_export_labels_or_identifiers(self):
+        from src.domain.progress import WorkProgress
+
+        def factory(now, progress):
+            progress(WorkProgress("PRIVATE source path", "private-phase", 1, 2, stage="PRIVATE session"))
+            return self.factory(now, progress)
+
+        events = []
+        result = ReportApplication(factory, clock=lambda: 4000).execute(ReportRequest(), progress=events.append)
+
+        self.assertIsNone(result.error)
+        self.assertEqual({"phase": "working", "completed": 1, "total": 2}, events[0].to_json())
+        self.assertNotIn("PRIVATE", json.dumps([event.to_json() for event in events]))
 
     def assert_parity(self, request, *, now=4000):
         old = self.factory(now, lambda _: None)

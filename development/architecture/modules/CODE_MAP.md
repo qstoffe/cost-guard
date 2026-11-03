@@ -89,6 +89,7 @@ Quota Used display is shared by `src/display.py`, `src/presentation/accounts.py`
 - `development/tests/fixtures/opencode_v1_database.py`: the synthetic V1 SQLite history used for generation parity.
 - `development/tests/fixtures/package_copy.py`: disposable distributable and config-only package copies and tool subprocesses for validator/config tests.
 - `development/tests/fixtures/synthetic_month.py`: scalable histories for bounded-sampling/cache/performance checks.
+- `development/tests/fixtures/models_progress.py`: bounded real Normal workflow with separate sample/account history, batch/non-batch paths, cache reuse and optional slowed completed units; `integration/web_minimal_overview.py` exercises its production process/HTTP/event/browser path.
 - `development/tests/fixtures/opencode_v1/` and `opencode_v2/`: non-secret native wire/schema fixtures.
 
 Import common setup from fixtures, not another test module. Fixture modules may import runtime contracts but never `development/tests/`. Some historical specialized test-to-test imports remain; the inventory shows exact remaining edges so they can be migrated when that responsibility is changed. Do not introduce a universal test `helpers.py` or a production dependency on fixtures.

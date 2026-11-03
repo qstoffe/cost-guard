@@ -90,16 +90,37 @@ async function api(path, value) {
 // are explicitly estimates, never clock-driven or new source requests. Counts
 // remain visible in their own stage; only a complete usable result means 100%.
 function overviewProgress(state, progress = {}) {
+  if (Number.isFinite(progress.sequence)) {
+    if (progress.sequence <= (state.progressSequence || 0)) return;
+    state.progressSequence = progress.sequence;
+  }
   const stages = {authorizing: [0, 5, 'Authorizing browser session'], queued: [5, 10, 'Waiting for report'],
     pricing: [10, 20, 'Loading reference prices'], catalog: [20, 30, 'Loading source'],
     history: [30, 55, 'Loading source history'], projection: [55, 70, 'Comparing models'],
     quotas: [70, 90, 'Acquiring accounts'], availability: [90, 95, 'Checking model availability'],
     finalizing: [95, 99, 'Preparing report']};
-  const [start, end, label] = stages[progress.phase] || [5, 10, 'Acquiring report'];
+  // Normal's actual consuming order, not provider start/completion order. Each
+  // history pass owns separate room; background providers remain concurrent.
+  const work = {sampling: [30, 48, 'Sampling recent sessions'], availability: [48, 50, 'Checking model availability'],
+    comparison: [50, 56, 'Comparing models'], models: [56, 62, 'Preparing model catalog'],
+    quotas: [62, 64, 'Acquiring accounts'], 'account-cache': [64, 70, 'Checking account history cache'],
+    'account-load': [70, 73, 'Loading account history'], 'account-analysis': [73, 88, 'Analyzing account history'],
+    'account-projection': [88, 94, 'Preparing account periods'], finalizing: [94, 99, 'Preparing report']};
+  const owned = work[progress.stage];
+  if (state.stagedProgress && !owned) return; // Nested legacy callbacks cannot consume later bands.
+  if (owned) state.stagedProgress = true;
+  const [start, end, label] = owned || stages[progress.phase] || [5, 10, 'Acquiring report'];
+  if (start < (state.progressStart || 0)) return;
+  state.progressStart = start;
   const measured = Number.isFinite(progress.completed) && Number.isFinite(progress.total) && progress.total > 0;
-  const fraction = measured ? Math.max(0, Math.min(1, progress.completed / progress.total)) : 0;
+  const completed = Number.isFinite(progress.completed) ? Math.max(0, progress.completed) : 0;
+  // Sampling may stop early: completed roots justify a bounded estimate, not a
+  // fabricated total or an extra history scan. No advancement from elapsed time.
+  const fraction = measured ? Math.max(0, Math.min(1, completed / progress.total)) :
+    progress.stage === 'sampling' ? completed / (completed + 8) : 0;
   state.percent = Math.max(state.percent || 0, Math.min(99, Math.floor(start + (end - start) * fraction)));
-  state.stage = label + (measured ? ` (${progress.completed}/${progress.total})` : '');
+  state.stage = label + (measured ? ` (${completed}/${progress.total})` :
+    progress.stage === 'sampling' && completed ? ` (${completed} completed)` : '');
 }
 function showOverviewProgress(state) {
   let activity = output.querySelector('.overview-loading');
@@ -173,6 +194,7 @@ async function acquire(state) {
   if (state.loading || !hostState.writable) return;
   state.loading = true;
   state.failed = false;
+  Object.assign(state, {percent: 0, progressSequence: 0, progressStart: 0, stagedProgress: false});
   overviewProgress(state, {phase: 'queued'});
   state.message = state.result ? 'Refreshing; last known snapshot retained until success.' : 'Loading snapshot…';
   show(state);

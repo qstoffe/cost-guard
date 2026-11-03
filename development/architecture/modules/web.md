@@ -103,6 +103,19 @@ One opt-in `ModelCatalogProjection` freezes full catalog, selectable publisher/n
 
 ## Allowed dependencies
 
+Normal loading observations additionally allowlist a `stage`: sampling, availability,
+comparison/catalog, quotas, account cache/load/analysis/projection, then application
+packaging. They retain source-neutral phases/counts for CLI compatibility. Sampling
+reports completed roots without inventing a denominator; counted cache/analysis/model
+units report after completion. `jobs.ProgressRelay` bounds child publications to one
+latest observation per 100ms plus final flush; host-assigned per-job sequences reject
+stale polling/SSE labels. Each consuming stage owns its own estimated band, without
+serializing the existing availability/account prefetch. Blocked source batches,
+provider waits and projection calls without internal observations can pause honestly.
+Only receipt of a full acquired result paints 100%; partial/error/lifecycle semantics
+and frozen-navigation acquisition remain unchanged. Focused tests and headless real
+Normal-workflow browser fixture: `integration/web_minimal_overview.py`.
+
 Accounts' Normal-only detailed mode reuses `overviewAccounts` and shared card/semantic styles, not a new acquisition owner. `src/display.py` now owns the unchanged CLI `format_reset`, re-exported by terminal accounts; `with_display` propagates frozen `now_ms` to quota reset tokens in the configured timezone. Exact raw fields remain untouched. `test_web_accounts.py`, `fixtures/account_views.py` and `integration/web_accounts.cjs` cover equivalent CLI/DTO/DOM states, native amounts, periods, Pace and private-field exclusions. Explicit synthetic browser/keyboard evidence and its limits: [Accounts parity](../governance/verification/accounts-display-parity.md). No application/presentation import, report scope, formula, freshness or source/privacy boundary change; journal assessment: no-update, these durable owner facts suffice.
 
 FR 000542 replaces Web's retained-row table with `watch.js` keyed prompt cards;

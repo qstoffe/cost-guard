@@ -198,8 +198,9 @@ class ReportService:
         return bundle
 
     def prepare_roots(self, roots: Sequence[NormalizedSession], *, detail: bool = False,
-                      force_fresh_ids: Sequence[str] = ()) -> frozenset[str]:
-        return self._acquisition.prepare(roots, now_ms=self.now_ms, detail=detail, force_fresh_ids=force_fresh_ids)
+                      force_fresh_ids: Sequence[str] = (), progress_scope: str | None = None) -> frozenset[str]:
+        return self._acquisition.prepare(roots, now_ms=self.now_ms, detail=detail,
+                                         force_fresh_ids=force_fresh_ids, progress_scope=progress_scope)
 
     def _quotas(self) -> tuple[AccountSnapshot, ...]:
         if self._account_work is None:
@@ -346,14 +347,16 @@ class ReportService:
         if all_models:
             comparison_catalog, warnings = catalog, ()
         else:
-            self.progress(WorkProgress("Checking available OpenCode models", "availability"))
+            self.progress(WorkProgress("Checking available OpenCode models", "availability", stage="availability"))
             comparison_catalog, warnings = selectable_catalog(
                 catalog, availability_source=self._availability or self.model_availability_source,
             )
+        self.progress(WorkProgress("Comparing model prices", "projection", stage="comparison"))
         promo_markers, promo_notes = active_promotion_notes(comparison_catalog, self.now_ms)
         usage = self._relative_usage(latest_prompts(roots, self._priceable()))
         rows: list[ModelComparisonProjection] = []
-        for row in model_comparison_rows(usage, comparison_catalog):
+        candidates = model_comparison_rows(usage, comparison_catalog)
+        for index, row in enumerate(candidates):
             marker = promo_markers.get(row.model_name)
             price_text = price_summary(comparison_catalog, row.model_name)
             rows.append(ModelComparisonProjection(
@@ -362,13 +365,18 @@ class ReportService:
                 row.relative_levels,
                 row.evidence,
             ))
+            self.progress(WorkProgress("Comparing model prices", "projection", index + 1, len(candidates), stage="comparison"))
         self._comparison_mix = (normalized_average_token_mix(usage), self.now_ms)
         sample_size = self._comparison_mix[0][4]
         notice, highlight_spans = recent_model_notice_details(
             comparison_catalog, now_ms=self.now_ms, cache_repository=self.cache_repository,
         )
-        web_catalog = web_model_catalog(usage, catalog, comparison_catalog, now_ms=self.now_ms,
-            cache_repository=self.cache_repository) if include_model_catalog else None
+        web_catalog = None
+        if include_model_catalog:
+            self.progress(WorkProgress("Preparing model catalog", "projection", stage="models"))
+            web_catalog = web_model_catalog(usage, catalog, comparison_catalog, now_ms=self.now_ms,
+                cache_repository=self.cache_repository, progress=lambda done, total: self.progress(
+                    WorkProgress("Preparing model catalog", "projection", done, total, stage="models")))
         return tuple(rows), sample_size, promo_notes, notice, highlight_spans, warnings, web_catalog
 
     def _accounts_quotas(
@@ -594,8 +602,15 @@ class ReportService:
         month = local_month_start_ms(self.timezone_id, now_ms=self.now_ms)
         cutoff = min(month, history_start(quotas, day, self.now_ms, include_copilot_month=True))
         selected = HistoryRequirements("account-periods", start_ms=cutoff).select(roots, root_activity)
-        self.prepare_roots(selected)
-        return self._accounts_quotas(quotas, roots=tuple(self._analyze(root) for root in selected),
+        self.prepare_roots(selected, progress_scope="account")
+        needs_analysis = any(root.session_id not in self._analyzed for root in selected)
+        analyzed = []
+        for index, root in enumerate(selected):
+            analyzed.append(self._analyze(root))
+            if needs_analysis:
+                self.progress(WorkProgress("Analyzing sessions", "history", index + 1, len(selected), stage="account-analysis"))
+        self.progress(WorkProgress("Preparing account periods", "projection", stage="account-projection"))
+        return self._accounts_quotas(quotas, roots=tuple(analyzed),
                                      today_start_ms=day, observed_start_ms=cutoff)
 
     def build(self, request: ReportRequest, *, include_model_catalog: bool = False) -> ReportProjection:
@@ -719,13 +734,18 @@ class ReportService:
     def _build_dashboard(self, request: ReportRequest, catalog: PricingCatalog, roots: Sequence[NormalizedSession],
                           root_activity: Mapping[str, int], *, include_model_catalog: bool = False) -> ReportProjection:
         priceable = self._priceable()
-        analyzed = recent_sample_roots(roots, root_activity, self._analyze, priceable)
+        self.progress(WorkProgress("Sampling recent sessions", "history", stage="sampling"))
+        analyzed = recent_sample_roots(roots, root_activity, self._analyze, priceable,
+            progress=lambda done: self.progress(WorkProgress("Sampling recent sessions", "history", done, stage="sampling")))
         self.progress(WorkProgress("Comparing model prices", "projection"))
         comparisons, sample, promo_notes, recent, recent_highlight_spans, availability_warnings, web_catalog = self._model_comparison(
             analyzed, all_models=request.kind is ReportKind.ALL_MODELS, include_model_catalog=include_model_catalog,
         )
         # Account periods have their own history scope, never the comparison sample.
-        quota_projection = self._account_history(self._quotas(), roots, root_activity) if request.kind is ReportKind.NORMAL else None
+        quota_projection = None
+        if request.kind is ReportKind.NORMAL:
+            self.progress(WorkProgress("Waiting for account quotas", "quotas", stage="quotas"))
+            quota_projection = self._account_history(self._quotas(), roots, root_activity)
         sample_prompts = latest_prompts(analyzed, priceable)
         entries = unique_usage(entry for prompt in sample_prompts for entry in prompt.entries)
         reference = self._load_comparison_catalog()

@@ -53,9 +53,13 @@ class ProgressEvent:
     phase: str
     completed: int = 0
     total: int | None = None
+    stage: str | None = None
 
     def to_json(self) -> dict:
-        return {"phase": self.phase, "completed": self.completed, "total": self.total}
+        value = {"phase": self.phase, "completed": self.completed, "total": self.total}
+        if self.stage is not None:
+            value["stage"] = self.stage
+        return value
 
 
 @dataclass(frozen=True, slots=True)

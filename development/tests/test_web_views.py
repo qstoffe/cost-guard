@@ -18,6 +18,7 @@ from development.tests.fixtures.session_snapshots import make_snapshot, make_unc
 from development.tests.fixtures.synthetic_month import SyntheticMonthSource, make_root_snapshot
 from development.tests.fixtures.pricing_catalog import threshold_catalog
 from development.tests.fixtures.accounts import account, NormalizedProvider
+from development.tests.fixtures.models_progress import ModelsWorkload
 from src.application import ReportApplication
 from src.cache import CacheDatabase, CacheRepository
 from src.config import load_configuration
@@ -155,6 +156,10 @@ class WebViewTests(unittest.TestCase):
                     return self.results.get(key)
 
             jobs = Jobs()
+            progress_events = []
+            normal = ModelsWorkload(Path(tmp) / "progress").application().execute(
+                ReportRequest(), progress=lambda event: progress_events.append(event.to_json()))
+            self.assertIsNone(normal.error)
             settings_root = Path(tmp).resolve() / "settings"
             (settings_root / "config").mkdir(parents=True)
             shutil.copyfile(ROOT / "config/default-config.jsonc", settings_root / "config/default-config.jsonc")
@@ -169,7 +174,8 @@ class WebViewTests(unittest.TestCase):
             thread.start()
             try:
                 payload = dict(origin=server.origin, credential=server.session.bootstrap(), examples=examples,
-                               overview=overview, tier_report=tier_report, account_report=account_report)
+                               overview=overview, tier_report=tier_report, account_report=account_report,
+                               normal_progress=progress_events)
                 with patch('src.web.http.DISPLAY_VERSION', 'v91.7'):
                     result = subprocess.run([shutil.which("node"), "development/tests/integration/web_views.cjs"],
                         cwd=ROOT, input=json.dumps(payload), text=True, capture_output=True, timeout=60)
