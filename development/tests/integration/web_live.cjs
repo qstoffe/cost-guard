@@ -43,7 +43,7 @@ function lifecycle(context, input) {
         assert.equal(card.running.hidden, true);
         assert.equal(card.background.hidden, true);
       } else assert.equal(card.activity.hidden, true);
-      const duration = row.children[6].textContent;
+      const duration = row.children[1].textContent;
       if (index === 1) frozenDuration = duration;
       else assert.equal(duration, frozenDuration);
       assert.equal(watch.active.children.includes(card.root), index === 1);
@@ -54,8 +54,40 @@ function lifecycle(context, input) {
   vm.runInContext('ReportView.renderLive(parent, example, state)', context);
   const reloaded = [...context.state.watch.cards.values()].find(card => card.value.session_id === input.stopped);
   assert.notEqual(reloaded.body.children[0].className, 'watch-running');
-  assert.equal(reloaded.body.children[0].children[6].textContent, frozenDuration);
+  assert.equal(reloaded.body.children[0].children[1].textContent, frozenDuration);
   console.log('web lifecycle passed');
+}
+async function tokenMix(context, frames) {
+  context.parent = new Node('div'); context.state = {connection:'Live connected.'};
+  let snapshot = {instance_id:'mix', sequence:0, values:{live:frames[0]}}, stream;
+  context.api = async () => JSON.parse(JSON.stringify(snapshot));
+  context.update = live => { context.current = live; vm.runInContext('ReportView.renderLive(parent, current, state)', context); };
+  context.status = message => { context.state.connection = message; };
+  context.sourceFactory = () => (stream = {listeners:{}, addEventListener(kind, fn) { this.listeners[kind] = fn; }, close() {},
+    emit(number, frame) { this.listeners.live({lastEventId:'mix:' + number, data:JSON.stringify(frame)}); }});
+  for (const name of ['render', 'watch', 'live']) vm.runInContext(fs.readFileSync('src/web/assets/' + name + '.js', 'utf8'), context);
+  vm.runInContext('LiveConnection.connect(api, update, status, sourceFactory)', context);
+  await turns(); stream.onopen(); await turns();
+  const card = [...context.state.watch.cards.values()].at(-1), row = card.body.children[0];
+  const mix = () => row.children[7].textContent;
+  assert.equal(mix(), '100/0/0/0');
+  for (let index=1; index<frames.length; index++) {
+    snapshot = {instance_id:'mix', sequence:index, values:{live:frames[index]}};
+    stream.emit(index, frames[index]);
+    assert.equal(mix(), ['100/0/0/0','25/75/0/0','20/60/0/20'][index]);
+    assert.equal(card.body.children[0], row, 'same keyed row updates without reload');
+    stream.emit(index-1, frames[0]);
+    assert.notEqual(mix(), '100/0/0/0', 'stale event cannot roll back usage');
+  }
+  stream.onerror();
+  assert.match(context.state.connection, /interrupted/);
+  assert.equal(mix(), '20/60/0/20', 'disconnect retains last observation, not invented current usage');
+  stream.onopen(); await turns();
+  assert.equal(mix(), '20/60/0/20');
+  snapshot.sequence = 10;
+  stream.emit(10, frames[0]); await turns();
+  assert.equal(mix(), '20/60/0/20', 'gap accepts HTTP snapshot, not unverified event body');
+  console.log('web token mix SSE passed');
 }
 async function main() {
   const streams = [], rendered = [], statuses = [];
@@ -77,6 +109,7 @@ async function main() {
        streams.push(source); return source;
      }});
   if (input.lifecycle) { lifecycle(context, input); return; }
+  if (input.tokenMixFrames) { await tokenMix(context, input.tokenMixFrames); return; }
   vm.runInContext(fs.readFileSync('src/web/assets/live.js', 'utf8'), context);
   vm.runInContext('LiveConnection.connect(api, update, status, sourceFactory)', context);
   await turns();
@@ -114,7 +147,7 @@ async function main() {
   vm.runInContext("globalThis.state = {pages: {}, connection: 'Live connected.'}; ReportView.renderLive(parent, example, state)", context);
   assert.match(context.parent.textContent, /Earlier Prompts/);
   assert.ok(!/Session Total|provisional/.test(context.parent.textContent));
-  assert.ok(!/Run CCost|Token Mix|not full session|Observation details|Unaccounted usage|Watch accounts/.test(context.parent.textContent));
+  assert.ok(!/Run CCost|not full session|Observation details|Unaccounted usage|Watch accounts/.test(context.parent.textContent));
   assert.ok(context.parent.textContent.includes(input.view.active_cards[0].title));
   function contains(node, tag) { return node.tag === tag || node.children.some(c => contains(c, tag)); }
   assert.equal(contains(context.parent, 'script'), false);
@@ -125,10 +158,10 @@ async function main() {
   const firstRow = promptRows()[0];
   const firstCell = firstRow.children[0];
   const canonical = input.view.active_cards[0].rows.map(r => r.prompt.display.ccost);
-  assert.deepEqual(promptRows().map(r => r.children[4].textContent), canonical);
+  assert.deepEqual(promptRows().map(r => r.children[5].textContent), canonical);
   const credits = context.parent.textContent, beforeUnits = calls;
   vm.runInContext('ReportView.setUnit("usd", parent)', context);
-  assert.deepEqual(promptRows().map(r => r.children[4].textContent), input.view.active_cards[0].rows.map(r =>
+  assert.deepEqual(promptRows().map(r => r.children[5].textContent), input.view.active_cards[0].rows.map(r =>
     r.prompt.display_units?.usd?.ccost ?? r.prompt.display.ccost));
   assert.equal(promptRows()[0], firstRow);
   assert.equal(firstRow.children[0], firstCell);
@@ -138,8 +171,17 @@ async function main() {
   assert.equal(context.parent.textContent, credits);
   assert.equal(calls, beforeUnits, 'switching is not acquisition');
   assert.ok(!firstCard.body.textContent.includes('Running at snapshot'));
-  assert.deepEqual(firstCard.root.querySelectorAll('th').map(node => node.textContent),
-    ['Started', 'Prompt', 'Model', 'Effort', 'CCost', 'Model Calls', 'Duration', 'Δ Ctx', 'Context']);
+  assert.deepEqual(firstCard.root.querySelectorAll('th').map(node => node.children[0].textContent),
+    ['Started', 'Duration', 'Prompt', 'Model', 'Effort', 'CCost', 'Calls', 'Token Mix %', 'Δ Ctx', 'Context']);
+  for (const header of firstCard.root.querySelectorAll('th')) {
+    const [button, help] = header.children;
+    assert.equal(button['aria-describedby'], help.id);
+    assert.equal(button.title, help.textContent);
+    assert.ok(button.events.focus && button.events.click && button.events.pointerenter);
+  }
+  assert.match(firstRow.children[0].textContent, /^\d\d:\d\d$/);
+  assert.equal(firstRow.children[2].children[0].children[0].textContent, '#' + input.view.active_cards[0].rows[0].prompt.prompt_number);
+  assert.equal(firstRow.children[7].textContent, input.view.active_cards[0].rows[0].prompt.display.token_mix_percent);
   assert.equal(watch.earlier.open || false, false);
   // Independent keyed cards, no filter/pager or global cap.
   const multiple = JSON.parse(JSON.stringify(input));
@@ -154,7 +196,7 @@ async function main() {
   assert.equal(promptRows()[0], firstRow); assert.equal(firstRow.children[0], firstCell);
   assert.ok(context.parent.querySelectorAll('tr').some(row => /Aborted · quota limit/.test(row['aria-label'])));
   assert.equal(context.parent.querySelectorAll('input').length, 0);
-  assert.equal(context.parent.querySelectorAll('button').length, 0);
+  assert.equal(context.parent.querySelectorAll('button').length, 20, 'only column-help controls');
   // A running update cannot destroy selected text; latest data applies on a later tick.
   selected = firstCell;
   multiple.view.active_cards[0].rows[0].prompt.preview = 'Latest running update';

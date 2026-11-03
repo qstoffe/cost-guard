@@ -3,8 +3,9 @@
 One isolated service reads/analyzes a root once, preserving causal and context
 evidence for the focal row. No full-session aggregate projection is acquired.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
+from src.analysis.token_mix import MIX_FIELDS
 from src.reports.sampling import AnalyzedRoot
 from .session_history import analyze_observed
 from .prompt_rows import PromptRowProjector
@@ -38,7 +39,15 @@ def capture_rows(service, root, previous=None, focal_ids=()):
     for index, record in enumerate(records):
         if record.in_progress or record.prompt_id in focal_ids:
             selected.update(range(max(0, index - 5), index + 1))
-    rows = [projector.prompt(records[index]) for index in sorted(selected)]
+    rows = []
+    for index in sorted(selected):
+        record = records[index]
+        row = projector.prompt(record)
+        # Completed CLI rows retain their historical rounding/coverage behavior.
+        # Watch must not present missing categories as observed zero-token usage.
+        if any(not set(MIX_FIELDS).issubset(entry.tokens.known_fields) for entry in record.entries):
+            row = replace(row, token_mix_percent=None)
+        rows.append(row)
     rows = _coherent_watch_deltas(rows, epochs=projector.epochs, session_id=root.session_id,
         subtask_ids=frozenset(record.prompt_id for record in records if record.prompt_kind == "subtask"))
     return WatchCapture(root.session_id, root.title or root.session_id, tuple(rows),

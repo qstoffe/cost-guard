@@ -172,9 +172,13 @@ history shares the existing single-worker account lane and revision reuse. The
 subscription subgrid aligns title/Today/primary label/bar tracks; complete primary
 reset/pace precedes any secondary-only divider. Title bands use theme tokens while
 body values stay left aligned; Accounts detail semantics are unchanged.
-`watch.js` uses Started sequence/time, preview-only ellipsized flexible cells,
-intrinsic non-Prompt subgrid tracks and horizontal overflow. History alone has a
-restrained frame/40vh cap; keyed disclosures retain focus/scroll. Running yellow,
+`watch.js` shares ten columns across active/history cards: local HH:mm Started,
+Duration, canonical #N Prompt, Model, Effort, CCost, Calls, Token Mix %, Δ Ctx, Context.
+The number does not ellipsize; only the preview flexes. Intrinsic non-Prompt subgrid
+tracks pan horizontally. All headers provide native top-layer explanations on
+hover/focus/click, outside table clipping; time cells retain accessible full dates.
+History is unframed/uncapped page flow with an expanded/nonempty-only section divider;
+keyed disclosures retain focus/scroll. Running yellow,
 activity gold/brown, red failures and context gold/orange have separate theme roles.
 `render.js` scopes account-detail cleanup through its Watch-only flag; Accounts,
 Models, settings, navigation and security are unchanged. User-visible scope and
@@ -183,6 +187,14 @@ limits: [Watch cards](../../journal/web/watch-cards.md). The older
 `probe_web_watch.py`/`web_watch_browser.js` table probe is historical, not current
 acceptance; use approval-only `probe_watch_cards.cjs` and the integrated-browser
 `serve_web_watch.py` fixture, plus read-only `probe_web_live.py --watch-cards --detail`.
+
+Watch capture already opts into canonical observed running metrics. Its minimal card
+export now retains `token_mix_percent`; no client attribution, rounding or acquisition
+is added. A Watch-only `MIX_FIELDS` coverage guard suppresses incomplete categories,
+including completed/child usage, without changing CLI/Reports. Known values retain
+the session report's rounding (not aggregate TokenMix's different rounding). Accepted
+source corrections replace the mix; stale captures/SSE cannot roll it back. See
+[prompt table evidence and scoped parity exception](../../journal/web/watch-prompt-tables.md).
 
 HTTP/security/assets and lifecycle/process/state/guard depend on standard library and their Web owners. Jobs consume shared application/report contracts. Composition alone wires concrete source/config/cache/pricing/providers and the Watch acquisition driver, never CLI dispatch/source wake. LiveRuntime consumes that supplied driver and exports immutable values; application/reports never import Web. CLI and Diagnostics do not import Web.
 
