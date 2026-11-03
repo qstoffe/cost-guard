@@ -32,6 +32,12 @@ remaining owned worker, not just a live serving/publisher thread.
 
 `src/web/events.py` publishes immutable full live/progress/terminal state with instance-bound IDs, 32-event/8 MiB replay and 2 MiB publications. `src/application/live_projection.py` allowlists Watch/tool/skill/context, subtotals and run/Today (not normal month/billing). `src/web/assets/live.js` owns one cookie-authenticated EventSource per tab. Gaps require HTTP resync; duplicates/older events cannot reset values; old instances require authorization. Terminal notices stop retry across gaps; offline retains evidence, never invents completion or launches servers.
 
+Full Watch's `watch_accounts.py` quota slots export native amount/limit/unit inputs
+to the shared application display tokens. `watch.js` keeps Used/Total with the native
+percentage/bar and labels independent period CCost below it, before reset/pace.
+Primary and secondary slots share this presentation; currency switches only CCost.
+Acquisition, period accounting, CLI/Accounts and Mini Watch semantics are unchanged.
+
 `watch/running.py` aggregates distinct canonical in-progress focal prompts once per
 Web publication, excluding compaction/history/placeholders/terminal grace. Count,
 prompt-only CCost and maximum canonical duration travel together with completeness

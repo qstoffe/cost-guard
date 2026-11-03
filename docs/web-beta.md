@@ -303,19 +303,23 @@ non-retryable/authentication failures have no grace. Daily failures request a re
 on the existing single history lane after five seconds rather than waiting a minute.
 Browser reconnect/offline/host-stop notices remain separate from source acquisition.
 
-Subscription cards align centered title bands, **CCost Today**, native primary percentage
+Subscription cards align centered title bands, **CCost Today**, native primary usage
 and bars; body values stay left aligned. Native declarations/order, never depletion or
 provider identity, select the primary. Missing primary stays unavailable; weekly-only
 accounts have no invented five-hour slot or duplicate secondary.
 
-Each quota shows **period · N% used (CCost)**, its bar/reset and applicable canonical
+Each quota shows **period · N% used · Used/Total native units**, its bar, separately
+labeled **CCost: …**, reset and applicable canonical
 **Remaining: …/day** and **Remaining: …/workday** (or **no workdays left**). Only real
 secondaries follow a divider. No routine rolling/fixed boilerplate appears. Exact
 account/window/model costs include pre-Watch native-month history, never Today/30-day
-substitutions. Unknown/stale/unacquired boundaries show **(—)**; confirmed empty windows
+substitutions. Unknown/stale/unacquired boundaries show **CCost: —**; confirmed empty windows
 show zero independently of Today. Unlimited, sub-100% precision and genuine warnings
 remain distinct. Today keeps daily scope/attribution without an estimate suffix (basis
-on hover). Credits/USD changes CCost, not native Remaining. Accounts is unchanged.
+on hover). Period CCost retains partial/estimated provenance. Native Used/Total comes
+from the same quota observation as the percentage, never from observed CCost; the two
+amounts need not agree. Missing native usage never borrows CCost. Credits/USD changes
+CCost, not native Used/Total or Remaining. Accounts and Mini Watch are unchanged.
 
 Context-price guidance appears directly below each session table, before active activity,
 without a separate divider/frame or empty reserved space. It uses the latest valid Watch

@@ -29,8 +29,10 @@ const WatchView = (() => {
   }
   function quotaTrack(value) {
     const quota = value.quota, summary = quota.unlimited ? 'Unlimited' : value.used_percent === '—' ? '—' : value.used_percent + ' used';
-    const label = el('div', () => `${quota.label} · ${summary} (${value.cost == null ? '—' : display(value.cost, 'account_ccost')})`,
-      value.exhausted ? 'warning metric-value' : 'metric-value');
+    const native = display(quota, 'quota_used');
+    const usage = native.startsWith('N/A') ? '' : ` · ${native}${quota.unlimited || value.used_fraction == null ? ' used' : ''}`;
+    const label = el('div', `${quota.label} · ${summary}${usage}`,
+      'watch-quota-summary metric-value' + (value.exhausted ? ' warning' : ''));
     const track = el('div', undefined, 'watch-quota-track');
     if (!quota.unlimited && value.used_fraction != null) {
       const bar = el('progress'); bar.max = 1; bar.value = value.used_fraction;
@@ -42,6 +44,10 @@ const WatchView = (() => {
   }
   function quotaDetails(parent, value) {
     const quota = value.quota;
+    const provenance = [value.cost && !value.cost.complete ? 'partial' : '', value.estimated ? 'estimated' : ''].filter(Boolean);
+    const cost = el('p', () => `CCost: ${value.cost == null ? '—' : display(value.cost, 'account_ccost')}${provenance.length ? ' · ' + provenance.join(' · ') : ''}`, 'detail');
+    cost.title = value.note || 'Observed CCost for this quota window; independent of provider-native usage.';
+    parent.append(cost);
     parent.append(el('p', quota.window_active === false && quota.reset_at_ms == null ? 'Reset: not started' : display(quota, 'reset'), 'detail'));
     if (value.pace) {
       parent.append(el('p', `Remaining: ${display(value.pace, 'per_day')}/day`, 'detail'));
