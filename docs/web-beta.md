@@ -317,7 +317,10 @@ remain. No Observation details, Copilot Unaccounted usage or global warning list
 Four isolated session workers publish coherent canonical rows independently, without a
 complete-total phase; generations reject superseded work. Account-history and detail
 lanes cannot borrow mutable Live service. Accurate rows still require capture/analysis,
-not source-level streaming. Active/top-five captures and a small catalog index are
+not source-level streaming. Successful admission order keeps captures fair across
+catalog revision changes and rejected stale results; busy roots cannot continually
+overtake a retained running card awaiting fresh termination evidence.
+Active/top-five captures and a small catalog index are
 retained; no per-card leases/browser acquisition loops. Adaptive 6× EMA/clamped 5–30s
 cadence measures capture work; explicit intervals, buffered V2 hints and presentation wakes remain.
 

@@ -167,6 +167,37 @@ class WatchCardTests(unittest.TestCase):
         self.publish(cards, root, replace(self.capture, rows=(row,)), now=1003)
         self.assertEqual(Decimal("42"), cards.project(1003)[1][0].rows[0].prompt.ccost)
 
+    def test_revision_churn_cannot_starve_a_retained_running_card(self):
+        workers = ManualWorkers()
+        cards = WatchCards(workers)
+        roots = self.roots[:6]
+        cards.catalog(self.catalog(roots))
+        running = replace(self.capture, rows=(replace(self.capture.rows[-1], in_progress=True),))
+        for root in roots:
+            self.publish(cards, root, running)
+        for revision in range(3):
+            cards.catalog(self.catalog(roots, revision=str(revision)))
+            cards.tick(2000 + revision)
+            for key in tuple(workers.jobs):
+                self.publish(cards, cards.sessions[key].root, running, now=2000 + revision)
+            workers.jobs.clear()
+        self.assertEqual({root.session_id for root in roots}, set(workers.submissions))
+
+    def test_rejected_generation_keeps_its_admission_turn(self):
+        workers = ManualWorkers()
+        cards = WatchCards(workers)
+        roots = self.roots[:6]
+        cards.catalog(self.catalog(roots, active=[root.session_id for root in roots]))
+        cards.tick(1000)
+        stale = tuple(workers.jobs.items())
+        cards.catalog(self.catalog(roots, active=[root.session_id for root in roots], revision="new"))
+        for key, generation in stale:
+            cards.accept(CardResult(key, generation, "rows", (self.capture, (), None)), 2000)
+        workers.jobs.clear()
+        cards.tick(2000)
+        self.assertEqual({root.session_id for root in roots}, set(workers.submissions))
+        self.assertTrue(all(entry.capture is None for entry in cards.sessions.values()))
+
     def test_concurrent_completion_keeps_its_own_grace_and_focal_acquisition_anchor(self):
         root = self.roots[0]
         rows = tuple(replace(self.capture.rows[-1], event_id=f"p-{index}", at_ms=1000 + index,

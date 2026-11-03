@@ -102,6 +102,10 @@ visible history membership and coherent metrics until replacement; collapsed his
 uses the same scheduling. Canonical prompt background fields feed activity DTOs.
 Only active/top-five snapshots are retained; catalog revisions/generations reject
 stale results. Source capture/analysis is necessary per session, not streaming.
+Capture fairness uses successful admission order, not result time or a revision-reset
+timestamp. Invalidated/delayed captures retain their turn; changing early session IDs
+cannot repeatedly overtake a retained running card waiting to observe retirement.
+The active/history rotation, four-worker bound and canonical lifecycle are unchanged.
 
 `watch/web_coordinator.py` adapts the existing coordinator, leaving CLI hydration
 and retention unchanged. It isolates account-history aggregation and Sessions
