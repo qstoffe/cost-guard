@@ -47,7 +47,7 @@ def fixture():
         active = replace(active, context_warning=summary.active_cards[0].context_warning)
         history = tuple(replace(card, context_warning=summary.history_cards[0].context_warning) for card in cards[1:])
         return dict(state="running", view=project_live(WatchProjection("Watch", "fixture", (),
-            now_ms=100_000_000, active_cards=(active, replace(active, session_id="second", title="Second running session")),
+            now_ms=summary.now_ms, active_cards=(active, replace(active, session_id="second", title="Second running session")),
             history_cards=history, cards_state="observed", history_state="observed", quota=summary.quota,
             daily_usage=summary.daily_usage, daily_state="observed")).to_json())
 

@@ -1,5 +1,6 @@
 """Watch native quota/period CCost independence and canonical display parity."""
 from dataclasses import replace
+from datetime import datetime, timezone
 from decimal import Decimal as D
 import json
 from pathlib import Path
@@ -13,6 +14,7 @@ from src.application.display import with_display
 from src.application.live_projection import project_live
 from src.application.watch_accounts import watch_account, watch_quota
 from src.domain import QuotaComponent
+from src.display import format_reset
 from src.presentation.accounts import quota_parts
 from src.reports.models import QuotaPeriodProjection
 
@@ -20,6 +22,52 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class WebWatchQuotaTests(unittest.TestCase):
+    def test_watch_reset_uses_duration_notation_and_keeps_other_reset_consumers(self):
+        now = int(datetime(2026, 11, 3, 18, 41, tzinfo=timezone.utc).timestamp() * 1000)
+        cases = ((12_000, '12s, 18:41'), (90_000, '1m30s, 18:42'),
+            (5_280_000, '1h28m, 20:09'), (97_200_000, '1d3h, 21:41'),
+            (604_799_000, '6d23h, 18:40'))
+        for elapsed, expected in cases:
+            quota = QuotaComponent('Primary', reset_at_ms=now + elapsed)
+
+            wire = with_display(watch_quota(quota), 'UTC', now).to_json()
+
+            with self.subTest(elapsed=elapsed):
+                self.assertEqual('Reset in ' + expected, wire['display']['watch_reset'])
+                self.assertEqual(format_reset(now + elapsed, 'UTC', now_ms=now), wire['quota']['display']['reset'])
+                self.assertEqual(now + elapsed, wire['quota']['reset_at_ms'])
+        for deadline, active, expected in ((now + 604_800_000, None, 'Reset at 2026-11-10 18:41'),
+                (now, None, 'Reset expired'), (now - 1, None, 'Reset expired'),
+                (None, None, 'Reset unknown'), (None, False, 'Window not started'), (0, None, 'Reset unknown')):
+            quota = QuotaComponent('Primary', reset_at_ms=deadline, window_active=active)
+
+            wire = with_display(watch_quota(quota), 'UTC', now).to_json()
+
+            with self.subTest(deadline=deadline, active=active):
+                self.assertEqual(expected, wire['display']['watch_reset'])
+
+    def test_primary_and_secondary_reset_follow_live_time_across_midnight_and_dst(self):
+        for start, elapsed, expected in (
+                ((2026, 11, 3, 22, 50), 5_280_000, 'Reset in 1h28m, 01:18'),
+                ((2026, 3, 29, 0, 30), 7_200_000, 'Reset in 2h, 04:30'),
+                ((2026, 10, 25, 0, 30), 7_200_000, 'Reset in 2h, 03:30')):
+            now = int(datetime(*start, tzinfo=timezone.utc).timestamp() * 1000)
+            frame = summary_watch()
+            item = frame.quota.accounts[0]
+            primary = QuotaComponent('5-hour', reset_at_ms=now + elapsed, primary=True)
+            secondary = replace(primary, label='Weekly', primary=False)
+            item = replace(item, account=replace(item.account, quotas=(primary, secondary), primary_quota_label='5-hour'))
+            frame = replace(frame, now_ms=now, quota=replace(frame.quota, accounts=(item,)))
+
+            first = project_live(frame, 'Europe/Stockholm').to_json()['accounts']['accounts'][0]
+            next_frame = project_live(replace(frame, now_ms=now + 60_000), 'Europe/Stockholm').to_json()['accounts']['accounts'][0]
+
+            with self.subTest(start=start):
+                for slot, updated in ((first['primary'], next_frame['primary']), (first['secondary'][0], next_frame['secondary'][0])):
+                    self.assertEqual(expected, slot['display']['watch_reset'])
+                    self.assertNotEqual(expected, updated['display']['watch_reset'])
+                    self.assertEqual(slot['quota']['display']['reset_at_ms'], updated['quota']['display']['reset_at_ms'])
+
     def test_owner_fixture_matches_cli_without_reconciling_independent_cost(self):
         frame = summary_watch()
         item = frame.quota.accounts[0]
@@ -46,6 +94,10 @@ class WebWatchQuotaTests(unittest.TestCase):
         base = QuotaComponent('Monthly', used=D(2088), limit=D(25000), unit='AI credits')
         cases = (
             ('zero', replace(base, used=D(0)), known, '0%', '0/25000 AI credits'),
+            ('49.9%', replace(base, used=D(12475)), known, '49.9%', '12475/25000 AI credits'),
+            ('50%', replace(base, used=D(12500)), known, '50%', '12500/25000 AI credits'),
+            ('75%', replace(base, used=D(18750)), known, '75%', '18750/25000 AI credits'),
+            ('99.9%', replace(base, used=D(24975)), known, '99.9%', '24975/25000 AI credits'),
             ('full', replace(base, used=D(25000)), known, '100%', '25000/25000 AI credits'),
             ('almost', replace(base, used=D('24999.9')), known, '<100%', '25000/25000 AI credits'),
             ('missing limit', replace(base, limit=None), known, '—', '2088 AI credits'),
@@ -67,6 +119,7 @@ class WebWatchQuotaTests(unittest.TestCase):
                 wire = with_display(watch_quota(quota, QuotaPeriodProjection(quota, cost, None),
                     estimated=name == 'estimated period')).to_json()
                 self.assertEqual(percent, wire['used_percent'])
+                self.assertEqual(name == 'full', wire['exhausted'])
                 self.assertEqual(native, wire['quota']['display']['quota_used'])
                 self.assertEqual(cost is None, wire['cost'] is None)
                 if cost is not None:
@@ -99,6 +152,18 @@ class WebWatchQuotaTests(unittest.TestCase):
         for limit in (D(-1), D('NaN'), D('Infinity')):
             with self.subTest(limit=limit), self.assertRaises(ValueError):
                 QuotaComponent('Monthly', used=D(2088), limit=limit)
+
+    def test_provider_restriction_and_unknown_or_unlimited_usage_do_not_invent_exhaustion(self):
+        for quota in (QuotaComponent('5-hour', status='blocked'),
+                QuotaComponent('Weekly', used=D(100), status='blocked'),
+                QuotaComponent('Unlimited', used=D(100), limit=D(100), unlimited=True, status='blocked'),
+                QuotaComponent('Almost', used=D('99.999'), limit=D(100), status='blocked')):
+
+            wire = watch_quota(quota).to_json()
+
+            with self.subTest(quota=quota.label):
+                self.assertFalse(wire['exhausted'])
+                self.assertTrue(wire['restricted'])
 
 
 if __name__ == '__main__':

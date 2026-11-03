@@ -32,7 +32,7 @@ const WatchView = (() => {
     const native = display(quota, 'quota_used');
     const usage = native.startsWith('N/A') ? '' : ` · ${native}${quota.unlimited || value.used_fraction == null ? ' used' : ''}`;
     const label = el('div', `${quota.label} · ${summary}${usage}`,
-      'watch-quota-summary metric-value' + (value.exhausted ? ' warning' : ''));
+      'watch-quota-summary metric-value' + (value.exhausted ? ' watch-quota-exhausted' : ''));
     const track = el('div', undefined, 'watch-quota-track');
     if (!quota.unlimited && value.used_fraction != null) {
       const bar = el('progress'); bar.max = 1; bar.value = value.used_fraction;
@@ -48,7 +48,9 @@ const WatchView = (() => {
     const cost = el('p', () => `CCost: ${value.cost == null ? '—' : display(value.cost, 'account_ccost')}${provenance.length ? ' · ' + provenance.join(' · ') : ''}`, 'detail');
     cost.title = value.note || 'Observed CCost for this quota window; independent of provider-native usage.';
     parent.append(cost);
-    parent.append(el('p', quota.window_active === false && quota.reset_at_ms == null ? 'Reset: not started' : display(quota, 'reset'), 'detail'));
+    const reset = el('p', display(value, 'watch_reset'), 'detail');
+    if (quota.reset_at_ms != null) { reset.title = display(quota, 'reset_at_ms'); reset.tabIndex = 0; }
+    parent.append(reset);
     if (value.pace) {
       parent.append(el('p', `Remaining: ${display(value.pace, 'per_day')}/day`, 'detail'));
       parent.append(el('p', value.pace.workdays === 0 ? 'Remaining: no workdays left' :
@@ -62,6 +64,7 @@ const WatchView = (() => {
     for (const item of value.accounts) {
       const obs = item.observation, card = el('section', undefined, 'account-card watch-subscription');
       card.dataset.availability = obs.availability;
+      card.dataset.exhausted = String([item.primary, ...item.secondary].some(quota => quota.exhausted));
       const today = item.ccost_scopes.find(scope => scope.name === 'today');
       const cost = el('p', () => `CCost Today: ${today?.cost == null ? '—' : display(today.cost, 'account_ccost')}`, 'metric-value');
       cost.title = item.today_note;
