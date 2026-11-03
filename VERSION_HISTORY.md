@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.137 — 2026-11-03
+
+- Web Watch: native Used/Total and units accompany each quota percentage; independent period CCost has its own explicit label and provenance. CCost currency switching leaves native usage unchanged.
+
 ## v80.136 — 2026-11-03
 
 - Web Watch: bounded four-root Daily batches share source catalog proofs; Stop cancels owned V2 reads before joining capture/history/detail workers. Read timeouts, truthful Daily values and the ten-second host bound are unchanged. Live probes retain separate primary/cleanup failures and bounded phase evidence.

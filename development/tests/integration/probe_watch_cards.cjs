@@ -102,10 +102,35 @@ async function main() {
       assert.equal(layout.scrollY, 0, 'layout assertions use the unscrolled document');
       assert.equal(layout.pageOverflow, false); assert.equal(layout.activeInnerScroll, false);
       assert.equal(layout.tableVerticalScroll, false); assert.equal(layout.stable, true);
-      assert.equal(layout.border, '0px'); assert.equal(layout.background, 'rgba(0, 0, 0, 0)');
-       if (width === 360) assert.equal(layout.horizontalPan, true);
+       assert.equal(layout.border, '0px'); assert.equal(layout.background, 'rgba(0, 0, 0, 0)');
+        if (width === 360) assert.equal(layout.horizontalPan, true);
+       const quotas = await evaluate(`(() => {
+         const cards=[...document.querySelectorAll('.watch-subscription')], monthly=cards[0];
+         const summary=monthly.querySelector('.watch-quota-summary'), details=monthly.querySelector('.watch-primary-details');
+         const native=summary.textContent, cost=details.firstChild.textContent, fill=monthly.querySelector('progress').value;
+         ReportView.setUnit('usd', document.getElementById('result'));
+         const usd=details.firstChild.textContent, unchanged=summary.textContent===native && monthly.querySelector('progress').value===fill;
+         ReportView.setUnit('credits', document.getElementById('result'));
+         const rect=node=>node.getBoundingClientRect();
+         const aligned=cards.every((card,i)=>cards.slice(0,i).filter(other=>rect(other).top===rect(card).top)
+           .every(other=>[0,1,2,3,4].every(track=>Math.abs(rect(card.children[track]).top-rect(other.children[track]).top)<1)));
+         return {native,cost,fill,usd,unchanged,aligned,
+           legible:cards.every(card=>[...card.querySelectorAll('.watch-quota-summary,.watch-primary-details,.watch-secondary-quota')]
+             .every(node=>node.scrollWidth<=node.clientWidth)),
+           monthlyDivider:monthly.querySelector('.watch-account-details')!==null,
+           secondary:cards[1].querySelector('.watch-secondary-quota').textContent}; })()`);
+       assert.equal(quotas.native, 'Monthly · 8.4% used · 2088/25000 AI credits');
+       assert.equal(quotas.cost, 'CCost: 1814'); assert.equal(quotas.usd, 'CCost: $18.14');
+       assert.equal(quotas.fill, .08352); assert.equal(quotas.unchanged, true);
+       assert.equal(quotas.aligned, true); assert.equal(quotas.legible, true);
+       assert.equal(quotas.monthlyDivider, false);
+       assert.match(quotas.secondary, /Weekly · 100% used · 100\/100 requestsCCost: 420/);
       const screenshot = await command('Page.captureScreenshot', {format: 'png', captureBeyondViewport: false}, sessionId);
-       await fs.writeFile(path.join(output, `watch-${theme}-${width}.png`), Buffer.from(screenshot.data, 'base64'));
+        await fs.writeFile(path.join(output, `watch-${theme}-${width}.png`), Buffer.from(screenshot.data, 'base64'));
+       await evaluate('document.querySelector(".watch-account-grid").scrollIntoView()');
+       const subscriptions = await command('Page.captureScreenshot', {format: 'png', captureBeyondViewport: false}, sessionId);
+       await fs.writeFile(path.join(output, `subscriptions-${theme}-${width}.png`), Buffer.from(subscriptions.data, 'base64'));
+       await evaluate('window.scrollTo(0,0)');
        const transitions = await evaluate(`(() => {
          const a=document.querySelector('.watch-active'), h=document.querySelector('.watch-history');
          const originals=[...INPUT.view.active_cards], node=a.children[1];
@@ -133,7 +158,7 @@ async function main() {
         return {count,scroll,success,error}; })()`);
       assert.equal(scale.count, 100); assert.equal(scale.scroll, false);
       assert.notEqual(scale.success, layout.runningColor); assert.notEqual(scale.error, layout.runningColor);
-       cases.push({theme, ...layout, transitions, scale, screenshot: `watch-${theme}-${width}.png`, outcome: 'PASS'});
+        cases.push({theme, ...layout, quotas, transitions, scale, screenshot: `watch-${theme}-${width}.png`, outcome: 'PASS'});
       await command('Target.closeTarget', {targetId});
     }
     await fs.writeFile(path.join(output, 'browser.json'), JSON.stringify({outcome: 'PASS', browser: version.product, userAgent: version.userAgent, cases,

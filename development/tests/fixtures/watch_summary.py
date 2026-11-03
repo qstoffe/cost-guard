@@ -21,11 +21,13 @@ from src.watch.models import SkillObservation, ToolObservation, WatchCard, Watch
 def summary_watch():
     quotas = account_report().accounts_quotas
     base = quotas.accounts[0]
-    monthly = replace(base.account.quotas[0], remaining_fraction=D("0.75"), used=D(25),
+    monthly = replace(base.account.quotas[0], remaining_fraction=D("0.91648"), used=D(2088), limit=D(25000),
+        remaining=D(22912), unit="AI credits",
         reset_at_ms=int(datetime(2026, 11, 1, tzinfo=timezone.utc).timestamp() * 1000))
     five = QuotaComponent("5-hour", "rolling", remaining_fraction=D("0.75"), duration_seconds=18000,
         reset_at_ms=NOW + 3600000)
-    weekly = QuotaComponent("Weekly", "rolling", remaining_fraction=D(0), duration_seconds=604800,
+    weekly = QuotaComponent("Weekly", "rolling", used=D(100), limit=D(100), unit="requests",
+        remaining_fraction=D(0), duration_seconds=604800,
         reset_at_ms=NOW + 86400000, status=Status.BLOCKED)
     accounts = []
     for index, (provider, label, windows) in enumerate((
@@ -38,7 +40,7 @@ def summary_watch():
         native = replace(base.account, ref=AccountRef("fixture", provider, account_id=str(index)),
             provider_label=label, plan=None, quotas=windows, billing=(), warnings=(), status=Status.UNKNOWN,
             primary_quota_label="5-hour" if provider == "anthropic" else None)
-        periods = tuple(QuotaPeriodProjection(quota, ComparisonCost(D(5608) if quota is monthly else D(420), 2, 2),
+        periods = tuple(QuotaPeriodProjection(quota, ComparisonCost(D(1814) if quota is monthly else D(420), 2, 2),
             quota_pace(quota, now_ms=NOW, timezone_id="UTC", workday_calendar="SE")) for quota in windows)
         accounts.append(replace(base, account=native, label=label, quota_periods=periods,
             ccost_scopes=(("today", ComparisonCost(D("12.5"), 2, 2)),),

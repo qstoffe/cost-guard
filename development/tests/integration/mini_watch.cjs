@@ -59,21 +59,21 @@ function setup() {
   assert.equal(child.document.head.children.length, 2);
   assert.deepEqual(child.document.head.children.map(n => n.href), ['http://127.0.0.1:1234/app.css', 'http://127.0.0.1:1234/mini.css']);
   assert.equal(view.accounts.children.length, 6);
-  assert.match(view.accounts.textContent, /GitHub Copilot Pro · 25% used \(5608\)/);
+  assert.match(view.accounts.textContent, /GitHub Copilot Pro · 8.4% used \(1814\)/);
   assert.match(view.accounts.textContent, /Primary temporarily missing · Usage unavailable \(—\)/);
   assert.match(view.accounts.textContent, /OpenAI Pro Lite · 42% used \(—\)/);
   assert.ok(!/Reset|Weekly|Today|Provisional/.test(view.accounts.textContent));
   const retained = view.accounts.children[0]; controller.update(input);
   assert.equal(view.accounts.children[0], retained, 'independent keyed DOM survives refresh');
   const primary = input.view.accounts.accounts[0].primary, savedCost = primary.cost;
-  primary.estimated = true; primary.cost = {...savedCost,complete:false,display:{known_ccost:'?5608'}};
-  controller.update(input); assert.match(retained.textContent,/25% used \(~\?5608\)/);
+  primary.estimated = true; primary.cost = {...savedCost,complete:false,display:{known_ccost:'?1814'}};
+  controller.update(input); assert.match(retained.textContent,/8.4% used \(~\?1814\)/);
   assert.match(retained.title,/estimated account attribution.*partial pricing/);
   primary.cost = {...savedCost,priced_requests:0};
-  controller.update(input); assert.match(retained.textContent,/25% used \(—\)/,'known percentage survives unknown pricing');
+  controller.update(input); assert.match(retained.textContent,/8.4% used \(—\)/,'known percentage survives unknown pricing');
   primary.estimated = false; primary.cost = savedCost; controller.update(input);
   vm.runInContext('ReportView.setUnit("usd")', context); owner.document.documentElement.dataset.theme = 'web'; controller.settings();
-  assert.equal(view.values[1].textContent, '$0.04'); assert.match(retained.textContent, /\(\$56.08\)/);
+  assert.equal(view.values[1].textContent, '$0.04'); assert.match(retained.textContent, /\(\$18.14\)/);
   assert.equal(child.document.documentElement.dataset.theme, 'web');
   for (const kind of ['reconnecting', 'offline', 'source_unavailable', 'authorization_required', 'identity_changed', 'stopped']) {
     controller.health({kind}); assert.match(view.health.textContent, /not live/); assert.equal(view.values[2].textContent, '20m');

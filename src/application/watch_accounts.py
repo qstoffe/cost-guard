@@ -12,7 +12,8 @@ def watch_quota(quota, period=None, *, estimated=False, note=""):
         ("used", "limit", "remaining", "remaining_fraction", "unlimited", "remaining_money", "limit_money")})
     percent = "—" if fraction is None else ("<100%" if fraction < 1 and fraction * 100 >= Decimal("99.95")
         else f"{fraction * 100:.1f}".removesuffix(".0") + "%")
-    return record(quota=fields(quota, "label period duration_seconds reset_at_ms window_active unlimited"),
+    return record(quota=fields(quota, """label period duration_seconds reset_at_ms window_active unlimited
+            used limit remaining remaining_fraction unit remaining_money limit_money"""),
         used_fraction=fraction, used_percent=percent, exhausted=fraction == 1,
         restricted=quota.status == "blocked" and fraction != 1,
         cost=comparison(period.cost) if period is not None else None,

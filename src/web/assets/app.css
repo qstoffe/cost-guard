@@ -161,6 +161,7 @@ p.warning { border-left: 3px solid var(--warn); padding: .65rem .85rem; backgrou
 .watch-subscription > :not(h4) { margin-inline: .9rem; min-width: 0; }
 .watch-view .watch-subscription > p { margin-block: 0; }
 .watch-quota-track { min-height: 1.2rem; }
+.watch-quota-summary { overflow-wrap: anywhere; }
 .watch-account-details { border-top: 1px solid var(--line); padding-top: .5rem; }
 .watch-secondary-quota + .watch-secondary-quota { margin-top: .65rem; }
 .watch-quota-exhausted { accent-color: var(--warn); }

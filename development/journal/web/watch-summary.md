@@ -114,3 +114,34 @@ provided rendered checks instead. No physical desktop, screen-reader, suspension
 native macOS or reproduction of the exact owner incident is claimed. No test exception
 or Decision Delegate waiver was needed. Scratch evidence: `scratch:/watch-summary.json`
 and nine synthetic screenshots; no runtime data or browser profile is committed.
+
+## FR 000556 — native Used/Total is not period CCost
+
+v80.137, 2026-11-03. Full Web Watch previously put observed period CCost in unlabelled
+parentheses after a native percentage. The Watch DTO now carries the same canonical
+quota amount/limit/unit inputs used by common CLI/Accounts display formatting. Both
+primary and secondary summaries use those tokens; independent period CCost has a
+separate explicit line with partial/estimated metadata. Unknown stays unavailable,
+and CCost unit switching never converts native usage. No reconciliation, residual,
+provider parsing, acquisition, valuation or period-boundary change is introduced.
+
+The exact fixture independently shows 8.4%, 2088/25000 AI credits and CCost 1814;
+canonical CLI retains 8% and 2088/25000. Projection/DOM regressions cover missing/zero/
+invalid denominators, 0/100/near-100%, Unlimited, remaining-derived native amounts,
+percent-only quotas, unknown/empty/unpriced/partial/estimated CCost, stale observations
+and overlapping same-label model/account windows. Shared Mini Watch expectations
+were updated for the new fixture values only; its presentation is unchanged.
+
+Hidden fresh-profile Chrome 156 passed nine Classic/light/dark × 360/1366/1920 cases:
+native values, independent CCost currency switching, aligned tracks, readable wrapping,
+conditional dividers and no document overflow. Subscription screenshots were inspected
+at mobile/light and desktop Classic/dark. Real read-only V2 probe passed: one owner,
+two streams, three accounts; 1,794 daily requests/101 known initiating prompts,
+incomplete attribution and complete pricing explicitly retained. Daily published at
+50.962s; all owned workers closed, shared OpenCode untouched. No model inference,
+physical desktop/screen-reader/macOS proof or actual provider reconciliation is claimed.
+The owner's exact 274 difference remains unexplained beyond the proven metric mismatch.
+Final Full passed all 131 files; validator had zero failures and six existing
+advisory prose/design warnings. The initial Full failure was a stale Mini Watch
+expectation for the replaced shared fixture, repaired without changing its runtime.
+No requirement or test exception was needed.
