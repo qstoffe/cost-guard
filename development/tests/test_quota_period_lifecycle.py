@@ -21,12 +21,13 @@ from src.analysis.period_ccost import monthly_quota_window, quota_window
 from src.accounts.acquisition import AccountUpdate
 from src.application.display import with_display
 from src.application.projection import account
+from src.application.watch_accounts import watch_account
 from src.domain import QuotaComponent
 from src.domain.acquisition import AcquisitionMetrics
 from src.numbers import ccost_display
 from src.presentation.accounts import capacity_lines
 from src.presentation.terminal import AnsiStyler
-from src.reports.accounts import WatchAccountProjection
+from src.reports.accounts import WatchAccountProjection, account_projections
 from src.watch.accounts import reconcile_accounts
 from src.watch.account_refresh import WatchAccountRefresh
 from src.watch.coordinator import WatchCoordinator
@@ -168,6 +169,66 @@ class QuotaPeriodLifecycleTests(unittest.TestCase):
         rows, _, _ = reconcile_accounts((old,), (partial,), {old.key: NOW}, now_ms=NOW + 1)
         self.assertIsNone(rows[0].quotas[0].reset_at_ms)
         self.assertEqual("partial", rows[0].availability)
+
+    def test_watch_native_month_has_its_own_history_cost_and_canonical_pace(self):
+        start = int(datetime(2026, 10, 1, tzinfo=timezone.utc).timestamp() * 1000)
+        reset = int(datetime(2026, 11, 1, tzinfo=timezone.utc).timestamp() * 1000)
+        monthly = QuotaComponent('Monthly', 'fixed', used=D(22), remaining=D(78), limit=D(100),
+                                 unit='AI credits', reset_at_ms=reset)
+        native = replace(subscription('github-copilot'), quotas=(monthly,))
+        first = request('month-start', start, provider='github-copilot', ref=native.ref)
+        entries = (request('before', start - 1, provider='github-copilot', ref=native.ref), first,
+                   replace(first, session_id='fork'), request('today', NOW, provider='github-copilot', ref=native.ref))
+
+        row = project((native,), entries, watch=True, observed_start_ms=start)[0]
+        wire = with_display(watch_account(row), now_ms=NOW).to_json()
+
+        self.assertEqual(D(100), dict(row.ccost_scopes)['today'].ccost)
+        self.assertEqual(D(200), row.quota_periods[0].cost.ccost)
+        self.assertIs(row.pace[0], row.quota_periods[0].pace)
+        self.assertEqual('200', wire['primary']['cost']['display']['account_ccost'])
+        self.assertEqual('11', wire['primary']['pace']['display']['per_day'])  # 78 / 7, rounded down by CLI.
+        self.assertEqual([], wire['secondary'])
+        # Partial daily acquisition must not claim the full month or erase Today.
+        pending = account_projections((native,), entries, FakePricingProvider().catalog, now_ms=NOW,
+            today_start_ms=DAY, month_start_ms=MONTH, watch=True, observed_start_ms=DAY, require_history=True)[0]
+        self.assertIsNone(pending.quota_periods[0].cost)
+        self.assertEqual(D(100), dict(pending.ccost_scopes)['today'].ccost)
+        self.assertEqual((), project((native,), entries)[0].quota_periods)  # Ordinary Accounts is unchanged.
+
+    def test_watch_month_unknown_stale_empty_and_rollover_rebind_without_old_cost(self):
+        start = int(datetime(2026, 10, 1, tzinfo=timezone.utc).timestamp() * 1000)
+        reset = int(datetime(2026, 11, 1, tzinfo=timezone.utc).timestamp() * 1000)
+        monthly = QuotaComponent('Monthly', 'fixed', reset_at_ms=reset, used=D(0), remaining_fraction=D(1))
+        native = replace(subscription('github-copilot'), quotas=(monthly,))
+        entries = (request('old', NOW, provider='github-copilot', ref=native.ref),)
+        projector = WatchAccountProjection(AcquisitionMetrics())
+        projector.project((native,), entries, FakePricingProvider().catalog, now_ms=NOW,
+            day_start_ms=DAY, month_start_ms=MONTH, timezone_id='UTC', workday_calendar='', observed_start_ms=start)
+        for component, availability, expected in ((monthly, 'available', D(100)),
+                (monthly, 'stale', None), (replace(monthly, reset_at_ms=reset + HOUR), 'available', None),
+                (empty(monthly), 'available', D(0)), (replace(monthly, reset_at_ms=None), 'available', None)):
+            row = projector.history.project((replace(native, quotas=(component,), availability=availability),),
+                now_ms=NOW, today_start_ms=DAY, month_start_ms=MONTH, timezone_id='UTC', workday_calendar='')[0]
+            cost = row.quota_periods[0].cost
+            self.assertEqual(expected, None if cost is None else cost.ccost)
+        new_month = replace(monthly, reset_at_ms=int(datetime(2026, 12, 1, tzinfo=timezone.utc).timestamp() * 1000))
+        row = projector.history.project((replace(native, quotas=(new_month,)),), now_ms=reset,
+            today_start_ms=reset, month_start_ms=reset, timezone_id='UTC', workday_calendar='')[0]
+        self.assertEqual(D(0), row.quota_periods[0].cost.ccost)
+
+    def test_watch_duplicate_quota_labels_keep_model_specific_cost_associations(self):
+        native = subscription()
+        account_quota = replace(native.quotas[0], label='Shared')
+        model_quota = replace(account_quota, scope='model', model_id='gpt-test')
+        native = replace(native, quotas=(account_quota, model_quota))
+        entries = (request('one', NOW, ref=native.ref), request('two', NOW, model='claude-test', ref=native.ref))
+
+        row = project((native,), entries, watch=True, observed_start_ms=MONTH)[0]
+        wire = with_display(watch_account(row), now_ms=NOW).to_json()
+
+        self.assertEqual('300', wire['primary']['cost']['display']['account_ccost'])
+        self.assertEqual('100', wire['secondary'][0]['cost']['display']['account_ccost'])
 
     def test_old_account_mailbox_does_not_regress_successful_observation_epoch(self):
         old = subscription()

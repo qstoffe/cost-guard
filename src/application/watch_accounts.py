@@ -4,17 +4,20 @@ from decimal import Decimal
 from src.display import quota_usage
 from src.domain import QuotaComponent
 from .contracts import record
-from .projection import account, fields
+from .projection import account, comparison, fields
 
 
-def watch_quota(quota):
+def watch_quota(quota, period=None):
     fraction, _used, _money = quota_usage(**{key: getattr(quota, key) for key in
         ("used", "limit", "remaining", "remaining_fraction", "unlimited", "remaining_money", "limit_money")})
     percent = "—" if fraction is None else ("<100%" if fraction < 1 and fraction * 100 >= Decimal("99.95")
         else f"{fraction * 100:.1f}".removesuffix(".0") + "%")
     return record(quota=fields(quota, "label period duration_seconds reset_at_ms window_active unlimited"),
         used_fraction=fraction, used_percent=percent, exhausted=fraction == 1,
-        restricted=quota.status == "blocked" and fraction != 1)
+        restricted=quota.status == "blocked" and fraction != 1,
+        cost=comparison(period.cost) if period is not None else None,
+        pace=fields(period.pace, "unit per_day days workdays per_workday")
+            if period is not None and period.pace is not None else None)
 
 
 def primary_quota(native):
@@ -32,8 +35,11 @@ def watch_account(item):
     native = item.account
     primary = primary_quota(native)
     base = account(item)
+    def projected(quota):
+        period = next((period for period in item.quota_periods if period.quota is quota), None)
+        return watch_quota(quota, period)
     allowed = {"observation", "ccost_scopes", "ccost_account_unknown"}
     return record(**{name: value for name, value in base.fields if name in allowed},
-        primary=watch_quota(primary), secondary=tuple(watch_quota(quota) for quota in native.quotas if quota is not primary),
+        primary=projected(primary), secondary=tuple(projected(quota) for quota in native.quotas if quota is not primary),
         today_estimated="today" in item.ccost_estimated_scopes,
         today_note=next((note for note in item.ccost_notes if note.startswith("CCost today:")), ""))

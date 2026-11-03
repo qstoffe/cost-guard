@@ -35,15 +35,20 @@ def main():
                 theme = 'classic' if query.get('theme') == ['classic'] else 'web'
                 scheme = 'dark' if query.get('scheme') == ['dark'] else 'light'
                 content = f'''<!doctype html><html style="color-scheme:{scheme}"><title>Watch summary layout</title>
-                    <iframe title="Synthetic Watch" style="border:0;width:{width}px;height:1600px" src="/case.html?theme={theme}"></iframe></html>'''.encode()
+                    <iframe title="Synthetic Watch" style="border:0;width:{width}px;height:1600px" src="/case.html?theme={theme}&scheme={scheme}"></iframe></html>'''.encode()
             elif url.path == '/case.html':
                 theme = 'classic' if query.get('theme') == ['classic'] else 'web'
+                scheme = 'dark' if query.get('scheme') == ['dark'] else 'light'
                 content = f'''<!doctype html><html lang="en" data-theme="{theme}"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-                    <title>Synthetic Watch</title><link rel="stylesheet" href="/app.css"><main><h1>Watch</h1><div id="result"></div></main>
+                    <title>Synthetic Watch</title><link rel="stylesheet" href="/app.css?scheme={scheme}"><main><h1>Watch</h1><div id="result"></div></main>
                     <script src="/render.js"></script><script src="/watch.js"></script><script src="/data.js"></script>
                     <script>const state = {{connection:'Live connected.'}}; ReportView.renderLive(document.getElementById('result'), INPUT, state);</script></html>'''.encode()
             else:
                 content = resources.get(url.path)
+                if content is not None and url.path == '/app.css':
+                    # Emulate the requested media preference only in this synthetic fixture.
+                    media = b'@media all' if query.get('scheme') == ['dark'] else b'@media not all'
+                    content = content.replace(b'@media (prefers-color-scheme: dark)', media)
             if content is None:
                 self.send_error(404)
                 return

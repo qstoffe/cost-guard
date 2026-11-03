@@ -22,7 +22,7 @@ from src.analysis.models import TraceEntry
 from src.analysis.timezones import local_day_start_ms
 from src.application.live_projection import project_live
 from src.application.watch_accounts import primary_quota, watch_account, watch_quota
-from src.domain import AccountRef, ModelRef, TokenUsage
+from src.domain import AccountRef, ModelRef, QuotaComponent, TokenUsage
 from src.reports.history import WatchHistoryAcquisition
 from src.presentation.accounts import account_capacity_parts
 from src.watch.web_coordinator import WebWatchCoordinator
@@ -153,6 +153,30 @@ class WatchDailyTests(unittest.TestCase):
         explicit = replace(native, primary_quota_label='Monthly', quotas=(native.quotas[1],))
         self.assertEqual('Monthly', primary_quota(explicit).label)
         self.assertIsNone(primary_quota(explicit).remaining_fraction)
+
+    def test_native_month_background_history_includes_pre_watch_and_reuses_stable_roots(self):
+        start = int(datetime(2026, 10, 1, tzinfo=timezone.utc).timestamp() * 1000)
+        now = int(datetime(2026, 10, 25, 12, tzinfo=timezone.utc).timestamp() * 1000)
+        monthly = QuotaComponent('Monthly', 'fixed', remaining=D(100),
+            reset_at_ms=int(datetime(2026, 11, 1, tzinfo=timezone.utc).timestamp() * 1000))
+        native = replace(summary_watch().quota.accounts[0].account, quotas=(monthly,))
+        with tempfile.TemporaryDirectory() as tmp:
+            source = SyntheticMonthSource(4, 3, month_start_ms=start, today_roots=1, now_ms=now)
+            config, selection, service, _ = make_service(tmp, source, now_ms=now)
+            owner = WebWatchCoordinator(selection=selection, report_service=service, config=config,
+                service_factory=lambda clock: make_service(tmp, source, now_ms=clock)[2])
+            self.addCleanup(owner.close)
+
+            history, today = owner._account_history(source.list_sessions(), (native,), now)
+            loads = source.load_count
+            owner._account_history(source.list_sessions(), (native,), now + 1)
+            row = history.project((native,), now_ms=now, today_start_ms=local_day_start_ms('UTC', now_ms=now),
+                month_start_ms=start, timezone_id='UTC', workday_calendar='')[0]
+
+            self.assertEqual(start, history.observed_start_ms)
+            self.assertEqual(3, today.mix.request_count)
+            self.assertEqual(12, row.quota_periods[0].cost.observed_requests)
+            self.assertEqual(loads, source.load_count)
 
     def test_previous_day_background_result_cannot_repopulate_new_day(self):
         with tempfile.TemporaryDirectory() as tmp:

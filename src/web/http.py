@@ -9,6 +9,7 @@ from socketserver import TCPServer
 import time
 from threading import BoundedSemaphore, Timer
 
+from src.version import DISPLAY_VERSION
 from .jobs import parse_report
 from .security import BrowserSession
 from .instance_state import checkout_identity
@@ -321,6 +322,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 return
             if self.path == "/api/status":
                 value = self.server.jobs.readiness()
+                value["product_version"] = DISPLAY_VERSION
                 if self.server.lifecycle:
                     value["lifecycle"] = self.server.lifecycle.public_status()
                     value["session_detail"] = self.server.lifecycle.live is not None

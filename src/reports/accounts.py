@@ -6,14 +6,14 @@ from dataclasses import dataclass, replace
 from typing import Sequence
 
 from src.analysis.models import TraceEntry
-from src.analysis.period_ccost import PeriodCCostIndex, history_start, usage_provider, quota_window, monthly_quota_window
+from src.analysis.period_ccost import PeriodCCostIndex, usage_provider, quota_window, monthly_quota_window
 from src.analysis.quota_pace import quota_pace
 from src.analysis.valuation import billed_spend, comparison_cost, unique_usage
 from src.domain import AccountSnapshot, CostDisposition
 from src.domain.acquisition import AcquisitionMetrics
 from src.pricing.catalog import PricingCatalog
 
-from .models import AccountProjection, AccountsQuotasProjection
+from .models import AccountProjection, AccountsQuotasProjection, QuotaPeriodProjection
 
 
 def account_projections(
@@ -21,7 +21,7 @@ def account_projections(
     catalog: PricingCatalog, *, now_ms: int, today_start_ms: int, month_start_ms: int,
     timezone_id: str = "UTC", workday_calendar: str = "",
     period_index: PeriodCCostIndex | None = None, watch: bool = False,
-    observed_start_ms: int | None = None,
+    observed_start_ms: int | None = None, require_history: bool = False,
 ) -> tuple[AccountProjection, ...]:
     counts = Counter((item.ref.provider_id, item.plan) for item in accounts)
     providers = Counter(usage_provider(item.ref.provider_id) for item in accounts)
@@ -45,7 +45,8 @@ def account_projections(
         attributed = tuple(entry for entry in entries if entry.account_ref and entry.account_ref.key == account.key
                            and entry.model.provider == account.ref.provider_id)
         scopes, notes, account_unknown, provider_notes, estimated_scopes = _period_scopes(account, index, providers, explained, today_start_ms,
-                                       month_start_ms, now_ms, watch=watch, observed_start_ms=observed_start_ms)
+                                       month_start_ms, now_ms, watch=watch, observed_start_ms=observed_start_ms,
+                                       require_history=require_history)
         unassigned = any(entry.model.provider == account.ref.provider_id and entry.account_ref is None
                          and month_start_ms <= entry.completed_at_ms <= now_ms for entry in entries)
         billing_known = not unassigned
@@ -57,14 +58,18 @@ def account_projections(
             return billed_spend(selected) if billing_known and has_billing else None
 
         # Pace derives from current quota state and the calendar, never usage history.
-        pace = tuple(value for component in account.quotas if (value := quota_pace(
-            component, now_ms=now_ms, timezone_id=timezone_id, workday_calendar=workday_calendar)) is not None)
+        paces = tuple(quota_pace(component, now_ms=now_ms, timezone_id=timezone_id,
+                                workday_calendar=workday_calendar) for component in account.quotas)
+        quota_periods = tuple(QuotaPeriodProjection(component, cost, pace)
+            for component, (_name, cost), pace in zip(account.quotas, scopes[1:], paces)) if watch else ()
         projections.append(AccountProjection(
             account, label, tuple(scopes),
-            actual_billing(today_start_ms), actual_billing(month_start_ms), pace, notes, account_unknown,
+            actual_billing(today_start_ms), actual_billing(month_start_ms),
+            tuple(pace for pace in paces if pace is not None), notes, account_unknown,
             unaccounted_usage=None if watch else _unaccounted_usage(account, index, providers, now_ms, observed_start_ms),
             provider_ccost_notes=provider_notes,
             ccost_estimated_scopes=estimated_scopes,
+            quota_periods=quota_periods,
         ))
     return tuple(projections)
 
@@ -92,14 +97,14 @@ def _unaccounted_usage(account, index, providers, now_ms, observed_start_ms):
 
 
 def _period_scopes(account, index, providers, explained, today_start_ms, month_start_ms, now_ms, *, watch,
-                   observed_start_ms):
+                    observed_start_ms, require_history):
     provider = usage_provider(account.ref.provider_id)
     ranges = [("today", (today_start_ms, now_ms + 1, "configured local calendar day"), None)]
     if not watch:
         ranges.append(("this month", (month_start_ms, now_ms + 1, "configured local calendar month to date"), None))
-    ranges.extend((component.label, quota_window(component, now_ms)
-                   if account.availability in {"available", "partial"} else None, component.model_id)
-                  for component in account.quotas if component.duration_seconds)
+    ranges.extend((component.label, quota_window(component, now_ms, include_monthly=watch)
+                    if account.availability in {"available", "partial"} else None, component.model_id)
+                  for component in account.quotas if watch or component.duration_seconds)
     scopes, notes, provider_notes, estimated_scopes = [], [], [], []
     account_unknown = False
     for name, window, model in ranges:
@@ -111,6 +116,10 @@ def _period_scopes(account, index, providers, explained, today_start_ms, month_s
         if start == end:
             scopes.append((name, index.cost(provider, account.key, start, end, model)))
             notes.append(f"CCost {name}: {basis}; no requests in this period.")
+            continue
+        if require_history and (observed_start_ms is None or observed_start_ms > start):
+            scopes.append((name, None))
+            notes.append(f"CCost {name}: waiting for complete period history.")
             continue
         proven = index.cost(provider, account.key, start, end, model)
         unknown = index.cost(provider, None, start, end, model)
@@ -151,20 +160,10 @@ class AccountPeriodHistory:
     observed_start_ms: int | None
 
     def project(self, accounts, *, now_ms, today_start_ms, month_start_ms, timezone_id, workday_calendar):
-        rows = account_projections(accounts, (), self.catalog, now_ms=now_ms,
+        return account_projections(accounts, (), self.catalog, now_ms=now_ms,
             today_start_ms=today_start_ms, month_start_ms=month_start_ms, timezone_id=timezone_id,
             workday_calendar=workday_calendar, period_index=self.index, watch=True,
-            observed_start_ms=self.observed_start_ms)
-        required_start = history_start(accounts, today_start_ms, now_ms)
-        if self.observed_start_ms is not None and self.observed_start_ms <= required_start:
-            return rows
-        pending = []
-        for row in rows:
-            empty_labels = {component.label for component in row.account.quotas
-                            if (window := quota_window(component, now_ms)) is not None and window[0] == window[1]}
-            pending.append(replace(row, ccost_scopes=tuple(
-                (name, cost if name in empty_labels else None) for name, cost in row.ccost_scopes)))
-        return tuple(pending)
+            observed_start_ms=self.observed_start_ms, require_history=True)
 
 
 class WatchAccountProjection:

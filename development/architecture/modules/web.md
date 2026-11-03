@@ -114,6 +114,14 @@ existing scheduler. Live owns publication/lifecycle and the shared EMA, measured
 from actual capture work, not just catalog admission. `application/live.py` calls
 the optional detail adapter without importing Watch. `live_projection.py` exports
 minimal detached card DTOs so 100 one-row cards fit the existing SSE bound.
+`/api/status` exports the process-loaded `DISPLAY_VERSION`; the persistent header
+uses it only after authorization, without a new poll or source-file reread.
+Watch account DTOs carry each actual quota's associated period cost and canonical
+pace from `QuotaPeriodProjection`, not label-based browser joins. Native monthly
+history shares the existing single-worker account lane and revision reuse. The
+subscription subgrid aligns title/Today/primary label/bar tracks; complete primary
+reset/pace precedes any secondary-only divider. Title bands use theme tokens while
+body values stay left aligned; Accounts detail semantics are unchanged.
 `watch.js` uses Started sequence/time, preview-only ellipsized flexible cells,
 intrinsic non-Prompt subgrid tracks and horizontal overflow. History alone has a
 restrained frame/40vh cap; keyed disclosures retain focus/scroll. Running yellow,

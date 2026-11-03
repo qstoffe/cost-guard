@@ -181,6 +181,15 @@ class WebRuntimeTests(unittest.TestCase):
             self.assertIsNone(other.exchange(other.bootstrap()))
         self.assertIsNone(other.exchange("å"))
 
+    def test_status_exposes_loaded_product_version_not_static_assets_or_disk_changes(self):
+        from src.version import DISPLAY_VERSION
+        self.login()
+        self.assertEqual(DISPLAY_VERSION, json.loads(self.request('/api/status')[2])['product_version'])
+        with patch('src.version.DISPLAY_VERSION', 'v999.1'):
+            self.assertEqual(DISPLAY_VERSION, json.loads(self.request('/api/status')[2])['product_version'])
+        with patch('src.web.http.DISPLAY_VERSION', 'v91.7'):
+            self.assertEqual('v91.7', json.loads(self.request('/api/status')[2])['product_version'])
+
     def test_host_origin_dns_rebinding_and_csrf_are_denied(self):
         self.login()
         for headers in ({"Host": "evil.example"}, {"Host": "localhost"}, {"Host": "127.0.0.1:1"},

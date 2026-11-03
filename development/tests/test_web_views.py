@@ -11,6 +11,7 @@ import subprocess
 import tempfile
 from threading import Event, Thread
 import unittest
+from unittest.mock import patch
 
 from development.tests.fixtures.report_runtime import FakeAccountProvider, FakePricingProvider, FakeSource
 from development.tests.fixtures.session_snapshots import make_snapshot, make_uncompacted_snapshot
@@ -169,8 +170,9 @@ class WebViewTests(unittest.TestCase):
             try:
                 payload = dict(origin=server.origin, credential=server.session.bootstrap(), examples=examples,
                                overview=overview, tier_report=tier_report, account_report=account_report)
-                result = subprocess.run([shutil.which("node"), "development/tests/integration/web_views.cjs"],
-                    cwd=ROOT, input=json.dumps(payload), text=True, capture_output=True, timeout=60)
+                with patch('src.web.http.DISPLAY_VERSION', 'v91.7'):
+                    result = subprocess.run([shutil.which("node"), "development/tests/integration/web_views.cjs"],
+                        cwd=ROOT, input=json.dumps(payload), text=True, capture_output=True, timeout=60)
                 self.assertEqual(0, result.returncode, result.stdout + result.stderr)
                 self.assertIn("web views passed", result.stdout)
                 self.assertGreaterEqual(len(jobs.results), 5)

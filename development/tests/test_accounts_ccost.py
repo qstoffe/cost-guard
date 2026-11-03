@@ -123,7 +123,11 @@ class AccountsTests(unittest.TestCase):
             self.assertEqual(5, len(projection.quota.accounts))
             self.assertEqual(5, len({a.account.key for a in projection.quota.accounts}))
             for row in projection.quota.accounts:
-                self.assertIsNone(row.ccost_scopes[0][1])
+                if row.account.ref.provider_id == 'github-copilot':
+                    self.assertIsNone(row.ccost_scopes[0][1], 'unassigned usage cannot be duplicated across accounts')
+                    self.assertTrue(row.ccost_account_unknown)
+                else:
+                    self.assertEqual(Decimal(0), row.ccost_scopes[0][1].ccost, 'acquired empty Today is independent of longer quotas')
             stream = io.StringIO()
             WatchRenderer(config, stream=stream, interactive=False, terminal_width=240).render(projection)
             text = stream.getvalue()

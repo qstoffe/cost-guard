@@ -1,5 +1,6 @@
 """Synthetic Watch daily/account/context states shared by VM and visual checks."""
 from dataclasses import replace
+from datetime import datetime, timezone
 from decimal import Decimal as D
 
 from development.tests.fixtures.account_views import account_report, NOW
@@ -8,17 +9,20 @@ from src.accounts.base import normalize_quota
 from src.accounts.openai_subscription import convert_usage_payload
 from src.analysis.context import PriceWarningSeverity
 from src.analysis.daily_usage import DailyUsage
+from src.analysis.quota_pace import quota_pace
 from src.analysis.token_mix import TokenMix
 from src.analysis.valuation import ComparisonCost
 from src.domain import AccountRef, AccountUsageStatus as Status, QuotaComponent
 from src.reports.watch_context import WatchContextGuidance
+from src.reports.models import QuotaPeriodProjection
 from src.watch.models import SkillObservation, ToolObservation, WatchCard, WatchProjection, WatchRow
 
 
 def summary_watch():
     quotas = account_report().accounts_quotas
     base = quotas.accounts[0]
-    monthly = replace(base.account.quotas[0], remaining_fraction=D("0.75"), used=D(25))
+    monthly = replace(base.account.quotas[0], remaining_fraction=D("0.75"), used=D(25),
+        reset_at_ms=int(datetime(2026, 11, 1, tzinfo=timezone.utc).timestamp() * 1000))
     five = QuotaComponent("5-hour", "rolling", remaining_fraction=D("0.75"), duration_seconds=18000,
         reset_at_ms=NOW + 3600000)
     weekly = QuotaComponent("Weekly", "rolling", remaining_fraction=D(0), duration_seconds=604800,
@@ -34,14 +38,17 @@ def summary_watch():
         native = replace(base.account, ref=AccountRef("fixture", provider, account_id=str(index)),
             provider_label=label, plan=None, quotas=windows, billing=(), warnings=(), status=Status.UNKNOWN,
             primary_quota_label="5-hour" if provider == "anthropic" else None)
-        accounts.append(replace(base, account=native, label=label,
+        periods = tuple(QuotaPeriodProjection(quota, ComparisonCost(D(5608) if quota is monthly else D(420), 2, 2),
+            quota_pace(quota, now_ms=NOW, timezone_id="UTC", workday_calendar="SE")) for quota in windows)
+        accounts.append(replace(base, account=native, label=label, quota_periods=periods,
             ccost_scopes=(("today", ComparisonCost(D("12.5"), 2, 2)),),
             ccost_estimated_scopes=("today",),
              ccost_notes=("CCost today: configured local calendar day; provider-attributed estimate; not verified account/billing attribution.",)))
     native = normalize_quota(convert_usage_payload({"plan_type": "pro_lite", "rate_limit": {
         "primary_window": {"limit_window_seconds": 604800, "used_percent": 42, "reset_after_seconds": 86400}}},
         fetched_at_ms=NOW), AccountRef("fixture", "openai", account_id="weekly"), "OpenAI Pro Lite")
-    accounts.append(replace(base, account=native, label="OpenAI Pro Lite"))
+    accounts.append(replace(base, account=native, label="OpenAI Pro Lite",
+        quota_periods=(QuotaPeriodProjection(native.quotas[0], None, None),)))
     item = replace(warning_prompt(PriceWarningSeverity.EXCEEDED), event_id="prompt", in_progress=True,
         watch_model="Model", watch_effort="High", prompt_number=37,
         preview="Keep completed literally\nhttps://example.test/" + "long" * 200,

@@ -277,6 +277,7 @@ async function connect() {
     try { applySettings(await api('/api/settings')); }
     catch (_) { notice.textContent = 'Unable to read saved Web settings. Open Settings for details.'; }
     const state = await api('/api/status');
+    if (typeof state.product_version === 'string') document.getElementById('product-version').textContent = ' ' + state.product_version;
     sessionDetailAvailable = state.session_detail === true && typeof SessionDetail !== 'undefined';
     statusLine.textContent = `HTTP ${state.http}; analysis ${state.analysis}; source ${state.source}; accounts ${state.accounts}. Snapshot health is shown below.`;
     if (!liveConnection && typeof LiveConnection !== 'undefined') {
