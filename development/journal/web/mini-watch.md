@@ -67,6 +67,8 @@ document/horizontal overflow, including 150% browser zoom. Manual resizing is fr
 
 ### Executed regressions and limits
 
+- **PASS:** final local Full, all 136 bounded runner units, **290.0s**, one worker
+  without simultaneous browser/native probes. All original assertions are intact.
 - VM/Python regression: full Watch/Mini exact daily parity despite visible-row totals
   differing, Credits/USD, known zero, unavailable pricing, partial data, loading,
   retry/source/offline/auth/stale states, canonical day replacement/corrections,
