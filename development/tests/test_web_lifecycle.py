@@ -45,7 +45,7 @@ class LifecycleTests(unittest.TestCase):
         # Lifecycle tests must not start real source/pricing/account acquisition.
         def idle_acquisition():
             return SimpleNamespace(tick=lambda: None, close=lambda: None,
-                error=None, terminal=False, observed_at_ms=None,
+                error=None, terminal=False, source_state='running', observed_at_ms=None,
                 coordinator=SimpleNamespace(report_service=None,
                     today_ccost=SimpleNamespace(history_pending=False)))
 

@@ -195,7 +195,8 @@ async function main() {
   assert.match(watch.empty.textContent, /last observation retained/);
   context.state.connection = 'source_changed: host stopped. Run the launcher again.';
   vm.runInContext('ReportView.renderLive(parent, example, state)', context);
-  assert.match(watch.empty.textContent, /unavailable/);
+  assert.match(watch.empty.textContent, /Live connection interrupted/);
+  assert.doesNotMatch(watch.empty.textContent, /Source unavailable/);
   assert.equal(watch.active.children[0], anchored);
   multiple.view.active_cards = []; context.state.connection = 'Live connected.';
   vm.runInContext('ReportView.renderLive(parent, example, state)', context);

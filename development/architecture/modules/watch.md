@@ -29,6 +29,16 @@ V1 batches payload-free revisions with bounded SQL parameters, never a root cap.
 
 Source recovery retains the last projection and retries only the selected source every 5s (no reselection, subprocess or account refresh). The same coordinator owns unfinished initialization: staged hydration/local-usage acquisition precedes account work; partial state is discarded before fresh retry. V2 refreshes discovery/pools and resumes with authoritative snapshots/new events. Retired SSE readers are cancellable; no OpenCode process is stopped. Schema/auth errors are terminal; unreadable/concurrent data is bounded. Only `WatchedSessionEnded` intentionally ends scoped Watch; Ctrl+C includes initialization.
 
+Web-only `source_status.py` confirms retryable read failures with retained evidence
+after five monotonic seconds, without moving the first-failure origin on repeated
+failure/partial capture. Existing publications advance retrying to unavailable;
+successful relevant acquisition alone clears it. Initial/non-retryable failures
+are immediate. Cards freeze observed duration while retrying; daily uses the existing
+single history lane for a five-second retry. Browser HTTP/SSE health remains separate;
+no CLI recovery/cadence or source-acquisition limits change. Web history first selects
+the five latest eligible sessions, then orders displayed prompt start/session/prompt IDs
+ascending. Context warnings retain canonical severity; only icon/text emphasis changes.
+
 `sources/connectivity.py` observes complete operations, not harmless compatibility probes; `connectivity_events.py` owns the existing bounded source transition file (24 events/30 days, whitelist/no raw endpoints/auth/payloads). Watch and selection share it; Diagnostics archives without deleting live history. Metadata TLS certificate failures are distinct from other TLS; its existing cache/backoff owner is unchanged.
 
 Watch tool observations use canonical prompt/task scope and one physical-call identity. `watch/tool_contracts.py` owns conservative persisted skill-input/metadata and bounded, known-script result evidence; no source reads, commands, secret discovery or accounting changes. `ToolObservation.skills` projects exact confirmed IDs and direct failure counts. Tracker attaches activity only to each session's latest prompt while it runs or retains its existing terminal marker, then removes rows on marker expiry or same-session supersession. Terminal snapshots retain final counts without live status; the final observation is reused for an unchanged source revision and may update on new authoritative evidence. Presentation adapts tool/skill rows to terminal width independently of fixed metric geometry; [activity contracts](../../../docs/watch-activity.md) define uncertainty and omissions.

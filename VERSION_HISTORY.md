@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.134 — 2026-11-03
+
+- Web Watch: severity-specific warning emphasis, five-second retry confirmation with truthful retained-data status, separate browser reconnect feedback and chronological display of the five latest eligible historical sessions.
+
 ## v80.133 — 2026-11-03
 
 - Verification: advisory budgets for the public README, release history and Web guide; behavioral startup/launcher tests and bounded readiness/release Windows fixtures. Product deadlines and security/context caps stay hard. Concise completion records link detailed PR/CI evidence instead of creating reporting-only rerun loops.

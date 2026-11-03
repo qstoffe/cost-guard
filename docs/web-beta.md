@@ -242,7 +242,8 @@ One authenticated `/api/live` watchdog runs at ten-second intervals after the pr
 [Built-in browser, deterministic and real-source verification](../development/architecture/governance/verification/web-connection.md) records the tested states and explicit physical-tray/suspension/restart/macOS limits.
 
 Watch uses unframed prompt cards. **Earlier Prompts** starts collapsed: five eligible
-distinct sessions, newest actual prompt start first, one latest prompt each. It updates
+distinct sessions selected by newest actual prompt start, then displayed oldest first,
+newest last, one latest prompt each with deterministic ID ties. It updates
 while collapsed, without an age/startup cutoff, excluding active/recent sessions before
 limiting. Its outlined container grows in normal page flow, with no nested vertical
 scrolling or height cap. The active list has no cap/filter/pager; concurrent prompts
@@ -265,7 +266,8 @@ Tables use theme-aware body/header surfaces and edges; compact dividers separate
 
 Running focal rows and linked titles are yellow; historical/terminal titles use
 neutral heading ink. Normal activity is gold/brown, failures independently red,
-and context guidance gold/orange. Observed success is lime, abort/error red, for
+and context guidance severity-specific (gold/orange triangle, ordinary foreground
+approaching text; gold/orange triangle and text once exceeded). Observed success is lime, abort/error red, for
 `watchRecentEventSeconds` (30 seconds by default), then the session becomes
 history-eligible when no other running/grace card remains. Old history does not
 replay completion flashes. Active cards show count-first tool/custom-skill
@@ -287,6 +289,20 @@ coherently. Routine refresh silently retains figures; only a scope without valid
 loads. Real failures remain visible. Midnight resets, rejecting yesterday's late results;
 Total Today keeps its label before 03:00. Web Credits/USD and CLI scopes are unchanged.
 
+Retryable source-read failures with a retained observation first say **Retrying** in
+ordinary detail text, explicitly **not current**, instead of immediately announcing
+**Source unavailable**. Each source/card/daily lane confirms after five monotonic seconds
+from its first failure (one existing source retry interval); further failures and
+partial/retained-only card publications cannot renew that window. Confirmation is
+evaluated on existing Live publications, normally every second, not on another timer
+or polling loop. In-flight bounded acquisition and browser suspension can delay a
+publication; five seconds is a confirmation window, not a network-latency promise.
+A successful relevant source observation clears the status; HTTP, SSE heartbeats,
+job progress and a successful unrelated card do not. Initial missing data and
+non-retryable/authentication failures have no grace. Daily failures request a retry
+on the existing single history lane after five seconds rather than waiting a minute.
+Browser reconnect/offline/host-stop notices remain separate from source acquisition.
+
 Subscription cards align centered title bands, **CCost Today**, native primary percentage
 and bars; body values stay left aligned. Native declarations/order, never depletion or
 provider identity, select the primary. Missing primary stays unavailable; weekly-only
@@ -305,7 +321,9 @@ Context-price guidance appears directly below each session table, before active 
 without a separate divider/frame or empty reserved space. It uses the latest valid Watch
 continuation (including hidden compaction), not historical context from another prompt.
 Compaction removes/downgrades it, unknown/replaced contexts never revive old guidance,
-and older concurrent cards do not borrow a newer focal's warning. Approaching uses
+and older concurrent cards do not borrow a newer focal's warning. Approaching keeps
+the existing gold/orange triangle but uses theme body foreground for its text and values;
+exceeded keeps both gold/orange. Approaching uses
 `thresholds.nextIctxPriceThresholdWarningPercent` (75%; zero disables approaching only);
 exact tier boundaries use unrounded counts. Gold/orange exceeded guidance includes the
 canonical relative price factor or supported cached/fresh cost fallback, not a bill

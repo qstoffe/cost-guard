@@ -59,8 +59,8 @@ class CardWorkers:
                 is_compaction=False, now_ms=now_ms + RUNNING_VISIBLE_AFTER_MS,
                 skill_origins_by_session=origins)) for row in capture.rows)
             self._publish(root, generation, "rows", (capture, tools, snapshot), now_ms)
-        except (SourceError, PricingUnavailableError):
-            self._publish(root, generation, "unavailable", captured_at_ms=now_ms)
+        except (SourceError, PricingUnavailableError) as error:
+            self._publish(root, generation, "unavailable", error, now_ms)
         finally:
             if service is not None:
                 service.close_accounts()

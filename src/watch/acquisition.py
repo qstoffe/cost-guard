@@ -11,6 +11,7 @@ from src.sources.errors import SourceError
 from src.sources.connectivity_events import record as record_recovery
 from .observation_diagnostics import record_source_error
 from .coordinator import SOURCE_RETRY_SECONDS, SOURCE_UNREADABLE_RETRIES, source_failure_kind
+from .source_status import SourceStatus
 
 
 class LiveAcquisition:
@@ -26,6 +27,13 @@ class LiveAcquisition:
         self.resync = False
         self.observed_at_ms = None
         self.recovery_started = None
+        self.source_status = SourceStatus(monotonic)
+
+    @property
+    def source_state(self):
+        if self.terminal:
+            return "failed"
+        return self.source_status.state(retained=self.frame is not None) or "running"
 
     def tick(self):
         owner = self.coordinator
@@ -61,6 +69,7 @@ class LiveAcquisition:
                     record_recovery(owner.selection.selected, "recovered", source_failure_kind(self.error) or "unsupported",
                         **self.error.evidence(), duration_ms=int((self.monotonic() - self.recovery_started) * 1000))
                 self.error = None
+                self.source_status.clear()
                 self.unreadable = 0
                 self.hints.clear()
                 self.resync = False
@@ -86,6 +95,7 @@ class LiveAcquisition:
                 record_recovery(owner.selection.selected, "retrying" if kind else "failed", kind or "unsupported",
                                 **error.evidence())
             self.error = error
+            self.source_status.fail(error)
             owner.last_source_recovery_kind = kind or "unsupported"
             self.unreadable = self.unreadable + 1 if kind == "unreadable" else 0
             self.terminal = kind is None or self.unreadable > SOURCE_UNREADABLE_RETRIES

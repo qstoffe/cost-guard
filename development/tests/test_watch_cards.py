@@ -22,7 +22,7 @@ from src.watch.observers import CatalogObservation
 from src.watch.web_coordinator import WebWatchCoordinator
 from src.watch.models import ToolObservation
 from src.web.events import MAX_EVENT_BYTES
-from src.sources.errors import SourceUnavailableError
+from src.sources.errors import SourceUnavailableError, http_failure, transport_failure
 
 
 class ManualWorkers:
@@ -82,14 +82,59 @@ class WatchCardTests(unittest.TestCase):
         active_ids = [self.roots[0].session_id, self.roots[1].session_id]
         cards.catalog(self.catalog(active=active_ids))
         for index, root in enumerate(self.roots):
-            capture = replace(self.capture, latest_ms=9000 - index)
+            capture = replace(self.capture, latest_ms=9000 - index,
+                rows=(replace(self.capture.rows[-1], at_ms=9000 - index),))
             if index < 2:
                 capture = replace(capture, rows=(replace(capture.rows[-1], in_progress=True),))
             self.publish(cards, root, capture)
         _, history, state = cards.project(2000)
-        self.assertEqual([root.session_id for root in self.roots[2:7]], [card.session_id for card in history])
+        self.assertEqual([root.session_id for root in reversed(self.roots[2:7])], [card.session_id for card in history])
         self.assertEqual("observed", state)
         self.assertTrue(all(len(card.rows) == 1 for card in history))
+
+    def test_history_reorders_selected_set_by_displayed_prompt_with_stable_ties(self):
+        cards = WatchCards(ManualWorkers())
+        cards.catalog(self.catalog())
+        for index, root in enumerate(self.roots):
+            row = replace(self.capture.rows[-1], at_ms=1000 + index // 2)
+            self.publish(cards, root, replace(self.capture, rows=(row,), latest_ms=row.at_ms))
+        expected = [root.session_id for root in self.roots[2:3] + self.roots[4:]]
+        self.assertEqual(expected, [card.session_id for card in cards.project(2000)[1]])
+        cards.catalog(self.catalog(tuple(reversed(self.roots))))
+        self.assertEqual(expected, [card.session_id for card in cards.project(2001)[1]])
+        root = self.roots[0]
+        row = replace(self.capture.rows[-1], at_ms=2000, in_progress=True)
+        self.publish(cards, root, replace(self.capture, rows=(row,), latest_ms=2000))
+        self.assertNotIn(root.session_id, [card.session_id for card in cards.project(2002)[1]])
+        self.publish(cards, root, replace(self.capture, rows=(replace(row, in_progress=False),), latest_ms=2000), now=2003)
+        self.assertEqual(root.session_id, cards.project(32003)[1][-1].session_id)
+
+    def test_retryable_card_failure_retains_rows_confirms_once_and_requires_success(self):
+        clock = [0.0]
+        cards = WatchCards(ManualWorkers(), monotonic=lambda: clock[0])
+        root = self.roots[0]
+        cards.catalog(self.catalog((root,)))
+        capture = replace(self.capture, rows=(replace(self.capture.rows[-1], in_progress=True),))
+        self.publish(cards, root, capture)
+        entry = cards.sessions[root.session_id]
+        failure = CardResult(root.session_id, entry.generation, 'unavailable', transport_failure(TimeoutError(), phase='capture'))
+
+        cards.accept(failure, 1001)
+        first = cards.project(1002)[0][0]
+        self.assertEqual('retrying', first.state)
+        self.assertEqual(capture.rows[-1].ccost, first.rows[-1].prompt.ccost)
+        clock[0] = 4.9
+        cards.accept(failure, 1003)
+        self.assertEqual('retrying', cards.project(1004)[0][0].state)
+        clock[0] = 5.0
+        self.assertEqual('unavailable', cards.project(1005)[0][0].state)
+        self.assertEqual(first.rows, cards.project(1005)[0][0].rows, 'retained running duration is not freshened')
+        self.publish(cards, root, replace(capture, retained=True), now=1006)
+        self.assertEqual('unavailable', cards.project(1007)[0][0].state, 'retained publication is not recovery')
+        self.publish(cards, root, capture, now=1008)
+        self.assertEqual('observed', cards.project(1009)[0][0].state)
+        cards.accept(CardResult(root.session_id, entry.generation, 'unavailable', http_failure(401, phase='capture')), 1010)
+        self.assertEqual('unavailable', cards.project(1011)[0][0].state, 'authentication has no grace')
 
     def test_one_hundred_concurrent_cards_each_have_only_their_focal_row(self):
         root = self.roots[0]
@@ -298,7 +343,7 @@ class WatchCardTests(unittest.TestCase):
         results = workers.drain()
         self.assertEqual(["unavailable", "timing"], [result.phase for result in results])
         self.assertFalse(workers.jobs)
-        self.assertIsNone(results[0].value)
+        self.assertIsInstance(results[0].value, SourceUnavailableError)
 
     def test_web_cadence_ema_measures_actual_capture_not_fast_catalog_admission(self):
         config, selection, service, _ = make_service(str(Path(self.tmp.name) / "cadence"), self.source)

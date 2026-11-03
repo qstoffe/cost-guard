@@ -16,6 +16,7 @@ from .cards import WatchCards
 from .coordinator import WatchCoordinator, WatchCycle
 from .today_ccost import WatchTodayCCost
 from .running import running_prompts
+from .source_status import SourceStatus, SOURCE_CONFIRM_SECONDS
 
 
 class WebWatchCoordinator(WatchCoordinator):
@@ -23,7 +24,7 @@ class WebWatchCoordinator(WatchCoordinator):
         super().__init__(**kwargs)
         self.card_workers = CardWorkers(service_factory)
         self.card_timing_observed = False
-        self.cards = WatchCards(self.card_workers, self.recent_seconds, self._record_card_duration)
+        self.cards = WatchCards(self.card_workers, self.recent_seconds, self._record_card_duration, self._monotonic)
         self.history_factory = service_factory
         self.history_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cost-guard-account-history")
         self.history_job = None
@@ -31,7 +32,7 @@ class WebWatchCoordinator(WatchCoordinator):
         self.history_quota = None
         self.daily_history = WatchHistoryAcquisition()
         self.daily_usage = None
-        self.daily_failed = False
+        self.daily_status = SourceStatus(self._monotonic)
         self.history_revision = None
         self.detail_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cost-guard-detail")
         self.detail_job = None
@@ -93,8 +94,8 @@ class WebWatchCoordinator(WatchCoordinator):
                 today.advance_history(service, now_ms, batch_size=1)
             service.project_watch_accounts(snapshots)
             return None if self._closed else (service.watch_account_history(), service.project_watch_today())
-        except (SourceError, PricingUnavailableError):
-            return None
+        except (SourceError, PricingUnavailableError) as error:
+            return error
         finally:
             if service is not None:
                 service.close_accounts()
@@ -110,9 +111,12 @@ class WebWatchCoordinator(WatchCoordinator):
             self.quota = self.report_service.project_watch_accounts(self.accounts.snapshots)[0]
         if self.history_job is not None and self.history_job.done():
             value = self.history_job.result()
-            self.daily_failed = value is None
-            if value is not None and value[1].day_start_ms == local_day_start_ms(self.report_service.timezone_id, now_ms=now_ms):
+            if isinstance(value, Exception):
+                self.daily_status.fail(value)
+                self.history_due_ms = min(self.history_due_ms, now_ms + int(SOURCE_CONFIRM_SECONDS * 1000))
+            elif value is not None and value[1].day_start_ms == local_day_start_ms(self.report_service.timezone_id, now_ms=now_ms):
                 self.history_quota, self.daily_usage = value
+                self.daily_status.clear()
             elif value is not None:
                 self.history_due_ms = 0
             self.history_job = None
@@ -144,12 +148,13 @@ class WebWatchCoordinator(WatchCoordinator):
                 workday_calendar=str(self.config.get("workdayCalendar") or ""))
             frame = replace(frame, quota=replace(frame.quota, accounts=accounts))
         history_pending = any(entry.latest_ms is None for entry in self.cards.sessions.values())
-        history_failed = any(entry.state == "unavailable" for entry in self.cards.sessions.values())
+        history_failed = any(entry.source_status.state(retained=entry.capture is not None) == "unavailable"
+            for entry in self.cards.sessions.values())
         frame = replace(frame, active_cards=active, history_cards=history, cards_state=state,
             running=running_prompts(active, state),
             daily_usage=self.daily_usage,
-            daily_state="unavailable" if self.daily_failed else "loading" if self.daily_usage is None
-                else "refreshing" if self.history_job is not None else "observed",
+            daily_state=self.daily_status.state(retained=self.daily_usage is not None) or ("loading" if self.daily_usage is None
+                else "refreshing" if self.history_job is not None else "observed"),
             history_state="unavailable" if history_failed else "loading" if history_pending else "observed",
             active_count=sum(row.prompt.in_progress for card in active for row in card.rows if row.prompt.event_id == card.focal_id)
                 + sum(not card.rows for card in active))

@@ -8,7 +8,7 @@ const LiveConnection = (() => {
     let dirty = false, pending = [], values = {}, timer = null, authenticatedAt = null, streamOpen = false;
     function report(kind, message) {
       status(message, {kind, authenticatedAt, observedAt: values.live?.source_observed_at_ms ?? null,
-        terminal: stopped, writable: !stopped && ['connected', 'starting', 'source_unavailable'].includes(kind)});
+        terminal: stopped, writable: !stopped && ['connected', 'starting', 'source_retrying', 'source_unavailable'].includes(kind)});
     }
     function stop(message, kind = 'stopped') {
       stopped = true;
@@ -19,8 +19,9 @@ const LiveConnection = (() => {
     function health() {
       const live = values.live;
       if (!live || live.state === 'starting' || (live.state === 'running' && !live.view)) report('starting', 'STARTING — source observation pending. HTTP is not source readiness.');
+      else if (!streamOpen && ['running', 'retrying'].includes(live.state)) report('reconnecting', 'RECONNECTING — HTTP connected; live stream interrupted. Last source observation retained.');
+      else if (live.state === 'retrying') report('source_retrying', 'Retrying source read — last observation retained, not current.');
       else if (live.state !== 'running') report('source_unavailable', 'SOURCE UNAVAILABLE — HTTP connected; last source observation retained, not live.');
-      else if (!streamOpen) report('reconnecting', 'RECONNECTING — HTTP connected; live stream interrupted. Last source observation retained.');
       else report('connected', 'Live connected.');
     }
     function publish(validate = false) {

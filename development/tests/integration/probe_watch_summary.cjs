@@ -64,13 +64,36 @@ async function evaluate(expression) {
       assert.deepEqual(layout.cards.map(c=>c.secondary), [0,1,0,1,0,1]);
       assert.equal(layout.cards[2].title, 'OpenAI Pro Lite');
       if (width >= 1366) assert.ok(Math.abs(layout.cards[0].top-layout.cards[2].top)<1, 'monthly/five-hour/weekly-only side by side');
-      assert.match(layout.cards[0].reset, /Reset.*Remaining: .*\/day.*Remaining: .*\/workday/);
+       assert.match(layout.cards[0].reset, /Reset.*Remaining: .*\/day.*Remaining: .*\/workday/);
+       const warningTransitions = await evaluate(`(() => {
+         const card=state.watch.cards.values().next().value, warning=INPUT.view.active_cards[0].context_warning;
+         const original=warning.severity, root=document.documentElement, theme=root.dataset.theme;
+         const outcomes=[];
+         for (const currentTheme of [theme,theme==='classic'?'web':'classic',theme]) {
+           root.dataset.theme=currentTheme;
+           for (const severity of ['approaching','exceeded','none','approaching']) {
+             warning.severity=severity; ReportView.renderLive(document.getElementById('result'),INPUT,state);
+             const color=node=>getComputedStyle(node).color;
+             outcomes.push({theme:currentTheme,severity,hidden:card.warning.hidden,
+               foreground:color(document.body),icon:color(card.warningIcon),text:color(card.warningText),
+               cleared:severity!=='none'||card.warning.textContent===''});
+           }
+         }
+         warning.severity=original;root.dataset.theme=theme;
+         ReportView.renderLive(document.getElementById('result'),INPUT,state);return outcomes;
+       })()`);
+       for (const result of warningTransitions) {
+         assert.equal(result.hidden, result.severity === 'none'); assert.ok(result.cleared);
+         if (result.severity === 'none') continue;
+         assert.notEqual(result.icon, result.foreground);
+         assert.equal(result.text, result.severity === 'approaching' ? result.foreground : result.icon);
+       }
       for (const card of layout.cards) for (const peer of layout.cards.filter(c=>Math.abs(c.top-card.top)<1))
         card.tracks.forEach((y,i)=>assert.ok(Math.abs(y-peer.tracks[i])<1, 'common tracks align'));
       const image = await command('Page.captureScreenshot', {format:'png', captureBeyondViewport:true});
       const name = output.replace(/\.json$/, '') + `-${theme}-${scheme}-${width}.png`;
       fs.writeFileSync(name, Buffer.from(image.data, 'base64'));
-      cases.push({theme, scheme, ...layout, screenshot:path.basename(name)});
+       cases.push({theme, scheme, ...layout, warningTransitions, screenshot:path.basename(name)});
     }
     evidence = {outcome:'PASS', cases, limitations:['Synthetic headless Chromium, not live-provider pixels or physical desktop acceptance.']};
   } catch (error) {

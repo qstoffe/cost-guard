@@ -98,6 +98,7 @@ const WatchView = (() => {
       parent.append(el('span', 'Partial pricing / telemetry', 'warning'));
     if (!value.mix.request_count) parent.append(el('span', 'No recorded usage', 'detail'));
     if (state === 'unavailable') parent.append(el('span', 'Source unavailable · retained daily observation', 'warning'));
+    if (state === 'retrying') parent.append(el('span', 'Retrying daily refresh · retained observation, not current', 'detail'));
   }
   class Card {
     constructor() {
@@ -118,6 +119,8 @@ const WatchView = (() => {
       this.tools = disclosure(); this.skills = disclosure(); this.running = el('p'); this.background = el('p');
       this.activity.append(this.tools.node, this.skills.node, this.running, this.background);
       this.warning = el('div', undefined, 'watch-context-warning');
+      this.warningIcon = el('span', '⚠ ', 'watch-warning-icon'); this.warningText = el('span');
+      this.warning.append(this.warningIcon, this.warningText);
       this.root.append(heading, this.message, scroll, this.warning, this.activity);
     }
     update(value, historical) {
@@ -126,7 +129,7 @@ const WatchView = (() => {
       text(this.title, value.title || value.session_id);
       if (/^[A-Za-z0-9_-]{1,200}$/.test(value.session_id)) this.title.href = '#/sessions/' + value.session_id;
       this.title.className = !historical && value.rows.some(item => item.prompt.in_progress) ? 'watch-running-title' : '';
-      text(this.message, value.state === 'unavailable' ? 'Source unavailable; retained contents are not current.' : value.state === 'partial' ? 'Partial / retained evidence' : !value.rows.length ? 'Loading prompts…' : '');
+      text(this.message, value.state === 'unavailable' ? 'Source unavailable; retained contents are not current.' : value.state === 'retrying' ? 'Retrying prompt refresh; retained contents are not current.' : value.state === 'partial' ? 'Partial / retained evidence' : !value.rows.length ? 'Loading prompts…' : '');
       if (!protectedNode(this.body)) {
         const old = new Map([...this.body.children].map(node => [node.dataset.id, node]));
         reconcile(this.body, value.rows.map(item => {
@@ -158,7 +161,8 @@ const WatchView = (() => {
       if (!historical) this.drawActivity(value.rows.find(row => row.prompt.event_id === value.focal_id)?.tool);
       const warning = value.context_warning;
       this.warning.hidden = !warning || warning.severity === 'none';
-      text(this.warning, () => this.warning.hidden ? '' : `⚠ ${warning.text.replace(/^\[|\]$/g, '')} ${display(warning, 'warning_cost')}`.trim());
+      text(this.warningIcon, this.warning.hidden ? '' : '⚠ ');
+      text(this.warningText, () => this.warning.hidden ? '' : `${warning.text.replace(/^\[|\]$/g, '')} ${display(warning, 'warning_cost')}`.trim());
       this.warning.dataset.severity = warning?.severity || 'none';
     }
     drawActivity(tool) {
@@ -214,8 +218,10 @@ const WatchView = (() => {
     }
     update(result) {
       const view = result.view, active = view.active_cards || [], history = view.history_cards || [];
-      const fresh = result.state === 'running' && this.state.connection === 'Live connected.';
-      text(this.empty, !fresh ? 'Source / connection unavailable; last observation retained.' : view.cards_state === 'loading' || view.cards_state == null ? 'Loading active prompts…' : view.cards_state === 'unavailable' ? 'Some prompt sources are unavailable.' : !active.some(card => card.rows.some(row => row.prompt.in_progress)) ? 'No running prompts' : '');
+      const connected = this.state.connection === 'Live connected.';
+      const sourceState = result.state === 'retrying' ? 'Retrying source read; last observation retained, not current.' :
+        result.state !== 'running' ? 'Source unavailable; last observation retained, not current.' : '';
+      text(this.empty, sourceState || (!connected ? 'Live connection interrupted; last observation retained, not live.' : view.cards_state === 'loading' || view.cards_state == null ? 'Loading active prompts…' : view.cards_state === 'unavailable' ? 'Some prompt sources are unavailable.' : !active.some(card => card.rows.some(row => row.prompt.in_progress)) ? 'No running prompts' : ''));
       const keep = new Set();
       for (const [parent, values, historical] of [[this.active, active, false], [this.history, history, true]]) {
         const wanted = values.map(value => {
@@ -227,7 +233,7 @@ const WatchView = (() => {
         reconcile(parent, wanted);
       }
       for (const key of this.cards.keys()) if (!keep.has(key)) this.cards.delete(key);
-      const dailyState = view.daily_usage && view.daily_state !== 'unavailable' ? 'observed' : view.daily_state;
+      const dailyState = view.daily_usage && !['retrying', 'unavailable'].includes(view.daily_state) ? 'observed' : view.daily_state;
       const dailySignature = JSON.stringify([view.daily_usage, dailyState]);
       if (this.dailySignature !== dailySignature && !protectedNode(this.daily)) {
         daily(this.daily, view.daily_usage, view.daily_state); this.dailySignature = dailySignature;

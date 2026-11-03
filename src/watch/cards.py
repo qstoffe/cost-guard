@@ -2,6 +2,7 @@
 from dataclasses import dataclass, field, replace
 
 from .models import WatchCard, WatchRow
+from .source_status import SourceStatus
 from .tools import RUNNING_VISIBLE_AFTER_MS, without_live_activity
 
 
@@ -18,10 +19,11 @@ class CardSession:
     state: str = "loading"
     latest_ms: int | None = None
     refresh_requested: bool = True
+    source_status: SourceStatus = field(default_factory=SourceStatus)
 
 
 class WatchCards:
-    def __init__(self, workers, recent_seconds=30, on_duration=None):
+    def __init__(self, workers, recent_seconds=30, on_duration=None, monotonic=None):
         self.workers = workers
         self.recent_ms = int(recent_seconds * 1000)
         self.sessions = {}
@@ -29,6 +31,7 @@ class WatchCards:
         self.generation = 0
         self.turn = 0
         self.on_duration = on_duration
+        self.monotonic = monotonic
 
     def catalog(self, observation):
         self.active_candidates = observation.active_candidates | observation.live_candidates
@@ -41,6 +44,8 @@ class WatchCards:
             if entry is None:
                 self.generation += 1
                 self.sessions[key] = CardSession(root, revision, self.generation)
+                if self.monotonic is not None:
+                    self.sessions[key].source_status = SourceStatus(self.monotonic)
             else:
                 entry.root = root
                 if entry.revision != revision:
@@ -51,7 +56,7 @@ class WatchCards:
                     if entry.capture is None:
                         entry.latest_ms = None
                     entry.refresh_requested = True
-                elif (entry.capture is not None and any(row.in_progress for row in entry.capture.rows)) or entry.state == "unavailable":
+                elif (entry.capture is not None and any(row.in_progress for row in entry.capture.rows)) or entry.source_status.failed_at is not None:
                     entry.refresh_requested = True
 
     def accept(self, result, now_ms):
@@ -106,8 +111,10 @@ class WatchCards:
             entry.capture, entry.tools, entry.snapshot = capture, dict(tools), snapshot
             entry.latest_ms = capture.latest_ms
             entry.state = "partial" if capture.retained else "observed"
+            if not capture.retained:
+                entry.source_status.clear()
         else:
-            entry.state = "unavailable"
+            entry.source_status.fail(result.value)
 
     def _focals(self, entry, now_ms):
         if entry.capture is None:
@@ -163,13 +170,14 @@ class WatchCards:
 
     def _card(self, entry, focal, now_ms):
         capture = entry.capture
+        state = entry.source_status.state(retained=capture is not None) or entry.state
         if capture is None:
             return WatchCard(entry.root.session_id, entry.root.title or entry.root.session_id,
-                "", (), state=entry.state)
+                "", (), state=state)
         rows = (focal,) if focal is not None else capture.rows[-1:]
         projected = []
         for row in rows:
-            observed_ms = capture.observed_at_ms if entry.state == "unavailable" else now_ms
+            observed_ms = capture.observed_at_ms if state in {"retrying", "unavailable"} else now_ms
             duration = (max(row.duration_ms or 0, observed_ms - row.at_ms)
                 if row.in_progress and row.event_id in capture.observed_ids else row.duration_ms)
             row = replace(row, duration_ms=duration)
@@ -188,8 +196,8 @@ class WatchCards:
                         if row.in_progress and row.background_kinds else 0)
             projected.append(WatchRow(capture.session_id, capture.title, row, marker, tool))
         return WatchCard(capture.session_id, capture.title, focal.event_id if focal else "",
-            tuple(projected), entry.state,
-            capture.context if (capture.context is not None and entry.state != "unavailable"
+            tuple(projected), state,
+            capture.context if (capture.context is not None and state != "unavailable"
                 and (focal is None or capture.context.owner_id == focal.event_id)) else None)
 
     def project(self, now_ms):
@@ -200,11 +208,13 @@ class WatchCards:
                 active.append((focal.at_ms, key, focal.event_id, self._card(entry, focal, now_ms)))
             if not focals and key in self.active_candidates and entry.capture is None and entry.latest_ms is None:
                 active.append((entry.root.created_at_ms, key, "", self._card(entry, None, now_ms)))
-        history = tuple(self._card(self.sessions[key], None, now_ms) for key in self.historical_ids(now_ms))
+        history = [self._card(self.sessions[key], None, now_ms) for key in self.historical_ids(now_ms)]
+        history.sort(key=lambda card: (card.rows[-1].prompt.at_ms if card.rows else 0,
+            card.session_id, card.rows[-1].prompt.event_id if card.rows else ""))
         pending = any(key in self.active_candidates and entry.latest_ms is None for key, entry in self.sessions.items())
         visible = [entry for key, entry in self.sessions.items()
             if key in self.active_candidates or self._focals(entry, now_ms)]
-        failed = any(entry.state == "unavailable" for entry in visible)
-        partial = any(entry.state == "partial" for entry in visible)
+        failed = any(entry.source_status.state(retained=entry.capture is not None) == "unavailable" for entry in visible)
+        partial = any(entry.state == "partial" or entry.source_status.failed_at is not None for entry in visible)
         state = "unavailable" if failed else "loading" if pending else "partial" if partial else "observed"
-        return tuple(item[-1] for item in sorted(active, key=lambda item: item[:3])), history, state
+        return tuple(item[-1] for item in sorted(active, key=lambda item: item[:3])), tuple(history), state
