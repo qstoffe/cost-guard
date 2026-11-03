@@ -230,6 +230,7 @@ class CurrentV2Service:
         }
         self.context_messages: dict[str, list[dict]] = {}
         self.before_catalog = None
+        self.before_message = None
 
     def __enter__(self):
         owner = self
@@ -312,6 +313,8 @@ class CurrentV2Service:
                 if (parsed.path.startswith("/api/session/") and parsed.path.endswith("/message")
                         and owner.message_path in {"session-message", "idle-then-message", "session-message-with-idle"}):
                     path_session_id = parsed.path.split("/")[3]
+                    if owner.before_message is not None:
+                        owner.before_message(path_session_id)
                     if owner.message_path == "idle-then-message":
                         self._json({"data": [{"type": "idle"}], "cursor": {}})
                         return

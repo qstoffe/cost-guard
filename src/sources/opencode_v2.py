@@ -152,6 +152,7 @@ class OpenCodeV2Source:
         self._endpoint_marker: tuple[int, ...] | None = None
         self._catalog_cache: tuple[_NativeSession, ...] | None = None
         self._catalog_index: V2CatalogIndex | None = None
+        self._message_lock = threading.Lock()
         self.metrics = AcquisitionMetrics(generation="v2")
         self._skill_origin_cache: dict[str, dict[str, str]] = {}
         self._catalog_listed_at = 0.0
@@ -497,11 +498,19 @@ class OpenCodeV2Source:
         tuple[BackgroundActivity, ...], frozenset[str], ActiveContext | None,
     ]:
         session_id = str(native.data["id"])
-        self.metrics.add("message_operations")
+        with self._message_lock:
+            self.metrics.add("message_operations")
         active_context = fetch_active_context(self._client(), session_id=session_id)
         items, contract, pages, rejected_routes = fetch_messages(
             self._client(), session_id=session_id, directory=native.directory
         )
+        with self._message_lock:
+            return self._normalize_messages(native, items, contract, pages, rejected_routes, active_context)
+
+    def _normalize_messages(self, native, items, contract, pages, rejected_routes, active_context):
+        # Only network waits overlap. Canonical normalization and shared numeric
+        # diagnostics remain serialized, outside the transport's own pool lock.
+        session_id = str(native.data["id"])
         self.metrics.add("message_pages", pages)
         background, notices = background_activities(
             items, session_id=session_id, running_jobs=lambda: running_jobs(self._client(), native.directory))
@@ -577,6 +586,11 @@ class OpenCodeV2Source:
     @observed("snapshot")
     def load_session_snapshots(self, session_ids: Sequence[str]) -> Mapping[str, SessionSnapshot]:
         return load_snapshots(self, session_ids)
+
+    @observed("snapshot")
+    def load_session_snapshots_observed(self, session_ids: Sequence[str], progress) -> Mapping[str, SessionSnapshot]:
+        """Explicit deep detail acquisition; ordinary Watch batches stay unchanged."""
+        return load_snapshots(self, session_ids, workers=4, progress=progress)
 
     @staticmethod
     def _event_session_id(value: Mapping[str, Any]) -> str | None:

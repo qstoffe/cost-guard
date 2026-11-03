@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from concurrent.futures import CancelledError, FIRST_COMPLETED, ThreadPoolExecutor, wait
+from threading import Event
 from typing import TYPE_CHECKING, Sequence
 
 from src.domain import SessionSnapshot
@@ -15,10 +17,12 @@ if TYPE_CHECKING:
 
 
 def _read_tree(source: OpenCodeV2Source, tree: Sequence[_NativeSession], root_id: str,
-               revision: str) -> SessionSnapshot:
+               revision: str, stopped: Event | None = None) -> SessionSnapshot:
     messages, parts, boundaries, background, contexts = [], [], [], [], []
     notices: set[str] = set()
     for native in tree:
+        if stopped is not None and stopped.is_set():
+            raise CancelledError()
         native_messages, native_parts, native_boundaries, native_background, native_notices, context = source._load_messages(native)
         messages.extend(native_messages)
         parts.extend(native_parts)
@@ -42,26 +46,68 @@ def _read_tree(source: OpenCodeV2Source, tree: Sequence[_NativeSession], root_id
     )
 
 
-def load_snapshots(source: OpenCodeV2Source, root_ids: Sequence[str]) -> dict[str, SessionSnapshot]:
+def _read_trees(source, index, pending, revisions, *, workers, progress):
+    """At most four submitted trees; join all owned reads, including failure paths."""
+    snapshots = {}
+    if workers == 1 or len(pending) == 1:
+        for root_id in pending:
+            snapshots[root_id] = _read_tree(source, index.tree(root_id), root_id, revisions[root_id])
+            progress('messages', len(snapshots), len(pending))
+        return snapshots
+    stopped = Event()
+    roots = iter(pending)
+    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix='cost-guard-v2-history') as pool:
+        active = {}
+
+        def submit():
+            root_id = next(roots, None)
+            if root_id is not None:
+                future = pool.submit(_read_tree, source, index.tree(root_id), root_id, revisions[root_id], stopped)
+                active[future] = root_id
+
+        try:
+            for _ in range(min(workers, len(pending))):
+                submit()
+            while active:
+                finished, _ = wait(active, return_when=FIRST_COMPLETED)
+                for future in finished:
+                    root_id = active.pop(future)
+                    snapshots[root_id] = future.result()
+                    progress('messages', len(snapshots), len(pending))
+                for _ in finished:
+                    submit()
+        finally:
+            stopped.set()
+            for future in active:
+                future.cancel()
+    return snapshots
+
+
+def load_snapshots(source: OpenCodeV2Source, root_ids: Sequence[str], *, workers: int = 1,
+                   progress=None) -> dict[str, SessionSnapshot]:
     """Share brackets, not weakened proofs: every returned tree is equal before/after its messages.
 
     Unstable trees alone retry; a reused bracket does not consume either fresh
     attempt. Events may invalidate the shared hint but never the local brackets.
     """
     pending = tuple(dict.fromkeys(root_ids))
+    progress = progress or (lambda _stage, _completed, _total: None)
     complete: dict[str, SessionSnapshot] = {}
     reuse = True
     attempts = 0
     while pending and attempts < 2:
         source._diagnostics["last_snapshot_stage"] = "catalog_before"
+        progress('catalog-before', 0, len(pending))
         before, reused = source._catalog_before_messages(pending[0], allow_reuse=reuse)
         index = source._catalog_index or V2CatalogIndex(before)
         revisions = {root_id: index.revision(root_id, source._revision) for root_id in pending}
         source._diagnostics["last_snapshot_stage"] = "messages"
+        progress('messages', 0, len(pending))
         with source.metrics.measure("hydration"):
-            snapshots = {root_id: _read_tree(source, index.tree(root_id), root_id, revisions[root_id]) for root_id in pending}
+            snapshots = _read_trees(source, index, pending, revisions, workers=workers, progress=progress)
         source.metrics.add("hydrated_roots", len(pending))
         source._diagnostics["last_snapshot_stage"] = "catalog_after"
+        progress('catalog-after', 0, len(pending))
         after_values = source._list_native_sessions(refresh=True)
         after = source._catalog_index or V2CatalogIndex(after_values)
         unstable = []

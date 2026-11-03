@@ -713,7 +713,7 @@ class ReportService:
             raise ReportRequestError("Date report requires a date target")
         date_range = local_report_range(request.date_text, self.timezone_id)
         candidates = HistoryRequirements("date", start_ms=date_range.start_ms).select(roots, root_activity)
-        self.prepare_roots(candidates, detail=True)
+        self.prepare_roots(candidates, detail=True, progress_scope="date")
         analyzed = tuple(self._analyze(root, detail=True) for root in candidates)
         self.progress(WorkProgress("Building prompt analytics", "projection"))
         blocks = _chronological_blocks(tuple(

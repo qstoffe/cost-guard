@@ -18,6 +18,7 @@ Installed OpenCode Toolkit shared repository skills own development procedures. 
 - [Windows startup](windows-startup.md): Web delegation/readiness and CLI console ownership, native probes and remaining consumer-desktop limits.
 - [Web UI knowledge](web/INDEX.md): snapshot/navigation parity and Settings/theme persistence, browser evidence, separate V2 probes and explicitly scoped Decision Delegate test exceptions.
 - [Web Daily and shutdown lifecycle](web/live-lifecycle.md): catalog-bracket amplification, Windows buffered-read cancellation, causal regressions and bounded probe diagnostics.
+- [Historical date reports](web/historical-reports.md): serial V2 read cost, bounded date-only overlap, revision-safe progress, deadline/cancellation and retained live-source failures.
 - [Watch prompt tables and live token mix](web/watch-prompt-tables.md): canonical coverage/rounding route, native V2/SSE/browser regressions and the scoped completed-partial CLI parity exception.
 - [Watch card polish](web/watch-polish.md): Watch-only reset clock/formatting, canonical quota colors, responsive frames and headless/real-source evidence limits.
 - [Token category presentation](token-categories.md): shared GitHub names, unchanged telemetry/valuation, synthetic CLI/DOM evidence and explicitly unverified browser layout.

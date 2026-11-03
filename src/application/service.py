@@ -24,7 +24,8 @@ ServiceFactory = Callable[[int, Callable[[str], None]], ReportService]
 ProgressSink = Callable[[ProgressEvent], None]
 _PHASES = frozenset({"pricing", "catalog", "history", "projection", "quotas", "availability", "finalizing"})
 _STAGES = frozenset({"sampling", "availability", "comparison", "models", "quotas", "account-cache",
-                     "account-load", "account-analysis", "account-projection", "finalizing"})
+                     "account-load", "account-analysis", "account-projection", "finalizing",
+                     "date-cache", "date-load", "date-catalog-before", "date-messages", "date-catalog-after", "date-analysis"})
 
 
 class ReportApplication:

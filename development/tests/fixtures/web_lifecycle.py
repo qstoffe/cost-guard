@@ -10,7 +10,7 @@ import time
 
 from .synthetic_month import SyntheticMonthSource
 from .watch_runtime import make_service
-from src.reports import ReportRequest
+from src.reports import ReportKind, ReportRequest
 from src.sources.errors import transport_failure
 from src.watch.acquisition import LiveAcquisition
 from src.watch.web_coordinator import WebWatchCoordinator
@@ -29,7 +29,7 @@ def pending_report(sender, request):
     threading.Event().wait(60)  # The real job owner must terminate this pending capture.
 
 
-def run_cycle(*, competing=False, failed_daily=False, http_timeout=False):
+def run_cycle(*, competing=False, failed_daily=False, http_timeout=False, deep_date=False):
     before_threads = set(threading.enumerate())
     before_children = {child.pid for child in multiprocessing.active_children()}
     started = time.monotonic()
@@ -44,7 +44,8 @@ def run_cycle(*, competing=False, failed_daily=False, http_timeout=False):
 
         coordinator = WebWatchCoordinator(selection=selection, report_service=service,
             config=config, service_factory=factory, clock_ms=lambda: 80_000_000)
-        host = WebHost(Path(tmp), jobs=ReportJobs(target=pending_report),
+        from .historical_reports import blocked_date_report
+        host = WebHost(Path(tmp), jobs=ReportJobs(target=blocked_date_report if deep_date else pending_report),
             live_factory=lambda: LiveAcquisition(coordinator))
         streams, cookie, csrf = [], None, None
         requests = []
@@ -111,13 +112,18 @@ def run_cycle(*, competing=False, failed_daily=False, http_timeout=False):
                 identity = next(line for line in reversed(frame) if line.startswith(b'id: '))
                 instance, sequence = identity.decode().strip()[4:].rsplit(':', 1)
                 assert instance == state['instance_id'] and int(sequence) > state['sequence']
-            if competing:
-                key = host.jobs.submit(ReportRequest())
-                until = time.monotonic() + 3
-                while time.monotonic() < until and host.jobs.snapshot(key)['progress']['phase'] != 'history':
+            if competing or deep_date:
+                request = ReportRequest(ReportKind.DATE, date_text='2026-10-25') if deep_date else ReportRequest()
+                key = host.jobs.submit(request)
+                until = time.monotonic() + 5
+                def ready():
+                    progress = host.jobs.snapshot(key)['progress']
+                    return (progress.get('stage') == 'date-messages' and progress['completed'] >= 4
+                            if deep_date else progress['phase'] == 'history')
+                while time.monotonic() < until and not ready():
                     time.sleep(.01)
                 assert host.jobs.snapshot(key)['status'] == 'running'
-                assert host.jobs.snapshot(key)['progress']['phase'] == 'history'
+                assert ready()
                 host.jobs.cancel(key)
                 assert host.jobs.snapshot(key)['status'] == 'cancelled'
             if http_timeout:
