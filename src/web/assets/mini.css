@@ -1,0 +1,19 @@
+/* Shared theme tokens come from app.css; only compact-document geometry lives here. */
+body { padding: .45rem; max-width: none; }
+.mini-card { padding: .65rem; border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--panel); min-width: 0; }
+.mini-top { display: flex; align-items: flex-start; gap: .35rem; }
+.mini-summary { flex: 1; min-width: 0; text-align: left; padding: .35rem; border-color: transparent; }
+.mini-brand { display: block; color: var(--accent); font-size: .8rem; margin-bottom: .55rem; }
+.mini-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .6rem; }
+.mini-metrics > span { min-width: 0; overflow-wrap: anywhere; }
+.mini-label { display: block; font-size: .7rem; color: var(--muted); font-weight: 400; line-height: 1.25; }
+.mini-metrics strong { display: block; font-size: 1.1rem; font-variant-numeric: tabular-nums; }
+.mini-close { flex: none; min-height: 1.9rem; padding: 0 .5rem; }
+.mini-summary, .mini-close { transition: none; }
+.mini-health { font-size: .75rem; color: var(--muted); margin: .4rem .35rem; }
+[data-live="false"] .mini-health, .mini-warning { color: var(--warn); }
+.mini-accounts { list-style: none; padding: .5rem .35rem 0; margin: .5rem 0 0; border-top: 1px solid var(--line);
+  font-size: .8rem; max-height: 55vh; overflow-y: auto; overflow-wrap: anywhere; }
+.mini-accounts li { margin-bottom: .35rem; }
+@media (max-width: 19rem) { .mini-metrics { grid-template-columns: 1fr; gap: .4rem; } }

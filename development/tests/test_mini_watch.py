@@ -1,0 +1,79 @@
+"""Canonical running aggregates and app-owned Mini lifecycle without a browser dependency."""
+from dataclasses import replace
+from decimal import Decimal as D
+from pathlib import Path
+import json
+import shutil
+import subprocess
+import unittest
+
+from development.tests.fixtures.watch_summary import summary_watch
+from src.application.live_projection import project_live
+from src.watch.models import WatchCard, WatchRow
+from src.watch.running import running_prompts
+
+ROOT = Path(__file__).resolve().parents[2]
+
+
+class MiniWatchTests(unittest.TestCase):
+    def setUp(self):
+        self.frame = summary_watch()
+        base = self.frame.active_cards[0].rows[0].prompt
+        self.first = replace(base, event_id="one", ccost=D("1.25"), duration_ms=600_000,
+            cost_estimated=False, unresolved_cost=False)
+        self.second = replace(self.first, event_id="two", ccost=D("2.75"), duration_ms=1_200_000)
+        self.cards = tuple(WatchCard("same-session", "Concurrent", row.event_id,
+            (WatchRow("same-session", "Concurrent", row),), "observed") for row in (self.first, self.second))
+
+    def test_same_session_distinct_prompts_dedup_focals_not_context_or_compaction(self):
+        context = WatchRow("same-session", "Concurrent", replace(self.first, event_id="context", ccost=D(999)))
+        terminal = replace(self.cards[1], rows=(replace(self.cards[1].rows[0],
+            prompt=replace(self.second, in_progress=False)),))
+        compact = replace(self.cards[1], rows=(replace(self.cards[1].rows[0],
+            prompt=replace(self.second, is_compaction=True)),))
+        placeholder = WatchCard("pending", "Pending", "", ())
+        cards = (replace(self.cards[0], rows=self.cards[0].rows + (context,)),
+            self.cards[1], self.cards[0], terminal, compact, placeholder)
+
+        result = running_prompts(cards, "observed")
+
+        self.assertEqual((2, D(4), 1_200_000), (result.count, result.ccost, result.duration_ms))
+        self.assertTrue(result.complete)
+        self.assertFalse(result.unresolved_cost)
+        # Ending the longest immediately removes its cost and allows max to decrease,
+        # even though its terminal grace card is still visible.
+        result = running_prompts((self.cards[0], terminal), "observed")
+        self.assertEqual((1, D("1.25"), 600_000), (result.count, result.ccost, result.duration_ms))
+
+    def test_pending_unknown_partial_estimate_and_genuine_empty_are_distinct(self):
+        for state in ("loading", "partial", "unavailable"):
+            pending = running_prompts((), state)
+            self.assertEqual((None, None, None, False),
+                (pending.count, pending.ccost, pending.duration_ms, pending.complete))
+            known = running_prompts(self.cards, state)
+            self.assertEqual((2, D(4)), (known.count, known.ccost))
+            self.assertFalse(known.complete)
+            self.assertTrue(known.unresolved_cost)
+        row = replace(self.first, ccost=D(0), unresolved_cost=True, cost_estimated=True)
+        card = replace(self.cards[0], rows=(WatchRow("same-session", "Concurrent", row),))
+        partial = running_prompts((card,), "observed")
+        wire = project_live(replace(self.frame, running=partial)).to_json()["running"]
+        self.assertEqual("N/A", wire["display"]["ccost"])
+        self.assertTrue(wire["cost_estimated"])
+        zero = running_prompts((), "observed")
+        self.assertEqual((0, D(0), None, True, False),
+            (zero.count, zero.ccost, zero.duration_ms, zero.complete, zero.unresolved_cost))
+        self.assertEqual("$0.00", project_live(replace(self.frame, running=zero),
+            ccost_display_unit="usd").to_json()["running"]["display"]["ccost"])
+
+    @unittest.skipUnless(shutil.which("node"), "optional JS VM unavailable")
+    def test_app_owned_window_races_health_settings_and_independent_dom(self):
+        payload = {"state": "running", "view": project_live(replace(self.frame,
+            active_cards=self.cards, running=running_prompts(self.cards, "observed"))).to_json()}
+        result = subprocess.run([shutil.which("node"), "development/tests/integration/mini_watch.cjs"],
+            cwd=ROOT, input=json.dumps(payload), text=True, encoding="utf-8", capture_output=True, timeout=15)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+
+
+if __name__ == "__main__":
+    unittest.main()

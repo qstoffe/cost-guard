@@ -19,15 +19,20 @@ let hostState = {kind: 'starting', writable: false, terminal: false};
 let hostInstance = null;
 let snapshotRender = null;
 let settingsView = null;
+const miniWatch = typeof MiniWatch === 'undefined' ? null : new MiniWatch.Controller(window,
+  document.getElementById('mini-watch-toggle'), document.getElementById('mini-watch-feedback'),
+  () => { if (location.hash !== '#/watch') location.hash = '#/watch'; });
 function applySettings(value) {
   const confirmed = WebSettings.apply(value, output);
   for (const state of views.values()) if (state.detail) ReportView.syncUnits(state.detail.root);
+  miniWatch?.settings();
   return confirmed;
 }
 function connectionStatus(message, state = {}) {
   if (hostState.terminal && state.kind !== hostState.kind) return;
   hostState = {...hostState, ...state};
   liveStatus = message;
+  miniWatch?.health(hostState);
   statusLine.textContent = hostState.kind === 'connected' ? message : `Connection: ${hostState.kind.replaceAll('_', ' ')}. See notice below.`;
   const banner = document.getElementById('host-state');
   if (banner) {
@@ -284,6 +289,7 @@ async function connect() {
       liveConnection = LiveConnection.connect(api, (value, progress) => {
         liveValue = value?.view || !liveValue?.view ? value : {...value,
           view: liveValue.view, source_observed_at_ms: liveValue.source_observed_at_ms};
+        miniWatch?.update(liveValue);
         if (current?.live) { current.message = 'Live observation; source/account freshness shown below.'; show(current); }
         for (const job of progress?.jobs || []) {
            if (current?.active === job.id) {

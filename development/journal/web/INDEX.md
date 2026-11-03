@@ -18,6 +18,9 @@ Status: current
   defects, shared fresh-versus-retained authority and historical-incident limits.
 - [Shared/native CI scope](ci-scope.md): measured Linux shared regression and
   focused three-architecture native startup, scoped handoff permission and proof limits.
+- [Mini Watch](mini-watch.md): canonical running aggregate, shared native-period
+  costs, actual headless Chrome/Edge PiP/hidden-page updates, real V2 evidence and
+  explicit Decision Delegate physical-desktop/shutdown verification exceptions.
 
 Historical observations keep their original dates and exceptions; this routing
 update does not refresh their validity or certify older failed probes. Parent

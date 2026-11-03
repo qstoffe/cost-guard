@@ -15,6 +15,20 @@ Status: current
 
 `src/web/events.py` publishes immutable full live/progress/terminal state with instance-bound IDs, 32-event/8 MiB replay and 2 MiB publications. `src/application/live_projection.py` allowlists Watch/tool/skill/context, subtotals and run/Today (not normal month/billing). `src/web/assets/live.js` owns one cookie-authenticated EventSource per tab. Gaps require HTTP resync; duplicates/older events cannot reset values; old instances require authorization. Terminal notices stop retry across gaps; offline retains evidence, never invents completion or launches servers.
 
+`watch/running.py` aggregates distinct canonical in-progress focal prompts once per
+Web publication, excluding compaction/history/placeholders/terminal grace. Count,
+prompt-only CCost and maximum canonical duration travel together with completeness
+and pricing state. Empty success differs from missing/partial acquisition; source
+capture failure freezes retained card duration. `assets/mini.js` owns one explicit
+Document PiP session per owning document, independent DOM and route lifetime. It
+consumes app-level Live/health/settings directly, without another connection, auth
+or acquisition owner. Window-identity checks reject stale callbacks/replacements;
+main pagehide ends the session. The PiP document's timer only detects stale
+publications, never extrapolates duration; repeated progress/snapshots cannot
+refresh its epoch. External `mini.css` reuses `app.css` theme tokens under unchanged
+CSP. Primary subscription costs reuse the indexed native-period history lane and
+stable server primary selection, with estimated/partial attribution retained.
+
 `src/web/lifecycle.py` owns deliberate launcher restart, overlap coalescing, bounded readiness/stop and detached spawn. `src/web/instance_state.py` owns canonical checkout/user identity, transition and lifetime OS locks, private atomic records and bounded allowlisted lifecycle diagnostics. `src/web/process_identity.py` owns native birth/image proof and safe termination handles. `src/web/change_guard.py` owns the allowlisted five-second runtime metadata baseline and terminal source_changed state; it never reloads/restarts code.
 
 `src/web/native_windows.py` owns same-process main-thread GUI integration and one asynchronous registered-browser handoff. `src/web/win32_tray.py` owns typed in-box Win32 resources/message dispatch and Explorer taskbar recovery; `src/web/tray_icon.py` owns the original source-rendered artwork. `src/web/windows_launch.py` and `src/web/windows_launch.ps1` own Beta-only Python/configuration/native preflight and sanitized failure feedback; stable terminal launchers do not import them. The Windows Beta batch waits synchronously for PowerShell's launch status; indeterminate activity spans bounded Python discovery and streamed startup stages until validated ready plus the OS browser-open result. The managed pythonw host remains detached/tray-owned, never console-owned; exit does not prove browser first paint. No compiler/cache/daemon is added. [Earlier hidden-delegation evidence](../governance/verification/windows-handoff.md) is historical, superseded by FR 000537.

@@ -1,8 +1,12 @@
 # Cost Guard version history
 
+## v80.131 — 2026-11-03
+
+- Web Mini Watch: explicit PiP, canonical running count/cost/max, primary same-period subscription CCost and shared live health/settings; no extra acquisition.
+
 ## v80.130 — 2026-11-03
 
-- Web: running server version in the header; centered Watch subscription title bands, per-quota native-period CCost including supported monthly history, complete primary reset/Remaining rows and secondary-only dividers. Today attribution remains unchanged without its visible estimate suffix.
+- Web: server version header; centered Watch subscription titles, native-period/monthly CCost, primary reset/Remaining rows and secondary-only dividers. Today attribution unchanged without an estimate suffix.
 
 ## v80.129 — 2026-11-02
 
