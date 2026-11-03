@@ -12,25 +12,6 @@ import traceback
 from unittest.mock import patch
 
 
-@contextmanager
-def probe_competing(enabled):
-    from threading import Event, Thread
-    from development.tests.fixtures.web_lifecycle import competing_work
-
-    stop = Event()
-    worker = Thread(target=competing_work, args=(stop,), name='cost-guard-probe-load') if enabled else None
-    if worker:
-        worker.start()
-    try:
-        yield
-    finally:
-        stop.set()
-        if worker:
-            worker.join(2)
-            if worker.is_alive():
-                raise RuntimeError('probe_load_shutdown_failed')
-
-
 class ProbeObservations:
     def __init__(self):
         self.started = time.monotonic()

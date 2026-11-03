@@ -14,7 +14,7 @@ sys.path.insert(0, str(ROOT))
 from src.web.composition import live_acquisition
 from src.web.host import WebHost
 from src.web.jobs import ReportJobs
-from development.tests.integration.web_live_observations import ProbeObservations, probe_competing, probe_lifecycle
+from development.tests.integration.web_live_observations import ProbeObservations, probe_lifecycle
 
 
 def main():
@@ -26,7 +26,6 @@ def main():
     parser.add_argument("--prompt-token-mix", action="store_true", help="Observe card token mix over twelve seconds; no inference or extra capture.")
     parser.add_argument("--daily", action="store_true", help="Wait for coherent full-day cost, initiating prompts and category prices.")
     parser.add_argument("--report-timings", action="store_true", help="Print sanitized child-process acquisition timings.")
-    parser.add_argument("--competing", action="store_true", help="Add one owned bounded CPU/JSON worker, no source/model calls.")
     args = parser.parse_args()
     owners = []
     csrf = None
@@ -44,7 +43,7 @@ def main():
     host = WebHost(ROOT, jobs=jobs, live_factory=factory)
     streams = []
     observations = ProbeObservations()
-    with observations.installed(), probe_lifecycle(host, streams, observations), probe_competing(args.competing):
+    with observations.installed(), probe_lifecycle(host, streams, observations):
         host.start()
         shell_seconds = time.monotonic() - started
         server = host.server
