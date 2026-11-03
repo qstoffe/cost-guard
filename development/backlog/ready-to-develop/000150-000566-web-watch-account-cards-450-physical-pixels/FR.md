@@ -1,0 +1,47 @@
+# FR 000566 — Enforce ≤450 actual on-screen pixels for Web Watch account cards at 150% display scaling
+
+## Owner request and verified baseline
+
+**Owner-approved, executable follow-up — 2026-11-03.** Permanent identity **000566**, Ready priority **000150** (after currently Ready FR000563–FR000565). This is a new follow-up to completed **FR000562**, not a retrospective change to its archived delivery.
+
+**Observed failure (owner's Chrome environment):** The user is running **Cost Guard Web Beta v80.142**, with **Windows display scaling confirmed at 150%**, and measures the subscription/account cards near the bottom of the **full Watch page** at **approximately 670 pixels wide**. The intended **absolute maximum is 450 pixels in the actual on-screen appearance**, *including* the border/padding of each card, also at 150% OS scaling. The ~670px measurement and exact units are owner-reported and must be independently verified with a screenshot/measurement; **150% OS scaling itself is confirmed**. Do not treat a CSS-only `450px` declaration as successful delivery.
+
+**Why this needs a follow-up:** FR000562 declared success with 450 **CSS** pixels in a headless Edge fixture at device-pixel ratio 1; the owner still sees a card about 670 **display** pixels wide in the shipped version. We must close the *actual user-visible discrepancy*, not merely repeat the previous CSS test.
+
+This scope is **only Web Beta → the full Watch page's subscription/account card grid**. Exclude the separate Accounts report, Watch session/prompt cards, native quota/CCost calculations and the **Mini Watch** floating PiP window. Mini Watch has its own height/scale refinement in **FR000565**; coordinate the scale-testing lessons without conflating the tasks.
+
+## Source inspection and likely explanation (not yet proved)
+
+The repository main source inspected on 2026-11-03 shows:
+
+- `src/version.py`: `VERSION = "80.142"`, release date `2026-11-03`; **the reported running version is the correct version for the FR000562 delivery**. The product's visible version label is not standalone proof that every served CSS asset matches the shipped version.
+- `src/web/assets/watch.js::accounts` builds `.account-grid.watch-account-grid` containing `.account-card.watch-subscription`, under `.watch-view`.
+- `src/web/assets/app.css` already sets `.account-grid.watch-account-grid { grid-template-columns: repeat(auto-fit, minmax(0, min(100%, 450px))); justify-content: start; }` and `.watch-view .watch-subscription { ... max-width: 450px; ... }`.
+- [Completed FR000562](../../complete/000074-000562-web-watch-compact-quota-cost-and-context-markers/COMPLETION.md) reports 450px **CSS** card widths in automated Edge 156 tests, including 150% **font-size** enlargement; its [journal](../../../journal/web/watch-polish.md) states the tests had DPR 1 and explicitly did **not** exercise real browser zoom/Windows screen scaling or Chrome real-account paint.
+- **Strong concrete hypothesis:** at the owner's confirmed **150% Windows scaling**, a 450 **CSS-pixel** card could occupy approximately **450 × 1.5 = 675 physical screen pixels**, very close to the owner's ~670px observation. However, Chrome zoom, DPI handling, CSS/physical pixel semantics, and the owner's measuring method are not yet verified. An old stylesheet, cache, unexpected cascade, or a different page/component remains possible until measured.
+
+## 1. Reproduce and identify the failure in the owner's effective display environment
+
+- In **desktop Chrome with Windows display scaling at 150%**, reproduce the complete full-Watch subscription cards (including cards with long account labels, primary/secondary quota rows and a single-card state). Verify which actual DOM node is being measured.
+- Capture **before and after screenshots with an explicit physical-pixel scale/ruler**, together with the **physical on-screen border-to-border card width**, the card's `getBoundingClientRect().width` in CSS px, the computed `width`/`max-width`, track geometry, active CSS declarations and relevant ancestor/layout constraints.
+- Record OS display scale **150%**, Chrome page zoom (record actual value, do **not** assume 100%), `window.devicePixelRatio`, `window.visualViewport?.scale`, `window.innerWidth`, the screenshot pixel density and any use of Chrome DevTools/device emulation. Explain precisely whether ~670 is **physical screenshot pixels, CSS layout pixels, or another unit**. Compare the same card using consistent units.
+- Confirm what the **running Web Beta** serves for `/app.css`, the version label, and matching scripts/DOM. An app reporting v80.142 does not rule out stale CSS/cache or a mismatched running installation. Diagnose, do not assume.
+- Identify the root cause with reproducible evidence. In particular, do not automatically blame the old `30rem` rule: that mechanism was replaced in current source. The ~1.5 multiplier is a lead, not a definitive diagnosis.
+
+## 2. Deliver the owner's actual 450-pixel width cap
+
+- **A full-Watch account card must not exceed 450 *visible physical screen pixels* in the owner's Chrome environment at 150% display scale, including its outer border/padding.** This is an **absolute maximum**, not a target CSS width, minimum, average or acceptable tolerance above the limit. At lower widths, smaller cards are fine.
+- Implement a locally scoped and responsive solution based on the proven cause: correct any wrong/stale served stylesheet or selector issue; if the actual discrepancy is physical-vs-CSS scaling, calculate/choose **the appropriate CSS layout size for the effective scale** rather than blindly reusing `max-width:450px`. At 150% scaling, **~300 CSS px would nominally correspond to 450 physical px**, before other zoom/scaling effects; this is **diagnostic arithmetic, not a prescribed implementation**. Prefer a small safety margin in the observed physical measurement.
+- Respect browser DPI/zoom and user text enlargement without global `zoom`, `transform:scale` hacks, hardcoded 150%-only CSS or reading a DPI value as physical width without validation. **Do not accidentally apply a 1.5 compensation twice** when both Chrome zoom and OS scaling are reflected in `devicePixelRatio`.
+- Keep each account's title, real subscription identity, Today CCost, quota Used/native values, Reset, secondary quotas and warnings readable and correctly aligned. Preserve grid wrapping, no clipped content/no horizontal page overflow, natural layout for one or multiple cards, all three existing themes, responsive small screens and keyboard/accessibility. Do not modify the separate Accounts page or floating Mini Watch.
+- Preserve FR000562's correct independent per-window CCost parentheses, Reset proximity, progress colors/geometry and Context warning behavior; no quota attribution, source polling, account identity, daily totals or backend changes.
+
+## Acceptance / mandatory real-geometry verification
+
+1. **Specific owner repro and fix:** with Web Beta v80.142 (or a newer development build carrying the fix), reproduce the reported ~670px width in Chrome with **Windows display scale 150%** or document an observed different baseline, including reason and units. After the change, **measure the same actual full-Watch account card at ≤450 physical screen pixels** at the same effective OS scale and browser zoom, including border/padding. Attach recorded screenshots, scale calibration, exact measured widths and relevant computed CSS geometry. A source-level `450px` declaration, headless DPR=1 test or Chrome DevTools CSS width **alone does not count as PASS**.
+2. **Browser/scaling matrix:** test at least Windows Chrome with **100% and 150% OS scaling**, including normal zoom plus at least one nondefault Chrome zoom/text enlargement where feasible, at desktop viewports with 1 and 2+ cards. Include 150%/200% text accessibility, the three existing themes, long names, expanded secondary quotas, wide/short viewports and narrow/mobile layouts. Record physical and CSS units separately. At 150% scaling the **visible physical** width cap still holds. Do not sacrifice content readability or accessible layout.
+3. **Asset/DOM integrity:** verify that the actual v80.142-or-newer running server serves the intended `app.css` and actual Watch classes/selectors; distinguish CSS asset caching, build/version mismatch, selector override and DPI/zoom conversions. If applicable, prove that reopening/reloading does not reintroduce the wrong result.
+4. **Evidence-based completion:** record root cause, before/after measurements, screenshots, Chrome/Windows versions, display scale and zoom, related regression tests and any platform limits in completion/journal. Ideally validate the owner's actual machine; **if owner-machine physical measurements are not available, explicitly mark that end-to-end criterion unverified rather than claiming success**. Any true browser/OS or accessibility blocker to the hard cap must be reported as unmet, not accepted on the strength of CSS pixels.
+5. **Regressions:** run focused DOM/browser/UI geometry tests and relevant repository validation, preserving known numerical and session behavior and layout outside full-Watch account cards. Avoid new network acquisition or external service mutations.
+
+**Non-goals:** new quota accounting, price or prompt changes, arbitrary global app scaling, replacing the responsive design, changing the separate Accounts page or implementing Mini Watch's own FR000565.
