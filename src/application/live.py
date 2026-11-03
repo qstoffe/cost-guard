@@ -17,6 +17,7 @@ class LiveRuntime:
         self.thread = None
         self.failure = None
         self.details = SessionDetails()
+        self.driver = None
 
     def start(self):
         if self.thread is not None:
@@ -37,6 +38,7 @@ class LiveRuntime:
                     self.stopping.wait(5)
             if driver is None:
                 return
+            self.driver = driver
             while not self.stopping.is_set():
                 frame = driver.tick()
                 if callable(getattr(type(driver.coordinator), "tick_details", None)):
@@ -77,6 +79,8 @@ class LiveRuntime:
 
     def close(self):
         self.stopping.set()
+        if self.driver is not None and callable(getattr(type(self.driver), "cancel", None)):
+            self.driver.cancel()
         if self.thread is not None:
             self.thread.join(timeout=10)
             if self.thread.is_alive():

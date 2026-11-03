@@ -14,6 +14,7 @@ sys.path.insert(0, str(ROOT))
 from src.web.composition import live_acquisition
 from src.web.host import WebHost
 from src.web.jobs import ReportJobs
+from development.tests.integration.web_live_observations import ProbeObservations, probe_lifecycle
 
 
 def main():
@@ -35,7 +36,8 @@ def main():
     started = time.monotonic()
     host = WebHost(ROOT, jobs=ReportJobs(), live_factory=factory)
     streams = []
-    try:
+    observations = ProbeObservations()
+    with observations.installed(), probe_lifecycle(host, streams, observations):
         host.start()
         shell_seconds = time.monotonic() - started
         server = host.server
@@ -49,11 +51,15 @@ def main():
                 headers.update(Origin=server.origin, **{'Content-Type': 'application/json'})
                 if csrf:
                     headers['X-CG-CSRF'] = csrf
-            connection.request('POST' if value is not None else 'GET', path,
-                               json.dumps(value) if value is not None else None, headers)
-            response = connection.getresponse()
-            data = json.loads(response.read())
-            connection.close()
+            route = path.split('/')[2] if path.startswith('/api/') else 'other'
+            try:
+                with observations.phase('http.' + route):
+                    connection.request('POST' if value is not None else 'GET', path,
+                                       json.dumps(value) if value is not None else None, headers)
+                    response = connection.getresponse()
+                    data = json.loads(response.read())
+            finally:
+                connection.close()
             if response.status not in {200, 202}:
                 raise RuntimeError('probe_http_failed')
             return data, response
@@ -76,6 +82,7 @@ def main():
         source_seconds = time.monotonic() - started
         card_evidence = None
         if args.watch_cards:
+            observations.stage = 'watch_cards'
             first_rows = None
             deadline = time.monotonic() + 90
             while time.monotonic() < deadline:
@@ -102,6 +109,7 @@ def main():
             else:
                 raise RuntimeError('probe_watch_cards_timeout')
         if args.daily:
+            observations.stage = 'daily'
             deadline = time.monotonic() + 120
             while time.monotonic() < deadline:
                 state, _ = get('/api/live', cookie=cookie)
@@ -122,6 +130,7 @@ def main():
                 time.sleep(.25)
             else:
                 raise RuntimeError('probe_daily_timeout')
+        observations.stage = 'streams'
         for _ in range(2):
             connection = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=3)
             connection.request('GET', '/api/events', headers={'Cookie': cookie,
@@ -142,6 +151,7 @@ def main():
             'shell_seconds': round(shell_seconds, 3), 'source_view_seconds': round(source_seconds, 3),
             'watch_cards': card_evidence}))
         if args.detail:
+            observations.stage = 'detail'
             sessions = [row['session_id'] for row in view['rows']] + [card['session_id'] for card in
                 [*view.get('active_cards', []), *view.get('history_cards', [])]]
             if not sessions:
@@ -173,6 +183,7 @@ def main():
                 page_rows=len(page['result']['view']['prompt_blocks'][0]['rows']),
                 first_latest_access=True, frozen_consistent=True, account_owners=len(owners))))
         if args.reports or args.models:
+            observations.stage = 'reports'
             # Do not emit session IDs, account details, report content or bootstrap values.
             def submit(value):
                 return get('/api/reports', value=value, cookie=cookie)[0]['id']
@@ -227,16 +238,10 @@ def main():
                 if len(owners) != 1 or latest['values']['live']['view']['started_at_ms'] != start:
                     raise RuntimeError('probe_cancel_changed_live_owner')
                 print(json.dumps(dict(history=value['status'], live_owner_preserved=True)))
-    finally:
-        host.stop('menu')
-        for connection, response in streams:
-            response.close()
-            connection.close()
-        host.close()
-        if host.failure:
-            print(json.dumps({'runtime_error_type': type(host.failure).__name__, 'frames': [
-                {'file': Path(frame.filename).name, 'function': frame.name, 'line': frame.lineno}
-                for frame in traceback.extract_tb(host.failure.__traceback__)]}))
+    if host.failure:
+        print(json.dumps({'runtime_error_type': type(host.failure).__name__, 'frames': [
+            {'file': Path(frame.filename).name, 'function': frame.name, 'line': frame.lineno}
+            for frame in traceback.extract_tb(host.failure.__traceback__)]}))
     if host.live.thread.is_alive() or host.thread.is_alive() or host.failure:
         raise RuntimeError('probe_shutdown_failed')
     print('PASS owned live and HTTP workers closed; shared OpenCode untouched')

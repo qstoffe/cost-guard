@@ -10,6 +10,7 @@ from src.reports.watch_capture import capture_rows
 from src.sources.errors import SourceError
 from .skill_registry import active_skill_origins
 from .tools import observe_tools, RUNNING_VISIBLE_AFTER_MS
+from .source_reads import SourceReads
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,10 +36,11 @@ class CardWorkers:
         self.results = SimpleQueue()
         self.jobs = {}
         self.stopping = Event()
+        self.reads = SourceReads()
 
     def submit(self, root, generation, now_ms, previous=None, focal_ids=()):
         key = root.session_id
-        if key in self.jobs or len(self.jobs) >= self.limit:
+        if self.stopping.is_set() or key in self.jobs or len(self.jobs) >= self.limit:
             return False
         self.jobs[key] = self.pool.submit(self._capture, root, generation, now_ms, previous, focal_ids)
         return True
@@ -52,13 +54,14 @@ class CardWorkers:
         service = None
         try:
             service = self.factory(now_ms)
-            capture, item = capture_rows(service, root, previous, focal_ids)
-            snapshot = item.snapshot
-            origins = active_skill_origins(service.source, snapshot, capture)
-            tools = tuple((row.event_id, observe_tools(snapshot, row.event_id,
-                is_compaction=False, now_ms=now_ms + RUNNING_VISIBLE_AFTER_MS,
-                skill_origins_by_session=origins)) for row in capture.rows)
-            self._publish(root, generation, "rows", (capture, tools, snapshot), now_ms)
+            with self.reads.using(service.source):
+                capture, item = capture_rows(service, root, previous, focal_ids)
+                snapshot = item.snapshot
+                origins = active_skill_origins(service.source, snapshot, capture)
+                tools = tuple((row.event_id, observe_tools(snapshot, row.event_id,
+                    is_compaction=False, now_ms=now_ms + RUNNING_VISIBLE_AFTER_MS,
+                    skill_origins_by_session=origins)) for row in capture.rows)
+                self._publish(root, generation, "rows", (capture, tools, snapshot), now_ms)
         except (SourceError, PricingUnavailableError) as error:
             self._publish(root, generation, "unavailable", error, now_ms)
         finally:
@@ -76,8 +79,12 @@ class CardWorkers:
                 del self.jobs[key]
         return values
 
-    def close(self):
+    def cancel(self):
         self.stopping.set()
+        self.reads.cancel()
+
+    def close(self):
+        self.cancel()
         self.pool.shutdown(wait=True, cancel_futures=True)
         for future in self.jobs.values():
             if not future.cancelled():

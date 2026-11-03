@@ -112,3 +112,8 @@ class LiveAcquisition:
 
     def close(self):
         self.coordinator.close()
+
+    def cancel(self):
+        cancel = getattr(self.coordinator, "cancel", None)
+        if callable(cancel):
+            cancel()
