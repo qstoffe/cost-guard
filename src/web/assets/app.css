@@ -166,9 +166,10 @@ p.warning { border-left: 3px solid var(--warn); padding: .65rem .85rem; backgrou
 .watch-quota-exhausted { accent-color: var(--warn); }
 .watch-daily { display: flex; align-items: baseline; flex-wrap: wrap; gap: .25rem 1rem; font-size: .85rem; box-shadow: none; margin-bottom: 4px; }
 .watch-daily-category { white-space: nowrap; }
-.watch-context-warning { margin-top: .25rem; color: var(--watch-context-warning, var(--warn)); font-size: .9rem; }
+.watch-context-warning { margin-top: .25rem; color: var(--ink); font-size: .9rem; }
+.watch-context-warning .watch-warning-icon { color: var(--watch-context-warning, var(--warn)); }
 .watch-context-warning[hidden] { display: none; }
-.watch-context-warning[data-severity="exceeded"] { font-weight: 650; }
+.watch-context-warning[data-severity="exceeded"] { color: var(--watch-context-warning, var(--warn)); font-weight: 650; }
 .superseded { color: var(--muted); }
 .catalog-controls { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 #scope-controls a[aria-current="page"] { background: var(--accent-soft); outline: 1px solid var(--accent); font-weight: 650; }

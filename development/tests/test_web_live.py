@@ -110,21 +110,29 @@ class LiveTests(unittest.TestCase):
             source.list_sessions = Mock(side_effect=SourceUnavailableError('private transport details'))
             clock[0] = 31
             outage = driver.tick()
+            self.assertEqual('retrying', driver.source_state)
+            self.assertEqual(2200, driver.observed_at_ms)
             self.assertEqual(initial.rows, outage.rows)
             self.assertFalse(driver.terminal)
             self.assertNotIn('private', project_live(outage).to_json()['status'])
             clock[0] = 32
             self.assertEqual(outage.rows, driver.tick().rows)
             self.assertEqual(1, source.list_sessions.call_count)
+            clock[0] = 36
+            driver.tick()
+            self.assertEqual('unavailable', driver.source_state, 'second failure cannot renew confirmation')
+            self.assertEqual(2200, driver.observed_at_ms)
             source.list_sessions = original
-            clock[0] = 37
+            clock[0] = 41
             recovered = driver.tick()
             self.assertIsNone(driver.error)
+            self.assertEqual('running', driver.source_state)
             self.assertEqual(initial.watch_started_at_ms, recovered.watch_started_at_ms)
             source.list_sessions = Mock(side_effect=SourceSchemaError('unsupported'))
             clock[0] = 100
             driver.tick()
             self.assertTrue(driver.terminal)
+            self.assertEqual('failed', driver.source_state)
 
     def test_hint_overflow_is_bounded_and_requires_authoritative_resync(self):
         pump = LiveEventPump(Mock())
@@ -251,6 +259,7 @@ class LiveTests(unittest.TestCase):
         driver.error = None
         driver.observed_at_ms = None
         driver.terminal = False
+        driver.source_state = 'running'
         driver.coordinator.today_ccost.history_pending = False
         driver.tick.side_effect = lambda: ticked.set()
         factory = Mock(return_value=driver)

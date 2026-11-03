@@ -43,12 +43,7 @@ class LiveRuntime:
                     driver.coordinator.tick_details(self.details, unavailable=driver.error is not None)
                 else:
                     self.details.tick(driver.coordinator.report_service, unavailable=driver.error is not None)
-                self.publish("live", record(state="failed" if driver.terminal else
-                    "recovering" if driver.error else "running",
-                    source_observed_at_ms=driver.observed_at_ms,
-                    error_code=driver.error.code.value if driver.error else None,
-                    view=project_live(frame, driver.coordinator.report_service.timezone_id,
-                        driver.coordinator.report_service.config.get("ccostDisplayUnit", "credits")) if frame is not None else None))
+                self._publish_frame(driver, frame)
                 if driver.terminal:
                     break
                 # Yield between history slices and keep account-only updates timely.
@@ -72,6 +67,13 @@ class LiveRuntime:
                         self.on_failure(error)
                     else:
                         raise
+
+    def _publish_frame(self, driver, frame):
+        self.publish("live", record(state=driver.source_state,
+            source_observed_at_ms=driver.observed_at_ms,
+            error_code=driver.error.code.value if driver.error else None,
+            view=project_live(frame, driver.coordinator.report_service.timezone_id,
+                driver.coordinator.report_service.config.get("ccostDisplayUnit", "credits")) if frame is not None else None))
 
     def close(self):
         self.stopping.set()

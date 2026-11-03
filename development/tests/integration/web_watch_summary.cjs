@@ -69,6 +69,14 @@ assert.equal(weeklyCard.children[4].children.length, 1, 'only primary reset; no 
 assert.equal(weeklyCard.children.length, 5, 'weekly-only has no secondary section or divider');
 assert.ok(!/BLOCKED|Unknown|Available|Observation details|Unaccounted usage/.test(watch.accounts.textContent));
 assert.match(card.warning.textContent, /⚠ Price threshold.*2.4x more expensive/);
+assert.equal(card.warningIcon.className, 'watch-warning-icon');
+for (const severity of ['approaching', 'exceeded', 'approaching']) {
+  context.input.view.active_cards[0].context_warning.severity = severity;
+  vm.runInContext('ReportView.renderLive(parent, input, state)', context);
+  assert.equal(card.warning.dataset.severity, severity);
+  assert.equal(card.warningIcon.textContent, '⚠ ');
+  assert.match(card.warningText.textContent, /Price threshold/);
+}
 assert.equal(card.root.children.indexOf(card.warning), card.root.children.indexOf(card.activity) - 1);
 assert.equal(card.root.children[card.root.children.indexOf(card.warning) - 1].className, 'watch-table-scroll');
 assert.equal(earlier.root.children[earlier.root.children.indexOf(earlier.warning) - 1].className, 'watch-table-scroll');
@@ -117,9 +125,32 @@ context.input.view.daily_state = 'unavailable';
 vm.runInContext('ReportView.renderLive(parent, input, state)', context);
 assert.match(watch.daily.textContent, /Source unavailable · retained daily observation/);
 assert.match(watch.daily.textContent, /182 prompts/);
+context.input.view.daily_state = 'retrying';
+context.input.view.active_cards[0].state = 'retrying';
+context.input.state = 'retrying';
+vm.runInContext('ReportView.renderLive(parent, input, state)', context);
+assert.match(watch.daily.textContent, /Retrying daily refresh.*not current/);
+assert.match(card.message.textContent, /Retrying prompt refresh.*not current/);
+assert.ok(!/Source unavailable/.test(watch.root.textContent));
+context.input.state = 'running';
+vm.runInContext("state.connection = 'RECONNECTING'; ReportView.renderLive(parent, input, state)", context);
+assert.match(watch.empty.textContent, /Live connection interrupted/);
+assert.ok(!/Source unavailable/.test(watch.empty.textContent));
 context.input.view.daily_usage = null;
 context.input.view.daily_state = 'loading';
 vm.runInContext('ReportView.renderLive(parent, input, state)', context);
 assert.match(watch.daily.textContent, /Loading daily activity/);
 assert.ok(!/0 prompts/.test(watch.daily.textContent));
+const baseHistory = context.input.view.history_cards[0];
+const historyCard = id => ({...baseHistory, session_id: id});
+context.input.view.history_cards = ['oldest', 'middle', 'newest'].map(historyCard);
+for (const open of [false, true, false]) {
+  watch.earlier.open = open;
+  vm.runInContext('ReportView.renderLive(parent, input, state)', context);
+  assert.deepEqual([...watch.history.children].map(node => node.dataset.session), ['oldest', 'middle', 'newest']);
+  assert.equal(watch.earlier.open, open);
+}
+context.input.view.history_cards = ['middle', 'newest', 'newly-eligible'].map(historyCard);
+vm.runInContext('ReportView.renderLive(parent, input, state)', context);
+assert.deepEqual([...watch.history.children].map(node => node.dataset.session), ['middle', 'newest', 'newly-eligible']);
 console.log('watch summary passed');

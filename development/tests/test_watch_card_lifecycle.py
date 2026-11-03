@@ -128,7 +128,7 @@ class WebTerminalLifecycleTests(unittest.TestCase):
         with patch.object(OpenCodeV2Source, "load_session_snapshot", side_effect=SourceUnavailableError("offline")):
             self.capture(20_000)
         self.assertTrue(self.row(20_000).in_progress, "last known state is not invented success")
-        self.assertEqual("unavailable", self.cards.project(20_000)[0][0].state)
+        self.assertEqual("retrying", self.cards.project(20_000)[0][0].state)
         self.assertEqual(self.row(20_000).duration_ms, self.row(90_000).duration_ms)
         self.terminate()
         self.capture(30_000)

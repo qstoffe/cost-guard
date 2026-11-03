@@ -71,3 +71,46 @@ genuine acquisition failures retain their truthful warning.
   unverified. This is not owner approval, a reduced implementation, a broad live PASS,
   or real-provider refresh/day-rollover proof. Deterministic cases cover those semantics;
   the focused sum is only the acquired subset, never complete daily/account history.
+
+## FR 000554 — warning emphasis, source confirmation and history order
+
+v80.134, 2026-11-03. `CardWorkers` previously discarded failure classifications and
+`WatchCards.accept` immediately marked every failed capture unavailable. The daily
+lane likewise immediately marked failure and could wait for the minute fallback.
+Separately, Watch mapped any non-connected browser state to a combined source/connection
+unavailable message. These are demonstrated presentation/recovery paths, not proof of
+the owner's exact intermittent incident. FR 000532's fixed sixty-second SSE rotation
+remains absent; no browser/host restart or new acquisition loop is introduced.
+
+`watch/source_status.py` retains the first monotonic failure time independently per
+source/card/daily lane. With valid retained data, retryable failures show neutral
+retrying/not-current text for five seconds, then unavailable on the next existing
+publication. Repeated failures cannot move the origin; terminal/non-retryable errors
+and initial missing data bypass grace. Global source recovery keeps its existing
+five-second retry. A daily error brings forward the existing single history-lane retry
+to five seconds. Authoritative relevant success clears failure, not partial retained
+capture, a different card, HTTP or heartbeat. Running duration freezes through retry;
+retained context guidance survives transient recovery. Bounded acquisition in flight
+can delay publication; the confirmation window is not an absolute network SLA.
+
+History still chooses five most recent eligible distinct sessions before ascending
+displayed-prompt start/session/prompt-ID order. Watch warnings split icon/text DOM:
+approaching uses theme body foreground for text/values and the old warning-colored
+triangle; exceeded keeps both warning-colored. No threshold or CLI change.
+
+Executed Full: 127 files, zero failures. Validator: 11 passes, zero failures, six
+advisory prose/design warnings; no budgets changed. Hidden Chrome passed nine
+Classic/light/dark × 1920/1366/360 cases and 108 severity/theme transitions, including
+clear/reappear. DOM fixtures cover collapsed updates and keyed order; Python fixtures
+exercise actual source/card/daily failure/recovery owners, retained freshness and ties.
+Real V2 probe: one owner/two streams/three accounts, first row 4.417s, bounded four
+captures, coherent daily 1,263 requests/55 known prompts in 11.242s (attribution incomplete,
+pricing complete). Owned HTTP/Live workers closed; shared OpenCode untouched; no inference.
+
+First real-source attempt timed out during daily wait and owned shutdown while source
+edits were ongoing. The stable-source repeat above passed; the first timeout's cause
+was not established. Integrated browser was disconnected; hidden fresh-profile Chrome
+provided rendered checks instead. No physical desktop, screen-reader, suspension,
+native macOS or reproduction of the exact owner incident is claimed. No test exception
+or Decision Delegate waiver was needed. Scratch evidence: `scratch:/watch-summary.json`
+and nine synthetic screenshots; no runtime data or browser profile is committed.

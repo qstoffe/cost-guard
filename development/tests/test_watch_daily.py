@@ -25,6 +25,7 @@ from src.application.watch_accounts import primary_quota, watch_account, watch_q
 from src.domain import AccountRef, ModelRef, QuotaComponent, TokenUsage
 from src.reports.history import WatchHistoryAcquisition
 from src.presentation.accounts import account_capacity_parts
+from src.sources.errors import transport_failure, http_failure
 from src.watch.web_coordinator import WebWatchCoordinator
 from src.watch.accounts import reconcile_accounts
 
@@ -196,6 +197,44 @@ class WatchDailyTests(unittest.TestCase):
             self.assertIsNone(owner.history_quota)
             self.assertEqual(86_400_001, submit.call_args.args[3])
             pending.cancel()
+
+    def test_daily_failure_confirmation_retains_observation_and_retries_on_existing_lane(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = SyntheticMonthSource(1, 1, month_start_ms=1000)
+            config, selection, service, _ = make_service(tmp, source, now_ms=80_000_000)
+            clock = [0.0]
+            owner = WebWatchCoordinator(selection=selection, report_service=service, config=config,
+                service_factory=lambda now: make_service(tmp, source, now_ms=now)[2], monotonic=lambda: clock[0])
+            self.addCleanup(owner.close)
+            observed = owner._account_history(source.list_sessions(), (), 80_000_000)
+            owner.history_quota, owner.daily_usage = observed
+            observation = SimpleNamespace(revisions={}, sessions=(), active_candidates=frozenset(), live_candidates=frozenset())
+            owner.history_revision = ()
+            owner.history_due_ms = 80_060_000
+            failure = transport_failure(TimeoutError(), phase='daily')
+            with patch.object(owner, 'history_factory', side_effect=failure):
+                failure = owner._account_history(source.list_sessions(), (), 80_000_001)
+            self.assertEqual('connection_timeout', failure.code.value)
+            pending = Future()
+            with patch.object(owner.accounts, 'refresh', return_value=False), patch.object(
+                    owner.history_pool, 'submit', return_value=pending) as submit:
+                for seconds in (0, 4, 5):
+                    clock[0] = seconds
+                    completed = Future(); completed.set_result(failure)
+                    owner.history_job = completed
+                    owner._refresh_quota(observation, now_ms=80_000_000 + seconds * 1000)
+                    frame = owner._build_projection(now_ms=80_000_000 + seconds * 1000)
+                    self.assertEqual('retrying' if seconds < 5 else 'unavailable', frame.daily_state)
+                    self.assertEqual(observed[1], frame.daily_usage)
+                submit.assert_called_once()
+                self.assertEqual(80_005_000, submit.call_args.args[3])
+                completed = Future(); completed.set_result(observed)
+                owner.history_job = completed
+                owner._refresh_quota(observation, now_ms=80_005_001)
+                self.assertIsNone(owner.daily_status.state(retained=True))
+            pending.cancel()
+            owner.daily_status.fail(http_failure(403, phase='daily'))
+            self.assertEqual('unavailable', owner._build_projection(now_ms=80_005_002).daily_state)
 
     def test_native_weekly_primary_matches_cli_population_and_is_not_duplicated(self):
         payload = {"plan_type": "pro_lite", "rate_limit": {"primary_window": {
