@@ -221,8 +221,9 @@ class WebRuntimeTests(unittest.TestCase):
         self.assertEqual(401, self.request("/api/status", headers={"Cookie": "cg_session=wrong"})[0])
         other = BrowserSession()
         self.assertFalse(other.authenticated(self.cookie))
+        expired = other.bootstrap()
         with patch("src.web.security.time.monotonic", return_value=time.monotonic() + 121):
-            self.assertIsNone(other.exchange(other.bootstrap()))
+            self.assertIsNone(other.exchange(expired))
         self.assertIsNone(other.exchange("å"))
 
     def test_status_exposes_loaded_product_version_not_static_assets_or_disk_changes(self):

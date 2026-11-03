@@ -10,6 +10,7 @@ from .tray_icon import ICON_SIZES, icon_bits
 
 CALLBACK = 0x8001
 OPEN, EXIT = 1, 2
+COPY = 3
 
 
 class NotifyData(c.Structure):
@@ -118,7 +119,8 @@ class Tray:
         self.menu = self.user.CreatePopupMenu()
         if not self.hwnd or not self.icon or not self.menu:
             raise InstanceConflict("tray_unavailable")
-        for identifier, text in ((OPEN, "Open Cost Guard"), (EXIT, "Exit Cost Guard")):
+        for identifier, text in ((OPEN, "Open Cost Guard"), (COPY, "Copy Cost Guard link"),
+                                 (EXIT, "Exit Cost Guard")):
             if not self.user.AppendMenuW(self.menu, 0, identifier, text):
                 raise InstanceConflict("tray_unavailable")
         self.data = NotifyData(cbSize=c.sizeof(NotifyData), hWnd=self.hwnd, uID=1,
@@ -180,7 +182,7 @@ class Tray:
                                           0, self.hwnd, None)
         self.user.PostMessageW(self.hwnd, 0, 0, 0)
         self._position_at_icon()
-        if choice in (OPEN, EXIT):
+        if choice in (OPEN, COPY, EXIT):
             self.events.append(choice)
 
     def _window_message(self, hwnd, message, first, second):
@@ -198,7 +200,7 @@ class Tray:
                 elif second in (0x205, 0x7B):  # right release / context menu
                     self._popup()
                 return 0
-            if message == 0x111 and first in (OPEN, EXIT):  # WM_COMMAND
+            if message == 0x111 and first in (OPEN, COPY, EXIT):  # WM_COMMAND
                 self.events.append(first)
                 return 0
         except Exception as error:
@@ -224,10 +226,18 @@ class Tray:
         return events
 
     def browser_failed(self):
+        self._notify("Browser could not open. Retry Open Cost Guard, or run Diagnostics.", 2)
+
+    def link_copied(self, success):
+        message = ("Link copied. Paste into another browser within 2 minutes. It can be used once."
+                   if success else "Link could not be copied. Retry Copy Cost Guard link.")
+        self._notify(message, 1 if success else 2)
+
+    def _notify(self, message, flags):
         self.data.uFlags = 0x10
         self.data.szInfoTitle = "Cost Guard Web Beta"
-        self.data.szInfo = "Browser could not open. Retry Open Cost Guard, or run Diagnostics."
-        self.data.dwInfoFlags = 2
+        self.data.szInfo = message
+        self.data.dwInfoFlags = flags
         self.shell.Shell_NotifyIconW(1, c.byref(self.data))
         self.data.uFlags = 7
 

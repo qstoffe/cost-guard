@@ -174,6 +174,7 @@ class WebViewTests(unittest.TestCase):
             thread.start()
             try:
                 payload = dict(origin=server.origin, credential=server.session.bootstrap(), examples=examples,
+                               handoff_credential=server.session.bootstrap(renew=True),
                                overview=overview, tier_report=tier_report, account_report=account_report,
                                normal_progress=progress_events)
                 with patch('src.web.http.DISPLAY_VERSION', 'v91.7'):

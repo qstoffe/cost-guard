@@ -79,6 +79,21 @@ remains separately qualified in the Mini journal; browser security chrome is int
 
 `src/web/native_windows.py` owns same-process main-thread GUI integration and one asynchronous registered-browser handoff. `src/web/win32_tray.py` owns typed Win32 resources/message dispatch and Explorer taskbar recovery. It scopes PMv2 to the UI thread before creating any HWND/menu, restores on cleanup/failure, selects physical small-icon metrics and positions the hidden owner on the relevant icon/popup monitor. Process defaults and other threads are unchanged. `src/web/tray_icon.py` is the sole canonical CG pixel artwork; `development/tools/generate_web_icon.py` regenerates the tested multi-resolution ICO. HTTP exposes only two fixed favicon paths and limits image CSP to them. Native/browser checks and unverified physical acceptance: [branding findings](../../journal/web/branding.md).
 
+Windows-only Copy is a third native event between Open/Exit, not an HTTP/browser
+capability. `host.copy_browser_link` mints the same owner-side URL and revokes only
+its own credential on copy failure. `security.BrowserSession` serializes up to 16
+independent in-memory pending links, expiring each after 120 seconds, refusing
+overflow instead of invalidating another link; redemption never rotates an active
+session/CSRF. `win32_clipboard.py` owns typed movable-memory/Unicode transfer and
+history/cloud exclusion formats. A separate coalesced worker bounds clipboard
+contention retries to four 20ms waits, with result feedback on the native pump and
+no credential-bearing logs. An explicit bootstrap hashchange in an already-loaded
+page erases the fragment before using the existing exchange endpoint, then reloads
+the clean Models URL; terminal authorization-error pages can accept pasted handoffs
+without bypassing HTTP guards. No new process, dependency, macOS menu, route, acquisition
+or trust boundary is added. Tests and explicit desktop limits:
+[browser handoff evidence](../../journal/web/browser-links.md).
+
 `src/web/windows_launch.py` and `src/web/windows_launch.ps1` own Beta-only Python/configuration/native preflight and sanitized failure feedback; stable terminal launchers do not import them. The Windows Beta batch waits synchronously for PowerShell's launch status; indeterminate activity spans bounded Python discovery and streamed startup stages until validated ready plus the OS browser-open result. The managed pythonw host remains detached/tray-owned, never console-owned; exit does not prove browser first paint. No compiler/cache/daemon is added. [Earlier hidden-delegation evidence](../governance/verification/windows-handoff.md) is historical, superseded by FR 000537.
 
 `src/web/startup.py` owns fixed, flushed, elapsed-time launcher stage text shared by Windows/macOS. Lifecycle's optional progress sink reports arbitration/restart/host/browser boundaries without receiving secrets. PowerShell drains stages privately and prints one `Starting CostGuard web...` label, updating only a spinner cell at 120ms intervals through discovery and handoff. Progress panels are suppressed; redirected/noninteractive output stays plain. A finally block clears the cell before errors or exit. Browser startup is static branded HTML until authorization; initial report activity remains separate from HTTP/source/account readiness. No new supervisor, auth route, acquisition owner or dependency boundary is introduced.

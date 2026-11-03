@@ -86,7 +86,7 @@ def adapter_probe(root=ROOT, jobs_factory=None):
         buffer = c.create_unicode_buffer(64)
         text(tray.menu, index, buffer, 64, 0x400)
         labels.append(buffer.value)
-    assert labels == ["Open Cost Guard", "Exit Cost Guard"]
+    assert labels == ["Open Cost Guard", "Copy Cost Guard link", "Exit Cost Guard"]
     notifications = []
     failures = []
     original = tray.browser_failed

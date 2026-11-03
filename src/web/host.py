@@ -14,6 +14,7 @@ from .jobs import ReportJobs
 from .events import EventHub
 from .process_identity import process_identity
 from .observations import WebObservations
+from .security import BrowserLinkUnavailable
 
 
 class WebHost:
@@ -69,7 +70,7 @@ class WebHost:
 
     def browser_url(self):
         if self.stopping.is_set() or not self.ready:
-            raise RuntimeError("instance_stopping")
+            raise BrowserLinkUnavailable("instance_stopping")
         return f"{self.server.origin}/#bootstrap={self.server.session.bootstrap(renew=True)}"
 
     def open_browser(self, opener=webbrowser.open):
@@ -78,6 +79,20 @@ class WebHost:
             return bool(opener(self.browser_url()))
         except Exception:
             return False
+
+    def copy_browser_link(self, copier):
+        """Trusted native handoff only; failed copies must not fill pending slots."""
+        url = None
+        try:
+            url = self.browser_url()
+            copier(url)
+            return True
+        except BaseException as error:
+            if url is not None:
+                self.server.session.discard_bootstrap(url.split("#bootstrap=", 1)[1])
+            if isinstance(error, (OSError, BrowserLinkUnavailable)):
+                return False
+            raise
 
     def publish_ready(self):
         """GUI calls this only after its required native icon/event loop is usable."""

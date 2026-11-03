@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.148 — 2026-11-04
+
+- Windows Web Beta: tray-only **Copy Cost Guard link** copies a fresh, two-minute, one-use browser handoff without opening a browser or restarting the server. Bounded independent pending credentials preserve other handoffs and active sessions; an already-loaded authorization-error tab accepts a pasted link safely. Unicode clipboard work is asynchronous/retryable and marks text ineligible for Windows history/cloud sync, with credential-free feedback. No new browser API or macOS menu. Real clipboard/physical desktop verification is explicitly deferred by Decision Delegate after private-isolation setup was denied; [evidence and limits](development/journal/web/browser-links.md).
+
 ## v80.147 — 2026-11-04
 
 - Web Beta: one original CG source supplies DPI-sized Windows tray icons and the offline multi-resolution browser favicon. Native menu resources are created under a scoped Per-Monitor v2 UI-thread context, restored on cleanup, without changing interpreter process defaults. Section titles and lifecycle actions stay intact. Physical notification-area appearance and full menu visual acceptance remain unverified; evidence and any scoped exception are recorded with FR 000567.
