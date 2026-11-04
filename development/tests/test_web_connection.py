@@ -10,11 +10,51 @@ from unittest.mock import patch
 
 from src.web.events import EventHub
 from src.web.http import RequestHandler
+from src.web.security import BrowserSession
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
 class ConnectionTests(unittest.TestCase):
+    def test_stream_validation_does_not_extend_idle_but_normal_sync_keeps_it_alive(self):
+        for polling in (False, True):
+            now = [1000]
+            session = BrowserSession(clock=lambda: now[0])
+            bearer, _ = session.exchange(session.bootstrap())
+            cookie = f'{session.cookie_name}={bearer}'
+            hub = EventHub('fixture')
+            reads = []
+
+            def read(cursor):
+                reads.append(cursor)
+                now[0] += 86400
+                if polling:
+                    session.activity(cookie)
+                if len(reads) == 16:
+                    hub.close('menu')
+                return hub.sequence, []
+
+            hub.read = read
+            handler = RequestHandler.__new__(RequestHandler)
+            handler.deadline = None
+            handler.headers = {'Cookie': cookie}
+            slots = BoundedSemaphore(4)
+            handler.server = SimpleNamespace(_streams=slots, origin='http://127.0.0.1:12345',
+                lifecycle=SimpleNamespace(events=hub), session=session)
+            handler.wfile = io.BytesIO()
+            handler.send_response_only = lambda code: None
+            sent_headers = {}
+            handler.send_header = lambda key, value: sent_headers.update({key: value})
+            handler.end_headers = lambda: None
+
+            handler.stream_events()
+
+            self.assertNotIn('Set-Cookie', sent_headers, 'an open response cannot renew browser cookies')
+            self.assertEqual(4, slots._value)
+            self.assertEqual(16 if polling else 7, len(reads))
+            self.assertIn(b'event: terminal' if polling else b'event: authorization_required',
+                          handler.wfile.getvalue())
+
     def test_healthy_idle_stream_survives_old_rotation_deadline(self):
         hub = EventHub('fixture')
         reads = []

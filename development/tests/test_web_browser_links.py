@@ -44,14 +44,70 @@ class BrowserLinksTests(unittest.TestCase):
 
         first = session.exchange(opened)
         cookie = f'{session.cookie_name}={first[0]}'
-        self.assertEqual(first, session.exchange(launcher))
-        self.assertEqual(first, session.exchange(copied))
+        second = session.exchange(launcher)
+        third = session.exchange(copied)
+        self.assertEqual(3, len({first[0], second[0], third[0]}))
+        self.assertEqual(first[1], second[1])
+        self.assertEqual(first[1], third[1])
+        self.assertEqual(first, session.exchange(session.bootstrap(renew=True), cookie))
         for token in (launcher, opened, copied):
             self.assertIsNone(session.exchange(token))
         self.assertTrue(session.authenticated(cookie))
         self.assertTrue(session.csrf(first[1]))
         self.assertFalse(BrowserSession().authenticated(cookie))
         self.assertIsNone(BrowserSession().exchange(copied))
+
+    def test_browser_activity_slides_repeated_weeks_without_rotating_credentials(self):
+        now = Mock(return_value=1000)
+        session = BrowserSession(clock=now)
+        bearer, csrf = session.exchange(session.bootstrap())
+        cookie = f'{session.cookie_name}={bearer}'
+        # Daily activity crosses the old eight-hour boundary and three weeks.
+        for day in range(1, 22):
+            now.return_value = 1000 + day * 86400
+            self.assertTrue(session.authenticated(cookie))
+            self.assertEqual(bearer, session.activity(cookie))
+            self.assertTrue(session.csrf(csrf))
+        last_activity = now.return_value
+        now.return_value += 6 * 86400 + 86399
+        self.assertTrue(session.authenticated(cookie))
+        now.return_value = last_activity + 7 * 86400
+        self.assertFalse(session.authenticated(cookie))
+        self.assertIsNone(session.activity(cookie), 'expired bearer cannot be revived')
+        replacement, same_csrf = session.exchange(session.bootstrap())
+        self.assertNotEqual(bearer, replacement)
+        self.assertEqual(csrf, same_csrf)
+        self.assertFalse(session.authenticated(cookie))
+
+    def test_independent_browser_expiry_and_concurrent_renewal_are_coalesced(self):
+        now = Mock(return_value=1000)
+        session = BrowserSession(clock=now)
+        chrome, csrf = session.exchange(session.bootstrap())
+        edge, edge_csrf = session.exchange(session.bootstrap(renew=True))
+        chrome_cookie = f'{session.cookie_name}={chrome}'
+        edge_cookie = f'{session.cookie_name}={edge}'
+        now.return_value += 3600
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            renewals = list(pool.map(session.activity, [chrome_cookie] * 8))
+        self.assertEqual(1, renewals.count(chrome))
+        self.assertEqual(edge, session.activity(edge_cookie), 'another browser cannot consume renewal')
+        self.assertEqual(csrf, edge_csrf)
+        for day in range(1, 8):
+            now.return_value = 1000 + 3600 + day * 86400
+            session.activity(chrome_cookie)
+        self.assertTrue(session.authenticated(chrome_cookie))
+        self.assertFalse(session.authenticated(edge_cookie))
+        self.assertTrue(session.csrf(csrf))
+
+    def test_suspend_counts_as_idle_even_when_monotonic_clock_does_not_advance(self):
+        now = Mock(return_value=1000)
+        session = BrowserSession(clock=now)
+        with patch('src.web.security.time.monotonic', return_value=100):
+            bearer, _ = session.exchange(session.bootstrap())
+            cookie = f'{session.cookie_name}={bearer}'
+            now.return_value += 7 * 86400
+            self.assertFalse(session.authenticated(cookie))
+            self.assertIsNone(session.activity(cookie))
 
     def test_expiry_prunes_each_link_and_later_handoff_is_fresh(self):
         session = BrowserSession()

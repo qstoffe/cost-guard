@@ -87,14 +87,22 @@ const LiveConnection = (() => {
     }
     function openStream() {
       if (stopped || source || !instance) return;
-      source = sourceFactory('/api/events'); // No reusable secret or query string.
-      for (const kind of ['live', 'progress', 'terminal']) source.addEventListener(kind, e => accept(kind, e));
-      source.addEventListener('resync', sync);
-      source.addEventListener('authorization_required', () => stop('AUTHENTICATION EXPIRED — NOT LIVE. Obtain a fresh launcher link.', 'authorization_required'));
-      source.onopen = () => { if (!stopped) { streamOpen = true; sync(); } };
-      source.onerror = () => {
+      const opened = sourceFactory('/api/events'); // No reusable secret or query string.
+      source = opened;
+      const current = () => !stopped && source === opened;
+      for (const kind of ['live', 'progress', 'terminal']) opened.addEventListener(kind, e => { if (current()) accept(kind, e); });
+      opened.addEventListener('resync', () => { if (current()) sync(); });
+      opened.addEventListener('authorization_required', () => {
+        if (!current()) return;
+        // A concurrent initial handoff may have replaced this stream's cookie.
+        // Validate the browser's current cookie before declaring real expiry.
+        opened.close(); source = null; streamOpen = false; sync();
+      });
+      opened.onopen = () => { if (current()) { streamOpen = true; sync(); } };
+      opened.onerror = () => {
+        if (!current()) return;
         streamOpen = false;
-        if (!stopped) report('reconnecting', 'RECONNECTING — live stream interrupted; host reachability being checked. Last observation retained, not live.');
+        report('reconnecting', 'RECONNECTING — live stream interrupted; host reachability being checked. Last observation retained, not live.');
       };
     }
     async function probe() {
