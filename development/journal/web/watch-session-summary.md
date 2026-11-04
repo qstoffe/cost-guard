@@ -63,6 +63,12 @@ canonical analysis remains separate; no general source-acquisition speedup is cl
   severity inheritance, focus-safe invalidation, Credits/USD, wrapping/no overflow,
   table pan, history, activity and account alignment passed. Screenshots/structured
   results were retained during work at `scratch:/browser-evidence-delivery/`.
+- The separate `probe_watch_summary.cjs` passed all nine classic/light/dark ×
+  1920/1366/360px cases, including warning transitions and account track alignment.
+  Its obsolete assertion requiring three account cards side by side at 1366px
+  initially failed; the corrected assertion preserves established responsive caps:
+  three cards at 1920px, two plus wrapping at 1366px, and stacking at 360px.
+  No production layout was changed to satisfy this legacy probe.
 - `probe_web_live.py --watch-cards --session-cost --daily`: real V2 read-only capture
   matched a stable four-request session to independent full history. A fresh
   repository revalued zero requests and wrote no session-cache state. The final
@@ -80,9 +86,11 @@ canonical analysis remains separate; no general source-acquisition speedup is cl
 The first Full run caught an obsolete JS column-order assertion, corrected to the
 new ten-column contract. A subsequent concurrent Full run failed the existing
 PowerShell PATH-fallback discovery test; that file passed in isolation, and all 139
-files passed in a two-worker Full rerun (156.2s). No launcher behavior/assertion was
-weakened, and no requirement/test exception was granted. Final-tree results are
-recorded in the completed specification's `COMPLETION.md`.
+files passed in a two-worker Full rerun (156.2s). The final production revision
+`330712dc1572b01777dd53583b9b58bd12ded5da` passed all 139 files in 160.0s;
+the subsequent legacy-probe-only correction passed its nine rendered cases.
+No launcher behavior/assertion was weakened, and no requirement/test exception was
+granted. Final results are recorded in the completed specification's `COMPLETION.md`.
 
 The initial real-source probe exposed a probe-only publication race (internal cost
 completed before the HTTP snapshot carried it); the probe now waits for a published
