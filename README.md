@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v80.156, 2026-11-04), the supported distribution.
+Use **current `main`** (v80.157, 2026-11-04), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -82,7 +82,7 @@ Distinct signals:
 - **Billed:** actual monetary spend with reported or explicit subscription/zero-billing evidence; otherwise `N/A`.
 - **Quotas / limits:** independent account-native windows, credits, budgets and availability.
 
-Reference costs—including Watch **Today**—are **CCost**, unless labeled otherwise, not native **Used** or actual **Billed**. Included work can have CCost with Billed $0. Quota bars show **Used / Total**; **Remaining** pace describes capacity left. Quota credentials do not prove historical attribution.
+Reference costs—including Watch **Today**—are **CCost**, unless labeled otherwise, not native **Used** or actual **Billed**. Included work can have CCost with Billed $0. Quota bars default to **Used / Total**; Web Settings can instead show finite native **Remaining / Total**. **Remaining** pace describes capacity left independently. Quota credentials do not prove historical attribution.
 
 ### Symbols and token categories
 
@@ -324,7 +324,7 @@ Useful settings include:
 - `pricingMaxAgeHours`: pricing/model metadata cache age.
 - `thresholds`: running-cost, context, percentile and quota warning thresholds.
 - `colorScheme`, `colorSchemes`, `colors`: terminal palette selection and per-role overrides.
-- `webSettings`: saved Web-only `theme` (`classic` default / `web`) and `ccostDisplayUnit` (`credits` default / `usd`). Legacy `webTheme` is fallback; other keys stay shared.
+- `webSettings`: Web-only `theme`, `ccostDisplayUnit`, `miniWatchPlacement` and `quotaDisplayMode` (`used` default / `remaining`). Each supports symbolic `default` inheritance or an explicit pinned choice. Legacy `webTheme` is fallback; other keys stay shared.
 
 `modelComparisonNew` colors new names/dates; `modelComparisonPromotion` colors active rates/Relative CCost. Superseded colors fade; plain output is unchanged.
 
@@ -361,7 +361,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.156 (2026-11-04):** Web Settings distinguishes inherited **Default** from explicit Theme, CCost display and new Mini Watch placement choices. Mini defaults to **Remember last** within the live opener/server; **Standard placement**, reload or a new host starts from browser-initial geometry. Preferences persist, window bounds do not. Physical placement checks remain unverified under an FR-scoped Decision Delegate exception; see [Mini Watch](docs/web-mini-watch.md).
+**v80.157 (2026-11-04):** Web Settings adds **Quota display: Default (Used) / Used / Remaining**. Finite native quota percentages, amounts and bars switch together across Accounts, Watch and an open Mini without new acquisition. Unlimited/unknown limits keep truthful Used/unknown presentation; exhausted Remaining stays red even with an empty bar. Observed period CCost stays independent and is labelled **CCost used** in Remaining. CLI and Remaining/day pace are unchanged. See [Web settings](docs/web-beta.md#web-settings).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

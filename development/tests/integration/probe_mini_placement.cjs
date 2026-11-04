@@ -60,11 +60,11 @@ module.exports = async ({evaluate,until,command,sessionId,targetId,restart,check
 
   await evaluate("location.hash='#/settings'"); await until("document.getElementById('mini-placement')?.disabled === false");
   const controls = await evaluate(`[...document.querySelectorAll('.web-settings select')].map(select=>({id:select.id,value:select.value,options:[...select.options].map(option=>option.text)}))`);
-  assert.equal(controls.length,3);
-  assert.deepEqual(controls.map(item=>item.value),['default','default','remember-last']);
+  assert.equal(controls.length,4);
+  assert.deepEqual(controls.map(item=>item.value),['default','default','remember-last','default']);
   assert.deepEqual(controls.map(item=>item.options),[
     ['Default (Classic)','Classic','Web'],['Default (Credits)','Credits','USD'],
-    ['Default (Remember last)','Remember last','Standard placement']]);
+    ['Default (Remember last)','Remember last','Standard placement'],['Default (Used)','Used','Remaining']]);
   const settingsImage = await command('Page.captureScreenshot',{format:'png',captureBeyondViewport:false},sessionId);
   const settingsPath = output.replace(/\.json$/,'')+'-settings.png';
   await fs.writeFile(settingsPath,Buffer.from(settingsImage.data,'base64')); screenshots.push(path.basename(settingsPath));
@@ -84,14 +84,14 @@ module.exports = async ({evaluate,until,command,sessionId,targetId,restart,check
   await until("typeof miniWatch !== 'undefined' && hostState.kind === 'connected' && liveValue?.view?.running?.count === 2");
   assert.notEqual(await evaluate('hostInstance'),instance);
   const saved = await evaluate("api('/api/settings')");
-  assert.deepEqual(saved.webSettingsChoices,{theme:'classic',ccostDisplayUnit:'credits',miniWatchPlacement:'remember-last'});
+  assert.deepEqual(saved.webSettingsChoices,{theme:'classic',ccostDisplayUnit:'credits',miniWatchPlacement:'remember-last',quotaDisplayMode:'default'});
   await open(); same((await measure('new-process-first-open')).bounds,initial);
   const newMoved = await alter('new-process-moved'); await close(false); await open(); same((await bounds()).bounds,newMoved);
   await change('theme','default'); await change('ccostDisplayUnit','default'); await change('miniWatchPlacement','default');
   const inheriting = await evaluate("api('/api/settings')");
-  assert.deepEqual(inheriting.webSettingsChoices,{theme:'default',ccostDisplayUnit:'default',miniWatchPlacement:'default'});
+  assert.deepEqual(inheriting.webSettingsChoices,{theme:'default',ccostDisplayUnit:'default',miniWatchPlacement:'default',quotaDisplayMode:'default'});
   assert.deepEqual(await evaluate('({local:localStorage.length,session:sessionStorage.length})'),{local:0,session:0});
-  checks.push('Three native selects preserve Default/explicit choices; real Python host restart keeps file-backed mode but first open resets native bounds; opener reload also starts standard, then remembers; no browser storage');
+  checks.push('Four native selects preserve Default/explicit choices; real Python host restart keeps file-backed mode but first open resets native bounds; opener reload also starts standard, then remembers; no browser storage');
   // Restore the original initial state for the established layout/SSE probe.
   await close(false); await change('miniWatchPlacement','standard'); await open();
   await change('miniWatchPlacement','default'); await evaluate("location.hash='#/watch'");

@@ -26,6 +26,7 @@ WEB_PREFERENCES = {
     "theme": ("classic", "web"),
     "ccostDisplayUnit": ("credits", "usd"),
     "miniWatchPlacement": ("remember-last", "standard"),
+    "quotaDisplayMode": ("used", "remaining"),
 }
 
 

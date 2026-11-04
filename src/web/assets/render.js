@@ -4,7 +4,16 @@ const ReportView = (() => {
   const known = value => value === null || value === undefined ? 'Unknown' : String(value);
   // Missing tokens are not a license to expose raw Decimal strings or calculate in JS.
   let unit = null;
+  let quotaMode = 'used';
   const bindings = new WeakMap();
+  const effects = new WeakMap();
+  function bind(node, update) { effects.set(node, update); update(); }
+  function setQuotaMode(value) { if (['used', 'remaining'].includes(value)) quotaMode = value; }
+  function quotaView(quota, watch) {
+    return quota.quota_display?.[quotaMode] || {mode: 'used', native: display(quota, 'quota_used'),
+      money: display(quota, 'used_money'), account_percent: display(quota, 'used_fraction'),
+      fraction: watch?.used_fraction, percent: watch?.used_percent, exhausted: watch?.exhausted, note: ''};
+  }
   const display = (row, key) => row?.display_units?.[unit]?.[key] ?? row?.display?.[key] ?? 'N/A';
   const mixLabels = row => Object.values(row?.display?.token_categories || {});
   const mixText = row => Object.entries(row?.display?.token_categories || {})
@@ -30,6 +39,7 @@ const ReportView = (() => {
     } else node.textContent = content;
   }
   function syncUnits(root) {
+    effects.get(root)?.();
     const binding = bindings.get(root);
     if (binding) text(root, binding);
     for (const child of root.children) syncUnits(child);
@@ -348,23 +358,33 @@ const ReportView = (() => {
       (quota.status === 'blocked' ? ' error' : ''));
     const status = quota.status === 'blocked' ? ' · BLOCKED' : compact && quota.status === 'available' ? '' : ' · ' + quota.status;
     row.append(element('strong', quota.label + status));
-    const used = display(quota, 'used_fraction');
-    const summary = quota.unlimited ? 'Unlimited' : used === 'N/A' ? 'Used percentage unavailable' : used + ' used';
-    row.append(element('span', summary, 'metric-value'));
+    const view = () => quotaView(quota);
+    const summary = () => quota.unlimited ? 'Unlimited' : view().account_percent === 'N/A' ? 'Used percentage unavailable' :
+      view().account_percent + ' ' + view().mode;
+    const label = element('span', summary, 'metric-value'); row.append(label);
+    bind(label, () => label.className = 'metric-value' + (view().mode === 'remaining' && view().exhausted ? ' quota-exhausted' : ''));
     // Only a known server-formatted fraction creates a determinate bar. Never coerce null to zero.
-    if (!compact && !quota.unlimited && used !== 'N/A') {
-      const bar = element('progress'); bar.max = 100;
-      bar.value = used.replace('%', '');
-      bar.setAttribute('aria-label', quota.label + ' used');
-      bar.setAttribute('aria-valuetext', summary); row.append(bar);
+    if (!compact && !quota.unlimited && view().account_percent !== 'N/A') {
+      const bar = element('progress');
+      bind(bar, () => {
+        bar.max = view().mode === 'remaining' ? 1 : 100;
+        bar.value = view().mode === 'remaining' ? view().fraction : display(quota, 'used_fraction').replace('%', '');
+        bar.setAttribute('aria-label', quota.label + ' ' + view().mode);
+        bar.setAttribute('aria-valuetext', summary() + (view().exhausted ? ' · exhausted' : ''));
+        bar.className = view().mode === 'remaining' && view().exhausted ? 'quota-exhausted' : '';
+      }); row.append(bar);
     }
     const unit = quota.unit || 'units';
-    if (!display(quota, 'quota_used').startsWith('N/A')) row.append(element('span', 'Used ' + display(quota, 'quota_used')));
-    else if (!quota.unlimited && quota.remaining != null) row.append(element('span', `${display(quota, 'remaining')} ${unit} remaining`));
-    else if (!quota.unlimited && quota.limit != null) row.append(element('span', `Limit ${display(quota, 'limit')} ${unit}`));
+    const native = element('span', () => !view().native.startsWith('N/A') ?
+      (view().mode === 'remaining' ? 'Remaining ' : 'Used ') + view().native :
+      !quota.unlimited && quota.remaining != null ? `${display(quota, 'remaining')} ${unit} remaining` :
+      !quota.unlimited && quota.limit != null ? `Limit ${display(quota, 'limit')} ${unit}` : '');
+    bind(native, () => native.hidden = view().native.startsWith('N/A') && (quota.unlimited || quota.remaining == null && quota.limit == null));
+    row.append(native);
     if (quota.remaining_money != null || quota.limit_money != null) row.append(element('span',
-      display(quota, 'used_money') !== 'N/A' ? `Native money used ${display(quota, 'used_money')} / ${display(quota, 'limit_money')}` :
+      () => view().money !== 'N/A' ? `Native money ${view().mode} ${view().money} / ${display(quota, 'limit_money')}` :
         `Native money remaining ${display(quota, 'remaining_money')} / ${display(quota, 'limit_money')}`, 'detail'));
+    if (view().note) row.append(element('span', view().note, 'warning'));
     row.append(element('span', display(quota, 'reset'), 'detail'));
     const window = [quota.period !== 'unknown' && quota.period,
       quota.duration_seconds && display(quota, 'window') + ' window',
@@ -414,7 +434,8 @@ const ReportView = (() => {
       for (const bill of obs.billing || []) (detailed && !compact ? card : details).append(element('p', `${bill.label} · ${bill.period} · ${bill.kind} · ${display(bill, 'amount')} ${bill.currency} · ${bill.status}`));
       if (compact) for (const quota of obs.quotas) accountQuota(details, quota);
       for (const quota of obs.quotas) details.append(element('p', detailed ?
-        `${quota.label} · Used ${display(quota, 'used')} ${quota.unit || 'units'} · ${quota.status}` :
+        () => quotaView(quota).mode === 'remaining' ? `${quota.label} · Remaining ${quotaView(quota).native} · ${quota.status}` :
+          `${quota.label} · Used ${display(quota, 'used')} ${quota.unit || 'units'} · ${quota.status}` :
         `${quota.label} · ${quota.period} · ${display(quota, 'window') || 'N/A'} window · ${quota.scope || ''} · Native money remaining/limit ${display(quota, 'remaining_money')}/${display(quota, 'limit_money')}`));
       if (!watch) card.append(details);
       group.append(card);
@@ -561,5 +582,5 @@ const ReportView = (() => {
     return ['Complete session', ccost(block, 'total_ccost'), known(block.total_calls),
       display(block, 'duration_ms'), '—', known(block.total_ictx_cost_text), known(block.total_extra_cost_text), known(block.total_mix_text)];
   }
-  return {render, renderLive, element, detailCells, detailTotals, compare, overviewAccounts, display, contextSummary, text, setUnit, syncUnits, defaultUnit, mixLegend, hourlySummary};
+  return {render, renderLive, element, detailCells, detailTotals, compare, overviewAccounts, display, contextSummary, text, setUnit, syncUnits, defaultUnit, mixLegend, hourlySummary, bind, setQuotaMode, quotaView};
 })();

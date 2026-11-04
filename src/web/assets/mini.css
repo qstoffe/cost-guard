@@ -51,5 +51,6 @@ body { padding: .5rem; max-width: none; }
 .mini-accounts progress::-moz-progress-bar { background: currentColor; border-radius: 1rem; }
 .mini-accounts progress.mini-exhausted { color: var(--error); accent-color: var(--error); }
 .mini-warning { color: var(--warn); }
+.mini-accounts li.mini-exhausted { color: var(--error); }
 .mini-prompt-table :focus-visible { outline-offset: -3px; }
 @media (max-height: 15rem) { .mini-prompts, .mini-accounts { min-height: 2rem; flex-shrink: 1; } }

@@ -119,6 +119,17 @@ remain visible; exhausted finite quota stays red. There are no reset/secondary-w
 Focus/hover a row for its period/estimated-attribution basis; unavailable cost does
 not hide a known percentage. `?` retains partial pricing; cost has no visible `~`.
 
+**Settings → Web settings → Quota display** offers **Default (Used) / Used / Remaining**.
+Remaining switches this already-open window along with Accounts and full Watch, without
+quota refresh, restart or another stream. A finite quota shows e.g. **91.6% remaining
+(CCost used: 1814)**; focus/hover also identifies native Remaining/Total. CCost is the
+unchanged observed reference spending, never a native remaining amount. Full remaining
+bars are healthy; empty, truly exhausted bars retain a red text warning and accessible
+exhaustion description. Tiny positive capacity is not marked exhausted by rounding.
+Unlimited keeps Used with no bar, and missing capacity/usage stays unknown rather than
+inventing Remaining. Default follows the shipped Used orientation; explicit Used pins it.
+CLI, remaining pace, period attribution and native money are unaffected.
+
 Cost uses verified native boundaries and acquired history **before Watch/Mini
 opened**, including earlier days of a supported fixed UTC calendar month.
 Five-hour native windows use their actual start/reset; unknown boundaries,

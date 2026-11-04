@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.157 — 2026-11-04
+
+- Web Settings adds inherited/explicit **Quota display**, defaulting to Used. Remaining switches finite native quota percentages, amounts and bars consistently in Accounts, Watch and an open Mini; Unlimited/unknown evidence keeps Used/unknown behavior. Exhausted Remaining stays red at zero fill, without treating rounded zero as exhaustion. Observed period CCost is unchanged and explicitly distinguished as **CCost used** in Remaining; CLI, pace, polling and accounting stay unchanged.
+
 ## v80.156 — 2026-11-04
 
 - Web Settings adds **Mini Watch placement** and a symbolic, selectable **Default (current default)** for all three controls. Explicit values stay pinned, including values equal to today's defaults; inherited values follow future defaults and bypass retained legacy theme overrides when selected. Mini defaults to browser-native **Remember last** in the same live opener/server; **Standard placement** always requests initial geometry. Reload/new openers and host restart begin standard, with no stored geometry. Fresh physical Windows-150%/manual/native-X/monitor proof remains unverified under an FR-only Decision Delegate exception; [evidence and limits](development/journal/web/mini-watch.md).

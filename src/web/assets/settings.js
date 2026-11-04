@@ -19,7 +19,10 @@ const WebSettings = (() => {
       explanation: 'USD is reference token valuation, not billed spending. CLI display is unchanged.'},
     {key: 'miniWatchPlacement', id: 'mini-placement', label: 'Mini Watch placement', endpoint: 'mini-placement',
       choices: [['remember-last', 'Remember last'], ['standard', 'Standard placement']],
-      explanation: 'Applies on the next opening. Remember last reuses browser-native bounds in this opener while the host lives; reload or host restart starts standard. Geometry is never saved.'}
+       explanation: 'Applies on the next opening. Remember last reuses browser-native bounds in this opener while the host lives; reload or host restart starts standard. Geometry is never saved.'},
+    {key: 'quotaDisplayMode', id: 'quota-display', label: 'Quota display', endpoint: 'quota-display',
+      choices: [['used', 'Used'], ['remaining', 'Remaining']],
+      explanation: 'Remaining applies to quotas with a known limit. Unlimited plans continue to show Used. Observed CCost and Remaining/day pace are unchanged.'}
   ];
   function apply(value, root) {
     const settings = value?.webSettings, choices = value?.webSettingsChoices, defaults = value?.webSettingsDefaults;
@@ -32,6 +35,7 @@ const WebSettings = (() => {
       throw new Error('settings_unavailable');
     }
     document.documentElement.dataset.theme = settings.theme;
+    ReportView.setQuotaMode(settings.quotaDisplayMode);
     ReportView.setUnit(settings.ccostDisplayUnit, root);
     return {values: {...settings}, choices: {...choices}, defaults: {...defaults}};
   }

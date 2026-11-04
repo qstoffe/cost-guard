@@ -308,7 +308,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                     return
                 self.reply(202, {"id": key})
                 return
-            if self.path in {"/api/settings/theme", "/api/settings/ccost", "/api/settings/mini-placement"}:
+            if self.path in {"/api/settings/theme", "/api/settings/ccost", "/api/settings/mini-placement", "/api/settings/quota-display"}:
                 self.web_settings(value)
                 return
             if self.path == "/api/detail" and self.server.lifecycle and self.server.lifecycle.live:
@@ -353,7 +353,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                 settings = self.server.settings.read()
             else:
                 field = {"/api/settings/theme": "theme", "/api/settings/ccost": "ccostDisplayUnit",
-                         "/api/settings/mini-placement": "miniWatchPlacement"}[self.path]
+                         "/api/settings/mini-placement": "miniWatchPlacement",
+                         "/api/settings/quota-display": "quotaDisplayMode"}[self.path]
                 if set(value) != {field}:
                     raise SettingsError("invalid_request")
                 def allowed():

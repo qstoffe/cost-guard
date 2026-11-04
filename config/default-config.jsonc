@@ -17,7 +17,9 @@
     "ccostDisplayUnit": "credits",
     // User overrides may select "default" for any Web preference to inherit.
     // Placement mode persists; browser-native window bounds never do.
-    "miniWatchPlacement": "remember-last"
+    "miniWatchPlacement": "remember-last",
+    // Finite native quotas only; Unlimited keeps Used. CLI remains Used.
+    "quotaDisplayMode": "used"
   },
 
   // OpenCode history source. "auto" selects the highest supported healthy

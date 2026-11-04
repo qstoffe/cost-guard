@@ -108,7 +108,8 @@ def main():
             elif self.path in {"/api/settings/theme", "/api/settings/ccost", "/api/settings/mini-placement"}:
                 try:
                     field = {"/api/settings/theme": "theme", "/api/settings/ccost": "ccostDisplayUnit",
-                             "/api/settings/mini-placement": "miniWatchPlacement"}[self.path]
+                             "/api/settings/mini-placement": "miniWatchPlacement",
+                             "/api/settings/quota-display": "quotaDisplayMode"}[self.path]
                     self.send(settings.write(field, value.get(field)))
                 except SettingsError as error:
                     self.send_response(503); self.end_headers()

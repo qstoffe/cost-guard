@@ -24,7 +24,10 @@ const miniWatch = typeof MiniWatch === 'undefined' ? null : new MiniWatch.Contro
   () => { if (location.hash !== '#/watch') location.hash = '#/watch'; });
 function applySettings(value) {
   const confirmed = WebSettings.apply(value, output);
-  for (const state of views.values()) if (state.detail) ReportView.syncUnits(state.detail.root);
+  for (const state of views.values()) {
+    if (state.detail) ReportView.syncUnits(state.detail.root);
+    if (state.watch) ReportView.syncUnits(state.watch.root);
+  }
   miniWatch?.settings(confirmed.values, hostInstance);
   return confirmed;
 }

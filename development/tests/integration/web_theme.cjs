@@ -20,12 +20,13 @@ async function main() {
   documentState.activeElement = documentState.body;
   const context = vm.createContext({document: documentState, ReportView: {
    element(tag, text) { const node = new Node(tag); node.textContent = text; return node; },
-   setUnit(unit) { documentState.unit = unit; }
+    setUnit(unit) { documentState.unit = unit; },
+    setQuotaMode(mode) { documentState.quotaMode = mode; }
   }});
   vm.runInContext(fs.readFileSync('src/web/assets/settings.js', 'utf8'), context);
   const Settings = vm.runInContext('WebSettings', context);
-  const defaults = {theme: 'classic', ccostDisplayUnit: 'credits', miniWatchPlacement: 'remember-last'};
-  const inherited = {theme: 'default', ccostDisplayUnit: 'default', miniWatchPlacement: 'default'};
+   const defaults = {theme: 'classic', ccostDisplayUnit: 'credits', miniWatchPlacement: 'remember-last', quotaDisplayMode: 'used'};
+   const inherited = {theme: 'default', ccostDisplayUnit: 'default', miniWatchPlacement: 'default', quotaDisplayMode: 'default'};
   const calls = []; let saved = {...inherited}, failure = null, release;
   const api = async (path, value) => {
     calls.push({path, value});
@@ -36,7 +37,8 @@ async function main() {
   };
   const view = new Settings.View(api), output = new Node('div');
   const theme = view.controls.get('theme'), ccost = view.controls.get('ccostDisplayUnit'), placement = view.controls.get('miniWatchPlacement');
-  assert.equal(view.controls.size, 3);
+   const quota = view.controls.get('quotaDisplayMode');
+   assert.equal(view.controls.size, 4);
   assert.equal(view.root.children[0].textContent, 'Web settings');
   const save = select => select.events.change();
   view.attach(output); const root = output.firstChild;
@@ -46,8 +48,10 @@ async function main() {
     [['default','Default (Classic)'],['classic','Classic'],['web','Web']]);
   assert.deepEqual(ccost.children.map(option => [option.value,option.textContent]),
     [['default','Default (Credits)'],['credits','Credits'],['usd','USD']]);
-  assert.deepEqual(placement.children.map(option => [option.value,option.textContent]),
-    [['default','Default (Remember last)'],['remember-last','Remember last'],['standard','Standard placement']]);
+   assert.deepEqual(placement.children.map(option => [option.value,option.textContent]),
+     [['default','Default (Remember last)'],['remember-last','Remember last'],['standard','Standard placement']]);
+   assert.deepEqual(quota.children.map(option => [option.value,option.textContent]),
+     [['default','Default (Used)'],['used','Used'],['remaining','Remaining']]);
   theme.focus(); theme.value = 'web'; const pending = save(theme);
   assert.equal(theme.disabled, true); assert.equal(ccost.disabled, true);
   assert.equal(html.dataset.theme, 'classic', 'never optimistically claim saved theme');
@@ -67,7 +71,9 @@ async function main() {
     assert.equal(theme.disabled, false);
     ccost.value = 'usd'; await save(ccost);
     assert.equal(ccost.value, 'default'); assert.equal(documentState.unit, 'credits');
-    placement.value = 'standard'; await save(placement); assert.equal(placement.value, 'default');
+     placement.value = 'standard'; await save(placement); assert.equal(placement.value, 'default');
+     quota.value = 'remaining'; await save(quota); assert.equal(quota.value, 'default');
+     assert.equal(documentState.quotaMode, 'used');
   }
   failure = null;
   ccost.focus(); ccost.value = 'usd'; const ccostPending = save(ccost);
@@ -85,7 +91,16 @@ async function main() {
   assert.equal(theme.value, 'classic'); assert.equal(theme.firstChild.textContent, 'Default (Web)');
   assert.equal(html.dataset.theme, 'classic');
   placement.value = 'remember-last'; const pinPlacement = save(placement); release(); await pinPlacement;
-  assert.equal(placement.value, 'remember-last');
+   assert.equal(placement.value, 'remember-last');
+   quota.focus(); quota.value = 'remaining'; const remaining = save(quota);
+   assert.equal(documentState.quotaMode, 'used'); release(); await remaining;
+   assert.equal(documentState.quotaMode, 'remaining'); assert.equal(documentState.activeElement, quota);
+   quota.value = 'used'; const pinUsed = save(quota); release(); await pinUsed;
+   defaults.quotaDisplayMode = 'remaining'; await view.read();
+   assert.equal(quota.value, 'used'); assert.equal(documentState.quotaMode, 'used');
+   assert.equal(quota.firstChild.textContent, 'Default (Remaining)');
+   quota.value = 'default'; const inheritQuota = save(quota); release(); await inheritQuota;
+   assert.equal(documentState.quotaMode, 'remaining'); defaults.quotaDisplayMode = 'used';
   saved = {...inherited}; defaults.theme = 'classic'; await view.read();
   assert.equal(html.dataset.theme, 'classic', 'external file edits apply on next read');
   const fresh = new Settings.View(api); await fresh.read();
@@ -94,7 +109,7 @@ async function main() {
   failure = 'offline'; const unread = new Settings.View(api); await unread.read();
   assert.equal(unread.controls.get('theme').disabled, true, 'unconfirmed initial read cannot claim or write a choice');
   assert.throws(() => Settings.apply({webSettings: defaults}), /settings_unavailable/);
-  assert.ok(calls.every(call => ['/api/settings', '/api/settings/theme', '/api/settings/ccost', '/api/settings/mini-placement'].includes(call.path)));
+   assert.ok(calls.every(call => ['/api/settings', '/api/settings/theme', '/api/settings/ccost', '/api/settings/mini-placement', '/api/settings/quota-display'].includes(call.path)));
   assert.ok(calls.filter(call => call.value).every(call => Object.keys(call.value).length === 1));
   console.log('Web settings state machine passed');
 }

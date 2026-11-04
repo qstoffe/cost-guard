@@ -38,6 +38,17 @@ for (const text of ['PRIVATE', '0.89876543211', '89.876543211', '1.23456789', 'r
 }
 // Rendering another section must not acquire or mutate the shared frozen report.
 assert.equal(view.accounts_quotas.accounts[0].observation.quotas[0].remaining, '89.876543211');
+const original = output.textContent, native = JSON.stringify(view), bar = all(cards[0], 'progress')[0];
+vm.runInContext('ReportView.setQuotaMode("remaining"); ReportView.syncUnits(output)', context);
+assert.match(cards[0].textContent, /90% remaining/);
+assert.match(cards[0].textContent, /Remaining 89\/100 AI credits/);
+assert.equal(bar.value, '0.89876543211'); assert.equal(bar.attrs['aria-label'], 'Monthly remaining');
+assert.equal(all(cards[0], 'progress')[0], bar);
+assert.equal(all(cards[1], 'progress')[0].value, '0');
+assert.match(all(cards[1], 'progress')[0].attrs['aria-valuetext'], /exhausted/);
+assert.match(cards[2].textContent, /Unlimited/); assert.doesNotMatch(cards[2].textContent, /% remaining/);
+vm.runInContext('ReportView.setQuotaMode("used"); ReportView.syncUnits(output)', context);
+assert.equal(output.textContent, original); assert.equal(JSON.stringify(view), native);
 
 // Overview reuses the same frozen CLI-defined values, with provenance hidden.
 output.replaceChildren();

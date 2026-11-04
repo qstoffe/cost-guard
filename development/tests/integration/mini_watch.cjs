@@ -132,6 +132,16 @@ function setup() {
   assert.ok(!/Reset|Weekly|Today|Provisional/.test(view.accounts.textContent));
   const retained = view.accounts.children[0]; controller.update(input);
   assert.equal(view.accounts.children[0], retained, 'independent keyed DOM survives refresh');
+  const beforeSwitch = JSON.stringify(input), retainedBar = retained.children[1];
+  vm.runInContext('ReportView.setQuotaMode("remaining")', context); controller.settings();
+  assert.match(retained.textContent, /91.6% remaining \(CCost used: 1814\)/);
+  assert.equal(retainedBar.value, '0.91648'); assert.match(retainedBar.attributes['aria-label'], /remaining/);
+  assert.match(retained.title, /22912\/25000 AI credits.*not remaining CCost/);
+  assert.doesNotMatch(retained.title, /Period cost unavailable/);
+  assert.equal(view.accounts.children[0], retained); assert.equal(retained.children[1], retainedBar);
+  vm.runInContext('ReportView.setQuotaMode("used")', context); controller.settings();
+  assert.match(retained.textContent, /8.4% used \(1814\)/);
+  assert.equal(JSON.stringify(input), beforeSwitch, 'presentation never changes canonical source fields');
   const firstRow = view.body.children[0], firstCell = firstRow.children[0], originals = input.view.active_cards;
   const prompt = originals[1].rows[0].prompt;
   input.view.active_cards = [originals[1], originals[0], originals[0], {session_id:'pending',focal_id:'',rows:[]}];
@@ -163,6 +173,8 @@ function setup() {
   assert.ok(!retained.textContent.includes('~'));
   assert.equal(retained.children[1].value, primary.used_fraction);
   const quota = {...primary.quota}, saved = {...primary};
+  // Exercise the supported legacy DTO fallback separately from computed variants.
+  primary.quota = {...primary.quota, quota_display: undefined};
   for (const [fraction, exhausted] of [['0',false],['0.5',false],['0.99999',false],['1',true],[null,false]]) {
     primary.used_fraction = fraction; primary.exhausted = exhausted; controller.update(input);
     assert.equal(retained.children[1].hidden,fraction == null);

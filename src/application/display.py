@@ -11,6 +11,7 @@ from src.display import (TOKEN_CATEGORIES, TOKEN_CATEGORY_LEGEND, compact_thresh
 from src.numbers import balanced_share_percents, ccost_amount, ccost_display, ccost_range, ccost_unit, remaining_capacity
 
 from .contracts import ObjectValue, record
+from .quota_display import quota_displays
 
 
 def decimal(value):
@@ -255,6 +256,7 @@ def _with_display(value, timezone_id, now_ms):
     opaque = {"by_model", "by_day_utc", "current_context_sources"}
     fields = tuple((key, item if key in opaque else _with_display(item, timezone_id, now_ms)) for key, item in value.fields)
     role_tokens = roles(values)
-    return ObjectValue(fields + ((("display", record(**tokens)),) if tokens else ()) +
+    quota_variants = (("quota_display", quota_displays(values)),) if "remaining_fraction" in values else ()
+    return ObjectValue(fields + quota_variants + ((("display", record(**tokens)),) if tokens else ()) +
                        ((("display_units", unit_tokens),) if unit_tokens is not None else ()) +
                        ((("display_roles", role_tokens),) if role_tokens else ()))
