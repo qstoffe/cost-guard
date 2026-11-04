@@ -6,6 +6,12 @@ body { padding: .5rem; max-width: none; }
   flex: 0 0 auto; min-width: 0; padding: 0; background: none; }
 .mini-summary { align-self: flex-start; min-height: 1.6rem; padding: .1rem .25rem; border-color: transparent;
   color: var(--accent); font-size: .8rem; transition: none; }
+.mini-earlier-toggle { min-height: 1.6rem; padding: .1rem .25rem; font-size: .75rem; background: none;
+  color: var(--ink); border-color: transparent; transition: none; }
+.mini-earlier-toggle::before { content: '› '; }
+.mini-earlier-toggle[aria-expanded="true"]::before { content: '⌄ '; }
+.mini-prompts section[hidden] { display: none; }
+.mini-prompts section { margin: 0 0 .4rem; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
 .mini-daily { margin: 0 0 0 auto; min-width: 0; max-width: 100%; text-align: right; font-size: .8rem; overflow-wrap: anywhere; color: var(--ink); }
 .mini-health { flex: 0 0 auto; min-height: 0; max-height: 25%; overflow: auto;
   font-size: .75rem; color: var(--muted); margin: 0; }
@@ -19,11 +25,15 @@ body { padding: .5rem; max-width: none; }
 .mini-prompt-table th { position: sticky; top: 0; z-index: 1; background: var(--surface); text-align: center; }
 .mini-prompt-table th:first-child, .mini-prompt-table td:first-child { border-left: 1px solid var(--line); }
 .mini-prompt-table th { border-top: 1px solid var(--line); }
-/* Metrics contribute their full intrinsic minimum, but none of the spare width.
-   Zero intrinsic title/empty content leaves only Session's heading as its minimum. */
+/* Metrics and the nonshrinking total set intrinsic minima. Only the title flexes. */
 .mini-prompt-table th:not(:first-child) { width: 1%; }
+.mini-session-value { display: grid; grid-template-columns: minmax(0, 1fr) max-content; }
 .mini-session, .mini-empty { display: block; width: 0; min-width: 100%; }
 .mini-session { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mini-session-total { white-space: pre; }
+.mini-session-help { position: fixed; inset: auto .5rem .5rem; max-width: calc(100% - 1rem); max-height: 70%;
+  overflow: auto; white-space: normal; overflow-wrap: anywhere; padding: .4rem; font-size: .8rem;
+  background: var(--surface); color: var(--ink); border: 1px solid var(--line); }
 .mini-empty { white-space: normal; overflow-wrap: anywhere; }
 .mini-prompt-table td { font-variant-numeric: tabular-nums; text-align: right; }
 .mini-prompt-table td:first-child { text-align: left; }

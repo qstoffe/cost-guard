@@ -426,8 +426,8 @@ browser reload and host restart. No prompt content is stored in this namespace.
 First build may show localized Loading; known totals stay visible during refresh with
 an explicit retained marker. Partial/source failures remain distinct. Optional cache
 failure safely computes from source and discloses unavailable persistence in cost help.
-No Session Total Duration returns. Mini Watch, CLI, Sessions UI and daily/account totals
-retain their existing meanings.
+No Session Total Duration returns. CLI, Sessions UI and daily/account totals retain
+their existing meanings. Mini consumes this same session-cost/context projection below.
 
 Watch still omits the normal heading, report/search/scope/refresh controls, run summaries,
 valuation disclosure and model announcements. Exceptional host/source/offline notices
@@ -435,7 +435,12 @@ remain. No Observation details, Copilot Unaccounted usage or global warning list
 
 **[Mini Watch](web-mini-watch.md)** is an explicit, highlighted-while-On floating view with
 compact per-prompt tables and thin primary-subscription bars on supported desktop browsers.
-It reuses this tab's live publication, not another Watch engine.
+The first column preserves ` / <whole-session CCost>` after the independently truncated
+title; prompt CCost/Duration/CTX remain separate. A collapsed-by-default **Earlier Sessions**
+header button shows up to three canonical finished sessions, with whole-session cost and
+current session CTX, above running prompts in one scroll region. Subscription scrolling
+stays independent. It reuses this tab's live publication and persisted session aggregate,
+not another Watch engine, acquisition loop or browser-side valuation.
 
 Four isolated session workers publish coherent canonical rows independently, without
 waiting for the separate session-cost lane; generations reject superseded work. Account-history and detail

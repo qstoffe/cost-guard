@@ -36,8 +36,16 @@ const MiniWatch = (() => {
         [JSON.stringify([card.session_id, card.focal_id]), card]));
       const cards = (view.active_cards || []).map(card => {
         const key = JSON.stringify([card.session_id, card.focal_id]);
-        const value = card.state === 'observed' ? {...card, mini_observed_at_ms: view.now_ms} : oldCards.get(key) || card;
+        const old = oldCards.get(key);
+        const value = card.state === 'observed' ? {...card, mini_observed_at_ms: view.now_ms} :
+          old ? {...old, state: card.state, session_summary: card.session_summary} : card;
         oldCards.set(key, value); return value;
+      });
+      const oldHistory = new Map((previous?.history_cards || []).map(card => [card.session_id, card]));
+      const history = (view.history_cards || []).map(card => {
+        const old = oldHistory.get(card.session_id);
+        return card.state === 'observed' ? {...card, mini_observed_at_ms: view.now_ms} :
+          old ? {...old, state: card.state, session_summary: card.session_summary} : card;
       });
       if (prompts) {
         this.observed('prompts', JSON.stringify([view.now_ms, publication.source_observed_at_ms]), now);
@@ -62,6 +70,7 @@ const MiniWatch = (() => {
       for (const key of this.clocks.keys()) if (key.startsWith('quota:') && !activeKeys.has(key)) this.clocks.delete(key);
       this.view = {...view,
         active_cards: prompts ? cards : [...oldCards.values()],
+        history_cards: view.history_state === 'observed' ? history : history.length ? history : previous?.history_cards || [],
         // A canonical null clears the previous day. Never carry it across rollover.
         daily_usage: !daily || dailyUsable || !previous?.daily_usage ||
           daily.day_start_ms !== previous.daily_usage.day_start_ms ? daily : previous.daily_usage,
@@ -96,26 +105,74 @@ const MiniWatch = (() => {
       this.summary.addEventListener('click', returnToWatch);
       this.summary.append(el('span', 'Cost Guard · Watch', 'mini-brand'));
       this.daily = el('p', 'CCost Today · Loading…', 'mini-daily'); this.daily.tabIndex = 0;
-      const top = el('header', undefined, 'mini-header'); top.append(this.summary, this.daily);
+      this.earlierToggle = el('button', 'Earlier Sessions', 'mini-earlier-toggle'); this.earlierToggle.type = 'button';
+      this.earlierToggle.id = 'mini-earlier-toggle';
+      this.earlierToggle.setAttribute('aria-expanded', 'false');
+      this.earlierToggle.setAttribute('aria-controls', 'mini-earlier-sessions');
+      this.earlierToggle.addEventListener('click', () => {
+        this.earlier.hidden = !this.earlier.hidden;
+        this.earlierToggle.setAttribute('aria-expanded', String(!this.earlier.hidden));
+      });
+      const top = el('header', undefined, 'mini-header'); top.append(this.summary, this.earlierToggle, this.daily);
       this.health = el('p', '', 'mini-health'); this.health.setAttribute('role', 'status');
       this.prompts = el('div', undefined, 'mini-prompts'); this.prompts.tabIndex = 0;
-      this.prompts.setAttribute('role', 'region'); this.prompts.setAttribute('aria-label', 'Active and recently ended prompts');
-      const table = el('table', undefined, 'mini-prompt-table'), head = el('thead'), header = el('tr');
-      table.setAttribute('aria-label', 'Per-prompt CCost, Duration and estimated next incoming context (CTX), not session totals');
-      for (const name of ['Session', '#', 'CCost', 'Duration', 'CTX']) {
-        const cell = el('th', name); cell.scope = 'col';
-        cell.title = {Session: 'Full session title is available on focus', '#': 'Canonical session-local prompt number',
-          CCost: 'This prompt only; reference-price cost, not billed spending', Duration: 'This prompt’s elapsed execution duration',
-          CTX: 'Estimated next incoming context for this prompt; N/A means unavailable'}[name];
-        header.append(cell);
-      }
-      head.append(header); this.body = el('tbody'); table.append(head, this.body); this.prompts.append(table);
-      this.promptRows = new Map(); this.emptyPrompts = el('tr');
-      const empty = el('td'); empty.colSpan = 5;
-      empty.append(el('span', 'No running or recently ended prompts', 'mini-empty')); this.emptyPrompts.append(empty);
+      this.prompts.setAttribute('role', 'region'); this.prompts.setAttribute('aria-label', 'Earlier sessions and active or recently ended prompts');
+      this.earlier = el('section'); this.earlier.id = 'mini-earlier-sessions'; this.earlier.hidden = true;
+      this.earlier.setAttribute('role', 'region'); this.earlier.setAttribute('aria-labelledby', this.earlierToggle.id);
+      this.historyBody = this.table(this.earlier, true); this.historyRows = new Map();
+      this.body = this.table(this.prompts, false); this.prompts.insertBefore(this.earlier, this.prompts.children[0]);
+      this.promptRows = new Map(); this.emptyPrompts = this.emptyRow(5); this.emptyHistory = this.emptyRow(2);
       this.accounts = el('ul', undefined, 'mini-accounts'); this.lines = new Map();
       this.accounts.tabIndex = 0; this.accounts.setAttribute('aria-label', 'Primary subscription usage and same-period observed CCost');
       this.root.append(top, this.health, this.prompts, this.accounts); doc.body.replaceChildren(this.root);
+    }
+    table(parent, historical) {
+      const table = this.el('table', undefined, 'mini-prompt-table'), head = this.el('thead'), header = this.el('tr');
+      table.setAttribute('aria-label', historical ? 'Earlier sessions: whole-session CCost and latest valid session context (CTX)' :
+        'Active prompts: whole-session CCost in Session; per-prompt CCost, Duration and estimated next incoming context (CTX)');
+      for (const name of historical ? ['Session / Total CCost', 'CTX'] : ['Session / Total CCost', '#', 'CCost', 'Duration', 'CTX']) {
+        const cell = this.el('th', name); cell.scope = 'col'; cell.tabIndex = 0;
+        cell.title = {'Session / Total CCost': 'Full session title and entire root/session-tree CCost, including pre-Watch history and child work; not prompt cost or billing',
+          '#': 'Canonical session-local prompt number', CCost: 'This prompt only; reference-price cost, not billed spending',
+          Duration: 'This prompt’s elapsed execution duration', CTX: historical ?
+            'Estimated latest valid session/current-next context, not historical prompt context or a sum; N/A means unavailable' :
+            'Estimated next incoming context for this prompt; N/A means unavailable'}[name];
+        cell.setAttribute('aria-description', cell.title); header.append(cell);
+      }
+      head.append(header); const body = this.el('tbody'); table.append(head, body); parent.append(table); return body;
+    }
+    emptyRow(columns) {
+      const row = this.el('tr'), cell = this.el('td'); cell.colSpan = columns;
+      cell.append(this.el('span', '', 'mini-empty')); row.append(cell); return row;
+    }
+    sessionRow(columns) {
+      const row = this.el('tr');
+      for (let index = 0; index < columns; index++) row.append(this.el('td'));
+      const cell = row.children[0], value = this.el('span', undefined, 'mini-session-value');
+      cell.tabIndex = 0; value.append(this.el('span', '', 'mini-session'), this.el('span', '', 'mini-session-total'));
+      const help = this.el('div', '', 'mini-session-help'); help.setAttribute('popover', 'auto');
+      help.setAttribute('role', 'tooltip');
+      const show = () => { if (help.showPopover && help.isConnected && !help.matches(':popover-open')) help.showPopover(); };
+      const hide = () => help.hidePopover?.();
+      cell.addEventListener('focus', show); cell.addEventListener('blur', hide);
+      cell.addEventListener('pointerenter', show);
+      cell.addEventListener('pointerleave', () => { if (this.doc.activeElement !== cell) hide(); });
+      cell.addEventListener('click', show);
+      cell.append(value, help); return row;
+    }
+    drawSession(cell, card) {
+      const summary = card.session_summary, cost = summary?.cost;
+      const amount = cost ? cost.observed_requests && !cost.priced_requests ? 'N/A' : ReportView.display(cost, 'known_ccost') :
+        summary?.state === 'unavailable' ? 'N/A' : 'Loading…';
+      const title = card.title || card.session_id;
+      ReportView.text(cell.children[0].children[0], title);
+      ReportView.text(cell.children[0].children[1], ' / ' + amount);
+      cell.title = `${title}. Whole-session CCost: ${amount}; all root/session-tree usage, including history, child and provisional work; not prompt cost, Today or billing.` +
+        ` Aggregate: ${summary?.state || 'loading'}; source: ${card.state || 'loading'}.` +
+        (cost && !cost.complete ? ' Partial/unknown pricing or source coverage.' : '') +
+        (summary?.cache_available === false ? ' Persistent cache unavailable.' : '');
+      ReportView.text(cell.children[1], cell.title);
+      cell.setAttribute('aria-label', cell.title); return cell.title;
     }
     update(publication, health, overdue, observations, now) {
       const view = observations.snapshot(now);
@@ -134,6 +191,7 @@ const MiniWatch = (() => {
       this.prompts.setAttribute('aria-description', disclosure);
       this.drawDaily(view, fresh);
       this.drawPrompts(view);
+      this.drawHistory(view);
       this.drawAccounts(view);
     }
     drawDaily(view, fresh) {
@@ -168,9 +226,7 @@ const MiniWatch = (() => {
         seen.add(key);
         let row = this.promptRows.get(key);
         if (!row) {
-          row = this.el('tr'); row.dataset.id = key;
-          for (let index = 0; index < 5; index++) row.append(this.el('td'));
-          row.children[0].tabIndex = 0; row.children[0].append(this.el('span', '', 'mini-session'));
+          row = this.sessionRow(5); row.dataset.id = key;
           this.promptRows.set(key, row);
         }
         const outcome = prompt.in_progress ? 'Running' : prompt.aborted ? 'Aborted' : prompt.has_error ? 'Error' : prompt.completed_successfully ? 'Completed' : 'Ended';
@@ -178,9 +234,9 @@ const MiniWatch = (() => {
         const state = ['partial', 'retrying', 'unavailable'].includes(card.state) ? ' · ' + card.state + ' source evidence' : '';
         row.title = `${outcome}${reason}${state}; per-prompt CCost, Duration and CTX.${prompt.cost_estimated ? ' Estimated cost.' : ''}${prompt.unresolved_cost ? ' Partial pricing.' : ''}`;
         row.title += ` Last prompt observation: ${observedAt(card.mini_observed_at_ms)}.`;
-        row.setAttribute('aria-label', `${card.title} · Prompt ${prompt.prompt_number} · ${row.title}`);
+        const session = this.drawSession(row.children[0], card);
+        row.setAttribute('aria-label', `${session} Prompt ${prompt.prompt_number} · ${row.title}`);
         row.className = prompt.in_progress ? 'mini-running' : prompt.aborted || prompt.has_error ? 'mini-error' : prompt.completed_successfully ? 'mini-success' : '';
-        text(row.children[0].children[0], card.title || card.session_id); row.children[0].title = row.children[0].textContent;
         const context = display(item.live_context, 'watch_next_context_tokens');
         const cells = ['#' + prompt.prompt_number, display(prompt, 'ccost'), display(item, 'watch_duration_ms'), context];
         cells.forEach((value, index) => text(row.children[index + 1], value)); wanted.push(row);
@@ -188,6 +244,31 @@ const MiniWatch = (() => {
       text(this.emptyPrompts.children[0].children[0], view?.cards_state === 'observed' ? 'No running or recently ended prompts' : 'Loading…');
       reconcile(this.body, wanted.length ? wanted : [this.emptyPrompts]);
       for (const key of this.promptRows.keys()) if (!seen.has(key)) this.promptRows.delete(key);
+    }
+    drawHistory(view) {
+      this.earlier.title = `History acquisition: ${view?.history_state || 'loading'}. Retained values are not new live observations.`;
+      this.earlier.setAttribute('aria-description', this.earlier.title);
+      const seen = new Set((view?.active_cards || []).map(card => card.session_id));
+      // Shared history is already eligible, session-distinct and oldest-to-newest.
+      // No clock/ranking/valuation or new acquisition belongs in this view.
+      const cards = (view?.history_cards || []).filter(card => {
+        if (seen.has(card.session_id)) return false;
+        seen.add(card.session_id); return true;
+      }).slice(-3);
+      const wanted = cards.map(card => {
+        let row = this.historyRows.get(card.session_id);
+        if (!row) { row = this.sessionRow(2); row.dataset.id = card.session_id; this.historyRows.set(card.session_id, row); }
+        const session = this.drawSession(row.children[0], card);
+        const context = ReportView.display(card.session_summary?.context, 'watch_next_context_tokens');
+        ReportView.text(row.children[1], context);
+        row.title = `Earlier session. ${session} Latest valid session CTX: ${context}. Last prompt observation: ${observedAt(card.mini_observed_at_ms)}. ${this.earlier.title}`;
+        row.setAttribute('aria-label', row.title); return row;
+      });
+      ReportView.text(this.emptyHistory.children[0].children[0], view?.history_state === 'observed' ? 'No earlier sessions' :
+        view?.history_state === 'unavailable' ? 'Earlier sessions unavailable' : 'Loading earlier sessions…');
+      reconcile(this.historyBody, wanted.length ? wanted : [this.emptyHistory]);
+      const keep = new Set(cards.map(card => card.session_id));
+      for (const key of this.historyRows.keys()) if (!keep.has(key)) this.historyRows.delete(key);
     }
     drawAccounts(view) {
       const text = ReportView.text, display = ReportView.display;

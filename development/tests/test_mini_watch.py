@@ -11,6 +11,8 @@ from unittest.mock import patch
 from zoneinfo import ZoneInfoNotFoundError
 
 from development.tests.fixtures.watch_summary import summary_watch
+from src.analysis.session_cost import SessionCost
+from src.analysis.valuation import ComparisonCost
 from src.application.live_projection import project_live
 from src.analysis.timezones import resolve_timezone
 from src.watch.models import WatchCard, WatchRow
@@ -28,7 +30,32 @@ class MiniWatchTests(unittest.TestCase):
         self.second = replace(self.first, event_id="two", prompt_number=24, at_ms=2000,
             ccost=D("2.75"), duration_ms=1_200_000)
         self.cards = tuple(WatchCard("same-session", "Concurrent", row.event_id,
-            (WatchRow("same-session", "Concurrent", row),), "observed") for row in (self.first, self.second))
+            (WatchRow("same-session", "Concurrent", row),), "observed",
+            session_context=self.frame.active_cards[0].session_context,
+            session_cost=self.frame.active_cards[0].session_cost, session_cost_state="observed")
+            for row in (self.first, self.second))
+
+    def test_session_projection_shares_full_totals_not_prompt_values_and_current_context(self):
+        partial = SessionCost(ComparisonCost(D("4582.125"), 2001, 2000), False, True)
+        active = tuple(replace(card, session_cost=partial, session_cost_state="refreshing") for card in self.cards)
+        earlier = replace(active[0], session_id="earlier", focal_id="",
+            rows=(replace(active[0].rows[0], prompt=replace(self.first,
+                in_progress=False, watch_next_context_tokens=17)),))
+
+        frame = replace(self.frame, active_cards=active, history_cards=(earlier,))
+        credits = project_live(frame).to_json()
+        usd = project_live(frame, ccost_display_unit="usd").to_json()
+
+        summaries = [card["session_summary"] for card in credits["active_cards"] + credits["history_cards"]]
+        self.assertTrue(all(summary == summaries[0] for summary in summaries))
+        self.assertEqual("4582.125", summaries[0]["cost"]["known_ccost"])
+        self.assertEqual("?4583", summaries[0]["cost"]["display"]["known_ccost"])
+        self.assertEqual("?$45.82", usd["history_cards"][0]["session_summary"]["cost"]["display"]["known_ccost"])
+        self.assertEqual("refreshing", summaries[0]["state"])
+        self.assertFalse(summaries[0]["cost"]["complete"])
+        self.assertEqual(120000, summaries[0]["context"]["watch_next_context_tokens"])
+        self.assertEqual(17, credits["history_cards"][0]["rows"][0]["live_context"]["watch_next_context_tokens"])
+        self.assertEqual(["1.25", "2.75"], [card["rows"][0]["prompt"]["ccost"] for card in credits["active_cards"]])
 
     def test_same_session_distinct_prompts_dedup_focals_not_context_or_compaction(self):
         context = WatchRow("same-session", "Concurrent", replace(self.first, event_id="context", ccost=D(999)))

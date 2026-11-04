@@ -20,7 +20,14 @@ Mini; a fresh page starts Off. Browser PiP replacement may also close it.
    Only the left title navigates; the daily summary is non-clickable. Loading and unknown
    pricing remain explicit; focus/hover discloses partial data and observation time. Genuine
   observed zero is zero; the next canonical day/correction replaces the prior value.
-- **Session:** actual session title, truncated to fit; focus/hover for the full title.
+- **Session / Total CCost:** actual session title followed by ` / <whole-session cost>`.
+  Only the title's end ellipsizes; the slash and complete cost remain visible. Focus/hover
+  retains the full title (or canonical session ID). This server-owned total covers the
+  entire available root/session tree: pre-Watch history, compactions, causal children
+  and provisional running usage, not just visible prompts, this Watch run or Today.
+  Concurrent prompts share the same session total. Credits/USD, zero, missing/partial
+  pricing and retained/corrected totals use the same canonical cache as full Watch;
+  loading is never replaced with prompt cost or fabricated zero.
 - **#:** canonical session-local prompt ordinal, not a Mini list index. Concurrent
   prompts within one session remain separate rows, ordered by actual start.
 - **CCost:** accumulated reference-price cost of that one prompt, not session/Today
@@ -41,6 +48,24 @@ they do not append orange “Not current” / “Partial” labels or flash retr
 Focus/hover discloses observation times and retained-data state: retention is **not**
 a new live observation. Valid empty publications still remove rows after the shared
 grace policy. No browser timer invents cost, completion or growing elapsed time.
+
+### Earlier Sessions
+
+The neutral **Earlier Sessions** header button expands a separate two-column table
+**above** the running prompts: **Session / Total CCost | CTX**. It starts collapsed
+every time a fresh Mini window opens; keyboard/click/touch works, and ordinary Live
+updates preserve the choice. The newest **up to three distinct eligible finished
+sessions** come from full Watch's canonical Earlier Prompts selection, displayed
+oldest-to-newest within that subset, including its unknown-finish fallback ordering.
+Running/recently ended sessions never appear in both tables. After the shared terminal
+grace a session may enter history; resuming moves it back out coherently.
+
+Earlier rows show the **whole-session** total and the **latest valid session/current-next
+CTX**, not the last prompt's cost/context, nor a sum of contexts. CTX remains an estimate
+with N/A for missing evidence and accessible help, without an added `~`. No prompt
+number, duration or state badge is added. Empty, loading and unavailable history are
+explicit; retained source/aggregate states are disclosed on focus/hover. Collapsing
+does not revalue or reacquire history.
 
 After **10 continuous minutes** without a usable new observation, one muted, separate
 “Updates unavailable · showing last values” notice appears. Prompt, daily and native
@@ -87,13 +112,16 @@ The previous 450-DIP request measured 729 physical pixels. Chrome page zoom chan
 document dimensions, not that request's screen units. Other scales/platforms can
 produce different outer geometry; a universal 470-physical-pixel cap is not verified.
 Prompt headings are centered; titles remain left-aligned and numeric values right.
-The four metric columns fit their full heading or longest displayed value, without
-wrapping, clipping or ellipses. Session alone takes all remaining width and ellipsizes
-long titles (focus/hover retains the full title). Widths adapt to live values/units;
+The four prompt-metric columns fit their full heading or longest displayed value, without
+wrapping, clipping or ellipses. Session takes all remaining width; its inner layout
+ellipsizes only the title while the full-session cost suffix never shrinks or ellipsizes.
+The complete first-column heading stays readable. Widths adapt to live values/units;
 an empty message does not expand metric columns. If a manually narrowed window cannot
 fit every heading/metric, the prompt region scrolls horizontally instead of clipping.
-Prompt and account regions scroll independently with a sticky prompt header; larger
-lists may scroll immediately at the smaller opening size. Resize with the browser's
+Earlier and running tables share **one vertical session viewport/scrollbar**, with no
+Mini-specific running-row limit. Each table's sticky headers stay within its own table.
+The subscription region still scrolls independently. Expanding history never resizes
+the native PiP window; larger lists may scroll immediately at the smaller opening size. Resize with the browser's
 controls; narrow widths wrap the header instead of overlapping it. Reopening requests
 the compact initial size again; later manual resizing is never forcibly undone.
 The browser
@@ -108,8 +136,10 @@ macOS appearance are also unverified. Chrome's normal application icon and the
 Windows tray are unchanged.
 
 Mini has independent DOM but shares the owning tab's one authenticated live connection
-and the process's bounded account-history lane. Opening/closing it never starts new
-history scans, EventSources or provider polling. Updates apply directly from publications,
+and the process's bounded account-history/session-cost lanes. Opening/closing Mini or
+toggling Earlier Sessions never starts new history scans, EventSources or provider
+polling. Whole-session figures reuse the persisted incremental SQLite-derived projection;
+the browser never sums or values usage. Updates apply directly from publications,
 not a hidden-main-document animation frame; a visible PiP timer only checks freshness.
 No credentials enter Mini URLs/storage/markup and no CSP relaxation is used.
 
