@@ -79,7 +79,24 @@ Domain uses the standard library; analysis consumes canonical domain and provide
 
 ## Entrypoints
 
-`src/analysis/core.py` composes attribution/compaction; `src/analysis/workload_mix.py` owns completed-prompt profiles; `src/analysis/valuation.py` owns reference valuation; `src/cache/database.py` owns transactions.
+`src/analysis/core.py` composes attribution/compaction; `src/analysis/comparisons.py` prices the shared global sample; `src/analysis/models.py` owns the retained `MixEvidence` value; `src/analysis/valuation.py` owns reference valuation; `src/cache/database.py` owns transactions.
+
+### Comparison ownership checked 2026-11-04
+
+Architecture maintenance 30 removes the unreachable model/publisher profile engine and its deep comparison cache orchestration, not historical Token Mix. The existing evidence fields/defaults remain wire-compatible; ordinary comparison rows still explicitly report zero model/publisher/prior counts and the actual global count. No compatibility import shim, cache migration or second sampling owner remains.
+
+```mermaid
+flowchart LR
+    service["ReportService: acquire roots"] --> sample["reports/sampling: completed priceable prompts, max 100"]
+    sample --> usage["token_mix: priceable unique request volumes"]
+    usage --> compare["analysis/comparisons: one global mix / all tiers"]
+    compare --> prices["pricing/catalog: exact reference rates"]
+    compare --> evidence["analysis/models: MixEvidence"]
+    compare --> reports["reports/models: frozen rows"]
+    reports --> export["application/projection: allowlisted evidence / display"]
+```
+
+`ReportService._threshold_multiplier` reuses the same sampling/volume rules and its existing 15-minute observation cache. Historical model/publisher aggregation remains in `reports/token_mix_history.py`. Focused ownership/negative cases: `test_workload_mix.py` and `test_report_sampling.py`; actual execution and sweep coverage are in [the architecture assessment](../../journal/architecture.md).
 
 ## Tests
 

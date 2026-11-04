@@ -9,9 +9,8 @@ from typing import Iterable
 from src.pricing.catalog import PricingCatalog, normalized_average_token_mix, token_mix_tier_price
 from src.pricing.tiers import lower_bound, ordered_tiers
 
-from .models import PromptRecord
+from .models import MixEvidence, PromptRecord
 from .token_mix import PricedUsage
-from .workload_mix import MixEvidence
 from src.pricing.publishers import model_publisher
 from .effort import EffortSelection, interpret_effort
 

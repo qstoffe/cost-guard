@@ -13,6 +13,20 @@ from src.domain import AccountRef, CostDisposition, ModelRef, TokenUsage
 
 
 @dataclass(frozen=True, slots=True)
+class MixEvidence:
+    """Comparison evidence, retaining the exported legacy fields without priors."""
+    model_prompts: int = 0
+    publisher_prompts: int = 0
+    generic_prior_weight: int = 100
+    global_prompts: int = 0
+    history_exhausted: bool = True
+
+    @property
+    def observed_prompts(self):
+        return self.model_prompts + self.publisher_prompts
+
+
+@dataclass(frozen=True, slots=True)
 class TraceEntry:
     session_id: str
     parent_event_id: str | None
