@@ -16,7 +16,7 @@ A previous full-Watch implementation introduced the column name **`ECTX`**, appa
 | **Mini Watch → Running Prompts**: estimated next incoming prompt context | `CTX` | **`Ctx`** |
 | **Mini Watch → Earlier Sessions**: latest valid session/current-next context | `CTX` | **`Ctx`** |
 
-**Capitalization is exact and deliberate:** `Ictx` uses a capital **I** followed by lowercase **ctx**; `Ctx` uses a capital **C** followed by lowercase **tx**. Do **not** render `ICTX`, `ICTX`, `ECTX`, `CTX`, `ICtx` or `Δ ctx` in these headings. The delta heading remains **`Δ Ctx`** (capital C, lowercase tx), with the same space after Δ.
+**Capitalization is exact and deliberate:** `Ictx` uses a capital **I** followed by lowercase **ctx**; `Ctx` uses a capital **C** followed by lowercase **tx**. Do **not** render `ICTX`, `ECTX`, `CTX`, `ICtx` or `Δ ctx` in these headings. The delta heading remains **`Δ Ctx`** (capital C, lowercase tx), with the same space after Δ.
 
 These are three *different meaning/scope* labels despite similar shorthand: full Watch `Ictx` stays the first-request prompt incoming context, `Δ Ctx` stays the per-prompt delta, and Mini `Ctx` stays its existing current/next estimate (with a session-level value for Earlier Sessions). Do not reinterpret Mini `Ctx` as first-request `Ictx` or make both Watch versions display the same measurement simply to standardize naming.
 
