@@ -392,22 +392,42 @@ or more keeps the calendar date. Expired, unknown and not-started windows remain
 explicit. Existing Live publications update countdowns without browser clocks or
 additional provider polls; CLI, Accounts and Mini Watch retain their reset wording.
 
-Context-price guidance appears directly below each session table, before active activity,
-without a separate divider/frame or empty reserved space. It uses the latest valid Watch
-continuation (including hidden compaction), not historical context from another prompt.
-Compaction removes/downgrades it, unknown/replaced contexts never revive old guidance,
-and older concurrent cards do not borrow a newer focal's warning. Approaching keeps
-the existing gold/orange triangle but uses theme body foreground for its text and values;
-exceeded keeps both gold/orange. Approaching uses
-`thresholds.nextIctxPriceThresholdWarningPercent` (75%; zero disables approaching only);
-exact tier boundaries use unrounded counts. Gold/orange exceeded guidance includes the
-canonical relative price factor or supported cached/fresh cost fallback, not a bill
-prediction. Full-Watch Context cells show the plain estimated number (no approximation
-prefix), with a focusable gold/orange triangle only for that continuation's approaching
-or exceeded warning. Its accessible label points to the retained full footer. Other
-rows keep plain numbers; unknown context stays N/A. Focus/selection cannot freeze an
-invalidated cell warning. Prompt outcome colors, Δ Ctx and Mini Watch are unchanged;
-no warning stars, footnotes or extra column are added.
+Both prompt tables end **Token Mix %, ECTX, Δ Ctx** (ten columns in total).
+**ECTX** is the effective incoming context at that prompt's first request, not its
+next context or a sum of calls. It has no approximation prefix; header help explains
+estimated/approximate evidence and N/A for missing first-request evidence. Help opens
+on hover, focus or touch/click; only the prompt preview ellipsizes, with horizontal pan
+for narrow tables.
+
+One compact line directly below each table, before active activity, reads
+**Session Context: 123k · Session CCost: 4582**. Session Context is the canonical
+estimated next incoming context for the latest valid continuation, including hidden
+compaction; its accessible help explains this distinction. Concurrent cards for one
+session share this same session state, not a focal prompt's old context.
+Approaching/exceeded context-price guidance is inline, in parentheses immediately
+after the context number and before Session CCost; there is no separate warning row.
+Approaching uses a gold/orange triangle with ordinary text; exceeded explicitly says
+the price threshold is exceeded and colors the **entire summary line** gold/orange.
+Canonical threshold, relative-price multiplier or supported cached/fresh cost details
+remain visible, not ellipsized. This is guidance for the next context, not an accumulated
+cost limit or bill prediction. Compaction, model/context changes and unknown evidence
+update/remove guidance atomically; focus/selection cannot freeze it. Approaching uses
+`thresholds.nextIctxPriceThresholdWarningPercent` (75%; zero disables approaching only),
+with exact tier boundaries on unrounded counts.
+
+Session CCost covers all canonical root-tree requests, including pre-Watch history,
+compaction, child work and provisional usage, independently of displayed prompts.
+Credits/USD and canonical partial-pricing markers apply; unknown is not zero. A single
+bounded background lane reconciles minimal hashed request identities/fingerprints and
+unrounded values in the disposable `session-ccost-v1` SQLite namespace. Unchanged
+requests are not revalued; corrections/deletions and catalog/algorithm/source changes
+reconcile or invalidate. Complete source checkpoints survive Earlier-slot eviction,
+browser reload and host restart. No prompt content is stored in this namespace.
+First build may show localized Loading; known totals stay visible during refresh with
+an explicit retained marker. Partial/source failures remain distinct. Optional cache
+failure safely computes from source and discloses unavailable persistence in cost help.
+No Session Total Duration returns. Mini Watch, CLI, Sessions UI and daily/account totals
+retain their existing meanings.
 
 Watch still omits the normal heading, report/search/scope/refresh controls, run summaries,
 valuation disclosure and model announcements. Exceptional host/source/offline notices
@@ -417,8 +437,8 @@ remain. No Observation details, Copilot Unaccounted usage or global warning list
 compact per-prompt tables and thin primary-subscription bars on supported desktop browsers.
 It reuses this tab's live publication, not another Watch engine.
 
-Four isolated session workers publish coherent canonical rows independently, without a
-complete-total phase; generations reject superseded work. Account-history and detail
+Four isolated session workers publish coherent canonical rows independently, without
+waiting for the separate session-cost lane; generations reject superseded work. Account-history and detail
 lanes cannot borrow mutable Live service. Accurate rows still require capture/analysis,
 not source-level streaming. Successful admission order keeps captures fair across
 catalog revision changes and rejected stale results; busy roots cannot continually

@@ -173,7 +173,7 @@ async function main() {
   assert.equal(calls, beforeUnits, 'switching is not acquisition');
   assert.ok(!firstCard.body.textContent.includes('Running at snapshot'));
   assert.deepEqual(firstCard.root.querySelectorAll('th').map(node => node.children[0].textContent),
-    ['Started', 'Duration', 'Prompt', 'Model', 'Effort', 'CCost', 'Calls', 'Token Mix %', 'Δ Ctx', 'Context']);
+    ['Started', 'Duration', 'Prompt', 'Model', 'Effort', 'CCost', 'Calls', 'Token Mix %', 'ECTX', 'Δ Ctx']);
   for (const header of firstCard.root.querySelectorAll('th')) {
     const [button, help] = header.children;
     assert.equal(button['aria-describedby'], help.id);

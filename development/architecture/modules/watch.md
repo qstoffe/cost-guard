@@ -76,8 +76,9 @@ scans history or prices browser-side. Native quota refresh remains independent.
 
 `reports/watch_context.py` maps `session_watch_context` and canonical price thresholds
 to one latest-prompt-owned continuation DTO, including hidden compaction rewrites and
-the Watch multiplier/cost range. Cards suppress guidance on superseded focals or source
-failure. This is separate from historical table rows and leaves CLI context semantics
+the Watch multiplier/cost range. Full Watch shares this valid latest session continuation
+across concurrent cards and suppresses it on source failure, independently of row ECTX.
+There is no duplicate row-cell/footer warning DTO; CLI context semantics stay
 unchanged. `application/watch_accounts.py` owns Watch-only stable primary slots and Used
 display; native primary flags/order normalize into account-scoped labels, preserving an
 absent primary on partial/error acquisition without inventing provider-wide windows.
@@ -85,10 +86,29 @@ Model limits never become account primary. Unavailable sign-in-method changes re
 their existing invalidation semantics. Canonical
 account period projection explicitly marks provider-attributed estimated scopes.
 
-Watch tables own themed body/header surfaces; conditional guidance immediately follows
-the table, before activity. Sibling selectors separate cards, and outlined history has
+Watch tables own themed body/header surfaces; first-request ECTX immediately precedes
+Δ Ctx. One Session Context · Session CCost line follows the table before activity,
+with canonical guidance inline after context. Approaching colors only the triangle;
+exceeded colors the whole line. Sibling selectors separate cards, and outlined history has
 natural document height. CCost Today presents the known integer without altering its
 completeness metadata; routine refresh-state changes preserve its DOM and valid values.
+
+`analysis/session_cost.py` owns a reconstructible `session-ccost-v1` namespace on the
+existing generation-2 cache. Source instance/generation/root, analysis/aggregation version
+and reference catalog identity isolate minimal hashed request fingerprints and unrounded
+amounts. Revision changes trigger complete membership/fingerprint reconciliation, not
+blind total reuse; unchanged contributions skip valuation. Authoritative omissions delete
+contributions, partial source brackets never overwrite a complete checkpoint. Canonical
+`trace_entries`, `unique_usage` and `comparison_cost` keep root-tree/report parity, including
+children, compaction and provisional usage. No private prompt content is persisted.
+`watch/session_costs.py` supplies one independent background future; `WatchCards` fairly
+admits visible sessions, shares results per root, retains totals through capture eviction
+and rejects superseded generations. Rows and account/daily work never wait for it.
+Presentation ticks do no cache/source work; optional cache failures recompute from source
+with honest persistence/coverage state. This is not a billing ledger or Sessions UI change.
+Reference-catalog identity is rechecked in the same bounded lane at 60-second admission
+intervals using exact fresh evidence, without rehydrating history. Production composition
+supplies isolated pricing/cache resources without source selection or schema writes.
 
 Watch depends on shared reports/analysis/domain and abstract source contracts; reports/analysis never import Watch. Presentation consumes projections without fetching history or native quotas.
 

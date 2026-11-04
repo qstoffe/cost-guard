@@ -1,7 +1,8 @@
 """Canonical prompt capture for Web cards; no acquisition loop or transport.
 
 One isolated service reads/analyzes a root once, preserving causal and context
-evidence for the focal row. No full-session aggregate projection is acquired.
+evidence for the focal row. Fresh source evidence is handed off for independent
+incremental session-cost work; no aggregate blocks this row publication.
 """
 from dataclasses import dataclass
 
@@ -23,6 +24,7 @@ class WatchCapture:
     observed_ids: frozenset = frozenset()
     context: object = None
     authoritative: bool = False
+    cost_snapshot: object = None
 
     @property
     def history_row(self):
@@ -60,4 +62,4 @@ def capture_rows(service, root, previous=None, focal_ids=()):
     return WatchCapture(root.session_id, root.title or root.session_id, tuple(rows),
         max((record.prompt_time_ms for record in records), default=0), service.now_ms, retained,
         frozenset(event.event_id for event in fresh.events),
-        card_context(projector, root.session_id, service._threshold_multiplier), fresh.complete), item
+        card_context(projector, root.session_id, service._threshold_multiplier), fresh.complete, fresh), item

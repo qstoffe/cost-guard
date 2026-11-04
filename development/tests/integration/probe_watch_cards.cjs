@@ -67,7 +67,7 @@ async function main() {
         details[0].querySelector('summary').focus({preventScroll:true}); const focus=document.activeElement;
         redraw(); const stable=document.activeElement===focus && details[0].open && details[1].open && document.querySelector('.watch-earlier').open;
         const table=c.querySelector('.watch-table-scroll'), row=c.querySelector('tbody tr'), prompt=row.querySelector('.watch-prompt-preview');
-        const warning=c.querySelector('.watch-context-warning'), daily=document.querySelector('.watch-daily'), grid=document.querySelector('.watch-account-grid');
+         const warning=c.querySelector('.watch-session-summary'), daily=document.querySelector('.watch-daily'), grid=document.querySelector('.watch-account-grid');
         const style=node=>getComputedStyle(node), rect=node=>node.getBoundingClientRect();
         const separators=parent=>[...parent.children].map(node=>parseFloat(style(node).borderTopWidth));
         return {width:innerWidth,height:innerHeight,scrollY,activeTop:a.getBoundingClientRect().top, historyHeight:h.clientHeight,
@@ -111,7 +111,7 @@ async function main() {
         assert.equal(layout.border, '1px'); assert.equal(layout.background, 'rgba(0, 0, 0, 0)');
          if (width === 360) assert.equal(layout.horizontalPan, true);
        const headers = await evaluate(`(() => {
-         const names=['Started','Duration','Prompt','Model','Effort','CCost','Calls','Token Mix %','Δ Ctx','Context'];
+          const names=['Started','Duration','Prompt','Model','Effort','CCost','Calls','Token Mix %','ECTX','Δ Ctx'];
           return [...document.querySelectorAll('table')].every(table=>[...table.querySelectorAll('th')]
             .every((th,i)=>th.querySelector('button').textContent===(i===0&&table.closest('.watch-history')?'Finished':names[i]) && th.querySelector('button').title.length>20))
             && [...document.querySelectorAll('tbody tr')].every(row=>row.cells.length===10 && /^\\d\\d:\\d\\d$/.test(row.cells[0].textContent)
@@ -132,8 +132,13 @@ async function main() {
        await command('Input.dispatchKeyEvent', {type:'keyDown',key:'Escape',code:'Escape',windowsVirtualKeyCode:27}, sessionId);
        await command('Input.dispatchKeyEvent', {type:'keyUp',key:'Escape',code:'Escape',windowsVirtualKeyCode:27}, sessionId);
        assert.equal(await evaluate(`document.querySelectorAll(':popover-open').length`), 0);
-       await evaluate(`document.activeElement.click()`);
-       assert.equal(await evaluate(`document.querySelectorAll(':popover-open').length`), 1);
+        await evaluate(`document.activeElement.click()`);
+        assert.equal(await evaluate(`document.querySelectorAll(':popover-open').length`), 1);
+        await evaluate(`document.querySelector('.watch-active th:nth-child(9) button').focus({preventScroll:true})`);
+        const ectxHelp = await evaluate(`(() => {
+          const panel=document.getElementById(document.activeElement.getAttribute('aria-describedby'));
+          return {open:panel.matches(':popover-open'),text:panel.textContent}; })()`);
+        assert.equal(ectxHelp.open, true); assert.match(ectxHelp.text, /first request.*estimated\/approximate.*N\/A.*unavailable/);
        await evaluate(`document.activeElement.blur(); document.querySelector('.watch-earlier').open=false`);
        assert.equal(await evaluate(`parseFloat(getComputedStyle(document.querySelector('.watch-earlier')).borderBottomWidth)`), 0);
        await evaluate(`document.querySelector('.watch-earlier').open=true`);

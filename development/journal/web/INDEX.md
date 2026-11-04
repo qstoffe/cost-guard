@@ -17,6 +17,9 @@ Status: current
 - [Watch summary and context](watch-summary.md): retained coherent daily accounting,
   native primary quotas, table-adjacent guidance, page-flow history, quiet Today,
   browser matrix and scoped live evidence/Decision Delegate verification exception.
+- [Watch session summary and incremental CCost](watch-session-summary.md): ECTX,
+  session-scoped inline guidance, reconstructible SQLite contribution/aggregate
+  checkpoints, independent bounded work and deterministic/browser/real-source evidence.
 - [Watch terminal lifecycle](watch-terminal-lifecycle.md): reproduced retention/race
   defects, failed pre-response continuations, shared fresh-versus-retained authority
   and historical-incident limits/FR000559's scoped delivery exception.

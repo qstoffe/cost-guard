@@ -25,6 +25,7 @@ def main():
     parser.add_argument("--watch-cards", action="store_true", help="Wait for independently published real one-row Watch cards.")
     parser.add_argument("--prompt-token-mix", action="store_true", help="Observe card token mix over twelve seconds; no inference or extra capture.")
     parser.add_argument("--daily", action="store_true", help="Wait for coherent full-day cost, initiating prompts and category prices.")
+    parser.add_argument("--session-cost", action="store_true", help="Compare a stable real session total with independent full history and persisted reuse.")
     parser.add_argument("--report-timings", action="store_true", help="Print sanitized child-process acquisition timings.")
     args = parser.parse_args()
     owners = []
@@ -114,6 +115,10 @@ def main():
                 time.sleep(.25)
             else:
                 raise RuntimeError('probe_watch_cards_timeout')
+        if args.session_cost:
+            from development.tests.integration.session_cost_observations import observe_session_cost
+            observations.stage = 'session_cost'
+            observe_session_cost(get, cookie, owners[0])
         if args.daily:
             observations.stage = 'daily'
             deadline = time.monotonic() + 120

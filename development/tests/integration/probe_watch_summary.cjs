@@ -43,7 +43,8 @@ async function evaluate(expression) {
       await command('Page.navigate', {url:`http://127.0.0.1:18753/case.html?theme=${theme}&scheme=${scheme}`});
       const ready = Date.now() + 10000;
       while (!await evaluate(`document.readyState === 'complete' && location.search === '?theme=${theme}&scheme=${scheme}' && document.documentElement.dataset.theme === '${theme}' && document.querySelectorAll('.watch-subscription').length === 6 && getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() === '${background}'`) && Date.now() < ready) await delay(50);
-      // Put the required monthly/five-hour/weekly-only combination side by side.
+      // Put the monthly/five-hour/weekly-only combination first; responsive
+      // tracks keep their established width cap and wrap when three cannot fit.
       // This rearranges synthetic fixture nodes only, not production account ordering.
       await evaluate(`(() => {const grid=document.querySelector('.watch-account-grid'); grid.insertBefore(grid.lastElementChild,grid.children[2]);})()`);
       const layout = await evaluate(`(() => {
@@ -63,10 +64,14 @@ async function evaluate(expression) {
       for (const card of layout.cards) assert.ok(card.centered && card.left && card.noOverflow && !card.clippedTitle);
       assert.deepEqual(layout.cards.map(c=>c.secondary), [0,1,0,1,0,1]);
       assert.equal(layout.cards[2].title, 'OpenAI Pro Lite');
-      if (width >= 1366) assert.ok(Math.abs(layout.cards[0].top-layout.cards[2].top)<1, 'monthly/five-hour/weekly-only side by side');
+      if (width === 1920) assert.ok(Math.abs(layout.cards[0].top-layout.cards[2].top)<1, 'three subscriptions fit the wide viewport');
+      else if (width === 1366) {
+        assert.ok(Math.abs(layout.cards[0].top-layout.cards[1].top)<1, 'two subscriptions share the medium row');
+        assert.ok(layout.cards[2].top>layout.cards[0].top, 'third subscription wraps instead of shrinking the existing tracks');
+      } else assert.ok(layout.cards[1].top>layout.cards[0].top, 'narrow subscriptions stack without clipping');
        assert.match(layout.cards[0].reset, /Reset.*Remaining: .*\/day.*Remaining: .*\/workday/);
        const warningTransitions = await evaluate(`(() => {
-         const card=state.watch.cards.values().next().value, warning=INPUT.view.active_cards[0].context_warning;
+          const card=state.watch.cards.values().next().value, warning=INPUT.view.active_cards[0].session_summary.context.warning;
          const original=warning.severity, root=document.documentElement, theme=root.dataset.theme;
          const outcomes=[];
          for (const currentTheme of [theme,theme==='classic'?'web':'classic',theme]) {
@@ -74,9 +79,9 @@ async function evaluate(expression) {
            for (const severity of ['approaching','exceeded','none','approaching']) {
              warning.severity=severity; ReportView.renderLive(document.getElementById('result'),INPUT,state);
              const color=node=>getComputedStyle(node).color;
-             outcomes.push({theme:currentTheme,severity,hidden:card.warning.hidden,
+              outcomes.push({theme:currentTheme,severity,hidden:card.warningIcon.hidden,
                foreground:color(document.body),icon:color(card.warningIcon),text:color(card.warningText),
-               cleared:severity!=='none'||card.warning.textContent===''});
+                cleared:severity!=='none'||card.warningText.textContent===''});
            }
          }
          warning.severity=original;root.dataset.theme=theme;

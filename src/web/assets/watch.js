@@ -124,25 +124,10 @@ const WatchView = (() => {
     ['CCost', 'Reference-price comparison cost, not billed money or provider quota usage; follows the selected display unit and coverage.'],
     ['Calls', 'Attributed physical model requests, including child contributions; not tool calls.'],
     ['Token Mix %', '1 = Input (ordinary input tokens); 2 = Cached input (cache-read tokens); 3 = Cache write (tokens written to cache); 4 = Output (including reasoning tokens under canonical rules). Shares cover all attributed calls, not billed cost: every call must report all four categories and the total must be positive. Missing is not zero. Updates on accepted usage observations, not intra-call streaming; N/A or running means no supported percentage.'],
-    ['Δ Ctx', 'Change in observed context since the preceding canonical context anchor; not total context size.'],
-    ['Context', 'Estimated next incoming context (CLI Watch); approximate tokens for the next model call, not a usage total.']
+    ['ECTX', 'Effective incoming context at the start of this prompt (first request). May be estimated/approximate; N/A means first-request evidence is unavailable, not zero. Not the next session context or a sum of calls.'],
+    ['Δ Ctx', 'Change in observed context since the preceding canonical context anchor; not total context size.']
   ];
   let helpSequence = 0;
-  function contextCell(item, node = el('span'), warningId) {
-    const value = item.context_cell, context = display(value, 'watch_next_context_tokens');
-    const warning = value?.warning, visible = context !== 'N/A' && warning?.owner_id === item.prompt.event_id &&
-      ['approaching', 'exceeded'].includes(warning.severity);
-    if (!node.children.length) node.append(el('span', undefined, 'watch-warning-icon'), el('span'));
-    const [icon, number] = node.children;
-    icon.hidden = !visible; icon.tabIndex = visible ? 0 : -1;
-    text(icon, visible ? '⚠ ' : ''); text(number, context);
-    icon.title = visible ? `${warning.severity === 'approaching' ? 'Approaching' : 'Exceeded'} context price threshold. ` +
-      warning.text.replace(/^\[|\]$/g, '') + '. See the full warning below this table.' : '';
-    icon.setAttribute('aria-label', icon.title);
-    icon.setAttribute('role', 'img'); icon.setAttribute('aria-describedby', warningId);
-    node.dataset.severity = visible ? warning.severity : 'none';
-    return node;
-  }
   function columnHeader(name, explanation) {
     const th = el('th'); th.scope = 'col';
     const button = el('button', name, 'watch-column-help'), help = el('div', explanation, 'watch-column-description');
@@ -174,11 +159,14 @@ const WatchView = (() => {
       this.activity = el('div', undefined, 'watch-activity');
       this.tools = disclosure(); this.skills = disclosure(); this.running = el('p'); this.background = el('p');
       this.activity.append(this.tools.node, this.skills.node, this.running, this.background);
-      this.warning = el('div', undefined, 'watch-context-warning');
-      this.warning.id = 'watch-warning-' + ++helpSequence;
+      this.summary = el('div', undefined, 'watch-session-summary');
       this.warningIcon = el('span', '⚠ ', 'watch-warning-icon'); this.warningText = el('span');
-      this.warning.append(this.warningIcon, this.warningText);
-      this.root.append(heading, this.message, scroll, this.warning, this.activity);
+      this.contextLabel = el('span'); this.contextLabel.tabIndex = 0;
+      this.contextLabel.title = 'Session Context is the estimated next incoming context for the latest valid session continuation; N/A means unavailable. Not the prompt ECTX or summed usage.';
+      this.contextLabel.setAttribute('aria-description', this.contextLabel.title);
+      this.costLabel = el('span'); this.costStatus = el('span');
+      this.summary.append(this.warningIcon, this.contextLabel, this.warningText, this.costLabel, this.costStatus);
+      this.root.append(heading, this.message, scroll, this.summary, this.activity);
     }
     update(value, historical) {
       this.value = value;
@@ -212,26 +200,40 @@ const WatchView = (() => {
             if (prompt.has_additional_model) model.title = 'Additional model contribution included in canonical cost and calls';
             const cells = [started, display(item, 'watch_duration_ms'), label, model, item.effort,
               () => display(prompt, 'ccost'), String(prompt.calls), display(prompt, 'token_mix_percent'),
-              display(item.live_context, 'watch_delta_context_tokens'), contextCell(item, undefined, this.warning.id)];
+              display(prompt, 'incoming_context_tokens'), display(item.live_context, 'watch_delta_context_tokens')];
             row.replaceChildren(...cells.map(value => { const cell = el('td'); cell.append(typeof value === 'object' ? value : el('span', value)); return cell; }));
             row.signature = signature;
           }
           return row;
         }));
       }
-      // A focused/selected table may defer row replacement, never warning invalidation.
-      const current = new Map(value.rows.map(item => [item.prompt.event_id, item]));
-      for (const row of this.body.children) {
-        const item = current.get(row.dataset.id);
-        if (item) contextCell(item, row.children[9].children[0], this.warning.id);
-      }
       this.activity.hidden = historical || !value.focal_id;
       if (!historical) this.drawActivity(value.rows.find(row => row.prompt.event_id === value.focal_id)?.tool);
-      const warning = value.context_warning;
-      this.warning.hidden = !warning || warning.severity === 'none';
-      text(this.warningIcon, this.warning.hidden ? '' : '⚠ ');
-      text(this.warningText, () => this.warning.hidden ? '' : `${warning.text.replace(/^\[|\]$/g, '')} ${display(warning, 'warning_cost')}`.trim());
-      this.warning.dataset.severity = warning?.severity || 'none';
+      this.drawSummary(value.session_summary);
+    }
+    drawSummary(value) {
+      const context = value?.context, warning = context?.warning;
+      const visible = context?.watch_next_context_tokens != null && ['approaching', 'exceeded'].includes(warning?.severity);
+      this.summary.dataset.severity = visible ? warning.severity : 'none';
+      text(this.contextLabel, 'Session Context: ' + (context ? display(context, 'watch_next_context_tokens') : 'N/A'));
+      text(this.warningIcon, visible ? '⚠ ' : ''); this.warningIcon.hidden = !visible;
+      const explanation = () => {
+        const label = warning.severity === 'approaching' ? 'Approaching price threshold' : 'Price threshold exceeded';
+        return `${label}: ${warning.text.replace(/^\[|\]$/g, '')} ${display(warning, 'warning_cost')}`.trim();
+      };
+      text(this.warningText, () => visible ? ` (${explanation()})` : '');
+      this.warningIcon.title = visible ? 'Session context price threshold guidance. ' + explanation() : '';
+      this.warningIcon.setAttribute('aria-label', this.warningIcon.title);
+      this.warningIcon.setAttribute('role', 'img'); this.warningIcon.tabIndex = visible ? 0 : -1;
+      text(this.costLabel, () => ' · Session CCost: ' + (value?.cost ?
+        value.cost.observed_requests && !value.cost.priced_requests ? 'N/A' : display(value.cost, 'known_ccost') :
+        value?.state === 'unavailable' ? 'N/A' : 'Loading…'));
+      text(this.costStatus, value?.state === 'refreshing' ? ' (refreshing; retained total)' :
+        value?.state === 'unavailable' ? ' (unavailable; retained observation, not current)' :
+        value?.state === 'partial' ? ' (partial source evidence)' : '');
+      this.costLabel.title = 'All root/session-tree reference-price usage, including historical, child and provisional requests; not billing.' +
+        (value?.cache_available === false ? ' Persistent cache unavailable; computed from source evidence.' : '');
+      this.costLabel.tabIndex = 0; this.costLabel.setAttribute('aria-description', this.costLabel.title);
     }
     drawActivity(tool) {
       const groups = [...(tool?.counts || [])].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
