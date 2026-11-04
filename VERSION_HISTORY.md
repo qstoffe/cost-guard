@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.162 — 2026-11-04
+
+- Full Watch labels first-request incoming context **Ictx**, still immediately before **Δ Ctx**. Mini Watch labels its existing prompt-next/session-current context **Ctx**, including accessible names and help. Only terminology changes; values, estimates, unknown states, layout, CLI and accounting are unchanged.
+
 ## v80.161 — 2026-11-04
 
 - Full Web Watch combines each card's summary as **Session Context / CCost**, followed by one canonical price-tier explanation. Approaching highlights an amber triangle and context figure; exceeded uses a distinct red octagonal stop icon and red context/multiplier only. Session cost, labels and threshold wording remain neutral; canonical context, pricing, caching, Mini and CLI behavior are unchanged.

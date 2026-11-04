@@ -112,7 +112,7 @@ async function main() {
         assert.equal(layout.border, '1px'); assert.equal(layout.background, 'rgba(0, 0, 0, 0)');
          if (width === 360) assert.equal(layout.horizontalPan, true);
        const headers = await evaluate(`(() => {
-          const names=['Started','Duration','Prompt','Model','Effort','CCost (I + E)','Calls','Token Mix %','ECTX','Δ Ctx'];
+          const names=['Started','Duration','Prompt','Model','Effort','CCost (I + E)','Calls','Token Mix %','Ictx','Δ Ctx'];
           return [...document.querySelectorAll('table')].every(table=>[...table.querySelectorAll('th')]
             .every((th,i)=>th.querySelector('button').textContent===(i===0&&table.closest('.watch-history')?'Finished':names[i]) && th.querySelector('button').title.length>20))
             && [...document.querySelectorAll('tbody tr')].every(row=>row.cells.length===10 && /^\\d\\d:\\d\\d$/.test(row.cells[0].textContent)
@@ -136,10 +136,11 @@ async function main() {
         await evaluate(`document.activeElement.click()`);
         assert.equal(await evaluate(`document.querySelectorAll(':popover-open').length`), 1);
         await evaluate(`document.querySelector('.watch-active th:nth-child(9) button').focus({preventScroll:true})`);
-        const ectxHelp = await evaluate(`(() => {
+        const ictxHelp = await evaluate(`(() => {
           const panel=document.getElementById(document.activeElement.getAttribute('aria-describedby'));
           return {open:panel.matches(':popover-open'),text:panel.textContent}; })()`);
-        assert.equal(ectxHelp.open, true); assert.match(ectxHelp.text, /first request.*estimated\/approximate.*N\/A.*unavailable/);
+        assert.equal(ictxHelp.open, true); assert.match(ictxHelp.text, /first request.*estimated\/approximate.*N\/A.*unavailable/);
+        assert.match(await evaluate(`document.querySelector('.watch-session-summary [title]').title`), /Not the prompt Ictx or summed usage/);
        await evaluate(`document.activeElement.blur(); document.querySelector('.watch-earlier').open=false`);
        assert.equal(await evaluate(`parseFloat(getComputedStyle(document.querySelector('.watch-earlier')).borderBottomWidth)`), 0);
        await evaluate(`document.querySelector('.watch-earlier').open=true`);

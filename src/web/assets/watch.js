@@ -136,7 +136,7 @@ const WatchView = (() => {
     ['CCost (I + E)', 'Total prompt reference-price comparison cost first, then (I + E). Not billed spending or provider quota usage; all three follow the selected display unit. I = Incoming Context CCost: initial incoming context on the first attributed model request. E = Extra CCost: other attributed usage, including generated output and later or linked-child requests. When known, I + E = total before display rounding. I means incoming-context cost, not the Input token category in Token Mix %. N/A means unavailable; ? marks partial pricing coverage.'],
     ['Calls', 'Attributed physical model requests, including child contributions; not tool calls.'],
     ['Token Mix %', '1 = Input (ordinary input tokens); 2 = Cached input (cache-read tokens); 3 = Cache write (tokens written to cache); 4 = Output (including reasoning tokens under canonical rules). Shares cover all attributed calls, not billed cost: every call must report all four categories and the total must be positive. Missing is not zero. Updates on accepted usage observations, not intra-call streaming; N/A or running means no supported percentage.'],
-    ['ECTX', 'Effective incoming context at the start of this prompt (first request). May be estimated/approximate; N/A means first-request evidence is unavailable, not zero. Not the next session context or a sum of calls.'],
+    ['Ictx', 'Effective incoming context at the start of this prompt (first request). May be estimated/approximate; N/A means first-request evidence is unavailable, not zero. Not the next session context or a sum of calls.'],
     ['Δ Ctx', 'Change in observed context since the preceding canonical context anchor; not total context size.']
   ];
   let helpSequence = 0;
@@ -186,7 +186,7 @@ const WatchView = (() => {
       this.summary = el('div', undefined, 'watch-session-summary');
       const icon = contextWarningIcon(); this.warningIcon = icon.node; this.warningOutline = icon.outline;
       this.contextLabel = el('span', 'Session Context / CCost: '); this.contextLabel.tabIndex = 0;
-      this.contextLabel.title = 'Session Context is the estimated next incoming context for the latest valid session continuation; N/A means unavailable. Not the prompt ECTX or summed usage. Price guidance concerns the next context model tier, not an accumulated session CCost spending budget.';
+      this.contextLabel.title = 'Session Context is the estimated next incoming context for the latest valid session continuation; N/A means unavailable. Not the prompt Ictx or summed usage. Price guidance concerns the next context model tier, not an accumulated session CCost spending budget.';
       this.contextLabel.setAttribute('aria-description', this.contextLabel.title);
       this.contextValue = el('span', undefined, 'watch-session-context');
       this.costLabel = el('span'); this.costStatus = el('span');

@@ -67,9 +67,10 @@ Browser-imposed limitations and exact evidence are in the [Mini journal](../deve
   cost or billed spending. Missing/partial pricing retains N/A or `?` conventions;
   focus a row for estimated/partial provenance without a distracting cost `~` glyph.
 - **Duration:** that prompt's canonical elapsed execution time, frozen when ended.
-- **CTX:** estimated next incoming context for the prompt, shown as a formatted number
-  without an added `~`. The header tooltip explains the estimate; N/A means unavailable,
-  with the same meaning as Watch's Context column.
+- **Ctx:** estimated next incoming context for the prompt, shown as a formatted number
+  without an added `~`. The header tooltip explains the estimate; N/A means unavailable.
+  This next-context estimate is distinct from full Watch's first-request **Ictx** and
+  its per-prompt **Δ Ctx**.
 
 Running rows use Watch's yellow tone, successful endings green, abort/error red;
 outcome and known stop cause remain accessible without color. Ended rows retain
@@ -85,7 +86,7 @@ grace policy. No browser timer invents cost, completion or growing elapsed time.
 ### Earlier Sessions
 
 The neutral **Earlier Sessions** header button expands a separate two-column table
-**above** the running prompts: **Session | Total CCost** in one column, plus **CTX**.
+**above** the running prompts: **Session | Total CCost** in one column, plus **Ctx**.
 The first column uses the same left-title/right-total alignment. It starts collapsed
 every time a fresh Mini window opens; keyboard/click/touch works, and ordinary Live
 updates preserve the choice. The newest **up to three distinct eligible finished
@@ -95,7 +96,7 @@ Running/recently ended sessions never appear in both tables. After the shared te
 grace a session may enter history; resuming moves it back out coherently.
 
 Earlier rows show the **whole-session** total and the **latest valid session/current-next
-CTX**, not the last prompt's cost/context, nor a sum of contexts. CTX remains an estimate
+Ctx**, not the last prompt's cost/context, nor a sum of contexts. Ctx remains an estimate
 with N/A for missing evidence and accessible help, without an added `~`. No prompt
 number, duration or state badge is added. Empty, loading and unavailable history are
 explicit; retained source/aggregate states are disclosed on focus/hover. Collapsing

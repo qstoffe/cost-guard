@@ -187,7 +187,8 @@ async function main() {
   assert.equal(calls, beforeUnits, 'switching is not acquisition');
   assert.ok(!firstCard.body.textContent.includes('Running at snapshot'));
   assert.deepEqual(firstCard.root.querySelectorAll('th').map(node => node.children[0].textContent),
-    ['Started', 'Duration', 'Prompt', 'Model', 'Effort', 'CCost (I + E)', 'Calls', 'Token Mix %', 'ECTX', 'Δ Ctx']);
+    ['Started', 'Duration', 'Prompt', 'Model', 'Effort', 'CCost (I + E)', 'Calls', 'Token Mix %', 'Ictx', 'Δ Ctx']);
+  assert.match(firstCard.contextLabel.title, /Not the prompt Ictx or summed usage/);
   for (const header of firstCard.root.querySelectorAll('th')) {
     const [button, help] = header.children;
     assert.equal(button['aria-describedby'], help.id);
@@ -197,6 +198,8 @@ async function main() {
   assert.match(firstRow.children[0].textContent, /^\d\d:\d\d$/);
   assert.equal(firstRow.children[2].children[0].children[0].textContent, '#' + input.view.active_cards[0].rows[0].prompt.prompt_number);
   assert.equal(firstRow.children[7].textContent, input.view.active_cards[0].rows[0].prompt.display.token_mix_percent);
+  assert.equal(firstRow.children[8].textContent, input.view.active_cards[0].rows[0].prompt.display.incoming_context_tokens);
+  assert.equal(firstRow.children[9].textContent, input.view.active_cards[0].rows[0].live_context.display.watch_delta_context_tokens);
   assert.equal(watch.earlier.open || false, false);
   // Independent keyed cards, no filter/pager or global cap.
   const multiple = JSON.parse(JSON.stringify(input));

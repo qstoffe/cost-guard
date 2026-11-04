@@ -8,9 +8,13 @@ module.exports = function sessionTables(vm, context, controller, view, input) {
   assert.equal(view.earlierToggle.attributes['aria-controls'], view.earlier.id);
   assert.equal(view.earlier.attributes['aria-labelledby'], view.earlierToggle.id);
   assert.deepEqual(view.body.parentNode.querySelectorAll('th').map(cell => cell.textContent),
-    ['Session | Total CCost', '#', 'CCost', 'Duration', 'CTX']);
+    ['Session | Total CCost', '#', 'CCost', 'Duration', 'Ctx']);
   assert.deepEqual(view.historyBody.parentNode.querySelectorAll('th').map(cell => cell.textContent),
-    ['Session | Total CCost', 'CTX']);
+    ['Session | Total CCost', 'Ctx']);
+  assert.match(view.historyBody.parentNode.attributes['aria-label'], /latest valid session context \(Ctx\)/);
+  const contextHeader = view.historyBody.parentNode.querySelectorAll('th')[1];
+  assert.equal(contextHeader.title, 'Estimated latest valid session/current-next context, not historical prompt context or a sum; N/A means unavailable');
+  assert.equal(contextHeader.attributes['aria-description'], contextHeader.title);
   for (const body of [view.body, view.historyBody]) {
     const header = body.parentNode.querySelectorAll('th')[0];
     assert.deepEqual(header.children[0].children.map(node => node.textContent), ['Session', ' | Total CCost']);
@@ -32,6 +36,8 @@ module.exports = function sessionTables(vm, context, controller, view, input) {
   assert.ok(view.historyBody.children.every(row => row.children.length === 2 && cost(row) === ' | 4583'));
   assert.equal(view.earlier.parentNode, view.prompts, 'both tables use one region');
   const row = view.historyBody.children[0];
+  assert.match(row.title, /Latest valid session Ctx: 902\./);
+  assert.equal(row.attributes['aria-label'], row.title);
   for (let index=0;index<20;index++) {input.view.now_ms++; controller.update(input);}
   assert.equal(view.historyBody.children[0],row,'publication preserves row/focus identity');
   assert.equal(view.earlier.hidden,false,'SSE never resets disclosure');

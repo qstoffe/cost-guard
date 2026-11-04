@@ -128,9 +128,9 @@ const MiniWatch = (() => {
     }
     table(parent, historical) {
       const table = this.el('table', undefined, 'mini-prompt-table'), head = this.el('thead'), header = this.el('tr');
-      table.setAttribute('aria-label', historical ? 'Earlier sessions: whole-session CCost and latest valid session context (CTX)' :
-        'Active prompts: whole-session CCost in Session; per-prompt CCost, Duration and estimated next incoming context (CTX)');
-      for (const name of historical ? ['Session', 'CTX'] : ['Session', '#', 'CCost', 'Duration', 'CTX']) {
+      table.setAttribute('aria-label', historical ? 'Earlier sessions: whole-session CCost and latest valid session context (Ctx)' :
+        'Active prompts: whole-session CCost in Session; per-prompt CCost, Duration and estimated next incoming context (Ctx)');
+      for (const name of historical ? ['Session', 'Ctx'] : ['Session', '#', 'CCost', 'Duration', 'Ctx']) {
         const cell = this.el('th', name); cell.scope = 'col'; cell.tabIndex = 0;
         if (name === 'Session') {
           const value = this.el('span', undefined, 'mini-session-value mini-session-heading');
@@ -139,7 +139,7 @@ const MiniWatch = (() => {
         }
         cell.title = {Session: 'Full session title and entire root/session-tree CCost, including pre-Watch history and child work; not prompt cost or billing',
           '#': 'Canonical session-local prompt number', CCost: 'This prompt only; reference-price cost, not billed spending',
-          Duration: 'This prompt’s elapsed execution duration', CTX: historical ?
+          Duration: 'This prompt’s elapsed execution duration', Ctx: historical ?
             'Estimated latest valid session/current-next context, not historical prompt context or a sum; N/A means unavailable' :
             'Estimated next incoming context for this prompt; N/A means unavailable'}[name];
         cell.setAttribute('aria-description', cell.title); header.append(cell);
@@ -237,7 +237,7 @@ const MiniWatch = (() => {
         const outcome = prompt.in_progress ? 'Running' : prompt.aborted ? 'Aborted' : prompt.has_error ? 'Error' : prompt.completed_successfully ? 'Completed' : 'Ended';
         const reason = !prompt.in_progress && prompt.abort_reason ? ' · ' + prompt.abort_reason.replaceAll('_', ' ') : '';
         const state = ['partial', 'retrying', 'unavailable'].includes(card.state) ? ' · ' + card.state + ' source evidence' : '';
-        row.title = `${outcome}${reason}${state}; per-prompt CCost, Duration and CTX.${prompt.cost_estimated ? ' Estimated cost.' : ''}${prompt.unresolved_cost ? ' Partial pricing.' : ''}`;
+        row.title = `${outcome}${reason}${state}; per-prompt CCost, Duration and Ctx.${prompt.cost_estimated ? ' Estimated cost.' : ''}${prompt.unresolved_cost ? ' Partial pricing.' : ''}`;
         row.title += ` Last prompt observation: ${observedAt(card.mini_observed_at_ms)}.`;
         const session = this.drawSession(row.children[0], card);
         row.setAttribute('aria-label', `${session} Prompt ${prompt.prompt_number} · ${row.title}`);
@@ -266,7 +266,7 @@ const MiniWatch = (() => {
         const session = this.drawSession(row.children[0], card);
         const context = ReportView.display(card.session_summary?.context, 'watch_next_context_tokens');
         ReportView.text(row.children[1], context);
-        row.title = `Earlier session. ${session} Latest valid session CTX: ${context}. Last prompt observation: ${observedAt(card.mini_observed_at_ms)}. ${this.earlier.title}`;
+        row.title = `Earlier session. ${session} Latest valid session Ctx: ${context}. Last prompt observation: ${observedAt(card.mini_observed_at_ms)}. ${this.earlier.title}`;
         row.setAttribute('aria-label', row.title); return row;
       });
       ReportView.text(this.emptyHistory.children[0].children[0], view?.history_state === 'observed' ? 'No earlier sessions' :

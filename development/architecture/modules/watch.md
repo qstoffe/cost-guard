@@ -77,7 +77,7 @@ scans history or prices browser-side. Native quota refresh remains independent.
 `reports/watch_context.py` maps `session_watch_context` and canonical price thresholds
 to one latest-prompt-owned continuation DTO, including hidden compaction rewrites and
 the Watch multiplier/cost range. Full Watch shares this valid latest session continuation
-across concurrent cards and suppresses it on source failure, independently of row ECTX.
+across concurrent cards and suppresses it on source failure, independently of row Ictx.
 There is no duplicate row-cell/footer warning DTO; CLI context semantics stay
 unchanged. `application/watch_accounts.py` owns Watch-only stable primary slots and Used
 display; native primary flags/order normalize into account-scoped labels, preserving an
@@ -86,7 +86,7 @@ Model limits never become account primary. Unavailable sign-in-method changes re
 their existing invalidation semantics. Canonical
 account period projection explicitly marks provider-attributed estimated scopes.
 
-Watch tables own themed body/header surfaces; first-request ECTX immediately precedes
+Watch tables own themed body/header surfaces; first-request Ictx immediately precedes
 Δ Ctx. One Session Context / CCost line follows the table before activity,
 with canonical guidance once after both values. Approaching colors the triangle and
 context figure amber; exceeded uses a red octagon/exclamation, context figure and
