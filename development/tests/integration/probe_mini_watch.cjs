@@ -98,6 +98,52 @@ async function main() {
       if (found.result.value) {pipSession=attached.sessionId; break;}
     }
     assert.ok(pipSession,'owned Document PiP target available for rendered geometry and theme checks');
+    const columns = () => evaluate(`(() => {
+      const w=miniWatch.window,v=miniWatch.view,table=v.prompts.querySelector('table');
+      const cells=[...table.rows].filter(row=>row.cells.length===5).map(row=>[...row.cells]);
+      const intrinsic=cell=>{const range=w.document.createRange();range.selectNodeContents(cell);
+        const s=w.getComputedStyle(cell);return range.getBoundingClientRect().width+
+          parseFloat(s.paddingLeft)+parseFloat(s.paddingRight)+parseFloat(s.borderLeftWidth)+parseFloat(s.borderRightWidth);};
+      return {width:w.innerWidth,pageOverflow:w.document.documentElement.scrollWidth>w.innerWidth,
+        scroll:v.prompts.scrollWidth>v.prompts.clientWidth,region:v.prompts.clientWidth,
+        widths:cells[0].map(cell=>cell.getBoundingClientRect().width),
+        required:[1,2,3,4].map(index=>Math.max(...cells.map(row=>intrinsic(row[index])))),
+        wrap:cells.flatMap(row=>row.slice(1)).map(cell=>w.getComputedStyle(cell).whiteSpace),
+        ellipsis:cells.flatMap(row=>row.slice(1)).some(cell=>w.getComputedStyle(cell).textOverflow==='ellipsis'),
+        title:v.body.querySelector('.mini-session')?.scrollWidth>v.body.querySelector('.mini-session')?.clientWidth};})()`);
+    const checkColumns = async name => {
+      const value=await columns(); layouts.push({case:name,...value});
+      assert.equal(value.pageOverflow,false); assert.equal(value.ellipsis,false);
+      assert.ok(value.wrap.every(mode=>mode==='nowrap'));
+      value.required.forEach((width,index)=>assert.ok(Math.abs(value.widths[index+1]-width)<1.1,JSON.stringify(value)));
+      if (!value.scroll) assert.ok(Math.abs(value.widths.reduce((a,b)=>a+b,0)-value.region)<1.1,JSON.stringify(value));
+      return value;
+    };
+    await fixture('density-6-4-long'); await until(`miniWatch.view.body.rows.length===6`);
+    assert.equal((await checkColumns('intrinsic-long-titles')).title,true);
+    await evaluate(`(() => {const p=structuredClone(liveValue);p.state='running';p.view.now_ms++;
+      p.view.active_cards[0].rows[0].prompt.prompt_number=123456;
+      p.view.active_cards[0].rows[0].prompt.display.ccost='?123 456.78';
+      p.view.active_cards[0].rows[0].prompt.display_units.credits.ccost='?123 456.78';
+      p.view.active_cards[0].rows[0].display.watch_duration_ms='123h 59m';
+      p.view.active_cards[0].rows[0].live_context.display.watch_next_context_tokens='123 456';
+      miniWatch.update(p);})()`);
+    const longColumns=await checkColumns('intrinsic-growing-metrics');
+    assert.equal(longColumns.scroll,false);
+    await fixture('empty'); await until(`miniWatch.view.body.rows.length===1 && miniWatch.view.body.rows[0].cells.length===1`);
+    await checkColumns('intrinsic-empty-colspan');
+    await fixture('running'); await until(`miniWatch.view.body.rows.length===2`);
+    await checkColumns('intrinsic-shrinking-metrics');
+    const savedMetrics=await metrics(), savedDaily=await evaluate('miniWatch.view.daily.textContent');
+    await fixture('unavailable'); await until(`liveValue.view.cards_state==='unavailable'`);
+    assert.deepEqual(await metrics(),savedMetrics); assert.equal(await evaluate('miniWatch.view.daily.textContent'),savedDaily);
+    assert.equal(await evaluate(`miniWatch.view.health.hidden && !/Not current|quota stale|not live/.test(miniWatch.view.root.textContent)`),true);
+    await evaluate(`miniWatch.view.update(miniWatch.publication,{kind:'reconnecting'},true,miniWatch.observations,miniWatch.observations.started+599999)`);
+    assert.equal(await evaluate('miniWatch.view.health.hidden'),true);
+    await evaluate(`miniWatch.view.update(miniWatch.publication,{kind:'reconnecting'},true,miniWatch.observations,Date.now()+600000)`);
+    assert.equal(await evaluate('miniWatch.view.health.textContent'),'Updates unavailable · showing last values');
+    await fixture('running'); await until(`miniWatch.view.health.hidden`);
+    checks.push('Intrinsic metric/header minima grow/shrink with content, empty colspan does not distort, only Session ellipsizes; failed reads retain figures quietly and one ten-minute notice clears on recovery');
     // PiP is not consistently exposed as a CDP target; DOM is accessible through its owning document.
     await evaluate(`location.hash='#/settings'`);
     await until(`document.getElementById('web-theme')?.disabled === false`);
@@ -174,6 +220,15 @@ async function main() {
     await evaluate(`miniWatch.window.resizeTo(280,320)`,true);
     await until(`miniWatch.window.innerWidth <= 300`);
     assert.equal(await evaluate(`miniWatch.window.document.documentElement.scrollWidth <= miniWatch.window.innerWidth`),true);
+    await checkColumns('intrinsic-narrow-native-resize');
+    await evaluate(`(() => {const p=structuredClone(liveValue);p.view.now_ms++;
+      p.view.active_cards[0].rows[0].prompt.prompt_number=123456789;
+      p.view.active_cards[0].rows[0].prompt.display_units.usd.ccost='?$123 456.78';
+      p.view.active_cards[0].rows[0].display.watch_duration_ms='123h 59m';
+      p.view.active_cards[0].rows[0].live_context.display.watch_next_context_tokens='123 456';
+      miniWatch.update(p);})()`);
+    assert.equal((await checkColumns('intrinsic-narrow-large-metrics')).scroll,true);
+    await fixture('running'); await until(`miniWatch.view.body.rows[0].cells[1].textContent==='#24'`);
     checks.push('Keyboard summary focus/activation and user-activated native PiP resize remain usable');
     const backgroundTarget = await command('Target.createTarget',{url:'about:blank'});
     const backgroundSession = await command('Target.attachToTarget',{targetId:backgroundTarget.targetId,flatten:true});
@@ -183,7 +238,8 @@ async function main() {
     await fixture('terminal'); await until(`miniWatch.view.body.querySelector('.mini-success')`);
     assert.deepEqual((await metrics()).map(row=>row.slice(1,4)),[['#24','$0.03','20m'],['#23','$0.01','10m']]);
     await fixture('empty'); await until(`miniWatch.view.body.textContent.includes('No running or recently ended prompts')`);
-    await fixture('recovering'); await until(`miniWatch.view.health.textContent.includes('not live')`);
+    await fixture('recovering'); await until(`liveValue.state==='recovering'`);
+    assert.equal(await evaluate(`miniWatch.view.health.hidden`),true);
     await fixture('running'); await until(`miniWatch.view.health.hidden`);
     checks.push('With main document actually hidden and PiP visible, real SSE preserves final prompt-local completion metrics and updates empty/recovery without rAF');
     await command('Page.bringToFront',{},sessionId);
@@ -209,7 +265,7 @@ async function main() {
     await evaluate(`miniWatch.toggle()`,true);
     await fixture('stop');
     await until(`hostState.kind === 'stopped'`);
-    assert.match(await evaluate(`miniWatch.view.health.textContent`),/Host stopped · not live/);
+    assert.match(await evaluate(`miniWatch.view.health.textContent`),/Host stopped · restart Cost Guard/);
     assert.equal(await pip(),true,'host shutdown marks retained figures not live without pretending window close');
     checks.push('Real terminal shutdown reaches open Mini as not live');
     assert.deepEqual(errors,[]);

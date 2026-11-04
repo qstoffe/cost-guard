@@ -8,23 +8,23 @@ body { padding: .5rem; max-width: none; }
   color: var(--accent); font-size: .8rem; transition: none; }
 .mini-daily { margin: 0 0 0 auto; min-width: 0; max-width: 100%; text-align: right; font-size: .8rem; overflow-wrap: anywhere; color: var(--ink); }
 .mini-health { flex: 0 0 auto; min-height: 0; max-height: 25%; overflow: auto;
-  font-size: .75rem; color: var(--warn); margin: 0; }
+  font-size: .75rem; color: var(--muted); margin: 0; }
 .mini-health[hidden] { display: none; }
 .mini-prompts { min-height: 3.6rem; max-height: 10.8rem; overflow: auto; flex: 0 1 auto; }
-.mini-prompt-table { table-layout: fixed; border-collapse: separate; border-spacing: 0; width: 100%;
+.mini-prompt-table { table-layout: auto; border-collapse: separate; border-spacing: 0; width: 100%;
   margin: 0; font-size: .9rem; line-height: 1.5; background: var(--panel); }
 .mini-prompt-table th, .mini-prompt-table td { padding: .15rem .25rem; border: 0;
-  border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); overflow-wrap: anywhere;
-  min-width: 0; max-width: none; white-space: normal; }
+  border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); overflow-wrap: normal;
+  min-width: 0; max-width: none; white-space: nowrap; }
 .mini-prompt-table th { position: sticky; top: 0; z-index: 1; background: var(--surface); text-align: center; }
 .mini-prompt-table th:first-child, .mini-prompt-table td:first-child { border-left: 1px solid var(--line); }
 .mini-prompt-table th { border-top: 1px solid var(--line); }
-.mini-prompt-table th:first-child { width: 34%; }
-.mini-prompt-table th:nth-child(2) { width: 10%; }
-.mini-prompt-table th:nth-child(3) { width: 18%; }
-.mini-prompt-table th:nth-child(4) { width: 21%; }
-.mini-prompt-table th:nth-child(5) { width: 17%; }
-.mini-prompt-table td:first-child:not([colspan]) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Metrics contribute their full intrinsic minimum, but none of the spare width.
+   Zero intrinsic title/empty content leaves only Session's heading as its minimum. */
+.mini-prompt-table th:not(:first-child) { width: 1%; }
+.mini-session, .mini-empty { display: block; width: 0; min-width: 100%; }
+.mini-session { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mini-empty { white-space: normal; overflow-wrap: anywhere; }
 .mini-prompt-table td { font-variant-numeric: tabular-nums; text-align: right; }
 .mini-prompt-table td:first-child { text-align: left; }
 .mini-running { color: var(--watch-running); }

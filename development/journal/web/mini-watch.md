@@ -1,5 +1,73 @@
 # Mini Watch and finished history
 
+## FR 000569 — v80.149, 2026-11-04
+
+Base: `99e8940206177a2dc46c525a7babb67fc9ec2e71`. Mini-only presentation policy;
+full Watch, accounting, polling, one-SSE ownership and 560×250-DIP opening are unchanged.
+
+- Auto-layout metric columns contribute full intrinsic nowrap minima; their 1% width
+  preference prevents taking spare space. Zero-intrinsic Session/empty spans leave
+  the remaining width to Session, whose heading still sets its minimum. Only session
+  titles ellipsize; insufficient native viewport width scrolls the prompt region.
+- Controller-owned presentation retention survives closing/reopening Mini. Coherent
+  prompt publications, Daily's actual `observed_at_ms` and each native quota's own
+  observation clock independently detect ten continuous minutes without usable data.
+  Repeated snapshots/retries cannot reset them; pricing incompleteness is not itself
+  an operational warning. One muted notice replaces short-lived orange warning spam;
+  definitive host/auth/identity failures remain immediately actionable. Numeric unknowns,
+  restriction/exhaustion and prompt outcome colors remain truthful.
+- Partial prompt reads retain unmatched rows, while individually valid card corrections
+  still apply; an observed empty set removes rows normally. Failed quota reads retain
+  usable native values. Canonical null Daily clears retention on rollover. Additive
+  presentation-only `daily_usage.day_end_ms` uses configured timezone/DST to expire
+  yesterday's Total Today even without a new publication; no usage is extrapolated.
+  Tooltips/accessible descriptions retain observation times and partial/retained state.
+
+### Executed verification
+
+- **PASS:** final local Full, **138 bounded units, 82.9s**, four workers; focused
+  Mini/lifecycle/historical regressions: 15 tests, 7.068s. Initial Full failed two
+  lifecycle units because the new day-end projection called a display formatter that
+  intentionally maps epoch dates to `unknown`. Direct configured-timezone date
+  conversion fixes the cause; new zero/negative-epoch and 23/25-hour DST cases pass.
+  No assertion, product deadline or test requirement was weakened.
+- **PASS:** working-tree validator, 11 checks, zero failures; six existing advisory
+  prose/Python design-budget warnings. No hard caps, dependencies or archives added.
+- **PASS:** real headless Chrome **156.0.8078.80** at emulated scales **1 and 1.5**,
+  and Edge **156.0.4314.58** at **1.5**. Shipped HTTP/CSP/auth/SSE and real Document PiP
+  verify default opening, metric growth/shrink, long titles, N/A/approximation/partial
+  strings, empty colspan, centered headings, semantic data alignment, sticky/independent
+  scrolling, real native-API narrow resizing, Credits/USD, Classic/Web light/dark,
+  keyboard focus, hidden-opener updates, retained/empty/recovery/terminal behavior and
+  one EventSource. Each measured metric width matches the maximum header/cell DOM
+  Range width plus padding/borders within **1.1 CSS px**. Narrow large metrics scroll
+  internally without document overflow. VM clocks cover 599999/600000ms, unrelated
+  healthy lanes not hiding Daily failure, genuine recovery, no fabricated initial
+  values and disconnected configured-day rollover.
+- **PASS:** read-only real installed **V2** acquisition: three coherent publications,
+  one running prompt, three accounts/one primary-period cost, two known-finish cards;
+  **4.442s**, owned close **0.114s**. No model inference/shared OpenCode stop.
+- Retained synthetic evidence: [Chrome raw layout/check results](../../architecture/governance/verification/mini-watch-quiet/mini-chrome-final.json),
+  [Edge results](../../architecture/governance/verification/mini-watch-quiet/mini-edge.json),
+  [Edge dark viewport](../../architecture/governance/verification/mini-watch-quiet/mini-edge-web-dark.png).
+  These screenshots were inspected and are **headless document captures**, not native
+  Windows frame or physical monitor proof.
+
+### Scoped Decision Delegate exception
+
+The **Decision Delegate**, not the owner, approved omitting the actual physical
+Windows-150% portion of acceptance criterion 2 **for FR 000569 only**, valid through
+same-task continuation unless superseded. System DPI was independently read as
+**144 (150%)**, but browser device scale **1.5 was explicitly emulated**, not native
+physical proof. Real headless layout/native-API checks are adequate for these
+presentation changes; additional visible proof is reassurance, not crucial enough
+to justify desktop disruption. The delegate explicitly said **do not run the visible
+native probe**. No earlier FR 000565 permission was reused; no future blanket exception
+or desktop authorization is granted. Physical PiP rendering/native chrome, minimized
+restoration and screen-reader speech remain **unverified**, not PASS. Functional
+content-fit, alignment, scrolling and accessible-description requirements are **not
+waived**, and **no failing-test exception** was granted.
+
 ## FR 000565 — v80.145, 2026-11-03
 
 Base: `6c99e65cc9e4dc0dccd9d2302f50fbd89392a8d9`. Only Mini presentation changes;

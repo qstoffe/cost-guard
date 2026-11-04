@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v80.148, 2026-11-04), the supported distribution.
+Use **current `main`** (v80.149, 2026-11-04), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -361,7 +361,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.148 (2026-11-04):** Windows Web Beta's tray menu adds **Copy Cost Guard link** to authorize another browser on the same running server, without opening a browser. Links expire after two minutes and work once; pending handoffs and existing sessions remain independent. See [usage and clipboard privacy](docs/web-beta.md#open-in-another-browser-windows).
+**v80.149 (2026-11-04):** Mini Watch fits metric columns to their full content and gives Session the remaining width. Brief update gaps quietly retain figures; only sustained failures show one muted notice. See [Mini Watch](docs/web-mini-watch.md) for observation disclosure, local-day rollover and verification limits.
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

@@ -10,6 +10,7 @@ from pathlib import Path
 import shutil
 import sys
 import tempfile
+import time
 from threading import Timer
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -18,6 +19,7 @@ sys.path.insert(0, str(ROOT))
 from development.tests.fixtures.watch_summary import summary_watch
 from development.tests.fixtures.web_reports import finite_report
 from src.application.live_projection import project_live
+from src.analysis.timezones import local_day_start_ms
 from src.watch.models import WatchRow
 from src.watch.running import running_prompts
 from src.web.host import WebHost
@@ -32,6 +34,9 @@ def main():
         host = WebHost(root, jobs=ReportJobs(target=finite_report))
         timer = Timer(180, host.stop)
         frame = summary_watch()
+        now = int(time.time() * 1000)
+        frame = replace(frame, now_ms=now, daily_usage=replace(frame.daily_usage,
+            day_start_ms=local_day_start_ms('UTC', now_ms=now), observed_at_ms=now))
         base = frame.active_cards[0]
         cards = tuple(replace(base, focal_id=str(index), rows=(WatchRow(base.session_id, base.title,
             replace(base.rows[0].prompt, event_id=str(index), prompt_number=22 + index,
@@ -41,6 +46,7 @@ def main():
         frame = replace(frame, active_cards=cards, running=running_prompts(cards, "observed"))
 
         def publish(state="running", value=frame):
+            value = replace(value, now_ms=int(time.time() * 1000))
             host.events.publish("live", {"state": state, "source_observed_at_ms": value.now_ms,
                 "view": project_live(value).to_json()})
 
@@ -65,6 +71,9 @@ def main():
                     publish(value=replace(frame, active_cards=(), running=running_prompts((), "observed")))
                 elif command == "recovering":
                     publish(state="recovering")
+                elif command == "unavailable":
+                    publish(value=replace(frame, active_cards=(), cards_state='unavailable',
+                        running=running_prompts((), 'unavailable'), daily_state='retrying', quota_stale=True))
                 elif command == "running":
                     publish()
                 elif command.startswith('density-'):
@@ -76,9 +85,10 @@ def main():
                         for index in range(int(prompts)))
                     quota = replace(frame.quota, accounts=tuple(replace(item, label=f'Subscription {index + 1}')
                         for index, item in enumerate(frame.quota.accounts[:int(accounts)])))
-                    publish(state='recovering' if flags else 'running', value=replace(frame,
-                        active_cards=current, quota=quota, quota_stale=bool(flags),
-                        daily_state='retrying' if flags else frame.daily_state,
+                    warning = 'warning' in flags
+                    publish(state='recovering' if warning else 'running', value=replace(frame,
+                        active_cards=current, quota=quota, quota_stale=warning,
+                        daily_state='retrying' if warning else frame.daily_state,
                         running=running_prompts(current, 'observed')))
                 else:
                     raise ValueError("unsupported_probe_command")
