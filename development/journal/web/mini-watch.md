@@ -34,9 +34,30 @@ Watch context, layout/CSS, geometry, window control or SSE ownership change.
   no model inference or running Web Beta mutation.
 
 Architecture assessment: no boundary/flow update; current Watch module wording and
-user guides updated. No requirement/test exception was needed. Browser evidence is
-synthetic/headless, not physical OS geometry, native chrome, screen-reader or macOS
-proof; those surfaces were not changed or newly claimed verified.
+user guides updated. Browser evidence is synthetic/headless, not physical OS geometry,
+native chrome, screen-reader or physical macOS proof; those surfaces were not changed.
+
+### Decision Delegate-approved CI exception
+
+The **Decision Delegate** explicitly authorized FR 000571 / PR 154 delivery without
+completed `native (macos-15-intel)` verification while it remains queued without a
+runner and is the sole missing check. On implementation/tested SHA
+`0fbd02a09a8fb794f69e2da3ace0ff0aa4678c6b`, [run 41874147908](https://github.com/qstoffe/cost-guard/actions/runs/41874147908)
+passed common Linux (Full/validator/browser), Windows 2025 and macOS 15 ARM. Intel
+job `126728878795` stayed queued after eight minutes of foreground waiting and a
+fresh read; no failure or outage was established. Fresh default protection/rules
+reads showed no required checks or branch rules; none were changed or bypassed.
+
+Reason: the missing job tests unchanged native launchers/lifecycle/AppKit/compilation,
+not Watch rendering; local Full/browser plus the three passing CI jobs provide
+adequate task-specific proof. **Intel-native behavior remains unverified**, not PASS.
+The delegate specifically authorized correcting this journal/completion report even
+though a reporting-only push retriggers CI, extending only the queued Intel exception
+to that successor; all other checks and normal exact-HEAD merge guards remain.
+No failed check, force/protection bypass, workflow edit, cancellation, duplicate rerun
+or future-FR exception is authorized. If Intel starts, allow bounded foreground
+completion; if it passes no missing-result exception is needed at merge. Any failed
+check requires renewed consultation with changed evidence. No owner question/hold.
 
 ## FR 000570 — v80.150, 2026-11-04
 
