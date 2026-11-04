@@ -155,6 +155,18 @@ const WatchView = (() => {
     button.addEventListener('click', show); // Touch has the same explanation; Escape/light-dismiss are native.
     th.append(button, help); return th;
   }
+  function contextWarningIcon() {
+    const node = el('span', undefined, 'watch-warning-icon');
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('aria-hidden', 'true');
+    svg.setAttribute('focusable', 'false');
+    const outline = document.createElementNS(svg.namespaceURI, 'polygon');
+    const mark = document.createElementNS(svg.namespaceURI, 'path');
+    mark.setAttribute('d', 'M12 8v6 M12 17v.1');
+    svg.append(outline, mark); node.append(svg);
+    node.setAttribute('role', 'img');
+    return {node, outline};
+  }
   class Card {
     constructor(historical) {
       this.root = el('article', undefined, 'watch-card');
@@ -172,12 +184,17 @@ const WatchView = (() => {
       this.tools = disclosure(); this.skills = disclosure(); this.running = el('p'); this.background = el('p');
       this.activity.append(this.tools.node, this.skills.node, this.running, this.background);
       this.summary = el('div', undefined, 'watch-session-summary');
-      this.warningIcon = el('span', '⚠ ', 'watch-warning-icon'); this.warningText = el('span');
-      this.contextLabel = el('span'); this.contextLabel.tabIndex = 0;
-      this.contextLabel.title = 'Session Context is the estimated next incoming context for the latest valid session continuation; N/A means unavailable. Not the prompt ECTX or summed usage.';
+      const icon = contextWarningIcon(); this.warningIcon = icon.node; this.warningOutline = icon.outline;
+      this.contextLabel = el('span', 'Session Context / CCost: '); this.contextLabel.tabIndex = 0;
+      this.contextLabel.title = 'Session Context is the estimated next incoming context for the latest valid session continuation; N/A means unavailable. Not the prompt ECTX or summed usage. Price guidance concerns the next context model tier, not an accumulated session CCost spending budget.';
       this.contextLabel.setAttribute('aria-description', this.contextLabel.title);
+      this.contextValue = el('span', undefined, 'watch-session-context');
       this.costLabel = el('span'); this.costStatus = el('span');
-      this.summary.append(this.warningIcon, this.contextLabel, this.warningText, this.costLabel, this.costStatus);
+      this.warningText = el('span'); this.warningLead = el('span');
+      this.warningImpact = el('span'); this.warningEnd = el('span');
+      this.warningText.append(this.warningLead, this.warningImpact, this.warningEnd);
+      this.summary.append(this.warningIcon, this.contextLabel, this.contextValue, el('span', ' / '),
+        this.costLabel, this.costStatus, this.warningText);
       this.root.append(heading, this.message, scroll, this.summary, this.activity);
     }
     update(value, historical) {
@@ -227,19 +244,24 @@ const WatchView = (() => {
       const context = value?.context, warning = context?.warning;
       const visible = context?.watch_next_context_tokens != null && ['approaching', 'exceeded'].includes(warning?.severity);
       this.summary.dataset.severity = visible ? warning.severity : 'none';
-      text(this.contextLabel, 'Session Context: ' + (context ? display(context, 'watch_next_context_tokens') : 'N/A'));
-      text(this.warningIcon, visible ? '⚠ ' : ''); this.warningIcon.hidden = !visible;
-      const explanation = () => {
-        const label = warning.severity === 'approaching' ? 'Approaching price threshold' : 'Price threshold exceeded';
-        return `${label}: ${warning.text.replace(/^\[|\]$/g, '')} ${display(warning, 'warning_cost')}`.trim();
-      };
-      text(this.warningText, () => visible ? ` (${explanation()})` : '');
-      this.warningIcon.title = visible ? 'Session context price threshold guidance. ' + explanation() : '';
-      this.warningIcon.setAttribute('aria-label', this.warningIcon.title);
-      this.warningIcon.setAttribute('role', 'img'); this.warningIcon.tabIndex = visible ? 0 : -1;
-      text(this.costLabel, () => ' · Session CCost: ' + (value?.cost ?
+      text(this.contextValue, context ? display(context, 'watch_next_context_tokens') : 'N/A');
+      this.warningIcon.hidden = !visible;
+      this.warningOutline.setAttribute('points', warning?.severity === 'exceeded' ?
+        '7,2 17,2 22,7 22,17 17,22 7,22 2,17 2,7' : '12,2 23,22 1,22');
+      this.warningIcon.setAttribute('aria-label', visible ? warning.severity === 'exceeded' ?
+        'Stop: higher context pricing' : 'Caution: nearing higher context pricing' : '');
+      this.warningIcon.tabIndex = visible ? 0 : -1;
+      // Canonical wording already includes severity and the boundary. Remove only
+      // its display delimiters; never derive severity or prices from formatted text.
+      const wording = visible ? warning.text.replace(/^\[|\]$/g, '').trim() : '';
+      const impact = () => visible ? display(warning, 'warning_cost').replace(/^\(|\)$/g, '').trim() : '';
+      text(this.warningLead, () => visible ? ` (${wording}${impact() ? '; ' : ''}` : '');
+      text(this.warningImpact, impact);
+      this.warningImpact.className = warning?.multiplier != null ? 'watch-price-multiplier' : '';
+      text(this.warningEnd, visible ? ')' : '');
+      text(this.costLabel, () => value?.cost ?
         value.cost.observed_requests && !value.cost.priced_requests ? 'N/A' : display(value.cost, 'known_ccost') :
-        value?.state === 'unavailable' ? 'N/A' : 'Loading…'));
+        value?.state === 'unavailable' ? 'N/A' : 'Loading…');
       text(this.costStatus, value?.state === 'refreshing' ? ' (refreshing; retained total)' :
         value?.state === 'unavailable' ? ' (unavailable; retained observation, not current)' :
         value?.state === 'partial' ? ' (partial source evidence)' : '');

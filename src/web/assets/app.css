@@ -181,8 +181,11 @@ p.warning { border-left: 3px solid var(--warn); padding: .65rem .85rem; backgrou
 .watch-daily { display: flex; align-items: baseline; flex-wrap: wrap; gap: .25rem 1rem; font-size: .85rem; box-shadow: none; margin-bottom: 4px; }
 .watch-daily-category { white-space: nowrap; }
 .watch-session-summary { margin-top: .25rem; color: var(--ink); font-size: .9rem; white-space: normal; overflow-wrap: anywhere; }
-.watch-view .watch-warning-icon { color: var(--watch-context-warning, var(--warn)); }
-.watch-session-summary[data-severity="exceeded"] { color: var(--watch-context-warning, var(--warn)); font-weight: 650; }
+.watch-warning-icon { display: inline-block; width: 1em; margin-inline-end: .3em; vertical-align: -.15em; }
+.watch-warning-icon[hidden] { display: none; }
+.watch-warning-icon svg { display: block; width: 100%; height: 1em; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.watch-session-summary[data-severity="approaching"] :is(.watch-warning-icon, .watch-session-context) { color: var(--watch-context-warning, var(--warn)); }
+.watch-session-summary[data-severity="exceeded"] :is(.watch-warning-icon, .watch-session-context, .watch-price-multiplier) { color: var(--error); }
 .superseded { color: var(--muted); }
 .catalog-controls { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 #scope-controls a[aria-current="page"] { background: var(--accent-soft); outline: 1px solid var(--accent); font-weight: 650; }

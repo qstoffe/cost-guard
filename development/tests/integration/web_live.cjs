@@ -103,7 +103,8 @@ async function main() {
   let selected = null;
   let snapshot = {instance_id: 'instance', sequence: 0, values: {live: input}};
   let calls = 0;
-  const document = {createElement: tag => new Node(tag), activeElement: null};
+  const document = {createElement: tag => new Node(tag), activeElement: null,
+    createElementNS: (namespaceURI, tag) => Object.assign(new Node(tag), {namespaceURI})};
   const context = vm.createContext({document, console, setTimeout: () => 1, clearTimeout: () => {},
     window: {getSelection: () => ({isCollapsed: !selected, anchorNode: selected, focusNode: selected}),
       addEventListener() {},matchMedia: () => ({addEventListener() {},removeEventListener() {}})},

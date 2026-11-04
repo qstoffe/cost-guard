@@ -20,7 +20,8 @@ const window = {devicePixelRatio:1.5,visualViewport:{scale:1,addEventListener(ki
     const value={query,addEventListener(kind,fn) {this.callback=fn;},removeEventListener() {this.callback=null;}};
     media.push(value);return value;
   }};
-const context = vm.createContext({document: {createElement: tag => new Node(tag)}, window, console,
+const context = vm.createContext({document: {createElement: tag => new Node(tag),
+  createElementNS: (namespaceURI, tag) => Object.assign(new Node(tag), {namespaceURI})}, window, console,
   input, parent: new Node('div')});
 for (const name of ['render', 'watch']) vm.runInContext(fs.readFileSync(`src/web/assets/${name}.js`, 'utf8'), context);
 vm.runInContext("globalThis.state = {connection:'Live connected.'}; ReportView.renderLive(parent, input, state)", context);
@@ -98,24 +99,45 @@ assert.ok(!/5-hour|Usage unavailable/.test(weeklyCard.textContent));
 assert.equal(weeklyCard.children[4].children.length, 1, 'primary reset only; unavailable cost omitted');
 assert.equal(weeklyCard.children.length, 5, 'weekly-only has no secondary section or divider');
 assert.ok(!/BLOCKED|Unknown|Available|Observation details|Unaccounted usage/.test(watch.accounts.textContent));
-assert.match(card.summary.textContent, /⚠ Session Context: 120k \(Price threshold exceeded:.*2.4x more expensive.* · Session CCost: 4583/);
+assert.equal(card.summary.textContent, 'Session Context / CCost: 120k / 4583 (Price threshold >100.0K exceeded; 2.4x more expensive)');
 assert.equal(card.warningIcon.className, 'watch-warning-icon');
 for (const severity of ['none', 'approaching', 'exceeded', 'none']) {
-  context.input.view.active_cards[0].session_summary.context.warning.severity = severity;
+  const warning = context.input.view.active_cards[0].session_summary.context.warning;
+  warning.severity = severity;
+  warning.text = severity === 'approaching' ? '[Approaching price threshold >100k]' : '[Price threshold >100k exceeded]';
   vm.runInContext('ReportView.renderLive(parent, input, state)', context);
   assert.equal(card.summary.dataset.severity, severity);
   const cell = card.body.children[0].children[8], icon = card.warningIcon;
   assert.equal(icon.hidden, severity === 'none');
-  assert.equal(icon.textContent, severity === 'none' ? '' : '⚠ ');
+  assert.equal(icon.textContent, '', 'SVG supplies shape without an OS-colored emoji');
   assert.ok(!/[~≈]/.test(cell.textContent));
   if (severity !== 'none') {
     assert.equal(icon.tabIndex, 0);
-    assert.match(icon.attributes['aria-label'], /context price threshold/);
-    assert.equal(card.warningIcon.textContent, '⚠ ');
-    assert.match(card.warningText.textContent, /Price threshold/);
+    assert.match(icon.attributes['aria-label'], severity === 'exceeded' ? /^Stop:/ : /^Caution:/);
+    assert.equal(icon.title, undefined, 'no repeated explanation in a tooltip');
+    assert.equal(card.warningOutline.attributes.points.split(' ').length, severity === 'exceeded' ? 8 : 3);
+    assert.equal((card.warningText.textContent.match(/price threshold/gi) || []).length, 1);
+    assert.equal((card.warningText.textContent.match(/\(/g) || []).length, 1);
+    assert.equal(card.warningImpact.className, 'watch-price-multiplier');
   }
 }
-assert.match(earlier.summary.textContent, /^⚠ Session Context:/);
+assert.match(earlier.summary.textContent, /^Session Context \/ CCost: 120k \/ 4583 \(Approaching price threshold/);
+const guidance = context.input.view.active_cards[0].session_summary.context.warning;
+const savedGuidance = structuredClone(guidance);
+guidance.severity = 'exceeded'; guidance.multiplier = null;
+guidance.display.warning_cost = '(Next Ictx CCost 0.3–3)';
+guidance.display_units = {usd: {warning_cost: '(Next Ictx CCost $0.003–$0.03)'}};
+vm.runInContext('ReportView.renderLive(parent, input, state)', context);
+assert.match(card.summary.textContent, /4583 \(Price threshold >100k exceeded; Next Ictx CCost 0.3–3\)$/);
+assert.equal(card.warningImpact.className, '', 'alternate price range stays neutral');
+vm.runInContext('ReportView.setUnit("usd", parent)', context);
+assert.match(card.warningText.textContent, /Next Ictx CCost \$0.003–\$0.03/);
+vm.runInContext('ReportView.setUnit("credits", parent)', context);
+guidance.display.warning_cost = ''; guidance.display_units = {};
+vm.runInContext('ReportView.renderLive(parent, input, state)', context);
+assert.equal(card.warningText.textContent, ' (Price threshold >100k exceeded)', 'no invented impact or dangling separator');
+Object.assign(guidance, savedGuidance);
+vm.runInContext('ReportView.renderLive(parent, input, state)', context);
 assert.ok(!/[~≈]/.test(earlier.body.children[0].children[8].textContent));
 assert.equal(card.root.children.indexOf(card.summary), card.root.children.indexOf(card.activity) - 1);
 assert.equal(card.root.children[card.root.children.indexOf(card.summary) - 1].className, 'watch-table-scroll');
@@ -164,7 +186,7 @@ context.input.view.active_cards[0].session_summary.context = null;
 vm.runInContext('ReportView.renderLive(parent, input, state)', context);
 assert.equal(card.warningIcon.hidden, true);
 assert.equal(card.warningText.textContent, '');
-assert.match(card.summary.textContent, /^Session Context: N\/A · Session CCost:/);
+assert.match(card.summary.textContent, /^Session Context \/ CCost: N\/A \/ /);
 const summaryValue = context.input.view.active_cards[0].session_summary;
 const savedCost = summaryValue.cost;
 summaryValue.state = 'refreshing';
@@ -173,13 +195,13 @@ assert.match(card.summary.textContent, /4583 \(refreshing; retained total\)/);
 assert.ok(!card.summary.textContent.includes('Loading'));
 summaryValue.cost = null; summaryValue.state = 'loading';
 vm.runInContext('ReportView.renderLive(parent, input, state)', context);
-assert.match(card.summary.textContent, /Session CCost: Loading…/);
+assert.match(card.summary.textContent, /Session Context \/ CCost: N\/A \/ Loading…/);
 summaryValue.state = 'unavailable';
 vm.runInContext('ReportView.renderLive(parent, input, state)', context);
-assert.match(card.summary.textContent, /Session CCost: N\/A.*unavailable/);
+assert.match(card.summary.textContent, /Session Context \/ CCost: N\/A \/ N\/A.*unavailable/);
 summaryValue.cost = {...savedCost, priced_requests:0, complete:false}; summaryValue.state = 'partial';
 vm.runInContext('ReportView.renderLive(parent, input, state)', context);
-assert.match(card.summary.textContent, /Session CCost: N\/A.*partial source evidence/);
+assert.match(card.summary.textContent, /Session Context \/ CCost: N\/A \/ N\/A.*partial source evidence/);
 summaryValue.cost = savedCost; summaryValue.state = 'observed';
 vm.runInContext('ReportView.renderLive(parent, input, state)', context);
 for (const complete of [true, false]) {

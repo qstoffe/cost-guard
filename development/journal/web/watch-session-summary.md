@@ -99,3 +99,36 @@ not physical-desktop, native shell or actual assistive-technology acceptance. No
 Mini Watch, CLI, Sessions-page UI or global daily/account accounting redesign is
 claimed. Existing advisory prose/module design-budget warnings remain; no hard cap
 was raised and no release ZIP was built.
+
+## Compact summary and severity presentation — FR 000580
+
+2026-11-04 · v80.161 · base `e0ecfb07d0cd5439026fbc1ee129eab8c4555fed`.
+This supersedes only the earlier summary text/color presentation, not its accounting.
+`watch.js` uses stable spans for the shared Session Context / CCost label, context,
+separator, session cost and one trailing canonical explanation. Canonical wording already
+contains severity/boundary; prefixing it again caused the reported duplication. Removing
+only display delimiters from that text and `warning_cost` avoids duplicate/nested prose
+while retaining shared formatting and currency bindings. Multiplier presence, not parsed
+text, selects the narrow emphasis role. Canonical severity still owns the decision.
+
+The retained SVG changes between triangle and octagon/exclamation, rather than recoloring
+one ambiguous glyph. CSS targets context plus the icon for approaching, and adds only the
+relative multiplier for exceeded. Everything else, including session CCost and alternate
+cost ranges, stays neutral. Icon severity names do not duplicate the adjacent explanation;
+the shared context help explicitly rejects a session-spending-budget interpretation.
+
+Final Full passed all 140 files in 86.9s; working-tree validator passed 11 checks with six
+existing advisory warnings. [Rendered context evidence](../../tests/evidence/watch-context-summary/)
+retains 12 passing Classic/light/dark × 2560/1920/1366/360px cases, measured contrast and
+representative screenshots. The reused browser probe needed coherent synthetic updates
+to its prepared quota-display variant and the painted body background for contrast;
+production quotas/themes were unchanged. SVG-capable DOM stubs preserve the existing
+Live/prompt-cost/Mini regression lanes; the first Full failure and its repair are disclosed
+in the completed FR's report.
+
+The separate real read-only V2 Watch/session-cost probe passed: one owner, two streams,
+stable four-request report parity, zero persisted-reuse valuations/cache writes, no model
+calls and zero remaining owned workers. Its shutdown instrumentation recorded a cancelled
+history read; this is not new complete-daily evidence or a diagnosis of the original cause.
+No requirement/test waiver applies. Actual AT/native-desktop/macOS proof remains unclaimed;
+this change adds no such UI authority and no accounting, source, cache or Mini behavior.

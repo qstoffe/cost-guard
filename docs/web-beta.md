@@ -456,18 +456,22 @@ on hover, focus or touch/click; only the prompt preview ellipsizes, with horizon
 for narrow tables.
 
 One compact line directly below each table, before active activity, reads
-**Session Context: 123k · Session CCost: 4582**. Session Context is the canonical
+**Session Context / CCost: 123k / 4582**. Session Context is the canonical
 estimated next incoming context for the latest valid continuation, including hidden
 compaction; its accessible help explains this distinction. Concurrent cards for one
 session share this same session state, not a focal prompt's old context.
-Approaching/exceeded context-price guidance is inline, in parentheses immediately
-after the context number and before Session CCost; there is no separate warning row.
-Approaching uses a gold/orange triangle with ordinary text; exceeded explicitly says
-the price threshold is exceeded and colors the **entire summary line** gold/orange.
+Approaching/exceeded context-price guidance appears once, in one pair of parentheses
+after both values; there is no separate warning row or repeated threshold label.
+Approaching uses an amber triangle and amber context figure. Exceeded uses a distinct
+red octagonal stop/exclamation icon, red context figure and red relative-price multiplier.
+The shared label, slash, session cost, threshold boundary and remaining warning text
+stay in ordinary theme foreground. An alternate next-input CCost range stays neutral.
+Accessible severity names and visible approaching/exceeded wording do not depend on color.
 Canonical threshold, relative-price multiplier or supported cached/fresh cost details
 remain visible, not ellipsized. This is guidance for the next context, not an accumulated
 cost limit or bill prediction. Compaction, model/context changes and unknown evidence
-update/remove guidance atomically; focus/selection cannot freeze it. Approaching uses
+update/remove guidance atomically; focus/selection cannot freeze it. Both values and
+the explanation wrap naturally at narrow widths. Approaching uses
 `thresholds.nextIctxPriceThresholdWarningPercent` (75%; zero disables approaching only),
 with exact tier boundaries on unrounded counts.
 

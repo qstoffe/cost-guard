@@ -311,14 +311,20 @@ and canonical deadline/local-clock timestamps. Live's existing publication time
 advances these tokens without provider polling or browser timers. The nested generic
 reset token remains unchanged for Accounts, CLI and Mini Watch. Focused formatting,
 DOM and rendered responsive evidence: [Watch polish](../../journal/web/watch-polish.md).
-`live_projection.card_row` additionally exports a full-Watch-only `context_cell`:
-the canonical guidance owner supplies its current tokens and structured warning;
-other rows never inherit its severity. This includes unknown/compacted continuation
-state rather than falling back to obsolete row tokens. Existing `live_context` stays
-unchanged for Mini. `watch.js` renders plain Context numbers and a focusable inline
-gold/orange triangle for approaching/exceeded only, retaining the complete footer.
-In-place cell updates invalidate warnings even while focus/selection defers replacing
-the surrounding row. No JavaScript thresholds, valuation or lifecycle rules are added.
+`live_projection.card` exports the canonical session continuation and entire root-tree
+cost as `session_summary`, shared across concurrent/earlier cards, independently of row
+ECTX. Unknown/compacted continuation never falls back to obsolete row tokens. Existing
+`live_context` stays unchanged for Mini. `watch.js` owns one neutral Session Context / CCost
+line with stable context/cost/warning spans. Canonical warning wording and display-cost
+tokens lose only their outer display delimiters, joining once after both values; raw
+multiplier presence selects the narrow emphasis role, never severity parsed from prose.
+One retained SVG changes from amber triangle to red octagon/exclamation in place.
+Only context and (for exceeded) relative multiplier inherit severity; labels, session
+cost, threshold wording and alternate range remain neutral. Accessible severity names
+do not repeat the adjacent explanation. In-place updates invalidate guidance even while
+focus/selection protects surrounding rows. No thresholds, valuation, acquisition, cache,
+Mini or lifecycle rules change. `fixtures/watch_context_browser.cjs` checks themes,
+contrast, responsive wrapping and transitions using the actual shipped assets.
 
 Watch capture already opts into canonical observed running metrics. Its minimal card
 export now retains `token_mix_percent`; no client attribution, rounding or acquisition

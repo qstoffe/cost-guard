@@ -20,7 +20,9 @@ class Node {
   contains(node) { return node === this || this.children.some(child => child.contains(node)); }
   querySelectorAll(tag) { return this.children.flatMap(child => [...(child.tag === tag ? [child] : []), ...child.querySelectorAll(tag)]); }
 }
-function doc() { return {createElement: tag => new Node(tag), head: new Node('head'), body: new Node('body'), documentElement: new Node('html')}; }
+function doc() { return {createElement: tag => new Node(tag),
+  createElementNS: (namespaceURI, tag) => Object.assign(new Node(tag), {namespaceURI}),
+  head: new Node('head'), body: new Node('body'), documentElement: new Node('html')}; }
 function win() {
   const node = new Node('window'); node.document = doc(); node.closed = false; node.timers = new Set();
   node.setInterval = callback => {node.timers.add(callback); return callback;};
