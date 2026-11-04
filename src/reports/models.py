@@ -92,6 +92,9 @@ class PromptProjection:
     ended_after_tool_calls: bool = False
     # Existing analysis terminal/event evidence; absent while running or unknown.
     completed_at_ms: int | None = None
+    # Independent token evidence for full-Watch diagnostics, not new valuations.
+    incoming_context_ccost_known: bool = False
+    extra_ccost_known: bool = False
 
 
 @dataclass(frozen=True, slots=True)

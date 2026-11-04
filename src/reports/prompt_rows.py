@@ -38,6 +38,12 @@ def mix_known(record: PromptRecord | CompactionRecord) -> bool:
         all(name in entry.tokens.known_fields for name in MIX_FIELDS) for entry in record.entries)
 
 
+def context_cost_known(record: PromptRecord | CompactionRecord) -> bool:
+    """Only the first attributed request establishes incoming-cost token evidence."""
+    return bool(record.entries) and all(
+        name in record.entries[0].tokens.known_fields for name in MIX_FIELDS[:3])
+
+
 def _context_ccost(catalog: PricingCatalog, record: PromptRecord | CompactionRecord) -> Decimal | None:
     if not record.entries:
         return None
@@ -74,8 +80,7 @@ def _prompt_metrics(catalog: PricingCatalog, record: PromptRecord, provisional: 
     supported = provisional and record.breakdown_known
     mix = (mix_percent((record.input_tokens, record.cache_read_tokens, record.cache_write_tokens, record.output_tokens))
            if coverage_known and (not active or supported) else None)
-    context_known = bool(record.entries) and all(
-        name in record.entries[0].tokens.known_fields for name in MIX_FIELDS[:3])
+    context_known = context_cost_known(record)
     ictx = _context_ccost(catalog, record) if not active or supported and context_known else None
     extra = _extra_ccost(catalog, record) if not active or supported and coverage_known else None
     return mix, ictx, extra
@@ -148,6 +153,8 @@ class PromptRowProjector:
             incoming_context_tokens=record.input_context_tokens or None,
             incoming_context_ccost=ictx_ccost,
             extra_ccost=extra_ccost,
+            incoming_context_ccost_known=context_cost_known(record),
+            extra_ccost_known=mix_known(record),
             token_mix_percent=mix,
             in_progress=record.in_progress,
             aborted=record.aborted,
@@ -209,6 +216,8 @@ class PromptRowProjector:
             incoming_context_tokens=record.input_context_tokens or None,
             incoming_context_ccost=_context_ccost(catalog, record),
             extra_ccost=_extra_ccost(catalog, record),
+            incoming_context_ccost_known=context_cost_known(record),
+            extra_ccost_known=mix_known(record),
             token_mix_percent=(mix_percent((record.input_tokens, record.cache_read_tokens,
                 record.cache_write_tokens, record.output_tokens)) if mix_known(record) else None),
             is_compaction=True,

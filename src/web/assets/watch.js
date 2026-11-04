@@ -115,13 +115,18 @@ const WatchView = (() => {
     if (state === 'unavailable') parent.append(el('span', 'Source unavailable · retained daily observation', 'warning'));
     if (state === 'retrying') parent.append(el('span', 'Retrying daily refresh · retained observation, not current', 'detail'));
   }
+  function promptCost(prompt) {
+    const total = display(prompt, 'ccost');
+    if (!total || total === 'N/A') return total;
+    return `${total} (${display(prompt, 'incoming_context_ccost')} + ${display(prompt, 'extra_ccost')})`;
+  }
   const columns = [
     ['Started', 'Local prompt start time (HH:mm), not elapsed duration. Full local date and time are available on the time cell.'],
     ['Duration', 'Elapsed prompt duration; advances only for observed active work and freezes when ended or unavailable.'],
     ['Prompt', 'Canonical session-local prompt number followed by the prompt preview; the full preview is available on focus.'],
     ['Model', 'Canonical focal model; additional model contributions remain included in cost, calls and token mix.'],
     ['Effort', 'Observed model reasoning effort; N/A means unavailable.'],
-    ['CCost', 'Reference-price comparison cost, not billed money or provider quota usage; follows the selected display unit and coverage.'],
+    ['CCost (I + E)', 'Total prompt reference-price comparison cost first, then (I + E). Not billed spending or provider quota usage; all three follow the selected display unit. I = Incoming Context CCost: initial incoming context on the first attributed model request. E = Extra CCost: other attributed usage, including generated output and later or linked-child requests. When known, I + E = total before display rounding. I means incoming-context cost, not the Input token category in Token Mix %. N/A means unavailable; ? marks partial pricing coverage.'],
     ['Calls', 'Attributed physical model requests, including child contributions; not tool calls.'],
     ['Token Mix %', '1 = Input (ordinary input tokens); 2 = Cached input (cache-read tokens); 3 = Cache write (tokens written to cache); 4 = Output (including reasoning tokens under canonical rules). Shares cover all attributed calls, not billed cost: every call must report all four categories and the total must be positive. Missing is not zero. Updates on accepted usage observations, not intra-call streaming; N/A or running means no supported percentage.'],
     ['ECTX', 'Effective incoming context at the start of this prompt (first request). May be estimated/approximate; N/A means first-request evidence is unavailable, not zero. Not the next session context or a sum of calls.'],
@@ -199,7 +204,7 @@ const WatchView = (() => {
             const model = el('span', item.model);
             if (prompt.has_additional_model) model.title = 'Additional model contribution included in canonical cost and calls';
             const cells = [started, display(item, 'watch_duration_ms'), label, model, item.effort,
-              () => display(prompt, 'ccost'), String(prompt.calls), display(prompt, 'token_mix_percent'),
+              () => promptCost(prompt), String(prompt.calls), display(prompt, 'token_mix_percent'),
               display(prompt, 'incoming_context_tokens'), display(item.live_context, 'watch_delta_context_tokens')];
             row.replaceChildren(...cells.map(value => { const cell = el('td'); cell.append(typeof value === 'object' ? value : el('span', value)); return cell; }));
             row.signature = signature;

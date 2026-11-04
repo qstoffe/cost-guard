@@ -33,6 +33,7 @@ QUICK_PATTERNS: tuple[str, ...] = (
     "test_web_repeatability.py",
     "test_watch_cards.py",
     "test_watch_token_mix.py",
+    "test_watch_prompt_cost.py",
     "test_mini_watch.py",
     "test_watch_card_lifecycle.py",
     "test_watch_daily.py",

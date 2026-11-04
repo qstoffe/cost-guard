@@ -5,6 +5,7 @@ branches; this is not OS-theme, native fullscreen, physical-input or AT proof.
 No real account/source data, browser state or user configuration is acquired.
 """
 from dataclasses import replace
+from decimal import Decimal
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
@@ -39,6 +40,7 @@ def fixture():
             running_tool="shell-with-a-long-but-readable-name", running_ms=12000,
             background_kinds=("subagent",), background_ms=55000)
         focal = replace(focal, prompt=replace(focal.prompt, in_progress=True,
+            ccost=Decimal(1250), incoming_context_ccost=Decimal(900), extra_ccost=Decimal(350),
             watch_model="GPT model with a long readable name", watch_effort="XHigh",
             preview="Check completed behavior\nhttps://example.test/" + "unbroken" * 200), marker="▶", tool=tool)
         active = replace(active, title="Long running session · UTF-8 Å日本語 · live prompt cards",

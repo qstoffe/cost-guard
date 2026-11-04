@@ -1,5 +1,60 @@
 # Watch prompt tables and observed token mix — FR 000558
 
+## Full-Watch prompt cost split — FR 000575, 2026-11-04
+
+v80.155 exports the existing canonical prompt `ccost`, `incoming_context_ccost`
+and `extra_ccost` through both card types. `watch.js` concatenates Python-prepared
+tokens as **CCost (I + E)**, total first, without pricing, subtraction, conversion,
+polling or source scans in the browser. Existing intrinsic metric columns/14rem
+Prompt minimum already accommodate the extra width; no CSS change is needed.
+Header help retains pointer/focus/click descriptions and distinguishes incoming
+cost from Token Mix's Input category. Mini, CLI and session/daily/account totals
+are unchanged; unavailable totals and sparse compaction cells retain their states.
+
+### Scoped availability decision
+
+Foreground **Decision Delegate**, session `ses_e57fd1c42ffecYineOX8mGu29t`, decided
+an additive availability correction rather than waiving missing-token truthfulness.
+Reproduction: completed `TokenUsage(input=100, known_fields=('input',))` yields
+canonical I=`0.0100`, E=`0`, total=`0.0100` because existing completed diagnostic
+and valuation paths normalize missing counters. Changing those raw values or CLI
+behavior is outside this FR. Report-owned `incoming_context_ccost_known` requires
+first-request input/cache-read/cache-write evidence; `extra_ccost_known` requires
+every attributed request's I/C/W/O evidence, independently of a positive Token Mix.
+Only Watch cards export flags to the shared display adapter. Unsupported component
+tokens become `N/A`; raw diagnostics, pricing/provisional nulls and totals stay intact.
+
+The delegate explicitly authorized this FR-only **full-Watch-versus-CLI display
+difference for incomplete component evidence**, not a canonical valuation change,
+test waiver or future authority. Canonical accounting/CLI missing-counter semantics
+remain outside delivery. No owner approval is inferred or attributed to the delegate.
+
+Focused tests cover raw CLI parity for a three-call/cache-heavy/model-switch/linked
+child prompt, input-only completed/active requests, known I with unsupported E,
+later/child missing counters, coverage corrections, known zero, unpriced amounts,
+independent null slots, partial totals, sparse compaction and Credits/USD in both
+tables. Existing actual LiveConnection/DOM sequences additionally assert all three
+cost tokens after accepted updates and stale-event rejection, with reconnect/gap
+resync retaining the accepted observation. Mini regressions retain total-only costs.
+
+Final-code hidden Edge 156.0.4314.58 passed twelve theme/viewport cases plus
+100/150/200% text scaling, complete cost cells, prompt numbering, horizontal
+panning, unit switching and focus/click help. Fresh real V2 capture matched all
+three raw values to a four-call CLI session row; one Live owner and two advancing
+verified SSE streams survived, and tracked workers closed without failures.
+[Sanitized observations and limits](../../tests/evidence/watch-prompt-cost/verification.json).
+The real probe started no inference and left shared OpenCode untouched; natural
+real-source correction timing, physical touch, screen readers and macOS remain
+unverified, not claimed as PASS. Daily cancellation was not a Daily campaign.
+
+Final-code Full passed **140 file targets, zero failures**, four isolated workers,
+84.3s. Package validation passed 11 checks with six advisory size warnings. No
+test waiver was used. The initial coverage-parity test draft reused a fixed source
+revision, causing stale report reuse; distinct fixture revisions corrected the setup,
+not the product. All final cases run after the evidence-flag change.
+
+## Original FR 000558 implementation
+
 2026-11-03, v80.138. `watch_capture.py` already enables canonical observed running
 metrics. Exporting the existing `token_mix_percent` fixes the missing card data
 route without adding source scans, provider polling, valuation or browser math.

@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v80.154, 2026-11-04), the supported distribution.
+Use **current `main`** (v80.155, 2026-11-04), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -361,7 +361,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.154 (2026-11-04):** Mini Watch preserves a full-session CCost suffix beside each truncated session title. A collapsed-by-default **Earlier Sessions** table shows up to three canonical finished sessions above the running prompts, sharing one scrollbar without new acquisition. Prompt-local CCost/Duration/CTX remain distinct. See [Mini Watch](docs/web-mini-watch.md).
+**v80.155 (2026-11-04):** Full Web Watch shows **CCost (I + E)**: prompt total followed by its canonical Incoming Context CCost + Extra CCost. Both Running and Earlier prompt tables share unit-aware amounts and accessible explanations; partial/unknown values remain distinct. Mini Watch stays total-only. See [Web Watch](docs/web-beta.md#global-watch-and-reconnect).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

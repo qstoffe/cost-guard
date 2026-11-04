@@ -25,6 +25,11 @@ def amount_tokens(values):
                 "watch_next_context_cached_ccost", "watch_next_context_fresh_ccost"):
         if key not in values:
             continue
+        # Only full-Watch cards export these report-owned availability flags.
+        # Preserve canonical values and legacy CLI/other-report presentation.
+        if key in ("incoming_context_ccost", "extra_ccost") and values.get(key + "_known") is False:
+            tokens[key] = "N/A"
+            continue
         unresolved = False
         if key == "ccost":
             unresolved = values.get("unresolved_cost", not values.get("complete", True))

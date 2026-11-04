@@ -70,13 +70,22 @@ async function tokenMix(context, frames) {
   await turns(); stream.onopen(); await turns();
   const card = [...context.state.watch.cards.values()].at(-1), row = card.body.children[0];
   const mix = () => row.children[7].textContent;
+  const cost = () => row.children[5].textContent;
+  const costText = prompt => {
+    const d = prompt.display;
+    return !d.ccost || d.ccost === 'N/A' ? d.ccost : `${d.ccost} (${d.incoming_context_ccost} + ${d.extra_ccost})`;
+  };
   assert.equal(mix(), '100/0/0/0');
+  assert.equal(cost(), costText(frames[0].view.active_cards.at(-1).rows[0].prompt));
   for (let index=1; index<frames.length; index++) {
     snapshot = {instance_id:'mix', sequence:index, values:{live:frames[index]}};
     stream.emit(index, frames[index]);
     assert.equal(mix(), ['100/0/0/0','25/75/0/0','20/60/0/20','running','25/75/0/0','N/A'][index]);
     assert.equal(card.body.children[0], row, 'same keyed row updates without reload');
+    const acceptedCost = costText(frames[index].view.active_cards.at(-1).rows[0].prompt);
+    assert.equal(cost(), acceptedCost);
     stream.emit(index-1, frames[0]);
+    assert.equal(cost(), acceptedCost, 'stale event cannot roll back cost components');
     assert.notEqual(mix(), '100/0/0/0', 'stale event cannot roll back usage');
   }
   stream.onerror();
@@ -158,12 +167,16 @@ async function main() {
   const promptRows = () => firstCard.body.children;
   const firstRow = promptRows()[0];
   const firstCell = firstRow.children[0];
-  const canonical = input.view.active_cards[0].rows.map(r => r.prompt.display.ccost);
+  const costText = (prompt, unit) => {
+    const d = {...prompt.display, ...prompt.display_units?.[unit]};
+    return !d.ccost || d.ccost === 'N/A' ? d.ccost : `${d.ccost} (${d.incoming_context_ccost} + ${d.extra_ccost})`;
+  };
+  const canonical = input.view.active_cards[0].rows.map(r => costText(r.prompt, 'credits'));
   assert.deepEqual(promptRows().map(r => r.children[5].textContent), canonical);
   const credits = context.parent.textContent, beforeUnits = calls;
   vm.runInContext('ReportView.setUnit("usd", parent)', context);
   assert.deepEqual(promptRows().map(r => r.children[5].textContent), input.view.active_cards[0].rows.map(r =>
-    r.prompt.display_units?.usd?.ccost ?? r.prompt.display.ccost));
+    costText(r.prompt, 'usd')));
   assert.equal(promptRows()[0], firstRow);
   assert.equal(firstRow.children[0], firstCell);
   vm.runInContext('ReportView.renderLive(parent, example, state)', context);
@@ -173,7 +186,7 @@ async function main() {
   assert.equal(calls, beforeUnits, 'switching is not acquisition');
   assert.ok(!firstCard.body.textContent.includes('Running at snapshot'));
   assert.deepEqual(firstCard.root.querySelectorAll('th').map(node => node.children[0].textContent),
-    ['Started', 'Duration', 'Prompt', 'Model', 'Effort', 'CCost', 'Calls', 'Token Mix %', 'ECTX', 'Δ Ctx']);
+    ['Started', 'Duration', 'Prompt', 'Model', 'Effort', 'CCost (I + E)', 'Calls', 'Token Mix %', 'ECTX', 'Δ Ctx']);
   for (const header of firstCard.root.querySelectorAll('th')) {
     const [button, help] = header.children;
     assert.equal(button['aria-describedby'], help.id);

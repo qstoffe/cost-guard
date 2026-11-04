@@ -6,6 +6,7 @@ const path = require('node:path');
 const {spawn} = require('node:child_process');
 const {once} = require('node:events');
 const checkContext = require('../fixtures/watch_context_browser.cjs');
+const checkPromptCost = require('../fixtures/watch_cost_browser.cjs');
 const args = process.argv.slice(2);
 const argument = key => args[args.indexOf(key) + 1];
 const browser = argument('--browser'), output = argument('--output');
@@ -111,7 +112,7 @@ async function main() {
         assert.equal(layout.border, '1px'); assert.equal(layout.background, 'rgba(0, 0, 0, 0)');
          if (width === 360) assert.equal(layout.horizontalPan, true);
        const headers = await evaluate(`(() => {
-          const names=['Started','Duration','Prompt','Model','Effort','CCost','Calls','Token Mix %','ECTX','Δ Ctx'];
+          const names=['Started','Duration','Prompt','Model','Effort','CCost (I + E)','Calls','Token Mix %','ECTX','Δ Ctx'];
           return [...document.querySelectorAll('table')].every(table=>[...table.querySelectorAll('th')]
             .every((th,i)=>th.querySelector('button').textContent===(i===0&&table.closest('.watch-history')?'Finished':names[i]) && th.querySelector('button').title.length>20))
             && [...document.querySelectorAll('tbody tr')].every(row=>row.cells.length===10 && /^\\d\\d:\\d\\d$/.test(row.cells[0].textContent)
@@ -268,7 +269,8 @@ async function main() {
        assert.equal(polish.outcomes.at(-2).warning,true);
        assert.equal(polish.outcomes.at(-1).restriction,true);
         assert.equal(polish.unlimited,true);
-       const context = await checkContext(evaluate);
+        const promptCost = await checkPromptCost(evaluate);
+        const context = await checkContext(evaluate);
       const screenshot = await command('Page.captureScreenshot', {format: 'png', captureBeyondViewport: false}, sessionId);
         await fs.writeFile(path.join(output, `watch-${theme}-${width}.png`), Buffer.from(screenshot.data, 'base64'));
        await evaluate('document.querySelector(".watch-account-grid").scrollIntoView()');
@@ -314,7 +316,7 @@ async function main() {
         return {count,scroll,success,error}; })()`);
       assert.equal(scale.count, 100); assert.equal(scale.scroll, false);
       assert.notEqual(scale.success, layout.runningColor); assert.notEqual(scale.error, layout.runningColor);
-          cases.push({theme, ...layout, quotas, polish, context, transitions, scale, screenshot: `watch-${theme}-${width}.png`, outcome: 'PASS'});
+          cases.push({theme, ...layout, quotas, polish, context, promptCost, transitions, scale, screenshot: `watch-${theme}-${width}.png`, outcome: 'PASS'});
       await command('Target.closeTarget', {targetId});
     }
     await fs.writeFile(path.join(output, 'browser.json'), JSON.stringify({outcome: 'PASS', browser: version.product, userAgent: version.userAgent, cases,
