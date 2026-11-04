@@ -65,7 +65,9 @@ assert.equal(card.body.children[0], saved, 'unchanged refresh retains row and va
 context.input.view.active_cards[0].rows[0].prompt.in_progress = false;
 vm.runInContext('ReportView.renderLive(parent, input, state)', context);
 assert.equal(card.title.className, '', 'terminal title stops looking running');
-assert.match(watch.daily.textContent, /Total Today34.*37 prompts.*Token Mix %.*Input: 50% \(15\).*Cached input: 30% \(3\)/);
+assert.equal(watch.daily.attributes['aria-label'], 'CCost Today');
+assert.deepEqual(watch.daily.children.map(node => node.textContent), ['CCost Today', '34', '37 prompts', 'Token Mix %',
+  'Input: 50% (15)', 'Cached input: 30% (3)', 'Cache write: 10% (4)', 'Output: 10% (12)']);
 assert.equal(watch.root.children.at(-2), watch.daily);
 assert.match(watch.accounts.textContent, /5-hour · 25% used/);
 assert.match(watch.accounts.textContent, /Weekly · 100% used/);
@@ -155,6 +157,7 @@ for (const complete of [true, false]) {
   assert.equal(context.input.view.daily_usage.prompt_count_complete, complete);
 }
 const retainedDaily = watch.daily.children[1], retainedText = watch.daily.textContent;
+const dailyCategories = watch.daily.children.slice(3).map(node => node.textContent);
 for (const state of ['refreshing', 'observed', 'refreshing']) {
   context.input.view.daily_state = state;
   vm.runInContext('ReportView.renderLive(parent, input, state)', context);
@@ -169,6 +172,15 @@ context.input.view.daily_state = 'unavailable';
 vm.runInContext('ReportView.renderLive(parent, input, state)', context);
 assert.match(watch.daily.textContent, /Source unavailable · retained daily observation/);
 assert.match(watch.daily.textContent, /182 prompts/);
+assert.equal(watch.daily.children[0].textContent, 'CCost Today');
+assert.deepEqual(watch.daily.children.slice(3, 8).map(node => node.textContent), dailyCategories);
+context.input.view.daily_usage.total.complete = false;
+vm.runInContext('ReportView.renderLive(parent, input, state)', context);
+assert.equal(watch.daily.children[0].textContent, 'CCost Today');
+assert.equal(watch.daily.children[1].textContent, '34');
+assert.deepEqual(watch.daily.children.slice(3, 8).map(node => node.textContent), dailyCategories);
+assert.match(watch.daily.textContent, /Partial pricing \/ telemetry/);
+context.input.view.daily_usage.total.complete = true;
 context.input.view.daily_state = 'retrying';
 context.input.view.active_cards[0].state = 'retrying';
 context.input.state = 'retrying';
@@ -184,7 +196,12 @@ context.input.view.daily_usage = null;
 context.input.view.daily_state = 'loading';
 vm.runInContext('ReportView.renderLive(parent, input, state)', context);
 assert.match(watch.daily.textContent, /Loading daily activity/);
+assert.equal(watch.daily.children[0].textContent, 'CCost Today');
+assert.equal(watch.daily.attributes['aria-label'], 'CCost Today');
 assert.ok(!/0 prompts/.test(watch.daily.textContent));
+context.input.view.daily_state = 'unavailable';
+vm.runInContext('ReportView.renderLive(parent, input, state)', context);
+assert.deepEqual(watch.daily.children.map(node => node.textContent), ['CCost Today', 'Daily activity unavailable']);
 const baseHistory = context.input.view.history_cards[0];
 const historyCard = id => ({...baseHistory, session_id: id});
 context.input.view.history_cards = ['oldest', 'middle', 'newest'].map(historyCard);

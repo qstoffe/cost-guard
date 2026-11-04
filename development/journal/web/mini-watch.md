@@ -1,5 +1,43 @@
 # Mini Watch and finished history
 
+## FR 000571 — v80.151, 2026-11-04
+
+Base: `711e45b21ef6c9d5ff84f02653205f2a0efdea56`. Mini passes its already-formatted
+CTX display token directly to the cell, without adding `~` or stripping source
+characters. The estimate tooltip/table accessible description and N/A remain intact.
+Mini's initial/loading/observed daily heading and full Watch's visible/accessible
+daily heading are now **CCost Today**. No acquisition, accounting, Token Mix, full
+Watch context, layout/CSS, geometry, window control or SSE ownership change.
+
+- **PASS:** new VM assertions first failed against the old CTX prefix and daily
+  accessible name, then passed after the presentation-only fix. Mini covers grouped
+  values, numeric changes, zero, N/A, missing context and source-owned characters;
+  existing currency, retention, rollover, outcomes and focus/identity checks remain.
+  Full Watch pins all four Token Mix categories/order plus partial/retained/unavailable
+  and loading daily headings, numeric values and accessible name.
+- **PASS:** local Full, **138 bounded units, zero failures, 90.5s**, four workers.
+  Working-tree validation: **11 passes, zero failures**, six existing advisory
+  prose/Python design-budget warnings; caps, assertions and dependencies unchanged.
+- **PASS:** [headless Chrome 156.0.8078.80](../../architecture/governance/verification/mini-watch-labels/chrome.json)
+  and [Edge 156.0.4314.58](../../architecture/governance/verification/mini-watch-labels/edge.json),
+  emulated scale **1.5**, shipped HTTP/CSP/SSE and real Document PiP. Both check CTX
+  text/updates/unknowns, tooltip/table meaning, daily loading text and full-Watch
+  visible/accessible name, intrinsic/narrow scrolling, alignment, themes/units,
+  retained states, keyboard behavior, reopen and exactly one EventSource. The new
+  initial-context assertion first assumed N/A; the fixture actually projects `120k`.
+  Correcting that independent expectation required no production change.
+- **PASS:** read-only installed **V2** Watch/Daily probe: 568 observed requests,
+  11 initiating prompts, complete pricing and reconciled category costs; prompt-count
+  completeness was **false**, preserved rather than overstated. Two active/two history
+  cards, three accounts, single acquisition owner; **14.5121s**, owned close **0.1076s**,
+  no pending owned threads/processes or cleanup failures. Shared OpenCode was untouched;
+  no model inference or running Web Beta mutation.
+
+Architecture assessment: no boundary/flow update; current Watch module wording and
+user guides updated. No requirement/test exception was needed. Browser evidence is
+synthetic/headless, not physical OS geometry, native chrome, screen-reader or macOS
+proof; those surfaces were not changed or newly claimed verified.
+
 ## FR 000570 — v80.150, 2026-11-04
 
 Base: `ce7859fcb8df3fe713c85519a7739242fc60fe6c`. Mini's independent document now

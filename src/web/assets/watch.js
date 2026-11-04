@@ -101,7 +101,7 @@ const WatchView = (() => {
     parent.append(grid);
   }
   function daily(parent, value, state) {
-    parent.replaceChildren(el('strong', 'Total Today'));
+    parent.replaceChildren(el('strong', 'CCost Today'));
     if (!value) { parent.append(el('span', state === 'unavailable' ? 'Daily activity unavailable' : 'Loading daily activity…')); return; }
     parent.append(el('span', () => value.total.observed_requests && !value.total.priced_requests ? 'N/A' : display(value.total, 'known_ccost'), 'metric-value'));
     const count = el('span', `${value.prompt_count} prompts`);
@@ -293,7 +293,7 @@ const WatchView = (() => {
       this.empty = el('p'); this.empty.setAttribute('role', 'status');
       this.accounts = el('div'); this.cards = new Map();
       this.daily = el('section', undefined, 'watch-daily');
-      this.daily.setAttribute('aria-label', 'Total Today');
+      this.daily.setAttribute('aria-label', 'CCost Today');
       this.root.append(this.earlier, this.empty, this.active, this.daily, this.accounts);
     }
     attach(parent) {

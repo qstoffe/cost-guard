@@ -14,7 +14,7 @@ Mini; a fresh page starts Off. Browser PiP replacement may also close it.
 
 ## What the figures mean
 
-- **Total Today**, on the right, is the same global configured-local-day CCost and
+- **CCost Today**, on the right, is the same global configured-local-day CCost and
   distinct initiating-prompt count as full Watch, including earlier pre-Watch activity
   across sessions/providers. It is not a sum of Mini rows or subscription periods.
    Only the left title navigates; the daily summary is non-clickable. Loading and unknown
@@ -27,8 +27,9 @@ Mini; a fresh page starts Off. Browser PiP replacement may also close it.
   cost or billed spending. Missing/partial pricing retains N/A or `?` conventions;
   focus a row for estimated/partial provenance without a distracting cost `~` glyph.
 - **Duration:** that prompt's canonical elapsed execution time, frozen when ended.
-- **CTX:** estimated next incoming context for the prompt (`~` means approximate;
-  N/A means unknown), with the same meaning as Watch's Context column.
+- **CTX:** estimated next incoming context for the prompt, shown as a formatted number
+  without an added `~`. The header tooltip explains the estimate; N/A means unavailable,
+  with the same meaning as Watch's Context column.
 
 Running rows use Watch's yellow tone, successful endings green, abort/error red;
 outcome and known stop cause remain accessible without color. Ended rows retain
