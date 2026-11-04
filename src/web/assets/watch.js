@@ -28,25 +28,32 @@ const WatchView = (() => {
     target.signature = signature;
   }
   function quotaTrack(value) {
-    const quota = value.quota, summary = quota.unlimited ? 'Unlimited' : value.used_percent === '—' ? '—' : value.used_percent + ' used';
-    const native = display(quota, 'quota_used');
-    const usage = native.startsWith('N/A') ? '' : ` · ${native}${quota.unlimited || value.used_fraction == null ? ' used' : ''}`;
-    const label = el('div', `${quota.label} · ${summary}`,
-      'watch-quota-summary metric-value' + (value.exhausted ? ' watch-quota-exhausted' : ''));
+    const quota = value.quota, view = () => ReportView.quotaView(quota, value);
+    const summary = () => quota.unlimited ? 'Unlimited' : view().percent === '—' ? '—' : view().percent + ' ' + view().mode;
+    const usage = () => (view().native.startsWith('N/A') ? '' : ` · ${view().native}${quota.unlimited || value.used_fraction == null ? ' ' + view().mode : ''}`) +
+      (view().mode === 'remaining' && view().money !== 'N/A' ? ` · Native money remaining ${view().money} / ${display(quota, 'limit_money')}` : '');
+    const label = el('div'); label.append(el('span', () => `${quota.label} · ${summary()}`));
+    ReportView.bind(label, () => label.className = 'watch-quota-summary metric-value' + (view().exhausted ? ' watch-quota-exhausted' : ''));
     if (!quota.unlimited && value.used_fraction != null && value.cost != null &&
         (!value.cost.observed_requests || value.cost.priced_requests)) {
-      const cost = el('span', () => ` (${display(value.cost, 'account_ccost')})`, 'watch-period-cost');
+      const cost = el('span', () => ` (${view().mode === 'remaining' ? 'CCost used: ' : ''}${display(value.cost, 'account_ccost')})`, 'watch-period-cost');
       const provenance = [!value.cost.complete ? 'partial attribution' : '', value.estimated ? 'estimated attribution' : ''].filter(Boolean);
-      cost.title = `Observed CCost for ${quota.label}; independent of provider-native Used.` +
+      cost.title = `Observed CCost for ${quota.label}; independent of provider-native Used or Remaining, not remaining CCost.` +
         (provenance.length ? ' ' + provenance.join('; ') + '.' : '') + (value.note ? ' ' + value.note : '');
       cost.tabIndex = 0; cost.setAttribute('aria-description', cost.title);
       label.append(cost);
     }
     label.append(el('span', usage));
+    if (view().note) label.append(el('span', ' · ' + view().note, 'warning'));
     const track = el('div', undefined, 'watch-quota-track');
     if (!quota.unlimited && value.used_fraction != null) {
-      const bar = el('progress'); bar.max = 1; bar.value = value.used_fraction;
-      bar.setAttribute('aria-label', quota.label + ' used'); bar.setAttribute('aria-valuetext', summary);
+      const bar = el('progress'); bar.max = 1;
+      ReportView.bind(bar, () => {
+        bar.value = view().fraction;
+        bar.setAttribute('aria-label', quota.label + ' ' + view().mode);
+        bar.setAttribute('aria-valuetext', summary() + (view().exhausted ? ' · exhausted' : ''));
+        bar.className = view().exhausted ? 'watch-quota-exhausted' : '';
+      });
       if (value.exhausted) bar.className = 'watch-quota-exhausted';
       track.append(bar);
     } else track.append(el('span', quota.unlimited ? 'No usage limit' : 'Usage unavailable', 'detail'));
@@ -70,7 +77,7 @@ const WatchView = (() => {
     for (const item of value.accounts) {
       const obs = item.observation, card = el('section', undefined, 'account-card watch-subscription');
       card.dataset.availability = obs.availability;
-      card.dataset.exhausted = String([item.primary, ...item.secondary].some(quota => quota.exhausted));
+      ReportView.bind(card, () => card.dataset.exhausted = String([item.primary, ...item.secondary].some(value => ReportView.quotaView(value.quota, value).exhausted)));
       const today = item.ccost_scopes.find(scope => scope.name === 'today');
       const cost = el('p', () => `CCost Today: ${today?.cost == null ? '—' : display(today.cost, 'account_ccost')}`, 'metric-value');
       cost.title = item.today_note;

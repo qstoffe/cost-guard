@@ -19,6 +19,8 @@ sys.path.insert(0, str(ROOT))
 from development.tests.fixtures.watch_summary import summary_watch
 from development.tests.fixtures.web_reports import finite_report
 from src.application.live_projection import project_live
+from src.application.display import with_display
+from src.application.projection import accounts as project_accounts
 from src.analysis.timezones import local_day_start_ms
 from src.watch.models import WatchRow
 from src.watch.running import running_prompts
@@ -49,7 +51,8 @@ def main():
         def publish(state="running", value=frame):
             value = replace(value, now_ms=int(time.time() * 1000))
             host.events.publish("live", {"state": state, "source_observed_at_ms": value.now_ms,
-                "view": project_live(value).to_json()})
+                "view": project_live(value).to_json(),
+                "probe_accounts": with_display(project_accounts(value.quota), now_ms=value.now_ms).to_json()})
 
         try:
             host.start()

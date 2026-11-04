@@ -22,6 +22,62 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class WebWatchQuotaTests(unittest.TestCase):
+    def test_web_orientation_variants_preserve_canonical_fields_and_native_evidence(self):
+        base = QuotaComponent('Monthly', used=D(5608), limit=D(25000), remaining=D(19392), unit='AI credits')
+        cases = (
+            (base, '77.6%', '0.77568', '19392/25000 AI credits', False),
+            (replace(base, used=D(0), remaining=None), '100%', '1', '25000/25000 AI credits', False),
+            (replace(base, used=D(2500), remaining=None), '90%', '0.9', '22500/25000 AI credits', False),
+            (replace(base, used=D(22500), remaining=None), '10%', '0.1', '2500/25000 AI credits', False),
+            (replace(base, used=D(25000), remaining=None), '0%', '0', '0/25000 AI credits', True),
+            (replace(base, used=D('24999.9'), remaining=None), '>0%', '0.000004', '0.1/25000 AI credits', False),
+            (replace(base, used=D(26000), remaining=None), '0%', '0', '0/25000 AI credits', True),
+            (replace(base, used=None), '77.6%', '0.77568', '19392/25000 AI credits', False),
+            (QuotaComponent('Weekly', remaining_fraction=D('.58')), '58%', '0.58', 'N/A units', False),
+            (QuotaComponent('Weekly', limit=D(100), remaining_fraction=D('.58')), '58%', '0.58', '58/100 units', False),
+        )
+        for quota, percent, fraction, native, exhausted in cases:
+            wire = with_display(watch_quota(quota), now_ms=1000).to_json()
+            shown = wire['quota']['quota_display']['remaining']
+
+            with self.subTest(quota=quota):
+                self.assertEqual(('remaining', percent, fraction, native, exhausted),
+                    tuple(shown[key] for key in ('mode', 'percent', 'fraction', 'native', 'exhausted')))
+                self.assertEqual(None if quota.remaining is None else str(quota.remaining), wire['quota']['remaining'])
+                self.assertEqual(None if quota.used is None else str(quota.used), wire['quota']['used'])
+                self.assertEqual(quota.used is not None and quota.used > D(25000), bool(shown['note']))
+
+    def test_remaining_falls_back_without_known_capacity_or_usage_and_keeps_native_money(self):
+        base = QuotaComponent('Monthly', used=D(5608), limit=D(25000), unit='AI credits')
+        for quota in (replace(base, unlimited=True), replace(base, limit=None), replace(base, limit=D(0)),
+                      replace(base, used=None), replace(base, window_active=False), QuotaComponent('Unknown')):
+            wire = with_display(watch_quota(quota)).to_json()['quota']
+
+            with self.subTest(quota=quota):
+                self.assertEqual(wire['quota_display']['used'], wire['quota_display']['remaining'])
+                self.assertEqual('used', wire['quota_display']['remaining']['mode'])
+        quota = replace(base, remaining=D(19392), remaining_money=D('7.75'), limit_money=D(10))
+
+        shown = with_display(watch_quota(quota)).to_json()['quota']['quota_display']['remaining']
+
+        self.assertEqual('$7.75', shown['money'], 'prefer trusted native money, never reference CCost')
+
+    def test_remaining_keeps_independent_period_ccost_markers_and_units(self):
+        quota = QuotaComponent('Monthly', used=D(2088), limit=D(25000), unit='AI credits')
+        for cost in (None, ComparisonCost(D(0), 0, 0), ComparisonCost(D(1814), 3, 2), ComparisonCost(D(0), 2, 0)):
+            for unit in ('credits', 'usd'):
+                value = with_display(watch_quota(quota, QuotaPeriodProjection(quota, cost, None), estimated=True),
+                    ccost_display_unit=unit).to_json()
+
+                with self.subTest(cost=cost, unit=unit):
+                    self.assertEqual('22912/25000 AI credits', value['quota']['quota_display']['remaining']['native'])
+                    self.assertEqual('91.6%', value['quota']['quota_display']['remaining']['percent'])
+                    self.assertEqual(cost is None, value['cost'] is None)
+                    if cost is not None:
+                        self.assertEqual(str(cost.known_ccost), value['cost']['known_ccost'])
+                        self.assertEqual(cost.complete, value['cost']['complete'])
+                    self.assertTrue(value['estimated'])
+
     def test_watch_reset_uses_duration_notation_and_keeps_other_reset_consumers(self):
         now = int(datetime(2026, 11, 3, 18, 41, tzinfo=timezone.utc).timestamp() * 1000)
         cases = ((12_000, '12s, 18:41'), (90_000, '1m30s, 18:42'),
@@ -114,6 +170,7 @@ class WebWatchQuotaTests(unittest.TestCase):
             ('unpriced period', base, ComparisonCost(D(0), 2, 0), '8.4%', '2088/25000 AI credits'),
             ('partial period', base, ComparisonCost(D(1814), 3, 2), '8.4%', '2088/25000 AI credits'),
             ('estimated period', base, known, '8.4%', '2088/25000 AI credits'),
+            ('native money', replace(base, remaining_money=D('91.65'), limit_money=D(100)), known, '8.4%', '2088/25000 AI credits'),
         )
         projected = []
         for name, quota, cost, percent, native in cases:
@@ -149,6 +206,8 @@ class WebWatchQuotaTests(unittest.TestCase):
             wire['primary']['cost']['known_ccost'], wire['primary']['quota']['reset_at_ms']))
         self.assertEqual(('70%', '9', 2000), (wire['secondary'][0]['used_percent'],
             wire['secondary'][0]['cost']['known_ccost'], wire['secondary'][0]['quota']['reset_at_ms']))
+        self.assertEqual('80/100 units', wire['primary']['quota']['quota_display']['remaining']['native'])
+        self.assertEqual('30/100 units', wire['secondary'][0]['quota']['quota_display']['remaining']['native'])
 
     def test_invalid_denominators_are_rejected_at_canonical_boundary(self):
         for limit in (D(-1), D('NaN'), D('Infinity')):

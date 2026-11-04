@@ -36,13 +36,14 @@ errors unless the source supports a specific abort/quota cause.
 
 ## Web settings
 
-**Settings → Web settings**, at `/#/settings`, contains exactly three dropdowns:
+**Settings → Web settings**, at `/#/settings`, contains four dropdowns:
 
 | Setting | Inherited choice (first) | Explicit choices |
 | --- | --- | --- |
 | Theme | Default (Classic) | Classic / Web |
 | CCost display | Default (Credits) | Credits / USD |
 | Mini Watch placement | Default (Remember last) | Remember last / Standard placement |
+| Quota display | Default (Used) | Used / Remaining |
 
 Default labels reflect the current shipped defaults, not fixed lifetime names.
 Classic is dark independently of system preference; Web follows system light/dark.
@@ -60,11 +61,11 @@ Until the initial settings read succeeds, controls cannot claim a saved choice a
 Mini stays unavailable; opening Settings retries the read.
 
 ```json
-{"webSettings": {"theme": "default", "ccostDisplayUnit": "credits", "miniWatchPlacement": "remember-last"}}
+{"webSettings": {"theme": "default", "ccostDisplayUnit": "credits", "miniWatchPlacement": "remember-last", "quotaDisplayMode": "default"}}
 ```
 
-The enums are lowercase `default|classic|web`, `default|credits|usd` and
-`default|remember-last|standard`. Missing overrides show Default without creating a
+The enums are lowercase `default|classic|web`, `default|credits|usd`,
+`default|remember-last|standard` and `default|used|remaining`. Missing overrides show Default without creating a
 user file. **Default inherits that preference's current application default**, including
 after a future version changes it. Explicit Classic/Credits/Remember last stay pinned
 even when their effective behavior currently equals Default. Reads/saves preserve the
@@ -89,7 +90,18 @@ screen coordinates are promised. The mode persists in user config; geometry is n
 written to config, SQLite, browser storage, cookies or URLs. See [Mini Watch](web-mini-watch.md)
 for supported-browser behavior and the explicitly unverified physical checks.
 
-Only these three nested fields are writable. A setting stays shared while Web only
+Quota display applies immediately to native finite quotas in Accounts, full Watch and
+an already-open Mini, including retained observations. Remaining uses the same account,
+window and denominator: 5,608/25,000 Used becomes 19,392/25,000 Remaining, about 78%.
+The bar fills with available capacity; zero Remaining is still exhausted/red, while a
+full Remaining bar is healthy. Unrounded native evidence determines exhaustion.
+Unlimited plans keep Used with no finite bar; unknown limits/usage never acquire a
+synthetic remaining amount. Stale/partial observations keep their existing warnings.
+Observed period CCost is independent: Remaining labels its unchanged parentheses
+**CCost used**, never a guessed remaining CCost budget. Native money, Credits/USD,
+Remaining/day/workday pace and CLI orientation keep their separate meanings.
+
+Only these four nested fields are writable. A setting stays shared while Web only
 consumes it; promotion to an editable Web control requires a separate approved
 feature and an independent value in `webSettings`. No other settings migrate here.
 CLI `colorScheme`, custom palettes and unpromoted shared settings are unchanged.
@@ -243,7 +255,7 @@ Accounts uses the shared provider/account cards with native quota windows, known
 | Session report | `/#/sessions/<id>` | Complete report Snapshot/Live detail; links from session lists and global Watch |
 | Date / inclusive range | `/#/reports?date=2026-10-25`, `/#/reports?date=2026-10-24:2026-10-25` | Configured-local boundaries/DST; canonical range valuation and union duration; impossible/reversed dates fail explicitly |
 | Historical Token Mix | `/#/token-mix` | Explicit Capture/Refresh only, never navigation/prefetch; CLI Input / Cached input / Cache write / Output share-and-CCost cells, model/publisher Prompts/Calls/Tokens/CCost, exact-volume sorting with compact K/M/B labels and explicit partial/unknown telemetry, full-report total above the table and optional sample/price coverage |
-| Web Settings | `/#/settings` | Theme, CCost display and Mini placement; inherited/explicit intent, authenticated narrow config read/write, no report acquisition |
+| Web Settings | `/#/settings` | Theme, CCost display, Mini placement and Quota display; inherited/explicit intent, authenticated narrow config read/write, no report acquisition |
 
 Outside Models and Watch, report tables retain their search/filter/page controls. Their column clicks cycle ascending, descending, then original server order. Models uses the independent filter/multi-sort contract above, with no three-click reset; Watch keeps fixed chronological cards without report controls. All controls are presentation-only: totals and source queries never change. Decimal strings compare exactly and unknowns sort last. Complete revision-paged session detail has its own controls; global search is disabled there rather than implying unloaded-row coverage.
 
@@ -402,7 +414,7 @@ without smaller text. Native declarations/order, never depletion or
 provider identity, select the primary. Missing primary stays unavailable; weekly-only
 accounts have no invented five-hour slot or duplicate secondary.
 
-Each finite known quota shows **period · N% used (period CCost) · Used/Total native units**,
+By default, each finite known quota shows **period · N% used (period CCost) · Used/Total native units**,
 its bar, a tightly adjacent reset and applicable canonical
 **Remaining: …/day** and **Remaining: …/workday** (or **no workdays left**). Only real
 secondaries follow a divider. No routine rolling/fixed boilerplate appears. Exact
@@ -414,7 +426,9 @@ on hover). Period CCost's focusable parentheses describe the independent window 
 partial/estimated provenance nonvisually, without an extra cost row. Native Used/Total comes
 from the same quota observation as the percentage, never from observed CCost; the two
 amounts need not agree. Missing native usage never borrows CCost. Credits/USD changes
-CCost, not native Used/Total or Remaining. Accounts and Mini Watch are unchanged.
+CCost, not native quota units. Quota display **Remaining** instead shows the same
+window's remaining percent, native Remaining/Total and remaining fill, labelling the
+unchanged parenthetical amount **CCost used**. Accounts and Mini follow the same choice.
 
 Watch's slim .83rem quota bars have subtle 2px corners and stay teal throughout the non-exhausted range,
 including **<100%**. Canonical numeric exhaustion alone makes that quota's entire
@@ -610,9 +624,10 @@ The historical synthetic parity and bounded integration inventory is [Beta stabi
 | `/health` | GET | Public HTTP-shell readiness only |
 | `/api/bootstrap` | POST | One-use `{"credential":"…"}` exchange with exact Origin |
 | `/api/session` | GET | Authenticated CSRF recovery, no control credential |
-| `/api/settings` | GET | Authenticated read of only `webSettings.theme` and `webSettings.ccostDisplayUnit` |
+| `/api/settings` | GET | Authenticated read of the four allowlisted Web preferences, selected choices and shipped defaults |
 | `/api/settings/theme` | POST | CSRF-protected fixed `{"theme":"classic"}` or `{"theme":"web"}` write only |
 | `/api/settings/ccost` | POST | CSRF-protected fixed `{"ccostDisplayUnit":"credits"}` or `{"ccostDisplayUnit":"usd"}` write only |
+| `/api/settings/quota-display` | POST | CSRF-protected single `quotaDisplayMode`: `default`, `used` or `remaining` |
 | `/api/status` | GET | Separate HTTP, analysis, source and account acquisition states |
 | `/api/live` | GET | Authenticated coherent live/progress snapshot and instance/sequence; retained terminal state while stopping |
 | `/api/events` | GET | Authenticated multiplexed SSE, bounded replay with Last-Event-ID; no query strings |

@@ -8,6 +8,12 @@ Reports and Watch sort credit/balance/budget accounts before usage-limit account
 
 Aligned 10-cell **Used** bars, percentages and Used/Total native amounts share a row. 100% used means exhausted; 0% used means unused. Native money equivalents use the same orientation. Provider-confirmed Unlimited shows native Used when known, without a percentage, finite denominator or Remaining pace. Reports align every quota bar and Remaining using one report-wide label column; Watch globally aligns only primary bars, with individual narrow fallback. Native money/units, reset, status and warnings remain.
 
+Web alone offers **Settings → Web settings → Quota display → Remaining** (Default is Used).
+Finite native percentages, Remaining/Total amounts and bars change together in Accounts,
+Watch and Mini. Unlimited or insufficient evidence keeps Used/unknown; zero Remaining
+remains exhausted/red even with no fill. Adjacent **CCost used** is unchanged observed
+period reference spending, not a remaining quota budget. CLI and Remaining/day pace do not change.
+
 Bars represent genuine provider-reported capacity: a real denominator or an explicitly reported percentage, never a fabricated allocation. Balance/informational spend without capacity stays textual. Native currencies are not added or converted; balances/spend are not CCost or historical usage. A current credential never establishes historical request-account attribution. There are no provider-specific Report/Watch renderer branches.
 
 Report/vertical Watch resets: <24h → `Reset in Nmin, HH:MM`; 24h–<7d → `Reset in Nh, Weekday HH:MM`; ≥7d → `Reset at YYYY-MM-DD HH:MM`. Elapsed-time tiers use whole units, configured timezone/English weekdays and no negative countdowns. Compact Watch uses `Reset@...` and the same underlying components.

@@ -131,6 +131,7 @@ async function main() {
       if (found.result.value) {pipSession=attached.sessionId; break;}
     }
     assert.ok(pipSession,'owned Document PiP target available for rendered geometry and theme checks');
+    await require('./probe_quota_display.cjs')({evaluate,until,command,sessionId,pipSession,checks,layouts});
     const columns = () => evaluate(`(() => {
       const w=miniWatch.window,v=miniWatch.view,table=v.body.parentNode;
       const cells=[...table.rows].filter(row=>row.cells.length===5).map(row=>[...row.cells]);

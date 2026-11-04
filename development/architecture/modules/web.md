@@ -46,13 +46,20 @@ metric widths remain shared. `test_watch_prompt_cost.py`, `integration/web_watch
 and `fixtures/watch_cost_browser.cjs` pin parity, units, unknowns and actual hidden layout.
 
 Full Watch's `watch_accounts.py` quota slots export native amount/limit/unit inputs
-to the shared application display tokens. `watch.js` keeps Used/Total with the native
+to the shared application display tokens. By default `watch.js` keeps Used/Total with the native
 percentage/bar and appends independent period CCost in bare parentheses after Used.
 Focusable provenance explains the window, independence and partial/estimated attribution;
 unavailable costs are omitted, while known zero remains numeric. Reset sits directly
 under its own bar, followed by pace; there is no separate cost/provenance row.
 Primary and secondary slots share this presentation; currency switches only CCost.
-Acquisition, period accounting, CLI/Accounts and Mini Watch semantics are unchanged.
+`application/quota_display.py` adds pure Web-only Used/Remaining variants from each
+quota's normalized native facts. A trustworthy native remainder wins; a finite
+usage complement is safe fallback. Unlimited, zero/missing limits or unknown usage
+never invent Remaining. `render.js` selects variants and updates bound text/bars in
+place, including detached Watch views; `mini.js` redraws its retained keyed rows.
+Remaining explicitly labels unchanged period spending as CCost used. Native
+exhaustion is independent of fill orientation/rounding. Acquisition, period
+accounting, CLI and remaining pace semantics are unchanged.
 
 `watch/running.py` aggregates distinct canonical in-progress focal prompts once per
 Web publication, excluding compaction/history/placeholders/terminal grace. Count,
@@ -148,7 +155,8 @@ port, dependency, source or accounting owner changes.
 ## Public contract
 
 `src/web/settings.py` is the sole write exception: `webSettings.theme` (`classic|web`),
-`ccostDisplayUnit` (`credits|usd`) and `miniWatchPlacement` (`remember-last|standard`)
+`ccostDisplayUnit` (`credits|usd`), `miniWatchPlacement` (`remember-last|standard`)
+and `quotaDisplayMode` (`used|remaining`)
 in this checkout's `config/user-config.jsonc`, each also accepting symbolic `default`.
 Shipped defaults must be actual enum values. `config.validated_values`
 shares startup validation, normalization and color resolution; neither merged
@@ -158,12 +166,12 @@ Owned/non-reparse paths, 1 MiB bounds, private same-directory temporaries, in-ho
 serialization and last-moment file identity/byte comparison precede atomic replace.
 This is ordinary editor-conflict detection, not a hostile same-user race guarantee.
 
-`GET /api/settings` and fixed `POST /api/settings/theme`, `/api/settings/ccost` and
-`/api/settings/mini-placement` expose effective `webSettings`, symbolic/explicit
+`GET /api/settings` and fixed `POST /api/settings/theme`, `/api/settings/ccost`,
+`/api/settings/mini-placement` and `/api/settings/quota-display` expose effective `webSettings`, symbolic/explicit
 `webSettingsChoices`, current `webSettingsDefaults` and allowlisted error codes,
 behind existing Host/Origin/session/CSRF/body/stopping guards. Early HTML selects
 the effective theme before CSS paint. `assets/settings.js` owns the sole native
-three dropdowns (Default first with a canonical-default-derived label) under Web
+four dropdowns (Default first with a canonical-default-derived label) under Web
 settings and confirmed-only CSS/display-token switching, rollback and
 keyboard focus recovery. `#/settings` reads on entry, never submits report jobs,
 restarts the host or polls. Other tabs converge on their next read, not a broadcast.

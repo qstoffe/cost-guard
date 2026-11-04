@@ -133,11 +133,16 @@ def main():
                 assert json.loads(user_config.read_text()) == {"webSettings": {"theme": "web", "ccostDisplayUnit": "usd"}}
                 placement = page.get_by_role("combobox", name="Mini Watch placement", exact=True)
                 expect(placement).to_have_value("default")
-                assert page.locator(".web-settings select").count() == 3
+                assert page.locator(".web-settings select").count() == 4
                 assert placement.locator("option").all_text_contents() == ["Default (Remember last)", "Remember last", "Standard placement"]
                 placement.select_option("remember-last")
                 expect(page.locator("#settings-feedback")).to_have_text("Mini Watch placement saved.")
                 expect(placement).to_have_value("remember-last")
+                quota = page.get_by_role("combobox", name="Quota display", exact=True)
+                expect(quota).to_have_value("default")
+                assert quota.locator("option").all_text_contents() == ["Default (Used)", "Used", "Remaining"]
+                quota.select_option("remaining")
+                expect(page.locator("#settings-feedback")).to_have_text("Quota display saved.")
                 assert page.locator("html").evaluate("el => getComputedStyle(el).getPropertyValue('--bg').trim()") == "#eef2f8"
                 page.emulate_media(color_scheme="dark")
                 assert page.locator("html").evaluate("el => getComputedStyle(el).getPropertyValue('--bg').trim()") == "#0c1422"
@@ -145,6 +150,7 @@ def main():
                 expect(page.get_by_role("combobox", name="Theme", exact=True)).to_have_value("web")
                 expect(page.get_by_role("combobox", name="CCost display", exact=True)).to_have_value("usd")
                 expect(page.get_by_role("combobox", name="Mini Watch placement", exact=True)).to_have_value("remember-last")
+                expect(page.get_by_role("combobox", name="Quota display", exact=True)).to_have_value("remaining")
                 page.get_by_role("combobox", name="Mini Watch placement", exact=True).select_option("default")
                 expect(page.locator("#settings-feedback")).to_have_text("Mini Watch placement saved.")
                 expect(page.locator("html")).to_have_attribute("data-theme", "web")
@@ -154,13 +160,16 @@ def main():
                     expect(fresh.get_by_role("combobox", name="Theme", exact=True)).to_have_value("web")
                     expect(fresh.get_by_role("combobox", name="CCost display", exact=True)).to_have_value("usd")
                     expect(fresh.get_by_role("combobox", name="Mini Watch placement", exact=True)).to_have_value("default")
+                    expect(fresh.get_by_role("combobox", name="Quota display", exact=True)).to_have_value("remaining")
                     expect(fresh.locator("html")).to_have_attribute("data-theme", "web")
                 finally:
                     fresh.close()
                 page.get_by_role("combobox", name="Theme", exact=True).select_option("classic")
                 expect(page.locator("#settings-feedback")).to_have_text("Theme saved.")
                 expect(page.locator("html")).to_have_attribute("data-theme", "classic")
-                assert json.loads(user_config.read_text()) == {"webSettings": {"theme": "classic", "ccostDisplayUnit": "usd", "miniWatchPlacement": "default"}}
+                page.get_by_role("combobox", name="Quota display", exact=True).select_option("default")
+                expect(page.locator("#settings-feedback")).to_have_text("Quota display saved.")
+                assert json.loads(user_config.read_text()) == {"webSettings": {"theme": "classic", "ccostDisplayUnit": "usd", "miniWatchPlacement": "default", "quotaDisplayMode": "default"}}
                 assert not report_requests, "Settings must not acquire reports"
                 page.go_back()
                 expect(page.locator("#result")).to_contain_text("<script>PRIVATE_TEXT</script>")

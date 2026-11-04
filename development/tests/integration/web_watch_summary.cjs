@@ -78,7 +78,7 @@ assert.ok(!/\(estimated\)|Rolling|Fixed window|rolling window/.test(watch.accoun
 const monthlyCard = watch.accounts.children[0].children[0];
 assert.equal(monthlyCard.children[2].textContent, 'Monthly · 8.4% used (1814) · 2088/25000 AI credits');
 assert.equal(monthlyCard.children[3].children[0].value, '0.08352');
-const periodCost = monthlyCard.children[2].children[0];
+const periodCost = monthlyCard.children[2].children[1];
 assert.equal(periodCost.tabIndex, 0);
 assert.match(periodCost.attributes['aria-description'], /Observed CCost for Monthly.*independent of provider-native Used/);
 assert.equal(monthlyCard.children[4].children.length, 3, 'reset and two pace rows; no period cost row');
@@ -134,6 +134,24 @@ vm.runInContext('ReportView.setUnit("credits", parent)', context);
 assert.equal(totals, watch.daily.textContent);
 assert.equal(monthlyCard.children[2].textContent, nativeSummary);
 assert.equal(periodCost.textContent, ' (1814)');
+const retainedBar = monthlyCard.children[3].children[0];
+const beforeSwitch = JSON.stringify(context.input);
+vm.runInContext('ReportView.setQuotaMode("remaining"); ReportView.syncUnits(parent)', context);
+assert.equal(monthlyCard.children[2].textContent, 'Monthly · 91.6% remaining (CCost used: 1814) · 22912/25000 AI credits · Native money remaining $8.99 / $10.00');
+assert.equal(retainedBar.value, '0.91648');
+assert.equal(retainedBar.attributes['aria-label'], 'Monthly remaining');
+assert.equal(monthlyCard.children[3].children[0], retainedBar, 'mode switches keep the existing bar and cost/focus owner');
+assert.equal(monthlyCard.children[2].children[1], periodCost);
+assert.equal(monthlyCard.children[4].children.slice(1).map(node => node.textContent).join(''), nativePace);
+assert.match(fiveCard.children[5].textContent, /Weekly · 0% remaining \(CCost used: 840\)/);
+const exhausted = fiveCard.children[5].querySelectorAll('progress')[0];
+assert.equal(exhausted.value, '0'); assert.match(exhausted.className, /exhausted/);
+assert.match(exhausted.attributes['aria-valuetext'], /exhausted/);
+vm.runInContext('ReportView.setUnit("usd", parent)', context);
+assert.match(periodCost.textContent, /CCost used: \$18.14/);
+vm.runInContext('ReportView.setQuotaMode("used"); ReportView.setUnit("credits", parent)', context);
+assert.equal(monthlyCard.children[2].textContent, nativeSummary);
+assert.equal(JSON.stringify(context.input), beforeSwitch, 'switching never mutates frozen native source values');
 const monthly = context.input.view.accounts.accounts[0];
 monthly.primary.pace.workdays = 0; monthly.primary.pace.per_workday = null;
 monthly.primary.quota.window_active = false; monthly.primary.quota.reset_at_ms = null;
@@ -250,9 +268,22 @@ for (const fixture of context.input.quota_cases || []) {
   if (fixture.name === 'empty period') assert.ok(label.includes('used (0)'));
   if (['unknown cost', 'unpriced period'].includes(fixture.name))
     assert.ok(!/[()]/.test(label));
-  if (fixture.name === 'partial period') assert.match(account.children[2].children[0].title, /partial attribution/);
-  if (fixture.name === 'estimated period') assert.match(account.children[2].children[0].title, /estimated attribution/);
+  if (fixture.name === 'partial period') assert.match(account.children[2].children[1].title, /partial attribution/);
+  if (fixture.name === 'estimated period') assert.match(account.children[2].children[1].title, /estimated attribution/);
   if (fixture.name === 'owner example') assert.equal(label, '5 hours · 16% used (94) · 120/750 AI credits');
   if (fixture.value.used_fraction == null || fixture.value.quota.unlimited) assert.ok(!/[()]/.test(label));
+  vm.runInContext('ReportView.setQuotaMode("remaining"); ReportView.syncUnits(parent)', context);
+  const shown = fixture.value.quota.quota_display.remaining;
+  if (fixture.name === 'native money') {
+    assert.match(account.children[2].textContent, /Native money remaining \$91.65 \/ \$100.00/);
+    vm.runInContext('ReportView.setUnit("usd", parent)', context);
+    assert.match(account.children[2].textContent, /CCost used: \$18.14/);
+    assert.match(account.children[2].textContent, /Native money remaining \$91.65 \/ \$100.00/);
+  }
+  if (shown.mode === 'remaining') {
+    assert.match(account.children[2].textContent, /remaining/);
+    for (const bar of account.querySelectorAll('progress')) assert.equal(bar.value, shown.fraction);
+  } else assert.equal(account.children[2].textContent, label, 'unknown/unlimited retains Used');
+  vm.runInContext('ReportView.setQuotaMode("used"); ReportView.setUnit("credits", parent)', context);
 }
 console.log('watch summary passed');

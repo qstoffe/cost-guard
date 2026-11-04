@@ -282,19 +282,24 @@ const MiniWatch = (() => {
           line = this.el('li'); line.tabIndex = 0;
           line.append(this.el('div'), this.el('progress')); this.lines.set(key, line);
         }
-        const used = primary.quota.unlimited ? 'Unlimited' : primary.used_percent === '—' ? 'Usage unavailable' : primary.used_percent + ' used';
+        const quota = ReportView.quotaView(primary.quota, primary);
+        const used = primary.quota.unlimited ? 'Unlimited' : quota.percent === '—' ? 'Usage unavailable' : quota.percent + ' ' + quota.mode;
         const cost = primary.cost, amount = cost == null || (cost.observed_requests && !cost.priced_requests) ? '—' : display(cost, 'known_ccost');
         const stale = !['available', 'partial'].includes(obs.availability) || view.quota_stale;
         const warning = primary.restricted ? ' · provider restriction' : '';
-        text(line.children[0], `${obs.label} · ${used} (${amount})${warning}`);
-        line.title = `${primary.quota.label} Used; same native-period observed CCost, independent of native usage and not billed spending. ${primary.note || 'Period cost unavailable until verified history and boundaries are available.'}${primary.estimated ? ' Estimated account attribution.' : ''}${cost && !cost.complete ? ' ? indicates partial pricing.' : ''}`;
+        const period = quota.mode === 'remaining' ? amount === '—' ? '' : ` (CCost used: ${amount})` : ` (${amount})`;
+        text(line.children[0], `${obs.label} · ${used}${period}${warning}`);
+        const basis = primary.note || (amount === '—' ? 'Period cost unavailable until verified history and boundaries are available.' :
+          'Observed reference spending within this native quota period.');
+        line.title = `${primary.quota.label} ${quota.mode}; ${quota.native}. ${quota.note || ''} Same native-period observed CCost, independent of native usage, not remaining CCost or billed spending. ${basis}${primary.estimated ? ' Estimated account attribution.' : ''}${cost && !cost.complete ? ' ? indicates partial pricing.' : ''}`;
+        if (quota.mode === 'remaining' && quota.money !== 'N/A') line.title += ` Native money remaining ${quota.money} / ${display(primary.quota, 'limit_money')}.`;
         line.title += ` Last quota observation: ${observedAt(obs.observed_at_ms)}.${stale ? ' Retained quota; not current.' : ''}${obs.availability === 'partial' ? ' Partial quota data.' : ''}`;
         line.setAttribute('aria-description', line.title);
-        line.className = primary.restricted ? 'mini-warning' : '';
+        line.className = quota.exhausted && quota.mode === 'remaining' ? 'mini-exhausted' : primary.restricted ? 'mini-warning' : '';
         const bar = line.children[1]; bar.hidden = primary.quota.unlimited || primary.used_fraction == null;
-        bar.max = 1; bar.value = primary.used_fraction ?? 0;
-        bar.className = primary.exhausted && !bar.hidden ? 'mini-exhausted' : '';
-        bar.setAttribute('aria-label', obs.label + ' · ' + primary.quota.label + ' Used'); bar.setAttribute('aria-valuetext', used + warning);
+        bar.max = 1; bar.value = quota.fraction ?? 0;
+        bar.className = quota.exhausted && !bar.hidden ? 'mini-exhausted' : '';
+        bar.setAttribute('aria-label', obs.label + ' · ' + primary.quota.label + ' ' + quota.mode); bar.setAttribute('aria-valuetext', used + warning + (quota.exhausted ? ' · exhausted' : ''));
         wanted.push(line);
       }
       if (!wanted.length) {

@@ -9,6 +9,9 @@ Status: current
   acquisition, payload/DOM/scroll evidence, unified Models and original proof limits.
 - Settings and appearance: `development/journal/web-settings.md` retains the narrow
   preserving config boundary, confirmed-only UI, theme checks and visual exception.
+- [Quota display orientation](quota-display.md): inherited/explicit Used/Remaining,
+  native arithmetic and exhaustion, independent CCost, retained browser views and
+  read-only V2 evidence without new acquisition or a test exception.
 - [Watch cards](watch-cards.md): isolated two-phase acquisition, continuous history,
   canonical totals, nine-case rendered-browser evidence and separate V2/detail proof.
 - [Watch account physical-width correction](watch-account-pixels.md): CSS/raster
