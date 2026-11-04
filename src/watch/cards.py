@@ -21,11 +21,18 @@ class CardSession:
     finished_ms: int = 0
     refresh_requested: bool = True
     source_status: SourceStatus = field(default_factory=SourceStatus)
+    cost_snapshot: object = None
+    session_cost: object = None
+    cost_generation: int = 0
+    cost_state: str = "loading"
+    cost_turn: int = 0
 
 
 class WatchCards:
-    def __init__(self, workers, recent_seconds=30, on_duration=None, monotonic=None):
+    def __init__(self, workers, recent_seconds=30, on_duration=None, monotonic=None, costs=None):
         self.workers = workers
+        self.costs = costs
+        self.cost_turn = 0
         self.recent_ms = int(recent_seconds * 1000)
         self.sessions = {}
         self.active_candidates = frozenset()
@@ -109,7 +116,10 @@ class WatchCards:
                     if old is not None and ((key in previous and not previous[key].in_progress)
                             or (old.completed_at_ms is not None and old.completed_at_ms <= row.at_ms)):
                         entry.terminals.pop(key, None)
-            entry.capture, entry.tools, entry.snapshot = capture, dict(tools), snapshot
+            entry.cost_snapshot = capture.cost_snapshot
+            if entry.session_cost is not None:
+                entry.cost_state = "refreshing"
+            entry.capture, entry.tools, entry.snapshot = replace(capture, cost_snapshot=None), dict(tools), snapshot
             entry.latest_ms = capture.latest_ms
             representative = capture.history_row
             entry.finished_ms = (representative.completed_at_ms or 0) if representative else 0
@@ -142,6 +152,7 @@ class WatchCards:
                     self.on_duration(result.value)
             else:
                 self.accept(result, now_ms)
+        self._tick_costs(now_ms)
         for entry in self.sessions.values():
             entry.terminals = {key: seen for key, seen in entry.terminals.items()
                 if 0 <= now_ms - seen < self.recent_ms}
@@ -172,6 +183,31 @@ class WatchCards:
                 entry.snapshot = None
                 if key not in self.workers.jobs:
                     entry.capture = None
+                    entry.cost_snapshot = None
+
+    def _tick_costs(self, now_ms):
+        if self.costs is None:
+            return
+        result = self.costs.drain()
+        if result is not None:
+            key, generation, value = result
+            entry = self.sessions.get(key)
+            if entry is not None and entry.generation == generation:
+                if value is None:
+                    entry.cost_state = "unavailable"
+                else:
+                    entry.session_cost = value
+                    entry.cost_generation = generation
+                    entry.cost_state = ("refreshing" if entry.cost_snapshot is not None else
+                        "observed" if value.source_complete else "partial")
+        visible = set(self.historical_ids(now_ms)) | {key for key, entry in self.sessions.items() if self._focals(entry, now_ms)}
+        for key in sorted(visible, key=lambda key: (self.sessions[key].cost_turn, key)):
+            entry = self.sessions[key]
+            if entry.cost_snapshot is not None and self.costs.submit(key, entry.generation, entry.cost_snapshot, now_ms):
+                entry.cost_snapshot = None
+                self.cost_turn += 1
+                entry.cost_turn = self.cost_turn
+                break
 
     def _card(self, entry, focal, now_ms):
         capture = entry.capture
@@ -204,7 +240,10 @@ class WatchCards:
         return WatchCard(capture.session_id, capture.title, focal.event_id if focal else "",
             tuple(projected), state,
             capture.context if (capture.context is not None and state != "unavailable"
-                and (focal is None or capture.context.owner_id == focal.event_id)) else None)
+                and (focal is None or capture.context.owner_id == focal.event_id)) else None,
+            capture.context if state != "unavailable" else None, entry.session_cost,
+            "unavailable" if state == "unavailable" or entry.cost_state == "unavailable" else
+                "refreshing" if entry.session_cost is not None and entry.cost_generation != entry.generation else entry.cost_state)
 
     def project(self, now_ms):
         active = []

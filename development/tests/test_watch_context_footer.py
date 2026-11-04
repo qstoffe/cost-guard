@@ -44,7 +44,7 @@ class WatchContextFooterTests(unittest.TestCase):
                 self.assertEqual(tokens, capture.context.tokens)
                 entry = CardSession(self.source.snapshot.root, 'revision', 1, capture=capture, state='observed')
                 card = WatchCards(None)._card(entry, capture.rows[-1], 4000)
-                cell = project_live(WatchProjection('Watch', 'fixture', (), active_cards=(card,))).to_json()['active_cards'][0]['rows'][0]['context_cell']
+                cell = project_live(WatchProjection('Watch', 'fixture', (), active_cards=(card,))).to_json()['active_cards'][0]['session_summary']['context']
                 self.assertEqual(severity, cell['warning']['severity'])
                 self.assertEqual(tokens, cell['watch_next_context_tokens'])
                 if severity != 'none':
@@ -69,7 +69,7 @@ class WatchContextFooterTests(unittest.TestCase):
                 current = replace(capture, context=guidance)
                 entry = CardSession(item.session, 'revision', 1, capture=current, state='observed')
                 card = WatchCards(None)._card(entry, current.rows[-1], 4000)
-                cell = project_live(WatchProjection('Watch', 'fixture', (), history_cards=(card,))).to_json()['history_cards'][0]['rows'][0]['context_cell']
+                cell = project_live(WatchProjection('Watch', 'fixture', (), history_cards=(card,))).to_json()['history_cards'][0]['session_summary']['context']
                 self.assertEqual(tokens, cell['watch_next_context_tokens'])
                 self.assertEqual(severity, cell['warning']['severity'])
 
@@ -91,17 +91,18 @@ class WatchContextFooterTests(unittest.TestCase):
         historical = cards._card(entry, None, 4000)
         self.assertIsNone(superseded.context_warning)
         self.assertEqual(current.context_warning, historical.context_warning)
+        self.assertEqual(current.session_context, superseded.session_context)
         wire = project_live(WatchProjection('Watch', 'fixture', (), active_cards=(current,))).to_json()
         self.assertIn('2x more expensive', wire['active_cards'][0]['context_warning']['display']['warning_cost'])
         self.assertNotIn('context_warning', wire['active_cards'][0]['rows'][0])
-        cell = wire['active_cards'][0]['rows'][0]['context_cell']
+        cell = wire['active_cards'][0]['session_summary']['context']
         self.assertEqual('u_next', cell['warning']['owner_id'])
         self.assertEqual('exceeded', cell['warning']['severity'])
         self.assertEqual(120000, cell['watch_next_context_tokens'])
         multi = replace(current, rows=superseded.rows + current.rows)
         rows = project_live(WatchProjection('Watch', 'fixture', (), active_cards=(multi,))).to_json()['active_cards'][0]['rows']
-        self.assertIsNone(rows[0]['context_cell']['warning'])
-        self.assertEqual('u_next', rows[1]['context_cell']['warning']['owner_id'])
+        self.assertTrue(all('context_cell' not in row for row in rows))
+        self.assertIn('incoming_context_tokens', rows[0]['prompt'])
         entry.state = 'unavailable'
         self.assertIsNone(cards._card(entry, focal, 4000).context_warning)
 
@@ -119,7 +120,7 @@ class WatchContextFooterTests(unittest.TestCase):
         card = cards._card(entry, entry.capture.rows[-1], 5002)
         wire = project_live(WatchProjection('Watch', 'fixture', (), active_cards=(card,))).to_json()
 
-        cell = wire['active_cards'][0]['rows'][0]['context_cell']
+        cell = wire['active_cards'][0]['session_summary']['context']
         self.assertIsNone(cell['watch_next_context_tokens'])
         self.assertEqual('none', cell['warning']['severity'])
 

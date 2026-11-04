@@ -46,8 +46,12 @@ def fixture():
         summary = summary_watch()
         active = replace(active, context_warning=replace(summary.active_cards[0].context_warning,
             owner_id=focal.prompt.event_id))
+        active = replace(active, session_context=active.context_warning,
+            session_cost=summary.active_cards[0].session_cost, session_cost_state="observed")
         history = tuple(replace(card, context_warning=replace(summary.history_cards[0].context_warning,
-            owner_id=card.rows[-1].prompt.event_id)) for card in cards[1:])
+             owner_id=card.rows[-1].prompt.event_id)) for card in cards[1:])
+        history = tuple(replace(card, session_context=card.context_warning,
+            session_cost=summary.history_cards[0].session_cost, session_cost_state="observed") for card in history)
         return dict(state="running", view=project_live(WatchProjection("Watch", "fixture", (),
             now_ms=summary.now_ms, active_cards=(active, replace(active, session_id="second", title="Second running session")),
             history_cards=history, cards_state="observed", history_state="observed", quota=summary.quota,

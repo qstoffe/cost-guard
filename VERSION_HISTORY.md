@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.152 — 2026-11-04
+
+- Full Web Watch replaces Context with first-request **ECTX** before **Δ Ctx**. A shared **Session Context · Session CCost** line integrates approaching/exceeded guidance and full root-tree cost. A bounded independent worker reconciles versioned SQLite request contributions, preserving partial/unknown coverage and reusing unchanged valuations across reappearance and host restart. Mini Watch, CLI, Sessions UI and daily/account accounting are unchanged.
+
 ## v80.151 — 2026-11-04
 
 - Mini Watch: remove only the added CTX `~`; retain formatted values, N/A and the estimate tooltip. Mini and full Watch now label the canonical global daily summary **CCost Today**, including loading/accessibility text. Accounting, prompts, Token Mix, units and layout are unchanged.

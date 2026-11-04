@@ -13,6 +13,7 @@ from src.analysis.timezones import local_day_start_ms, local_month_start_ms
 from src.reports.history import WatchHistoryAcquisition
 from .card_workers import CardWorkers
 from .cards import WatchCards
+from .session_costs import SessionCosts
 from .coordinator import WatchCoordinator, WatchCycle
 from .today_ccost import WatchTodayCCost
 from .running import running_prompts
@@ -25,7 +26,9 @@ class WebWatchCoordinator(WatchCoordinator):
         super().__init__(**kwargs)
         self.card_workers = CardWorkers(service_factory)
         self.card_timing_observed = False
-        self.cards = WatchCards(self.card_workers, self.recent_seconds, self._record_card_duration, self._monotonic)
+        self.session_costs = SessionCosts(service_factory)
+        self.cards = WatchCards(self.card_workers, self.recent_seconds, self._record_card_duration, self._monotonic,
+            costs=self.session_costs)
         self.history_factory = service_factory
         self.history_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cost-guard-account-history")
         self.history_job = None
@@ -181,6 +184,7 @@ class WebWatchCoordinator(WatchCoordinator):
         try:
             self.card_workers.close()
         finally:
+            self.session_costs.close()
             self.history_pool.shutdown(wait=True, cancel_futures=True)
             self.detail_pool.shutdown(wait=True, cancel_futures=True)
             for future in (self.history_job, self.detail_job):

@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v80.151, 2026-11-04), the supported distribution.
+Use **current `main`** (v80.152, 2026-11-04), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -361,7 +361,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.151 (2026-11-04):** Mini Watch shows CTX without an added approximation prefix; its tooltip still explains the estimate. Both Watch views label their global daily summary **CCost Today**. Formatting, accounting, Token Mix and layout are unchanged. See [Mini Watch](docs/web-mini-watch.md).
+**v80.152 (2026-11-04):** Full Watch uses per-prompt **ECTX** and a compact **Session Context · Session CCost** line with inline context-price guidance. Whole-session cost reuses incremental, reconstructible SQLite contributions; Mini Watch, CLI and daily accounting are unchanged. See [Web Watch](docs/web-beta.md).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 
