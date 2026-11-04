@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 from development.tests.fixtures.package_copy import make_package
-from src.config import ConfigError, load_configuration, merge_config, read_jsonc, remove_json_comments
+from src.config import ConfigError, load_configuration, merge_config, read_jsonc, remove_json_comments, validated_values
 
 
 class JsoncTests(unittest.TestCase):
@@ -27,6 +27,21 @@ class JsoncTests(unittest.TestCase):
 
 
 class ConfigurationCompatibilityTests(unittest.TestCase):
+    def test_web_default_sentinel_resolves_canonically_before_consumers(self) -> None:
+        defaults = read_jsonc(Path(__file__).resolve().parents[2] / "config/default-config.jsonc")
+        overrides = {"webTheme": "web", "webSettings": {
+            "theme": "default", "ccostDisplayUnit": "default", "miniWatchPlacement": "default"}}
+        self.assertEqual({"theme": "classic", "ccostDisplayUnit": "credits", "miniWatchPlacement": "remember-last"},
+                         validated_values(defaults, overrides)["webSettings"])
+        self.assertEqual("default", overrides["webSettings"]["theme"], "resolution must not mutate saved intent")
+        for name in ("theme", "ccostDisplayUnit", "miniWatchPlacement"):
+            for value in (None, [], {}, True, "Default", "unsupported"):
+                with self.subTest(name=name, value=value), self.assertRaises(ConfigError):
+                    validated_values(defaults, {"webSettings": {name: value}})
+        defaults["webSettings"]["theme"] = "default"
+        with self.assertRaises(ConfigError):
+            validated_values(defaults, {"webSettings": {"theme": "web"}})
+
     def test_default_config_loads_without_creating_user_config(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             package = make_package(tmp)

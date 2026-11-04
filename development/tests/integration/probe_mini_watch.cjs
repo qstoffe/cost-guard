@@ -8,10 +8,19 @@ async function main() {
   assert.ok(['1','1.5','2'].includes(scale));
   await fs.stat(browser); await fs.stat(path.dirname(output));
   const profile = await fs.mkdtemp(path.join(path.dirname(output), 'mini-browser-'));
-  const server = spawn('py', ['-3', 'development/tests/integration/serve_mini_watch.py'], {windowsHide:true, stdio:['pipe','pipe','pipe']});
-  const lines = readline.createInterface({input:server.stdout})[Symbol.asyncIterator]();
+  const configRoot = await fs.mkdtemp(path.join(path.dirname(output), 'mini-config-'));
+  let server, lines;
+  const startServer = () => {
+    server = spawn('py', ['-3', 'development/tests/integration/serve_mini_watch.py', configRoot], {windowsHide:true, stdio:['pipe','pipe','pipe']});
+    lines = readline.createInterface({input:server.stdout})[Symbol.asyncIterator]();
+  };
+  startServer();
   const next = async () => JSON.parse((await lines.next()).value);
   const fixture = async command => {server.stdin.write(JSON.stringify({command})+'\n'); return next();};
+  const restart = async () => {
+    const exited = new Promise(resolve => server.once('exit', resolve)); server.stdin.end(); await exited;
+    startServer(); return next();
+  };
    const child = spawn(browser, ['--headless=new', `--screen-info={${1920*Number(scale)}x${1080*Number(scale)}}`, '--force-device-scale-factor='+scale, '--no-first-run', '--no-default-browser-check',
     '--disable-extensions', '--disable-background-networking', '--remote-debugging-pipe',
     '--user-data-dir=' + profile, 'about:blank'], {windowsHide:true, stdio:['ignore','ignore','ignore','pipe','pipe']});
@@ -34,7 +43,7 @@ async function main() {
   const deadline = setTimeout(() => {child.kill(); server.kill();}, 150000);
     const checks = [], screenshots = [], layouts = []; let evidence = {outcome:'FAIL'};
   try {
-    const launch = await next(); // Secret bootstrap URL is never logged or retained.
+    let launch = await next(); // Secret bootstrap URL is never logged or retained.
     const version = await command('Browser.getVersion');
     const {targetId} = await command('Target.createTarget', {url:'about:blank'});
     const {sessionId} = await command('Target.attachToTarget', {targetId,flatten:true});
@@ -61,6 +70,8 @@ async function main() {
     await evaluate(`miniWatch.toggle()`,true);
     const open = await evaluate(`({on:!!miniWatch.window,reason:miniWatch.feedback.textContent})`);
     assert.equal(open.on,true,open.reason);
+    await require('./probe_mini_placement.cjs')({evaluate,until,command,sessionId,targetId,
+      restart:async () => { launch = await restart(); return launch; },checks,layouts,output,screenshots});
     const checkIcon = async () => {
       await until(`miniWatch.window.performance.getEntriesByType('resource').some(entry =>
         entry.name === new URL('/favicon-cg1.ico',location.href).href && entry.initiatorType === 'other')`);
@@ -319,6 +330,7 @@ async function main() {
     if(child.exitCode===null) child.kill();
     if(server.exitCode===null) server.kill();
     try {await fs.rm(profile,{recursive:true});} catch {}
+    try {await fs.rm(configRoot,{recursive:true});} catch {}
     await fs.writeFile(output,JSON.stringify(evidence,null,2)+'\n'); console.log(JSON.stringify(evidence));
   }
 }

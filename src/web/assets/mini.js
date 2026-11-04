@@ -311,6 +311,7 @@ const MiniWatch = (() => {
       this.window = null; this.view = null; this.pending = null; this.ended = false;
       this.publication = null; this.healthState = {kind: 'starting'}; this.receivedAt = 0;
       this.observations = new Observations();
+      this.placement = null; this.opened = false; this.instance = null;
       this.reason = unavailable(owner);
       button.addEventListener('click', () => this.toggle());
       owner.addEventListener('pagehide', () => { this.ended = true; this.close(); });
@@ -321,8 +322,9 @@ const MiniWatch = (() => {
       if (win && (win.closed || this.owner.documentPictureInPicture.window !== win)) this.release(win);
       this.button.textContent = `Mini Watch: ${this.window ? 'On' : 'Off'}`;
       this.button.setAttribute('aria-pressed', this.window ? 'true' : 'false');
-      this.button.disabled = Boolean(this.reason);
+      this.button.disabled = Boolean(this.reason) || !this.placement;
       if (this.reason) this.feedback.textContent = this.reason;
+      else if (!this.placement) this.feedback.textContent = 'Mini Watch placement unavailable. Open Settings to retry.';
     }
     release(win) {
       if (this.window !== win) return;
@@ -338,7 +340,7 @@ const MiniWatch = (() => {
     }
     async toggle() {
       this.sync();
-      if (this.reason || this.ended) return;
+      if (this.reason || this.ended || !this.placement) return;
       if (this.window) { this.close(); return; }
       if (this.pending) {
         this.pending.cancelled = true; this.feedback.textContent = 'Opening cancelled.'; return;
@@ -352,7 +354,10 @@ const MiniWatch = (() => {
         // Windows at 150%: 450 DIPs produced a 729-physical-pixel visible frame.
         // 250 leaves room for native chrome below the 470px target on that setup.
         // Do not resize after opening: Chrome requires a NEW PiP user activation.
-        win = await this.owner.documentPictureInPicture.requestWindow({width: 560, height: 250, preferInitialWindowPlacement: true});
+        const instance = this.instance;
+        win = await this.owner.documentPictureInPicture.requestWindow({width: 560, height: 250,
+          preferInitialWindowPlacement: !this.opened || this.placement === 'standard'});
+        if (instance === this.instance) this.opened = true;
         if (request.cancelled || this.ended || win.closed || this.owner.documentPictureInPicture.window !== win) {
           win.close(); return;
         }
@@ -387,7 +392,14 @@ const MiniWatch = (() => {
       this.publication = value; this.sync(); this.render();
     }
     health(value) { this.healthState = value; this.sync(); this.render(); }
-    settings() { this.render(); }
+    settings(values, instance) {
+      if (instance && instance !== this.instance) { this.instance = instance; this.opened = false; }
+      if (values) {
+        this.placement = values.miniWatchPlacement;
+        this.feedback.textContent = '';
+      }
+      this.sync(); this.render();
+    }
     render() {
       if (!this.view) return;
       this.view.doc.documentElement.dataset.theme = this.owner.document.documentElement.dataset.theme;

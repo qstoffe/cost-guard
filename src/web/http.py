@@ -253,7 +253,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             data, content_type = self.server.assets[ASSETS[self.path][0]]
             if self.path == "/":
                 try:
-                    theme = self.server.settings.read()["theme"]
+                    theme = self.server.settings.read()["webSettings"]["theme"]
                 except SettingsError:
                     theme = "classic"  # Authenticated read will explain the safe config error.
                 data = data.replace(b'data-theme="classic"', f'data-theme="{theme}"'.encode(), 1)
@@ -308,7 +308,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                     return
                 self.reply(202, {"id": key})
                 return
-            if self.path in {"/api/settings/theme", "/api/settings/ccost"}:
+            if self.path in {"/api/settings/theme", "/api/settings/ccost", "/api/settings/mini-placement"}:
                 self.web_settings(value)
                 return
             if self.path == "/api/detail" and self.server.lifecycle and self.server.lifecycle.live:
@@ -352,7 +352,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             if value is None:
                 settings = self.server.settings.read()
             else:
-                field = "theme" if self.path == "/api/settings/theme" else "ccostDisplayUnit"
+                field = {"/api/settings/theme": "theme", "/api/settings/ccost": "ccostDisplayUnit",
+                         "/api/settings/mini-placement": "miniWatchPlacement"}[self.path]
                 if set(value) != {field}:
                     raise SettingsError("invalid_request")
                 def allowed():
@@ -360,7 +361,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                     return (not owner or not owner.stopping.is_set()) and self.server.session.authenticated(
                         self.headers.get("Cookie"))
                 settings = self.server.settings.write(field, value[field], allowed=allowed)
-            self.reply(200, {"webSettings": settings})
+            self.reply(200, settings)
         except SettingsError as error:
             code = str(error)
             status = 400 if code == "invalid_request" else 409 if code == "settings_conflict" else 503

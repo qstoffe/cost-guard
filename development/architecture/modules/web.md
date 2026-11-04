@@ -97,11 +97,14 @@ retained/partial provenance are accessible, not prominent warning suffixes. Addi
 `daily_usage.day_end_ms` uses configured timezone/DST so disconnected Mini clears the
 previous day without calculating any usage. Loading is not zero. The left title alone returns
 to Watch. Mini-only header alignment never changes full Watch tables. Chromium's
-560×250 opening request uses screen DIPs, not physical or zoomed document pixels;
-native Windows 150% measurements establish the <=470-physical-pixel opening cap on
-that setup, including reopen after manual enlargement. There is no automatic
-post-open resize or extra permission. Native geometry on other scales/platforms
-remains separately qualified in the Mini journal; browser security chrome is intact.
+560×250 opening request uses screen DIPs, not physical or zoomed document pixels.
+The controller requests initial placement on the opener's first opening or changed
+host nonce, then permits browser-native cached position/size for Remember last;
+Standard always requests initial placement. Settings changes never reposition open
+PiP. Reload/new openers start standard. Only mode, nonce and an opened flag live in
+memory; no geometry is read/persisted by production code. Historical Windows150%
+standard-frame measurements do not prove fresh physical Remember-last behavior;
+the Mini journal records hidden API proof and the scoped physical-verification exception.
 
 `src/web/lifecycle.py` owns deliberate launcher restart, overlap coalescing, bounded readiness/stop and detached spawn. `src/web/instance_state.py` owns canonical checkout/user identity, transition and lifetime OS locks, private atomic records and bounded allowlisted lifecycle diagnostics. `src/web/process_identity.py` owns native birth/image proof and safe termination handles. `src/web/change_guard.py` owns the allowlisted five-second runtime metadata baseline and terminal source_changed state; it never reloads/restarts code.
 
@@ -144,9 +147,10 @@ port, dependency, source or accounting owner changes.
 
 ## Public contract
 
-`src/web/settings.py` is the sole write exception: `webSettings.theme` (`classic`
-default or `web`) and `webSettings.ccostDisplayUnit` (`credits` default or `usd`)
-in this checkout's `config/user-config.jsonc`. `config.validated_values`
+`src/web/settings.py` is the sole write exception: `webSettings.theme` (`classic|web`),
+`ccostDisplayUnit` (`credits|usd`) and `miniWatchPlacement` (`remember-last|standard`)
+in this checkout's `config/user-config.jsonc`, each also accepting symbolic `default`.
+Shipped defaults must be actual enum values. `config.validated_values`
 shares startup validation, normalization and color resolution; neither merged
 defaults nor CLI colors are serialized. Bounded JSONC token offsets preserve every
 unrelated byte; duplicate keys and malformed/unsupported settings fail safely.
@@ -154,14 +158,16 @@ Owned/non-reparse paths, 1 MiB bounds, private same-directory temporaries, in-ho
 serialization and last-moment file identity/byte comparison precede atomic replace.
 This is ordinary editor-conflict detection, not a hostile same-user race guarantee.
 
-`GET /api/settings` and fixed `POST /api/settings/theme` / `POST /api/settings/ccost`
-expose only those enums and allowlisted error codes,
+`GET /api/settings` and fixed `POST /api/settings/theme`, `/api/settings/ccost` and
+`/api/settings/mini-placement` expose effective `webSettings`, symbolic/explicit
+`webSettingsChoices`, current `webSettingsDefaults` and allowlisted error codes,
 behind existing Host/Origin/session/CSRF/body/stopping guards. Early HTML selects
 the effective theme before CSS paint. `assets/settings.js` owns the sole native
-two dropdowns under Web settings and confirmed-only CSS/display-token switching, rollback and
+three dropdowns (Default first with a canonical-default-derived label) under Web
+settings and confirmed-only CSS/display-token switching, rollback and
 keyboard focus recovery. `#/settings` reads on entry, never submits report jobs,
 restarts the host or polls. Other tabs converge on their next read, not a broadcast.
-Explicit nested theme overrides legacy user `webTheme`; normalization happens before
+Explicit nested theme, including inheriting `default`, overrides legacy user `webTheme`; normalization happens before
 shipped nested defaults merge. Web CCost never follows CLI `ccostDisplayUnit` after
 promotion. Only separately approved promotions get independent Web fields; other
 settings remain shared. CLI/Watch settings and acquisition stay unchanged. Tests: `test_web_theme.py`,

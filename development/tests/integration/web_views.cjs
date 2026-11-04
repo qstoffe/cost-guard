@@ -111,11 +111,11 @@ async function main() {
   assert.match(ids.result.textContent, /Reference token valuation, not actual billing/);
   const creditsText = ids.result.textContent, beforeToggle = requests;
   const retainedChildren = [...ids.result.children];
-  vm.runInContext('applySettings({webSettings: {theme: "classic", ccostDisplayUnit: "usd"}})', context);
+  vm.runInContext('applySettings({webSettings: {theme: "classic", ccostDisplayUnit: "usd", miniWatchPlacement: "remember-last"}, webSettingsChoices: {theme: "classic", ccostDisplayUnit: "usd", miniWatchPlacement: "default"}, webSettingsDefaults: {theme: "classic", ccostDisplayUnit: "credits", miniWatchPlacement: "remember-last"}})', context);
   assert.notEqual(ids.result.textContent, creditsText);
   assert.match(ids.result.textContent, /\$\d+\.\d{2}/);
   assert.deepEqual(ids.result.children, retainedChildren, 'unit change retains DOM');
-  vm.runInContext('applySettings({webSettings: {theme: "classic", ccostDisplayUnit: "credits"}})', context);
+  vm.runInContext('applySettings({webSettings: {theme: "classic", ccostDisplayUnit: "credits", miniWatchPlacement: "remember-last"}, webSettingsChoices: {theme: "default", ccostDisplayUnit: "default", miniWatchPlacement: "default"}, webSettingsDefaults: {theme: "classic", ccostDisplayUnit: "credits", miniWatchPlacement: "remember-last"}})', context);
   assert.equal(ids.result.textContent, creditsText, 'exact reversible display');
   assert.equal(requests, beforeToggle, 'toggle never requests a report/provider');
   const overviewTable = all(ids.result, 'table')[0];
@@ -155,7 +155,7 @@ async function main() {
   const frozenModels = ids.result.textContent;
   navigate('settings');
   await until(() => all(ids.result, 'select')[0]?.disabled === false);
-  assert.equal(all(ids.result, 'select').length, 2, 'exactly Theme and CCost display');
+  assert.equal(all(ids.result, 'select').length, 3, 'exactly Theme, CCost display and Mini placement');
   assert.match(ids.result.textContent, /Web settings/);
   assert.equal(all(ids.result, 'button').length, 0, 'no save or apply action');
   assert.equal(ids.heading.textContent, 'Settings');

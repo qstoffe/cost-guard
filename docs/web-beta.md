@@ -36,8 +36,15 @@ errors unless the source supports a specific abort/quota cause.
 
 ## Web settings
 
-v80.120 groups exactly two controls under **Settings → Web settings**, at
-`/#/settings`: **Theme** (Classic / Web) and **CCost display** (Credits / USD).
+**Settings → Web settings**, at `/#/settings`, contains exactly three dropdowns:
+
+| Setting | Inherited choice (first) | Explicit choices |
+| --- | --- | --- |
+| Theme | Default (Classic) | Classic / Web |
+| CCost display | Default (Credits) | Credits / USD |
+| Mini Watch placement | Default (Remember last) | Remember last / Standard placement |
+
+Default labels reflect the current shipped defaults, not fixed lifetime names.
 Classic is dark independently of system preference; Web follows system light/dark.
 USD is reference token valuation, not billed spending. No CCost selector remains
 on Models or other report pages.
@@ -46,18 +53,26 @@ Each selection saves immediately to `config/user-config.jsonc` through the priva
 authenticated/CSRF-protected API. Only confirmed success changes the loaded theme
 or Python-prepared CCost tokens, including retained Snapshot/Live views. There is no
 reload, report/history/pricing/account acquisition, host restart, Apply button or
-browser-local preference. Both dropdowns disable briefly during a write. Failure
+browser-local preference. All dropdowns disable briefly during a write. Failure
 restores the last confirmed choices and shows an accessible error; select again to retry.
+Mini placement affects the **next opening**, never the size/existence of an open window.
+Until the initial settings read succeeds, controls cannot claim a saved choice and
+Mini stays unavailable; opening Settings retries the read.
 
 ```json
-{"webSettings": {"theme": "classic", "ccostDisplayUnit": "credits"}}
+{"webSettings": {"theme": "default", "ccostDisplayUnit": "credits", "miniWatchPlacement": "remember-last"}}
 ```
 
-The enums are exactly lowercase `classic|web` and `credits|usd`. Missing overrides
-inherit the shipped Classic/Credits defaults without creating a user file.
-Theme precedence is explicit user `webSettings.theme`, then legacy user `webTheme`,
-then Classic. Legacy `webTheme` remains accepted and is never destructively migrated;
-subsequent Theme changes write the nested key. Web CCost independently defaults to
+The enums are lowercase `default|classic|web`, `default|credits|usd` and
+`default|remember-last|standard`. Missing overrides show Default without creating a
+user file. **Default inherits that preference's current application default**, including
+after a future version changes it. Explicit Classic/Credits/Remember last stay pinned
+even when their effective behavior currently equals Default. Reads/saves preserve the
+selected intent, not just the resolved value; opening Settings does not migrate a file.
+Theme precedence is nested user choice (including symbolic `default`), then legacy
+user `webTheme`, then the shipped theme. Old valid overrides still show as explicit.
+Selecting Default bypasses a retained legacy override without deleting/reformatting it.
+Web CCost independently defaults to
 Credits even if the original CLI `ccostDisplayUnit` is USD. The CLI key and its
 `--ccost-unit` override keep their behavior and cannot override a Web choice.
 
@@ -66,7 +81,15 @@ CCost is read before report/Live presentation. Reopening Settings recognizes val
 external edits, without polling or automatic cross-tab broadcast. Existing tabs
 retain confirmed values until their next settings read or successful change.
 
-Only these two nested fields are writable. A setting stays shared while Web only
+Remember last reuses browser-native Mini bounds in the **same live opener and host**.
+Its first opening, reload/new opener or host restart starts with the standard
+560×250-DIP request and browser-initial placement. Standard placement requests that
+initial geometry every opening. The browser/OS owns position and clamping; no exact
+screen coordinates are promised. The mode persists in user config; geometry is never
+written to config, SQLite, browser storage, cookies or URLs. See [Mini Watch](web-mini-watch.md)
+for supported-browser behavior and the explicitly unverified physical checks.
+
+Only these three nested fields are writable. A setting stays shared while Web only
 consumes it; promotion to an editable Web control requires a separate approved
 feature and an independent value in `webSettings`. No other settings migrate here.
 CLI `colorScheme`, custom palettes and unpromoted shared settings are unchanged.
@@ -220,7 +243,7 @@ Accounts uses the shared provider/account cards with native quota windows, known
 | Session report | `/#/sessions/<id>` | Complete report Snapshot/Live detail; links from session lists and global Watch |
 | Date / inclusive range | `/#/reports?date=2026-10-25`, `/#/reports?date=2026-10-24:2026-10-25` | Configured-local boundaries/DST; canonical range valuation and union duration; impossible/reversed dates fail explicitly |
 | Historical Token Mix | `/#/token-mix` | Explicit Capture/Refresh only, never navigation/prefetch; CLI Input / Cached input / Cache write / Output share-and-CCost cells, model/publisher Prompts/Calls/Tokens/CCost, exact-volume sorting with compact K/M/B labels and explicit partial/unknown telemetry, full-report total above the table and optional sample/price coverage |
-| Web Settings | `/#/settings` | Theme only; authenticated narrow config read/write, no report acquisition |
+| Web Settings | `/#/settings` | Theme, CCost display and Mini placement; inherited/explicit intent, authenticated narrow config read/write, no report acquisition |
 
 Outside Models and Watch, report tables retain their search/filter/page controls. Their column clicks cycle ascending, descending, then original server order. Models uses the independent filter/multi-sort contract above, with no three-click reset; Watch keeps fixed chronological cards without report controls. All controls are presentation-only: totals and source queries never change. Decimal strings compare exactly and unknowns sort last. Complete revision-paged session detail has its own controls; global search is disabled there rather than implying unloaded-row coverage.
 

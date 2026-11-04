@@ -1,4 +1,4 @@
-"""The two writable Web preferences: bounded, preserving nested JSONC edits.
+"""Allowlisted Web preference choices: bounded, preserving nested JSONC edits.
 
 No settings cache: reads use canonical configuration validation. Local writes are
 serialized and compare file identity/bytes immediately before atomic replacement.
@@ -12,12 +12,12 @@ import stat
 import tempfile
 from threading import Lock
 
-from src.config import ConfigError, read_jsonc, validated_values
+from src.config import ConfigError, WEB_PREFERENCES, normalize_legacy_settings, read_jsonc, validated_values
 from .instance_state import _private
 from .process_identity import InstanceConflict
 
 MAX_CONFIG_BYTES = 1024 * 1024
-WEB_FIELDS = {"theme": ("classic", "web"), "ccostDisplayUnit": ("credits", "usd")}
+WEB_FIELDS = {name: ("default", *values) for name, values in WEB_PREFERENCES.items()}
 JSONC_TOKENS = re.compile(r'"(?:[^"\\]|\\.)*"|//[^\r\n]*|/\*[\s\S]*?\*/')
 
 
@@ -135,7 +135,11 @@ class WebSettings:
     def _values(self, raw):
         defaults = read_jsonc(self.directory / "default-config.jsonc")
         overrides = jsonc_document(raw)[2] if raw is not None else {}
-        return validated_values(defaults, overrides)
+        effective = validated_values(defaults, overrides)
+        web = normalize_legacy_settings(overrides).get("webSettings", {})
+        return {"webSettings": effective["webSettings"],
+                "webSettingsChoices": {name: web.get(name, "default") for name in WEB_FIELDS},
+                "webSettingsDefaults": defaults["webSettings"]}
 
     def read(self):
         return self._perform()
@@ -151,7 +155,7 @@ class WebSettings:
                 raw, identity = self._snapshot()
                 effective = self._values(raw)
                 if field is None:
-                    return effective["webSettings"]
+                    return effective
                 updated = replace_preference(raw if raw is not None else b"{\n}\n", field, value)
                 effective = self._values(updated)
                 if len(updated) > MAX_CONFIG_BYTES:
@@ -159,7 +163,7 @@ class WebSettings:
                 if not allowed():
                     raise SettingsError("instance_stopping")
                 self._commit(raw, identity, updated, allowed)
-                return effective["webSettings"]
+                return effective
         except SettingsError:
             raise
         except (ConfigError, ValueError, UnicodeError, RecursionError, OverflowError):

@@ -10,7 +10,7 @@ import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
-from src.config import ConfigError, load_configuration
+from src.config import ConfigError, load_configuration, read_jsonc
 from src.web.change_guard import SourceGuard
 from src.web.host import WebHost
 from src.web.jobs import ReportJobs
@@ -33,14 +33,15 @@ class ThemeTests(unittest.TestCase):
 
     def test_defaults_missing_file_and_cli_configuration_stay_independent(self):
         before = load_configuration(self.root).values
-        self.assertEqual({"theme": "classic", "ccostDisplayUnit": "credits"}, before["webSettings"])
-        self.assertEqual(before["webSettings"], self.settings.read())
+        self.assertEqual({"theme": "classic", "ccostDisplayUnit": "credits", "miniWatchPlacement": "remember-last"}, before["webSettings"])
+        self.assertEqual(before["webSettings"], self.settings.read()["webSettings"])
+        self.assertEqual(dict.fromkeys(before["webSettings"], "default"), self.settings.read()["webSettingsChoices"])
         self.assertFalse(self.path.exists())
-        self.assertEqual({"theme": "web", "ccostDisplayUnit": "credits"}, self.settings.write("theme", "web"))
+        self.assertEqual("web", self.settings.write("theme", "web")["webSettingsChoices"]["theme"])
         after = load_configuration(self.root).values
-        self.assertEqual(dict(before, webSettings={"theme": "web", "ccostDisplayUnit": "credits"}), after)
+        self.assertEqual(dict(before, webSettings=dict(before["webSettings"], theme="web")), after)
         self.assertEqual({"webSettings": {"theme": "web"}}, json.loads(self.path.read_bytes()))
-        self.assertEqual(after["webSettings"], WebSettings(self.root).read())
+        self.assertEqual(after["webSettings"], WebSettings(self.root).read()["webSettings"])
 
     def test_legacy_precedence_and_independent_ccost_defaults_external_edits_and_relaunch(self):
         for overrides, expected in (
@@ -51,15 +52,17 @@ class ThemeTests(unittest.TestCase):
         ):
             with self.subTest(overrides=overrides):
                 self.path.write_text(json.dumps(overrides))
+                expected = dict(expected, miniWatchPlacement="remember-last")
                 self.assertEqual(expected, load_configuration(self.root).values["webSettings"])
-                self.assertEqual(expected, self.settings.read())
-                self.assertEqual(expected, WebSettings(self.root).read())
+                self.assertEqual(expected, self.settings.read()["webSettings"])
+                self.assertEqual(expected, WebSettings(self.root).read()["webSettings"])
+                self.assertEqual(expected["theme"], self.settings.read()["webSettingsChoices"]["theme"])
                 self.assertEqual(overrides, json.loads(self.path.read_bytes()), "reads never migrate the file")
         self.settings.write("ccostDisplayUnit", "credits")
         saved = json.loads(self.path.read_bytes())
         saved["ccostDisplayUnit"] = "usd"
         self.path.write_text(json.dumps(saved))
-        self.assertEqual("credits", self.settings.read()["ccostDisplayUnit"])
+        self.assertEqual("credits", self.settings.read()["webSettings"]["ccostDisplayUnit"])
         self.assertEqual("usd", load_configuration(self.root).values["ccostDisplayUnit"])
 
     def test_round_trip_preserves_comments_nested_objects_order_and_cli_overrides(self):
@@ -68,12 +71,38 @@ class ThemeTests(unittest.TestCase):
         before = load_configuration(self.root).values
         self.settings.write("theme", "web")
         self.assertEqual(original.replace(b': "classic"', b': "web"'), self.path.read_bytes())
-        self.assertEqual(dict(before, webSettings={"theme": "web", "ccostDisplayUnit": "credits"}), load_configuration(self.root).values)
+        self.assertEqual(dict(before, webSettings=dict(before["webSettings"], theme="web")), load_configuration(self.root).values)
         self.settings.write("ccostDisplayUnit", "usd")
         self.assertEqual(original.replace(b': "classic"', b': "web"').replace(b': "credits"', b': "usd"'), self.path.read_bytes())
         self.settings.write("theme", "classic")
         self.settings.write("ccostDisplayUnit", "credits")
         self.assertEqual(original, self.path.read_bytes())
+        self.settings.write("theme", "default")
+        self.assertEqual(original.replace(b': "classic"', b': "default"'), self.path.read_bytes())
+        self.assertEqual("classic", self.settings.read()["webSettings"]["theme"], "Default bypasses retained legacy Web")
+
+    def test_inheritance_and_explicit_equal_defaults_survive_new_shipped_defaults(self):
+        current = {"theme": "classic", "ccostDisplayUnit": "credits", "miniWatchPlacement": "remember-last"}
+        future = {"theme": "web", "ccostDisplayUnit": "usd", "miniWatchPlacement": "standard"}
+        for field, value in current.items():
+            self.settings.write(field, value)
+        self.assertEqual(current, self.settings.read()["webSettingsChoices"])
+        default_path = self.root / "config/default-config.jsonc"
+        defaults = read_jsonc(default_path)
+        defaults["webSettings"] = future
+        default_path.write_text(json.dumps(defaults))
+        self.assertEqual(current, WebSettings(self.root).read()["webSettings"])
+        self.assertEqual(future, self.settings.read()["webSettingsDefaults"])
+        expected = dict(current)
+        for field in current:
+            result = self.settings.write(field, "default")
+            expected[field] = future[field]
+            self.assertEqual(expected, result["webSettings"], "one inherited preference never unpins another")
+            self.assertEqual("default", result["webSettingsChoices"][field])
+            self.assertEqual(future[field], result["webSettings"][field])
+            self.assertEqual("default", json.loads(self.path.read_bytes())["webSettings"][field])
+        self.assertEqual(future, load_configuration(self.root).values["webSettings"])
+        self.assertEqual(dict.fromkeys(current, "default"), WebSettings(self.root).read()["webSettingsChoices"])
 
     def test_insertion_and_escaped_nested_keys_preserve_every_other_byte(self):
         for raw in (b'{}', b'{ /* stays */ }\n', b'{"timezone":"UTC"}',
@@ -94,7 +123,9 @@ class ThemeTests(unittest.TestCase):
                     b'{"webSettings":null}', b'{"webSettings":[]}',
                     b'{"webSettings":{"theme":"Web"}}', b'{"webSettings":{"ccostDisplayUnit":"USD"}}',
                     b'{"webSettings":{"theme":"web","theme":"classic"}}',
-                    b'{"webSettings":{"other":"PRIVATE"}}',
+                     b'{"webSettings":{"other":"PRIVATE"}}',
+                     b'{"webSettings":{"miniWatchPlacement":"Standard"}}',
+                     b'{"webSettings":{"miniWatchPlacement":null}}',
                     b'{"timezone":"UTC" /* unclosed', b'{"watchDashboardMaxRows":' + b'9' * 400 + b'}'):
             with self.subTest(raw=raw):
                 self.path.write_bytes(raw)
@@ -173,7 +204,7 @@ class ThemeTests(unittest.TestCase):
         self.assertEqual([], list(self.path.parent.glob(".web-settings-*.tmp")))
         with self.assertRaisesRegex(SettingsError, "instance_stopping"):
             self.settings.write("ccostDisplayUnit", "usd", allowed=lambda: False)
-        self.assertEqual("credits", self.settings.read()["ccostDisplayUnit"])
+        self.assertEqual("credits", self.settings.read()["webSettings"]["ccostDisplayUnit"])
         permission = iter((True, False))
         with self.assertRaisesRegex(SettingsError, "instance_stopping"):
             self.settings.write("ccostDisplayUnit", "usd", allowed=lambda: next(permission))
@@ -181,7 +212,7 @@ class ThemeTests(unittest.TestCase):
         other_tab = WebSettings(self.root)
         other_tab.write("theme", "web")
         self.settings.write("ccostDisplayUnit", "usd")
-        self.assertEqual({"theme": "web", "ccostDisplayUnit": "usd"}, other_tab.read())
+        self.assertEqual({"theme": "web", "ccostDisplayUnit": "usd", "miniWatchPlacement": "remember-last"}, other_tab.read()["webSettings"])
 
     def test_source_guard_ignores_only_actual_user_override(self):
         guard = SourceGuard(self.root, interval=0)
@@ -220,23 +251,31 @@ class ThemeTests(unittest.TestCase):
             self.assertEqual(401, request('/api/settings')[0])
             self.assertEqual(401, request('/api/settings/theme', {"theme":"web"})[0])
             self.assertEqual(401, request('/api/settings/ccost', {"ccostDisplayUnit":"usd"})[0])
+            self.assertEqual(401, request('/api/settings/mini-placement', {"miniWatchPlacement":"standard"})[0])
             _, headers, body = request('/api/bootstrap', {"credential":server.session.bootstrap()})
             cookie = headers['Set-Cookie'].split(';')[0]
             csrf = json.loads(body)['csrf']
-            self.assertEqual({"webSettings":{"theme":"classic", "ccostDisplayUnit":"credits"}}, json.loads(request('/api/settings')[2]))
+            self.assertEqual(self.settings.read(), json.loads(request('/api/settings')[2]))
             for headers in ({"Origin":"https://foreign.invalid"}, {"X-CG-CSRF":""},
                             {"Content-Type":"text/plain"}, {"Host":"localhost"}):
                 self.assertEqual(403, request('/api/settings/theme', {"theme":"web"}, **headers)[0])
                 self.assertEqual(403, request('/api/settings/ccost', {"ccostDisplayUnit":"usd"}, **headers)[0])
+                self.assertEqual(403, request('/api/settings/mini-placement', {"miniWatchPlacement":"standard"}, **headers)[0])
             for value in ({}, {"theme":"web","path":"PRIVATE"}, {"theme":[]}, {"theme":"bad"}):
                 self.assertEqual(400, request('/api/settings/theme', value)[0])
             self.assertFalse(self.path.exists())
             for value in ({}, {"theme":"web"}, {"ccostDisplayUnit":"usd","path":"PRIVATE"}, {"ccostDisplayUnit":[]}, {"ccostDisplayUnit":"bad"}):
                 self.assertEqual(400, request('/api/settings/ccost', value)[0])
+            for value in ({}, {"theme":"web"}, {"miniWatchPlacement":"standard","path":"PRIVATE"}, {"miniWatchPlacement":[]}, {"miniWatchPlacement":"bad"}):
+                self.assertEqual(400, request('/api/settings/mini-placement', value)[0])
             self.assertEqual(200, request('/api/settings/theme', {"theme":"web"})[0])
             self.assertEqual(200, request('/api/settings/ccost', {"ccostDisplayUnit":"usd"})[0])
             self.assertIn(b'data-theme="web"', request('/')[2])
-            self.assertEqual({"webSettings":{"theme":"web", "ccostDisplayUnit":"usd"}}, json.loads(request('/api/settings')[2]))
+            self.assertEqual(self.settings.read(), json.loads(request('/api/settings')[2]))
+            for field, endpoint in (("theme", "theme"), ("ccostDisplayUnit", "ccost"), ("miniWatchPlacement", "mini-placement")):
+                result = json.loads(request('/api/settings/' + endpoint, {field: "default"})[2])
+                self.assertEqual("default", result["webSettingsChoices"][field])
+                self.assertEqual(result["webSettingsDefaults"][field], result["webSettings"][field])
             self.assertFalse(host.stopping.is_set())
             self.assertEqual("unchanged", host.guard.check())
             self.path.chmod(stat.S_IREAD)

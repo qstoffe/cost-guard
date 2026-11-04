@@ -28,9 +28,10 @@ from src.web.jobs import ReportJobs
 
 def main():
     with tempfile.TemporaryDirectory() as tmp:
-        root = Path(tmp)
-        (root / "config").mkdir()
-        shutil.copyfile(ROOT / "config/default-config.jsonc", root / "config/default-config.jsonc")
+        root = Path(sys.argv[1]) if len(sys.argv) == 2 else Path(tmp)
+        (root / "config").mkdir(exist_ok=True)
+        if not (root / "config/default-config.jsonc").exists():
+            shutil.copyfile(ROOT / "config/default-config.jsonc", root / "config/default-config.jsonc")
         host = WebHost(root, jobs=ReportJobs(target=finite_report))
         timer = Timer(180, host.stop)
         frame = summary_watch()

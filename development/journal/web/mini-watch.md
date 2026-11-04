@@ -1,5 +1,86 @@
 # Mini Watch and finished history
 
+## FR 000576 — v80.156, 2026-11-04
+
+Base: `c905df332071c5eff69f6aed8654d2c73f7f1372`. Three Web Settings dropdowns
+retain symbolic Default versus explicit choices independently of effective values.
+The canonical config enums resolve `default` against shipped defaults before regular
+consumers; the nested sentinel bypasses retained legacy `webTheme`. The preserving
+JSONC/atomic-write owner and HTTP guards are unchanged. API responses expose
+`webSettings`, `webSettingsChoices` and `webSettingsDefaults`; UI labels derive from
+the last, not hardcoded default names. Failed saves restore confirmed intent;
+an unconfirmed first read cannot enable settings writes or Mini opening.
+
+Mini requests the unchanged 560×250 DIPs with initial placement on first opening
+per opener/host nonce, then permits browser-native bounds reuse for Remember last.
+Standard always prefers initial placement. No geometry getter, persistence or native
+window-management bridge is added to production. A mode switch never touches open
+PiP. Reload/navigation/new tabs start standard, even while the server lives; this
+is deliberately a live-opener scope, not cross-tab/server-wide geometry retention.
+The reload test proves our explicit first-open request, not independent cache clearing.
+
+### Verification
+
+- **PASS:** local Full, **140 bounded units, zero failures, 83.4s**, four workers;
+  **1659 tests passed, one standard platform skip** (zsh/PTY on Windows, macOS CI owns
+  shell execution). [Per-unit report](../../architecture/governance/verification/mini-placement/full-tests.json).
+  Config tests cover unsupported enums, legacy precedence, missing/default/explicit
+  intent, future changed defaults and independent pinning. Settings tests retain
+  JSONC bytes/comments, authenticated allowlists, Origin/CSRF/body validation,
+  stopping/editor conflicts, no-create reads, honest rollback and focus.
+- **PASS:** working-tree validator: **11 passes, zero failures, six existing advisory
+  prose/Python design warnings**. No dependency, cap, timeout or assertion was weakened.
+- **PASS:** final actual hidden [Chrome 156.0.8078.80](../../architecture/governance/verification/mini-placement/chrome-placement.json)
+  and [Edge 156.0.4314.58](../../architecture/governance/verification/mini-placement/edge-placement.json),
+  **emulated scale 1.5**, shipped HTTP/auth/CSP/SSE and real Document PiP. Native CDP
+  bounds were changed to `(80,90,500,340)` and both position/dimensions returned after
+  app-close and `Window.close()`/pagehide. Standard reset to the original lower-right-like
+  bounds each time; current-window bounds remained unchanged when selecting modes.
+  The 560×250 request retains width/height in both modes. Initial 700×400 test bounds
+  hit the browser's 634×362 work-area maximum; the final probe uses supported 500×340
+  bounds and at most two DIPs of scale-rounding tolerance, not a product workaround.
+- **PASS:** a real Python fixture subprocess exits/restarts using the same disposable
+  user-config directory and browser profile. New nonce/random-port origin, persisted
+  explicit Theme/CCost/mode, standard first opening and later remembered bounds are
+  checked. Opener reload on the original same host also starts standard and then
+  remembers. Browser local/session storage stays empty. No geometry file/setting exists.
+  VM independently checks a changed host nonce in the same controller, canceled/rejected
+  opens, delayed callbacks, first-open flags, next-opening mode changes and native closes.
+- **PASS:** three real selects and exact option order/labels, Default and explicit saves,
+  immediate Theme/USD propagation to open Mini, single EventSource, historical table,
+  keyboard/scroll, narrow windows, light/dark layouts and host stop remain verified.
+  [Settings screenshot](../../architecture/governance/verification/mini-placement/chrome-placement-settings.png)
+  inspected: one column, all three controls readable. Rendered-headless proof is not physical DPI proof.
+- **PASS, limited scope:** read-only installed V2 `probe_web_live.py --watch-cards`,
+  one acquisition owner, two streams, three accounts, one active/two history cards;
+  **7.0461s**, owned close **0.2511s**, no pending owned threads/processes or cleanup
+  failures. One history-read error was observed and Daily was not published; this
+  check does **not** claim Daily/history completeness. Shared OpenCode/running Web
+  Beta were untouched; no inference or real-user settings write.
+
+Architecture overview/module/code map and current user guides updated in place;
+no acquisition, accounting, CLI, connection, CSS/layout or process-owner change.
+Product metadata advances to v80.156; no release ZIP/tag/Release is produced.
+
+### Decision Delegate-approved verification and scope exception
+
+On 2026-11-04 the foreground **Decision Delegate**, after read-only inspection of
+the FR/controller/probes/restart fixture/lifecycle tests, authorized **FR 000576 only**:
+omit fresh physical Windows-150% manual move/resize, native-X clicks, frame/display-edge
+measurements and monitor/work-area changes, and accept remembering only within the
+same live opener and server instance. Reload/navigation/new tabs begin standard.
+The decider was **Decision Delegate, not the user**; no visible-desktop permission
+was granted and no visible probe ran. Reason: adequate hidden real Chrome/Edge API/cache
+evidence avoids disruptive reassurance or unsupported native geometry workarounds.
+
+**UNVERIFIED:** physical DPI/frames, manual/native-X interaction, monitor transitions
+and untested browsers/platforms. CDP bounds changes are not manual Windows dragging;
+`Window.close()`/pagehide is not a physical X click. Historical native measurements
+remain historical. The decision required Full, validator and normal exact-HEAD GitHub
+checks; it waived no functional failure, security/Git protection or other requirement,
+and grants no future-FR authority. Completion is limited to this documented scope,
+not a claim of full physical acceptance.
+
 ## FR 000574 — v80.154, 2026-11-04
 
 Base: `7df4a6a9a8c826f537970c4348c872bdb8fb4381`. Mini consumes the existing
