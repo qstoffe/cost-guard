@@ -7,7 +7,7 @@ Status: current
 
 ## Summary
 
-Current schema-2 milestone 30 removes runtime-error/lifecycle/recovery test-module coupling without changing assertions, admission or deadlines. [Assessment and evidence](../architecture/governance/verification/test-health-30-20261104.md). Source metadata identifies the observed base; the maintenance diff/PR identifies the extraction. Whole-suite/platform results remain revision-specific, not consumer-desktop acceptance. Older reports are historical evidence, not the current progress counter.
+Schema-2 milestone 30 removes runtime/lifecycle/recovery test coupling; assertions, admission and deadlines stay unchanged. [Assessment](../architecture/governance/verification/test-health-30-20261104.md). Metadata identifies the observed base; the PR identifies the extraction. Results remain revision/platform-specific, not desktop acceptance. Older reports are historical, not progress counters.
 
 ## Evidence
 
@@ -31,7 +31,7 @@ Only named README/history/Web-guide prose caps became advisory; hard instruction
 
 ### Runner and retained critical risks
 
-`development/tools/run_tests.py`: four isolated local suite workers, hard Quick/Full file bounds 25/240s, named skips/failures/incomplete passed counts. Current CI runs Full+validator/browser once on Linux and focused serial native profiles on Windows/macOS ARM/macOS Intel, not Full on every native platform. Native profiles omit validator/browser provisioning. `test_ci_web_beta.py` protects hosted-only admission and sanitized truthful reporting; method counts/DOM substitutes are not execution/browser proof.
+`development/tools/run_tests.py`: four isolated local workers, hard Quick/Full bounds 25/240s, named skips/failures/incomplete counts. CI runs Full+validator/browser once on Linux, serial native profiles on Windows/macOS ARM/Intel; native omits validator/browser provisioning. `test_ci_web_beta.py` protects hosted-only admission/truthful sanitized reporting. Counts/DOM substitutes are not execution/browser proof.
 
 Historical milestone-40 counts/timings remain in `development/architecture/governance/verification/test-health-40.md`, not current evidence or controlled savings. Model-mix, quota and display-unit risks remain independent; FR 000553 changes only named prose limits.
 
