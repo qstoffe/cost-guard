@@ -57,7 +57,15 @@ stable server primary selection, with estimated/partial attribution retained.
 
 Mini renders canonical active/focal card identities, not the running aggregate: one
 keyed row per prompt with prompt-local cost/duration/context and shared terminal grace.
-Its two unframed regions scroll independently, including shorter lists at compact height;
+The first cell separately shows `session_summary.cost` after an independently ellipsized
+title, preserving the suffix and full heading's intrinsic minima. Its header's neutral
+Earlier Sessions disclosure starts collapsed per new PiP document and survives publications.
+It takes the last three of the shared eligible, oldest-to-newest `history_cards`, excludes
+active/grace session IDs, and uses `session_summary.context`, never historical prompt CTX.
+Both keyed tables share one bounded scroll region; sticky headers stay table-scoped.
+Session totals/context retain their canonical source/cache states and display tokens;
+there is no added acquisition, valuation, SSE or history scan. The session and subscription
+regions scroll independently, including shorter lists at compact height;
 primary Used bars stay thin and cyan until authoritative exhaustion. Estimated costs
 have accessible provenance without a visible approximation glyph. Native close and
 the filled Watch toggle own closing; the title still returns to the existing tab.

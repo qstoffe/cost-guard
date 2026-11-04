@@ -1,0 +1,484 @@
+{
+  "outcome": "PASS",
+  "browser": "Chrome/156.0.8078.80",
+  "emulatedDeviceScale": 1.5,
+  "checks": [
+    "Real user-activated Document PiP opens prompt-local table with external CSP styles, no inner frame/close and selected On fill",
+    "Whole-session suffix stays visible before/after title ellipsis; canonical newest-three Earlier Sessions, zero/one/three/five history, keyboard/click disclosure, stable SSE choice and shared scroll keep every running row reachable without PiP resize or second SSE",
+    "Intrinsic metric/header minima grow/shrink with content, empty colspan does not distort, only Session ellipsizes; failed reads retain figures quietly and one ten-minute notice clears on recovery",
+    "Navigation, existing-opener return, live theme/USD propagation keep Mini and exactly one EventSource",
+    "Compact opening and higher-scale browser clamps keep reachable independent scroll regions; enlarged 5/3 fits at 100/150%, 6/4 scroll; centered headers, semantic data alignment, canonical separate daily summary",
+    "Classic/Web light/dark styles, long account labels, primary-only six-account content without page overflow",
+    "Keyboard summary focus/activation and user-activated native PiP resize remain usable",
+    "With main document actually hidden and PiP visible, real SSE preserves final prompt-local completion metrics and updates empty/recovery without rAF",
+    "Shipped controller attaches/fetches the existing absolute same-origin ICO on open/reopen; owner icon and single SSE unchanged (not OS icon proof)",
+    "Native API replacement, browser-owned close, main toggle, reopen and main reload synchronize Off; no auto-open",
+    "Real terminal shutdown reaches open Mini as not live"
+  ],
+  "layouts": [
+    {
+      "case": "initial-unattached-5-3",
+      "width": 561,
+      "height": 250,
+      "outerHeight": 296,
+      "dpr": 1.5,
+      "prompts": true,
+      "accounts": true,
+      "promptHeight": 108,
+      "accountHeight": 91,
+      "outer": false
+    },
+    {
+      "case": "earlier-0",
+      "width": 561,
+      "height": 250,
+      "pageOverflow": false,
+      "headings": [
+        "Session / Total CCost",
+        "CTX"
+      ],
+      "ids": [],
+      "running": 12,
+      "columns": [],
+      "onlyRegion": true,
+      "unframed": true,
+      "scroll": true,
+      "accounts": 82,
+      "costs": [
+        " / 4583",
+        " / 4583",
+        " / 4583",
+        " / 4583",
+        " / 4583",
+        " / 4583",
+        " / 4583",
+        " / 4583",
+        " / 4583",
+        " / 4583",
+        " / 4583",
+        " / 4583"
+      ],
+      "suffixVisible": true,
+      "ellipsis": true,
+      "title": "Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title . Whole-session CCost: 4583; all root/session-tree usage, including history, child and provisional work; not prompt cost, Today or billing. Aggregate: observed; source: observed.",
+      "accessible": "Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title . Whole-session CCost: 4583; all root/session-tree usage, including history, child and provisional work; not prompt cost, Today or billing. Aggregate: observed; source: observed.",
+      "sameHeaderRow": true
+    },
+    {
+      "case": "earlier-1",
+      "width": 561,
+      "height": 250,
+      "pageOverflow": false,
+      "headings": [
+        "Session / Total CCost",
+        "CTX"
+      ],
+      "ids": [
+        "earlier-0"
+      ],
+      "running": 12,
+      "columns": [
+        2
+      ],
+      "onlyRegion": true,
+      "unframed": true,
+      "scroll": true,
+      "accounts": 82,
+      "costs": [
+        " / 4583",
+        " / 4583",
+        " / 4583",
+        " / 4583",
+        " / 4583",
+        " / 4583",
+        " / 4583",
+        " / 4583",
+        " / 4583",
+        " / 4583",
+        " / 4583",
+        " / 4583",
+        " / 4583"
+      ],
+      "suffixVisible": true,
+      "ellipsis": true,
+      "title": "Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title . Whole-session CCost: 4583; all root/session-tree usage, including history, child and provisional work; not prompt cost, Today or billing. Aggregate: observed; source: observed.",
+      "accessible": "Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title . Whole-session CCost: 4583; all root/session-tree usage, including history, child and provisional work; not prompt cost, Today or billing. Aggregate: observed; source: observed.",
+      "sameHeaderRow": true
+    },
+    {
+      "case": "earlier-3",
+      "width": 561,
+      "height": 250,
+      "pageOverflow": false,
+      "headings": [
+        "Session / Total CCost",
+        "CTX"
+      ],
+      "ids": [
+        "earlier-0",
+        "earlier-1",
+        "earlier-2"
+      ],
+      "running": 12,
+      "columns": [
+        2,
+        2,
+        2
+      ],
+      "onlyRegion": true,
+      "unframed": true,
+      "scroll": true,
+      "accounts": 76,
+      "costs": [
+        " / 4583",
+        " / 4583",
+        " / 4583",
+        " / 4583",
+        " / 4583",
+        " / 4583",
+        " / 4583",
+        " / 4583",
+        " / 4583",
+        " / 4583",
+        " / 4583",
+        " / 4583",
+        " / 4583",
+        " / 4583",
+        " / 4583"
+      ],
+      "suffixVisible": true,
+      "ellipsis": true,
+      "title": "Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title . Whole-session CCost: 4583; all root/session-tree usage, including history, child and provisional work; not prompt cost, Today or billing. Aggregate: observed; source: observed.",
+      "accessible": "Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title . Whole-session CCost: 4583; all root/session-tree usage, including history, child and provisional work; not prompt cost, Today or billing. Aggregate: observed; source: observed.",
+      "sameHeaderRow": true
+    },
+    {
+      "case": "earlier-5",
+      "width": 561,
+      "height": 250,
+      "pageOverflow": false,
+      "headings": [
+        "Session / Total CCost",
+        "CTX"
+      ],
+      "ids": [
+        "earlier-2",
+        "earlier-3",
+        "earlier-4"
+      ],
+      "running": 12,
+      "columns": [
+        2,
+        2,
+        2
+      ],
+      "onlyRegion": true,
+      "unframed": true,
+      "scroll": true,
+      "accounts": 76,
+      "costs": [
+        " / 4583",
+        " / 4583",
+        " / 4583",
+        " / 4583",
+        " / 4583",
+        " / 4583",
+        " / 4583",
+        " / 4583",
+        " / 4583",
+        " / 4583",
+        " / 4583",
+        " / 4583",
+        " / 4583",
+        " / 4583",
+        " / 4583"
+      ],
+      "suffixVisible": true,
+      "ellipsis": true,
+      "title": "Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title . Whole-session CCost: 4583; all root/session-tree usage, including history, child and provisional work; not prompt cost, Today or billing. Aggregate: observed; source: observed.",
+      "accessible": "Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title . Whole-session CCost: 4583; all root/session-tree usage, including history, child and provisional work; not prompt cost, Today or billing. Aggregate: observed; source: observed.",
+      "sameHeaderRow": true
+    },
+    {
+      "case": "intrinsic-long-titles",
+      "width": 561,
+      "pageOverflow": false,
+      "scroll": false,
+      "region": 531,
+      "widths": [
+        355.0833435058594,
+        30.697917938232422,
+        44.0625,
+        64.4375,
+        36.71875
+      ],
+      "required": [
+        30.697917,
+        44.06251050585937,
+        64.43751050585938,
+        36.7187910234375
+      ],
+      "wrap": [
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap"
+      ],
+      "ellipsis": false,
+      "title": true
+    },
+    {
+      "case": "intrinsic-growing-metrics",
+      "width": 561,
+      "pageOverflow": false,
+      "scroll": false,
+      "region": 531,
+      "widths": [
+        269.07293701171875,
+        59.8125,
+        79.0625,
+        67.52083587646484,
+        55.53125
+      ],
+      "required": [
+        59.81247998828125,
+        79.06247998828125,
+        67.52082349414063,
+        55.5312910234375
+      ],
+      "wrap": [
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap"
+      ],
+      "ellipsis": false,
+      "title": true
+    },
+    {
+      "case": "intrinsic-empty-colspan",
+      "width": 561,
+      "pageOverflow": false,
+      "scroll": false,
+      "region": 546,
+      "widths": [
+        388.34375,
+        16.166667938232422,
+        44.0625,
+        64.4375,
+        33.32291793823242
+      ],
+      "required": [
+        16.166667,
+        44.06247998828125,
+        64.43747998828125,
+        33.322917
+      ],
+      "wrap": [
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap"
+      ],
+      "ellipsis": false,
+      "title": false
+    },
+    {
+      "case": "intrinsic-shrinking-metrics",
+      "width": 561,
+      "pageOverflow": false,
+      "scroll": false,
+      "region": 531,
+      "widths": [
+        355.0833435058594,
+        30.697917938232422,
+        44.0625,
+        64.4375,
+        36.71875
+      ],
+      "required": [
+        30.697917,
+        44.06251050585937,
+        64.43751050585938,
+        36.7187910234375
+      ],
+      "wrap": [
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap"
+      ],
+      "ellipsis": false,
+      "title": false
+    },
+    {
+      "case": "native-resize-5-3",
+      "width": 513,
+      "height": 385,
+      "outer": false,
+      "horizontal": false,
+      "prompts": false,
+      "accounts": false,
+      "barHeight": 9.75,
+      "promptHeight": 153,
+      "promptContent": 153,
+      "accountHeight": 125,
+      "accountContent": 125,
+      "header": "sticky",
+      "healthyHidden": true
+    },
+    {
+      "case": "classic-light",
+      "width": 513,
+      "height": 385
+    },
+    {
+      "case": "web-light",
+      "width": 513,
+      "height": 385
+    },
+    {
+      "case": "web-dark",
+      "width": 513,
+      "height": 385
+    },
+    {
+      "case": "intrinsic-narrow-native-resize",
+      "width": 258,
+      "pageOverflow": false,
+      "scroll": true,
+      "region": 228,
+      "widths": [
+        140.1979217529297,
+        30.697917938232422,
+        44.0625,
+        64.4375,
+        36.71875
+      ],
+      "required": [
+        30.697917,
+        44.06249524707031,
+        64.43751050585938,
+        36.71876050585937
+      ],
+      "wrap": [
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap"
+      ],
+      "ellipsis": false,
+      "title": true
+    },
+    {
+      "case": "intrinsic-narrow-large-metrics",
+      "width": 258,
+      "pageOverflow": false,
+      "scroll": true,
+      "region": 228,
+      "widths": [
+        140.1979217529297,
+        81.64583587646484,
+        86.34375,
+        67.52083587646484,
+        55.53125
+      ],
+      "required": [
+        81.64583875292969,
+        86.34376050585938,
+        67.52085401171875,
+        55.53126050585937
+      ],
+      "wrap": [
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap"
+      ],
+      "ellipsis": false,
+      "title": true
+    }
+  ],
+  "screenshots": [
+    "chrome-earlier.png",
+    "chrome-classic-light.png",
+    "chrome-web-light.png",
+    "chrome-web-dark.png",
+    "chrome-earlier-narrow.png"
+  ],
+  "limitations": [
+    "Headless Chromium only; no physical/native X, native return/replacement chrome, minimized-opener restoration, always-on-top OS geometry or screen-reader proof."
+  ]
+}

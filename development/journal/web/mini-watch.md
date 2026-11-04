@@ -1,5 +1,73 @@
 # Mini Watch and finished history
 
+## FR 000574 — v80.154, 2026-11-04
+
+Base: `7df4a6a9a8c826f537970c4348c872bdb8fb4381`. Mini consumes the existing
+`session_summary.cost/context` and canonical ascending `history_cards`, without
+changing the server projection, valuation/cache, lifecycle or acquisition owners.
+The first cell's grid reserves a nonshrinking full-session-cost suffix and only
+ellipsizes the title. Focus/hover/click exposes the complete title and cost scope
+in a native top-layer popover. The neutral Earlier Sessions disclosure starts
+collapsed per PiP document, retains its choice across publications, and puts up to
+three newest eligible session-distinct rows above running prompts in one bounded
+scroll region. Accounts retain independent scrolling; opening remains 560×250 DIPs.
+
+### Verification
+
+- **PASS:** final local Full, **139 bounded units, zero failures, 84.9s**, four workers;
+  [per-unit report](../../architecture/governance/verification/mini-session-tables/full-tests.json).
+  **1653 tests passed; one standard platform skip**: macOS zsh/PTY execution unavailable
+  on this Windows host (native macOS CI owns that test).
+  The initial Full overlapped both browsers and real-source work and failed an existing
+  872-root catalog-count assertion (4 versus 2/3) in the two-second catalog-reuse path.
+  A focused run passed that individual case but its whole file exceeded the default
+  25s focused-run timeout; the final standard Full, with its unchanged 240s unit bound
+  and no competing probes, passed the scale class in 30.74s. No product/test deadline,
+  assertion, source behavior, dependency or budget was weakened. Contention is the
+  observed association, not a claim that the historical timing sensitivity is repaired.
+- **PASS:** working-tree validation, **11 passes, zero failures, six existing advisory
+  prose/Python design warnings**. Focused Mini has seven tests, including whole-session
+  versus prompt/current-session-context scope, concurrent totals, units and partial coverage.
+- **PASS:** final hidden [Chrome 156.0.8078.80](../../architecture/governance/verification/mini-session-tables/chrome.json)
+  and [Edge 156.0.4314.58](../../architecture/governance/verification/mini-session-tables/edge.json),
+  **emulated device scale 1.5**, shipped HTTP/CSP/auth/SSE and actual Document PiP.
+  Zero/one/three/five eligible sessions, zero/one/twelve running prompts, newest-three
+  ordering, no active/history duplicates (VM), full-cost visibility, metric minima,
+  partial/unknown/zero/retained states, focus/row identity, Enter/Space disclosure,
+  real Ctrl+Home/PageDown region scrolling and visible full-title focus popover pass.
+  Expanded Classic/Web light/dark, enlarged font, native-API narrow resizing and
+  no page overflow are checked; screenshot inspection caught generic section-card
+  styling, now fully reset (including shadow). Sticky headings remain table-scoped,
+  every running row is reachable, toggle never changes PiP dimensions, reopen
+  collapses history, and exactly one EventSource remains. An initial probe race
+  accepted the prior three-row publication during a five-history update; waiting for
+  the actual source history count fixed the probe without weakening expected IDs.
+  [Expanded light](../../architecture/governance/verification/mini-session-tables/chrome-web-light.png),
+  [dark](../../architecture/governance/verification/mini-session-tables/chrome-web-dark.png),
+  [narrow](../../architecture/governance/verification/mini-session-tables/chrome-earlier-narrow.png).
+- **PASS:** read-only installed V2 `probe_web_live.py --watch-cards --session-cost`:
+  stable session **4 requests/all priced**, independent report parity, fresh repository
+  valuations **0**, cache writes **false**. One acquisition owner, two streams, three
+  accounts, **13.204s** overall, owned close **0.1302s**, no pending owned threads/processes
+  or cleanup failures. No model inference or shared OpenCode stop/mutation.
+
+Architecture: module contract/code map updated in place; no boundary/flow change.
+User guides distinguish full-session, prompt, daily and native-period costs. Existing
+cache/correction/compaction/child/provisional/no-op tests retain semantic ownership.
+
+### Decision Delegate-approved verification exception
+
+The foreground **Decision Delegate** approved an **FR 000574-only** exception,
+conditional on final Full/validator/browser and normal PR verification: omit fresh
+physical **Windows-150% PiP rendering/native-chrome observation** and actual
+**screen-reader speech**. Hidden real PiP tests use **emulated device scale 1.5**;
+font enlargement is not browser zoom or physical Windows scaling. Actual OS DPI/frame
+rendering and assistive announcements remain **unverified**. Historical native
+measurements are context, not fresh proof of the changed tables. Adequate hidden
+layout/input and installed-source evidence did not justify disruptive reassurance.
+No visible probe ran and no desktop permission was granted. Functional behavior,
+failing tests, CI and Git protections were not waived; no future-task exception applies.
+
 ## FR 000571 — v80.151, 2026-11-04
 
 Base: `711e45b21ef6c9d5ff84f02653205f2a0efdea56`. Mini passes its already-formatted

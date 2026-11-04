@@ -65,7 +65,7 @@ function setup() {
   assert.equal(view.body.children[1].children[2].textContent, '3');
   assert.equal(view.body.children[1].children[3].textContent, '20m');
   assert.equal(view.health.textContent, ''); assert.equal(view.health.hidden, true);
-  const table = view.prompts.querySelectorAll('table')[0], headers = table.querySelectorAll('th');
+  const table = view.body.parentNode, headers = table.querySelectorAll('th');
   assert.equal(headers[4].textContent, 'CTX');
   assert.equal(headers[4].title, 'Estimated next incoming context for this prompt; N/A means unavailable');
   assert.match(table.attributes['aria-label'], /estimated next incoming context \(CTX\)/);
@@ -84,6 +84,7 @@ function setup() {
   view.daily.fire('click'); view.daily.fire('keydown'); assert.equal(test.returned(),0);
   assert.equal(api.requests[0].height,250); assert.equal(api.requests[0].width,560);
   assert.equal(api.requests[0].preferInitialWindowPlacement,true);
+  require('../fixtures/mini_sessions.cjs')(vm,context,controller,view,input);
   context.fullParent = new Node('div'); context.fullState = {connection:'Live connected.'};
   const daily = input.view.daily_usage;
   function parity() {
@@ -221,7 +222,8 @@ function setup() {
    assert.equal(api.requests.at(-1).height,250,'reopening requests the compact size again');
    assert.equal(second.document.head.children.filter(n => n.rel === 'icon').length, 1);
    assert.equal(second.document.head.children[0].href, 'http://127.0.0.1:1234/favicon-cg1.ico');
-   assert.notEqual(second.document.head.children[0], child.document.head.children[0], 'each PiP document owns its link');
+    assert.notEqual(second.document.head.children[0], child.document.head.children[0], 'each PiP document owns its link');
+   assert.equal(controller.view.earlier.hidden,true,'fresh Mini always opens Earlier Sessions collapsed');
   child.fire('pagehide'); assert.equal(button.textContent, 'Mini Watch: On', 'late old pagehide cannot retire a new window');
   second.close(); second.fire('pagehide'); assert.equal(button.textContent, 'Mini Watch: Off', 'native close');
   const replaceOpen = controller.toggle(), replaced = win(); test.opened(replaced); await replaceOpen;

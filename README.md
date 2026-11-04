@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v80.152, 2026-11-04), the supported distribution.
+Use **current `main`** (v80.154, 2026-11-04), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -361,7 +361,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.153 (2026-11-04):** Web Beta browser authorization renews during ordinary Live/Watch use, with a rolling seven-day inactivity window per browser instead of an absolute eight-hour cutoff. Trusted launcher links remain one-use and valid for only 120 seconds. See [browser session lifetime](docs/web-beta.md#browser-session-and-privacy).
+**v80.154 (2026-11-04):** Mini Watch preserves a full-session CCost suffix beside each truncated session title. A collapsed-by-default **Earlier Sessions** table shows up to three canonical finished sessions above the running prompts, sharing one scrollbar without new acquisition. Prompt-local CCost/Duration/CTX remain distinct. See [Mini Watch](docs/web-mini-watch.md).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

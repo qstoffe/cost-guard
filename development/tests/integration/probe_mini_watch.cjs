@@ -76,9 +76,9 @@ async function main() {
     const metrics = () => evaluate(`[...miniWatch.view.body.rows].map(row=>[...row.cells].map(cell=>cell.textContent))`);
     assert.deepEqual((await metrics()).map(row=>row.slice(1,4)),[['#24','3','20m'],['#23','2','10m']]);
     assert.deepEqual((await metrics()).map(row=>row[4]),['120k','120k']);
-    assert.equal(await evaluate(`miniWatch.view.root.querySelectorAll('th')[4].title`),
+    assert.equal(await evaluate(`miniWatch.view.body.parentNode.querySelectorAll('th')[4].title`),
       'Estimated next incoming context for this prompt; N/A means unavailable');
-    assert.match(await evaluate(`miniWatch.view.prompts.querySelector('table').getAttribute('aria-label')`), /estimated next incoming context \(CTX\)/);
+    assert.match(await evaluate(`miniWatch.view.body.parentNode.getAttribute('aria-label')`), /estimated next incoming context \(CTX\)/);
     await evaluate(`miniWatch.view.drawDaily(null,false)`);
     assert.equal(await evaluate(`miniWatch.view.daily.textContent`),'CCost Today · Loading…');
     assert.match(await evaluate(`miniWatch.view.daily.getAttribute('aria-label')`), /^CCost Today · Loading…/);
@@ -86,7 +86,7 @@ async function main() {
     assert.equal(await evaluate(`documentPictureInPicture.window === miniWatch.window`),true);
     await until(`miniWatch.window.getComputedStyle(miniWatch.view.prompts).overflowY === 'auto'`);
     const alignment = await evaluate(`(() => {const w=miniWatch.window,v=miniWatch.view;return {
-      headers:[...v.root.querySelectorAll('th')].map(cell=>w.getComputedStyle(cell).textAlign),
+      headers:[...v.body.parentNode.querySelectorAll('th')].map(cell=>w.getComputedStyle(cell).textAlign),
       cells:[...v.body.rows[0].cells].map(cell=>w.getComputedStyle(cell).textAlign),
       daily:v.daily.textContent,full:[...document.querySelector('.watch-daily').children].slice(1,3).map(cell=>cell.textContent),
       separate:!v.summary.contains(v.daily),headerPadding:w.getComputedStyle(v.root.firstElementChild).padding,
@@ -121,7 +121,7 @@ async function main() {
     }
     assert.ok(pipSession,'owned Document PiP target available for rendered geometry and theme checks');
     const columns = () => evaluate(`(() => {
-      const w=miniWatch.window,v=miniWatch.view,table=v.prompts.querySelector('table');
+      const w=miniWatch.window,v=miniWatch.view,table=v.body.parentNode;
       const cells=[...table.rows].filter(row=>row.cells.length===5).map(row=>[...row.cells]);
       const intrinsic=cell=>{const range=w.document.createRange();range.selectNodeContents(cell);
         const s=w.getComputedStyle(cell);return range.getBoundingClientRect().width+
@@ -141,6 +141,7 @@ async function main() {
       if (!value.scroll) assert.ok(Math.abs(value.widths.reduce((a,b)=>a+b,0)-value.region)<1.1,JSON.stringify(value));
       return value;
     };
+    await require('./probe_mini_sessions.cjs')({evaluate,until,fixture,command,pipSession,layouts,checks,output,screenshots});
     await fixture('density-6-4-long'); await until(`miniWatch.view.body.rows.length===6`);
     assert.equal((await checkColumns('intrinsic-long-titles')).title,true);
     await evaluate(`(() => {const p=structuredClone(liveValue);p.state='running';p.view.now_ms++;
@@ -196,7 +197,7 @@ async function main() {
       horizontal:d.documentElement.scrollWidth>w.innerWidth, prompts:v.prompts.scrollHeight>v.prompts.clientHeight,
       accounts:v.accounts.scrollHeight>v.accounts.clientHeight,barHeight:parseFloat(w.getComputedStyle(v.accounts.querySelector('progress')).height),
       promptHeight:v.prompts.clientHeight,promptContent:v.prompts.scrollHeight,accountHeight:v.accounts.clientHeight,accountContent:v.accounts.scrollHeight,
-      header:w.getComputedStyle(v.prompts.querySelector('th')).position,healthyHidden:v.health.hidden};})()`);
+      header:w.getComputedStyle(v.body.parentNode.querySelector('th')).position,healthyHidden:v.health.hidden};})()`);
     const normal = await geometry();
     layouts.push({case:'native-resize-5-3',...normal});
     assert.equal(normal.outer,false); assert.equal(normal.horizontal,false);
@@ -220,6 +221,7 @@ async function main() {
     }
     await fixture('running'); await until(`miniWatch.view.body.rows.length === 2 && miniWatch.view.accounts.children.length === 6`);
     checks.push('Compact opening and higher-scale browser clamps keep reachable independent scroll regions; enlarged 5/3 fits at 100/150%, 6/4 scroll; centered headers, semantic data alignment, canonical separate daily summary');
+    await evaluate(`miniWatch.view.earlierToggle.click();miniWatch.view.prompts.scrollTop=0`);
     for (const [theme,scheme,background] of [['classic','light','#101112'],['web','light','#eef2f8'],['web','dark','#0c1422']]) {
       await evaluate(`document.documentElement.dataset.theme='${theme}'; miniWatch.settings()`);
       await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:scheme}]},pipSession);
@@ -256,6 +258,11 @@ async function main() {
       p.view.active_cards[0].rows[0].live_context.display.watch_next_context_tokens='123 456';
       miniWatch.update(p);})()`);
     assert.equal((await checkColumns('intrinsic-narrow-large-metrics')).scroll,true);
+    assert.equal(await evaluate(`!miniWatch.view.earlier.hidden && miniWatch.view.historyBody.rows[0].cells.length===2 && miniWatch.view.doc.documentElement.scrollWidth<=miniWatch.window.innerWidth`),true);
+    const narrowImage=await command('Page.captureScreenshot',{format:'png',captureBeyondViewport:false},pipSession);
+    const narrowPath=output.replace(/\.json$/,'')+'-earlier-narrow.png';
+    await fs.writeFile(narrowPath,Buffer.from(narrowImage.data,'base64'));screenshots.push(path.basename(narrowPath));
+    await evaluate(`miniWatch.view.earlierToggle.click()`);
     await fixture('running'); await until(`miniWatch.view.body.rows[0].cells[1].textContent==='#24'`);
     checks.push('Keyboard summary focus/activation and user-activated native PiP resize remain usable');
     const backgroundTarget = await command('Target.createTarget',{url:'about:blank'});
@@ -280,6 +287,7 @@ async function main() {
     await evaluate(`miniWatch.window.close()`);
     await until(`document.getElementById('mini-watch-toggle').textContent === 'Mini Watch: Off'`);
     await evaluate(`miniWatch.toggle()`,true); assert.equal(await pip(),true);
+    assert.equal(await evaluate(`miniWatch.view.earlier.hidden`),true,'fresh PiP reopens history collapsed');
     await checkIcon();
     assert.equal(await evaluate('probeStreams'),1,'closing/reopening Mini never adds an EventSource');
     checks.push('Shipped controller attaches/fetches the existing absolute same-origin ICO on open/reopen; owner icon and single SSE unchanged (not OS icon proof)');
