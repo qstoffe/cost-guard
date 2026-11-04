@@ -361,7 +361,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.152 (2026-11-04):** Full Watch uses per-prompt **ECTX** and a compact **Session Context · Session CCost** line with inline context-price guidance. Whole-session cost reuses incremental, reconstructible SQLite contributions; Mini Watch, CLI and daily accounting are unchanged. See [Web Watch](docs/web-beta.md).
+**v80.153 (2026-11-04):** Web Beta browser authorization renews during ordinary Live/Watch use, with a rolling seven-day inactivity window per browser instead of an absolute eight-hour cutoff. Trusted launcher links remain one-use and valid for only 120 seconds. See [browser session lifetime](docs/web-beta.md#browser-session-and-privacy).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

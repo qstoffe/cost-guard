@@ -11,7 +11,7 @@ from threading import BoundedSemaphore, Timer
 
 from src.version import DISPLAY_VERSION
 from .jobs import parse_report
-from .security import BrowserSession
+from .security import BrowserSession, COOKIE_SECONDS
 from .instance_state import checkout_identity
 from .settings import SettingsError, WebSettings
 
@@ -188,6 +188,8 @@ class RequestHandler(BaseHTTPRequestHandler):
         if self.server.lifecycle:
             self.server.lifecycle.observations.response(status)
         data = value if isinstance(value, bytes) else json.dumps(value, allow_nan=False).encode("utf-8")
+        if (cookie is None and 200 <= status < 300 and getattr(self, '_protected', False)):
+            cookie = self.server.session.activity(self.headers.get('Cookie'))
         self.send_response_only(status)
         for key, val in {"Content-Type": content_type, "Content-Length": str(len(data)),
                          "Connection": "close", "Cache-Control": "no-store",
@@ -198,7 +200,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.send_header(key, val)
         if cookie:
             name = self.server.session.cookie_name
-            self.send_header("Set-Cookie", f"{name}={cookie}; HttpOnly; SameSite=Strict; Path=/; Max-Age=28800")
+            self.send_header("Set-Cookie", f"{name}={cookie}; HttpOnly; SameSite=Strict; Path=/; Max-Age={COOKIE_SECONDS}")
         if (getattr(self, 'path', '').startswith('/api/') and self.server.lifecycle and
                 (cookie or self.server.session.authenticated(self.headers.get('Cookie')))):
             self.send_header('X-CG-Instance', self.server.lifecycle.nonce)
@@ -268,6 +270,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         if self.path != "/api/bootstrap" and not self.server.session.authenticated(headers.get("Cookie")):
             self.reply(401, {"error": "authentication_required"})
             return
+        self._protected = self.path.startswith('/api/') and self.path != '/api/bootstrap'
         if self.server.lifecycle and self.server.lifecycle.stopping.is_set() and self.path not in {"/api/status", "/api/live"}:
             self.reply(503, {"error": "instance_stopping"})
             return
@@ -286,7 +289,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 self.reply(400, {"error": "invalid_request"})
                 return
             if self.path == "/api/bootstrap":
-                session = self.server.session.exchange(value.get("credential")) if set(value) == {"credential"} else None
+                session = self.server.session.exchange(value.get("credential"), headers.get('Cookie')) if set(value) == {"credential"} else None
                 if session is None:
                     self.reply(401, {"error": "bootstrap_expired_or_used"})
                 else:

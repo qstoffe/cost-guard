@@ -235,6 +235,82 @@ class WebRuntimeTests(unittest.TestCase):
         with patch('src.web.http.DISPLAY_VERSION', 'v91.7'):
             self.assertEqual('v91.7', json.loads(self.request('/api/status')[2])['product_version'])
 
+    def test_cookie_renewal_covers_full_idle_window_and_all_successful_api_replies(self):
+        now = Mock(return_value=1000)
+        self.server.session = BrowserSession(clock=now)
+        self.login()
+        original_cookie, csrf = self.cookie, self.csrf
+        for elapsed in (10, 3599):
+            now.return_value = 1000 + elapsed
+            status, headers, _ = self.request('/api/session')
+            self.assertEqual(200, status)
+            self.assertNotIn('Set-Cookie', headers)
+        # Close immediately before renewal; return just before seven idle days.
+        now.return_value += 7 * 86400 - 1
+        status, headers, body = self.request('/api/session')
+        self.assertEqual(200, status)
+        self.assertEqual(original_cookie, headers['Set-Cookie'].split(';', 1)[0])
+        self.assertEqual('HttpOnly; SameSite=Strict; Path=/; Max-Age=608400',
+                         headers['Set-Cookie'].split('; ', 1)[1])
+        self.assertEqual(csrf, json.loads(body)['csrf'])
+        now.return_value += 7 * 86400
+        status, headers, _ = self.request('/api/session')
+        self.assertEqual(401, status)
+        self.assertNotIn('Set-Cookie', headers)
+
+    def test_rejected_and_public_requests_never_renew_browser_activity(self):
+        now = Mock(return_value=1000)
+        self.server.session = BrowserSession(clock=now)
+        self.login()
+        now.return_value += 3600
+        cases = [('/', None, {}, 200), ('/health', None, {}, 200),
+                 ('/api/status', None, {'Host': 'evil.example'}, 403),
+                 ('/api/status', None, {'Origin': 'null'}, 403),
+                 ('/api/session', None, {'Cookie': 'invalid=wrong'}, 401),
+                 ('/api/reports', {'kind': 'sessions'}, {'X-CG-CSRF': 'wrong'}, 403),
+                 ('/api/reports', {'kind': 'invalid'}, {}, 400),
+                 ('/api/not-found', None, {}, 404)]
+        for path, value, supplied, expected in cases:
+            status, headers, _ = self.request(path, value, headers=supplied)
+            self.assertEqual(expected, status)
+            self.assertNotIn('Set-Cookie', headers)
+        now.return_value = 1000 + 7 * 86400
+        self.assertEqual(401, self.request('/api/status')[0])
+
+    def test_real_live_poll_and_settings_write_renew_without_report_acquisition(self):
+        from types import SimpleNamespace
+        from src.web.events import EventHub
+        now = Mock(return_value=1000)
+        self.server.session = BrowserSession(clock=now)
+        self.login()
+        self.server.lifecycle = SimpleNamespace(events=EventHub('fixture'), nonce='fixture',
+            stopping=Event(), observations=Mock())
+        self.server.settings = Mock()
+        self.server.settings.write.return_value = {'theme': 'web'}
+        for day in range(1, 16):
+            now.return_value = 1000 + day * 86400
+            status, headers, _ = self.request('/api/live')
+            self.assertEqual(200, status)
+            self.assertIn('Max-Age=608400', headers['Set-Cookie'])
+            self.assertEqual(200, self.request('/api/settings/theme', {'theme': 'web'})[0])
+            self.assertNotIn('Set-Cookie', self.request('/api/live')[1])
+        self.assertIsNone(self.jobs._active)
+        self.assertEqual({}, self.jobs._jobs)
+
+    def test_concurrent_same_browser_handoffs_keep_active_cookie_and_csrf(self):
+        from concurrent.futures import ThreadPoolExecutor
+        self.login()
+        cookie, csrf = self.cookie, self.csrf
+        links = [self.server.session.bootstrap(renew=True) for _ in range(4)]
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            replies = list(pool.map(lambda token: self.request('/api/bootstrap', {'credential': token}), links))
+        for status, headers, body in replies:
+            self.assertEqual(200, status)
+            self.assertEqual(cookie, headers['Set-Cookie'].split(';', 1)[0])
+            self.assertEqual(csrf, json.loads(body)['csrf'])
+        self.assertEqual(200, self.request('/api/session')[0])
+        self.assertEqual(401, self.request('/api/bootstrap', {'credential': links[0]})[0])
+
     def test_host_origin_dns_rebinding_and_csrf_are_denied(self):
         self.login()
         for headers in ({"Host": "evil.example"}, {"Host": "localhost"}, {"Host": "127.0.0.1:1"},

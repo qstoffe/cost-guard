@@ -101,6 +101,20 @@ without bypassing HTTP guards. No new process, dependency, macOS menu, route, ac
 or trust boundary is added. Tests and explicit desktop limits:
 [browser handoff evidence](../../journal/web/browser-links.md).
 
+FR 000573 replaces the shared eight-hour deadline with per-browser stable bearer
+records and seven days since a successful protected API reply. `http.reply` alone
+records ordinary successful activity; validation, failures, assets and SSE do not.
+`security.activity` coalesces each browser's cookie headers hourly; browser storage
+is seven days plus one hour, while server authorization rejects at exactly seven
+inactive days. The storage/equality exception is explicitly Decision Delegate-approved;
+see [session findings](../../journal/web/browser-sessions.md). Session wall time includes
+host sleep. Bootstrap remains monotonic/120-second/one-use; an existing valid
+browser credential is reused on redemption, without rotating peers or instance CSRF.
+SSE validates its opening bearer; an obsolete stream triggers current-cookie sync
+and guarded replacement, not immediate terminal sign-out. Existing ten-second
+Live sync renews cookies without new requests or acquisition. No layer, process,
+port, dependency, source or accounting owner changes.
+
 `src/web/windows_launch.py` and `src/web/windows_launch.ps1` own Beta-only Python/configuration/native preflight and sanitized failure feedback; stable terminal launchers do not import them. The Windows Beta batch waits synchronously for PowerShell's launch status; indeterminate activity spans bounded Python discovery and streamed startup stages until validated ready plus the OS browser-open result. The managed pythonw host remains detached/tray-owned, never console-owned; exit does not prove browser first paint. No compiler/cache/daemon is added. [Earlier hidden-delegation evidence](../governance/verification/windows-handoff.md) is historical, superseded by FR 000537.
 
 `src/web/startup.py` owns fixed, flushed, elapsed-time launcher stage text shared by Windows/macOS. Lifecycle's optional progress sink reports arbitration/restart/host/browser boundaries without receiving secrets. PowerShell drains stages privately and prints one `Starting CostGuard web...` label, updating only a spinner cell at 120ms intervals through discovery and handoff. Progress panels are suppressed; redirected/noninteractive output stays plain. A finally block clears the cell before errors or exit. Browser startup is static branded HTML until authorization; initial report activity remains separate from HTTP/source/account readiness. No new supervisor, auth route, acquisition owner or dependency boundary is introduced.

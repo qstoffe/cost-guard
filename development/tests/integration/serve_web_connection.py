@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import shutil
 import sys
 import time
 
@@ -21,6 +22,7 @@ from src.reports import ReportRequest
 from src.watch.coordinator import WatchCoordinator
 from src.web.host import WebHost
 from src.web.http import ASSETS
+from src.web.settings import WebSettings
 
 
 def main():
@@ -65,6 +67,12 @@ def main():
 
     host.events.read = read_with_owned_fault
     host.start()
+    settings_directory = workspace / 'config'
+    settings_directory.mkdir()
+    shutil.copyfile(ROOT / 'config/default-config.jsonc', settings_directory / 'default-config.jsonc')
+    host.server.settings = WebSettings(workspace)
+    session_elapsed = [0]
+    host.server.session._clock = lambda: time.time() + session_elapsed[0]
     # A fixture-only asset bootstraps the test browser without printing a token.
     # Production routing/assets remain unchanged on disk.
     ASSETS['/probe-entry.js'] = ('probe-entry.js', 'text/javascript; charset=utf-8')
@@ -83,7 +91,8 @@ def main():
     try:
         while time.monotonic() < deadline and not host.stopped.is_set():
             if command.is_file():
-                action = json.loads(command.read_text(encoding='utf-8-sig'))['action']
+                value = json.loads(command.read_text(encoding='utf-8-sig'))
+                action = value['action']
                 command.unlink()
                 if action in {'menu', 'source_changed'}:
                     host.stop(action)
@@ -91,15 +100,25 @@ def main():
                     os._exit(0)  # Deliberately abrupt, test process only; no child jobs.
                 elif action == 'expire':
                     with host.server.session._lock:
-                        host.server.session._until = 0
+                        host.server.session._browsers.clear()
                 elif action in {'running', 'recovering'}:
                     host.events.publish('live', dict(state=action, source_observed_at_ms=2200, view=view))
                 elif action == 'new_identity':
                     host.nonce = 'replacement-fixture'
                 elif action == 'interrupt':
                     interruption[0] = time.monotonic() + 1
+                elif action == 'advance_session':
+                    seconds = value['seconds']
+                    if type(seconds) is not int or seconds < 0:
+                        raise ValueError('invalid_session_advance')
+                    session_elapsed[0] += seconds
+                elif action == 'fresh_entry':
+                    host.server.assets['probe-entry.js'] = (
+                        ('location.hash = "bootstrap=" + ' + json.dumps(host.server.session.bootstrap(renew=True)) + ';').encode(),
+                        'text/javascript; charset=utf-8')
                 else:
                     raise ValueError('unknown_fixture_action')
+                (workspace / 'ack.json').write_text(json.dumps({'action': action}), encoding='utf-8')
             time.sleep(.1)
     finally:
         host.close()

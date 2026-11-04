@@ -91,18 +91,30 @@ async function main() {
   vm.runInContext('connection.resync()', context);
   assert.equal(states.at(-1).kind, 'reconnecting', 'stale idle resume invalidates retained DOM before fetching');
   await turns();
-  const start = states.length;
+   const start = states.length;
   for (let n = 0; n < 120; n++) await tick();
-  assert.ok(states.slice(start).every(s => s.kind === 'connected'), 'twenty healthy virtual minutes never flap');
+   assert.ok(states.slice(start).every(s => s.kind === 'connected'), 'twenty healthy virtual minutes never flap');
+   // Existing sync covers repeated weeks and a long suspended/background tab.
+   for (let day = 0; day < 16; day++) { now += 86400000; await tick(); }
+   assert.equal(states.at(-1).kind, 'connected');
+   assert.equal(streams.length, 1, 'no periodic stream rotation or extra polling owner');
+   const obsolete = streams[0];
+   obsolete.listeners.authorization_required(); await turns();
+   assert.equal(obsolete.closed, true);
+   assert.equal(streams.length, 2, 'current browser cookie is validated before replacing obsolete stream');
+   streams[1].onopen(); await turns();
+   obsolete.onerror(); obsolete.listeners.authorization_required(); await turns();
+   assert.equal(states.at(-1).kind, 'connected', 'late old stream cannot disconnect current credentials');
+   assert.equal(streams.length, 2);
   held = true;
   await tick();
-  streams[0].onerror(); streams[0].onopen(); streams[0].onopen();
+   streams.at(-1).onerror(); streams.at(-1).onopen(); streams.at(-1).onopen();
   vm.runInContext('connection.resync()', context);
   assert.equal(inFlight, 1, 'probe/open/resync race shares the in-flight authenticated snapshot');
   held = false; releaseApi(); await turns();
   assert.equal(maxInFlight, 1);
   assert.equal(states.at(-1).kind, 'connected');
-  assert.equal(streams.length, 1);
+   assert.equal(streams.length, 2);
   assert.equal(timers.size, 1);
   snapshot.instance_id = 'replacement';
   const count = updates.length;
@@ -115,8 +127,8 @@ async function main() {
   assert.equal(states.at(-1).kind, 'identity_changed', 'late transport callbacks cannot undo terminal state');
   snapshot.instance_id = 'first';
   await connect();
-  failure = 'authentication_required';
-  await tick();
+   failure = 'authentication_required';
+   streams.at(-1).listeners.authorization_required(); await turns();
   assert.equal(states.at(-1).kind, 'authorization_required');
   assert.equal(timers.size, 0);
   failure = null;

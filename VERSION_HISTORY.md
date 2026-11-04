@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.153 — 2026-11-04
+
+- Web Beta: each browser retains stable authorization through successful ordinary API/Live activity, expiring after seven inactive days rather than eight absolute hours. Hourly cookie renewal uses a one-hour storage margin without extending server authorization; independent browsers, stable CSRF and 120-second one-use launcher handoffs remain protected. Obsolete SSE credentials revalidate the current browser cookie before reporting real expiry. Verification and the Decision Delegate-approved cookie-storage exception: [session findings](development/journal/web/browser-sessions.md).
+
 ## v80.152 — 2026-11-04
 
 - Full Web Watch replaces Context with first-request **ECTX** before **Δ Ctx**. A shared **Session Context · Session CCost** line integrates approaching/exceeded guidance and full root-tree cost. A bounded independent worker reconciles versioned SQLite request contributions, preserving partial/unknown coverage and reusing unchanged valuations across reappearance and host restart. Mini Watch, CLI, Sessions UI and daily/account accounting are unchanged.

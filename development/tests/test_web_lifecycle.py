@@ -804,13 +804,16 @@ class LifecycleTests(unittest.TestCase):
         # New Open link doesn't invalidate an already authenticated tab in same instance.
         owner.browser_url()
         current_cookie, _ = owner.server.session.exchange(owner.server.session.bootstrap())
-        self.assertEqual(current_cookie, old_cookie)
+        session = owner.server.session
+        self.assertTrue(session.authenticated(f'{session.cookie_name}={old_cookie}'))
+        self.assertTrue(session.authenticated(f'{session.cookie_name}={current_cookie}'))
         later = WebHost(self.root)
         self.addCleanup(later.close)
         self.assertFalse(later.authorized(owner.control))
         self.assertFalse(later.server)  # No server started just by construction.
         from src.web.security import BrowserSession
-        self.assertFalse(BrowserSession().authenticated("cg_session=" + old_cookie))
+        replacement = BrowserSession(session.cookie_name.removeprefix('cg_session_'))
+        self.assertFalse(replacement.authenticated(f'{session.cookie_name}={old_cookie}'))
         lifecycle.control(state, "stop")
         self.assertTrue(owner.stopped.wait(5))
 
