@@ -1,50 +1,41 @@
 # Test system health
 
-Source revision: 0efa18782fde1dfd2a34da9d87a95ed2695c18be
-Checked revision: 0efa18782fde1dfd2a34da9d87a95ed2695c18be
-Last checked: 2026-11-03
+Source revision: 55f74a4fb9b7e8347e3c407881a914dcbfb44745
+Checked revision: 55f74a4fb9b7e8347e3c407881a914dcbfb44745
+Last checked: 2026-11-04
 Status: current
 
 ## Summary
 
-Current schema-2 milestone 15 removes hourly/duration/probe test-module coupling without changing assertions, admission or deadlines. [Assessment and evidence](../architecture/governance/verification/test-health-15-20261103.md). Whole-suite/platform results remain revision-specific, not consumer-desktop acceptance. Older milestone reports are historical evidence, not the current progress counter.
+Schema-2 milestone 30 removes runtime/lifecycle/recovery test coupling; assertions, admission and deadlines stay unchanged. [Assessment](../architecture/governance/verification/test-health-30-20261104.md). Metadata identifies the observed base; the PR identifies the extraction. Results remain revision/platform-specific, not desktop acceptance. Older reports are historical, not progress counters.
 
 ## Evidence
 
-### Shared fixture ownership — milestone 15 (2026-11-03)
+### Watch lifecycle fixture ownership — milestone 30 (2026-11-04)
 
-`fixtures/session_snapshots.py` now owns explicit start/end `history`; `fixtures/active_hour.py` owns finite hourly capture/setup. The two tests and `integration/probe_web_active_hour.py` import those fixtures directly, without a shim. Top-level sibling-test imports: 12 → 11 statements / 11 → 10 distinct edges. The probe imports neither test module. All 27 test-method ASTs are unchanged; six pre-extraction canonical snapshots compare equal. Existing duration/rate checks both reject deliberately lost completion evidence (two assertion failures, zero harness errors).
+`fixtures/watch_runtime.py` owns unchanged global/scoped `watch_for` and render/status/finish `Recorder`. Runtime faults/lifecycle no longer import other tests for setup. Sibling import statements: 11 → 7; distinct edges: 10 → 7. All 47 method ASTs match excluding imports; moved definitions match excluding new docstrings. Scoped/global/recorder characterization and import-only smoke for 56 direct consumers pass. No wrapper/framework/runtime change.
 
-Focused before/final: 14 hourly + 13 duration tests pass; timing differences are not controlled savings. Initial extraction removed a still-used `MODEL` import (one NameError); restore it, final 13 pass. Finite probe setup works without browser/UI. Local Full/validator/live/model/version work was not selected for this development-only change; candidate CI belongs in its PR. No gate/budget changed.
+Before/final: 30 runtime + 8 lifecycle + 9 recovery pass, no skips; privacy/fatal/clean-stop/pump/source protections stay intact. Dropping pump stop or returning zero on fatal errors yields four assertion failures, no harness errors. Two Daily tests pass locally. Focused results are not Full/validator/live proof or timing savings.
 
-Base inventory: 704 text/config entries, 94 exclusions; 134 test files, 1,613 methods, no registration gaps. Quick/Full: 131/136 selectors, 872-root scale cases Full-only. Fresh [41718551110](https://github.com/qstoffe/cost-guard/actions/runs/41718551110): four successful jobs, common 1,595 passed/18 platform skips, Windows native 28 passed/no skips. Full source IDs, durations and limitations are in the assessment, not candidate PASS. No private sessions/foreign scratch/user payloads were read.
+Base: 792 text/config records, 225 exclusions; 138 test files/1,659 methods, no registration gaps; Quick/Full 135/140 selectors. Fresh [41922482417](https://github.com/qstoffe/cost-guard/actions/runs/41922482417): four successful jobs, common 1,639 passed/20 platform skips, Windows native 52 passed/no skips. Candidate CI belongs in the PR, not old-head PASS. Development-only work selects no local product gates/version update.
 
-Recent source/completion review retains revision-safe date hydration, coverage/rounding, HTTP/auth/isolation and cancellation. FR 000563's delegate load/cleanup exception remains unverified scope; FR 000564 fixes completed-partial CLI/Web mix but retains natural-transition proof limits. No broader harness replacement is justified.
+Earlier [41918986747](https://github.com/qstoffe/cost-guard/actions/runs/41918986747) failed Daily's `finished.wait(1)` on `020e500`; validator/browser/native passed. Same guard remains; comparison removal did not fix it. Current default/local success leaves cause unknown. Scheduling sensitivity is unproven; retain deadlines and the separate modeled 120s budget. No exception/false PASS.
+
+### Shared hourly fixture ownership — milestone 15 (2026-11-03)
+
+`fixtures/session_snapshots.py` owns explicit start/end `history`; `fixtures/active_hour.py` owns finite hourly capture/setup. Tests/probe import fixtures directly. That extraction removed one sibling-test edge; 27 method ASTs/six snapshots stayed equal, and lost-completion mutations still failed. Initial missing `MODEL` import caused one NameError; restored import yields 14 hourly/13 duration passes. Historical inventory/CI counts and revision limits are in the [milestone-15 assessment](../architecture/governance/verification/test-health-15-20261103.md), not current PASS. FR 000563's load/cleanup exception and FR 000564's natural-transition proof limits remain scoped, not generalized.
 
 ### Focused verification cleanup — FR 000553 (2026-11-03)
 
-Only the three named public README/history/Web-guide prose caps became advisory;
-broken-package negatives retain hard instruction/context, source/config, arbitrary
-Markdown and universal artifact caps. Dormant history-structure rules stay dormant.
-Foundation checks execute bootstrap/minimum-Python/Watch handoff behavior rather
-than local-name/source shapes. Hidden shell fixtures retain interpreter fallback,
-arguments and exit propagation; readiness/release plus 30s startup, 10s join and
-60s emergency lifetime permit owned-child cleanup without product deadline changes.
-
-CI topology accepts equivalent names/indentation/matrix order/arguments but rejects
-misplaced shared work, lost platforms or cancellation. The
-[evidence route](../architecture/governance/verification/web-beta-ci.md) records
-cumulative PR paths: report actual CI in the PR, not a reporting-only commit that
-reruns the unchanged product. No evidence cache/phase skip or old-head-as-new-PASS.
-Shell/validator checks do not prove unrelated providers or consumer desktop UX.
+Only named README/history/Web-guide prose caps became advisory; hard instruction/context, source/config, other Markdown/artifact caps remain. Dormant history rules stay dormant. Foundation checks execute bootstrap/minimum-Python/Watch handoff behavior, not local names. Hidden shell fixtures retain fallback/arguments/exit and 30s startup, 10s join, 60s emergency cleanup without product deadline changes. CI topology tolerates equivalent formatting but rejects misplaced work, lost platforms/cancellation. [CI evidence route](../architecture/governance/verification/web-beta-ci.md): cumulative PR paths mean reporting commits rerun checks; no cache/skip/old-head-as-new-PASS. Shell/validator success is not desktop/provider proof.
 
 ### Runner and retained critical risks
 
-`development/tools/run_tests.py`: four isolated local suite workers, hard Quick/Full file bounds 25/240s, named skips/failures/incomplete passed counts. Current CI runs Full+validator/browser once on Linux and focused serial native profiles on Windows/macOS ARM/macOS Intel, not Full on every native platform. Native profiles omit validator/browser provisioning. `test_ci_web_beta.py` protects hosted-only admission and sanitized truthful reporting; method counts/DOM substitutes are not execution/browser proof.
+`development/tools/run_tests.py`: four isolated local workers, hard Quick/Full bounds 25/240s, named skips/failures/incomplete counts. CI runs Full+validator/browser once on Linux, serial native profiles on Windows/macOS ARM/Intel; native omits validator/browser provisioning. `test_ci_web_beta.py` protects hosted-only admission/truthful sanitized reporting. Counts/DOM substitutes are not execution/browser proof.
 
-Historical milestone-40 inventory/measurements and sampled three-platform run are in `development/architecture/governance/verification/test-health-40.md`; they are not current counts or controlled speed comparisons. Independent model-mix, quota and display-unit risks remain separately owned. Earlier README CRLF failures stay historical; FR 000553 changes only its named prose limits.
+Historical milestone-40 counts/timings remain in `development/architecture/governance/verification/test-health-40.md`, not current evidence or controlled savings. Model-mix, quota and display-unit risks remain independent; FR 000553 changes only named prose limits.
 
-Tests below are under `development/tests/`; mappings establish intended contracts, not coverage percentages:
+Tests below live under `development/tests/`; these are contract routes, not coverage percentages:
 
 | Risk | Source owner | Protection |
 | --- | --- | --- |
@@ -65,13 +56,13 @@ Watch Today rollover remains in watch/today_ccost and test_watch_today_ccost. Re
 
 `.github/workflows/web-beta.yml` owns the common/native scoped phases. Direct smoke refuses workstation execution. Offline entry shims suppress acquisition/browser dispatch but retain shipped HTTP/native APIs, OS locks and lifecycle. Public standard runners only; no paid/self-hosted fallback.
 
-- Numeric-loopback reverse DNS caused macOS startup timeout; use TCPServer binding, not a larger deadline. Native identity must compare original PID/birth and the current live image, accepting same-birth exec but denying foreign birth/forged image. Resolve temporary-root aliases without weakening symlink guards.
+- macOS numeric-loopback reverse DNS caused startup timeout: use TCPServer binding, not longer deadlines. Native identity compares original PID/birth/current image, allowing same-birth exec but denying foreign birth/forged image. Resolve temp aliases without weakening symlink guards.
 - Pin synthetic platform metadata around compiler mocks; platform discovery can otherwise enter mocked subprocess calls. Virtual settling clocks and distinct synthetic credential mtimes prevent wall-clock/file-version races.
 - Keep 55 list roots and full 151-row detail, but only one prompt in unrelated roots; do not multiply analysis or increase fixed VM UI deadlines. Keep expensive finite work off HTTP handlers.
-- Windows cold Add-Type skewed discovery fixtures: use their console stub while retaining native launcher/Watch paths. [40411971939](https://github.com/qstoffe/cost-guard/actions/runs/40411971939) failed despite separate browser/native success. The later aggregate discovery/DACL fixture budget repair ([40412977788](https://github.com/qstoffe/cost-guard/actions/runs/40412977788)) preserved product readiness and file deadlines.
+- Windows cold Add-Type skewed discovery fixtures: use the console stub, retain native launcher/Watch paths. [40411971939](https://github.com/qstoffe/cost-guard/actions/runs/40411971939) failed despite browser/native success; [40412977788](https://github.com/qstoffe/cost-guard/actions/runs/40412977788) repaired aggregate discovery/DACL fixtures without longer product/file deadlines.
 - Browser offline mode does not close SSE sockets: close the fixture's own recorded stream and verify real reconnect. NSApplication is process-global; run a second native fault case in a fresh bounded process. Await owned identity retirement before opening a Windows record being unlinked.
 - Darwin ENOTCONN can follow wire rejection at write-half-close; tolerate only that race, assert actual response bytes and retain EPERM propagation. [40413855775](https://github.com/qstoffe/cost-guard/actions/runs/40413855775), with a deterministic canary; never infer rejection by swallowing all errors.
-- Historical README CRLF hard-cap failures motivated prose shortening. FR 000553 supersedes only the three named product-prose caps with advisory warnings; source/config/artifact and agent-context caps remain hard.
+- Historical README CRLF cap failures motivated shortening; FR 000553 makes only three named product-prose caps advisory. All other protected caps stay hard.
 
 Historical raw-log download returned HTTP 401; no identity bypass. Checks provide sanitized totals/failures/skips; split notices below truncation bounds. Failed/cancelled is not PASS; physical desktop/default-browser/accessibility remain separate acceptance.
 
@@ -83,7 +74,7 @@ FR 000370: product IPC backpressure, retain 64-message drain canary. FR 000380: 
 
 ## Next investigations
 
-Inspect per-file durations/skips before changing Quick deadlines, especially Node/HTTP/spawn/PowerShell. The VM child permits 60 seconds while Quick bounds its whole file at 25 seconds: a known tighter outer limit, not authority to loosen it. Reproduce probe interference sequentially. Legacy static shape guards/import edges remain refactor-sensitive debt; move coupling into its responsibility-owned fixture when that area changes, preserving behavioral canaries. Hosted API success does not close desktop/Finder/Gatekeeper/accessibility/suspend/soak acceptance.
+Inspect per-file durations/skips before changing Quick deadlines, especially Node/HTTP/spawn/PowerShell. Daily's unexplained one-second failure needs causal scheduling/catalog evidence before any harness/product diagnosis; a passing rerun is not a fix. The VM child permits 60 seconds while Quick bounds its whole file at 25 seconds: a known tighter outer limit, not authority to loosen it. Reproduce probe interference sequentially. Seven remaining test-import edges stay localized debt; preserve behavioral canaries when extracting their fixtures. Hosted API success does not close desktop/Finder/Gatekeeper/accessibility/suspend/soak acceptance.
 
 Architecture: no-update; runtime/validation ownership and triggers are unchanged.
 

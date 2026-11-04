@@ -1,5 +1,4 @@
 """Watch intentional stops versus terminal failures, and Windows shell ownership."""
-from contextlib import contextmanager
 from dataclasses import replace
 import io
 from pathlib import Path
@@ -7,25 +6,13 @@ import tempfile
 import unittest
 from unittest import mock
 
-from development.tests.fixtures.watch_runtime import MutableSource, make_service
-from development.tests.test_watch_source_recovery import Recorder
+from development.tests.fixtures.watch_runtime import Recorder, watch_for
 from src import bootstrap
 from src.sources.errors import SourceDataError, SourceSchemaError
-from src.watch import WatchCoordinator
 from src.watch.coordinator import WatchedSessionEnded
 from src.runtime_errors import RuntimeErrors
 
 ROOT = Path(__file__).resolve().parents[2]
-
-
-@contextmanager
-def watch_for(*, scoped=False):
-    with tempfile.TemporaryDirectory() as td:
-        source = MutableSource()
-        config, selection, service, _ = make_service(td, source)
-        watch = WatchCoordinator(selection=selection, report_service=service, config=config,
-                                 session_id="root" if scoped else None, clock_ms=lambda: 2200)
-        yield watch, source
 
 
 def bootstrap_watch(watch):
