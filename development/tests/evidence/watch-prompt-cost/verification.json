@@ -1,0 +1,53 @@
+{
+  "date": "2026-11-04",
+  "feature": "FR 000575",
+  "finalFullSuite": {"outcome": "PASS", "fileTargets": 140, "failures": 0, "workers": 4, "seconds": 84.3},
+  "packageValidation": {"passes": 11, "failures": 0, "advisoryWarnings": 6},
+  "browser": {
+    "outcome": "PASS",
+    "product": "Edg/156.0.4314.58",
+    "cases": 12,
+    "themes": ["classic", "light", "dark"],
+    "viewports": [[2560, 1080], [1920, 1080], [1366, 768], [360, 800]],
+    "textScalePercent": [100, 150, 200],
+    "bothTables": true,
+    "creditsAndUsd": true,
+    "completeMetricCells": true,
+    "promptNumbersPreserved": true,
+    "oneLineCosts": true,
+    "noDocumentHorizontalOverflow": true,
+    "headerFocusAndClickPopover": true,
+    "costExample": "1250 (900 + 350)",
+    "usdExample": "$12.50 ($9.00 + $3.50)",
+    "command": "node development/tests/integration/probe_watch_cards.cjs --browser <explicit Edge executable> --output <owned scratch evidence directory>"
+  },
+  "realInstallation": {
+    "outcome": "PASS",
+    "command": "py -3 development/tests/integration/probe_web_live.py --watch-cards --prompt-cost",
+    "source": "V2",
+    "canonicalCliRawCostParity": true,
+    "incomingPlusExtraReconciles": true,
+    "comparedPromptCalls": 4,
+    "liveOwners": 1,
+    "verifiedAdvancingSseStreams": 2,
+    "activeCards": 1,
+    "historyCards": 2,
+    "rowsPerCard": 1,
+    "pendingCapturesAtObservation": 4,
+    "elapsedSeconds": 12.2016,
+    "trackedOwnedThreadsAfterClose": 0,
+    "trackedMultiprocessingChildrenAfterClose": 0,
+    "cleanupFailures": [],
+    "modelCallsStartedByProbe": 0,
+    "sharedOpenCodeStopped": false,
+    "dailyPublished": false
+  },
+  "limitations": [
+    "Hidden browser uses synthetic loopback data and a fresh owned profile, not a real-source browser or personal browser state.",
+    "Text-size scaling and viewport coverage do not prove every native page-zoom, physical-touch, screen-reader or macOS combination.",
+    "Natural real-source live cost correction timing was not independently demonstrated; controlled accepted SSE updates, stale rejection and reconnect remain deterministic coverage.",
+    "Daily history cancellation produced one instrumented error per history method at shutdown; this was not a Daily verification campaign.",
+    "Tracked thread/multiprocessing cleanup is not an inventory of all OS helpers.",
+    "Canonical CLI/valuation still normalize missing token counters; only full Watch applies component evidence flags, per the scoped Decision Delegate decision."
+  ]
+}

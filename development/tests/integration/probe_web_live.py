@@ -24,6 +24,7 @@ def main():
     parser.add_argument("--models", action="store_true", help="Capture only task-focused Normal/full Models snapshots beside Live.")
     parser.add_argument("--watch-cards", action="store_true", help="Wait for independently published real one-row Watch cards.")
     parser.add_argument("--prompt-token-mix", action="store_true", help="Observe card token mix over twelve seconds; no inference or extra capture.")
+    parser.add_argument("--prompt-cost", action="store_true", help="Compare an observed completed prompt's raw cost split with a CLI session report.")
     parser.add_argument("--daily", action="store_true", help="Wait for coherent full-day cost, initiating prompts and category prices.")
     parser.add_argument("--session-cost", action="store_true", help="Compare a stable real session total with independent full history and persisted reuse.")
     parser.add_argument("--report-timings", action="store_true", help="Print sanitized child-process acquisition timings.")
@@ -115,6 +116,10 @@ def main():
                 time.sleep(.25)
             else:
                 raise RuntimeError('probe_watch_cards_timeout')
+        if args.prompt_cost:
+            from development.tests.integration.prompt_cost_observations import observe_prompt_cost
+            observations.stage = 'prompt_cost'
+            observe_prompt_cost(get, cookie, owners[0])
         if args.session_cost:
             from development.tests.integration.session_cost_observations import observe_session_cost
             observations.stage = 'session_cost'

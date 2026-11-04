@@ -32,6 +32,19 @@ remaining owned worker, not just a live serving/publisher thread.
 
 `src/web/events.py` publishes immutable full live/progress/terminal state with instance-bound IDs, 32-event/8 MiB replay and 2 MiB publications. `src/application/live_projection.py` allowlists Watch/tool/skill/context, subtotals and run/Today (not normal month/billing). `src/web/assets/live.js` owns one cookie-authenticated EventSource per tab. Gaps require HTTP resync; duplicates/older events cannot reset values; old instances require authorization. Terminal notices stop retry across gaps; offline retains evidence, never invents completion or launches servers.
 
+Full Watch's prompt **CCost (I + E)** cell concatenates the existing immutable
+`ccost`, `incoming_context_ccost` and `extra_ccost` display tokens. Both card types
+reuse `PromptRowProjector`'s first-attributed-request incoming valuation and remaining
+usage, including supported provisional/child observations. No acquisition, valuation
+or lifecycle owner changes. Additive report-owned `incoming_context_ccost_known` and
+`extra_ccost_known` distinguish first-request input-category coverage from all-request
+I/C/W/O coverage. Only cards export those flags to the immutable display adapter, which
+withholds unsupported component tokens without altering raw/CLI/other-report values.
+Unknown components stay independent, partial totals retain
+coverage, and Mini Watch still renders only the prompt total. Header help and intrinsic
+metric widths remain shared. `test_watch_prompt_cost.py`, `integration/web_watch_prompt_cost.cjs`
+and `fixtures/watch_cost_browser.cjs` pin parity, units, unknowns and actual hidden layout.
+
 Full Watch's `watch_accounts.py` quota slots export native amount/limit/unit inputs
 to the shared application display tokens. `watch.js` keeps Used/Total with the native
 percentage/bar and appends independent period CCost in bare parentheses after Used.

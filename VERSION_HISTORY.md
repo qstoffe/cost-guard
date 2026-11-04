@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.155 — 2026-11-04
+
+- Full Web Watch's **CCost (I + E)** column shows each prompt's canonical total followed by Incoming Context CCost + Extra CCost in both Running and Earlier tables. Shared Credits/USD formatting, accessible header help, partial/unknown states and intrinsic horizontal scrolling remain intact. Mini Watch, CLI and accounting are unchanged; no extra source acquisition or browser valuation.
+
 ## v80.154 — 2026-11-04
 
 - Mini Watch adds **Session / Total CCost**, with only the title ellipsized and the complete canonical root-tree cost always visible. A neutral, collapsed-by-default **Earlier Sessions** disclosure reuses the newest three canonical eligible sessions and current session CTX above the prompt table in one scroll region. Session totals reuse the persisted incremental cache; no browser valuation, extra history scan, connection or resize. Prompt metrics, daily/account accounting and full Watch remain unchanged.

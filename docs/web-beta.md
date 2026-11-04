@@ -284,13 +284,13 @@ before running cards and no nested vertical scrolling or height cap. Collapsed/e
 history has no divider. The active list has no cap/filter/pager; concurrent prompts
 get separate cards, oldest focal first, with one row even during terminal grace.
 
-Session title alone links to that canonical Sessions route. Watch has no session
-aggregate cost/duration or dedicated aggregate acquisition; complete-session totals
-remain available on Sessions. Canonical child/compaction/context evidence still feeds
+Session title alone links to that canonical Sessions route. The footer keeps whole-session
+CCost separate from prompt-local costs; duration remains prompt-local. Canonical child/compaction/context evidence still feeds
 prompt metrics. Credits/USD follows Web Settings. Valid metrics remain visible during
 ordinary refresh; first acquisition, partial evidence and genuine failure stay explicit.
-The ten columns are **Started, Duration, Prompt, Model, Effort, CCost, Calls,
-Token Mix %, Δ Ctx, Context** (estimated next incoming context using CLI Watch semantics).
+The ten columns are **Started, Duration, Prompt, Model, Effort, CCost (I + E), Calls,
+Token Mix %, ECTX, Δ Ctx**. ECTX is the first request's effective incoming context;
+the footer's Session Context remains the estimated next incoming context.
 Running keeps **Started** and start-ascending order. Earlier replaces only column 1 with
 **Finished**; Duration stays column 2. Both clocks show configured-timezone `HH:mm`,
 with full local date/time on hover/accessible focus; Finished includes the UTC offset
@@ -300,6 +300,21 @@ its canonical session-local `#N`, never a visible-row index. Only preview text e
 the number stays visible, the full preview is available on hover/accessible focus,
 and lifecycle state remains accessible on the row. Every header explains its metric
 on hover, keyboard focus or touch/click; Escape or leaving focus dismisses the explanation.
+Both prompt tables show **total CCost (Incoming Context CCost + Extra CCost)** in
+the single **CCost (I + E)** column. I values the initial incoming context on the
+first attributed request; E covers the remaining canonical usage, including output,
+later requests and linked-child contributions. These are the CLI session report's
+existing diagnostics, not billing, quota usage or Token Mix's Input category. Raw
+I + E reconciles to the total when known; separately rounded Credits/USD values
+need not visually sum. All three use the selected Web unit and shared formatting.
+Partial totals retain `?`; unavailable components independently show `N/A`, never
+synthetic zero. Report-owned evidence flags require first-request input/cache-read/
+cache-write counters for I, and every attributed request's four token categories for E.
+Full Watch can therefore withhold an unsupported component even when the existing CLI
+diagnostic uses normalized placeholders; raw costs and CLI behavior are unchanged.
+Wholly unavailable totals stay `N/A`; sparse non-billed compaction
+cells stay empty. Accepted captures/SSE update the same prompt's split without
+browser valuation, polling or extra history scans. Mini Watch remains total-only.
 Token Mix % is raw observed **Input / Cached input / Cache write / Output** token volume,
 not cost shares; reasoning is folded into Output. It uses canonical prompt-attributed
 physical requests, including child/model contributions, and CLI prompt rounding.
