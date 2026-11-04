@@ -16,7 +16,7 @@ from src.analysis.active_hour import ActiveHour
 from src.analysis.context import PriceWarningSeverity
 from src.analysis.valuation import ComparisonCost
 from src.analysis.token_mix import TokenMix
-from src.analysis.workload_mix import MixEvidence
+from src.analysis.models import MixEvidence
 from src.analysis.comparisons import RelativePriceLevel
 from src.domain import AccountSnapshot, QuotaComponent
 

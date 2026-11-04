@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.160 — 2026-11-04
+
+- Architecture upkeep removes the unused model/publisher-specific comparison sampler and its deep-history cache path. Relative CCost and warnings retain the shared global sample; CLI/Web evidence fields, historical Token Mix and account/Watch behavior are unchanged.
+
 ## v80.159 — 2026-11-04
 
 - Mini Watch's Web appearance now inherits the owning page's resolved light/dark palette, including its content canvas, tables, controls, help and quota surfaces, even when Document PiP reports a different system preference. Opening, live Settings changes and owner appearance changes stay coherent without another stream or refresh. Classic/default dark styling, compact layout, metrics and browser-native chrome are unchanged.

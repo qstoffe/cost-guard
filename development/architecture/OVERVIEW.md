@@ -1,8 +1,8 @@
 # Cost Guard v80 architecture
 
-Source revision: a27d5fede5d07a7a2e992691b34790b6017cd780
-Checked revision: a27d5fede5d07a7a2e992691b34790b6017cd780
-Last checked: 2026-10-28
+Source revision: 020e50071671ee863ceffcd37b6871af789bbe0f
+Checked revision: 020e50071671ee863ceffcd37b6871af789bbe0f
+Last checked: 2026-11-04
 Status: current
 
 ## Development data and authority
@@ -28,6 +28,8 @@ flowchart TD
     sources --> domain["Domain: canonical snapshots / identities"]
     providers --> domain
     reports --> analysis["Analysis: causal usage, valuation, context"]
+    reports --> comparison["Comparison: one global sample / exact catalog tiers"]
+    comparison --> domain
     analysis --> domain
     reports --> cache["Cache: disposable revision-keyed acceleration"]
     entry --> presentation["Presentation: job-local units / immutable DTOs / terminal"]
@@ -117,13 +119,13 @@ The product validator resolves absolute/relative/nested layer imports, rejects r
 
 ## Validation, review and delivery flow
 
-Procedure checked against installed contract r5 on 2026-11-01; runtime assessment above remains dated 2026-10-28. This is a descriptive route, not a new gate or local scheduling policy. Installed Toolkit owns first-Ready selection and remote lifecycle; repository scripts own product checks. No ownership registry, automatic maintenance, repository live-model runner or automatic PR self-review is introduced. Contract Sync is a separate development-only PR before fresh FR selection.
+Procedure checked against installed contract r5 and the active worker workflow on 2026-11-04. This is a descriptive route, not a new gate or local scheduling policy. Installed Toolkit selects one due maintenance occurrence before first Ready and owns remote lifecycle; repository scripts own product checks. No ownership registry, repository scheduler, live-model runner or automatic PR self-review is introduced. Contract Sync is a separate development-only PR before fresh selection when required.
 
 ```mermaid
 flowchart TD
     request["Authorized request"] --> author{"FR-only authoring?"}
     author -->|yes| publish["Guarded FR-only main publication; no product checks"]
-    author -->|no| select["Backlog: fetched default, fixed selected FR-ID"]
+    author -->|no| select["Backlog: fetched default; due maintenance else first Ready; fixed task"]
     select --> scope{"Only development changes?"}
     scope -->|yes| skip["Skip product tests, validator, version / release work"]
     scope -->|no| product["Repository product verification and release facts"]
@@ -140,7 +142,7 @@ flowchart TD
     pr --> truth{"Confirmed merge and default read-back?"}
     truth -->|no or uncertain| preserve["Preserve pending work; reconcile actual Git truth"]
     preserve --> pr
-    truth -->|yes| delivery["Report actual delivery; optional own-scratch housekeeping"]
+    truth -->|yes| delivery["Report actual delivery; native bulk cleanup attempt, any outcome"]
     delivery --> finish["Native finish; after-response fresh worker"]
 ```
 
@@ -149,11 +151,11 @@ flowchart TD
 | Stage | Scope / activation | Disposition | Exact source owner | Failure handling |
 | --- | --- | --- | --- | --- |
 | FR publication | Approved FR-only authoring | Required safety; product checks skipped | Installed `shared-repo/references/fr-authoring.md` | Preserve unrelated work; reconcile fresh default |
-| Contract Sync / selection | Fresh Backlog invocation | Required installed identity check; sync-only when older, otherwise first Ready | Installed `/repo-backlog`, `shared-repo/references/contract-sync.md`, `development/applied-contract.json` | No downgrade; empty Ready ends without maintenance; keep selected permanent ID |
+| Contract Sync / selection | Fresh Backlog invocation | Required installed identity check; sync-only when older, otherwise one due maintenance method or first Ready | Installed `/repo-backlog`, `shared-repo/references/contract-sync.md`, `development/applied-contract.json` | No downgrade; no due method and empty Ready ends no-work; keep selected task |
 | Development-only | All changed paths under development | Product checks/version disabled | Installed `shared-repo/references/contract.md`; this tree's `development/README.md` | Do not activate product gates for documentation/state |
 | Product verification | Shipped-source changes | Repository-owned applicable tests/security checks | `development/tools/run_tests.py`, `development/tools/validate_package.py`, `src/version.py`, `VERSION_HISTORY.md`, `README.md` | Investigate/repair required failures; never weaken assertions |
 | Real installation / live tests | Relevant product proof; model inference separately authorized | Read-only probes conditional; live-model default-denied | `development/tools/collect_diagnostics.py`; `development/tests/integration/live/` is reserved, not an implemented runner | Do not stop shared OpenCode; disclose unavailable proof; no invented freeze/dispatch owner |
 | PR / merge | Authorized delivery | Required Git safety; self-review not a gate | Installed `/repo-backlog` and actual GitHub default/protection/check state | No force/protection bypass; uncertain merge requires read-back, not replay |
-| Delivery / handoff | Confirmed merge and default read-back | Truthful finish required; housekeeping optional; no delivery receipt | Installed native `repo_backlog` finish | Preserve recovery evidence; no second task here; fresh worker starts after response |
+| Delivery / handoff | Confirmed merge and default read-back | Truthful finish and native bulk cleanup attempt required; deletion success not required; no delivery receipt | Installed native `repo_backlog` finish | Cleanup failure/skip does not block handoff; no second task here; fresh worker starts after response |
 
-Milestone-40 source assessment: `development/journal/architecture.md` (runtime no-change; sampling/display owners and unmeasured risks). Native desktop proof remains separate.
+Milestone-30 source assessment: `development/journal/architecture.md` (base revision above plus this maintenance diff). Global coordination is retained; two unreachable comparison modules are removed and evidence moves to the existing analysis records owner. [Module-level comparison map](modules/analysis.md#comparison-ownership-checked-2026-11-04). Native desktop proof remains separate.
