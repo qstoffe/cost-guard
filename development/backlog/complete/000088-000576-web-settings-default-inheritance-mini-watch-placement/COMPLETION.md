@@ -57,3 +57,27 @@ other requirements or future FRs were waived. No owner question/On Hold was need
 
 Product metadata/date/history/README updated. Current main remains the distribution;
 no ZIP, tag or GitHub Release. Maintenance progress advances only when this PR merges.
+
+## Queued ARM CI exception — Decision Delegate
+
+For **this FR / PR 159 only**, Decision Delegate explicitly narrowed its normal
+exact-HEAD-check condition. Original HEAD `1ef72a4b4763b5cfea5bc8fb379e01cd25026406`
+[run 41903154630](https://github.com/qstoffe/cost-guard/actions/runs/41903154630) passed
+Linux Full/validator/browser, Windows2025 and Intel macOS15. ARM macOS15 job
+`126830653328` remained queued/unassigned after eight minutes at20:13:27Z, with no
+observed failure. Main had no required checks/rules; none were altered or bypassed.
+
+The delegate authorized merge while ARM is queued/unassigned and the **sole missing
+check**, extending the same exception to this reporting-only successor with unchanged
+product/tests/config/workflow/effective base. All other normal checks must succeed on
+the successor's exact HEAD; old successes do not count as new PASS. If ARM starts,
+allow bounded execution to finish. Failure, timeout, unexpected cancellation or another
+missing check requires repair/reconsideration; no manual cancellation/rerun, changed
+runner/workflow, force/protection bypass or future-task exception is authorized.
+
+Reason: unchanged native AppKit/launcher/lifecycle scope, with adequate local and
+Linux/browser/Windows/Intel-macOS evidence for the feature. **ARM-native execution
+remains UNVERIFIED; the queue cause is unknown**, not a proven outage. The decider is
+Decision Delegate, not the user. Physical/per-opener exceptions above remain intact.
+Later final CI outcomes are retained in the PR/run and handoff, without another
+reporting-commit/CI loop.

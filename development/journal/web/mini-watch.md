@@ -81,6 +81,32 @@ checks; it waived no functional failure, security/Git protection or other requir
 and grants no future-FR authority. Completion is limited to this documented scope,
 not a claim of full physical acceptance.
 
+### Decision Delegate-approved queued ARM CI exception
+
+The same foreground **Decision Delegate**, not the user, explicitly narrowed the
+normal exact-HEAD-check condition for **FR 000576 / PR 159 only**. On original HEAD
+`1ef72a4b4763b5cfea5bc8fb379e01cd25026406`, [run 41903154630](https://github.com/qstoffe/cost-guard/actions/runs/41903154630)
+passed common Linux (Full/validator/rendered browser), Windows2025 and Intel macOS15.
+At 20:13:27Z, ARM `native (macos-15)` job `126830653328` was still queued since
+20:05:03Z with no assigned runner, no conclusion and no observed failure. Fresh
+main protection/rules reads showed no required contexts/rules; nothing was bypassed.
+
+The delegate permitted merge while that ARM job is **queued, unassigned and the sole
+missing check**, and extended this precise exception to the reporting-only successor
+recording this paragraph/completion, with unchanged product/tests/config/workflow and
+effective base. **All other checks must succeed on that successor's exact HEAD**;
+original successes are not successor PASS. If ARM starts, its bounded execution must
+finish; any failure, timeout, unexpected cancellation or other missing result requires
+repair or renewed consideration. No manual cancellation/rerun, runner/workflow change,
+force/protection bypass or future-FR waiver is authorized. Normal automatic CI
+supersession from this reporting push is not evidence of failure concealment.
+
+Reason: the missing native AppKit/launcher/lifecycle check does not own the changed
+settings/PiP behavior; local plus Linux/browser, Windows and Intel-macOS evidence is
+adequate without indefinite unassigned-runner waiting. **ARM-native execution remains
+UNVERIFIED and the queue cause unknown**, not an established outage. Later CI outcomes
+belong in the PR/run/final handoff; no additional reporting commit/CI loop is required.
+
 ## FR 000574 — v80.154, 2026-11-04
 
 Base: `7df4a6a9a8c826f537970c4348c872bdb8fb4381`. Mini consumes the existing
