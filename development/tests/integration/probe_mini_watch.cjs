@@ -61,6 +61,18 @@ async function main() {
     await evaluate(`miniWatch.toggle()`,true);
     const open = await evaluate(`({on:!!miniWatch.window,reason:miniWatch.feedback.textContent})`);
     assert.equal(open.on,true,open.reason);
+    const checkIcon = async () => {
+      await until(`miniWatch.window.performance.getEntriesByType('resource').some(entry =>
+        entry.name === new URL('/favicon-cg1.ico',location.href).href && entry.initiatorType === 'other')`);
+      const icon = await evaluate(`(() => {const icons=miniWatch.window.document.querySelectorAll('link[rel="icon"]');
+        return {count:icons.length,type:icons[0]?.type,url:icons[0]?.href,owner:document.querySelector('link[rel="icon"]').href};})()`);
+      assert.deepEqual(icon,{count:1,type:'image/x-icon',url:new URL('/favicon-cg1.ico',launch.url).href,
+        owner:new URL('/favicon-cg1.ico',launch.url).href});
+      const resource = await evaluate(`miniWatch.window.fetch(new URL('/favicon-cg1.ico',location.href)).then(async response =>
+        ({status:response.status,type:response.headers.get('Content-Type'),bytes:(await response.arrayBuffer()).byteLength}))`);
+      assert.equal(resource.status,200); assert.equal(resource.type,'image/x-icon'); assert.ok(resource.bytes>1000);
+    };
+    await checkIcon();
     const metrics = () => evaluate(`[...miniWatch.view.body.rows].map(row=>[...row.cells].map(cell=>cell.textContent))`);
     assert.deepEqual((await metrics()).map(row=>row.slice(1,4)),[['#24','3','20m'],['#23','2','10m']]);
     assert.equal(await evaluate(`documentPictureInPicture.window === miniWatch.window`),true);
@@ -252,6 +264,9 @@ async function main() {
     await evaluate(`miniWatch.window.close()`);
     await until(`document.getElementById('mini-watch-toggle').textContent === 'Mini Watch: Off'`);
     await evaluate(`miniWatch.toggle()`,true); assert.equal(await pip(),true);
+    await checkIcon();
+    assert.equal(await evaluate('probeStreams'),1,'closing/reopening Mini never adds an EventSource');
+    checks.push('Shipped controller attaches/fetches the existing absolute same-origin ICO on open/reopen; owner icon and single SSE unchanged (not OS icon proof)');
     await evaluate(`miniWatch.button.click()`,true);
     await until(`!miniWatch.window`);
     await evaluate(`miniWatch.toggle()`,true);
