@@ -2,7 +2,11 @@
 const assert = require('node:assert/strict'), fs = require('node:fs'), vm = require('node:vm');
 const input = JSON.parse(fs.readFileSync(0, 'utf8'));
 class Node {
-  constructor(tag) { this.tag = tag; this.children = []; this.dataset = {}; this.attributes = {}; this.events = {}; this.text = ''; this.style = {setProperty() {}}; }
+  constructor(tag) {
+    this.tag = tag; this.children = []; this.dataset = {}; this.attributes = {}; this.events = {}; this.text = '';
+    const properties = new Map(); this.style = {setProperty: (key,value) => properties.set(key,value),
+      getPropertyValue: key => properties.get(key) || '', removeProperty: key => properties.delete(key)};
+  }
   set textContent(value) { this.text = String(value); this.children = []; }
   get textContent() { return this.text + this.children.map(child => child.textContent).join(''); }
   append(...children) { for (const child of children) { child.remove(); child.parentNode = this; this.children.push(child); } }
@@ -11,6 +15,7 @@ class Node {
   insertBefore(child, before) { child.remove(); child.parentNode = this; this.children.splice(before ? this.children.indexOf(before) : this.children.length, 0, child); }
   setAttribute(name, value) { this.attributes[name] = value; }
   addEventListener(name, callback) { (this.events[name] ||= []).push(callback); }
+  removeEventListener(name, callback) { this.events[name] = (this.events[name] || []).filter(item => item !== callback); }
   fire(name) { for (const callback of this.events[name] || []) callback(); }
   contains(node) { return node === this || this.children.some(child => child.contains(node)); }
   querySelectorAll(tag) { return this.children.flatMap(child => [...(child.tag === tag ? [child] : []), ...child.querySelectorAll(tag)]); }
@@ -22,7 +27,13 @@ function win() {
   node.clearInterval = callback => node.timers.delete(callback);
   node.close = () => {node.closed = true;}; // Deliberately defer pagehide to reproduce stale callbacks.
   node.resizeTo = () => {throw new Error('Opening consumes activation; resizeTo requires a new PiP gesture');};
-  node.matchMedia = () => ({addEventListener() {},removeEventListener() {}});
+  node.media = new Node('media'); node.media.matches = false; node.matchMedia = () => node.media;
+  node.getComputedStyle = root => {
+    assert.equal(root,node.document.documentElement);
+    const values = {'--bg': node.media.matches ? '#0c1422' : '#eef2f8', '--ink': node.media.matches ? '#e6edf8' : '#17253b',
+      '--surface': node.media.matches ? '#19263b' : '#f6f8fc'};
+    const names = Object.keys(values); names.getPropertyValue = key => values[key]; return names;
+  };
   return node;
 }
 let now = 1000;
@@ -189,6 +200,19 @@ function setup() {
   vm.runInContext('ReportView.setUnit("usd")', context); owner.document.documentElement.dataset.theme = 'web'; controller.settings();
   assert.equal(view.body.children[0].children[2].textContent, '$0.01'); assert.match(retained.textContent, /\(\$18.14\)/);
   assert.equal(child.document.documentElement.dataset.theme, 'web');
+  const themeStyle = child.document.documentElement.style;
+  assert.equal(themeStyle.getPropertyValue('--bg'),'#eef2f8','PiP uses owner-resolved Web tokens');
+  assert.equal(themeStyle.getPropertyValue('--ink'),'#17253b');
+  assert.equal(themeStyle.getPropertyValue('color-scheme'),'light');
+  owner.media.matches = true; owner.media.fire('change');
+  assert.equal(themeStyle.getPropertyValue('--bg'),'#0c1422','OS change applies without settings, data or timer');
+  assert.equal(themeStyle.getPropertyValue('color-scheme'),'dark');
+  owner.document.documentElement.dataset.theme = 'classic'; controller.settings();
+  assert.equal(themeStyle.getPropertyValue('--bg'),'','Classic retains its original CSS without Web overrides');
+  assert.equal(themeStyle.getPropertyValue('--surface'),'');
+  assert.equal(themeStyle.getPropertyValue('color-scheme'),'');
+  owner.media.matches = false; owner.document.documentElement.dataset.theme = 'web'; controller.settings();
+  assert.equal(themeStyle.getPropertyValue('--bg'),'#eef2f8','Web → Classic → Web restores the entire palette');
   assert.equal(view.daily.textContent,'CCost Today $0.34 · 37 prompts');
   for (const kind of ['reconnecting', 'offline', 'source_unavailable', 'authorization_required', 'identity_changed', 'stopped']) {
     controller.health({kind});
@@ -232,10 +256,15 @@ function setup() {
   await controller.toggle();
   assert.equal(child.closed, true); assert.equal(test.focused(), 1, 'close does not also focus the owner');
   assert.equal(child.timers.size, 0); assert.equal(button.textContent, 'Mini Watch: Off');
+  assert.equal(owner.media.events.change.length,0,'native close releases the appearance listener');
+  owner.media.matches = true; owner.media.fire('change');
+  assert.equal(themeStyle.getPropertyValue('--bg'),'#eef2f8','retired document no longer follows the owner');
    const reopen = controller.toggle(), second = win(); test.opened(second); await reopen;
    assert.equal(api.requests.at(-1).height,250,'reopening requests the compact size again');
    assert.equal(api.requests.at(-1).preferInitialWindowPlacement,false,'Remember last permits browser-native bounds after first open');
    assert.equal(second.document.head.children.filter(n => n.rel === 'icon').length, 1);
+   assert.equal(second.document.documentElement.style.getPropertyValue('--bg'),'#0c1422','fresh Web opens in current owner appearance');
+   assert.equal(owner.media.events.change.length,1,'reopen has exactly one appearance listener');
    assert.equal(second.document.head.children[0].href, 'http://127.0.0.1:1234/favicon-cg1.ico');
     assert.notEqual(second.document.head.children[0], child.document.head.children[0], 'each PiP document owns its link');
    assert.equal(controller.view.earlier.hidden,true,'fresh Mini always opens Earlier Sessions collapsed');

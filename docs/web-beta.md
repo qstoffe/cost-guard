@@ -47,6 +47,10 @@ errors unless the source supports a specific abort/quota cause.
 
 Default labels reflect the current shipped defaults, not fixed lifetime names.
 Classic is dark independently of system preference; Web follows system light/dark.
+An open Mini Watch inherits this owning page's resolved Web appearance, including its
+content background and overlays, even if the separate PiP document reports another
+preference. Settings and owner appearance changes apply live; Classic/default remains
+unchanged. Browser-native PiP chrome is not recolored by Cost Guard.
 USD is reference token valuation, not billed spending. No CCost selector remains
 on Models or other report pages.
 

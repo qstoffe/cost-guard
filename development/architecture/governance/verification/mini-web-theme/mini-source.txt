@@ -1,0 +1,2 @@
+{"source": "V2", "coherent_publications_checked": 64, "running_count": 1, "running_complete": true, "running_cost_complete": true, "accounts": 3, "primary_period_costs_available": 2, "finished_history_cards": 4, "known_finish_times": 4, "single_acquisition_owner": true, "seconds": 26.068}
+{"owned_acquisition_closed": true, "close_seconds": 0.151, "shared_opencode_untouched": true}

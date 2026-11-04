@@ -75,6 +75,15 @@ refresh its epoch. External `mini.css` reuses `app.css` theme tokens under uncha
 CSP. Primary subscription costs reuse the indexed native-period history lane and
 stable server primary selection, with estimated/partial attribution retained.
 
+Mini's controller installs the effective theme before adding PiP styles/content.
+Web copies the owner's computed custom properties and resolves native content
+`color-scheme` from the owner's media query: Chromium PiP can independently prefer
+dark while the main page is light. Confirmed Settings changes and an owner media-query
+change listener resynchronize the palette without data/render timers or new acquisition.
+Closing/replacing PiP removes that listener; Classic removes all inherited Web overrides
+and retains its original shared CSS. Mini-only Web canvas/quota-surface/scrollbar rules
+never restyle the owner, Classic or browser-native chrome. No layer boundary changes.
+
 Mini renders canonical active/focal card identities, not the running aggregate: one
 keyed row per prompt with prompt-local cost/duration/context and shared terminal grace.
 The first cell left-anchors an independently ellipsized title and right-anchors

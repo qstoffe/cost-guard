@@ -322,6 +322,8 @@ const MiniWatch = (() => {
       this.publication = null; this.healthState = {kind: 'starting'}; this.receivedAt = 0;
       this.observations = new Observations();
       this.placement = null; this.opened = false; this.instance = null;
+      this.appearance = owner.matchMedia('(prefers-color-scheme: dark)');
+      this.themeChanged = () => this.syncTheme(); this.themeProperties = [];
       this.reason = unavailable(owner);
       button.addEventListener('click', () => this.toggle());
       owner.addEventListener('pagehide', () => { this.ended = true; this.close(); });
@@ -339,6 +341,7 @@ const MiniWatch = (() => {
     release(win) {
       if (this.window !== win) return;
       win.clearInterval(this.timer);
+      this.appearance.removeEventListener('change', this.themeChanged);
       this.window = this.view = null;
     }
     close() {
@@ -374,6 +377,8 @@ const MiniWatch = (() => {
         this.window = win;
         win.addEventListener('pagehide', () => { this.release(win); this.sync(); }, {once: true});
         const doc = win.document; doc.title = 'Mini Watch · Cost Guard'; doc.documentElement.lang = 'en';
+        this.syncTheme();
+        this.appearance.addEventListener('change', this.themeChanged);
         const icon = doc.createElement('link'); icon.rel = 'icon'; icon.type = 'image/x-icon';
         icon.href = new URL('/favicon-cg1.ico', this.owner.location.href).href; doc.head.append(icon);
         for (const name of ['app.css', 'mini.css']) {
@@ -408,11 +413,24 @@ const MiniWatch = (() => {
         this.placement = values.miniWatchPlacement;
         this.feedback.textContent = '';
       }
-      this.sync(); this.render();
+      this.syncTheme(); this.sync(); this.render();
+    }
+    syncTheme() {
+      if (!this.window) return;
+      const source = this.owner.document.documentElement, root = this.window.document.documentElement;
+      root.dataset.theme = source.dataset.theme;
+      for (const name of this.themeProperties) root.style.removeProperty(name);
+      this.themeProperties = []; root.style.removeProperty('color-scheme');
+      if (source.dataset.theme !== 'web') return; // Classic keeps its exact shared CSS.
+      // Document PiP can report dark while its opener is light. Inherit resolved
+      // semantic roles, not a second palette or the PiP document's media result.
+      const style = this.owner.getComputedStyle(source);
+      this.themeProperties = [...style].filter(name => name.startsWith('--'));
+      for (const name of this.themeProperties) root.style.setProperty(name, style.getPropertyValue(name));
+      root.style.setProperty('color-scheme', this.appearance.matches ? 'dark' : 'light');
     }
     render() {
       if (!this.view) return;
-      this.view.doc.documentElement.dataset.theme = this.owner.document.documentElement.dataset.theme;
       const now = Date.now();
       this.view.update(this.publication, this.healthState, now - this.receivedAt > 15000, this.observations, now);
     }

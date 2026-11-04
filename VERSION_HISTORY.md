@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.159 — 2026-11-04
+
+- Mini Watch's Web appearance now inherits the owning page's resolved light/dark palette, including its content canvas, tables, controls, help and quota surfaces, even when Document PiP reports a different system preference. Opening, live Settings changes and owner appearance changes stay coherent without another stream or refresh. Classic/default dark styling, compact layout, metrics and browser-native chrome are unchanged.
+
 ## v80.158 — 2026-11-04
 
 - Mini Watch: both session tables keep Session/title at the left and `| Total CCost` / `| amount` at the right of the same column. Only long titles ellipsize; full costs retain natural width, accessible scope and narrow-region horizontal scrolling. No accounting, acquisition, full Watch or PiP geometry change.
