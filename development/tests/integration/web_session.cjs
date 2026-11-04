@@ -35,6 +35,7 @@ async function main() {
       duringPage();
       return JSON.parse(JSON.stringify(page));
     }});
+  require('../fixtures/web_help_vm.cjs')(vm, context);
   for (const path of ['render', 'session']) vm.runInContext(fs.readFileSync(`src/web/assets/${path}.js`, 'utf8'), context);
   vm.runInContext("globalThis.view = new SessionDetail.View(api, 'root-0000', 'live')", context);
   const view = context.view;

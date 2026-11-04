@@ -44,15 +44,13 @@ function connectionStatus(message, state = {}) {
     banner.hidden = hostState.kind === 'connected' || (hostState.kind === 'starting' && !(current?.result || current?.detail?.data || liveValue?.view));
     const summary = document.getElementById('host-message');
     const details = document.getElementById('host-details');
-    const timing = `Last authenticated host check: ${time(hostState.authenticatedAt)} · Last source update: ${time(hostState.observedAt)}. Reports remain frozen snapshots; account freshness is independent.`;
+    const timing = `Last host check: ${time(hostState.authenticatedAt)}\nLast source update: ${time(hostState.observedAt)}\nReports stay frozen. Account updates are separate.`;
     if (summary && details) { summary.textContent = message; details.textContent = timing; }
     else banner.textContent = `${message} · ${timing}`;
-    statusLine.title = `${message} ${timing}`;
     const warning = document.getElementById('host-warning');
     if (warning) {
       const recovery = ['authorization_required', 'identity_changed', 'stopped'].includes(hostState.kind) ? 'Use a fresh OS launcher link.' : 'Check the local source/host; reload to retry.';
       warning.textContent = `${hostState.kind.replaceAll('_', ' ')} — ${recovery}`;
-      warning.title = `${message} ${timing}`;
     }
   }
   if (hostState.terminal) for (const view of views.values()) view.detail?.detach();

@@ -13,6 +13,7 @@ const all = (node, tag) => [...(node.tag === tag ? [node] : []), ...node.childre
 const input = JSON.parse(fs.readFileSync(0, 'utf8'));
 const output = new Node('main');
 const context = vm.createContext({document: {createElement: tag => new Node(tag)}, output, Date});
+require('../fixtures/web_help_vm.cjs')(vm, context);
 vm.runInContext(fs.readFileSync('src/web/assets/render.js', 'utf8'), context);
 for (const [kind, result] of Object.entries(input)) {
   context.result = result;
@@ -69,6 +70,7 @@ console.log('PASS date scope, configured prompt clocks/context, bounded rows/ful
 const freshOutput = new Node('main');
 const fresh = vm.createContext({document: {createElement: tag => new Node(tag)}, output: freshOutput,
   result: {...input.date, view: {...input.date.view, ccost_display_unit: 'usd'}}, Date});
+require('../fixtures/web_help_vm.cjs')(vm, fresh);
 vm.runInContext(fs.readFileSync('src/web/assets/render.js', 'utf8'), fresh);
 vm.runInContext('ReportView.render(output, result, {pages: {}, section: "reports"})', fresh);
 assert.equal(all(freshOutput, 'tfoot')[0].children[0].children[1].textContent,

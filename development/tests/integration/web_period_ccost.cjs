@@ -13,6 +13,7 @@ const account = JSON.parse(fs.readFileSync(0, 'utf8'));
 const output = new Node('main');
 const context = vm.createContext({document: {createElement: tag => new Node(tag)}, output,
   quota: {accounts: [account]}, Date});
+require('../fixtures/web_help_vm.cjs')(vm, context);
 vm.runInContext(fs.readFileSync('src/web/assets/render.js', 'utf8'), context);
 vm.runInContext('ReportView.overviewAccounts(output, quota, "", true, true)', context);
 for (const text of ['0% used', 'Window not started', 'CCost 5-hour: 0', 'CCost today: 604']) {

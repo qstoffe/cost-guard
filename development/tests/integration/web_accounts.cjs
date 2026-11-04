@@ -13,6 +13,7 @@ const all = (n, tag) => [...(n.tag === tag ? [n] : []), ...n.children.flatMap(ch
 const view = JSON.parse(fs.readFileSync(0, 'utf8')), output = new Node('main');
 const context = vm.createContext({document: {createElement: tag => new Node(tag)}, output, Date,
   state: {section: 'accounts', pages: {}}, result: {view, observed_at_ms: 1, source: {status: 'acquired'}}});
+require('../fixtures/web_help_vm.cjs')(vm, context);
 vm.runInContext(fs.readFileSync('src/web/assets/render.js', 'utf8'), context);
 vm.runInContext('ReportView.render(output, result, state)', context);
 const cards = all(output, 'section');

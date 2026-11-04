@@ -56,7 +56,8 @@ module.exports = async function checkContext(evaluate) {
       const range=color(impact())===ordinaryColor && summary().textContent.endsWith('; Next Ictx CCost 0.3–3)');
       value.context.warning.display.warning_cost='';redraw();
       const noImpact=summary().textContent.endsWith('(Price threshold >100.0K exceeded)') && !impact().textContent;
-      const help=summary().children[1].getAttribute('aria-description').includes('not an accumulated session CCost spending budget');
+      summary().children[1].focus();
+      const help=document.getElementById('context-help').textContent.includes('not a session spending limit');
       return {both,undecorated,transitions,ordinaryColor,invalidated,plain,usd,credits,range,noImpact,help};
     } finally {
       document.activeElement?.blur();INPUT.view.active_cards=original;redraw();

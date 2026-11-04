@@ -3,6 +3,24 @@
 After authentication, **Web Beta v…** shows the running server's CLI product version,
 not a release lookup or newly edited source. Offline views retain their original version.
 
+## Contextual help
+
+Dotted-underlined headings and **?** buttons explain metrics in both Web and Mini
+Watch. Hover or focus with Tab to read; press Escape to dismiss without moving
+focus. You can move the pointer into the help to keep reading. Tap a help button
+to keep it open; tap again or outside to close it. Only one explanation opens in
+each window. Values remain selectable; action buttons and links stay clickable.
+
+Full Watch’s **CCost (I + E)** help separates first-request incoming-context cost
+from output/later/linked-subagent work. **Token Mix %** explains I/C/W/O token
+shares, not prices. **Model** names the main model even when other linked models
+contribute to totals. **N/A** means unavailable, not zero; **?** marks partial
+pricing/data. CCost is an estimated reference cost, not your bill or native quota.
+
+Use adjacent help for an exact date, full prompt preview or untruncated Mini
+session title. Connection warnings, settings explanations and longer report/account
+details remain visible or expandable rather than hidden exclusively on hover.
+
 ## Open in another browser (Windows)
 
 Right-click the Windows notification-area **Cost Guard** icon and choose

@@ -16,10 +16,11 @@ const view = JSON.parse(fs.readFileSync(0, 'utf8'));
 const output = new Node('main');
 const context = vm.createContext({document: {createElement: tag => new Node(tag)}, output,
   result: {observed_at_ms: 1, source: {status: 'acquired', atomicity: 'per_root_snapshot'}, view}, Date});
+require('../fixtures/web_help_vm.cjs')(vm, context);
 vm.runInContext(fs.readFileSync('src/web/assets/render.js', 'utf8'), context);
 vm.runInContext('ReportView.render(output, result, {pages: {}, section: "models"})', context);
 assert.ok(output.textContent.includes('I = Input; C = Cached input; W = Cache write; O = Output'));
-assert.ok(output.textContent.includes('Reference token valuation, not actual billing.'));
+assert.ok(output.textContent.includes('Estimated reference cost, not your bill.'));
 assert.ok(output.textContent.includes('0.1x'));
 assert.ok(!output.textContent.includes('0.123456789012345'));
 assert.ok(!output.textContent.includes('0.000000123456789/0/0/2'), 'retired native-rate column is absent');

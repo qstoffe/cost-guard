@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v80.162, 2026-11-04), the supported distribution.
+Use **current `main`** (v80.163, 2026-11-05), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -361,7 +361,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.161 (2026-11-04):** Full Web Watch uses one **Session Context / CCost** summary per card and one canonical price-threshold explanation. Approaching uses an amber triangle/context value; exceeded uses a distinct red stop icon and red context/multiplier, keeping session cost and other text neutral. See [Web Watch](docs/web-beta.md).
+**v80.163 (2026-11-05):** Web and Mini Watch share concise, line-separated contextual help with keyboard, hover and touch access. Explicit help cues preserve selectable values, exact titles/dates and action cursors; CCost, Token Mix and model/subagent explanations are easier to scan. See [Web help](docs/web-beta.md#contextual-help).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

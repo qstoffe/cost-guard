@@ -25,12 +25,14 @@ def main():
     if not args.browser.is_file() or not args.output.parent.is_dir():
         raise SystemExit('Explicit browser and existing owned output directory required')
     assets = ROOT / 'src/web/assets'
-    resources = {'/' + name: (assets / name).read_bytes() for name in ('app.css', 'render.js', 'reports.js')}
+    resources = {'/' + name: (assets / name).read_bytes() for name in ('app.css', 'help.js', 'render.js', 'reports.js')}
     resources['/data.js'] = ('const INPUT = ' + json.dumps([
         project(model_report(all_models=all_models, fallback=fallback, include_model_catalog=True)).to_json()
         for all_models in (False, True) for fallback in (False, True)]) + ';').encode()
     resources['/browser.js'] = Path(__file__).with_name('web_models_browser.js').read_bytes()
     resources['/case.html'] = b'''<!doctype html><html><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/app.css"><main><div id="scope-controls"></div><div id="result"></div></main><script src="/render.js"></script><script src="/reports.js"></script><script src="/data.js"></script><script src="/browser.js"></script></html>'''
+
+    resources['/case.html'] = resources['/case.html'].replace(b'<script src="/render.js">', b'<script src="/help.js"></script><script src="/render.js">')
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):

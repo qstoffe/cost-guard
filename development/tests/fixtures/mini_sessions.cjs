@@ -1,6 +1,6 @@
 // Mini session-table regression cases over immutable server display tokens, not valuation.
 const assert = require('node:assert/strict');
-module.exports = function sessionTables(vm, context, controller, view, input) {
+module.exports = function sessionTables(vm, context, controller, view, input, helpText) {
   const saved = structuredClone(input.view), active = saved.active_cards[0];
   const summary = active.session_summary;
   assert.equal(view.earlier.hidden, true);
@@ -13,12 +13,12 @@ module.exports = function sessionTables(vm, context, controller, view, input) {
     ['Session | Total CCost', 'Ctx']);
   assert.match(view.historyBody.parentNode.attributes['aria-label'], /latest valid session context \(Ctx\)/);
   const contextHeader = view.historyBody.parentNode.querySelectorAll('th')[1];
-  assert.equal(contextHeader.title, 'Estimated latest valid session/current-next context, not historical prompt context or a sum; N/A means unavailable');
-  assert.equal(contextHeader.attributes['aria-description'], contextHeader.title);
+  assert.match(helpText(contextHeader.children[0]), /next request in this earlier session[\s\S]*Not its historical prompt context or a sum[\s\S]*N\/A means unavailable/);
+  assert.equal(contextHeader.title, undefined);
   for (const body of [view.body, view.historyBody]) {
     const header = body.parentNode.querySelectorAll('th')[0];
-    assert.deepEqual(header.children[0].children.map(node => node.textContent), ['Session', ' | Total CCost']);
-    assert.match(header.attributes['aria-description'], /entire root\/session-tree CCost/);
+    assert.deepEqual(header.children[0].children[0].children.map(node => node.textContent), ['Session', ' | Total CCost']);
+    assert.match(helpText(header.children[0]), /total estimated session cost[\s\S]*earlier prompts, linked subagents/);
   }
   const cost = row => row.children[0].children[0].children[1].textContent;
   assert.deepEqual(view.body.children.map(cost), [' | 4583', ' | 4583']);
@@ -36,8 +36,8 @@ module.exports = function sessionTables(vm, context, controller, view, input) {
   assert.ok(view.historyBody.children.every(row => row.children.length === 2 && cost(row) === ' | 4583'));
   assert.equal(view.earlier.parentNode, view.prompts, 'both tables use one region');
   const row = view.historyBody.children[0];
-  assert.match(row.title, /Latest valid session Ctx: 902\./);
-  assert.equal(row.attributes['aria-label'], row.title);
+  assert.match(row.helpText, /Latest valid session Ctx: 902/);
+  assert.match(row.attributes['aria-label'], /Earlier session · Earlier 2/);
   for (let index=0;index<20;index++) {input.view.now_ms++; controller.update(input);}
   assert.equal(view.historyBody.children[0],row,'publication preserves row/focus identity');
   assert.equal(view.earlier.hidden,false,'SSE never resets disclosure');
@@ -57,7 +57,7 @@ module.exports = function sessionTables(vm, context, controller, view, input) {
     input.view.active_cards = saved.active_cards.map(card=>({...card,session_summary:value}));
     input.view.history_cards = [history(0)].map(card=>({...card,session_summary:value})); controller.update(input);
     assert.ok([...view.body.children,...view.historyBody.children].every(row=>cost(row)===' | '+expected));
-    assert.match(view.body.children[0].attributes['aria-label'],/Whole-session CCost/);
+    assert.match(view.body.children[0].children[0].helpText,/Session CCost/);
   }
   const resumed = {...history(3),focal_id:active.focal_id};
   input.view = {...saved, active_cards:[...saved.active_cards,resumed],history_cards:[history(3),history(4)]};
@@ -69,7 +69,7 @@ module.exports = function sessionTables(vm, context, controller, view, input) {
   assert.equal(view.historyBody.children.length,1,'unknown finish fallback keeps server order');
   input.view = {...input.view,history_cards:[],history_state:'unavailable'}; controller.update(input);
   assert.equal(view.historyBody.children[0].dataset.id,'history-0','failed read retains real history');
-  assert.match(view.prompts.title,/Retained values are not new live observations/);
+  assert.match(view.observationHelp,/Retained values are not live updates/);
   input.view.history_state='observed'; controller.update(input);
   assert.equal(view.historyBody.textContent,'No earlier sessions','canonical empty clears retained history');
   input.view.history_state='loading'; controller.update(input);
@@ -78,6 +78,6 @@ module.exports = function sessionTables(vm, context, controller, view, input) {
   assert.equal(view.historyBody.textContent,'Earlier sessions unavailable');
   input.view = {...saved,active_cards:saved.active_cards.map(card=>({...card,title:''}))}; controller.update(input);
   assert.equal(view.body.children[0].children[0].children[0].children[0].textContent,active.session_id);
-  assert.match(view.body.children[0].children[0].title,/all root\/session-tree usage/);
+  assert.match(view.body.children[0].children[0].helpText,/Entire session[\s\S]*linked subagents/);
   view.earlierToggle.fire('click'); input.view=saved; controller.update(input);
 };

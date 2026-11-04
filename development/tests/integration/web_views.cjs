@@ -66,6 +66,7 @@ async function main() {
   const context = vm.createContext({LiveConnection: transport, AbortController, clearTimeout, document: {documentElement: new Node('html'), body: new Node('body'), querySelector: () => toolbar, createElement: tag => new Node(tag),
     getElementById: id => ids[id], querySelectorAll: () => nav, addEventListener() {}}, window: {addEventListener: (key, fn) => { handlers[key] = fn; }},
     location, history, URLSearchParams, fetch: wire, setTimeout, Date, console});
+  require('../fixtures/web_help_vm.cjs')(vm, context);
   for (const path of ['/render.js', '/reports.js', '/settings.js', '/app.js']) {
     const response = await fetch(input.origin + path);
     assert.equal(response.status, 200);
@@ -108,7 +109,7 @@ async function main() {
   releaseReport();
   await until(() => ids.notice.textContent.includes('Snapshot captured'));
   assert.equal(location.hash, '#/models');
-  assert.match(ids.result.textContent, /Reference token valuation, not actual billing/);
+  assert.match(ids.result.textContent, /Estimated reference cost, not your bill/);
   const creditsText = ids.result.textContent, beforeToggle = requests;
   const retainedChildren = [...ids.result.children];
   vm.runInContext('applySettings({webSettings: {theme: "classic", ccostDisplayUnit: "usd", miniWatchPlacement: "remember-last", quotaDisplayMode: "used"}, webSettingsChoices: {theme: "classic", ccostDisplayUnit: "usd", miniWatchPlacement: "default", quotaDisplayMode: "default"}, webSettingsDefaults: {theme: "classic", ccostDisplayUnit: "credits", miniWatchPlacement: "remember-last", quotaDisplayMode: "used"}})', context);
@@ -128,7 +129,7 @@ async function main() {
   assert.equal(requests, beforeHeartbeat, 'no hidden reacquisition');
   assert.equal(ids['host-state'].hidden, true, 'healthy operation has no persistent banner');
   assert.equal(ids.status.textContent, 'Live connected.', 'one compact accessible status');
-  assert.match(ids.status.title, /Last authenticated host check/);
+  assert.equal(ids.status.title, undefined, 'hidden status does not duplicate visible connection details');
   ids.search.events.input({target: {value: 'no matching model'}});
   assert.ok(all(ids.result, 'tbody')[0].children.length, 'Overview ignores hidden legacy search state');
   ids.search.events.input({target: {value: ''}});
@@ -355,6 +356,7 @@ async function main() {
   location.hash = '#/sessions/root-0000';
   const reloaded = vm.createContext({LiveConnection: transport, AbortController, clearTimeout, document: context.document, window: context.window, location, history,
     URLSearchParams, fetch: wire, setTimeout, Date, console});
+  require('../fixtures/web_help_vm.cjs')(vm, reloaded);
   vm.runInContext(await (await fetch(input.origin + '/render.js')).text(), reloaded);
   vm.runInContext(await (await fetch(input.origin + '/reports.js')).text(), reloaded);
   vm.runInContext(await (await fetch(input.origin + '/settings.js')).text(), reloaded);
@@ -367,6 +369,7 @@ async function main() {
   location.hash = '#/live';
   const watchReload = vm.createContext({LiveConnection: transport, AbortController, clearTimeout, document: context.document, window: context.window, location, history,
     URLSearchParams, fetch: wire, setTimeout, Date, console});
+  require('../fixtures/web_help_vm.cjs')(vm, watchReload);
   for (const script of ['/render.js', '/reports.js', '/settings.js', '/app.js']) {
     vm.runInContext(await (await fetch(input.origin + script)).text(), watchReload);
   }
@@ -382,7 +385,7 @@ async function main() {
   vm.runInContext("connectionStatus('STOPPED — NOT LIVE. Use the OS launcher.', {kind: 'stopped', terminal: true, writable: false})", watchReload);
   assert.match(ids['host-state'].textContent, /STOPPED — NOT LIVE/);
   assert.equal(ids['host-state'].hidden, false, 'terminal notice is never hidden');
-  assert.match(ids['host-details'].textContent, /Reports remain frozen snapshots/);
+  assert.match(ids['host-details'].textContent, /Reports stay frozen/);
   assert.match(ids.notice.textContent, /not updating/);
   assert.equal(ids.refresh.disabled, true);
   assert.equal(ids.cancel.disabled, true);
@@ -396,6 +399,7 @@ async function main() {
   ids.result.textContent = 'Starting Cost Guard';
   const unavailable = vm.createContext({LiveConnection: transport, AbortController, clearTimeout, document: context.document, window: context.window, location, history,
     URLSearchParams, fetch: wire, setTimeout, Date, console});
+  require('../fixtures/web_help_vm.cjs')(vm, unavailable);
   for (const script of ['/render.js', '/reports.js', '/settings.js', '/app.js']) {
     vm.runInContext(await (await fetch(input.origin + script)).text(), unavailable);
   }

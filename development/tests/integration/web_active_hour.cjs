@@ -12,6 +12,7 @@ class Node {
 const all = (node, tag) => [...(node.tag === tag ? [node] : []), ...node.children.flatMap(child => all(child, tag))];
 const result = JSON.parse(fs.readFileSync(0, 'utf8')), output = new Node('main');
 const context = vm.createContext({document: {createElement: tag => new Node(tag)}, output, result, Date, URLSearchParams});
+require('../fixtures/web_help_vm.cjs')(vm, context);
 for (const file of ['render.js', 'reports.js']) vm.runInContext(fs.readFileSync('src/web/assets/' + file, 'utf8'), context);
 vm.runInContext('ReportView.render(output, result, {pages: {}, section: "cost-per-hour"})', context);
 assert.match(output.textContent, /Today.*Month to date.*Rolling 30 days/);

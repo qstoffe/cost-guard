@@ -23,6 +23,7 @@ const window = {devicePixelRatio:1.5,visualViewport:{scale:1,addEventListener(ki
 const context = vm.createContext({document: {createElement: tag => new Node(tag),
   createElementNS: (namespaceURI, tag) => Object.assign(new Node(tag), {namespaceURI})}, window, console,
   input, parent: new Node('div')});
+const helpText = require('../fixtures/web_help_vm.cjs')(vm, context);
 for (const name of ['render', 'watch']) vm.runInContext(fs.readFileSync(`src/web/assets/${name}.js`, 'utf8'), context);
 vm.runInContext("globalThis.state = {connection:'Live connected.'}; ReportView.renderLive(parent, input, state)", context);
 const watch = context.state.watch, card = [...watch.cards.values()][0];
@@ -39,9 +40,9 @@ const row = card.body.children[0], prompt = context.input.view.active_cards[0].r
 assert.equal(card.body.children.length, 1);
 assert.equal(row.children[0].textContent, prompt.display.clock);
 assert.equal(row.children[2].textContent, '#37' + prompt.preview);
-assert.equal(row.children[2].children[0].children[1].title, prompt.preview);
+assert.equal(helpText(row.children[2].children[0].children[2]), prompt.preview);
 assert.equal(row.attributes['aria-label'], 'Prompt 37 · Running');
-assert.match(row.children[3].children[0].title, /Additional model contribution/);
+assert.match(helpText(row.children[3].children[0].children[0]), /Other models also contributed/);
 assert.equal(card.title.className, 'watch-running-title');
 assert.ok(!/Session Total|provisional|Loading/.test(card.root.textContent));
 assert.equal(card.running.textContent, 'Running: shell 41s');
@@ -54,12 +55,12 @@ const earlier = [...watch.cards.values()][1];
 assert.equal(earlier.title.className, '');
 assert.equal(earlier.body.children[0].children[0].textContent,
    context.input.view.history_cards[0].rows[0].prompt.display.finished_clock);
-assert.equal(earlier.body.children[0].children[0].children[0].title,
+assert.equal(helpText(earlier.body.children[0].children[0].children[0].children[0]),
    context.input.view.history_cards[0].rows[0].prompt.display.finished_date_time);
 assert.equal(earlier.root.querySelectorAll('th')[0].children[0].textContent, 'Finished');
 assert.equal(card.root.querySelectorAll('th')[0].children[0].textContent, 'Started');
 assert.equal(earlier.root.querySelectorAll('th')[1].children[0].textContent, 'Duration');
-assert.match(earlier.root.querySelectorAll('th')[0].children[0].title, /abort\/error.*not elapsed Duration/);
+assert.match(helpText(earlier.root.querySelectorAll('th')[0].children[0]), /including stopped or failed work/);
 const saved = card.body.children[0];
 vm.runInContext('ReportView.renderLive(parent, input, state)', context);
 assert.equal(card.body.children[0], saved, 'unchanged refresh retains row and valid metrics');
@@ -80,8 +81,8 @@ const monthlyCard = watch.accounts.children[0].children[0];
 assert.equal(monthlyCard.children[2].textContent, 'Monthly · 8.4% used (1814) · 2088/25000 AI credits');
 assert.equal(monthlyCard.children[3].children[0].value, '0.08352');
 const periodCost = monthlyCard.children[2].children[1];
-assert.equal(periodCost.tabIndex, 0);
-assert.match(periodCost.attributes['aria-description'], /Observed CCost for Monthly.*independent of provider-native Used/);
+assert.equal(periodCost.title, undefined);
+assert.match(helpText(monthlyCard.children[2].children[2]), /CCost used during Monthly[\s\S]*Separate from the provider’s used quota/);
 assert.equal(monthlyCard.children[4].children.length, 3, 'reset and two pace rows; no period cost row');
 assert.match(monthlyCard.children[4].children[0].textContent, /^Reset/);
 assert.match(monthlyCard.children[4].children[1].textContent, /^Remaining: .*\/day$/);
@@ -235,7 +236,7 @@ vm.runInContext('ReportView.renderLive(parent, input, state)', context);
 assert.equal(watch.daily.children[0].textContent, 'CCost Today');
 assert.equal(watch.daily.children[1].textContent, '34');
 assert.deepEqual(watch.daily.children.slice(3, 8).map(node => node.textContent), dailyCategories);
-assert.match(watch.daily.textContent, /Partial pricing \/ telemetry/);
+assert.match(watch.daily.textContent, /Partial pricing \/ token data/);
 context.input.view.daily_usage.total.complete = true;
 context.input.view.daily_state = 'retrying';
 context.input.view.active_cards[0].state = 'retrying';
@@ -290,8 +291,8 @@ for (const fixture of context.input.quota_cases || []) {
   if (fixture.name === 'empty period') assert.ok(label.includes('used (0)'));
   if (['unknown cost', 'unpriced period'].includes(fixture.name))
     assert.ok(!/[()]/.test(label));
-  if (fixture.name === 'partial period') assert.match(account.children[2].children[1].title, /partial attribution/);
-  if (fixture.name === 'estimated period') assert.match(account.children[2].children[1].title, /estimated attribution/);
+  if (fixture.name === 'partial period') assert.match(helpText(account.children[2].children[2]), /partial attribution/);
+  if (fixture.name === 'estimated period') assert.match(helpText(account.children[2].children[2]), /estimated attribution/);
   if (fixture.name === 'owner example') assert.equal(label, '5 hours · 16% used (94) · 120/750 AI credits');
   if (fixture.value.used_fraction == null || fixture.value.quota.unlimited) assert.ok(!/[()]/.test(label));
   vm.runInContext('ReportView.setQuotaMode("remaining"); ReportView.syncUnits(parent)', context);

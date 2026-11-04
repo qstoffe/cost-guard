@@ -18,7 +18,7 @@ from src.application.live_projection import project_live
 
 def main():
     assets = ROOT / 'src/web/assets'
-    resources = {'/' + name: (assets / name).read_bytes() for name in ('app.css', 'render.js', 'watch.js')}
+    resources = {'/' + name: (assets / name).read_bytes() for name in ('app.css', 'help.js', 'render.js', 'watch.js')}
     resources['/data.js'] = ('const INPUT = ' + json.dumps(dict(state='running', view=project_live(summary_watch()).to_json())) + ';').encode()
 
     class Handler(BaseHTTPRequestHandler):
@@ -41,7 +41,7 @@ def main():
                 scheme = 'dark' if query.get('scheme') == ['dark'] else 'light'
                 content = f'''<!doctype html><html lang="en" data-theme="{theme}"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
                     <title>Synthetic Watch</title><link rel="stylesheet" href="/app.css?scheme={scheme}"><main><h1>Watch</h1><div id="result"></div></main>
-                    <script src="/render.js"></script><script src="/watch.js"></script><script src="/data.js"></script>
+                    <script src="/help.js"></script><script src="/render.js"></script><script src="/watch.js"></script><script src="/data.js"></script>
                     <script>const state = {{connection:'Live connected.'}}; ReportView.renderLive(document.getElementById('result'), INPUT, state);</script></html>'''.encode()
             else:
                 content = resources.get(url.path)

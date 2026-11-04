@@ -20,11 +20,12 @@ class Node {
   contains(node) { return node === this || this.children.some(child => child.contains(node)); }
   querySelectorAll(tag) { return this.children.flatMap(child => [...(child.tag === tag ? [child] : []), ...child.querySelectorAll(tag)]); }
 }
-function doc() { return {createElement: tag => new Node(tag),
+function doc() { const value = {createElement: tag => Object.assign(new Node(tag), {ownerDocument:value}),
   createElementNS: (namespaceURI, tag) => Object.assign(new Node(tag), {namespaceURI}),
-  head: new Node('head'), body: new Node('body'), documentElement: new Node('html')}; }
+  head: new Node('head'), body: new Node('body'), documentElement: new Node('html')}; return value; }
 function win() {
   const node = new Node('window'); node.document = doc(); node.closed = false; node.timers = new Set();
+  node.document.defaultView = node; node.clearTimeout = clearTimeout; node.setTimeout = setTimeout;
   node.setInterval = callback => {node.timers.add(callback); return callback;};
   node.clearInterval = callback => node.timers.delete(callback);
   node.close = () => {node.closed = true;}; // Deliberately defer pagehide to reproduce stale callbacks.
@@ -41,6 +42,7 @@ function win() {
 let now = 1000;
 class Clock extends Date { static now() { return now; } }
 const context = vm.createContext({document: doc(), window: win(), URL, Date: Clock, input});
+const helpText = require('../fixtures/web_help_vm.cjs')(vm, context);
 for (const file of ['render', 'watch', 'mini']) vm.runInContext(fs.readFileSync(`src/web/assets/${file}.js`, 'utf8'), context);
 const Controller = vm.runInContext('MiniWatch.Controller', context);
 function setup() {
@@ -82,10 +84,10 @@ function setup() {
   assert.equal(view.health.textContent, ''); assert.equal(view.health.hidden, true);
   const table = view.body.parentNode, headers = table.querySelectorAll('th');
   assert.equal(headers[4].textContent, 'Ctx');
-  assert.equal(headers[4].title, 'Estimated next incoming context for this prompt; N/A means unavailable');
+  assert.match(helpText(headers[4].children[0]), /Estimated context for this prompt’s next request[\s\S]*N\/A means unavailable, not zero/);
   assert.match(table.attributes['aria-label'], /estimated next incoming context \(Ctx\)/);
-  assert.match(view.body.children[0].title, /per-prompt CCost, Duration and Ctx\./);
-  assert.match(view.body.children[0].attributes['aria-label'], /per-prompt CCost, Duration and Ctx\./);
+  assert.match(view.body.children[0].helpText, /CCost, Duration and Ctx describe this prompt/);
+  assert.match(view.body.children[0].attributes['aria-label'], /Prompt 23 · Running/);
   const contextItem = input.view.active_cards[0].rows[0], originalContext = contextItem.live_context;
   for (const formatted of ['123 456', '234 567', '0', 'N/A', '~source-format']) {
     contextItem.live_context = {display:{watch_next_context_tokens:formatted}};
@@ -96,12 +98,12 @@ function setup() {
   assert.equal(view.body.children[0].children[4].textContent, 'N/A');
   contextItem.live_context = originalContext; controller.update(input);
   assert.equal(view.daily.textContent, 'CCost Today 34 · 37 prompts', 'prior activity is not the two prompt rows or account-period costs');
-  assert.match(view.daily.attributes['aria-label'], /^CCost Today 34 · 37 prompts\. Global configured local-day CCost/);
+  assert.match(view.dailyHelp, /Today’s estimated cost and prompt count across sessions/);
   assert.notEqual(view.daily.parentNode, view.summary, 'daily metric is outside the navigation target');
   view.daily.fire('click'); view.daily.fire('keydown'); assert.equal(test.returned(),0);
   assert.equal(api.requests[0].height,250); assert.equal(api.requests[0].width,560);
   assert.equal(api.requests[0].preferInitialWindowPlacement,true);
-  require('../fixtures/mini_sessions.cjs')(vm,context,controller,view,input);
+  require('../fixtures/mini_sessions.cjs')(vm,context,controller,view,input,helpText);
   context.fullParent = new Node('div'); context.fullState = {connection:'Live connected.'};
   const daily = input.view.daily_usage;
   function parity() {
@@ -122,7 +124,7 @@ function setup() {
   }
   input.view.daily_usage = {...daily,total:{...daily.total,priced_requests:0,complete:false}};
   parity(); assert.equal(view.daily.textContent,'CCost Today N/A · 37 prompts');
-  assert.match(view.daily.title,/Partial pricing/);
+  assert.match(view.dailyHelp,/Partial pricing/);
   input.view.daily_usage = {...daily,total:{...daily.total,complete:false}};
   parity(); assert.equal(view.daily.textContent,'CCost Today 34 · 37 prompts');
   for (const state of ['retrying','unavailable','loading','partial']) {
@@ -151,8 +153,8 @@ function setup() {
   vm.runInContext('ReportView.setQuotaMode("remaining")', context); controller.settings();
   assert.match(retained.textContent, /91.6% remaining \(CCost used: 1814\)/);
   assert.equal(retainedBar.value, '0.91648'); assert.match(retainedBar.attributes['aria-label'], /remaining/);
-  assert.match(retained.title, /22912\/25000 AI credits.*not remaining CCost/);
-  assert.doesNotMatch(retained.title, /Period cost unavailable/);
+  assert.match(retained.helpText, /22912\/25000 AI credits[\s\S]*not remaining CCost/);
+  assert.doesNotMatch(retained.helpText, /Period CCost unavailable/);
   assert.equal(view.accounts.children[0], retained); assert.equal(retained.children[1], retainedBar);
   vm.runInContext('ReportView.setQuotaMode("used")', context); controller.settings();
   assert.match(retained.textContent, /8.4% used \(1814\)/);
@@ -164,6 +166,8 @@ function setup() {
   assert.equal(view.body.children.length, 2, 'deduplicated by source session and event, not aggregate count');
   assert.equal(view.body.children[0], firstRow, 'canonical ascending start order and keyed row');
   assert.equal(firstRow.children[0], firstCell, 'focusable title cell survives updates');
+  const statusHelp = view.body.children[1].children[1].children[1];
+  assert.match(helpText(statusHelp), /Running/);
   for (const [outcome, className, label] of [
     [{in_progress:false,completed_successfully:true},'mini-success','Completed'],
     [{in_progress:false,completed_successfully:false,aborted:true,abort_reason:'quota_limit'},'mini-error','Aborted · quota limit'],
@@ -171,7 +175,8 @@ function setup() {
     [{in_progress:false,completed_successfully:false,aborted:false,has_error:false},'','Ended']]) {
     const saved = {...prompt}; Object.assign(prompt, outcome); controller.update(input);
     const terminal = view.body.children[1];
-    assert.equal(terminal.className,className); assert.ok(terminal.title.startsWith(label));
+    assert.equal(terminal.className,className); assert.ok(terminal.helpText.startsWith(label));
+    assert.ok(view.doc.body.children.at(-1).textContent.startsWith(label), 'open help follows current prompt status without refocusing');
     assert.equal(terminal.children[3].textContent,'20m'); Object.assign(prompt,saved);
   }
   input.view.active_cards = []; controller.update(input);
@@ -184,7 +189,7 @@ function setup() {
   const primary = input.view.accounts.accounts[0].primary, savedCost = primary.cost;
   primary.estimated = true; primary.cost = {...savedCost,complete:false,display:{known_ccost:'?1814'},display_units:{credits:{known_ccost:'?1814'}}};
   controller.update(input); assert.match(retained.textContent,/8.4% used \(\?1814\)/);
-  assert.match(retained.title,/Estimated account attribution.*partial pricing/);
+  assert.match(retained.helpText,/Estimated account attribution[\s\S]*Partial pricing/);
   assert.ok(!retained.textContent.includes('~'));
   assert.equal(retained.children[1].value, primary.used_fraction);
   const quota = {...primary.quota}, saved = {...primary};
@@ -223,7 +228,7 @@ function setup() {
     assert.equal(view.health.hidden, ['reconnecting','offline','source_unavailable'].includes(kind));
     if (!view.health.hidden) assert.match(view.health.textContent,/return to|reopen|restart/);
     assert.equal(view.body.children[1].children[3].textContent, '20m');
-    assert.equal(view.daily.textContent,'CCost Today $0.34 · 37 prompts'); assert.match(view.daily.title,/retained observation/);
+    assert.equal(view.daily.textContent,'CCost Today $0.34 · 37 prompts'); assert.match(view.dailyHelp,/retained observation/);
   }
   controller.health({kind: 'connected'}); now += 16000;
   [...child.timers][0](); assert.equal(view.health.hidden,true); assert.equal(view.root.dataset.live,'false');
@@ -244,7 +249,7 @@ function setup() {
   now = 601000; controller.update(input); assert.equal(view.health.textContent,'Updates unavailable · showing last values');
   const warning = view.health.textContent; now += 5000; controller.health({kind:'connected'});
   input.view.now_ms++; controller.update(input); assert.equal(view.health.textContent,warning,'retry publications cannot fake recovery');
-  assert.equal(view.body.textContent,retainedText); assert.match(view.prompts.title,/Retained values are not new live observations/);
+  assert.equal(view.body.textContent,retainedText); assert.match(view.observationHelp,/Retained values are not live updates/);
   input.view = {...healthy.view,now_ms:healthy.view.now_ms+2,
     daily_usage:{...daily,observed_at_ms:daily.observed_at_ms+1},accounts:{...healthy.view.accounts,accounts:healthy.view.accounts.accounts.map(item =>
       ({...item,observation:{...item.observation,observed_at_ms:item.observation.observed_at_ms+1}}))}};
@@ -322,7 +327,7 @@ function setup() {
   assert.equal(initial.observations.snapshot(now),null,'no fabricated first values');
   const initialOpening = initial.toggle(); initialTest.opened(win()); await initialOpening;
   assert.equal(initial.view.daily.textContent, 'CCost Today · Loading…');
-  assert.match(initial.view.daily.attributes['aria-label'], /^CCost Today · Loading…/);
+  assert.equal(initial.view.daily.textContent, 'CCost Today · Loading…');
   initial.close();
   now += 599999; assert.equal(initial.observations.delayed(now),false);
   now++; assert.equal(initial.observations.delayed(now),true);
