@@ -1,6 +1,6 @@
 // Rendered first-cell alignment and intrinsic suffix widths in actual hidden Document PiP.
 const assert = require('node:assert/strict');
-module.exports = async function alignment({evaluate,until,fixture,command,pipSession,layouts,checks}) {
+module.exports = async function alignment({evaluate,until,fixture,command,sessionId,pipSession,layouts,checks}) {
   const original = await evaluate(`({width:miniWatch.window.outerWidth,height:miniWatch.window.outerHeight,
     theme:document.documentElement.dataset.theme,earlierHidden:miniWatch.view.earlier.hidden})`);
   await fixture('history-3-6');
@@ -21,7 +21,7 @@ module.exports = async function alignment({evaluate,until,fixture,command,pipSes
       await command('Runtime.evaluate',{expression:`document.documentElement.style.fontSize='${font}';document.documentElement.style.zoom='${zoom}'`},pipSession);
       for(const [theme,scheme] of [['classic','light'],['web','light'],['web','dark']]) {
         await evaluate(`document.documentElement.dataset.theme='${theme}';miniWatch.settings()`);
-        await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:scheme}]},pipSession);
+        await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:scheme}]},sessionId);
         for(const unit of ['credits','usd']) {
           await evaluate(`ReportView.setUnit('${unit}');miniWatch.settings()`);
           const result=await evaluate(`(() => {const v=miniWatch.view,w=miniWatch.window,d=w.document;

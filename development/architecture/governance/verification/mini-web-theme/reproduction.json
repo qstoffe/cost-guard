@@ -1,0 +1,430 @@
+{
+  "browser": "Chrome/156.0.8078.80",
+  "base": "34522ecb25a8aee0629f456068ddc02671de2aac",
+  "before": [
+    {
+      "name": "natural-web",
+      "owner": {
+        "theme": "web",
+        "dark": false,
+        "tokens": {
+          "--bg": "#eef2f8",
+          "--ink": "#17253b",
+          "--panel": "#fff",
+          "--surface": "#f6f8fc",
+          "--line": "#d3ddea",
+          "--watch-running": "#756000",
+          "--watch-quota-fill": "#087e8b"
+        },
+        "body": {
+          "background": "rgb(238, 242, 248)",
+          "color": "rgb(23, 37, 59)"
+        },
+        "htmlBackground": "rgba(0, 0, 0, 0)",
+        "colorScheme": "light dark",
+        "styles": [
+          "/app.css"
+        ],
+        "width": 758,
+        "height": 482
+      },
+      "mini": {
+        "theme": "web",
+        "dark": true,
+        "tokens": {
+          "--bg": "#0c1422",
+          "--ink": "#e6edf8",
+          "--panel": "#141f31",
+          "--surface": "#19263b",
+          "--line": "#31415b",
+          "--watch-running": "#ffff55",
+          "--watch-quota-fill": "#78dce8"
+        },
+        "body": {
+          "background": "rgb(12, 20, 34)",
+          "color": "rgb(230, 237, 248)"
+        },
+        "htmlBackground": "rgba(0, 0, 0, 0)",
+        "colorScheme": "light dark",
+        "styles": [
+          "/app.css",
+          "/mini.css"
+        ],
+        "width": 518,
+        "height": 231
+      }
+    },
+    {
+      "name": "owner-web-light",
+      "owner": {
+        "theme": "web",
+        "dark": false,
+        "tokens": {
+          "--bg": "#eef2f8",
+          "--ink": "#17253b",
+          "--panel": "#fff",
+          "--surface": "#f6f8fc",
+          "--line": "#d3ddea",
+          "--watch-running": "#756000",
+          "--watch-quota-fill": "#087e8b"
+        },
+        "body": {
+          "background": "rgb(238, 242, 248)",
+          "color": "rgb(23, 37, 59)"
+        },
+        "htmlBackground": "rgba(0, 0, 0, 0)",
+        "colorScheme": "light dark",
+        "styles": [
+          "/app.css"
+        ],
+        "width": 758,
+        "height": 482
+      },
+      "mini": {
+        "theme": "web",
+        "dark": true,
+        "tokens": {
+          "--bg": "#0c1422",
+          "--ink": "#e6edf8",
+          "--panel": "#141f31",
+          "--surface": "#19263b",
+          "--line": "#31415b",
+          "--watch-running": "#ffff55",
+          "--watch-quota-fill": "#78dce8"
+        },
+        "body": {
+          "background": "rgb(12, 20, 34)",
+          "color": "rgb(230, 237, 248)"
+        },
+        "htmlBackground": "rgba(0, 0, 0, 0)",
+        "colorScheme": "light dark",
+        "styles": [
+          "/app.css",
+          "/mini.css"
+        ],
+        "width": 518,
+        "height": 231
+      }
+    },
+    {
+      "name": "owner-web-dark",
+      "owner": {
+        "theme": "web",
+        "dark": true,
+        "tokens": {
+          "--bg": "#0c1422",
+          "--ink": "#e6edf8",
+          "--panel": "#141f31",
+          "--surface": "#19263b",
+          "--line": "#31415b",
+          "--watch-running": "#ffff55",
+          "--watch-quota-fill": "#78dce8"
+        },
+        "body": {
+          "background": "rgb(12, 20, 34)",
+          "color": "rgb(230, 237, 248)"
+        },
+        "htmlBackground": "rgba(0, 0, 0, 0)",
+        "colorScheme": "light dark",
+        "styles": [
+          "/app.css"
+        ],
+        "width": 758,
+        "height": 482
+      },
+      "mini": {
+        "theme": "web",
+        "dark": true,
+        "tokens": {
+          "--bg": "#0c1422",
+          "--ink": "#e6edf8",
+          "--panel": "#141f31",
+          "--surface": "#19263b",
+          "--line": "#31415b",
+          "--watch-running": "#ffff55",
+          "--watch-quota-fill": "#78dce8"
+        },
+        "body": {
+          "background": "rgb(12, 20, 34)",
+          "color": "rgb(230, 237, 248)"
+        },
+        "htmlBackground": "rgba(0, 0, 0, 0)",
+        "colorScheme": "light dark",
+        "styles": [
+          "/app.css",
+          "/mini.css"
+        ],
+        "width": 518,
+        "height": 231
+      }
+    },
+    {
+      "name": "classic",
+      "owner": {
+        "theme": "classic",
+        "dark": true,
+        "tokens": {
+          "--bg": "#101112",
+          "--ink": "#e5e5e5",
+          "--panel": "#191b1d",
+          "--surface": "#222528",
+          "--line": "#3b4046",
+          "--watch-running": "#ffff55",
+          "--watch-quota-fill": "#78dce8"
+        },
+        "body": {
+          "background": "rgb(16, 17, 18)",
+          "color": "rgb(229, 229, 229)"
+        },
+        "htmlBackground": "rgba(0, 0, 0, 0)",
+        "colorScheme": "dark",
+        "styles": [
+          "/app.css"
+        ],
+        "width": 758,
+        "height": 482
+      },
+      "mini": {
+        "theme": "classic",
+        "dark": true,
+        "tokens": {
+          "--bg": "#101112",
+          "--ink": "#e5e5e5",
+          "--panel": "#191b1d",
+          "--surface": "#222528",
+          "--line": "#3b4046",
+          "--watch-running": "#ffff55",
+          "--watch-quota-fill": "#78dce8"
+        },
+        "body": {
+          "background": "rgb(16, 17, 18)",
+          "color": "rgb(229, 229, 229)"
+        },
+        "htmlBackground": "rgba(0, 0, 0, 0)",
+        "colorScheme": "dark",
+        "styles": [
+          "/app.css",
+          "/mini.css"
+        ],
+        "width": 518,
+        "height": 231
+      }
+    }
+  ],
+  "after": [
+    {
+      "name": "natural-web",
+      "owner": {
+        "theme": "web",
+        "dark": false,
+        "tokens": {
+          "--bg": "#eef2f8",
+          "--ink": "#17253b",
+          "--panel": "#fff",
+          "--surface": "#f6f8fc",
+          "--line": "#d3ddea",
+          "--watch-running": "#756000",
+          "--watch-quota-fill": "#087e8b"
+        },
+        "body": {
+          "background": "rgb(238, 242, 248)",
+          "color": "rgb(23, 37, 59)"
+        },
+        "htmlBackground": "rgba(0, 0, 0, 0)",
+        "colorScheme": "light dark",
+        "styles": [
+          "/app.css"
+        ],
+        "width": 758,
+        "height": 482
+      },
+      "mini": {
+        "theme": "web",
+        "dark": true,
+        "tokens": {
+          "--bg": "#eef2f8",
+          "--ink": "#17253b",
+          "--panel": "#fff",
+          "--surface": "#f6f8fc",
+          "--line": "#d3ddea",
+          "--watch-running": "#756000",
+          "--watch-quota-fill": "#087e8b"
+        },
+        "body": {
+          "background": "rgb(238, 242, 248)",
+          "color": "rgb(23, 37, 59)"
+        },
+        "htmlBackground": "rgb(238, 242, 248)",
+        "colorScheme": "light",
+        "styles": [
+          "/app.css",
+          "/mini.css"
+        ],
+        "width": 518,
+        "height": 231
+      }
+    },
+    {
+      "name": "owner-web-light",
+      "owner": {
+        "theme": "web",
+        "dark": false,
+        "tokens": {
+          "--bg": "#eef2f8",
+          "--ink": "#17253b",
+          "--panel": "#fff",
+          "--surface": "#f6f8fc",
+          "--line": "#d3ddea",
+          "--watch-running": "#756000",
+          "--watch-quota-fill": "#087e8b"
+        },
+        "body": {
+          "background": "rgb(238, 242, 248)",
+          "color": "rgb(23, 37, 59)"
+        },
+        "htmlBackground": "rgba(0, 0, 0, 0)",
+        "colorScheme": "light dark",
+        "styles": [
+          "/app.css"
+        ],
+        "width": 758,
+        "height": 482
+      },
+      "mini": {
+        "theme": "web",
+        "dark": true,
+        "tokens": {
+          "--bg": "#eef2f8",
+          "--ink": "#17253b",
+          "--panel": "#fff",
+          "--surface": "#f6f8fc",
+          "--line": "#d3ddea",
+          "--watch-running": "#756000",
+          "--watch-quota-fill": "#087e8b"
+        },
+        "body": {
+          "background": "rgb(238, 242, 248)",
+          "color": "rgb(23, 37, 59)"
+        },
+        "htmlBackground": "rgb(238, 242, 248)",
+        "colorScheme": "light",
+        "styles": [
+          "/app.css",
+          "/mini.css"
+        ],
+        "width": 518,
+        "height": 231
+      }
+    },
+    {
+      "name": "owner-web-dark",
+      "owner": {
+        "theme": "web",
+        "dark": true,
+        "tokens": {
+          "--bg": "#0c1422",
+          "--ink": "#e6edf8",
+          "--panel": "#141f31",
+          "--surface": "#19263b",
+          "--line": "#31415b",
+          "--watch-running": "#ffff55",
+          "--watch-quota-fill": "#78dce8"
+        },
+        "body": {
+          "background": "rgb(12, 20, 34)",
+          "color": "rgb(230, 237, 248)"
+        },
+        "htmlBackground": "rgba(0, 0, 0, 0)",
+        "colorScheme": "light dark",
+        "styles": [
+          "/app.css"
+        ],
+        "width": 758,
+        "height": 482
+      },
+      "mini": {
+        "theme": "web",
+        "dark": true,
+        "tokens": {
+          "--bg": "#0c1422",
+          "--ink": "#e6edf8",
+          "--panel": "#141f31",
+          "--surface": "#19263b",
+          "--line": "#31415b",
+          "--watch-running": "#ffff55",
+          "--watch-quota-fill": "#78dce8"
+        },
+        "body": {
+          "background": "rgb(12, 20, 34)",
+          "color": "rgb(230, 237, 248)"
+        },
+        "htmlBackground": "rgb(12, 20, 34)",
+        "colorScheme": "dark",
+        "styles": [
+          "/app.css",
+          "/mini.css"
+        ],
+        "width": 518,
+        "height": 231
+      }
+    },
+    {
+      "name": "classic",
+      "owner": {
+        "theme": "classic",
+        "dark": true,
+        "tokens": {
+          "--bg": "#101112",
+          "--ink": "#e5e5e5",
+          "--panel": "#191b1d",
+          "--surface": "#222528",
+          "--line": "#3b4046",
+          "--watch-running": "#ffff55",
+          "--watch-quota-fill": "#78dce8"
+        },
+        "body": {
+          "background": "rgb(16, 17, 18)",
+          "color": "rgb(229, 229, 229)"
+        },
+        "htmlBackground": "rgba(0, 0, 0, 0)",
+        "colorScheme": "dark",
+        "styles": [
+          "/app.css"
+        ],
+        "width": 758,
+        "height": 482
+      },
+      "mini": {
+        "theme": "classic",
+        "dark": true,
+        "tokens": {
+          "--bg": "#101112",
+          "--ink": "#e5e5e5",
+          "--panel": "#191b1d",
+          "--surface": "#222528",
+          "--line": "#3b4046",
+          "--watch-running": "#ffff55",
+          "--watch-quota-fill": "#78dce8"
+        },
+        "body": {
+          "background": "rgb(16, 17, 18)",
+          "color": "rgb(229, 229, 229)"
+        },
+        "htmlBackground": "rgba(0, 0, 0, 0)",
+        "colorScheme": "dark",
+        "styles": [
+          "/app.css",
+          "/mini.css"
+        ],
+        "width": 518,
+        "height": 231
+      }
+    }
+  ],
+  "classicExactComputedStyleComparison": {
+    "outcome": "PASS",
+    "elements": 15,
+    "properties": 7620,
+    "scope": "All computed properties on 15 representative elements, all sampled tokens, stylesheet URLs and inner dimensions; identical synthetic data and browser. Not a physical/native-chrome comparison."
+  }
+}

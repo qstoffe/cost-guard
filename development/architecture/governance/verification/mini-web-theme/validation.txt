@@ -1,0 +1,18 @@
+PASS  required layout/runtime-artifact rules checked
+PASS  package-owned directory names are lowercase
+PASS  text files are UTF-8 readable
+PASS  generic open-source/public-repository hygiene checked
+PASS  machine-enforced file budgets checked
+PASS  Python 3.11 syntax compatibility checked
+PASS  Python compile checks executed
+PASS  bootstrap import smoke passed
+PASS  version consistency checked for v80.159
+PASS  thin entry-point architecture checked
+PASS  absolute/relative/nested architecture import boundaries checked
+WARN  webUserGuide prose budget: docs/web-beta.md: 83994 > 65536 bytes (advisory)
+WARN  rootReadme prose budget: README.md: 33576 > 32768 bytes (advisory)
+WARN  pythonModule design budget: src/analysis/context.py: 35606 > 32768 bytes
+WARN  pythonModule design budget: src/reports/service.py: 44966 > 32768 bytes
+WARN  pythonModule design budget: src/watch/coordinator.py: 41845 > 32768 bytes
+WARN  versionHistory prose budget: VERSION_HISTORY.md: 43817 > 32768 bytes (advisory)
+SUMMARY failures=0 warnings=6 passes=11

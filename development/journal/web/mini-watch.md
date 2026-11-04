@@ -1,5 +1,57 @@
 # Mini Watch and finished history
 
+## FR 000579 — v80.159, 2026-11-04
+
+Base: `34522ecb25a8aee0629f456068ddc02671de2aac`; later default additions were
+backlog-only and retained. **Fresh reproduction, before design:** in hidden Chrome
+156.0.8078.80, the owner naturally reported light and Mini dark. Both had Web selected
+and the expected shared/Mini stylesheets, but owner/mini backgrounds were respectively
+`#eef2f8` / `#0c1422`; ink, panels, headers and quota roles disagreed too. Attribute
+copying alone was insufficient. Classic's forced-dark roles matched both documents.
+[Before/after computed facts and Classic comparison](../../architecture/governance/verification/mini-web-theme/reproduction.json).
+
+The Mini controller now applies the effective theme before styles/content and copies
+the owner's computed custom properties only for Web. Content `color-scheme` follows
+the owner's media result. Settings and owner media-change events resynchronize directly,
+without another publication, report refresh or live connection; close/replacement
+removes the listener. Classic clears every inherited Web override and retains its
+original CSS. Web-only canvas/quota-panel/empty/scrollbar rules reuse semantic roles,
+not a duplicated hardcoded palette. Main Web, compact grid/geometry, native controls,
+valuation and acquisition are unchanged. Module/user docs updated; no boundary/flow change.
+
+### Verification and limits
+
+- **PASS:** new VM palette assertion first failed against old production; opening,
+  owner-media-only changes, Web/Classic round trips and listener release/reopen pass.
+  [Full local suite](../../architecture/governance/verification/mini-web-theme/full-tests.txt):
+  140 bounded units, four workers, **92.1s**, zero failures.
+- **PASS:** [validator](../../architecture/governance/verification/mini-web-theme/validation.txt),
+  11 passes, zero failures, six existing advisory prose/Python design warnings.
+  No assertion, cap, deadline or dependency weakened.
+- **PASS:** hidden actual Document PiP in [Chrome 156.0.8078.80](../../architecture/governance/verification/mini-web-theme/chrome.json)
+  and [Edge 156.0.4314.58](../../architecture/governance/verification/mini-web-theme/edge.json),
+  emulated device scale 1.5, shipped HTTP/auth/CSP/SSE, **108 layout cases each**.
+  Owner and PiP preferences are deliberately opposite: all owner roles, actual canvas,
+  table/header/help/controls/status/quota colors, text contrast, semantic scrollbars,
+  media-only updates and Default/Classic/Web round trips pass. Keyed rows/disclosure,
+  keyboard focus/popovers, standard compact/native-API narrow resizing and one SSE remain.
+  Prior pipe-alignment/units/density/independent-scroll/sticky/retention/lifecycle cases pass.
+  [Compact light/help](../../architecture/governance/verification/mini-web-theme/chrome-theme-owner-web-light-560.png),
+  [narrow dark/help](../../architecture/governance/verification/mini-web-theme/chrome-theme-owner-web-dark-280.png).
+- **PASS:** exact Classic baseline, all computed properties on **15 representative
+  elements**, sampled tokens, stylesheet URLs and inner dimensions; identical synthetic
+  content/browser before and after. This compares app-controlled content, not native frames.
+- **PASS:** [read-only installed V2](../../architecture/governance/verification/mini-web-theme/mini-source.txt),
+  64 coherent publications, one running prompt, three accounts/two period costs,
+  four known-finish history cards, **26.068s**, owned close **0.151s**. No inference
+  or shared OpenCode stop/mutation.
+
+The integrated browser was disconnected; owned hidden browsers provided adequate
+app-content evidence. System preference is emulated and narrow windows use the native
+PiP resize API, not physical manual dragging/OS settings. Native chrome recoloring is
+out of scope; actual OS frame rendering, screen-reader speech and macOS pixels remain
+unverified. No task/test exception requested or granted and no physical proof claimed.
+
 ## FR 000578 — v80.158, 2026-11-04
 
 Base: `57f2505fcf9f7365a8ce4eb28e23f894d21c7770`. Both first headers now reuse

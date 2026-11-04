@@ -55,3 +55,9 @@ body { padding: .5rem; max-width: none; }
 .mini-accounts li.mini-exhausted { color: var(--error); }
 .mini-prompt-table :focus-visible { outline-offset: -3px; }
 @media (max-height: 15rem) { .mini-prompts, .mini-accounts { min-height: 2rem; flex-shrink: 1; } }
+/* Web uses the opener's resolved roles; never restyle Classic or native PiP chrome. */
+html[data-theme="web"], [data-theme="web"] body { background: var(--bg); color: var(--ink); }
+[data-theme="web"] .mini-accounts { background: var(--panel); border-radius: .4rem; }
+[data-theme="web"] .mini-empty { color: var(--muted); }
+[data-theme="web"] :is(.mini-prompts, .mini-accounts, .mini-health, .mini-session-help) {
+  scrollbar-color: var(--control-line) var(--surface); }

@@ -149,7 +149,17 @@ requests stay Off with a reason. There is no popup fallback advertised as always
 extension, flag, notification permission, native helper or second sign-in flow.
 
 The unframed compact tables follow **Classic / Web light/dark** and live
-**Credits / USD**. Healthy Live text and transient operational warnings are omitted.
+**Credits / USD**. **Default (Classic)** and explicit **Classic** retain the existing
+dark presentation. **Web** matches the owning Web page's effective system appearance:
+light content canvas and coordinated surfaces in light mode, the Web blue-dark palette
+in dark mode, never Classic as a fallback. The application inherits the owner's resolved
+semantic colors because the separate PiP document can report a different light/dark
+preference. Header actions, daily summary, both tables/sticky headings, status text,
+quota tracks/fills, empty states, scrollbars and accessible help use those shared roles.
+Changes in Settings and the owner's system appearance update an already-open Mini
+without reopening, report refresh, server restart, another live stream or browser storage.
+This styles application content only; browser-native frame/security/return/close controls
+remain browser-owned. Healthy Live text and transient operational warnings are omitted.
 Mini requests 560×250 **screen DIPs**, not physical screen pixels or zoomed document
 CSS pixels. Historical standard-placement measurements on Windows 150% showed a
 complete visible native frame **428–429 physical pixels** high, below 470, including native chrome.

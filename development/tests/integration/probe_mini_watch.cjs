@@ -131,6 +131,7 @@ async function main() {
       if (found.result.value) {pipSession=attached.sessionId; break;}
     }
     assert.ok(pipSession,'owned Document PiP target available for rendered geometry and theme checks');
+    await require('./probe_mini_theme.cjs')({evaluate,until,command,sessionId,pipSession,checks,layouts,output,screenshots});
     await require('./probe_quota_display.cjs')({evaluate,until,command,sessionId,pipSession,checks,layouts});
     const columns = () => evaluate(`(() => {
       const w=miniWatch.window,v=miniWatch.view,table=v.body.parentNode;
@@ -154,7 +155,7 @@ async function main() {
       return value;
     };
     await require('./probe_mini_sessions.cjs')({evaluate,until,fixture,command,pipSession,layouts,checks,output,screenshots});
-    await require('./probe_mini_session_alignment.cjs')({evaluate,until,fixture,command,pipSession,layouts,checks});
+    await require('./probe_mini_session_alignment.cjs')({evaluate,until,fixture,command,sessionId,pipSession,layouts,checks});
     await fixture('density-6-4-long'); await until(`miniWatch.view.body.rows.length===6`);
     assert.equal((await checkColumns('intrinsic-long-titles')).title,true);
     await evaluate(`(() => {const p=structuredClone(liveValue);p.state='running';p.view.now_ms++;
@@ -237,7 +238,7 @@ async function main() {
     await evaluate(`miniWatch.view.earlierToggle.click();miniWatch.view.prompts.scrollTop=0`);
     for (const [theme,scheme,background] of [['classic','light','#101112'],['web','light','#eef2f8'],['web','dark','#0c1422']]) {
       await evaluate(`document.documentElement.dataset.theme='${theme}'; miniWatch.settings()`);
-      await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:scheme}]},pipSession);
+      await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:scheme}]},sessionId);
       await until(`miniWatch.window.getComputedStyle(miniWatch.window.document.documentElement).getPropertyValue('--bg').trim() === '${background}'`);
        const layout = await evaluate(`(() => {const w=miniWatch.window,d=w.document,r=miniWatch.view.root;return {width:w.innerWidth,height:w.innerHeight,background:w.getComputedStyle(d.documentElement).getPropertyValue('--bg').trim(),overflow:d.documentElement.scrollWidth>w.innerWidth,lines:miniWatch.view.accounts.children.length,clutter:/Reset|CCost Today|Provisional/.test(miniWatch.view.accounts.textContent),title:r.querySelector('li').textContent};})()`);
        layouts.push({case:theme+'-'+scheme,width:layout.width,height:layout.height});

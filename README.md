@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v80.158, 2026-11-04), the supported distribution.
+Use **current `main`** (v80.159, 2026-11-04), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -361,7 +361,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.158 (2026-11-04):** Mini Watch's two session tables left-anchor Session/title and right-anchor **| Total CCost** / **| amount** within one column. Only long titles ellipsize; whole-session totals use their natural width and stay visible. Accessible scope, horizontal scrolling, prompt metrics, accounting and PiP geometry are unchanged. See [Mini Watch](docs/web-mini-watch.md).
+**v80.159 (2026-11-04):** Mini Watch's Web theme follows the owning page's actual light/dark palette, not PiP's independently resolved preference. Its canvas, tables, controls, help and quota surfaces update on opening, Settings changes and system-appearance changes. Classic/default dark styling, compact layout, metrics and native browser chrome are unchanged. See [Mini Watch](docs/web-mini-watch.md).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 
