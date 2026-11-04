@@ -51,8 +51,10 @@ Browser-imposed limitations and exact evidence are in the [Mini journal](../deve
    Only the left title navigates; the daily summary is non-clickable. Loading and unknown
    pricing remain explicit; focus/hover discloses partial data and observation time. Genuine
   observed zero is zero; the next canonical day/correction replaces the prior value.
-- **Session / Total CCost:** actual session title followed by ` / <whole-session cost>`.
-  Only the title's end ellipsizes; the slash and complete cost remain visible. Focus/hover
+- **Session | Total CCost:** within one column, Session/title stays at the left edge
+  and `| Total CCost` / `| <whole-session cost>` stays at the right edge. Only the title's
+  end ellipsizes; the pipe and complete cost remain visible. Short amounts use only
+  their natural width, not a header-sized reserved block. Focus/hover/click
   retains the full title (or canonical session ID). This server-owned total covers the
   entire available root/session tree: pre-Watch history, compactions, causal children
   and provisional running usage, not just visible prompts, this Watch run or Today.
@@ -83,7 +85,8 @@ grace policy. No browser timer invents cost, completion or growing elapsed time.
 ### Earlier Sessions
 
 The neutral **Earlier Sessions** header button expands a separate two-column table
-**above** the running prompts: **Session / Total CCost | CTX**. It starts collapsed
+**above** the running prompts: **Session | Total CCost** in one column, plus **CTX**.
+The first column uses the same left-title/right-total alignment. It starts collapsed
 every time a fresh Mini window opens; keyboard/click/touch works, and ordinary Live
 updates preserve the choice. The newest **up to three distinct eligible finished
 sessions** come from full Watch's canonical Earlier Prompts selection, displayed
@@ -153,7 +156,8 @@ complete visible native frame **428–429 physical pixels** high, below 470, inc
 The previous 450-DIP request measured 729 physical pixels. Chrome page zoom changes
 document dimensions, not that request's screen units. Other scales/platforms can
 produce different outer geometry; a universal 470-physical-pixel cap is not verified.
-Prompt headings are centered; titles remain left-aligned and numeric values right.
+Metric headings are centered; the split Session heading/title is left-anchored and
+its pipe/total suffix right-anchored. Numeric metric values remain right-aligned.
 The four prompt-metric columns fit their full heading or longest displayed value, without
 wrapping, clipping or ellipses. Session takes all remaining width; its inner layout
 ellipsizes only the title while the full-session cost suffix never shrinks or ellipsizes.

@@ -77,8 +77,10 @@ stable server primary selection, with estimated/partial attribution retained.
 
 Mini renders canonical active/focal card identities, not the running aggregate: one
 keyed row per prompt with prompt-local cost/duration/context and shared terminal grace.
-The first cell separately shows `session_summary.cost` after an independently ellipsized
-title, preserving the suffix and full heading's intrinsic minima. Its header's neutral
+The first cell left-anchors an independently ellipsized title and right-anchors
+`| session_summary.cost` at its natural width, without a header-sized reservation.
+The same internal grid splits `Session` / `| Total CCost` in one heading, retaining
+both labels' intrinsic minima. Its header's neutral
 Earlier Sessions disclosure starts collapsed per new PiP document and survives publications.
 It takes the last three of the shared eligible, oldest-to-newest `history_cards`, excludes
 active/grace session IDs, and uses `session_summary.context`, never historical prompt CTX.

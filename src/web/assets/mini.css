@@ -28,6 +28,7 @@ body { padding: .5rem; max-width: none; }
 /* Metrics and the nonshrinking total set intrinsic minima. Only the title flexes. */
 .mini-prompt-table th:not(:first-child) { width: 1%; }
 .mini-session-value { display: grid; grid-template-columns: minmax(0, 1fr) max-content; }
+.mini-session-heading { grid-template-columns: minmax(max-content, 1fr) max-content; text-align: left; }
 .mini-session, .mini-empty { display: block; width: 0; min-width: 100%; }
 .mini-session { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mini-session-total { white-space: pre; }

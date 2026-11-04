@@ -1,5 +1,58 @@
 # Mini Watch and finished history
 
+## FR 000578 — v80.158, 2026-11-04
+
+Base: `57f2505fcf9f7365a8ce4eb28e23f894d21c7770`. Both first headers now reuse
+the row's two-region grid: Session stays left, `| Total CCost` stays right, and
+each row uses `| amount`. Header tracks retain both labels' intrinsic minima;
+row suffixes use their own natural text width rather than a header-sized block.
+Only session titles ellipsize. One physical first column, canonical display/cost
+scope, focus/hover/click help, other metrics and shared scrolling remain intact.
+There is no acquisition, accounting, SSE, window-geometry or full-Watch change.
+
+### Verification
+
+- **PASS:** local Full, **140 bounded units, zero failures, 91.6s**, four workers;
+  **1663 tests passed, one standard Windows platform skip** (zsh/PTY unavailable;
+  native macOS CI owns shell execution). [Per-unit report](../../architecture/governance/verification/mini-session-alignment/full-tests.json).
+  The new VM heading/separator assertions first failed against old production code.
+  Both tables cover actual zero/loading/unavailable/partial/retained cost states,
+  full canonical title/ID, concurrent prompts, disclosure/row identity and units.
+- **PASS:** working-tree validation: 11 passes, zero failures; six existing advisory
+  prose/Python design warnings. No dependency, assertion, cap or timeout weakened.
+- **PASS:** actual hidden [Chrome 156.0.8078.80](../../architecture/governance/verification/mini-session-alignment/chrome.json)
+  and [Edge 156.0.4314.58](../../architecture/governance/verification/mini-session-alignment/edge.json),
+  emulated device scale 1.5, shipped HTTP/auth/CSP/SSE and real Document PiP.
+  Each run records 91 layout cases, including 54 new width/font/zoom/theme/unit combinations:
+  560/800/280 outer-width requests (browser clamps permitted), 100/150% root font or 125% CSS zoom,
+  Classic/Web light/dark and Credits/USD. Rectangles/ranges prove both cell edges,
+  natural suffix width, title-only ellipsis, full header/cost visibility, flexible
+  space, fallback IDs and unchanged row identity. Extreme narrowing/CSS zoom pans the region,
+  not the page. Existing keyboard disclosure/title popover, sticky headers, shared
+  vertical scrolling, live updates, reopening and single-EventSource checks pass.
+  [Light screenshot](../../architecture/governance/verification/mini-session-alignment/chrome-web-light.png)
+  inspected: Session flush left, pipe/full total flush right in each first cell.
+  Initial probe failures were causal test selectors now matching the reused header
+  classes, a new matrix not restoring disclosure state, and mouse checks aiming beneath
+  a sticky header after focus scrolling / leaving pointer modality for a later keyboard
+  outline check. Selectors are now TD-scoped; the matrix restores its input state,
+  pointer targets use the painted visible cell intersection and a real Tab restores
+  keyboard modality. Native hidden hover/click/title-help checks pass; no product workaround.
+- **PASS, limited scope:** [read-only installed V2 probe](../../architecture/governance/verification/mini-session-alignment/live-probe.txt),
+  `probe_web_live.py --watch-cards --session-cost`:
+  four requests/all priced, independent report parity, zero fresh repository
+  valuations, cache writes false, no inference. One acquisition owner, two streams,
+  three accounts, one active/one history card; 13.9005s, owned close 0.1053s,
+  zero pending owned threads/processes or cleanup failures. One history-batch read
+  error and no Daily publication were observed: full history/Daily completeness
+  is **not** established. Shared OpenCode and running Web Beta were untouched.
+
+Architecture module and current user guide updated in place. This presentation-only
+FR needs no new boundary or broader journal assessment. No requirement/test exception
+was requested or granted. Physical Windows DPI/native chrome, manual OS input,
+actual browser page zoom and screen-reader speech were not exercised; CSS zoom/enlarged font and
+headless DOM/accessibility evidence are not those proofs. No release ZIP/tag/Release.
+
 ## FR 000576 — v80.156, 2026-11-04
 
 Base: `c905df332071c5eff69f6aed8654d2c73f7f1372`. Three Web Settings dropdowns

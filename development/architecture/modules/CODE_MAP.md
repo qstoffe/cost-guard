@@ -74,8 +74,10 @@ All paths in this table are relative to the repository root. Test names live und
 ## Shared synthetic fixtures
 
 Mini's session totals/history presentation is covered by `test_mini_watch.py`,
-`fixtures/mini_sessions.cjs` and `integration/probe_mini_sessions.cjs` (invoked by
-the existing real hidden Document PiP probe). The shared `session_summary` projection
+`fixtures/mini_sessions.cjs` and `integration/probe_mini_sessions.cjs`; the paired
+`integration/probe_mini_session_alignment.cjs` pins first-cell edges/natural suffix
+widths across widths, font/CSS zoom, themes and units in the real hidden PiP probe.
+The shared `session_summary` projection
 and cache/lifecycle tests retain valuation and history eligibility ownership.
 
 Quota Used display is shared by `src/display.py`, `src/presentation/accounts.py` and `src/application/display.py`; `test_quota_used.py` covers parity and the temporary `src/presentation/quota_migration.py` visible-Watch state owner. Web Watch's native Used/Total versus independent inline period CCost is covered by `test_web_watch_quota.py`, `integration/web_watch_summary.cjs` and the headless `integration/probe_watch_cards.cjs` layout/currency matrix. `test_watch_context_footer.py` and `fixtures/watch_context_browser.cjs` pin the full-Watch session summary's inline guidance, compaction, stale captures and focus-safe invalidation; Mini keeps the original live-context fields. Remove only the temporary notice per the [cleanup note](../../backlog/quota-used-warning-cleanup.md), never the permanent Used conversion.

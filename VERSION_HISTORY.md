@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.158 — 2026-11-04
+
+- Mini Watch: both session tables keep Session/title at the left and `| Total CCost` / `| amount` at the right of the same column. Only long titles ellipsize; full costs retain natural width, accessible scope and narrow-region horizontal scrolling. No accounting, acquisition, full Watch or PiP geometry change.
+
 ## v80.157 — 2026-11-04
 
 - Web Settings adds inherited/explicit **Quota display**, defaulting to Used. Remaining switches finite native quota percentages, amounts and bars consistently in Accounts, Watch and an open Mini; Unlimited/unknown evidence keeps Used/unknown behavior. Exhausted Remaining stays red at zero fill, without treating rounded zero as exhaustion. Observed period CCost is unchanged and explicitly distinguished as **CCost used** in Remaining; CLI, pace, polling and accounting stay unchanged.

@@ -130,9 +130,14 @@ const MiniWatch = (() => {
       const table = this.el('table', undefined, 'mini-prompt-table'), head = this.el('thead'), header = this.el('tr');
       table.setAttribute('aria-label', historical ? 'Earlier sessions: whole-session CCost and latest valid session context (CTX)' :
         'Active prompts: whole-session CCost in Session; per-prompt CCost, Duration and estimated next incoming context (CTX)');
-      for (const name of historical ? ['Session / Total CCost', 'CTX'] : ['Session / Total CCost', '#', 'CCost', 'Duration', 'CTX']) {
+      for (const name of historical ? ['Session', 'CTX'] : ['Session', '#', 'CCost', 'Duration', 'CTX']) {
         const cell = this.el('th', name); cell.scope = 'col'; cell.tabIndex = 0;
-        cell.title = {'Session / Total CCost': 'Full session title and entire root/session-tree CCost, including pre-Watch history and child work; not prompt cost or billing',
+        if (name === 'Session') {
+          const value = this.el('span', undefined, 'mini-session-value mini-session-heading');
+          value.append(this.el('span', 'Session'), this.el('span', ' | Total CCost', 'mini-session-total'));
+          cell.replaceChildren(value);
+        }
+        cell.title = {Session: 'Full session title and entire root/session-tree CCost, including pre-Watch history and child work; not prompt cost or billing',
           '#': 'Canonical session-local prompt number', CCost: 'This prompt only; reference-price cost, not billed spending',
           Duration: 'This prompt’s elapsed execution duration', CTX: historical ?
             'Estimated latest valid session/current-next context, not historical prompt context or a sum; N/A means unavailable' :
@@ -166,7 +171,7 @@ const MiniWatch = (() => {
         summary?.state === 'unavailable' ? 'N/A' : 'Loading…';
       const title = card.title || card.session_id;
       ReportView.text(cell.children[0].children[0], title);
-      ReportView.text(cell.children[0].children[1], ' / ' + amount);
+      ReportView.text(cell.children[0].children[1], ' | ' + amount);
       cell.title = `${title}. Whole-session CCost: ${amount}; all root/session-tree usage, including history, child and provisional work; not prompt cost, Today or billing.` +
         ` Aggregate: ${summary?.state || 'loading'}; source: ${card.state || 'loading'}.` +
         (cost && !cost.complete ? ' Partial/unknown pricing or source coverage.' : '') +

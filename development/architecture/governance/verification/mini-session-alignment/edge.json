@@ -1,0 +1,2325 @@
+{
+  "outcome": "PASS",
+  "browser": "Edg/156.0.4314.58",
+  "emulatedDeviceScale": 1.5,
+  "checks": [
+    "Actual hidden PiP with width/height present: Remember last reuses position and size after app/native close; Standard resets both each open; mode switch applies next open",
+    "Four native selects preserve Default/explicit choices; real Python host restart keeps file-backed mode but first open resets native bounds; opener reload also starts standard, then remembers; no browser storage",
+    "Real user-activated Document PiP opens prompt-local table with external CSP styles, no inner frame/close and selected On fill",
+    "Quota orientation: authenticated fourth select, same-period Accounts/Watch/open PiP, exhausted empty bar, independent USD/CCost, retained nodes, light/dark narrow/zoom, unchanged source and one SSE",
+    "Whole-session suffix stays visible before/after title ellipsis; canonical newest-three Earlier Sessions, zero/one/three/five history, keyboard/click disclosure, stable SSE choice and shared scroll keep every running row reachable without PiP resize or second SSE",
+    "Both single first cells edge-anchor Session and natural-width pipe/cost; short/long/fallback titles, all display states, live identity, 3 widths, enlarged font/CSS zoom, themes and units preserve suffixes without page overflow",
+    "Intrinsic metric/header minima grow/shrink with content, empty colspan does not distort, only Session ellipsizes; failed reads retain figures quietly and one ten-minute notice clears on recovery",
+    "Navigation, existing-opener return, live theme/USD propagation keep Mini and exactly one EventSource",
+    "Compact opening and higher-scale browser clamps keep reachable independent scroll regions; enlarged 5/3 fits at 100/150%, 6/4 scroll; centered headers, semantic data alignment, canonical separate daily summary",
+    "Classic/Web light/dark styles, long account labels, primary-only six-account content without page overflow",
+    "Keyboard summary focus/activation and user-activated native PiP resize remain usable",
+    "With main document actually hidden and PiP visible, real SSE preserves final prompt-local completion metrics and updates empty/recovery without rAF",
+    "Shipped controller attaches/fetches the existing absolute same-origin ICO on open/reopen; owner icon and single SSE unchanged (not OS icon proof)",
+    "Native API replacement, browser-owned close, main toggle, reopen and main reload synchronize Off; no auto-open",
+    "Real terminal shutdown reaches open Mini as not live"
+  ],
+  "layouts": [
+    {
+      "case": "placement-first-standard",
+      "left": 1316,
+      "top": 764,
+      "width": 584,
+      "height": 296,
+      "windowState": "normal"
+    },
+    {
+      "case": "placement-before-app-close",
+      "left": 80,
+      "top": 90,
+      "width": 500,
+      "height": 340,
+      "windowState": "normal"
+    },
+    {
+      "case": "placement-remember-reopen",
+      "left": 80,
+      "top": 90,
+      "width": 500,
+      "height": 340,
+      "windowState": "normal"
+    },
+    {
+      "case": "placement-before-native-close",
+      "left": 80,
+      "top": 90,
+      "width": 500,
+      "height": 340,
+      "windowState": "normal"
+    },
+    {
+      "case": "placement-remember-reopen",
+      "left": 80,
+      "top": 90,
+      "width": 500,
+      "height": 340,
+      "windowState": "normal"
+    },
+    {
+      "case": "placement-unchanged-on-mode-switch",
+      "left": 80,
+      "top": 90,
+      "width": 500,
+      "height": 340,
+      "windowState": "normal"
+    },
+    {
+      "case": "placement-standard-reset",
+      "left": 1316,
+      "top": 764,
+      "width": 584,
+      "height": 296,
+      "windowState": "normal"
+    },
+    {
+      "case": "placement-standard-moved",
+      "left": 80,
+      "top": 90,
+      "width": 500,
+      "height": 340,
+      "windowState": "normal"
+    },
+    {
+      "case": "placement-standard-every-open",
+      "left": 1316,
+      "top": 764,
+      "width": 584,
+      "height": 296,
+      "windowState": "normal"
+    },
+    {
+      "case": "placement-remember-after-switch",
+      "left": 80,
+      "top": 90,
+      "width": 500,
+      "height": 340,
+      "windowState": "normal"
+    },
+    {
+      "case": "placement-opener-reload-standard",
+      "left": 1316,
+      "top": 763,
+      "width": 584,
+      "height": 297,
+      "windowState": "normal"
+    },
+    {
+      "case": "placement-reloaded-moved",
+      "left": 80,
+      "top": 90,
+      "width": 500,
+      "height": 342,
+      "windowState": "normal"
+    },
+    {
+      "case": "placement-new-process-first-open",
+      "left": 1316,
+      "top": 764,
+      "width": 584,
+      "height": 296,
+      "windowState": "normal"
+    },
+    {
+      "case": "placement-new-process-moved",
+      "left": 80,
+      "top": 90,
+      "width": 500,
+      "height": 340,
+      "windowState": "normal"
+    },
+    {
+      "case": "initial-unattached-5-3",
+      "width": 560,
+      "height": 250,
+      "outerHeight": 296,
+      "dpr": 1.5,
+      "prompts": true,
+      "accounts": true,
+      "promptHeight": 108,
+      "accountHeight": 91,
+      "outer": false
+    },
+    {
+      "case": "quota-remaining",
+      "scheme": "light",
+      "width": 360,
+      "scale": 1,
+      "watchOverflow": false,
+      "pageOverflow": false,
+      "miniWidth": 360,
+      "miniOverflow": false,
+      "mini": "GitHub Copilot Pro · 91.6% remaining (CCost used: 1814)",
+      "description": "Monthly remaining; 22912/25000 AI credits.  Same native-period observed CCost, independent of native usage, not remaining CCost or billed spending. Observed reference spending within this native quota period. Native money remaining $8.99 / $10.00. Last quota observation: 2026-10-26T22:00:00.000Z.",
+      "accessible": true
+    },
+    {
+      "case": "quota-remaining",
+      "scheme": "light",
+      "width": 360,
+      "scale": 1.25,
+      "watchOverflow": false,
+      "pageOverflow": false,
+      "miniWidth": 360,
+      "miniOverflow": false,
+      "mini": "GitHub Copilot Pro · 91.6% remaining (CCost used: 1814)",
+      "description": "Monthly remaining; 22912/25000 AI credits.  Same native-period observed CCost, independent of native usage, not remaining CCost or billed spending. Observed reference spending within this native quota period. Native money remaining $8.99 / $10.00. Last quota observation: 2026-10-26T22:00:00.000Z.",
+      "accessible": true
+    },
+    {
+      "case": "quota-remaining",
+      "scheme": "light",
+      "width": 560,
+      "scale": 1,
+      "watchOverflow": false,
+      "pageOverflow": false,
+      "miniWidth": 560,
+      "miniOverflow": false,
+      "mini": "GitHub Copilot Pro · 91.6% remaining (CCost used: 1814)",
+      "description": "Monthly remaining; 22912/25000 AI credits.  Same native-period observed CCost, independent of native usage, not remaining CCost or billed spending. Observed reference spending within this native quota period. Native money remaining $8.99 / $10.00. Last quota observation: 2026-10-26T22:00:00.000Z.",
+      "accessible": true
+    },
+    {
+      "case": "quota-remaining",
+      "scheme": "light",
+      "width": 560,
+      "scale": 1.25,
+      "watchOverflow": false,
+      "pageOverflow": false,
+      "miniWidth": 560,
+      "miniOverflow": false,
+      "mini": "GitHub Copilot Pro · 91.6% remaining (CCost used: 1814)",
+      "description": "Monthly remaining; 22912/25000 AI credits.  Same native-period observed CCost, independent of native usage, not remaining CCost or billed spending. Observed reference spending within this native quota period. Native money remaining $8.99 / $10.00. Last quota observation: 2026-10-26T22:00:00.000Z.",
+      "accessible": true
+    },
+    {
+      "case": "quota-remaining",
+      "scheme": "dark",
+      "width": 360,
+      "scale": 1,
+      "watchOverflow": false,
+      "pageOverflow": false,
+      "miniWidth": 360,
+      "miniOverflow": false,
+      "mini": "GitHub Copilot Pro · 91.6% remaining (CCost used: 1814)",
+      "description": "Monthly remaining; 22912/25000 AI credits.  Same native-period observed CCost, independent of native usage, not remaining CCost or billed spending. Observed reference spending within this native quota period. Native money remaining $8.99 / $10.00. Last quota observation: 2026-10-26T22:00:00.000Z.",
+      "accessible": true
+    },
+    {
+      "case": "quota-remaining",
+      "scheme": "dark",
+      "width": 360,
+      "scale": 1.25,
+      "watchOverflow": false,
+      "pageOverflow": false,
+      "miniWidth": 360,
+      "miniOverflow": false,
+      "mini": "GitHub Copilot Pro · 91.6% remaining (CCost used: 1814)",
+      "description": "Monthly remaining; 22912/25000 AI credits.  Same native-period observed CCost, independent of native usage, not remaining CCost or billed spending. Observed reference spending within this native quota period. Native money remaining $8.99 / $10.00. Last quota observation: 2026-10-26T22:00:00.000Z.",
+      "accessible": true
+    },
+    {
+      "case": "quota-remaining",
+      "scheme": "dark",
+      "width": 560,
+      "scale": 1,
+      "watchOverflow": false,
+      "pageOverflow": false,
+      "miniWidth": 560,
+      "miniOverflow": false,
+      "mini": "GitHub Copilot Pro · 91.6% remaining (CCost used: 1814)",
+      "description": "Monthly remaining; 22912/25000 AI credits.  Same native-period observed CCost, independent of native usage, not remaining CCost or billed spending. Observed reference spending within this native quota period. Native money remaining $8.99 / $10.00. Last quota observation: 2026-10-26T22:00:00.000Z.",
+      "accessible": true
+    },
+    {
+      "case": "quota-remaining",
+      "scheme": "dark",
+      "width": 560,
+      "scale": 1.25,
+      "watchOverflow": false,
+      "pageOverflow": false,
+      "miniWidth": 560,
+      "miniOverflow": false,
+      "mini": "GitHub Copilot Pro · 91.6% remaining (CCost used: 1814)",
+      "description": "Monthly remaining; 22912/25000 AI credits.  Same native-period observed CCost, independent of native usage, not remaining CCost or billed spending. Observed reference spending within this native quota period. Native money remaining $8.99 / $10.00. Last quota observation: 2026-10-26T22:00:00.000Z.",
+      "accessible": true
+    },
+    {
+      "case": "earlier-0",
+      "width": 560,
+      "height": 250,
+      "pageOverflow": false,
+      "headings": [
+        "Session | Total CCost",
+        "CTX"
+      ],
+      "ids": [],
+      "running": 12,
+      "columns": [],
+      "onlyRegion": true,
+      "unframed": true,
+      "scroll": true,
+      "accounts": 82,
+      "costs": [
+        " | 4583",
+        " | 4583",
+        " | 4583",
+        " | 4583",
+        " | 4583",
+        " | 4583",
+        " | 4583",
+        " | 4583",
+        " | 4583",
+        " | 4583",
+        " | 4583",
+        " | 4583"
+      ],
+      "suffixVisible": true,
+      "ellipsis": true,
+      "title": "Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title . Whole-session CCost: 4583; all root/session-tree usage, including history, child and provisional work; not prompt cost, Today or billing. Aggregate: observed; source: observed.",
+      "accessible": "Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title . Whole-session CCost: 4583; all root/session-tree usage, including history, child and provisional work; not prompt cost, Today or billing. Aggregate: observed; source: observed.",
+      "sameHeaderRow": true
+    },
+    {
+      "case": "earlier-1",
+      "width": 560,
+      "height": 250,
+      "pageOverflow": false,
+      "headings": [
+        "Session | Total CCost",
+        "CTX"
+      ],
+      "ids": [
+        "earlier-0"
+      ],
+      "running": 12,
+      "columns": [
+        2
+      ],
+      "onlyRegion": true,
+      "unframed": true,
+      "scroll": true,
+      "accounts": 82,
+      "costs": [
+        " | 4583",
+        " | 4583",
+        " | 4583",
+        " | 4583",
+        " | 4583",
+        " | 4583",
+        " | 4583",
+        " | 4583",
+        " | 4583",
+        " | 4583",
+        " | 4583",
+        " | 4583",
+        " | 4583"
+      ],
+      "suffixVisible": true,
+      "ellipsis": true,
+      "title": "Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title . Whole-session CCost: 4583; all root/session-tree usage, including history, child and provisional work; not prompt cost, Today or billing. Aggregate: observed; source: observed.",
+      "accessible": "Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title . Whole-session CCost: 4583; all root/session-tree usage, including history, child and provisional work; not prompt cost, Today or billing. Aggregate: observed; source: observed.",
+      "sameHeaderRow": true
+    },
+    {
+      "case": "earlier-3",
+      "width": 560,
+      "height": 250,
+      "pageOverflow": false,
+      "headings": [
+        "Session | Total CCost",
+        "CTX"
+      ],
+      "ids": [
+        "earlier-0",
+        "earlier-1",
+        "earlier-2"
+      ],
+      "running": 12,
+      "columns": [
+        2,
+        2,
+        2
+      ],
+      "onlyRegion": true,
+      "unframed": true,
+      "scroll": true,
+      "accounts": 76,
+      "costs": [
+        " | 4583",
+        " | 4583",
+        " | 4583",
+        " | 4583",
+        " | 4583",
+        " | 4583",
+        " | 4583",
+        " | 4583",
+        " | 4583",
+        " | 4583",
+        " | 4583",
+        " | 4583",
+        " | 4583",
+        " | 4583",
+        " | 4583"
+      ],
+      "suffixVisible": true,
+      "ellipsis": true,
+      "title": "Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title . Whole-session CCost: 4583; all root/session-tree usage, including history, child and provisional work; not prompt cost, Today or billing. Aggregate: observed; source: observed.",
+      "accessible": "Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title . Whole-session CCost: 4583; all root/session-tree usage, including history, child and provisional work; not prompt cost, Today or billing. Aggregate: observed; source: observed.",
+      "sameHeaderRow": true
+    },
+    {
+      "case": "earlier-5",
+      "width": 560,
+      "height": 250,
+      "pageOverflow": false,
+      "headings": [
+        "Session | Total CCost",
+        "CTX"
+      ],
+      "ids": [
+        "earlier-2",
+        "earlier-3",
+        "earlier-4"
+      ],
+      "running": 12,
+      "columns": [
+        2,
+        2,
+        2
+      ],
+      "onlyRegion": true,
+      "unframed": true,
+      "scroll": true,
+      "accounts": 76,
+      "costs": [
+        " | 4583",
+        " | 4583",
+        " | 4583",
+        " | 4583",
+        " | 4583",
+        " | 4583",
+        " | 4583",
+        " | 4583",
+        " | 4583",
+        " | 4583",
+        " | 4583",
+        " | 4583",
+        " | 4583",
+        " | 4583",
+        " | 4583"
+      ],
+      "suffixVisible": true,
+      "ellipsis": true,
+      "title": "Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title . Whole-session CCost: 4583; all root/session-tree usage, including history, child and provisional work; not prompt cost, Today or billing. Aggregate: observed; source: observed.",
+      "accessible": "Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title Active long title . Whole-session CCost: 4583; all root/session-tree usage, including history, child and provisional work; not prompt cost, Today or billing. Aggregate: observed; source: observed.",
+      "sameHeaderRow": true
+    },
+    {
+      "case": "session-alignment-560-100%-zoom1-classic-light-credits",
+      "errors": [],
+      "suffixes": [
+        " | 0",
+        " | N/A",
+        " | Loading…",
+        " | ?12",
+        " | 123 456 789",
+        " | 23",
+        " | 0",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        290.8333435058594,
+        272.9375,
+        236.92709350585938,
+        276.625,
+        220.875,
+        283.07293701171875,
+        439.13543701171875,
+        421.2395935058594,
+        385.22918701171875
+      ],
+      "width": 538,
+      "font": "16px",
+      "scroll": false,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-560-100%-zoom1-classic-light-usd",
+      "errors": [],
+      "suffixes": [
+        " | $0.00",
+        " | N/A",
+        " | Loading…",
+        " | ?$0.12",
+        " | $1 234 567.89",
+        " | $0.23",
+        " | $0.00",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        264.4375,
+        272.9375,
+        236.92709350585938,
+        257.9895935058594,
+        210,
+        264.4375,
+        412.7395935058594,
+        421.2395935058594,
+        385.22918701171875
+      ],
+      "width": 538,
+      "font": "16px",
+      "scroll": false,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-560-100%-zoom1-web-light-credits",
+      "errors": [],
+      "suffixes": [
+        " | 0",
+        " | N/A",
+        " | Loading…",
+        " | ?12",
+        " | 123 456 789",
+        " | 23",
+        " | 0",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        290.8333435058594,
+        272.9375,
+        236.92709350585938,
+        276.625,
+        220.875,
+        283.07293701171875,
+        439.13543701171875,
+        421.2395935058594,
+        385.22918701171875
+      ],
+      "width": 538,
+      "font": "16px",
+      "scroll": false,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-560-100%-zoom1-web-light-usd",
+      "errors": [],
+      "suffixes": [
+        " | $0.00",
+        " | N/A",
+        " | Loading…",
+        " | ?$0.12",
+        " | $1 234 567.89",
+        " | $0.23",
+        " | $0.00",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        264.4375,
+        272.9375,
+        236.92709350585938,
+        257.9895935058594,
+        210,
+        264.4375,
+        412.7395935058594,
+        421.2395935058594,
+        385.22918701171875
+      ],
+      "width": 538,
+      "font": "16px",
+      "scroll": false,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-560-100%-zoom1-web-dark-credits",
+      "errors": [],
+      "suffixes": [
+        " | 0",
+        " | N/A",
+        " | Loading…",
+        " | ?12",
+        " | 123 456 789",
+        " | 23",
+        " | 0",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        290.8333435058594,
+        272.9375,
+        236.92709350585938,
+        276.625,
+        220.875,
+        283.07293701171875,
+        439.13543701171875,
+        421.2395935058594,
+        385.22918701171875
+      ],
+      "width": 538,
+      "font": "16px",
+      "scroll": false,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-560-100%-zoom1-web-dark-usd",
+      "errors": [],
+      "suffixes": [
+        " | $0.00",
+        " | N/A",
+        " | Loading…",
+        " | ?$0.12",
+        " | $1 234 567.89",
+        " | $0.23",
+        " | $0.00",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        264.4375,
+        272.9375,
+        236.92709350585938,
+        257.9895935058594,
+        210,
+        264.4375,
+        412.7395935058594,
+        421.2395935058594,
+        385.22918701171875
+      ],
+      "width": 538,
+      "font": "16px",
+      "scroll": false,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-560-150%-zoom1-classic-light-credits",
+      "errors": [],
+      "suffixes": [
+        " | 0",
+        " | N/A",
+        " | Loading…",
+        " | ?12",
+        " | 123 456 789",
+        " | 23",
+        " | 0",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        179.0104217529297,
+        152.14584350585938,
+        98.11458587646484,
+        157.67709350585938,
+        74.02083587646484,
+        167.36459350585938,
+        398.34375,
+        371.47918701171875,
+        317.44793701171875
+      ],
+      "width": 538,
+      "font": "24px",
+      "scroll": true,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-560-150%-zoom1-classic-light-usd",
+      "errors": [],
+      "suffixes": [
+        " | $0.00",
+        " | N/A",
+        " | Loading…",
+        " | ?$0.12",
+        " | $1 234 567.89",
+        " | $0.23",
+        " | $0.00",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        139.39584350585938,
+        152.14584350585938,
+        98.11458587646484,
+        129.70834350585938,
+        57.69791793823242,
+        139.39584350585938,
+        358.72918701171875,
+        371.47918701171875,
+        317.44793701171875
+      ],
+      "width": 538,
+      "font": "24px",
+      "scroll": true,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-560-150%-zoom1-web-light-credits",
+      "errors": [],
+      "suffixes": [
+        " | 0",
+        " | N/A",
+        " | Loading…",
+        " | ?12",
+        " | 123 456 789",
+        " | 23",
+        " | 0",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        179.0104217529297,
+        152.14584350585938,
+        98.11458587646484,
+        157.67709350585938,
+        74.02083587646484,
+        167.36459350585938,
+        398.34375,
+        371.47918701171875,
+        317.44793701171875
+      ],
+      "width": 538,
+      "font": "24px",
+      "scroll": true,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-560-150%-zoom1-web-light-usd",
+      "errors": [],
+      "suffixes": [
+        " | $0.00",
+        " | N/A",
+        " | Loading…",
+        " | ?$0.12",
+        " | $1 234 567.89",
+        " | $0.23",
+        " | $0.00",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        139.39584350585938,
+        152.14584350585938,
+        98.11458587646484,
+        129.70834350585938,
+        57.69791793823242,
+        139.39584350585938,
+        358.72918701171875,
+        371.47918701171875,
+        317.44793701171875
+      ],
+      "width": 538,
+      "font": "24px",
+      "scroll": true,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-560-150%-zoom1-web-dark-credits",
+      "errors": [],
+      "suffixes": [
+        " | 0",
+        " | N/A",
+        " | Loading…",
+        " | ?12",
+        " | 123 456 789",
+        " | 23",
+        " | 0",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        179.0104217529297,
+        152.14584350585938,
+        98.11458587646484,
+        157.67709350585938,
+        74.02083587646484,
+        167.36459350585938,
+        398.34375,
+        371.47918701171875,
+        317.44793701171875
+      ],
+      "width": 538,
+      "font": "24px",
+      "scroll": true,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-560-150%-zoom1-web-dark-usd",
+      "errors": [],
+      "suffixes": [
+        " | $0.00",
+        " | N/A",
+        " | Loading…",
+        " | ?$0.12",
+        " | $1 234 567.89",
+        " | $0.23",
+        " | $0.00",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        139.39584350585938,
+        152.14584350585938,
+        98.11458587646484,
+        129.70834350585938,
+        57.69791793823242,
+        139.39584350585938,
+        358.72918701171875,
+        371.47918701171875,
+        317.44793701171875
+      ],
+      "width": 538,
+      "font": "24px",
+      "scroll": true,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-560-100%-zoom1.25-classic-light-credits",
+      "errors": [],
+      "suffixes": [
+        " | 0",
+        " | N/A",
+        " | Loading…",
+        " | ?12",
+        " | 123 456 789",
+        " | 23",
+        " | 0",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        233.7916717529297,
+        211.40625,
+        166.375,
+        216.02084350585938,
+        146.30209350585938,
+        224.08334350585938,
+        418.72918701171875,
+        396.34375,
+        351.3125
+      ],
+      "width": 538,
+      "font": "16px",
+      "scroll": false,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-560-100%-zoom1.25-classic-light-usd",
+      "errors": [],
+      "suffixes": [
+        " | $0.00",
+        " | N/A",
+        " | Loading…",
+        " | ?$0.12",
+        " | $1 234 567.89",
+        " | $0.23",
+        " | $0.00",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        200.78125,
+        211.40625,
+        166.375,
+        192.70834350585938,
+        132.6979217529297,
+        200.78125,
+        385.71875,
+        396.34375,
+        351.3125
+      ],
+      "width": 538,
+      "font": "16px",
+      "scroll": false,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-560-100%-zoom1.25-web-light-credits",
+      "errors": [],
+      "suffixes": [
+        " | 0",
+        " | N/A",
+        " | Loading…",
+        " | ?12",
+        " | 123 456 789",
+        " | 23",
+        " | 0",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        233.7916717529297,
+        211.40625,
+        166.375,
+        216.02084350585938,
+        146.30209350585938,
+        224.08334350585938,
+        418.72918701171875,
+        396.34375,
+        351.3125
+      ],
+      "width": 538,
+      "font": "16px",
+      "scroll": false,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-560-100%-zoom1.25-web-light-usd",
+      "errors": [],
+      "suffixes": [
+        " | $0.00",
+        " | N/A",
+        " | Loading…",
+        " | ?$0.12",
+        " | $1 234 567.89",
+        " | $0.23",
+        " | $0.00",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        200.78125,
+        211.40625,
+        166.375,
+        192.70834350585938,
+        132.6979217529297,
+        200.78125,
+        385.71875,
+        396.34375,
+        351.3125
+      ],
+      "width": 538,
+      "font": "16px",
+      "scroll": false,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-560-100%-zoom1.25-web-dark-credits",
+      "errors": [],
+      "suffixes": [
+        " | 0",
+        " | N/A",
+        " | Loading…",
+        " | ?12",
+        " | 123 456 789",
+        " | 23",
+        " | 0",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        233.7916717529297,
+        211.40625,
+        166.375,
+        216.02084350585938,
+        146.30209350585938,
+        224.08334350585938,
+        418.72918701171875,
+        396.34375,
+        351.3125
+      ],
+      "width": 538,
+      "font": "16px",
+      "scroll": false,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-560-100%-zoom1.25-web-dark-usd",
+      "errors": [],
+      "suffixes": [
+        " | $0.00",
+        " | N/A",
+        " | Loading…",
+        " | ?$0.12",
+        " | $1 234 567.89",
+        " | $0.23",
+        " | $0.00",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        200.78125,
+        211.40625,
+        166.375,
+        192.70834350585938,
+        132.6979217529297,
+        200.78125,
+        385.71875,
+        396.34375,
+        351.3125
+      ],
+      "width": 538,
+      "font": "16px",
+      "scroll": false,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-800-100%-zoom1-classic-light-credits",
+      "errors": [],
+      "suffixes": [
+        " | 0",
+        " | N/A",
+        " | Loading…",
+        " | ?12",
+        " | 123 456 789",
+        " | 23",
+        " | 0",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        408.8333435058594,
+        390.9375,
+        354.9270935058594,
+        394.625,
+        338.875,
+        401.07293701171875,
+        557.1354370117188,
+        539.2396240234375,
+        503.22918701171875
+      ],
+      "width": 656,
+      "font": "16px",
+      "scroll": false,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-800-100%-zoom1-classic-light-usd",
+      "errors": [],
+      "suffixes": [
+        " | $0.00",
+        " | N/A",
+        " | Loading…",
+        " | ?$0.12",
+        " | $1 234 567.89",
+        " | $0.23",
+        " | $0.00",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        382.4375,
+        390.9375,
+        354.9270935058594,
+        375.9895935058594,
+        328,
+        382.4375,
+        530.7396240234375,
+        539.2396240234375,
+        503.22918701171875
+      ],
+      "width": 656,
+      "font": "16px",
+      "scroll": false,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-800-100%-zoom1-web-light-credits",
+      "errors": [],
+      "suffixes": [
+        " | 0",
+        " | N/A",
+        " | Loading…",
+        " | ?12",
+        " | 123 456 789",
+        " | 23",
+        " | 0",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        408.8333435058594,
+        390.9375,
+        354.9270935058594,
+        394.625,
+        338.875,
+        401.07293701171875,
+        557.1354370117188,
+        539.2396240234375,
+        503.22918701171875
+      ],
+      "width": 656,
+      "font": "16px",
+      "scroll": false,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-800-100%-zoom1-web-light-usd",
+      "errors": [],
+      "suffixes": [
+        " | $0.00",
+        " | N/A",
+        " | Loading…",
+        " | ?$0.12",
+        " | $1 234 567.89",
+        " | $0.23",
+        " | $0.00",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        382.4375,
+        390.9375,
+        354.9270935058594,
+        375.9895935058594,
+        328,
+        382.4375,
+        530.7396240234375,
+        539.2396240234375,
+        503.22918701171875
+      ],
+      "width": 656,
+      "font": "16px",
+      "scroll": false,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-800-100%-zoom1-web-dark-credits",
+      "errors": [],
+      "suffixes": [
+        " | 0",
+        " | N/A",
+        " | Loading…",
+        " | ?12",
+        " | 123 456 789",
+        " | 23",
+        " | 0",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        408.8333435058594,
+        390.9375,
+        354.9270935058594,
+        394.625,
+        338.875,
+        401.07293701171875,
+        557.1354370117188,
+        539.2396240234375,
+        503.22918701171875
+      ],
+      "width": 656,
+      "font": "16px",
+      "scroll": false,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-800-100%-zoom1-web-dark-usd",
+      "errors": [],
+      "suffixes": [
+        " | $0.00",
+        " | N/A",
+        " | Loading…",
+        " | ?$0.12",
+        " | $1 234 567.89",
+        " | $0.23",
+        " | $0.00",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        382.4375,
+        390.9375,
+        354.9270935058594,
+        375.9895935058594,
+        328,
+        382.4375,
+        530.7396240234375,
+        539.2396240234375,
+        503.22918701171875
+      ],
+      "width": 656,
+      "font": "16px",
+      "scroll": false,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-800-150%-zoom1-classic-light-credits",
+      "errors": [],
+      "suffixes": [
+        " | 0",
+        " | N/A",
+        " | Loading…",
+        " | ?12",
+        " | 123 456 789",
+        " | 23",
+        " | 0",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        294.82293701171875,
+        267.9583435058594,
+        213.92709350585938,
+        273.4895935058594,
+        189.83334350585938,
+        283.1770935058594,
+        516.34375,
+        489.47918701171875,
+        435.44793701171875
+      ],
+      "width": 656,
+      "font": "24px",
+      "scroll": false,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-800-150%-zoom1-classic-light-usd",
+      "errors": [],
+      "suffixes": [
+        " | $0.00",
+        " | N/A",
+        " | Loading…",
+        " | ?$0.12",
+        " | $1 234 567.89",
+        " | $0.23",
+        " | $0.00",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        255.20834350585938,
+        267.9583435058594,
+        213.92709350585938,
+        245.52084350585938,
+        173.5104217529297,
+        255.20834350585938,
+        476.72918701171875,
+        489.47918701171875,
+        435.44793701171875
+      ],
+      "width": 656,
+      "font": "24px",
+      "scroll": false,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-800-150%-zoom1-web-light-credits",
+      "errors": [],
+      "suffixes": [
+        " | 0",
+        " | N/A",
+        " | Loading…",
+        " | ?12",
+        " | 123 456 789",
+        " | 23",
+        " | 0",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        294.82293701171875,
+        267.9583435058594,
+        213.92709350585938,
+        273.4895935058594,
+        189.83334350585938,
+        283.1770935058594,
+        516.34375,
+        489.47918701171875,
+        435.44793701171875
+      ],
+      "width": 656,
+      "font": "24px",
+      "scroll": false,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-800-150%-zoom1-web-light-usd",
+      "errors": [],
+      "suffixes": [
+        " | $0.00",
+        " | N/A",
+        " | Loading…",
+        " | ?$0.12",
+        " | $1 234 567.89",
+        " | $0.23",
+        " | $0.00",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        255.20834350585938,
+        267.9583435058594,
+        213.92709350585938,
+        245.52084350585938,
+        173.5104217529297,
+        255.20834350585938,
+        476.72918701171875,
+        489.47918701171875,
+        435.44793701171875
+      ],
+      "width": 656,
+      "font": "24px",
+      "scroll": false,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-800-150%-zoom1-web-dark-credits",
+      "errors": [],
+      "suffixes": [
+        " | 0",
+        " | N/A",
+        " | Loading…",
+        " | ?12",
+        " | 123 456 789",
+        " | 23",
+        " | 0",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        294.82293701171875,
+        267.9583435058594,
+        213.92709350585938,
+        273.4895935058594,
+        189.83334350585938,
+        283.1770935058594,
+        516.34375,
+        489.47918701171875,
+        435.44793701171875
+      ],
+      "width": 656,
+      "font": "24px",
+      "scroll": false,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-800-150%-zoom1-web-dark-usd",
+      "errors": [],
+      "suffixes": [
+        " | $0.00",
+        " | N/A",
+        " | Loading…",
+        " | ?$0.12",
+        " | $1 234 567.89",
+        " | $0.23",
+        " | $0.00",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        255.20834350585938,
+        267.9583435058594,
+        213.92709350585938,
+        245.52084350585938,
+        173.5104217529297,
+        255.20834350585938,
+        476.72918701171875,
+        489.47918701171875,
+        435.44793701171875
+      ],
+      "width": 656,
+      "font": "24px",
+      "scroll": false,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-800-100%-zoom1.25-classic-light-credits",
+      "errors": [],
+      "suffixes": [
+        " | 0",
+        " | N/A",
+        " | Loading…",
+        " | ?12",
+        " | 123 456 789",
+        " | 23",
+        " | 0",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        351.79168701171875,
+        329.40625,
+        284.375,
+        334.0208435058594,
+        264.3020935058594,
+        342.0833435058594,
+        536.7291870117188,
+        514.34375,
+        469.3125
+      ],
+      "width": 656,
+      "font": "16px",
+      "scroll": false,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-800-100%-zoom1.25-classic-light-usd",
+      "errors": [],
+      "suffixes": [
+        " | $0.00",
+        " | N/A",
+        " | Loading…",
+        " | ?$0.12",
+        " | $1 234 567.89",
+        " | $0.23",
+        " | $0.00",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        318.78125,
+        329.40625,
+        284.375,
+        310.7083435058594,
+        250.6979217529297,
+        318.78125,
+        503.71875,
+        514.34375,
+        469.3125
+      ],
+      "width": 656,
+      "font": "16px",
+      "scroll": false,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-800-100%-zoom1.25-web-light-credits",
+      "errors": [],
+      "suffixes": [
+        " | 0",
+        " | N/A",
+        " | Loading…",
+        " | ?12",
+        " | 123 456 789",
+        " | 23",
+        " | 0",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        351.79168701171875,
+        329.40625,
+        284.375,
+        334.0208435058594,
+        264.3020935058594,
+        342.0833435058594,
+        536.7291870117188,
+        514.34375,
+        469.3125
+      ],
+      "width": 656,
+      "font": "16px",
+      "scroll": false,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-800-100%-zoom1.25-web-light-usd",
+      "errors": [],
+      "suffixes": [
+        " | $0.00",
+        " | N/A",
+        " | Loading…",
+        " | ?$0.12",
+        " | $1 234 567.89",
+        " | $0.23",
+        " | $0.00",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        318.78125,
+        329.40625,
+        284.375,
+        310.7083435058594,
+        250.6979217529297,
+        318.78125,
+        503.71875,
+        514.34375,
+        469.3125
+      ],
+      "width": 656,
+      "font": "16px",
+      "scroll": false,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-800-100%-zoom1.25-web-dark-credits",
+      "errors": [],
+      "suffixes": [
+        " | 0",
+        " | N/A",
+        " | Loading…",
+        " | ?12",
+        " | 123 456 789",
+        " | 23",
+        " | 0",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        351.79168701171875,
+        329.40625,
+        284.375,
+        334.0208435058594,
+        264.3020935058594,
+        342.0833435058594,
+        536.7291870117188,
+        514.34375,
+        469.3125
+      ],
+      "width": 656,
+      "font": "16px",
+      "scroll": false,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-800-100%-zoom1.25-web-dark-usd",
+      "errors": [],
+      "suffixes": [
+        " | $0.00",
+        " | N/A",
+        " | Loading…",
+        " | ?$0.12",
+        " | $1 234 567.89",
+        " | $0.23",
+        " | $0.00",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        318.78125,
+        329.40625,
+        284.375,
+        310.7083435058594,
+        250.6979217529297,
+        318.78125,
+        503.71875,
+        514.34375,
+        469.3125
+      ],
+      "width": 656,
+      "font": "16px",
+      "scroll": false,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-280-100%-zoom1-classic-light-credits",
+      "errors": [],
+      "suffixes": [
+        " | 0",
+        " | N/A",
+        " | Loading…",
+        " | ?12",
+        " | 123 456 789",
+        " | 23",
+        " | 0",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        119.29167175292969,
+        101.39583587646484,
+        65.38542175292969,
+        105.08333587646484,
+        49.333335876464844,
+        111.53125,
+        159.1354217529297,
+        141.23959350585938,
+        105.22917175292969
+      ],
+      "width": 258,
+      "font": "16px",
+      "scroll": true,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-280-100%-zoom1-classic-light-usd",
+      "errors": [],
+      "suffixes": [
+        " | $0.00",
+        " | N/A",
+        " | Loading…",
+        " | ?$0.12",
+        " | $1 234 567.89",
+        " | $0.23",
+        " | $0.00",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        92.89583587646484,
+        101.39583587646484,
+        65.38542175292969,
+        86.44792175292969,
+        38.458335876464844,
+        92.89583587646484,
+        132.73959350585938,
+        141.23959350585938,
+        105.22917175292969
+      ],
+      "width": 258,
+      "font": "16px",
+      "scroll": true,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-280-100%-zoom1-web-light-credits",
+      "errors": [],
+      "suffixes": [
+        " | 0",
+        " | N/A",
+        " | Loading…",
+        " | ?12",
+        " | 123 456 789",
+        " | 23",
+        " | 0",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        119.29167175292969,
+        101.39583587646484,
+        65.38542175292969,
+        105.08333587646484,
+        49.333335876464844,
+        111.53125,
+        159.1354217529297,
+        141.23959350585938,
+        105.22917175292969
+      ],
+      "width": 258,
+      "font": "16px",
+      "scroll": true,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-280-100%-zoom1-web-light-usd",
+      "errors": [],
+      "suffixes": [
+        " | $0.00",
+        " | N/A",
+        " | Loading…",
+        " | ?$0.12",
+        " | $1 234 567.89",
+        " | $0.23",
+        " | $0.00",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        92.89583587646484,
+        101.39583587646484,
+        65.38542175292969,
+        86.44792175292969,
+        38.458335876464844,
+        92.89583587646484,
+        132.73959350585938,
+        141.23959350585938,
+        105.22917175292969
+      ],
+      "width": 258,
+      "font": "16px",
+      "scroll": true,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-280-100%-zoom1-web-dark-credits",
+      "errors": [],
+      "suffixes": [
+        " | 0",
+        " | N/A",
+        " | Loading…",
+        " | ?12",
+        " | 123 456 789",
+        " | 23",
+        " | 0",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        119.29167175292969,
+        101.39583587646484,
+        65.38542175292969,
+        105.08333587646484,
+        49.333335876464844,
+        111.53125,
+        159.1354217529297,
+        141.23959350585938,
+        105.22917175292969
+      ],
+      "width": 258,
+      "font": "16px",
+      "scroll": true,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-280-100%-zoom1-web-dark-usd",
+      "errors": [],
+      "suffixes": [
+        " | $0.00",
+        " | N/A",
+        " | Loading…",
+        " | ?$0.12",
+        " | $1 234 567.89",
+        " | $0.23",
+        " | $0.00",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        92.89583587646484,
+        101.39583587646484,
+        65.38542175292969,
+        86.44792175292969,
+        38.458335876464844,
+        92.89583587646484,
+        132.73959350585938,
+        141.23959350585938,
+        105.22917175292969
+      ],
+      "width": 258,
+      "font": "16px",
+      "scroll": true,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-280-150%-zoom1-classic-light-credits",
+      "errors": [],
+      "suffixes": [
+        " | 0",
+        " | N/A",
+        " | Loading…",
+        " | ?12",
+        " | 123 456 789",
+        " | 23",
+        " | 0",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        179.0104217529297,
+        152.14584350585938,
+        98.11458587646484,
+        157.67709350585938,
+        74.02083587646484,
+        167.36459350585938,
+        179.0104217529297,
+        152.14584350585938,
+        98.11458587646484
+      ],
+      "width": 258,
+      "font": "24px",
+      "scroll": true,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-280-150%-zoom1-classic-light-usd",
+      "errors": [],
+      "suffixes": [
+        " | $0.00",
+        " | N/A",
+        " | Loading…",
+        " | ?$0.12",
+        " | $1 234 567.89",
+        " | $0.23",
+        " | $0.00",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        139.39584350585938,
+        152.14584350585938,
+        98.11458587646484,
+        129.70834350585938,
+        57.69791793823242,
+        139.39584350585938,
+        139.39584350585938,
+        152.14584350585938,
+        98.11458587646484
+      ],
+      "width": 258,
+      "font": "24px",
+      "scroll": true,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-280-150%-zoom1-web-light-credits",
+      "errors": [],
+      "suffixes": [
+        " | 0",
+        " | N/A",
+        " | Loading…",
+        " | ?12",
+        " | 123 456 789",
+        " | 23",
+        " | 0",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        179.0104217529297,
+        152.14584350585938,
+        98.11458587646484,
+        157.67709350585938,
+        74.02083587646484,
+        167.36459350585938,
+        179.0104217529297,
+        152.14584350585938,
+        98.11458587646484
+      ],
+      "width": 258,
+      "font": "24px",
+      "scroll": true,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-280-150%-zoom1-web-light-usd",
+      "errors": [],
+      "suffixes": [
+        " | $0.00",
+        " | N/A",
+        " | Loading…",
+        " | ?$0.12",
+        " | $1 234 567.89",
+        " | $0.23",
+        " | $0.00",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        139.39584350585938,
+        152.14584350585938,
+        98.11458587646484,
+        129.70834350585938,
+        57.69791793823242,
+        139.39584350585938,
+        139.39584350585938,
+        152.14584350585938,
+        98.11458587646484
+      ],
+      "width": 258,
+      "font": "24px",
+      "scroll": true,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-280-150%-zoom1-web-dark-credits",
+      "errors": [],
+      "suffixes": [
+        " | 0",
+        " | N/A",
+        " | Loading…",
+        " | ?12",
+        " | 123 456 789",
+        " | 23",
+        " | 0",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        179.0104217529297,
+        152.14584350585938,
+        98.11458587646484,
+        157.67709350585938,
+        74.02083587646484,
+        167.36459350585938,
+        179.0104217529297,
+        152.14584350585938,
+        98.11458587646484
+      ],
+      "width": 258,
+      "font": "24px",
+      "scroll": true,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-280-150%-zoom1-web-dark-usd",
+      "errors": [],
+      "suffixes": [
+        " | $0.00",
+        " | N/A",
+        " | Loading…",
+        " | ?$0.12",
+        " | $1 234 567.89",
+        " | $0.23",
+        " | $0.00",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        139.39584350585938,
+        152.14584350585938,
+        98.11458587646484,
+        129.70834350585938,
+        57.69791793823242,
+        139.39584350585938,
+        139.39584350585938,
+        152.14584350585938,
+        98.11458587646484
+      ],
+      "width": 258,
+      "font": "24px",
+      "scroll": true,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-280-100%-zoom1.25-classic-light-credits",
+      "errors": [],
+      "suffixes": [
+        " | 0",
+        " | N/A",
+        " | Loading…",
+        " | ?12",
+        " | 123 456 789",
+        " | 23",
+        " | 0",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        149.1666717529297,
+        126.78125,
+        81.75,
+        131.39584350585938,
+        61.677085876464844,
+        139.45834350585938,
+        149.1666717529297,
+        126.78125,
+        81.75
+      ],
+      "width": 258,
+      "font": "16px",
+      "scroll": true,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-280-100%-zoom1.25-classic-light-usd",
+      "errors": [],
+      "suffixes": [
+        " | $0.00",
+        " | N/A",
+        " | Loading…",
+        " | ?$0.12",
+        " | $1 234 567.89",
+        " | $0.23",
+        " | $0.00",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        116.15625,
+        126.78125,
+        81.75,
+        108.08333587646484,
+        48.07291793823242,
+        116.15625,
+        116.15625,
+        126.78125,
+        81.75
+      ],
+      "width": 258,
+      "font": "16px",
+      "scroll": true,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-280-100%-zoom1.25-web-light-credits",
+      "errors": [],
+      "suffixes": [
+        " | 0",
+        " | N/A",
+        " | Loading…",
+        " | ?12",
+        " | 123 456 789",
+        " | 23",
+        " | 0",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        149.1666717529297,
+        126.78125,
+        81.75,
+        131.39584350585938,
+        61.677085876464844,
+        139.45834350585938,
+        149.1666717529297,
+        126.78125,
+        81.75
+      ],
+      "width": 258,
+      "font": "16px",
+      "scroll": true,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-280-100%-zoom1.25-web-light-usd",
+      "errors": [],
+      "suffixes": [
+        " | $0.00",
+        " | N/A",
+        " | Loading…",
+        " | ?$0.12",
+        " | $1 234 567.89",
+        " | $0.23",
+        " | $0.00",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        116.15625,
+        126.78125,
+        81.75,
+        108.08333587646484,
+        48.07291793823242,
+        116.15625,
+        116.15625,
+        126.78125,
+        81.75
+      ],
+      "width": 258,
+      "font": "16px",
+      "scroll": true,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-280-100%-zoom1.25-web-dark-credits",
+      "errors": [],
+      "suffixes": [
+        " | 0",
+        " | N/A",
+        " | Loading…",
+        " | ?12",
+        " | 123 456 789",
+        " | 23",
+        " | 0",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        149.1666717529297,
+        126.78125,
+        81.75,
+        131.39584350585938,
+        61.677085876464844,
+        139.45834350585938,
+        149.1666717529297,
+        126.78125,
+        81.75
+      ],
+      "width": 258,
+      "font": "16px",
+      "scroll": true,
+      "pageOverflow": false
+    },
+    {
+      "case": "session-alignment-280-100%-zoom1.25-web-dark-usd",
+      "errors": [],
+      "suffixes": [
+        " | $0.00",
+        " | N/A",
+        " | Loading…",
+        " | ?$0.12",
+        " | $1 234 567.89",
+        " | $0.23",
+        " | $0.00",
+        " | N/A",
+        " | Loading…"
+      ],
+      "titleWidths": [
+        116.15625,
+        126.78125,
+        81.75,
+        108.08333587646484,
+        48.07291793823242,
+        116.15625,
+        116.15625,
+        126.78125,
+        81.75
+      ],
+      "width": 258,
+      "font": "16px",
+      "scroll": true,
+      "pageOverflow": false
+    },
+    {
+      "case": "intrinsic-long-titles",
+      "width": 561,
+      "pageOverflow": false,
+      "scroll": false,
+      "region": 531,
+      "widths": [
+        355.0833435058594,
+        30.697917938232422,
+        44.0625,
+        64.4375,
+        36.71875
+      ],
+      "required": [
+        30.697917,
+        44.06251050585937,
+        64.43751050585938,
+        36.7187910234375
+      ],
+      "wrap": [
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap"
+      ],
+      "ellipsis": false,
+      "title": true
+    },
+    {
+      "case": "intrinsic-growing-metrics",
+      "width": 561,
+      "pageOverflow": false,
+      "scroll": false,
+      "region": 531,
+      "widths": [
+        269.07293701171875,
+        59.8125,
+        79.0625,
+        67.52083587646484,
+        55.53125
+      ],
+      "required": [
+        59.81247998828125,
+        79.06247998828125,
+        67.52082349414063,
+        55.5312910234375
+      ],
+      "wrap": [
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap"
+      ],
+      "ellipsis": false,
+      "title": true
+    },
+    {
+      "case": "intrinsic-empty-colspan",
+      "width": 561,
+      "pageOverflow": false,
+      "scroll": false,
+      "region": 546,
+      "widths": [
+        388.34375,
+        16.166667938232422,
+        44.0625,
+        64.4375,
+        33.32291793823242
+      ],
+      "required": [
+        16.166667,
+        44.06247998828125,
+        64.43747998828125,
+        33.322917
+      ],
+      "wrap": [
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap"
+      ],
+      "ellipsis": false,
+      "title": false
+    },
+    {
+      "case": "intrinsic-shrinking-metrics",
+      "width": 561,
+      "pageOverflow": false,
+      "scroll": false,
+      "region": 531,
+      "widths": [
+        355.0833435058594,
+        30.697917938232422,
+        44.0625,
+        64.4375,
+        36.71875
+      ],
+      "required": [
+        30.697917,
+        44.06251050585937,
+        64.43751050585938,
+        36.7187910234375
+      ],
+      "wrap": [
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap"
+      ],
+      "ellipsis": false,
+      "title": false
+    },
+    {
+      "case": "native-resize-5-3",
+      "width": 513,
+      "height": 385,
+      "outer": false,
+      "horizontal": false,
+      "prompts": false,
+      "accounts": false,
+      "barHeight": 9.75,
+      "promptHeight": 153,
+      "promptContent": 153,
+      "accountHeight": 125,
+      "accountContent": 125,
+      "header": "sticky",
+      "healthyHidden": true
+    },
+    {
+      "case": "classic-light",
+      "width": 513,
+      "height": 385
+    },
+    {
+      "case": "web-light",
+      "width": 513,
+      "height": 385
+    },
+    {
+      "case": "web-dark",
+      "width": 513,
+      "height": 385
+    },
+    {
+      "case": "intrinsic-narrow-native-resize",
+      "width": 258,
+      "pageOverflow": false,
+      "scroll": true,
+      "region": 228,
+      "widths": [
+        138.625,
+        30.697917938232422,
+        44.0625,
+        64.4375,
+        36.71875
+      ],
+      "required": [
+        30.697917,
+        44.06249524707031,
+        64.43749524707032,
+        36.71872998828125
+      ],
+      "wrap": [
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap"
+      ],
+      "ellipsis": false,
+      "title": true
+    },
+    {
+      "case": "intrinsic-narrow-large-metrics",
+      "width": 258,
+      "pageOverflow": false,
+      "scroll": true,
+      "region": 228,
+      "widths": [
+        138.625,
+        81.64583587646484,
+        86.34375,
+        67.52083587646484,
+        55.53125
+      ],
+      "required": [
+        81.64583875292969,
+        86.34376050585938,
+        67.52082349414063,
+        55.53122998828125
+      ],
+      "wrap": [
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap"
+      ],
+      "ellipsis": false,
+      "title": true
+    }
+  ],
+  "screenshots": [
+    "edge-settings.png",
+    "edge-earlier.png",
+    "edge-classic-light.png",
+    "edge-web-light.png",
+    "edge-web-dark.png",
+    "edge-earlier-narrow.png"
+  ],
+  "limitations": [
+    "Headless Chromium only; no physical/native X, native return/replacement chrome, minimized-opener restoration, always-on-top OS geometry or screen-reader proof."
+  ]
+}
