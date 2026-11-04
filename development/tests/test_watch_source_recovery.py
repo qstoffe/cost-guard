@@ -12,7 +12,7 @@ from unittest import mock
 
 from development.tests.fixtures.session_snapshots import make_snapshot
 from development.tests.fixtures.opencode_v2_service import FakeV2Service, fixture, source_with_service
-from development.tests.fixtures.watch_runtime import CountingAccountProvider, FakeLiveSource, MutableSource, make_service
+from development.tests.fixtures.watch_runtime import CountingAccountProvider, FakeLiveSource, MutableSource, Recorder, make_service
 from src.presentation import WatchRenderer
 from src.sources.errors import SourceDataError, SourceError, SourceSchemaError, SourceUnavailableError
 from src.sources.selection import MigrationGapDiagnostic, MigrationGapSession
@@ -52,20 +52,6 @@ class FailingV1(FailingMixin, MutableSource):
 
 class FailingV2(FailingMixin, FakeLiveSource):
     pass
-
-
-class Recorder:
-    def __init__(self):
-        self.renders, self.statuses, self.finished = [], [], []
-
-    def render(self, projection):
-        self.renders.append(projection)
-
-    def render_status(self, projection):
-        self.statuses.append(projection)
-
-    def finish(self, text):
-        self.finished.append(text)
 
 
 def _forbid_subprocess():

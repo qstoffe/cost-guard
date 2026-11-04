@@ -1,9 +1,11 @@
 """Deterministic Watch sources, account scheduling and service composition."""
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import replace
 from decimal import Decimal
 from pathlib import Path
+import tempfile
 
 from development.tests.fixtures.session_snapshots import make_snapshot
 from development.tests.fixtures.report_runtime import FakeAccountProvider, FakePricingProvider
@@ -15,8 +17,36 @@ from src.reports import ReportService
 from src.reports.models import AccountProjection
 from src.sources.errors import SourceResyncRequiredError
 from src.sources.selection import SourceSelection
+from src.watch import WatchCoordinator
 
 ROOT = Path(__file__).resolve().parents[3]
+
+
+class Recorder:
+    """Capture Watch renders, status updates and intentional/terminal finishes."""
+
+    def __init__(self):
+        self.renders, self.statuses, self.finished = [], [], []
+
+    def render(self, projection):
+        self.renders.append(projection)
+
+    def render_status(self, projection):
+        self.statuses.append(projection)
+
+    def finish(self, text):
+        self.finished.append(text)
+
+
+@contextmanager
+def watch_for(*, scoped=False):
+    """Compose a finite synthetic Watch for lifecycle and runtime-fault checks."""
+    with tempfile.TemporaryDirectory() as td:
+        source = MutableSource()
+        config, selection, service, _ = make_service(td, source)
+        watch = WatchCoordinator(selection=selection, report_service=service, config=config,
+                                 session_id="root" if scoped else None, clock_ms=lambda: 2200)
+        yield watch, source
 
 
 class MutableSource:

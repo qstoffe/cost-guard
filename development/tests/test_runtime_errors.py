@@ -340,7 +340,7 @@ class RuntimeErrorTests(unittest.TestCase):
         self.assertFalse(reconciled[0].quotas)
 
     def test_watch_valuation_and_quota_projection_bugs_are_fatal_not_stale(self):
-        from development.tests.test_watch_lifecycle import watch_for
+        from development.tests.fixtures.watch_runtime import watch_for
         for method in ("token_category_valuation", "watch_history_batch"):
             with self.subTest(method=method), watch_for() as (watch, _):
                 with patch.object(watch.report_service, method, side_effect=TypeError("SECRET")):
@@ -348,8 +348,7 @@ class RuntimeErrorTests(unittest.TestCase):
         self.assertEqual(2, len(self.crashes()))
 
     def test_watch_ctrl_c_and_scoped_lifecycle_do_not_log_software_errors(self):
-        from development.tests.test_watch_lifecycle import watch_for
-        from development.tests.test_watch_source_recovery import Recorder
+        from development.tests.fixtures.watch_runtime import Recorder, watch_for
         from src.watch.coordinator import WatchedSessionEnded
         for end in (KeyboardInterrupt, WatchedSessionEnded("expected archived root")):
             with watch_for(scoped=True) as (watch, _):
