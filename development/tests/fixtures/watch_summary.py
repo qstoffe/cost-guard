@@ -62,13 +62,12 @@ def summary_watch():
         running_tool="shell", running_ms=41000, background_kinds=("subagent",), background_ms=55000,
         skills=(SkillObservation("custom-skill", 1),))
     card = WatchCard("root", "Synthetic active session", "prompt", (WatchRow("root", "Session", item, "▶", tool),),
-        state="observed", context_warning=guidance, session_context=guidance,
+        state="observed", session_context=guidance,
         session_cost=SessionCost(ComparisonCost(D("4582.125"), 2000, 2000), True, True), session_cost_state="observed")
     history = replace(card, session_id="past", title="Synthetic earlier session", focal_id="",
         rows=(WatchRow("past", "Earlier", replace(item, in_progress=False)),),
-        context_warning=replace(guidance, severity=PriceWarningSeverity.APPROACHING,
-             text="[Approaching price threshold >100.0K]", multiplier=None))
-    history = replace(history, session_context=history.context_warning)
+        session_context=replace(guidance, severity=PriceWarningSeverity.APPROACHING,
+            text="[Approaching price threshold >100.0K]", multiplier=None))
     mix = TokenMix((5000, 3000, 1000, 1000), (50, 30, 10, 10), 37, 100,
         (D(15), D(3), D(4), D(12)), 100, 10000)
     daily = DailyUsage(NOW - 3600000, NOW, ComparisonCost(D(34), 100, 100), mix, 37, True)

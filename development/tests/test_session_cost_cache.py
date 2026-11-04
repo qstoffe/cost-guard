@@ -225,6 +225,51 @@ print(json.dumps(dict(valued=value.valued_requests, written=value.cache_written,
         self.assertEqual(len(changed.invocations), entry.session_cost.total.observed_requests)
         self.assertIsNone(entry.cost_snapshot)
 
+    def test_pricing_only_refresh_reuses_exact_evidence_without_source_hydration(self):
+        source = MutableSource(replace(make_snapshot(), complete=True))
+        prices = [catalog()]
+        def factory(now):
+            service = make_service(self.tmp.name, source, now_ms=now)[2]
+            service.pricing_provider.catalog = prices[0]
+            return service
+        capture, _ = capture_rows(factory(10000), source.snapshot.root)
+        costs = SessionCosts(factory)
+        self.addCleanup(costs.close)
+        cards = WatchCards(None, costs=costs)
+        entry = CardSession(source.snapshot.root, source.snapshot.source_revision, 1)
+        cards.sessions['root'] = entry
+        cards.accept(CardResult('root', 1, 'rows', (capture, (), None)), 10000)
+        cards._tick_costs(10000)
+        costs.job.result(timeout=3)
+        cards._tick_costs(10001)
+        self.assertTrue(entry.session_cost.total.complete)
+        loads = source.load_count
+        prices[0] = replace(prices[0], models=())
+
+        cards._tick_costs(70000)
+        self.assertIsNotNone(costs.job)
+        costs.job.result(timeout=3)
+        cards._tick_costs(70001)
+
+        self.assertFalse(entry.session_cost.total.complete)
+        self.assertEqual(loads, source.load_count)
+        self.assertEqual('observed', entry.cost_state, 'pricing coverage remains distinct from source coverage')
+
+    def test_aggregate_resources_need_no_source_service_or_schema_writes(self):
+        snapshot = replace(make_snapshot(), complete=True)
+        reconcile_session_cost(self.repository, snapshot, catalog())
+        def forbidden(now):
+            self.fail('aggregate-only work must not create another source service')
+        costs = SessionCosts(forbidden, lambda: (self.repository, catalog()))
+        self.addCleanup(costs.close)
+        with patch.object(self.database, 'initialize', side_effect=AssertionError('schema write')), \
+                patch.object(self.repository, 'put', side_effect=AssertionError('no-op write')):
+            costs.submit('root', 1, snapshot, 10000)
+            costs.job.result(timeout=3)
+            value = costs.drain()[2]
+        self.assertEqual(0, value.valued_requests)
+        self.assertFalse(value.cache_written)
+
 
 if __name__ == '__main__':
     unittest.main()

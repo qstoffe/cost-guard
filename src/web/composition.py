@@ -64,5 +64,13 @@ def live_acquisition():
                 max_age_hours=float(config.get("pricingMaxAgeHours", 1))),
             account_provider=None, cache_repository=card_cache, config=config, now_ms=now_ms)
 
+    def session_cost_resources():
+        # The host already initialized this disposable schema. Aggregate-only
+        # work needs neither another source selection nor schema/metadata writes.
+        repository = CacheRepository(CacheDatabase(root))
+        provider = GitHubCopilotPricingProvider(cache=repository,
+            max_age_hours=float(config.get("pricingMaxAgeHours", 1)))
+        return repository, provider.get_catalog()
+
     return LiveAcquisition(WebWatchCoordinator(selection=selection, report_service=service,
-        config=config, service_factory=card_service))
+        config=config, service_factory=card_service, session_cost_factory=session_cost_resources))

@@ -78,7 +78,7 @@ scans history or prices browser-side. Native quota refresh remains independent.
 to one latest-prompt-owned continuation DTO, including hidden compaction rewrites and
 the Watch multiplier/cost range. Full Watch shares this valid latest session continuation
 across concurrent cards and suppresses it on source failure, independently of row ECTX.
-The retained focal-owned warning DTO remains separate; CLI context semantics stay
+There is no duplicate row-cell/footer warning DTO; CLI context semantics stay
 unchanged. `application/watch_accounts.py` owns Watch-only stable primary slots and Used
 display; native primary flags/order normalize into account-scoped labels, preserving an
 absent primary on partial/error acquisition without inventing provider-wide windows.
@@ -106,6 +106,9 @@ admits visible sessions, shares results per root, retains totals through capture
 and rejects superseded generations. Rows and account/daily work never wait for it.
 Presentation ticks do no cache/source work; optional cache failures recompute from source
 with honest persistence/coverage state. This is not a billing ledger or Sessions UI change.
+Reference-catalog identity is rechecked in the same bounded lane at 60-second admission
+intervals using exact fresh evidence, without rehydrating history. Production composition
+supplies isolated pricing/cache resources without source selection or schema writes.
 
 Watch depends on shared reports/analysis/domain and abstract source contracts; reports/analysis never import Watch. Presentation consumes projections without fetching history or native quotas.
 

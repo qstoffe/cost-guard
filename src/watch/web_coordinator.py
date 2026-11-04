@@ -22,11 +22,11 @@ from .source_reads import SourceReads, cancel_source
 
 
 class WebWatchCoordinator(WatchCoordinator):
-    def __init__(self, *, service_factory, **kwargs):
+    def __init__(self, *, service_factory, session_cost_factory=None, **kwargs):
         super().__init__(**kwargs)
         self.card_workers = CardWorkers(service_factory)
         self.card_timing_observed = False
-        self.session_costs = SessionCosts(service_factory)
+        self.session_costs = SessionCosts(service_factory, session_cost_factory)
         self.cards = WatchCards(self.card_workers, self.recent_seconds, self._record_card_duration, self._monotonic,
             costs=self.session_costs)
         self.history_factory = service_factory

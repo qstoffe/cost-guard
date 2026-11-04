@@ -8,8 +8,9 @@ from src.sources.errors import SourceError
 
 
 class SessionCosts:
-    def __init__(self, factory):
+    def __init__(self, factory, resources_factory=None):
         self.factory = factory
+        self.resources_factory = resources_factory
         self.pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cost-guard-session-cost")
         self.job = None
         self.identity = None
@@ -24,6 +25,9 @@ class SessionCosts:
     def _capture(self, snapshot, now_ms):
         service = None
         try:
+            if self.resources_factory is not None:
+                repository, catalog = self.resources_factory()
+                return reconcile_session_cost(repository, snapshot, catalog)
             service = self.factory(now_ms)
             return reconcile_session_cost(service.cache_repository, snapshot, service._load_comparison_catalog())
         except (SourceError, PricingUnavailableError, sqlite3.Error, OSError):

@@ -66,7 +66,7 @@ async function evaluate(expression) {
       if (width >= 1366) assert.ok(Math.abs(layout.cards[0].top-layout.cards[2].top)<1, 'monthly/five-hour/weekly-only side by side');
        assert.match(layout.cards[0].reset, /Reset.*Remaining: .*\/day.*Remaining: .*\/workday/);
        const warningTransitions = await evaluate(`(() => {
-         const card=state.watch.cards.values().next().value, warning=INPUT.view.active_cards[0].context_warning;
+          const card=state.watch.cards.values().next().value, warning=INPUT.view.active_cards[0].session_summary.context.warning;
          const original=warning.severity, root=document.documentElement, theme=root.dataset.theme;
          const outcomes=[];
          for (const currentTheme of [theme,theme==='classic'?'web':'classic',theme]) {
@@ -74,9 +74,9 @@ async function evaluate(expression) {
            for (const severity of ['approaching','exceeded','none','approaching']) {
              warning.severity=severity; ReportView.renderLive(document.getElementById('result'),INPUT,state);
              const color=node=>getComputedStyle(node).color;
-             outcomes.push({theme:currentTheme,severity,hidden:card.warning.hidden,
+              outcomes.push({theme:currentTheme,severity,hidden:card.warningIcon.hidden,
                foreground:color(document.body),icon:color(card.warningIcon),text:color(card.warningText),
-               cleared:severity!=='none'||card.warning.textContent===''});
+                cleared:severity!=='none'||card.warningText.textContent===''});
            }
          }
          warning.severity=original;root.dataset.theme=theme;

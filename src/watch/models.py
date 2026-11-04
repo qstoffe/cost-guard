@@ -96,7 +96,6 @@ class WatchCard:
     focal_id: str
     rows: tuple[WatchRow, ...]
     state: str = "loading"
-    context_warning: object = None
     session_context: object = None
     session_cost: object = None
     session_cost_state: str = "loading"

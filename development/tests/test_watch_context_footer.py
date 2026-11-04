@@ -79,7 +79,7 @@ class WatchContextFooterTests(unittest.TestCase):
         self.assertEqual(PriceWarningSeverity.NONE, capture.context.severity)
         self.assertIsNone(capture.context.tokens)
 
-    def test_only_owning_focal_card_gets_warning_and_export_uses_watch_multiplier(self):
+    def test_concurrent_cards_share_valid_session_continuation_and_watch_multiplier(self):
         capture, item = self.capture(120000)
         focal = capture.rows[-1]
         older = replace(focal, event_id='older', at_ms=focal.at_ms - 1)
@@ -89,11 +89,10 @@ class WatchContextFooterTests(unittest.TestCase):
         current = cards._card(entry, focal, 4000)
         superseded = cards._card(entry, older, 4000)
         historical = cards._card(entry, None, 4000)
-        self.assertIsNone(superseded.context_warning)
-        self.assertEqual(current.context_warning, historical.context_warning)
+        self.assertEqual(current.session_context, historical.session_context)
         self.assertEqual(current.session_context, superseded.session_context)
         wire = project_live(WatchProjection('Watch', 'fixture', (), active_cards=(current,))).to_json()
-        self.assertIn('2x more expensive', wire['active_cards'][0]['context_warning']['display']['warning_cost'])
+        self.assertIn('2x more expensive', wire['active_cards'][0]['session_summary']['context']['warning']['display']['warning_cost'])
         self.assertNotIn('context_warning', wire['active_cards'][0]['rows'][0])
         cell = wire['active_cards'][0]['session_summary']['context']
         self.assertEqual('u_next', cell['warning']['owner_id'])
@@ -104,7 +103,7 @@ class WatchContextFooterTests(unittest.TestCase):
         self.assertTrue(all('context_cell' not in row for row in rows))
         self.assertIn('incoming_context_tokens', rows[0]['prompt'])
         entry.state = 'unavailable'
-        self.assertIsNone(cards._card(entry, focal, 4000).context_warning)
+        self.assertIsNone(cards._card(entry, focal, 4000).session_context)
 
     def test_out_of_order_capture_cannot_revive_pre_compaction_cell_warning(self):
         capture, item = self.capture(120000)
