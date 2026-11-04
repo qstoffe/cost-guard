@@ -94,8 +94,8 @@ never restyle the owner, Classic or browser-native chrome. No layer boundary cha
 Mini renders canonical active/focal card identities, not the running aggregate: one
 keyed row per prompt with prompt-local cost/duration/context and shared terminal grace.
 The first cell left-anchors an independently ellipsized title and right-anchors
-`| session_summary.cost` at its natural width, without a header-sized reservation.
-The same internal grid splits `Session` / `| Total CCost` in one heading, retaining
+`(session_summary.cost)` at its natural width, without a header-sized reservation.
+The same internal grid splits `Session` / `(Total CCost)` in one heading, retaining
 both labels' intrinsic minima. Its header's neutral
 Earlier Sessions disclosure starts collapsed per new PiP document and survives publications.
 It takes the last three of the shared eligible, oldest-to-newest `history_cards`, excludes
@@ -127,7 +127,17 @@ The controller requests initial placement on the opener's first opening or chang
 host nonce, then permits browser-native cached position/size for Remember last;
 Standard always requests initial placement. Settings changes never reposition open
 PiP. Reload/new openers start standard. Only mode, nonce and an opened flag live in
-memory; no geometry is read/persisted by production code. Historical Windows150%
+memory; disclosure-only before/achieved bounds are also ephemeral, never persisted.
+`mini.js`'s `DisclosureSize` measures vertical overflow directly inside the disclosure
+click (including native keyboard activation). Only new overflow gets one height-only
+resize; expanded CSS removes the compact cap while flex/overflow retain usable scroll
+fallbacks. Achieved bounds, native resize events and a bounded two-frame confirmation
+permit collapse restoration without reinterpreting manual bounds or repeating attempts.
+`resizeBy(0, delta)` avoids fractional-DIP width drift; `resizeTo` is fallback.
+No rendering/data event invokes sizing. Full Watch's card/source presentation waits
+30 continuous seconds before retry/refresh delay guidance, keeps retained metric DOM
+quiet and exposes provenance in cost help; unavailable/partial and host/auth guidance
+remain explicit. Source states, timings and lifecycle are unchanged. Historical Windows150%
 standard-frame measurements do not prove fresh physical Remember-last behavior;
 the Mini journal records hidden API proof and the scoped physical-verification exception.
 

@@ -501,8 +501,13 @@ unrounded values in the disposable `session-ccost-v1` SQLite namespace. Unchange
 requests are not revalued; corrections/deletions and catalog/algorithm/source changes
 reconcile or invalidate. Complete source checkpoints survive Earlier-slot eviction,
 browser reload and host restart. No prompt content is stored in this namespace.
-First build may show localized Loading; known totals stay visible during refresh with
-an explicit retained marker. Partial/source failures remain distinct. Optional cache
+First build may show localized Loading; known prompt/session figures stay visible quietly
+during routine refresh, with no Refreshing/Retrying label or temporary card-height change.
+Help still explains retained observations. After 30 continuous seconds of retrying prompt
+reads or refreshing session totals, meaningful delayed/not-current guidance appears;
+observed recovery clears it. Explicit unavailable/partial evidence and host/auth/connection
+failures retain their existing guidance. These are presentation clocks only, not source
+observations or lifecycle changes. Optional cache
 failure safely computes from source and discloses unavailable persistence in cost help.
 No Session Total Duration returns. CLI, Sessions UI and daily/account totals retain
 their existing meanings. Mini consumes this same session-cost/context projection below.
@@ -513,10 +518,13 @@ remain. No Observation details, Copilot Unaccounted usage or global warning list
 
 **[Mini Watch](web-mini-watch.md)** is an explicit, highlighted-while-On floating view with
 compact per-prompt tables and thin primary-subscription bars on supported desktop browsers.
-The first column preserves ` / <whole-session CCost>` after the independently truncated
+The first column right-aligns `(<whole-session CCost>)` beside the independently truncated
 title; prompt CCost/Duration/Ctx remain separate. A collapsed-by-default **Earlier Sessions**
 header button shows up to three canonical finished sessions, with whole-session cost and
-current session Ctx, above running prompts in one scroll region. Subscription scrolling
+current session Ctx, above running prompts in one scroll region. Explicit expansion attempts
+one height-only native enlargement only if it introduces a new vertical session scrollbar;
+collapse restores the pre-expansion size unless the user has resized it. Live updates never
+auto-fit, and refusal/clamping silently retains scrolling. Subscription scrolling
 stays independent. It reuses this tab's live publication and persisted session aggregate,
 not another Watch engine, acquisition loop or browser-side valuation.
 

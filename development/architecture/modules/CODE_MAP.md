@@ -79,6 +79,10 @@ Mini's session totals/history presentation is covered by `test_mini_watch.py`,
 `fixtures/mini_sessions.cjs` and `integration/probe_mini_sessions.cjs`; the paired
 `integration/probe_mini_session_alignment.cjs` pins first-cell edges/natural suffix
 widths across widths, font/CSS zoom, themes and units in the real hidden PiP probe.
+`fixtures/mini_disclosure.cjs` covers bounded sizing state and failures;
+`integration/probe_mini_disclosure.cjs` measures native pointer/keyboard outer/inner
+bounds and safe fallbacks. `integration/probe_watch_quiet.cjs` checks actual card
+heights/retained figures across transient and virtual sustained refresh failures.
 The shared `session_summary` projection
 and cache/lifecycle tests retain valuation and history eligibility ownership.
 

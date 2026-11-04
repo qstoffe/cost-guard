@@ -4,6 +4,12 @@ const WatchView = (() => {
   const el = (...args) => ReportView.element(...args);
   const display = (row, key) => ReportView.display(row, key);
   const text = (node, value) => ReportView.text(node, value);
+  // Presentation-only grace: retries are not observations or a lifecycle change.
+  function delayed(owner, key, waiting) {
+    if (!waiting) { owner[key] = null; return false; }
+    owner[key] ??= Date.now();
+    return Date.now() - owner[key] >= 30000;
+  }
   function protectedNode(node) {
     const selection = window.getSelection?.();
     return node.contains(document.activeElement) || Boolean(selection && !selection.isCollapsed &&
@@ -178,6 +184,8 @@ const WatchView = (() => {
       this.contextValue = el('span', undefined, 'watch-session-context');
       this.costLabel = el('span'); this.costStatus = el('span');
       this.costHelp = ContextHelp.button('', () => 'Session CCost — Estimated cost of the entire session, including earlier prompts, linked subagents and provisional work. Not your bill.' +
+        (this.value?.session_summary?.state === 'refreshing' ? '\nSession total is updating; retained observation, not current.' : '') +
+        (this.value?.state === 'retrying' ? '\nPrompt source is retrying; retained contents are not current.' : '') +
         (this.value?.session_summary?.cache_available === false ? '\nCache unavailable; calculated from source data.' : ''));
       this.costHelp.className += ' help-cue'; this.costHelp.setAttribute('aria-label', 'About session CCost');
       this.warningText = el('span'); this.warningLead = el('span');
@@ -193,7 +201,9 @@ const WatchView = (() => {
       text(this.title, value.title || value.session_id);
       if (/^[A-Za-z0-9_-]{1,200}$/.test(value.session_id)) this.title.href = '#/sessions/' + value.session_id;
       this.title.className = !historical && value.rows.some(item => item.prompt.in_progress) ? 'watch-running-title' : '';
-      text(this.message, value.state === 'unavailable' ? 'Source unavailable; retained contents are not current.' : value.state === 'retrying' ? 'Retrying prompt refresh; retained contents are not current.' : value.state === 'partial' ? 'Partial / retained evidence' : !value.rows.length ? 'Loading prompts…' : '');
+      const retryDelayed = delayed(this, 'retrySince', value.state === 'retrying');
+      text(this.message, value.state === 'unavailable' ? 'Source unavailable; retained contents are not current.' : retryDelayed ? 'Prompt updates delayed; retained contents are not current.' : value.state === 'partial' ? 'Partial / retained evidence' : !value.rows.length ? 'Loading prompts…' : '');
+      this.message.hidden = !this.message.textContent;
       if (!protectedNode(this.body)) {
         const old = new Map([...this.body.children].map(node => [node.dataset.id, node]));
         reconcile(this.body, value.rows.map(item => {
@@ -250,7 +260,8 @@ const WatchView = (() => {
       text(this.costLabel, () => value?.cost ?
         value.cost.observed_requests && !value.cost.priced_requests ? 'N/A' : display(value.cost, 'known_ccost') :
         value?.state === 'unavailable' ? 'N/A' : 'Loading…');
-      text(this.costStatus, value?.state === 'refreshing' ? ' (refreshing; retained total)' :
+      const summaryDelayed = delayed(this, 'summarySince', value?.state === 'refreshing');
+      text(this.costStatus, summaryDelayed ? ' (session total updates delayed; retained observation, not current)' :
         value?.state === 'unavailable' ? ' (unavailable; retained observation, not current)' :
         value?.state === 'partial' ? ' (partial source evidence)' : '');
       ContextHelp.refresh(this.costHelp);
@@ -326,7 +337,8 @@ const WatchView = (() => {
       const view = result.view, active = view.active_cards || [], history = view.history_cards || [];
       this.earlier.dataset.hasHistory = String(history.length > 0);
       const connected = this.state.connection === 'Live connected.';
-      const sourceState = result.state === 'retrying' ? 'Retrying source read; last observation retained, not current.' :
+      const retryDelayed = delayed(this, 'retrySince', result.state === 'retrying');
+      const sourceState = result.state === 'retrying' ? retryDelayed ? 'Source updates delayed; last observation retained, not current.' : '' :
         result.state !== 'running' ? 'Source unavailable; last observation retained, not current.' : '';
       text(this.empty, sourceState || (!connected ? 'Live connection interrupted; last observation retained, not live.' : view.cards_state === 'loading' || view.cards_state == null ? 'Loading active prompts…' : view.cards_state === 'unavailable' ? 'Some prompt sources are unavailable.' : !active.some(card => card.rows.some(row => row.prompt.in_progress)) ? 'No running prompts' : ''));
       const keep = new Set();

@@ -1,0 +1,24 @@
+{
+  "outcome": "FAIL",
+  "checks": [],
+  "reason": "Condition not reached: Math.abs(miniWatch.window.outerWidth-500)<=2 && Math.abs(miniWatch.window.outerHeight-340)<=2",
+  "layoutCount": 2,
+  "layouts": [
+    {
+      "case": "placement-resize-failure",
+      "bounds": {
+        "left": 1401,
+        "top": 769,
+        "width": 436,
+        "height": 296,
+        "windowState": "normal"
+      },
+      "dom": {
+        "x": 1401,
+        "y": 769,
+        "w": 436,
+        "h": 296
+      }
+    }
+  ]
+}

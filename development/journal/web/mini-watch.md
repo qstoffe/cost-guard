@@ -1,5 +1,64 @@
 # Mini Watch and finished history
 
+## FR 000583 — v80.164, 2026-11-05
+
+Base `30736ab6`, later backlog-only default `8147b1f9` retained. Mini's disclosure
+now measures newly introduced vertical overflow directly in pointer/native-keyboard
+activation. Expanded CSS can use the added space; one height-only request includes
+flex-shrunk account space and a small rounding margin. Achieved bounds, not a
+successful API return, enable collapse restoration. Native manual size changes
+invalidate restoration; no data/render timer resizes, reopens or moves PiP.
+`resizeBy(0, delta)` avoids the one-pixel width drift reproduced with `resizeTo`
+at fractional scale. Both tables replace pipes with parenthesized cost at the
+same natural-width, right-aligned edge. Placement modes/persistence are unchanged.
+
+The original Watch source was freshly executed in the deterministic DOM harness:
+`retrying` rendered `Retrying prompt refresh; retained contents are not current.`;
+`refreshing` added `(refreshing; retained total)` beside cost `4583`. Both paths
+now remain quiet during brief refreshes, including the equivalent top source retry
+message. Empty status paragraphs are hidden. Cost help retains source provenance;
+30 continuous seconds of retry/refresh produces meaningful delayed/not-current
+guidance. Recovery resets these presentation-only clocks; unavailable/partial,
+host/auth/connection and canonical lifecycle/accounting states are not suppressed.
+
+### Verification and limitations
+
+- Local Full: **141 bounded units, 1659 passed tests, one platform skip, zero
+  failures, 89.9s**. An earlier concurrent Full/browser run failed the unrelated
+  872-root fixture's catalog-count assertion (four versus two/three); after reading
+  its real-time hint-expiry-sensitive assertion, the complete unchanged suite was
+  rerun without browser load and passed. No test, timeout, cap or dependency weakened.
+- Working-tree validator: **11 passes, zero failures**, six existing advisory
+  prose/Python design warnings. No release archive generated.
+- Actual hidden **Chrome 156.0.8078.80** at scales 1 / 1.5 and **Edge 156.0.4314.58**
+  at 1.5: **113 layout cases, 18 grouped checks per run**, shipped HTTP/auth/CSP/SSE.
+  Pointer and Enter activation grow once, preserve width and restore bounds without
+  accumulated drift; e.g. at 1.5 outer **560×300 → 560×388 → 560×300**, inner
+  **538×255 → 538×342 → 538×255**, expanded session **159/159px** viewport/content.
+  Fit/existing-scroll/horizontal-only, manual native/CDP bounds, real absent user
+  activation, unsupported/refused/no-change and simulated short-work-area partial
+  clamps preserve disclosure/scrolling. SSE/history changes never resize. Native
+  placement/reload/process restart, Classic/Web light/dark, units, title ellipsis,
+  sticky headings, narrow windows and one EventSource continue to pass.
+- Five actual Watch DOM refresh cycles preserve exact card heights and prompt/session
+  figures for active/history cards. Virtual 30-second delays, unavailable source and
+  recovery show truthful statuses. This is synthetic browser evidence, not an outage
+  injected into the user's running service.
+- Read-only installed V2: session-cost report parity for four requests/all priced,
+  zero fresh valuations/cache writes/inference; one owner/two streams, three accounts,
+  14.1498s and no remaining owned threads/processes or cleanup failures. One history
+  batch failed and Daily was unpublished: this probe does **not** prove complete
+  history/Daily health. Shared OpenCode and the ordinary checkout were untouched.
+- An **additional exploratory scale-2** run stopped in the existing placement test,
+  before new feature checks: browser clamped the requested 500×340 to 436×296.
+  It is **not a scale-2 PASS**. Required Chrome/Edge actual-PiP and fallback checks
+  above passed; no physical monitor, manual-drag/native-frame, touch hardware,
+  screen-reader or macOS acceptance is claimed. No requirement/test exception was
+  requested or granted.
+
+[Compact browser measurements and full per-unit test report](../../architecture/governance/verification/watch-disclosure-refresh/).
+Owner/module docs updated in place; no acquisition, valuation or layer-boundary change.
+
 ## FR 000579 — v80.159, 2026-11-04
 
 Base: `34522ecb25a8aee0629f456068ddc02671de2aac`; later default additions were

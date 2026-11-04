@@ -33,7 +33,8 @@ Default-versus-explicit convention. Missing preferences inherit without creating
   Reload/navigation/new tabs also start standard: this is per live opener, not a
   server-wide remembered position shared between tabs. Later reopens can remember again.
   No geometry is written to JSONC, SQLite, browser storage, cookies or URLs. Only the
-  browser owns cached bounds; the application keeps an in-memory first-open flag/host identity.
+   browser owns cached bounds; the application keeps an in-memory first-open flag/host identity
+   and temporary bounds only while an Earlier Sessions disclosure is being auto-enlarged.
 
 Fresh headless Chrome 156 / Edge 156 tests verify the actual Document PiP API, both
 bounds dimensions and position, mode switching, close/reopen, reload and a Python
@@ -51,9 +52,9 @@ Browser-imposed limitations and exact evidence are in the [Mini journal](../deve
    Only the left title navigates; the daily summary is non-clickable. Loading and unknown
    pricing remain explicit; focus/hover discloses partial data and observation time. Genuine
   observed zero is zero; the next canonical day/correction replaces the prior value.
-- **Session | Total CCost:** within one column, Session/title stays at the left edge
-  and `| Total CCost` / `| <whole-session cost>` stays at the right edge. Only the title's
-  end ellipsizes; the pipe and complete cost remain visible. Short amounts use only
+- **Session (Total CCost):** within one column, Session/title stays at the left edge
+  and `(Total CCost)` / `(<whole-session cost>)` stays at the right edge. Only the title's
+  end ellipsizes; the parentheses and complete cost remain visible. Short amounts use only
   their natural width, not a header-sized reserved block. Focus/hover/click
   retains the full title (or canonical session ID). This server-owned total covers the
   entire available root/session tree: pre-Watch history, compactions, causal children
@@ -86,7 +87,7 @@ grace policy. No browser timer invents cost, completion or growing elapsed time.
 ### Earlier Sessions
 
 The neutral **Earlier Sessions** header button expands a separate two-column table
-**above** the running prompts: **Session | Total CCost** in one column, plus **Ctx**.
+**above** the running prompts: **Session (Total CCost)** in one column, plus **Ctx**.
 The first column uses the same left-title/right-total alignment. It starts collapsed
 every time a fresh Mini window opens; keyboard/click/touch works, and ordinary Live
 updates preserve the choice. The newest **up to three distinct eligible finished
@@ -101,6 +102,22 @@ with N/A for missing evidence and accessible help, without an added `~`. No prom
 number, duration or state badge is added. Empty, loading and unavailable history are
 explicit; retained source/aggregate states are disclosed on focus/hover. Collapsing
 does not revalue or reacquire history.
+
+If explicit pointer/keyboard activation introduces a **new vertical session scrollbar**,
+Mini attempts one height-only enlargement of the existing PiP window, directly within
+that gesture. Expanded sessions can use the added space instead of the compact height cap.
+Already-fitting content, a pre-existing vertical scrollbar and horizontal panning alone
+never trigger growth. Live publications, new rows, day changes and settings never auto-fit.
+Collapse attempts to restore the measured pre-expansion size only after actual enlargement;
+a later manual resize cancels that restoration. Reopening still follows the selected
+placement mode, with Earlier Sessions collapsed. No geometry or new setting is persisted.
+
+Chrome and Edge can refuse or clamp native resizing. Disclosure still works silently,
+with usable session scrolling and independent subscription scrolling; Mini never retries,
+reopens or deliberately moves the window. Hidden-browser tests measure actual outer/inner
+bounds, pointer/keyboard activation, missing activation, refused/unsupported methods and
+simulated short-work-area clamps. Physical dragging, monitor transitions and native frame
+pixels are not established by these tests; final placement/rounding remains browser-owned.
 
 After **10 continuous minutes** without a usable new observation, one muted, separate
 “Updates unavailable · showing last values” notice appears. Prompt, daily and native
@@ -168,7 +185,7 @@ The previous 450-DIP request measured 729 physical pixels. Chrome page zoom chan
 document dimensions, not that request's screen units. Other scales/platforms can
 produce different outer geometry; a universal 470-physical-pixel cap is not verified.
 Metric headings are centered; the split Session heading/title is left-anchored and
-its pipe/total suffix right-anchored. Numeric metric values remain right-aligned.
+its parenthesized total suffix right-anchored. Numeric metric values remain right-aligned.
 The four prompt-metric columns fit their full heading or longest displayed value, without
 wrapping, clipping or ellipses. Session takes all remaining width; its inner layout
 ellipsizes only the title while the full-session cost suffix never shrinks or ellipsizes.
@@ -177,9 +194,9 @@ an empty message does not expand metric columns. If a manually narrowed window c
 fit every heading/metric, the prompt region scrolls horizontally instead of clipping.
 Earlier and running tables share **one vertical session viewport/scrollbar**, with no
 Mini-specific running-row limit. Each table's sticky headers stay within its own table.
-The subscription region still scrolls independently. Expanding history never resizes
-the native PiP window; larger lists may scroll immediately at the smaller opening size. Resize with the browser's
-controls; narrow widths wrap the header instead of overlapping it. Remember last
+The subscription region still scrolls independently. Explicit history expansion may
+enlarge PiP once under the rule above; larger/clamped lists remain scrollable. Resize with
+the browser's controls; narrow widths wrap the header instead of overlapping it. Remember last
 reopens at the browser's last bounds; Standard placement requests the compact initial
 geometry again. While open, later manual resizing is never forcibly undone.
 The browser

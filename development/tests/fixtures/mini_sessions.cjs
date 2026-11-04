@@ -8,20 +8,20 @@ module.exports = function sessionTables(vm, context, controller, view, input, he
   assert.equal(view.earlierToggle.attributes['aria-controls'], view.earlier.id);
   assert.equal(view.earlier.attributes['aria-labelledby'], view.earlierToggle.id);
   assert.deepEqual(view.body.parentNode.querySelectorAll('th').map(cell => cell.textContent),
-    ['Session | Total CCost', '#', 'CCost', 'Duration', 'Ctx']);
+    ['Session (Total CCost)', '#', 'CCost', 'Duration', 'Ctx']);
   assert.deepEqual(view.historyBody.parentNode.querySelectorAll('th').map(cell => cell.textContent),
-    ['Session | Total CCost', 'Ctx']);
+    ['Session (Total CCost)', 'Ctx']);
   assert.match(view.historyBody.parentNode.attributes['aria-label'], /latest valid session context \(Ctx\)/);
   const contextHeader = view.historyBody.parentNode.querySelectorAll('th')[1];
   assert.match(helpText(contextHeader.children[0]), /next request in this earlier session[\s\S]*Not its historical prompt context or a sum[\s\S]*N\/A means unavailable/);
   assert.equal(contextHeader.title, undefined);
   for (const body of [view.body, view.historyBody]) {
     const header = body.parentNode.querySelectorAll('th')[0];
-    assert.deepEqual(header.children[0].children[0].children.map(node => node.textContent), ['Session', ' | Total CCost']);
+    assert.deepEqual(header.children[0].children[0].children.map(node => node.textContent), ['Session', ' (Total CCost)']);
     assert.match(helpText(header.children[0]), /total estimated session cost[\s\S]*earlier prompts, linked subagents/);
   }
   const cost = row => row.children[0].children[0].children[1].textContent;
-  assert.deepEqual(view.body.children.map(cost), [' | 4583', ' | 4583']);
+  assert.deepEqual(view.body.children.map(cost), [' (4583)', ' (4583)']);
   assert.notEqual(view.body.children[0].children[2].textContent, '4583');
   const history = index => ({...active, session_id:'history-'+index, title:'Earlier '+index, focal_id:'',
     session_summary:{...summary, context:{display:{watch_next_context_tokens:String(900+index)}}},
@@ -33,7 +33,7 @@ module.exports = function sessionTables(vm, context, controller, view, input, he
   assert.equal(view.earlierToggle.attributes['aria-expanded'], 'true');
   assert.deepEqual(view.historyBody.children.map(row => row.dataset.id), ['history-2','history-3','history-4']);
   assert.deepEqual(view.historyBody.children.map(row => row.children[1].textContent), ['902','903','904']);
-  assert.ok(view.historyBody.children.every(row => row.children.length === 2 && cost(row) === ' | 4583'));
+  assert.ok(view.historyBody.children.every(row => row.children.length === 2 && cost(row) === ' (4583)'));
   assert.equal(view.earlier.parentNode, view.prompts, 'both tables use one region');
   const row = view.historyBody.children[0];
   assert.match(row.helpText, /Latest valid session Ctx: 902/);
@@ -45,7 +45,7 @@ module.exports = function sessionTables(vm, context, controller, view, input, he
   assert.equal(view.earlier.hidden,true);
   view.earlierToggle.fire('click'); assert.equal(view.historyBody.children[0],row,'toggle never reacquires or rebuilds');
   vm.runInContext('ReportView.setUnit("usd")',context); controller.settings();
-  assert.ok([...view.body.children,...view.historyBody.children].every(row => cost(row)===' | $45.82'));
+  assert.ok([...view.body.children,...view.historyBody.children].every(row => cost(row)===' ($45.82)'));
   vm.runInContext('ReportView.setUnit("credits")',context); controller.settings();
   for (const [value,expected] of [
     [{...summary,cost:null,state:'loading'},'Loading…'],
@@ -56,7 +56,7 @@ module.exports = function sessionTables(vm, context, controller, view, input, he
     [{...summary,state:'refreshing'},'4583'], [{...summary,state:'unavailable'},'4583']]) {
     input.view.active_cards = saved.active_cards.map(card=>({...card,session_summary:value}));
     input.view.history_cards = [history(0)].map(card=>({...card,session_summary:value})); controller.update(input);
-    assert.ok([...view.body.children,...view.historyBody.children].every(row=>cost(row)===' | '+expected));
+    assert.ok([...view.body.children,...view.historyBody.children].every(row=>cost(row)===' ('+expected+')'));
     assert.match(view.body.children[0].children[0].helpText,/Session CCost/);
   }
   const resumed = {...history(3),focal_id:active.focal_id};

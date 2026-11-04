@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.164 — 2026-11-05
+
+- Mini Watch attempts one height-only native enlargement when Earlier Sessions activation introduces vertical overflow, restores the pre-expansion size on collapse unless manually resized, and silently retains scrolling on refusal/clamps. Both session tables keep aligned titles and parenthesized whole-session totals. Full Watch removes fleeting prompt/session refresh labels while retaining figures, help provenance and meaningful sustained-delay/source-failure guidance. Placement defaults, acquisition, accounting and CLI are unchanged.
+
 ## v80.163 — 2026-11-05
 
 - Web and Mini Watch share one line-preserving contextual-help surface with hover/focus, Escape, pointer transfer and touch dismissal. Beginner-friendly CCost, token mix, main-model/subagent, session, quota and settings explanations replace dense/duplicate native tooltips. Explicit adjacent cues keep values selectable and reveal exact titles, previews and dates. Accounting, acquisition, CLI, themes and browser-native PiP ownership are unchanged.

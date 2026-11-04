@@ -1,0 +1,671 @@
+{
+  "outcome": "PASS",
+  "browser": "Chrome/156.0.8078.80",
+  "emulatedDeviceScale": 1,
+  "checks": [
+    "Actual hidden PiP with width/height present: Remember last reuses position and size after app/native close; Standard resets both each open; mode switch applies next open",
+    "Four native selects preserve Default/explicit choices; real Python host restart keeps file-backed mode but first open resets native bounds; opener reload also starts standard, then remembers; no browser storage",
+    "Real user-activated Document PiP opens prompt-local table with external CSP styles, no inner frame/close and selected On fill",
+    "Owner-resolved Web roles/canvas/controls/tables/popovers/quotas and WCAG text contrast match despite opposite PiP media; Default/Classic/Web round trips, media-only events, compact/narrow focus and one SSE preserve keyed state without browser storage",
+    "Quota orientation: authenticated fourth select, same-period Accounts/Watch/open PiP, exhausted empty bar, independent USD/CCost, retained nodes, light/dark narrow/zoom, unchanged source and one SSE",
+    "Parenthesized whole-session suffix stays visible before/after title ellipsis; canonical newest-three history, keyboard/click disclosure and shared scroll preserve every running row without content-driven resizing or second SSE",
+    "Both single first cells edge-anchor Session and natural-width parenthesized cost; short/long/fallback titles, all display states, live identity, 3 widths, enlarged font/CSS zoom, themes and units preserve suffixes without page overflow",
+    "Native pointer/keyboard disclosure grows height once only for new vertical overflow; achieved outer/inner bounds fit rows and collapse restores; existing-scroll, fit, narrow horizontal-only, manual bounds, refused/unsupported/unchanged clamp and SSE never cause repeated resizing",
+    "Five real DOM refresh/revaluation cycles retain prompt/session figures and exact card heights without retry/refresh labels in active/earlier cards; virtual sustained delay, unavailable source and recovery remain explicit",
+    "Intrinsic metric/header minima grow/shrink with content, empty colspan does not distort, only Session ellipsizes; failed reads retain figures quietly and one ten-minute notice clears on recovery",
+    "Navigation, existing-opener return, live theme/USD propagation keep Mini and exactly one EventSource",
+    "Compact opening and higher-scale browser clamps keep reachable independent scroll regions; enlarged 5/3 fits at 100/150%, 6/4 scroll; centered headers, semantic data alignment, canonical separate daily summary",
+    "Classic/Web light/dark styles, long account labels, primary-only six-account content without page overflow",
+    "Keyboard summary focus/activation and user-activated native PiP resize remain usable",
+    "With main document actually hidden and PiP visible, real SSE preserves final prompt-local completion metrics and updates empty/recovery without rAF",
+    "Shipped controller attaches/fetches the existing absolute same-origin ICO on open/reopen; owner icon and single SSE unchanged (not OS icon proof)",
+    "Native API replacement, browser-owned close, main toggle, reopen and main reload synchronize Off; no auto-open",
+    "Real terminal shutdown reaches open Mini as not live"
+  ],
+  "limitations": [
+    "Headless Chromium only; no physical/native X, native return/replacement chrome, minimized-opener restoration, always-on-top OS geometry or screen-reader proof."
+  ],
+  "layoutCount": 113,
+  "layouts": [
+    {
+      "case": "disclosure-pointer",
+      "before": {
+        "outer": [
+          560,
+          300
+        ],
+        "inner": [
+          538,
+          255
+        ],
+        "session": [
+          54,
+          54
+        ],
+        "accounts": [
+          126,
+          257
+        ],
+        "expanded": false,
+        "attempts": 0,
+        "restore": null,
+        "pending": false
+      },
+      "after": {
+        "outer": [
+          560,
+          389
+        ],
+        "inner": [
+          538,
+          344
+        ],
+        "session": [
+          161,
+          161
+        ],
+        "accounts": [
+          126,
+          257
+        ],
+        "expanded": true,
+        "attempts": 1,
+        "restore": {
+          "before": {
+            "width": 560,
+            "height": 300
+          },
+          "after": {
+            "width": 560,
+            "height": 389
+          }
+        },
+        "pending": false
+      },
+      "collapsed": {
+        "outer": [
+          560,
+          300
+        ],
+        "inner": [
+          538,
+          255
+        ],
+        "session": [
+          54,
+          54
+        ],
+        "accounts": [
+          126,
+          257
+        ],
+        "expanded": false,
+        "attempts": 2,
+        "restore": null,
+        "pending": false
+      }
+    },
+    {
+      "case": "disclosure-keyboard",
+      "before": {
+        "outer": [
+          560,
+          300
+        ],
+        "inner": [
+          538,
+          255
+        ],
+        "session": [
+          54,
+          54
+        ],
+        "accounts": [
+          126,
+          257
+        ],
+        "expanded": false,
+        "attempts": 0,
+        "restore": null,
+        "pending": false
+      },
+      "after": {
+        "outer": [
+          560,
+          389
+        ],
+        "inner": [
+          538,
+          344
+        ],
+        "session": [
+          161,
+          161
+        ],
+        "accounts": [
+          126,
+          257
+        ],
+        "expanded": true,
+        "attempts": 1,
+        "restore": {
+          "before": {
+            "width": 560,
+            "height": 300
+          },
+          "after": {
+            "width": 560,
+            "height": 389
+          }
+        },
+        "pending": false
+      },
+      "collapsed": {
+        "outer": [
+          560,
+          300
+        ],
+        "inner": [
+          538,
+          255
+        ],
+        "session": [
+          54,
+          54
+        ],
+        "accounts": [
+          126,
+          257
+        ],
+        "expanded": false,
+        "attempts": 2,
+        "restore": null,
+        "pending": false
+      }
+    },
+    {
+      "case": "disclosure-pointer",
+      "before": {
+        "outer": [
+          560,
+          300
+        ],
+        "inner": [
+          538,
+          255
+        ],
+        "session": [
+          54,
+          54
+        ],
+        "accounts": [
+          126,
+          257
+        ],
+        "expanded": false,
+        "attempts": 0,
+        "restore": null,
+        "pending": false
+      },
+      "after": {
+        "outer": [
+          560,
+          389
+        ],
+        "inner": [
+          538,
+          344
+        ],
+        "session": [
+          161,
+          161
+        ],
+        "accounts": [
+          126,
+          257
+        ],
+        "expanded": true,
+        "attempts": 1,
+        "restore": {
+          "before": {
+            "width": 560,
+            "height": 300
+          },
+          "after": {
+            "width": 560,
+            "height": 389
+          }
+        },
+        "pending": false
+      },
+      "collapsed": {
+        "outer": [
+          560,
+          300
+        ],
+        "inner": [
+          538,
+          255
+        ],
+        "session": [
+          54,
+          54
+        ],
+        "accounts": [
+          126,
+          257
+        ],
+        "expanded": false,
+        "attempts": 2,
+        "restore": null,
+        "pending": false
+      }
+    },
+    {
+      "case": "disclosure-fit-existing-scroll-manual-refused-clamped-narrow",
+      "fit": {
+        "outer": [
+          560,
+          650
+        ],
+        "inner": [
+          538,
+          605
+        ],
+        "session": [
+          54,
+          54
+        ],
+        "accounts": [
+          126,
+          257
+        ],
+        "expanded": false,
+        "attempts": 0,
+        "restore": null,
+        "pending": false
+      },
+      "scroll": {
+        "outer": [
+          560,
+          300
+        ],
+        "inner": [
+          538,
+          255
+        ],
+        "session": [
+          113,
+          335
+        ],
+        "accounts": [
+          91,
+          257
+        ],
+        "expanded": false,
+        "attempts": 0,
+        "restore": null,
+        "pending": false
+      },
+      "noActivation": {
+        "outer": [
+          560,
+          300
+        ],
+        "inner": [
+          538,
+          255
+        ],
+        "session": [
+          78,
+          161
+        ],
+        "accounts": [
+          126,
+          257
+        ],
+        "expanded": true,
+        "attempts": 1,
+        "restore": null,
+        "pending": false
+      },
+      "short": {
+        "outer": [
+          560,
+          310
+        ],
+        "inner": [
+          538,
+          265
+        ],
+        "session": [
+          88,
+          161
+        ],
+        "accounts": [
+          126,
+          257
+        ],
+        "expanded": true,
+        "attempts": 1,
+        "restore": {
+          "before": {
+            "width": 560,
+            "height": 300
+          },
+          "after": {
+            "width": 560,
+            "height": 310
+          }
+        },
+        "pending": false
+      },
+      "refused": {
+        "outer": [
+          560,
+          300
+        ],
+        "inner": [
+          538,
+          255
+        ],
+        "session": [
+          78,
+          161
+        ],
+        "accounts": [
+          126,
+          257
+        ],
+        "expanded": true,
+        "attempts": 1,
+        "restore": null,
+        "pending": false
+      },
+      "clamped": {
+        "outer": [
+          560,
+          300
+        ],
+        "inner": [
+          538,
+          255
+        ],
+        "session": [
+          78,
+          161
+        ],
+        "accounts": [
+          126,
+          257
+        ],
+        "expanded": true,
+        "attempts": 2,
+        "restore": null,
+        "pending": false
+      },
+      "narrow": {
+        "outer": [
+          280,
+          650
+        ],
+        "inner": [
+          258,
+          605
+        ],
+        "session": [
+          161,
+          161
+        ],
+        "accounts": [
+          126,
+          274
+        ],
+        "expanded": true,
+        "attempts": 0,
+        "restore": null,
+        "pending": false
+      }
+    },
+    {
+      "case": "quiet-watch-refresh",
+      "before": [
+        {
+          "text": "Synthetic active sessionStartedDurationPromptModelEffortCCost (I + E)CallsToken Mix %IctxÎ” Ctx23:4610m#23Keep completed literally\nhttps://example.test/longlonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglongModelHigh2 (N/A + N/A)190/0/0/1076k+4kSession Context / CCost: 120k / 4583 (Price threshold >100.0K exceeded; 2.4x more expensive)0 tool callsNo tool calls0 skillsNo confirmed custom skills",
+          "height": 187.484375,
+          "summary": "Session Context / CCost: 120k / 4583 (Price threshold >100.0K exceeded; 2.4x more expensive)",
+          "cost": "4583",
+          "message": "",
+          "hidden": true
+        },
+        {
+          "text": "Synthetic active sessionStartedDurationPromptModelEffortCCost (I + E)CallsToken Mix %IctxÎ” Ctx23:3620m#24Keep completed literally\nhttps://example.test/longlonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglongModelHigh3 (N/A + N/A)190/0/0/1076k+4kSession Context / CCost: 120k / 4583 (Price threshold >100.0K exceeded; 2.4x more expensive)0 tool callsNo tool calls0 skillsNo confirmed custom skills",
+          "height": 187.484375,
+          "summary": "Session Context / CCost: 120k / 4583 (Price threshold >100.0K exceeded; 2.4x more expensive)",
+          "cost": "4583",
+          "message": "",
+          "hidden": true
+        },
+        {
+          "text": "Synthetic earlier sessionFinishedDurationPromptModelEffortCCost (I + E)CallsToken Mix %IctxÎ” Ctxâ€”N/A#37Keep completed literally\nhttps://example.test/longlonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglongModelHigh12 (N/A + N/A)190/0/0/1076k+4kSession Context / CCost: 120k / 4583 (Approaching price threshold >100.0K; Next Ictx CCost 2â€“12)",
+          "height": 135.984375,
+          "summary": "Session Context / CCost: 120k / 4583 (Approaching price threshold >100.0K; Next Ictx CCost 2â€“12)",
+          "cost": "4583",
+          "message": "",
+          "hidden": true
+        }
+      ],
+      "cycles": [
+        [
+          {
+            "text": "Synthetic active sessionStartedDurationPromptModelEffortCCost (I + E)CallsToken Mix %IctxÎ” Ctx23:4610m#23Keep completed literally\nhttps://example.test/longlonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglongModelHigh2 (N/A + N/A)190/0/0/1076k+4kSession Context / CCost: 120k / 4583 (Price threshold >100.0K exceeded; 2.4x more expensive)0 tool callsNo tool calls0 skillsNo confirmed custom skills",
+            "height": 187.484375,
+            "summary": "Session Context / CCost: 120k / 4583 (Price threshold >100.0K exceeded; 2.4x more expensive)",
+            "cost": "4583",
+            "message": "",
+            "hidden": true
+          },
+          {
+            "text": "Synthetic active sessionStartedDurationPromptModelEffortCCost (I + E)CallsToken Mix %IctxÎ” Ctx23:3620m#24Keep completed literally\nhttps://example.test/longlonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglongModelHigh3 (N/A + N/A)190/0/0/1076k+4kSession Context / CCost: 120k / 4583 (Price threshold >100.0K exceeded; 2.4x more expensive)0 tool callsNo tool calls0 skillsNo confirmed custom skills",
+            "height": 187.484375,
+            "summary": "Session Context / CCost: 120k / 4583 (Price threshold >100.0K exceeded; 2.4x more expensive)",
+            "cost": "4583",
+            "message": "",
+            "hidden": true
+          },
+          {
+            "text": "Synthetic earlier sessionFinishedDurationPromptModelEffortCCost (I + E)CallsToken Mix %IctxÎ” Ctxâ€”N/A#37Keep completed literally\nhttps://example.test/longlonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglongModelHigh12 (N/A + N/A)190/0/0/1076k+4kSession Context / CCost: 120k / 4583 (Approaching price threshold >100.0K; Next Ictx CCost 2â€“12)",
+            "height": 135.984375,
+            "summary": "Session Context / CCost: 120k / 4583 (Approaching price threshold >100.0K; Next Ictx CCost 2â€“12)",
+            "cost": "4583",
+            "message": "",
+            "hidden": true
+          }
+        ],
+        [
+          {
+            "text": "Synthetic active sessionStartedDurationPromptModelEffortCCost (I + E)CallsToken Mix %IctxÎ” Ctx23:4610m#23Keep completed literally\nhttps://example.test/longlonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglongModelHigh2 (N/A + N/A)190/0/0/1076k+4kSession Context / CCost: 120k / 4583 (Price threshold >100.0K exceeded; 2.4x more expensive)0 tool callsNo tool calls0 skillsNo confirmed custom skills",
+            "height": 187.484375,
+            "summary": "Session Context / CCost: 120k / 4583 (Price threshold >100.0K exceeded; 2.4x more expensive)",
+            "cost": "4583",
+            "message": "",
+            "hidden": true
+          },
+          {
+            "text": "Synthetic active sessionStartedDurationPromptModelEffortCCost (I + E)CallsToken Mix %IctxÎ” Ctx23:3620m#24Keep completed literally\nhttps://example.test/longlonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglongModelHigh3 (N/A + N/A)190/0/0/1076k+4kSession Context / CCost: 120k / 4583 (Price threshold >100.0K exceeded; 2.4x more expensive)0 tool callsNo tool calls0 skillsNo confirmed custom skills",
+            "height": 187.484375,
+            "summary": "Session Context / CCost: 120k / 4583 (Price threshold >100.0K exceeded; 2.4x more expensive)",
+            "cost": "4583",
+            "message": "",
+            "hidden": true
+          },
+          {
+            "text": "Synthetic earlier sessionFinishedDurationPromptModelEffortCCost (I + E)CallsToken Mix %IctxÎ” Ctxâ€”N/A#37Keep completed literally\nhttps://example.test/longlonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglongModelHigh12 (N/A + N/A)190/0/0/1076k+4kSession Context / CCost: 120k / 4583 (Approaching price threshold >100.0K; Next Ictx CCost 2â€“12)",
+            "height": 135.984375,
+            "summary": "Session Context / CCost: 120k / 4583 (Approaching price threshold >100.0K; Next Ictx CCost 2â€“12)",
+            "cost": "4583",
+            "message": "",
+            "hidden": true
+          }
+        ],
+        [
+          {
+            "text": "Synthetic active sessionStartedDurationPromptModelEffortCCost (I + E)CallsToken Mix %IctxÎ” Ctx23:4610m#23Keep completed literally\nhttps://example.test/longlonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglongModelHigh2 (N/A + N/A)190/0/0/1076k+4kSession Context / CCost: 120k / 4583 (Price threshold >100.0K exceeded; 2.4x more expensive)0 tool callsNo tool calls0 skillsNo confirmed custom skills",
+            "height": 187.484375,
+            "summary": "Session Context / CCost: 120k / 4583 (Price threshold >100.0K exceeded; 2.4x more expensive)",
+            "cost": "4583",
+            "message": "",
+            "hidden": true
+          },
+          {
+            "text": "Synthetic active sessionStartedDurationPromptModelEffortCCost (I + E)CallsToken Mix %IctxÎ” Ctx23:3620m#24Keep completed literally\nhttps://example.test/longlonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglongModelHigh3 (N/A + N/A)190/0/0/1076k+4kSession Context / CCost: 120k / 4583 (Price threshold >100.0K exceeded; 2.4x more expensive)0 tool callsNo tool calls0 skillsNo confirmed custom skills",
+            "height": 187.484375,
+            "summary": "Session Context / CCost: 120k / 4583 (Price threshold >100.0K exceeded; 2.4x more expensive)",
+            "cost": "4583",
+            "message": "",
+            "hidden": true
+          },
+          {
+            "text": "Synthetic earlier sessionFinishedDurationPromptModelEffortCCost (I + E)CallsToken Mix %IctxÎ” Ctxâ€”N/A#37Keep completed literally\nhttps://example.test/longlonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglongModelHigh12 (N/A + N/A)190/0/0/1076k+4kSession Context / CCost: 120k / 4583 (Approaching price threshold >100.0K; Next Ictx CCost 2â€“12)",
+            "height": 135.984375,
+            "summary": "Session Context / CCost: 120k / 4583 (Approaching price threshold >100.0K; Next Ictx CCost 2â€“12)",
+            "cost": "4583",
+            "message": "",
+            "hidden": true
+          }
+        ],
+        [
+          {
+            "text": "Synthetic active sessionStartedDurationPromptModelEffortCCost (I + E)CallsToken Mix %IctxÎ” Ctx23:4610m#23Keep completed literally\nhttps://example.test/longlonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglongModelHigh2 (N/A + N/A)190/0/0/1076k+4kSession Context / CCost: 120k / 4583 (Price threshold >100.0K exceeded; 2.4x more expensive)0 tool callsNo tool calls0 skillsNo confirmed custom skills",
+            "height": 187.484375,
+            "summary": "Session Context / CCost: 120k / 4583 (Price threshold >100.0K exceeded; 2.4x more expensive)",
+            "cost": "4583",
+            "message": "",
+            "hidden": true
+          },
+          {
+            "text": "Synthetic active sessionStartedDurationPromptModelEffortCCost (I + E)CallsToken Mix %IctxÎ” Ctx23:3620m#24Keep completed literally\nhttps://example.test/longlonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglongModelHigh3 (N/A + N/A)190/0/0/1076k+4kSession Context / CCost: 120k / 4583 (Price threshold >100.0K exceeded; 2.4x more expensive)0 tool callsNo tool calls0 skillsNo confirmed custom skills",
+            "height": 187.484375,
+            "summary": "Session Context / CCost: 120k / 4583 (Price threshold >100.0K exceeded; 2.4x more expensive)",
+            "cost": "4583",
+            "message": "",
+            "hidden": true
+          },
+          {
+            "text": "Synthetic earlier sessionFinishedDurationPromptModelEffortCCost (I + E)CallsToken Mix %IctxÎ” Ctxâ€”N/A#37Keep completed literally\nhttps://example.test/longlonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglongModelHigh12 (N/A + N/A)190/0/0/1076k+4kSession Context / CCost: 120k / 4583 (Approaching price threshold >100.0K; Next Ictx CCost 2â€“12)",
+            "height": 135.984375,
+            "summary": "Session Context / CCost: 120k / 4583 (Approaching price threshold >100.0K; Next Ictx CCost 2â€“12)",
+            "cost": "4583",
+            "message": "",
+            "hidden": true
+          }
+        ],
+        [
+          {
+            "text": "Synthetic active sessionStartedDurationPromptModelEffortCCost (I + E)CallsToken Mix %IctxÎ” Ctx23:4610m#23Keep completed literally\nhttps://example.test/longlonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglongModelHigh2 (N/A + N/A)190/0/0/1076k+4kSession Context / CCost: 120k / 4583 (Price threshold >100.0K exceeded; 2.4x more expensive)0 tool callsNo tool calls0 skillsNo confirmed custom skills",
+            "height": 187.484375,
+            "summary": "Session Context / CCost: 120k / 4583 (Price threshold >100.0K exceeded; 2.4x more expensive)",
+            "cost": "4583",
+            "message": "",
+            "hidden": true
+          },
+          {
+            "text": "Synthetic active sessionStartedDurationPromptModelEffortCCost (I + E)CallsToken Mix %IctxÎ” Ctx23:3620m#24Keep completed literally\nhttps://example.test/longlonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglongModelHigh3 (N/A + N/A)190/0/0/1076k+4kSession Context / CCost: 120k / 4583 (Price threshold >100.0K exceeded; 2.4x more expensive)0 tool callsNo tool calls0 skillsNo confirmed custom skills",
+            "height": 187.484375,
+            "summary": "Session Context / CCost: 120k / 4583 (Price threshold >100.0K exceeded; 2.4x more expensive)",
+            "cost": "4583",
+            "message": "",
+            "hidden": true
+          },
+          {
+            "text": "Synthetic earlier sessionFinishedDurationPromptModelEffortCCost (I + E)CallsToken Mix %IctxÎ” Ctxâ€”N/A#37Keep completed literally\nhttps://example.test/longlonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglongModelHigh12 (N/A + N/A)190/0/0/1076k+4kSession Context / CCost: 120k / 4583 (Approaching price threshold >100.0K; Next Ictx CCost 2â€“12)",
+            "height": 135.984375,
+            "summary": "Session Context / CCost: 120k / 4583 (Approaching price threshold >100.0K; Next Ictx CCost 2â€“12)",
+            "cost": "4583",
+            "message": "",
+            "hidden": true
+          }
+        ]
+      ],
+      "sustained": [
+        {
+          "text": "Synthetic active sessionPrompt updates delayed; retained contents are not current.StartedDurationPromptModelEffortCCost (I + E)CallsToken Mix %IctxÎ” Ctx23:4610m#23Keep completed literally\nhttps://example.test/longlonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglongModelHigh2 (N/A + N/A)190/0/0/1076k+4kSession Context / CCost: 120k / 4583 (session total updates delayed; retained observation, not current) (Price threshold >100.0K exceeded; 2.4x more expensive)0 tool callsNo tool calls0 skillsNo confirmed custom skills",
+          "height": 251.828125,
+          "summary": "Session Context / CCost: 120k / 4583 (session total updates delayed; retained observation, not current) (Price threshold >100.0K exceeded; 2.4x more expensive)",
+          "cost": "4583",
+          "message": "Prompt updates delayed; retained contents are not current.",
+          "hidden": false
+        },
+        {
+          "text": "Synthetic active sessionPrompt updates delayed; retained contents are not current.StartedDurationPromptModelEffortCCost (I + E)CallsToken Mix %IctxÎ” Ctx23:3620m#24Keep completed literally\nhttps://example.test/longlonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglongModelHigh3 (N/A + N/A)190/0/0/1076k+4kSession Context / CCost: 120k / 4583 (session total updates delayed; retained observation, not current) (Price threshold >100.0K exceeded; 2.4x more expensive)0 tool callsNo tool calls0 skillsNo confirmed custom skills",
+          "height": 251.828125,
+          "summary": "Session Context / CCost: 120k / 4583 (session total updates delayed; retained observation, not current) (Price threshold >100.0K exceeded; 2.4x more expensive)",
+          "cost": "4583",
+          "message": "Prompt updates delayed; retained contents are not current.",
+          "hidden": false
+        },
+        {
+          "text": "Synthetic earlier sessionPrompt updates delayed; retained contents are not current.FinishedDurationPromptModelEffortCCost (I + E)CallsToken Mix %IctxÎ” Ctxâ€”N/A#37Keep completed literally\nhttps://example.test/longlonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglongModelHigh12 (N/A + N/A)190/0/0/1076k+4kSession Context / CCost: 120k / 4583 (session total updates delayed; retained observation, not current) (Approaching price threshold >100.0K; Next Ictx CCost 2â€“12)",
+          "height": 197.171875,
+          "summary": "Session Context / CCost: 120k / 4583 (session total updates delayed; retained observation, not current) (Approaching price threshold >100.0K; Next Ictx CCost 2â€“12)",
+          "cost": "4583",
+          "message": "Prompt updates delayed; retained contents are not current.",
+          "hidden": false
+        }
+      ],
+      "source": "Source updates delayed; last observation retained, not current.",
+      "unavailable": [
+        {
+          "text": "Synthetic active sessionSource unavailable; retained contents are not current.StartedDurationPromptModelEffortCCost (I + E)CallsToken Mix %IctxÎ” Ctx23:4610m#23Keep completed literally\nhttps://example.test/longlonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglongModelHigh2 (N/A + N/A)190/0/0/1076k+4kSession Context / CCost: 120k / 4583 (unavailable; retained observation, not current) (Price threshold >100.0K exceeded; 2.4x more expensive)0 tool callsNo tool calls0 skillsNo confirmed custom skills",
+          "height": 251.828125,
+          "summary": "Session Context / CCost: 120k / 4583 (unavailable; retained observation, not current) (Price threshold >100.0K exceeded; 2.4x more expensive)",
+          "cost": "4583",
+          "message": "Source unavailable; retained contents are not current.",
+          "hidden": false
+        },
+        {
+          "text": "Synthetic active sessionSource unavailable; retained contents are not current.StartedDurationPromptModelEffortCCost (I + E)CallsToken Mix %IctxÎ” Ctx23:3620m#24Keep completed literally\nhttps://example.test/longlonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglongModelHigh3 (N/A + N/A)190/0/0/1076k+4kSession Context / CCost: 120k / 4583 (unavailable; retained observation, not current) (Price threshold >100.0K exceeded; 2.4x more expensive)0 tool callsNo tool calls0 skillsNo confirmed custom skills",
+          "height": 251.828125,
+          "summary": "Session Context / CCost: 120k / 4583 (unavailable; retained observation, not current) (Price threshold >100.0K exceeded; 2.4x more expensive)",
+          "cost": "4583",
+          "message": "Source unavailable; retained contents are not current.",
+          "hidden": false
+        },
+        {
+          "text": "Synthetic earlier sessionSource unavailable; retained contents are not current.FinishedDurationPromptModelEffortCCost (I + E)CallsToken Mix %IctxÎ” Ctxâ€”N/A#37Keep completed literally\nhttps://example.test/longlonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglongModelHigh12 (N/A + N/A)190/0/0/1076k+4kSession Context / CCost: 120k / 4583 (unavailable; retained observation, not current) (Approaching price threshold >100.0K; Next Ictx CCost 2â€“12)",
+          "height": 197.171875,
+          "summary": "Session Context / CCost: 120k / 4583 (unavailable; retained observation, not current) (Approaching price threshold >100.0K; Next Ictx CCost 2â€“12)",
+          "cost": "4583",
+          "message": "Source unavailable; retained contents are not current.",
+          "hidden": false
+        }
+      ],
+      "recovered": [
+        {
+          "text": "Synthetic active sessionStartedDurationPromptModelEffortCCost (I + E)CallsToken Mix %IctxÎ” Ctx23:4610m#23Keep completed literally\nhttps://example.test/longlonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglongModelHigh2 (N/A + N/A)190/0/0/1076k+4kSession Context / CCost: 120k / 4583 (Price threshold >100.0K exceeded; 2.4x more expensive)0 tool callsNo tool calls0 skillsNo confirmed custom skills",
+          "height": 187.484375,
+          "summary": "Session Context / CCost: 120k / 4583 (Price threshold >100.0K exceeded; 2.4x more expensive)",
+          "cost": "4583",
+          "message": "",
+          "hidden": true
+        },
+        {
+          "text": "Synthetic active sessionStartedDurationPromptModelEffortCCost (I + E)CallsToken Mix %IctxÎ” Ctx23:3620m#24Keep completed literally\nhttps://example.test/longlonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglongModelHigh3 (N/A + N/A)190/0/0/1076k+4kSession Context / CCost: 120k / 4583 (Price threshold >100.0K exceeded; 2.4x more expensive)0 tool callsNo tool calls0 skillsNo confirmed custom skills",
+          "height": 187.484375,
+          "summary": "Session Context / CCost: 120k / 4583 (Price threshold >100.0K exceeded; 2.4x more expensive)",
+          "cost": "4583",
+          "message": "",
+          "hidden": true
+        },
+        {
+          "text": "Synthetic earlier sessionFinishedDurationPromptModelEffortCCost (I + E)CallsToken Mix %IctxÎ” Ctxâ€”N/A#37Keep completed literally\nhttps://example.test/longlonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglongModelHigh12 (N/A + N/A)190/0/0/1076k+4kSession Context / CCost: 120k / 4583 (Approaching price threshold >100.0K; Next Ictx CCost 2â€“12)",
+          "height": 135.984375,
+          "summary": "Session Context / CCost: 120k / 4583 (Approaching price threshold >100.0K; Next Ictx CCost 2â€“12)",
+          "cost": "4583",
+          "message": "",
+          "hidden": true
+        }
+      ]
+    }
+  ]
+}
