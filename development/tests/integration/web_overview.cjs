@@ -17,6 +17,7 @@ const output = new Node('main');
 const context = vm.createContext({document: {createElement: tag => new Node(tag)}, output,
   state: {pages: {}, section: 'overview'}, result: {observed_at_ms: 1,
     source: {status: 'acquired', atomicity: 'per_root_snapshot'}, view}, Date});
+require('../fixtures/web_help_vm.cjs')(vm, context);
 vm.runInContext(fs.readFileSync('src/web/assets/render.js', 'utf8'), context);
 const draw = () => vm.runInContext('ReportView.render(output, result, state)', context);
 const names = () => all(output, 'tbody')[0].children.map(row => row.children[1].textContent);
@@ -46,7 +47,7 @@ assert.ok(!warnings.includes('Attribution incomplete'));
 const relatives = all(output, 'tbody')[0].children.map(row => row.children[2].textContent);
 if (fallback) {
   assert.deepEqual(relatives, ['', '', '', '*1 ', '']);
-  assert.ok(output.textContent.includes('hidden 2/96/1/1 mix'));
+  assert.ok(output.textContent.includes('fixed I/C/W/O mix of 2/96/1/1'));
 } else {
   assert.deepEqual(relatives, ['8.0x', '8.0x', '8.0x → 20.0x (>1M)', '*1 8.0x → 16.0x (>200K)', '1.0x']);
   assert.ok(output.textContent.includes('Input: 20% (2) · Cached input: 60% (6) · Cache write: 10% (1) · Output: 10% (1)'));

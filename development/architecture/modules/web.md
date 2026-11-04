@@ -7,6 +7,13 @@ Status: current
 
 ## Responsibility and ownership
 
+`assets/help.js` owns one text-only contextual-help controller per document,
+including Mini PiP. Shared passive buttons/adjacent cues preserve selection and
+action cursors; manual Popover, pointer transfer, focus/tap, Escape/light-dismiss and
+current-token refresh replace native-title/duplicate help. No acquisition or layer
+boundary changes. [Writing conventions and surface inventory](web-help.md) are the
+current reference; older per-cell/native-tooltip descriptions below are historical.
+
 `src/web/http.py` owns bounded loopback HTTP, fixed assets and routing; `src/web/security.py` owns one-use bootstrap/HttpOnly sessions/CSRF; `src/web/jobs.py` owns finite admission, process isolation, progress, cancellation and retention; at most 64 progress messages drain per host turn to prevent scan backpressure without starving control/Live. `src/web/composition.py` creates fresh canonical ReportApplication integrations.
 
 `src/web/assets/app.js` owns finite refresh/stale/cancel state and memory-only observations; unified Models/Accounts reuse one frozen normal report. `src/web/assets/reports.js` owns scope forms and explicit-only deep-history admission. `render.js` presents DTOs with exact Decimal/vector sorting; generic reports retain presentation search/50-row paging, while Models has independent catalog/version filters and complete document-scrolling rows. Totals never come from cells. `session.js` owns Snapshot/Live detail, canonical DOM identities, anchored paging, selection/focus protection and follow-latest. `src/application/session_detail.py` round-robins captures on the Web adapter's isolated single detail lane and returns frozen revision-aware pages/full totals. `src/reports/session_history.py` retains canonical evidence outside durable caches; omissions freeze lifecycle/time rather than falsely complete rows. Unchanged running evidence reuses attribution/valuation. Web→application→reports is unchanged; missing/archive/outage is not empty success. Scope/cache/route inventory: `docs/web-beta.md`.

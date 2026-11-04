@@ -40,11 +40,11 @@ module.exports = async ({evaluate,until,command,sessionId,pipSession,checks,layo
         pageOverflow:(() => {document.getElementById('result').replaceChildren(quotaAccounts);return document.documentElement.scrollWidth>innerWidth;})(),
         miniWidth:w.innerWidth,
         miniOverflow:d.documentElement.scrollWidth>w.innerWidth,mini:miniWatch.view.accounts.children[0].textContent,
-        description:miniWatch.view.accounts.children[0].getAttribute('aria-description'),
+        description:miniWatch.view.accounts.children[0].helpText,
         accessible:[...quotaAccounts.querySelectorAll('progress')].every(bar=>bar.getAttribute('aria-label')&&bar.getAttribute('aria-valuetext'))};})()`);
       assert.equal(layout.pageOverflow,false); assert.equal(layout.watchOverflow,false);
       assert.equal(layout.miniOverflow,false); assert.equal(layout.accessible,true);
-      assert.match(layout.description,/independent of native usage, not remaining CCost/);
+      assert.match(layout.description,/separate from native quota, not remaining CCost/);
       layouts.push({case:'quota-remaining',scheme,width,scale,...layout});
     }
   }

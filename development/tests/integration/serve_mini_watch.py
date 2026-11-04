@@ -18,6 +18,7 @@ sys.path.insert(0, str(ROOT))
 
 from development.tests.fixtures.watch_summary import summary_watch
 from development.tests.fixtures.web_reports import finite_report
+from development.tests.fixtures.web_help_reports import HelpAuditJobs
 from src.application.live_projection import project_live
 from src.application.display import with_display
 from src.application.projection import accounts as project_accounts
@@ -30,11 +31,12 @@ from src.web.jobs import ReportJobs
 
 def main():
     with tempfile.TemporaryDirectory() as tmp:
-        root = Path(sys.argv[1]) if len(sys.argv) == 2 else Path(tmp)
+        root = Path(sys.argv[1]) if len(sys.argv) >= 2 else Path(tmp)
         (root / "config").mkdir(exist_ok=True)
         if not (root / "config/default-config.jsonc").exists():
             shutil.copyfile(ROOT / "config/default-config.jsonc", root / "config/default-config.jsonc")
-        host = WebHost(root, jobs=ReportJobs(target=finite_report))
+        jobs = HelpAuditJobs() if sys.argv[2:] == ["--help-audit"] else ReportJobs(target=finite_report)
+        host = WebHost(root, jobs=jobs)
         timer = Timer(180, host.stop)
         frame = summary_watch()
         now = int(time.time() * 1000)

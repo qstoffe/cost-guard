@@ -17,6 +17,7 @@ const output = new Node('main'), controls = new Node('div');
 const state = {pages: {}, section: 'models'};
 const context = vm.createContext({document: {createElement: tag => new Node(tag)}, output, controls,
   state, result: {view, observed_at_ms: 1, source: {status: 'acquired'}}, URLSearchParams});
+require('../fixtures/web_help_vm.cjs')(vm, context);
 vm.runInContext(fs.readFileSync('src/web/assets/render.js', 'utf8'), context);
 vm.runInContext(fs.readFileSync('src/web/assets/reports.js', 'utf8'), context);
 const draw = () => vm.runInContext('ReportView.render(output, result, state)', context);
@@ -43,7 +44,7 @@ assert.ok(!old.className.includes('superseded'));
 assert.equal(old.children[2].textContent, fallback ? '*1 ' : '*1 8.0x → 16.0x (>200K) → 32.0x (≥1M)');
 assert.ok(output.textContent.includes('*1 Fixture promotional terms'));
 assert.ok(!output.textContent.includes('8.040000'));
-if (fallback) assert.ok(output.textContent.includes('hidden 2/96/1/1'));
+if (fallback) assert.ok(output.textContent.includes('fixed I/C/W/O mix of 2/96/1/1'));
 
 // Four filter states use table-local conservative flags exported by Python.
 const base = view.model_comparison[0];

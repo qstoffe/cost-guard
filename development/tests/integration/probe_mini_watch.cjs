@@ -87,14 +87,16 @@ async function main() {
     const metrics = () => evaluate(`[...miniWatch.view.body.rows].map(row=>[...row.cells].map(cell=>cell.textContent))`);
     assert.deepEqual((await metrics()).map(row=>row.slice(1,4)),[['#24','3','20m'],['#23','2','10m']]);
     assert.deepEqual((await metrics()).map(row=>row[4]),['120k','120k']);
-    assert.equal(await evaluate(`miniWatch.view.body.parentNode.querySelectorAll('th')[4].title`),
-      'Estimated next incoming context for this prompt; N/A means unavailable');
+    await evaluate(`miniWatch.view.body.parentNode.querySelectorAll('th')[4].querySelector('button').focus()`);
+    assert.match(await evaluate(`miniWatch.window.document.getElementById('context-help').textContent`),
+      /Estimated context for this prompt’s next request[\s\S]*N\/A means unavailable, not zero/);
+    await evaluate(`miniWatch.window.document.activeElement.blur()`);
     assert.equal(await evaluate(`miniWatch.view.body.parentNode.querySelectorAll('th')[4].textContent`), 'Ctx');
     assert.match(await evaluate(`miniWatch.view.body.parentNode.getAttribute('aria-label')`), /estimated next incoming context \(Ctx\)/);
-    assert.match(await evaluate(`miniWatch.view.body.rows[0].getAttribute('aria-label')`), /per-prompt CCost, Duration and Ctx\./);
+    assert.match(await evaluate(`miniWatch.view.body.rows[0].helpText`), /CCost, Duration and Ctx describe this prompt/);
     await evaluate(`miniWatch.view.drawDaily(null,false)`);
     assert.equal(await evaluate(`miniWatch.view.daily.textContent`),'CCost Today · Loading…');
-    assert.match(await evaluate(`miniWatch.view.daily.getAttribute('aria-label')`), /^CCost Today · Loading…/);
+    assert.equal(await evaluate(`miniWatch.view.daily.querySelector('button').getAttribute('aria-label')`), 'About CCost Today');
     await evaluate(`miniWatch.settings()`);
     assert.equal(await evaluate(`documentPictureInPicture.window === miniWatch.window`),true);
     await until(`miniWatch.window.getComputedStyle(miniWatch.view.prompts).overflowY === 'auto'`);

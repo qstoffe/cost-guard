@@ -38,11 +38,12 @@ const ReportView = (() => {
       }
     } else node.textContent = content;
   }
-  function syncUnits(root) {
+  function syncUnits(root, nested = false) {
     effects.get(root)?.();
     const binding = bindings.get(root);
     if (binding) text(root, binding);
-    for (const child of root.children) syncUnits(child);
+    for (const child of root.children) syncUnits(child, true);
+    if (!nested) ContextHelp.refresh(root);
   }
   function setUnit(value, root) {
     if (!['credits', 'usd'].includes(value)) return;
@@ -124,6 +125,7 @@ const ReportView = (() => {
     const headers = [];
     columns.forEach((column, index) => {
       const th = element('th'), button = element('button', column); th.scope = 'col';
+      ContextHelp.attach(button, 'Sort this column; activate again to reverse or clear sorting.\nUnknown values stay last. Sorting does not change totals.');
       button.addEventListener('click', () => {
         const old = state.sorts[key];
         if (old?.index === index && old.direction === -1) delete state.sorts[key];
@@ -208,23 +210,23 @@ const ReportView = (() => {
     function concept(label, value, explanation) {
       const card = element('div');
       card.append(element('h3', label), element('p', value, 'metric-value'));
-      card.append(element('p', explanation)); concepts.append(card);
+      card.append(element('p', explanation, 'help-copy')); concepts.append(card);
       return card;
     }
     const costCard = concept('CCost', '1 CCost = 1 Copilot AI credit',
-      'Reference token valuation, not actual billing. Flat-rate accounts use Copilot’s published token rates. Unlabeled cost figures are CCost; unknown pricing is not zero.');
+      'Estimated reference cost, not your bill.\nFlat-rate plans use Copilot’s published token prices. Unlabelled costs are CCost.\nUnknown prices are not zero.');
     const mix = view.token_mix;
     const mixCard = concept('Token Mix %', () => mix ? mixText(mix) : 'N/A',
-      'Observed token shares: ' + mixLegend(view) + ' Input is uncached; Cached input is cache read; Cache write is cache creation. The report sample is independent of account-period usage.');
+      'Percentages of tokens, not cost: ' + mixLegend(view) + '\nInput — New input. Cached input — Reused input. Cache write — Input saved for reuse.\nThis report’s sample is separate from account quota periods.');
     if (mix) mixCard.append(element('p',
       () => `${mix.sample_size} priced prompts · ${display(mix, 'totals')} tokens · CCost ${display(mix, 'costs')}`,
       mix.cost_complete ? 'detail' : 'detail partial'));
     mixCard.append(element('p', mix?.request_count ? `Your mix uses the latest ${mix.sample_size} priced prompts, totaling ${display(mix, 'total_tokens')} tokens.` : 'No priced prompts are available yet.', 'detail'));
     concept('Relative CCost', view.model_comparison_sample_size ? `${view.model_comparison_sample_size} completed ${view.model_comparison_sample_size === 1 ? 'prompt' : 'prompts'}` : 'No completed priced prompts',
-      view.model_comparison_sample_size ? 'Common token-category workload price comparison: one shared pooled I/C/W/O mix from the latest up to 100 completed priceable prompts globally prices every model and tier, including untried models. Every tier uses the same cheapest positive comparable base as 1.0x. Not a same-task capability/throughput benchmark, actual billing or a forecast of specialized future jobs. Dashboard Token Mix % uses a separate usage sample. Arrows show context-tier prices; > or ≥ marks the published input-token boundary.' :
-        'Relative CCost stays blank; a hidden 2/96/1/1 mix orders published prices. No synthetic multipliers are shown.');
+      view.model_comparison_sample_size ? 'Price comparison using the same token mix for every model and price tier. The mix comes from up to 100 recent completed, priceable prompts across sessions.\n1.0x — The cheapest comparable positive price in the full catalog. Filters do not change it.\nArrows — Prices at larger input sizes; > or ≥ marks the boundary.\nNot a model-quality test, bill or forecast. Token Mix % uses a separate sample.' :
+        'No comparable prompt sample yet, so Relative CCost is blank.\nA fixed I/C/W/O mix of 2/96/1/1 orders prices only; it does not produce displayed multipliers.');
     help.append(concepts, element('p', 'Local, read-only. This report is frozen at capture; navigation and live heartbeats never refresh it. Reload to acquire again. Closing this tab does not stop Cost Guard.', 'detail'));
-    if (view.model_catalog) help.append(element('p', 'Web uses one full Copilot-priced catalog and one shared sample at capture. The cheapest positive comparable base in that full catalog stays 1.0x for every filter combination. Selectable means global OpenCode availability, not separately verified subscription entitlement. Unknown comparison prices are not zero.', 'detail'));
+    if (view.model_catalog) help.append(element('p', 'Available models come from OpenCode’s global list, not a check of your subscription’s entitlements.\nUnknown comparison prices are not zero.', 'detail help-copy'));
     parent.append(help);
   }
   function overviewModels(parent, view, state) {
@@ -236,12 +238,12 @@ const ReportView = (() => {
     const filters = element('div', undefined, 'model-filters');
     function checkbox(label, key, help) {
       const wrap = element('label'), input = element('input');
-      input.type = 'checkbox'; input.checked = choice[key]; input.title = help;
+      input.type = 'checkbox'; input.checked = choice[key]; ContextHelp.attach(input, help);
       input.addEventListener('change', () => { choice[key] = input.checked; draw(); });
       wrap.append(input, element('span', label)); filters.append(wrap);
     }
-    checkbox('Show all Copilot-priced models', 'all', 'Off: global OpenCode selectable list, not separately verified subscription entitlement. Unverified availability fails open with a warning.');
-    checkbox('Latest versions only', 'latest', 'Hide only recognized older stable versions within the selected candidate set.');
+    checkbox('Show all Copilot-priced models', 'all', 'Off — Show models in OpenCode’s available list, not verified subscription entitlements.\nIf availability cannot be checked, show the catalog with a warning.');
+    checkbox('Latest versions only', 'latest', 'Hide recognized older stable versions among the models selected by the other filter.');
     tools.append(notices, filters); parent.append(tools);
     const scroll = element('div', undefined, 'overview-models');
     scroll.tabIndex = 0;
@@ -307,7 +309,7 @@ const ReportView = (() => {
         cell.setAttribute('aria-sort', priority === 0 ? sort.direction === 1 ? 'ascending' : 'descending' : 'none');
         text(button, names[index] + (sort ? (sort.direction === 1 ? ' ↑' : ' ↓') + (choice.sorts.length > 1 ? ' ' + (priority + 1) : '') : ' ↕'));
         button.setAttribute('aria-label', names[index] + (sort ? `, ${sort.direction === 1 ? 'ascending' : 'descending'}, priority ${priority + 1}` : ', not sorted') + '. Activate to sort; Shift adds a key.');
-        button.title = 'Click to sort/toggle. Shift+click or Shift+Enter/Space keeps earlier keys. Missing values always last.';
+        ContextHelp.attach(button, 'Activate to sort or reverse direction.\nHold Shift to keep earlier sort columns (click, Enter or Space).\nUnknown values stay last.');
       });
       body.replaceChildren();
       for (const model of shown) {
@@ -339,7 +341,6 @@ const ReportView = (() => {
   }
   function modelRelative(row, sampled, evidence = true) {
     const cell = element('span', undefined, 'model-relative' + (row.promotional ? ' promotion' : ''));
-    if (evidence) cell.title = display(row, 'evidence');
     cell.append(element('span', row.promotion_marker != null ? `*${row.promotion_marker} ` : '', 'model-marker'));
     const [base, ...tiers] = sampled ? display(row, 'relative_cost').split(' → ') : [''];
     cell.append(element('span', base, 'model-ratio'));
@@ -351,6 +352,7 @@ const ReportView = (() => {
       levels.append(level);
     }
     cell.append(levels);
+    if (evidence) ContextHelp.beside(cell, display(row, 'evidence'), 'Model price sources and coverage');
     return cell;
   }
   function accountQuota(card, quota, compact = false) {
@@ -510,7 +512,7 @@ const ReportView = (() => {
     if (view.model_availability_empty) parent.append(element('p', 'No available OpenCode models match the pricing catalog.', 'warning'));
     if (view.kind === 'date') parent.append(element('p', `Inclusive local range ${result.scope.date_text} · ${result.scope.timezone_id} · inclusive local calendar dates. Session links open complete history; Back returns to this frozen range.`, 'snapshot'));
     const definitions = element('details');
-    definitions.append(element('summary', 'Reading this report'), element('p', 'CCost = reference valuation, not provider billing. Unknown pricing is not zero. Durations are report execution durations, frozen at observation time. Search/sort/page controls never change report scope or totals. Reports stay frozen until explicit Refresh; navigation and source activity do not recapture them. Closing this tab does not stop Cost Guard; CLI remains independent.'));
+    definitions.append(element('summary', 'Reading this report'), element('p', 'CCost — Estimated reference cost, not your bill. Unknown prices are not zero.\nDuration — Recorded execution time, frozen with this snapshot.\nSearch, sorting and pages change what you see, not the totals or report scope.\nRefresh acquires a new snapshot. Navigation and live updates do not refresh reports.\nClosing this tab does not stop Cost Guard; the CLI runs separately.', 'help-copy'));
     if (!overview) parent.append(definitions);
     if (view.kind === 'cost-per-hour') {
       hourlyPeriods(parent, view, result.scope);
@@ -559,7 +561,7 @@ const ReportView = (() => {
       mixText(mix), mix.cost_complete ? 'metric-value' : 'metric-value partial'));
     parent.append(element('p', mixLegend(mix), 'detail'));
     const details = element('details'); details.append(element('summary', 'Sample and price coverage'), element('p',
-      `Full-report I/C/W/O tokens: ${display(mix, 'totals')} · Requests ${mix.request_count} · Prompts ${mix.sample_size} · Priced requests ${mix.priced_requests} · ${mix.cost_complete ? 'Complete prices' : 'Incomplete prices'}. Tokens sum known I/C/W/O categories; ? marks incomplete telemetry, N/A no known categories. K/M/B are rounded display only; sorting uses raw volumes. Output includes reasoning; one prompt can contribute to several model rows.`)); parent.append(details);
+      `Full-report I/C/W/O tokens: ${display(mix, 'totals')}\nRequests: ${mix.request_count} · Prompts: ${mix.sample_size} · Priced requests: ${mix.priced_requests}\n${mix.cost_complete ? 'Complete prices' : 'Incomplete prices'}\n? — Incomplete token data. N/A — No known token categories.\nTotals add the known categories. K/M/B are rounded; sorting uses exact amounts.\nOutput includes reasoning. One prompt can use several models.`, 'help-copy')); parent.append(details);
   }
   function contextSummary(parent, block) {
     parent.append(element('p', () => display(block, 'next_context'), block.next_context_warning ? 'threshold' : 'detail'));

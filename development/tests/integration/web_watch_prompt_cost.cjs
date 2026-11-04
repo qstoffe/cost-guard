@@ -16,6 +16,7 @@ const input = JSON.parse(fs.readFileSync(0, 'utf8'));
 const context = vm.createContext({input, parent:new Node('div'), document:{createElement:tag => new Node(tag),
   createElementNS:(namespaceURI,tag) => Object.assign(new Node(tag), {namespaceURI})},
   window:{addEventListener() {}, matchMedia:() => ({addEventListener() {}, removeEventListener() {}})}});
+const helpText = require('../fixtures/web_help_vm.cjs')(vm, context);
 for (const name of ['render', 'watch']) vm.runInContext(fs.readFileSync(`src/web/assets/${name}.js`, 'utf8'), context);
 vm.runInContext('globalThis.state={connection:"Live connected."}; ReportView.renderLive(parent,input,state)', context);
 const cards = [...context.state.watch.cards.values()];
@@ -26,12 +27,13 @@ for (const [unit, expected] of [['credits', credits], ['usd', usd], ['credits', 
   vm.runInContext(`ReportView.setUnit('${unit}',parent)`, context);
   for (const card of cards) {
     assert.deepEqual(card.body.children.map(row => row.children[5].textContent), expected);
-    const [button, help] = card.root.children[2].children[0].children[0].children[0].children[5].children;
+    const [button] = card.root.children[2].children[0].children[0].children[0].children[5].children;
     assert.equal(button.textContent, 'CCost (I + E)');
-    assert.equal(button['aria-describedby'], help.id);
-    assert.equal(help.role, 'tooltip');
+    const explanation = helpText(button);
+    assert.equal(button['aria-describedby'], 'context-help');
+    assert.equal(button.title, undefined, 'no overlapping native title');
     assert.ok(button.events.focus && button.events.click && button.events.pointerenter);
-    assert.match(help.textContent, /Total.*first.*I = Incoming Context CCost.*first attributed.*E = Extra CCost.*linked-child.*I \+ E = total.*rounding.*not the Input.*N\/A.*partial/);
+    assert.match(explanation, /not your bill[\s\S]*I — Incoming context cost on the first model request\.[\s\S]*E — Other cost[\s\S]*linked subagents[\s\S]*fully priced[\s\S]*rounding[\s\S]*N\/A[\s\S]*not zero[\s\S]*cannot be priced[\s\S]*not the Input token share/);
   }
 }
 console.log('watch prompt cost passed');

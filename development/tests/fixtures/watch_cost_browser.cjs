@@ -37,7 +37,7 @@ module.exports = async function checkPromptCost(evaluate) {
     assert.equal(help.name, 'CCost (I + E)');
     assert.equal(help.open, true); assert.equal(help.click, true);
     assert.equal(help.within, true); assert.equal(help.role, 'tooltip');
-    assert.match(help.text, /I = Incoming Context CCost.*E = Extra CCost.*I \+ E = total.*not the Input/);
+    assert.match(help.text, /I — Incoming context cost[\s\S]*E — Other cost[\s\S]*I \+ E when fully priced[\s\S]*not the Input/);
   }
   for (const sample of result.geometry) {
     assert.equal(sample.complete, true); assert.equal(sample.numbered, true);

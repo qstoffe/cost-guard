@@ -119,6 +119,7 @@ async function main() {
         }};
        streams.push(source); return source;
      }});
+  const helpText = require('../fixtures/web_help_vm.cjs')(vm, context);
   if (input.lifecycle) { lifecycle(context, input); return; }
   if (input.tokenMixFrames) { await tokenMix(context, input.tokenMixFrames); return; }
   vm.runInContext(fs.readFileSync('src/web/assets/live.js', 'utf8'), context);
@@ -188,11 +189,12 @@ async function main() {
   assert.ok(!firstCard.body.textContent.includes('Running at snapshot'));
   assert.deepEqual(firstCard.root.querySelectorAll('th').map(node => node.children[0].textContent),
     ['Started', 'Duration', 'Prompt', 'Model', 'Effort', 'CCost (I + E)', 'Calls', 'Token Mix %', 'Ictx', 'Δ Ctx']);
-  assert.match(firstCard.contextLabel.title, /Not the prompt Ictx or summed usage/);
+  assert.match(helpText(firstCard.contextLabel), /Not prompt Ictx or summed usage/);
   for (const header of firstCard.root.querySelectorAll('th')) {
-    const [button, help] = header.children;
-    assert.equal(button['aria-describedby'], help.id);
-    assert.equal(button.title, help.textContent);
+    const [button] = header.children;
+    assert.ok(helpText(button));
+    assert.equal(button['aria-describedby'], 'context-help');
+    assert.equal(button.title, undefined);
     assert.ok(button.events.focus && button.events.click && button.events.pointerenter);
   }
   assert.match(firstRow.children[0].textContent, /^\d\d:\d\d$/);
@@ -214,7 +216,7 @@ async function main() {
   assert.equal(promptRows()[0], firstRow); assert.equal(firstRow.children[0], firstCell);
   assert.ok(context.parent.querySelectorAll('tr').some(row => /Aborted · quota limit/.test(row['aria-label'])));
   assert.equal(context.parent.querySelectorAll('input').length, 0);
-  assert.equal(context.parent.querySelectorAll('button').length, 20, 'only column-help controls');
+  assert.equal(context.parent.querySelectorAll('button').filter(node => node.className.includes('watch-column-help')).length, 20, 'ten column-help controls per card');
   // A running update cannot destroy selected text; latest data applies on a later tick.
   selected = firstCell;
   multiple.view.active_cards[0].rows[0].prompt.preview = 'Latest running update';

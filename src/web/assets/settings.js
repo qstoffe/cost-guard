@@ -16,13 +16,13 @@ const WebSettings = (() => {
     {key: 'theme', id: 'web-theme', label: 'Theme', endpoint: 'theme', choices: [['classic', 'Classic'], ['web', 'Web']],
       explanation: 'Classic uses a dark CLI-inspired palette. Web follows your system appearance. Terminal colors are unchanged.'},
     {key: 'ccostDisplayUnit', id: 'ccost-unit', label: 'CCost display', endpoint: 'ccost', choices: [['credits', 'Credits'], ['usd', 'USD']],
-      explanation: 'USD is reference token valuation, not billed spending. CLI display is unchanged.'},
+      explanation: 'Credits and USD show the same estimated reference cost, not your bill. Terminal display is unchanged.'},
     {key: 'miniWatchPlacement', id: 'mini-placement', label: 'Mini Watch placement', endpoint: 'mini-placement',
       choices: [['remember-last', 'Remember last'], ['standard', 'Standard placement']],
-       explanation: 'Applies on the next opening. Remember last reuses browser-native bounds in this opener while the host lives; reload or host restart starts standard. Geometry is never saved.'},
+       explanation: 'Applies next time Mini Watch opens.\nRemember last lets the browser reuse its last size and position in this tab. Reload or host restart starts standard. Cost Guard never saves window geometry.'},
     {key: 'quotaDisplayMode', id: 'quota-display', label: 'Quota display', endpoint: 'quota-display',
       choices: [['used', 'Used'], ['remaining', 'Remaining']],
-      explanation: 'Remaining applies to quotas with a known limit. Unlimited plans continue to show Used. Observed CCost and Remaining/day pace are unchanged.'}
+       explanation: 'Remaining needs a known quota limit; unlimited plans still show Used.\nCCost used and the daily remaining allowance are unchanged.'}
   ];
   function apply(value, root) {
     const settings = value?.webSettings, choices = value?.webSettingsChoices, defaults = value?.webSettingsDefaults;
@@ -54,7 +54,7 @@ const WebSettings = (() => {
           const option = e('option', text); option.value = value; select.append(option);
         }
         const label = e('label', field.label); label.htmlFor = select.id;
-        const explanation = e('p', field.explanation); explanation.id = field.id + '-explanation';
+        const explanation = e('p', field.explanation, 'help-copy'); explanation.id = field.id + '-explanation';
         select.setAttribute('aria-describedby', explanation.id + ' settings-feedback');
         select.value = this.confirmed[field.key]; select.disabled = true;
         select.addEventListener('change', () => this.save(field));

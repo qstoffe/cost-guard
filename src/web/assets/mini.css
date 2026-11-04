@@ -27,14 +27,14 @@ body { padding: .5rem; max-width: none; }
 .mini-prompt-table th { border-top: 1px solid var(--line); }
 /* Metrics and the nonshrinking total set intrinsic minima. Only the title flexes. */
 .mini-prompt-table th:not(:first-child) { width: 1%; }
-.mini-session-value { display: grid; grid-template-columns: minmax(0, 1fr) max-content; }
+.mini-session-value { display: grid; grid-template-columns: minmax(0, 1fr) max-content max-content; }
+.mini-session-value:not(.mini-session-heading) > .mini-session-total { grid-column: 3; grid-row: 1; }
+.mini-session-value > .help-cue { grid-column: 2; grid-row: 1; align-self: center; }
 .mini-session-heading { grid-template-columns: minmax(max-content, 1fr) max-content; text-align: left; }
 .mini-session, .mini-empty { display: block; width: 0; min-width: 100%; }
 .mini-session { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mini-session-total { white-space: pre; }
-.mini-session-help { position: fixed; inset: auto .5rem .5rem; max-width: calc(100% - 1rem); max-height: 70%;
-  overflow: auto; white-space: normal; overflow-wrap: anywhere; padding: .4rem; font-size: .8rem;
-  background: var(--surface); color: var(--ink); border: 1px solid var(--line); }
+.mini-prompt-table th > .help-trigger { width: 100%; white-space: nowrap; }
 .mini-empty { white-space: normal; overflow-wrap: anywhere; }
 .mini-prompt-table td { font-variant-numeric: tabular-nums; text-align: right; }
 .mini-prompt-table td:first-child { text-align: left; }
@@ -59,5 +59,5 @@ body { padding: .5rem; max-width: none; }
 html[data-theme="web"], [data-theme="web"] body { background: var(--bg); color: var(--ink); }
 [data-theme="web"] .mini-accounts { background: var(--panel); border-radius: .4rem; }
 [data-theme="web"] .mini-empty { color: var(--muted); }
-[data-theme="web"] :is(.mini-prompts, .mini-accounts, .mini-health, .mini-session-help) {
+[data-theme="web"] :is(.mini-prompts, .mini-accounts, .mini-health, .context-help) {
   scrollbar-color: var(--control-line) var(--surface); }

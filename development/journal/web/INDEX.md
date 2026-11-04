@@ -36,6 +36,9 @@ Status: current
 - [Models loading progress](models-progress.md): real Normal stage ownership,
   before/after synthetic observations, bounded process/browser updates and separate
   V2 probe timings/availability limits.
+- [Shared contextual help](contextual-help.md): whole-app content inventory,
+  singleton Web/PiP interaction owner, Chrome/Edge and broader Mini evidence,
+  current-state regression and explicit synthetic-report/platform limits.
 
 Historical observations keep their original dates and exceptions; this routing
 update does not refresh their validity or certify older failed probes. Parent

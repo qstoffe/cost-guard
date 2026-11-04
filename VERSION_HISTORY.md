@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.163 — 2026-11-05
+
+- Web and Mini Watch share one line-preserving contextual-help surface with hover/focus, Escape, pointer transfer and touch dismissal. Beginner-friendly CCost, token mix, main-model/subagent, session, quota and settings explanations replace dense/duplicate native tooltips. Explicit adjacent cues keep values selectable and reveal exact titles, previews and dates. Accounting, acquisition, CLI, themes and browser-native PiP ownership are unchanged.
+
 ## v80.162 — 2026-11-04
 
 - Full Watch labels first-request incoming context **Ictx**, still immediately before **Δ Ctx**. Mini Watch labels its existing prompt-next/session-current context **Ctx**, including accessible names and help. Only terminology changes; values, estimates, unknown states, layout, CLI and accounting are unchanged.

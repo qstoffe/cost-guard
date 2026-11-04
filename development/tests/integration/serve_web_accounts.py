@@ -19,9 +19,11 @@ from src.application.projection import project
 
 def main():
     assets = ROOT / "src/web/assets"
-    resources = {"/" + name: (assets / name).read_bytes() for name in ("app.css", "render.js")}
+    resources = {"/" + name: (assets / name).read_bytes() for name in ("app.css", "help.js", "render.js")}
     resources["/data.js"] = ("const INPUT = " + json.dumps(project(account_report(), "Europe/Stockholm").to_json()) + ";").encode()
     resources["/case.html"] = b'''<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Synthetic Accounts acceptance</title><link rel="stylesheet" href="/app.css"><main><h1>Accounts</h1><p>Synthetic fixtures only</p><div id="result"></div></main><script src="/render.js"></script><script src="/data.js"></script><script>ReportView.render(document.getElementById('result'), {view: INPUT, observed_at_ms: 1793052000000, source: {status: 'acquired', atomicity: 'per_root_snapshot'}}, {section: 'accounts', pages: {}});</script></html>'''
+
+    resources["/case.html"] = resources["/case.html"].replace(b'<script src="/render.js">', b'<script src="/help.js"></script><script src="/render.js">')
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
