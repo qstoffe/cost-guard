@@ -87,9 +87,11 @@ their existing invalidation semantics. Canonical
 account period projection explicitly marks provider-attributed estimated scopes.
 
 Watch tables own themed body/header surfaces; first-request ECTX immediately precedes
-Δ Ctx. One Session Context · Session CCost line follows the table before activity,
-with canonical guidance inline after context. Approaching colors only the triangle;
-exceeded colors the whole line. Sibling selectors separate cards, and outlined history has
+Δ Ctx. One Session Context / CCost line follows the table before activity,
+with canonical guidance once after both values. Approaching colors the triangle and
+context figure amber; exceeded uses a red octagon/exclamation, context figure and
+relative multiplier only. Session cost, labels, boundary wording and alternate price
+ranges stay neutral. Sibling selectors separate cards, and outlined history has
 natural document height. CCost Today presents the known integer without altering its
 completeness metadata; routine refresh-state changes preserve its DOM and valid values.
 

@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.161 — 2026-11-04
+
+- Full Web Watch combines each card's summary as **Session Context / CCost**, followed by one canonical price-tier explanation. Approaching highlights an amber triangle and context figure; exceeded uses a distinct red octagonal stop icon and red context/multiplier only. Session cost, labels and threshold wording remain neutral; canonical context, pricing, caching, Mini and CLI behavior are unchanged.
+
 ## v80.160 — 2026-11-04
 
 - Architecture upkeep removes the unused model/publisher-specific comparison sampler and its deep-history cache path. Relative CCost and warnings retain the shared global sample; CLI/Web evidence fields, historical Token Mix and account/Watch behavior are unchanged.

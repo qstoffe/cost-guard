@@ -13,7 +13,8 @@ class Node {
   addEventListener(kind, handler) { this.events[kind] = handler; }
 }
 const input = JSON.parse(fs.readFileSync(0, 'utf8'));
-const context = vm.createContext({input, parent:new Node('div'), document:{createElement:tag => new Node(tag)},
+const context = vm.createContext({input, parent:new Node('div'), document:{createElement:tag => new Node(tag),
+  createElementNS:(namespaceURI,tag) => Object.assign(new Node(tag), {namespaceURI})},
   window:{addEventListener() {}, matchMedia:() => ({addEventListener() {}, removeEventListener() {}})}});
 for (const name of ['render', 'watch']) vm.runInContext(fs.readFileSync(`src/web/assets/${name}.js`, 'utf8'), context);
 vm.runInContext('globalThis.state={connection:"Live connected."}; ReportView.renderLive(parent,input,state)', context);

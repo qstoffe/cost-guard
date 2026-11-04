@@ -210,9 +210,11 @@ async function main() {
          const outcomes=[];
          function render(p,s,availability='available',restricted=false) {
            for (const [slot,fraction] of [[primary,p],[secondary,s]]) {
-             slot.used_fraction=fraction;slot.used_percent=fraction===null?'—':fraction<1&&fraction>=.9995?'<100%':String(fraction*100)+'%';
-             slot.exhausted=fraction===1;slot.restricted=restricted;
-             slot.quota.unlimited=false;
+              slot.used_fraction=fraction;slot.used_percent=fraction===null?'—':fraction<1&&fraction>=.9995?'<100%':String(fraction*100)+'%';
+              slot.exhausted=fraction===1;slot.restricted=restricted;
+              // Keep the current prepared display variant coherent with this synthetic publication.
+              Object.assign(slot.quota.quota_display.used, {fraction,percent:slot.used_percent,exhausted:slot.exhausted});
+              slot.quota.unlimited=false;
            }
            account.observation.availability=availability;
            account.observation.status=restricted?'blocked':'unknown';
@@ -269,8 +271,12 @@ async function main() {
        assert.equal(polish.outcomes.at(-2).warning,true);
        assert.equal(polish.outcomes.at(-1).restriction,true);
         assert.equal(polish.unlimited,true);
-        const promptCost = await checkPromptCost(evaluate);
-        const context = await checkContext(evaluate);
+         const promptCost = await checkPromptCost(evaluate);
+         const context = await checkContext(evaluate);
+         await evaluate(`document.querySelector('.watch-earlier').open=false; window.scrollTo(0,0)`);
+         const contextShot = await command('Page.captureScreenshot', {format:'png',captureBeyondViewport:false}, sessionId);
+         await fs.writeFile(path.join(output, `context-${theme}-${width}.png`), Buffer.from(contextShot.data,'base64'));
+         await evaluate(`document.querySelector('.watch-earlier').open=true; window.scrollTo(0,0)`);
       const screenshot = await command('Page.captureScreenshot', {format: 'png', captureBeyondViewport: false}, sessionId);
         await fs.writeFile(path.join(output, `watch-${theme}-${width}.png`), Buffer.from(screenshot.data, 'base64'));
        await evaluate('document.querySelector(".watch-account-grid").scrollIntoView()');
@@ -316,7 +322,8 @@ async function main() {
         return {count,scroll,success,error}; })()`);
       assert.equal(scale.count, 100); assert.equal(scale.scroll, false);
       assert.notEqual(scale.success, layout.runningColor); assert.notEqual(scale.error, layout.runningColor);
-          cases.push({theme, ...layout, quotas, polish, context, promptCost, transitions, scale, screenshot: `watch-${theme}-${width}.png`, outcome: 'PASS'});
+           cases.push({theme, ...layout, quotas, polish, context, promptCost, transitions, scale,
+             contextScreenshot:`context-${theme}-${width}.png`, screenshot: `watch-${theme}-${width}.png`, outcome: 'PASS'});
       await command('Target.closeTarget', {targetId});
     }
     await fs.writeFile(path.join(output, 'browser.json'), JSON.stringify({outcome: 'PASS', browser: version.product, userAgent: version.userAgent, cases,
