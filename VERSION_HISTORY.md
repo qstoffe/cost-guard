@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.150 — 2026-11-04
+
+- Mini Watch reuses the existing CG favicon in its separate PiP document. Native Windows Chrome icon adoption was verified at 150% scaling; taskbar-preview/Alt+Tab rendering and grouping remain unverified under an FR-scoped Decision Delegate exception. Normal-tab/tray branding, browser controls and shared Live ownership are unchanged; [evidence and limits](development/journal/web/mini-watch.md).
+
 ## v80.149 — 2026-11-04
 
 - Mini Watch: intrinsic metric/header widths leave spare space to Session, with horizontal scrolling when narrowed. Transient retries quietly retain figures; one muted notice follows ten minutes without usable observations, while terminal failures remain actionable. Accessible observation/provenance disclosure and configured-day expiry preserve truthfulness; full Watch and accounting are unchanged.

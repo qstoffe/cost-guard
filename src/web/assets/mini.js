@@ -278,6 +278,8 @@ const MiniWatch = (() => {
         this.window = win;
         win.addEventListener('pagehide', () => { this.release(win); this.sync(); }, {once: true});
         const doc = win.document; doc.title = 'Mini Watch · Cost Guard'; doc.documentElement.lang = 'en';
+        const icon = doc.createElement('link'); icon.rel = 'icon'; icon.type = 'image/x-icon';
+        icon.href = new URL('/favicon-cg1.ico', this.owner.location.href).href; doc.head.append(icon);
         for (const name of ['app.css', 'mini.css']) {
           const link = doc.createElement('link'); link.rel = 'stylesheet';
           link.href = new URL('/' + name, this.owner.location.href).href; doc.head.append(link);

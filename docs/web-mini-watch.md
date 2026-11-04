@@ -99,6 +99,13 @@ The browser
 owns outer chrome, origin/security indication, positioning, native return controls
 and final geometry; this is not a frameless, arbitrarily positioned tooltip.
 
+Mini supplies the same CG favicon as the normal tab. Native window-icon adoption
+was verified in Windows Chrome 156.0.8078.80 at 150% display scaling. Actual
+taskbar-preview/Alt+Tab rendering and grouping remain unverified; the browser/OS
+owns those surfaces and may cache or present icons differently. Native Edge and
+macOS appearance are also unverified. Chrome's normal application icon and the
+Windows tray are unchanged.
+
 Mini has independent DOM but shares the owning tab's one authenticated live connection
 and the process's bounded account-history lane. Opening/closing it never starts new
 history scans, EventSources or provider polling. Updates apply directly from publications,

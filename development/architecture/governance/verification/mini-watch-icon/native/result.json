@@ -1,0 +1,478 @@
+{
+  "outcome": "MEASURED",
+  "mode": "native",
+  "cases": [
+    {
+      "name": "baseline",
+      "dom": {
+        "inner": [
+          560,
+          250
+        ],
+        "outer": [
+          574,
+          292
+        ],
+        "dpr": 1.5,
+        "ownerIcon": "http://127.0.0.1:63506/favicon-cg1.ico",
+        "pipIcons": [],
+        "iconFetches": [],
+        "ownerViolations": [],
+        "pipViolations": [],
+        "streams": 0,
+        "apiSame": true,
+        "title": "Mini Watch · Cost Guard"
+      },
+      "native": {
+        "case": "baseline",
+        "os": {
+          "major": 10,
+          "minor": 0,
+          "build": 26300
+        },
+        "ownedPid": 4128,
+        "windows": [
+          {
+            "hwnd": 459438,
+            "title": "Models · Cost Guard Web Beta",
+            "dpi": 144,
+            "rect": [
+              2934,
+              1607,
+              3795,
+              2044
+            ],
+            "visibleFrame": [
+              2943,
+              1607,
+              3786,
+              2035
+            ],
+            "icons": {
+              "small": {
+                "querySucceeded": true,
+                "error": 0,
+                "nonNull": true,
+                "file": "baseline-459438-small.png",
+                "pixelSha256": "4bee65d2ddd345bd7c13df7c55febd11d340bd746e8546b9070be9fce3033faa",
+                "drawSucceeded": true
+              },
+              "large": {
+                "querySucceeded": true,
+                "error": 0,
+                "nonNull": true,
+                "file": "baseline-459438-large.png",
+                "pixelSha256": "88adac8299779dcd9c5c58b5ea286213bf7deac021719f4c4bf9b2a9490cf5a2",
+                "drawSucceeded": true
+              },
+              "small2": {
+                "querySucceeded": true,
+                "error": 0,
+                "nonNull": true,
+                "file": "baseline-459438-small2.png",
+                "pixelSha256": "4bee65d2ddd345bd7c13df7c55febd11d340bd746e8546b9070be9fce3033faa",
+                "drawSucceeded": true
+              },
+              "classLarge": {
+                "nonNull": true,
+                "file": "baseline-459438-classLarge.png",
+                "pixelSha256": "6a2a20fec55b6cfa9997ffcc4c8839be051d7e3f7a736d0ec0af6e983ee33fa5",
+                "drawSucceeded": true
+              },
+              "classSmall": {
+                "nonNull": true,
+                "file": "baseline-459438-classSmall.png",
+                "pixelSha256": "d18a1b3d05d1ee3a105f297a54375c71321a6e998cdd50913dce705701492565",
+                "drawSucceeded": true
+              }
+            },
+            "capture": {
+              "file": "baseline-459438-frame.png",
+              "pixelSha256": "407cfcd929a23134877967479d45f76da1f77fb6c399bce98d3224d2a1dd39cc",
+              "drawSucceeded": true
+            }
+          },
+          {
+            "hwnd": 591758,
+            "title": "Models · Cost Guard Web Beta - Google Chrome",
+            "dpi": 144,
+            "rect": [
+              15,
+              15,
+              1913,
+              2073
+            ],
+            "visibleFrame": [
+              24,
+              15,
+              1904,
+              2064
+            ],
+            "icons": {
+              "small": {
+                "querySucceeded": true,
+                "error": 0,
+                "nonNull": false
+              },
+              "large": {
+                "querySucceeded": true,
+                "error": 0,
+                "nonNull": false
+              },
+              "small2": {
+                "querySucceeded": true,
+                "error": 0,
+                "nonNull": false
+              },
+              "classLarge": {
+                "nonNull": true,
+                "file": "baseline-591758-classLarge.png",
+                "pixelSha256": "6a2a20fec55b6cfa9997ffcc4c8839be051d7e3f7a736d0ec0af6e983ee33fa5",
+                "drawSucceeded": true
+              },
+              "classSmall": {
+                "nonNull": true,
+                "file": "baseline-591758-classSmall.png",
+                "pixelSha256": "d18a1b3d05d1ee3a105f297a54375c71321a6e998cdd50913dce705701492565",
+                "drawSucceeded": true
+              }
+            }
+          }
+        ],
+        "canonical": {
+          "file": "baseline-canonical.png",
+          "pixelSha256": "2bc8afc50a7f8a02d96cb77a94722989fe1b666722f87feb8525d5c1e0e88c52",
+          "drawSucceeded": true
+        },
+        "limitation": "Read-only native HICON metadata and owned-window captures, not taskbar/Alt+Tab shell pixels."
+      }
+    },
+    {
+      "name": "delayed-link",
+      "dom": {
+        "inner": [
+          560,
+          250
+        ],
+        "outer": [
+          574,
+          292
+        ],
+        "dpr": 1.5,
+        "ownerIcon": "http://127.0.0.1:63506/favicon-cg1.ico",
+        "pipIcons": [
+          {
+            "href": "http://127.0.0.1:63506/favicon-cg1.ico",
+            "type": "image/x-icon"
+          }
+        ],
+        "iconFetches": [
+          {
+            "name": "http://127.0.0.1:63506/favicon-cg1.ico",
+            "initiatorType": "other"
+          },
+          {
+            "name": "http://127.0.0.1:63506/favicon-cg1.ico",
+            "initiatorType": "img"
+          }
+        ],
+        "ownerViolations": [],
+        "pipViolations": [],
+        "streams": 0,
+        "apiSame": true,
+        "title": "Mini Watch · Cost Guard"
+      },
+      "native": {
+        "case": "delayed-link",
+        "os": {
+          "major": 10,
+          "minor": 0,
+          "build": 26300
+        },
+        "ownedPid": 4128,
+        "windows": [
+          {
+            "hwnd": 459438,
+            "title": "Models · Cost Guard Web Beta",
+            "dpi": 144,
+            "rect": [
+              2934,
+              1607,
+              3795,
+              2044
+            ],
+            "visibleFrame": [
+              2943,
+              1607,
+              3786,
+              2035
+            ],
+            "icons": {
+              "small": {
+                "querySucceeded": true,
+                "error": 0,
+                "nonNull": true,
+                "file": "delayed-link-459438-small.png",
+                "pixelSha256": "58fbb4e615f6a698205067756d03f61b99dbb79b0b1cc0547b4d2553e817b08b",
+                "drawSucceeded": true
+              },
+              "large": {
+                "querySucceeded": true,
+                "error": 0,
+                "nonNull": true,
+                "file": "delayed-link-459438-large.png",
+                "pixelSha256": "00bc38ded143fd9ad3b6d28eb72aa50c7ea4046d3b9cc34ec0c98dc73143447e",
+                "drawSucceeded": true
+              },
+              "small2": {
+                "querySucceeded": true,
+                "error": 0,
+                "nonNull": true,
+                "file": "delayed-link-459438-small2.png",
+                "pixelSha256": "58fbb4e615f6a698205067756d03f61b99dbb79b0b1cc0547b4d2553e817b08b",
+                "drawSucceeded": true
+              },
+              "classLarge": {
+                "nonNull": true,
+                "file": "delayed-link-459438-classLarge.png",
+                "pixelSha256": "6a2a20fec55b6cfa9997ffcc4c8839be051d7e3f7a736d0ec0af6e983ee33fa5",
+                "drawSucceeded": true
+              },
+              "classSmall": {
+                "nonNull": true,
+                "file": "delayed-link-459438-classSmall.png",
+                "pixelSha256": "d18a1b3d05d1ee3a105f297a54375c71321a6e998cdd50913dce705701492565",
+                "drawSucceeded": true
+              }
+            },
+            "capture": {
+              "file": "delayed-link-459438-frame.png",
+              "pixelSha256": "35be729d94cd1574b71759f5367b8a66b1ddebf31deb22cf10f6b5ff446fb9d8",
+              "drawSucceeded": true
+            }
+          },
+          {
+            "hwnd": 591758,
+            "title": "Models · Cost Guard Web Beta - Google Chrome",
+            "dpi": 144,
+            "rect": [
+              15,
+              15,
+              1913,
+              2073
+            ],
+            "visibleFrame": [
+              24,
+              15,
+              1904,
+              2064
+            ],
+            "icons": {
+              "small": {
+                "querySucceeded": true,
+                "error": 0,
+                "nonNull": false
+              },
+              "large": {
+                "querySucceeded": true,
+                "error": 0,
+                "nonNull": false
+              },
+              "small2": {
+                "querySucceeded": true,
+                "error": 0,
+                "nonNull": false
+              },
+              "classLarge": {
+                "nonNull": true,
+                "file": "delayed-link-591758-classLarge.png",
+                "pixelSha256": "6a2a20fec55b6cfa9997ffcc4c8839be051d7e3f7a736d0ec0af6e983ee33fa5",
+                "drawSucceeded": true
+              },
+              "classSmall": {
+                "nonNull": true,
+                "file": "delayed-link-591758-classSmall.png",
+                "pixelSha256": "d18a1b3d05d1ee3a105f297a54375c71321a6e998cdd50913dce705701492565",
+                "drawSucceeded": true
+              }
+            }
+          }
+        ],
+        "canonical": {
+          "file": "delayed-link-canonical.png",
+          "pixelSha256": "2bc8afc50a7f8a02d96cb77a94722989fe1b666722f87feb8525d5c1e0e88c52",
+          "drawSucceeded": true
+        },
+        "limitation": "Read-only native HICON metadata and owned-window captures, not taskbar/Alt+Tab shell pixels."
+      }
+    },
+    {
+      "name": "immediate-link-reopen",
+      "dom": {
+        "inner": [
+          561,
+          250
+        ],
+        "outer": [
+          576,
+          292
+        ],
+        "dpr": 1.5,
+        "ownerIcon": "http://127.0.0.1:63506/favicon-cg1.ico",
+        "pipIcons": [
+          {
+            "href": "http://127.0.0.1:63506/favicon-cg1.ico",
+            "type": "image/x-icon"
+          }
+        ],
+        "iconFetches": [
+          {
+            "name": "http://127.0.0.1:63506/favicon-cg1.ico",
+            "initiatorType": "other"
+          }
+        ],
+        "ownerViolations": [],
+        "pipViolations": [],
+        "streams": 0,
+        "apiSame": true,
+        "title": "Mini Watch · Cost Guard"
+      },
+      "native": {
+        "case": "immediate-link-reopen",
+        "os": {
+          "major": 10,
+          "minor": 0,
+          "build": 26300
+        },
+        "ownedPid": 4128,
+        "windows": [
+          {
+            "hwnd": 524974,
+            "title": "Models · Cost Guard Web Beta",
+            "dpi": 144,
+            "rect": [
+              2933,
+              1607,
+              3796,
+              2044
+            ],
+            "visibleFrame": [
+              2942,
+              1607,
+              3787,
+              2035
+            ],
+            "icons": {
+              "small": {
+                "querySucceeded": true,
+                "error": 0,
+                "nonNull": true,
+                "file": "immediate-link-reopen-524974-small.png",
+                "pixelSha256": "58fbb4e615f6a698205067756d03f61b99dbb79b0b1cc0547b4d2553e817b08b",
+                "drawSucceeded": true
+              },
+              "large": {
+                "querySucceeded": true,
+                "error": 0,
+                "nonNull": true,
+                "file": "immediate-link-reopen-524974-large.png",
+                "pixelSha256": "00bc38ded143fd9ad3b6d28eb72aa50c7ea4046d3b9cc34ec0c98dc73143447e",
+                "drawSucceeded": true
+              },
+              "small2": {
+                "querySucceeded": true,
+                "error": 0,
+                "nonNull": true,
+                "file": "immediate-link-reopen-524974-small2.png",
+                "pixelSha256": "58fbb4e615f6a698205067756d03f61b99dbb79b0b1cc0547b4d2553e817b08b",
+                "drawSucceeded": true
+              },
+              "classLarge": {
+                "nonNull": true,
+                "file": "immediate-link-reopen-524974-classLarge.png",
+                "pixelSha256": "6a2a20fec55b6cfa9997ffcc4c8839be051d7e3f7a736d0ec0af6e983ee33fa5",
+                "drawSucceeded": true
+              },
+              "classSmall": {
+                "nonNull": true,
+                "file": "immediate-link-reopen-524974-classSmall.png",
+                "pixelSha256": "d18a1b3d05d1ee3a105f297a54375c71321a6e998cdd50913dce705701492565",
+                "drawSucceeded": true
+              }
+            },
+            "capture": {
+              "file": "immediate-link-reopen-524974-frame.png",
+              "pixelSha256": "13f4c39a3fa65dc7d889ebbf6e287f75e22c3d8396dc24c06876b70a805b4aa3",
+              "drawSucceeded": true
+            }
+          },
+          {
+            "hwnd": 591758,
+            "title": "Models · Cost Guard Web Beta - Google Chrome",
+            "dpi": 144,
+            "rect": [
+              15,
+              15,
+              1913,
+              2073
+            ],
+            "visibleFrame": [
+              24,
+              15,
+              1904,
+              2064
+            ],
+            "icons": {
+              "small": {
+                "querySucceeded": true,
+                "error": 0,
+                "nonNull": false
+              },
+              "large": {
+                "querySucceeded": true,
+                "error": 0,
+                "nonNull": false
+              },
+              "small2": {
+                "querySucceeded": true,
+                "error": 0,
+                "nonNull": false
+              },
+              "classLarge": {
+                "nonNull": true,
+                "file": "immediate-link-reopen-591758-classLarge.png",
+                "pixelSha256": "6a2a20fec55b6cfa9997ffcc4c8839be051d7e3f7a736d0ec0af6e983ee33fa5",
+                "drawSucceeded": true
+              },
+              "classSmall": {
+                "nonNull": true,
+                "file": "immediate-link-reopen-591758-classSmall.png",
+                "pixelSha256": "d18a1b3d05d1ee3a105f297a54375c71321a6e998cdd50913dce705701492565",
+                "drawSucceeded": true
+              }
+            }
+          }
+        ],
+        "canonical": {
+          "file": "immediate-link-reopen-canonical.png",
+          "pixelSha256": "2bc8afc50a7f8a02d96cb77a94722989fe1b666722f87feb8525d5c1e0e88c52",
+          "drawSucceeded": true
+        },
+        "limitation": "Read-only native HICON metadata and owned-window captures, not taskbar/Alt+Tab shell pixels."
+      }
+    }
+  ],
+  "browser": {
+    "protocolVersion": "1.3",
+    "product": "Chrome/156.0.8078.80",
+    "revision": "@fb096c0011f9d50f0a264a9376420cdea9c421e3",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36",
+    "jsVersion": "15.6.75.27"
+  },
+  "limitations": [
+    "Synthetic HTTP/SSE; no personal profile or installed source calls.",
+    "HICON metadata is not actual taskbar/Alt+Tab rendering.",
+    "Headless mode is not physical desktop proof."
+  ],
+  "elapsedMs": 4551
+}

@@ -101,8 +101,11 @@ function setup() {
   input.view.daily_state='observed'; parity(); assert.equal(view.daily.textContent,'Total Today 0 · 0 prompts','new canonical local day replaces the old daily observation');
   input.view.daily_usage=daily; parity(); assert.equal(view.daily.textContent,'Total Today 34 · 37 prompts','later source corrections replace, never accumulate');
   assert.ok(!/Running prompts|Running CCost|Longest running|×/.test(view.root.textContent));
-  assert.equal(child.document.head.children.length, 2);
-  assert.deepEqual(child.document.head.children.map(n => n.href), ['http://127.0.0.1:1234/app.css', 'http://127.0.0.1:1234/mini.css']);
+   assert.equal(child.document.head.children.length, 3);
+   assert.deepEqual(child.document.head.children.map(n => [n.rel, n.type, n.href]), [
+     ['icon', 'image/x-icon', 'http://127.0.0.1:1234/favicon-cg1.ico'],
+     ['stylesheet', undefined, 'http://127.0.0.1:1234/app.css'], ['stylesheet', undefined, 'http://127.0.0.1:1234/mini.css']]);
+   assert.equal(owner.document.head.children.length, 0, 'Mini never changes the owning tab head');
   assert.equal(view.accounts.children.length, 6);
   assert.match(view.accounts.textContent, /GitHub Copilot Pro · 8.4% used \(1814\)/);
   assert.match(view.accounts.textContent, /Primary temporarily missing · Usage unavailable \(—\)/);
@@ -198,8 +201,11 @@ function setup() {
   await controller.toggle();
   assert.equal(child.closed, true); assert.equal(test.focused(), 1, 'close does not also focus the owner');
   assert.equal(child.timers.size, 0); assert.equal(button.textContent, 'Mini Watch: Off');
-  const reopen = controller.toggle(), second = win(); test.opened(second); await reopen;
-  assert.equal(api.requests.at(-1).height,250,'reopening requests the compact size again');
+   const reopen = controller.toggle(), second = win(); test.opened(second); await reopen;
+   assert.equal(api.requests.at(-1).height,250,'reopening requests the compact size again');
+   assert.equal(second.document.head.children.filter(n => n.rel === 'icon').length, 1);
+   assert.equal(second.document.head.children[0].href, 'http://127.0.0.1:1234/favicon-cg1.ico');
+   assert.notEqual(second.document.head.children[0], child.document.head.children[0], 'each PiP document owns its link');
   child.fire('pagehide'); assert.equal(button.textContent, 'Mini Watch: On', 'late old pagehide cannot retire a new window');
   second.close(); second.fire('pagehide'); assert.equal(button.textContent, 'Mini Watch: Off', 'native close');
   const replaceOpen = controller.toggle(), replaced = win(); test.opened(replaced); await replaceOpen;

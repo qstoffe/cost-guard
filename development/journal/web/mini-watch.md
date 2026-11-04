@@ -1,5 +1,73 @@
 # Mini Watch and finished history
 
+## FR 000570 — v80.150, 2026-11-04
+
+Base: `ce7859fcb8df3fe713c85519a7739242fc60fe6c`. Mini's independent document now
+adds one `rel=icon`, `type=image/x-icon` link to the existing absolute same-origin
+`/favicon-cg1.ico` before its stylesheets. No new artwork, route, dependency,
+native bridge, acquisition owner, CSP exception or browser/OS grouping change.
+Normal-tab/tray branding and the 560×250-DIP opening/controls remain unchanged.
+
+### Native feasibility, before implementation
+
+An owned disposable **Chrome 156.0.8078.80** profile, synthetic shipped loopback
+HTTP/SSE and hidden helpers ran on **Windows build 26300, actual DPI 144 / 150%**.
+No zoom/display settings or personal browser state were changed. Read-only,
+exact-browser-PID `WM_GETICON` queries succeeded for all three PiP icon sizes.
+On the **same HWND**, adding the link changed the generic globe to recognizable
+CG; immediate attachment during the API's enter event and reopening gave identical
+CG icon pixels on a new HWND. Class fallback icons and the normal Chrome window
+were unchanged. Borrowed HICONs were not destroyed or modified. Browser resampling
+means the canonical ICO's rendered pixels need not equal the browser's HICON hash.
+
+- [Baseline native large icon](../../architecture/governance/verification/mini-watch-icon/native/baseline-459438-large.png)
+  → [same-window CG icon](../../architecture/governance/verification/mini-watch-icon/native/delayed-link-459438-large.png).
+- [Native frame](../../architecture/governance/verification/mini-watch-icon/native/delayed-link-459438-frame.png):
+  origin/security, return and close controls intact; raw height **437px**, DWM-visible
+  height **428px**. This frame capture is not a taskbar or Alt+Tab screenshot.
+- [Raw results and all linked native captures](../../architecture/governance/verification/mini-watch-icon/native/result.json).
+  Retained probe sources describe the owned-PID method; they are experiment records,
+  not an automatically authorized native check. Native visible runtime was **4.551s**.
+  The probe's `streams: 0` counts matching owner-document DOM, **not SSE connections**.
+
+### Final-controller regressions
+
+- **PASS:** local Full, **138 bounded units, 88.4s**, four workers. Working-tree
+  validation: **11 passes, zero failures**, six pre-existing advisory prose/Python
+  design-budget warnings; no caps, assertions, product deadlines or dependencies changed.
+- **PASS:** real installed **V2** read-only acquisition, **seven coherent publications**,
+  two running prompts, three accounts/two available primary-period costs, two known-finish
+  cards; **9.567s**, owned close **0.126s**. No inference or shared OpenCode stop.
+- Focused Mini VM, HTTP/favicon/CSP and Windows shared-icon regressions passed.
+  VM checks the exact absolute link, independent per-window nodes, reopen and unchanged
+  owner head alongside existing race, policy, geometry, theme and retained-data cases.
+- Final shipped controller, **without candidate injection**, passed real **headless**
+  [Chrome](../../architecture/governance/verification/mini-watch-icon/browser/chrome.json)
+  and [Edge 156.0.4314.58](../../architecture/governance/verification/mini-watch-icon/browser/edge.json)
+  at **emulated scale 1.5**. Both fetch the ICO through the favicon loader on initial
+  open/reopen and preserve styles/CSP, normal-tab icon, controls/API identity, geometry,
+  hidden-opener updates, terminal lifecycle and **exactly one EventSource**. Headless
+  document captures and emulated scale are not physical native proof.
+
+### Scoped Decision Delegate verification exception
+
+The **Decision Delegate**, not the owner, authorized the crucial finite Chrome-only
+native feasibility probe after non-disruptive alternatives could not establish native
+adoption. After independently reading its JSON and four images, the same delegate
+approved protected delivery **with an FR 000570-only verification exception**:
+omit actual **taskbar-preview, Alt+Tab and grouping observation** because the proven
+native-icon change and narrow link-only fix do not justify disruptive shell interaction.
+Unused visible authorization ended; final code is checked only through hidden browsers.
+
+**Verified:** Chrome's native small/large PiP HICON adoption at actual Windows 150%.
+**UNVERIFIED:** actual shell taskbar-preview/Alt+Tab rendering and grouping, native
+Edge and macOS. Shell caching/browser/OS-specific representation remains uncertain;
+untested platforms are not declared unsupported. This is **delivery with an approved
+verification exception**, not unconditional primary/full acceptance PASS. No behavior,
+failing-test or future-FR exception was granted; legitimate continuation retains this
+scope unless superseded. No shared desktop input, taskbar hover/Alt+Tab invocation,
+unrelated-window capture or native-window mutation occurred.
+
 ## FR 000569 — v80.149, 2026-11-04
 
 Base: `99e8940206177a2dc46c525a7babb67fc9ec2e71`. Mini-only presentation policy;
