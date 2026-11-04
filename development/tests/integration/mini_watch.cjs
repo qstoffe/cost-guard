@@ -81,14 +81,16 @@ function setup() {
   assert.equal(view.body.children[1].children[3].textContent, '20m');
   assert.equal(view.health.textContent, ''); assert.equal(view.health.hidden, true);
   const table = view.body.parentNode, headers = table.querySelectorAll('th');
-  assert.equal(headers[4].textContent, 'CTX');
+  assert.equal(headers[4].textContent, 'Ctx');
   assert.equal(headers[4].title, 'Estimated next incoming context for this prompt; N/A means unavailable');
-  assert.match(table.attributes['aria-label'], /estimated next incoming context \(CTX\)/);
+  assert.match(table.attributes['aria-label'], /estimated next incoming context \(Ctx\)/);
+  assert.match(view.body.children[0].title, /per-prompt CCost, Duration and Ctx\./);
+  assert.match(view.body.children[0].attributes['aria-label'], /per-prompt CCost, Duration and Ctx\./);
   const contextItem = input.view.active_cards[0].rows[0], originalContext = contextItem.live_context;
   for (const formatted of ['123 456', '234 567', '0', 'N/A', '~source-format']) {
     contextItem.live_context = {display:{watch_next_context_tokens:formatted}};
     controller.update(input);
-    assert.equal(view.body.children[0].children[4].textContent, formatted, 'CTX uses the source format without adding or stripping characters');
+    assert.equal(view.body.children[0].children[4].textContent, formatted, 'Ctx uses the source format without adding or stripping characters');
   }
   contextItem.live_context = null; controller.update(input);
   assert.equal(view.body.children[0].children[4].textContent, 'N/A');

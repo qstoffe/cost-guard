@@ -89,7 +89,9 @@ async function main() {
     assert.deepEqual((await metrics()).map(row=>row[4]),['120k','120k']);
     assert.equal(await evaluate(`miniWatch.view.body.parentNode.querySelectorAll('th')[4].title`),
       'Estimated next incoming context for this prompt; N/A means unavailable');
-    assert.match(await evaluate(`miniWatch.view.body.parentNode.getAttribute('aria-label')`), /estimated next incoming context \(CTX\)/);
+    assert.equal(await evaluate(`miniWatch.view.body.parentNode.querySelectorAll('th')[4].textContent`), 'Ctx');
+    assert.match(await evaluate(`miniWatch.view.body.parentNode.getAttribute('aria-label')`), /estimated next incoming context \(Ctx\)/);
+    assert.match(await evaluate(`miniWatch.view.body.rows[0].getAttribute('aria-label')`), /per-prompt CCost, Duration and Ctx\./);
     await evaluate(`miniWatch.view.drawDaily(null,false)`);
     assert.equal(await evaluate(`miniWatch.view.daily.textContent`),'CCost Today · Loading…');
     assert.match(await evaluate(`miniWatch.view.daily.getAttribute('aria-label')`), /^CCost Today · Loading…/);

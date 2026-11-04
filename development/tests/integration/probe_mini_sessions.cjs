@@ -37,7 +37,9 @@ module.exports = async function sessions({evaluate,until,fixture,command,pipSess
     assert.equal(value.pageOverflow,false); assert.equal(value.onlyRegion,true); assert.equal(value.scroll,true);
     assert.equal(value.unframed,true,'earlier table does not inherit generic section-card chrome');
     assert.ok(value.accounts>=32); assert.equal(value.suffixVisible,true); assert.equal(value.ellipsis,true);
-    assert.deepEqual(value.headings,['Session | Total CCost','CTX']);
+    assert.deepEqual(value.headings,['Session | Total CCost','Ctx']);
+    assert.match(await evaluate(`miniWatch.view.historyBody.parentNode.getAttribute('aria-label')`), /latest valid session context \(Ctx\)/);
+    if (count) assert.match(await evaluate(`miniWatch.view.historyBody.rows[0].getAttribute('aria-label')`), /Latest valid session Ctx:/);
     assert.deepEqual(value.ids,Array.from({length:Math.min(count,3)},(_,index)=>'earlier-'+(Math.max(0,count-3)+index)));
     assert.ok(value.columns.every(count=>count===2)); assert.ok(value.costs.every(cost=>cost===' | 4583'));
     assert.match(value.accessible,/Whole-session CCost: 4583/); assert.match(value.title,/Active long title/);

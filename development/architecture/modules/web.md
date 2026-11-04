@@ -92,7 +92,7 @@ The same internal grid splits `Session` / `| Total CCost` in one heading, retain
 both labels' intrinsic minima. Its header's neutral
 Earlier Sessions disclosure starts collapsed per new PiP document and survives publications.
 It takes the last three of the shared eligible, oldest-to-newest `history_cards`, excludes
-active/grace session IDs, and uses `session_summary.context`, never historical prompt CTX.
+active/grace session IDs, and uses `session_summary.context`, never historical prompt Ctx.
 Both keyed tables share one bounded scroll region; sticky headers stay table-scoped.
 Session totals/context retain their canonical source/cache states and display tokens;
 there is no added acquisition, valuation, SSE or history scan. The session and subscription
@@ -279,8 +279,8 @@ history shares the existing single-worker account lane and revision reuse. The
 subscription subgrid aligns title/Today/primary label/bar tracks; complete primary
 reset/pace precedes any secondary-only divider. Title bands use theme tokens while
 body values stay left aligned; Accounts detail semantics are unchanged.
-`watch.js` shares ten columns across active/history cards: local HH:mm Started,
-Duration, canonical #N Prompt, Model, Effort, CCost, Calls, Token Mix %, Δ Ctx, Context.
+`watch.js` shares ten columns across active/history cards: local HH:mm Started/Finished,
+Duration, canonical #N Prompt, Model, Effort, CCost (I + E), Calls, Token Mix %, Ictx, Δ Ctx.
 The number does not ellipsize; only the preview flexes. Intrinsic non-Prompt subgrid
 tracks pan horizontally. All headers provide native top-layer explanations on
 hover/focus/click, outside table clipping; time cells retain accessible full dates.
@@ -313,7 +313,7 @@ reset token remains unchanged for Accounts, CLI and Mini Watch. Focused formatti
 DOM and rendered responsive evidence: [Watch polish](../../journal/web/watch-polish.md).
 `live_projection.card` exports the canonical session continuation and entire root-tree
 cost as `session_summary`, shared across concurrent/earlier cards, independently of row
-ECTX. Unknown/compacted continuation never falls back to obsolete row tokens. Existing
+Ictx. Unknown/compacted continuation never falls back to obsolete row tokens. Existing
 `live_context` stays unchanged for Mini. `watch.js` owns one neutral Session Context / CCost
 line with stable context/cost/warning spans. Canonical warning wording and display-cost
 tokens lose only their outer display delimiters, joining once after both values; raw

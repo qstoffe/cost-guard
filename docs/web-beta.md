@@ -328,7 +328,7 @@ CCost separate from prompt-local costs; duration remains prompt-local. Canonical
 prompt metrics. Credits/USD follows Web Settings. Valid metrics remain visible during
 ordinary refresh; first acquisition, partial evidence and genuine failure stay explicit.
 The ten columns are **Started, Duration, Prompt, Model, Effort, CCost (I + E), Calls,
-Token Mix %, ECTX, Δ Ctx**. ECTX is the first request's effective incoming context;
+Token Mix %, Ictx, Δ Ctx**. Ictx is the first request's effective incoming context;
 the footer's Session Context remains the estimated next incoming context.
 Running keeps **Started** and start-ascending order. Earlier replaces only column 1 with
 **Finished**; Duration stays column 2. Both clocks show configured-timezone `HH:mm`,
@@ -448,8 +448,8 @@ or more keeps the calendar date. Expired, unknown and not-started windows remain
 explicit. Existing Live publications update countdowns without browser clocks or
 additional provider polls; CLI, Accounts and Mini Watch retain their reset wording.
 
-Both prompt tables end **Token Mix %, ECTX, Δ Ctx** (ten columns in total).
-**ECTX** is the effective incoming context at that prompt's first request, not its
+Both prompt tables end **Token Mix %, Ictx, Δ Ctx** (ten columns in total).
+**Ictx** is the effective incoming context at that prompt's first request, not its
 next context or a sum of calls. It has no approximation prefix; header help explains
 estimated/approximate evidence and N/A for missing first-request evidence. Help opens
 on hover, focus or touch/click; only the prompt preview ellipsizes, with horizontal pan
@@ -496,9 +496,9 @@ remain. No Observation details, Copilot Unaccounted usage or global warning list
 **[Mini Watch](web-mini-watch.md)** is an explicit, highlighted-while-On floating view with
 compact per-prompt tables and thin primary-subscription bars on supported desktop browsers.
 The first column preserves ` / <whole-session CCost>` after the independently truncated
-title; prompt CCost/Duration/CTX remain separate. A collapsed-by-default **Earlier Sessions**
+title; prompt CCost/Duration/Ctx remain separate. A collapsed-by-default **Earlier Sessions**
 header button shows up to three canonical finished sessions, with whole-session cost and
-current session CTX, above running prompts in one scroll region. Subscription scrolling
+current session Ctx, above running prompts in one scroll region. Subscription scrolling
 stays independent. It reuses this tab's live publication and persisted session aggregate,
 not another Watch engine, acquisition loop or browser-side valuation.
 
