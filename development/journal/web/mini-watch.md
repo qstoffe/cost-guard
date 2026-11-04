@@ -1,5 +1,64 @@
 # Mini Watch and finished history
 
+## FR 000571 — v80.151, 2026-11-04
+
+Base: `711e45b21ef6c9d5ff84f02653205f2a0efdea56`. Mini passes its already-formatted
+CTX display token directly to the cell, without adding `~` or stripping source
+characters. The estimate tooltip/table accessible description and N/A remain intact.
+Mini's initial/loading/observed daily heading and full Watch's visible/accessible
+daily heading are now **CCost Today**. No acquisition, accounting, Token Mix, full
+Watch context, layout/CSS, geometry, window control or SSE ownership change.
+
+- **PASS:** new VM assertions first failed against the old CTX prefix and daily
+  accessible name, then passed after the presentation-only fix. Mini covers grouped
+  values, numeric changes, zero, N/A, missing context and source-owned characters;
+  existing currency, retention, rollover, outcomes and focus/identity checks remain.
+  Full Watch pins all four Token Mix categories/order plus partial/retained/unavailable
+  and loading daily headings, numeric values and accessible name.
+- **PASS:** local Full, **138 bounded units, zero failures, 90.5s**, four workers.
+  Working-tree validation: **11 passes, zero failures**, six existing advisory
+  prose/Python design-budget warnings; caps, assertions and dependencies unchanged.
+- **PASS:** [headless Chrome 156.0.8078.80](../../architecture/governance/verification/mini-watch-labels/chrome.json)
+  and [Edge 156.0.4314.58](../../architecture/governance/verification/mini-watch-labels/edge.json),
+  emulated scale **1.5**, shipped HTTP/CSP/SSE and real Document PiP. Both check CTX
+  text/updates/unknowns, tooltip/table meaning, daily loading text and full-Watch
+  visible/accessible name, intrinsic/narrow scrolling, alignment, themes/units,
+  retained states, keyboard behavior, reopen and exactly one EventSource. The new
+  initial-context assertion first assumed N/A; the fixture actually projects `120k`.
+  Correcting that independent expectation required no production change.
+- **PASS:** read-only installed **V2** Watch/Daily probe: 568 observed requests,
+  11 initiating prompts, complete pricing and reconciled category costs; prompt-count
+  completeness was **false**, preserved rather than overstated. Two active/two history
+  cards, three accounts, single acquisition owner; **14.5121s**, owned close **0.1076s**,
+  no pending owned threads/processes or cleanup failures. Shared OpenCode was untouched;
+  no model inference or running Web Beta mutation.
+
+Architecture assessment: no boundary/flow update; current Watch module wording and
+user guides updated. Browser evidence is synthetic/headless, not physical OS geometry,
+native chrome, screen-reader or physical macOS proof; those surfaces were not changed.
+
+### Decision Delegate-approved CI exception
+
+The **Decision Delegate** explicitly authorized FR 000571 / PR 154 delivery without
+completed `native (macos-15-intel)` verification while it remains queued without a
+runner and is the sole missing check. On implementation/tested SHA
+`0fbd02a09a8fb794f69e2da3ace0ff0aa4678c6b`, [run 41874147908](https://github.com/qstoffe/cost-guard/actions/runs/41874147908)
+passed common Linux (Full/validator/browser), Windows 2025 and macOS 15 ARM. Intel
+job `126728878795` stayed queued after eight minutes of foreground waiting and a
+fresh read; no failure or outage was established. Fresh default protection/rules
+reads showed no required checks or branch rules; none were changed or bypassed.
+
+Reason: the missing job tests unchanged native launchers/lifecycle/AppKit/compilation,
+not Watch rendering; local Full/browser plus the three passing CI jobs provide
+adequate task-specific proof. **Intel-native behavior remains unverified**, not PASS.
+The delegate specifically authorized correcting this journal/completion report even
+though a reporting-only push retriggers CI, extending only the queued Intel exception
+to that successor; all other checks and normal exact-HEAD merge guards remain.
+No failed check, force/protection bypass, workflow edit, cancellation, duplicate rerun
+or future-FR exception is authorized. If Intel starts, allow bounded foreground
+completion; if it passes no missing-result exception is needed at merge. Any failed
+check requires renewed consultation with changed evidence. No owner question/hold.
+
 ## FR 000570 — v80.150, 2026-11-04
 
 Base: `ce7859fcb8df3fe713c85519a7739242fc60fe6c`. Mini's independent document now

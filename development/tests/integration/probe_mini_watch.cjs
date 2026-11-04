@@ -75,6 +75,14 @@ async function main() {
     await checkIcon();
     const metrics = () => evaluate(`[...miniWatch.view.body.rows].map(row=>[...row.cells].map(cell=>cell.textContent))`);
     assert.deepEqual((await metrics()).map(row=>row.slice(1,4)),[['#24','3','20m'],['#23','2','10m']]);
+    assert.deepEqual((await metrics()).map(row=>row[4]),['120k','120k']);
+    assert.equal(await evaluate(`miniWatch.view.root.querySelectorAll('th')[4].title`),
+      'Estimated next incoming context for this prompt; N/A means unavailable');
+    assert.match(await evaluate(`miniWatch.view.prompts.querySelector('table').getAttribute('aria-label')`), /estimated next incoming context \(CTX\)/);
+    await evaluate(`miniWatch.view.drawDaily(null,false)`);
+    assert.equal(await evaluate(`miniWatch.view.daily.textContent`),'CCost Today · Loading…');
+    assert.match(await evaluate(`miniWatch.view.daily.getAttribute('aria-label')`), /^CCost Today · Loading…/);
+    await evaluate(`miniWatch.settings()`);
     assert.equal(await evaluate(`documentPictureInPicture.window === miniWatch.window`),true);
     await until(`miniWatch.window.getComputedStyle(miniWatch.view.prompts).overflowY === 'auto'`);
     const alignment = await evaluate(`(() => {const w=miniWatch.window,v=miniWatch.view;return {
@@ -85,7 +93,9 @@ async function main() {
       sameRow:Math.abs(v.summary.getBoundingClientRect().top-v.daily.getBoundingClientRect().top)<8};})()`);
     assert.deepEqual(alignment.headers,Array(5).fill('center'));
     assert.deepEqual(alignment.cells,['left','right','right','right','right']);
-    assert.equal(alignment.daily,`Total Today ${alignment.full[0]} · ${alignment.full[1]}`);
+    assert.equal(alignment.daily,`CCost Today ${alignment.full[0]} · ${alignment.full[1]}`);
+    assert.equal(await evaluate(`document.querySelector('.watch-daily strong').textContent`),'CCost Today');
+    assert.equal(await evaluate(`document.querySelector('.watch-daily').getAttribute('aria-label')`),'CCost Today');
     assert.equal(alignment.separate,true); assert.equal(alignment.sameRow,true); assert.equal(alignment.headerPadding,'0px');
     await evaluate(`miniWatch.view.daily.click()`);
     assert.equal(await evaluate(`location.hash`),'#/watch','daily summary is non-navigating');
@@ -141,6 +151,12 @@ async function main() {
       p.view.active_cards[0].rows[0].live_context.display.watch_next_context_tokens='123 456';
       miniWatch.update(p);})()`);
     const longColumns=await checkColumns('intrinsic-growing-metrics');
+    assert.equal((await metrics()).find(row=>row[1]==='#123456')[4],'123 456');
+    for (const formatted of ['234 567','0','N/A']) {
+      await evaluate(`(() => {const p=structuredClone(miniWatch.publication);p.view.now_ms++;
+        p.view.active_cards[0].rows[0].live_context.display.watch_next_context_tokens='${formatted}';miniWatch.update(p);})()`);
+      assert.equal((await metrics()).find(row=>row[1]==='#123456')[4],formatted);
+    }
     assert.equal(longColumns.scroll,false);
     await fixture('empty'); await until(`miniWatch.view.body.rows.length===1 && miniWatch.view.body.rows[0].cells.length===1`);
     await checkColumns('intrinsic-empty-colspan');
@@ -208,7 +224,7 @@ async function main() {
       await evaluate(`document.documentElement.dataset.theme='${theme}'; miniWatch.settings()`);
       await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:scheme}]},pipSession);
       await until(`miniWatch.window.getComputedStyle(miniWatch.window.document.documentElement).getPropertyValue('--bg').trim() === '${background}'`);
-       const layout = await evaluate(`(() => {const w=miniWatch.window,d=w.document,r=miniWatch.view.root;return {width:w.innerWidth,height:w.innerHeight,background:w.getComputedStyle(d.documentElement).getPropertyValue('--bg').trim(),overflow:d.documentElement.scrollWidth>w.innerWidth,lines:miniWatch.view.accounts.children.length,clutter:/Reset|CCost Today|Provisional/.test(r.textContent),title:r.querySelector('li').textContent};})()`);
+       const layout = await evaluate(`(() => {const w=miniWatch.window,d=w.document,r=miniWatch.view.root;return {width:w.innerWidth,height:w.innerHeight,background:w.getComputedStyle(d.documentElement).getPropertyValue('--bg').trim(),overflow:d.documentElement.scrollWidth>w.innerWidth,lines:miniWatch.view.accounts.children.length,clutter:/Reset|CCost Today|Provisional/.test(miniWatch.view.accounts.textContent),title:r.querySelector('li').textContent};})()`);
        layouts.push({case:theme+'-'+scheme,width:layout.width,height:layout.height});
       assert.equal(layout.background,background); assert.equal(layout.overflow,false); assert.equal(layout.lines,6); assert.equal(layout.clutter,false);
       if (pipSession) {

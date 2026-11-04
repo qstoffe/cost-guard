@@ -87,7 +87,7 @@ account period projection explicitly marks provider-attributed estimated scopes.
 
 Watch tables own themed body/header surfaces; conditional guidance immediately follows
 the table, before activity. Sibling selectors separate cards, and outlined history has
-natural document height. Total Today presents the known integer without altering its
+natural document height. CCost Today presents the known integer without altering its
 completeness metadata; routine refresh-state changes preserve its DOM and valid values.
 
 Watch depends on shared reports/analysis/domain and abstract source contracts; reports/analysis never import Watch. Presentation consumes projections without fetching history or native quotas.

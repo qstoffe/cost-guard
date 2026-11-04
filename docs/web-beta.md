@@ -328,7 +328,7 @@ running tool appears at the shared ten-second threshold. Tool and canonical
 background/subagent lines explicitly start **Running:** and clear on completion.
 Historical cards have no activity section. Narrow tables pan horizontally.
 
-**Total Today**, four pixels above subscriptions, shows current-local-day reference cost,
+**CCost Today**, four pixels above subscriptions, shows current-local-day reference cost,
 initiating prompts and Input / Cached input / Cache write / Output shares/category costs.
 It includes pre-Watch history, running requests and unassigned-account usage, not just
 visible cards or subscription sums. Requests use completion/attribution dates; continuing
@@ -338,7 +338,7 @@ and all unassigned cost/tokens. Missing telemetry/prices remain partial; empty d
 loading. Source changes/minute fallback update retained history and publish cost/count/mix
 coherently. Routine refresh silently retains figures; only a scope without valid data
 loads. Real failures remain visible. Midnight resets, rejecting yesterday's late results;
-Total Today keeps its label before 03:00. Web Credits/USD and CLI scopes are unchanged.
+CCost Today keeps its label before 03:00. Web Credits/USD and CLI scopes are unchanged.
 
 Retryable source-read failures with a retained observation first say **Retrying** in
 ordinary detail text, explicitly **not current**, instead of immediately announcing

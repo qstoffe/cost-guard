@@ -65,7 +65,21 @@ function setup() {
   assert.equal(view.body.children[1].children[2].textContent, '3');
   assert.equal(view.body.children[1].children[3].textContent, '20m');
   assert.equal(view.health.textContent, ''); assert.equal(view.health.hidden, true);
-  assert.equal(view.daily.textContent, 'Total Today 34 · 37 prompts', 'prior activity is not the two prompt rows or account-period costs');
+  const table = view.prompts.querySelectorAll('table')[0], headers = table.querySelectorAll('th');
+  assert.equal(headers[4].textContent, 'CTX');
+  assert.equal(headers[4].title, 'Estimated next incoming context for this prompt; N/A means unavailable');
+  assert.match(table.attributes['aria-label'], /estimated next incoming context \(CTX\)/);
+  const contextItem = input.view.active_cards[0].rows[0], originalContext = contextItem.live_context;
+  for (const formatted of ['123 456', '234 567', '0', 'N/A', '~source-format']) {
+    contextItem.live_context = {display:{watch_next_context_tokens:formatted}};
+    controller.update(input);
+    assert.equal(view.body.children[0].children[4].textContent, formatted, 'CTX uses the source format without adding or stripping characters');
+  }
+  contextItem.live_context = null; controller.update(input);
+  assert.equal(view.body.children[0].children[4].textContent, 'N/A');
+  contextItem.live_context = originalContext; controller.update(input);
+  assert.equal(view.daily.textContent, 'CCost Today 34 · 37 prompts', 'prior activity is not the two prompt rows or account-period costs');
+  assert.match(view.daily.attributes['aria-label'], /^CCost Today 34 · 37 prompts\. Global configured local-day CCost/);
   assert.notEqual(view.daily.parentNode, view.summary, 'daily metric is outside the navigation target');
   view.daily.fire('click'); view.daily.fire('keydown'); assert.equal(test.returned(),0);
   assert.equal(api.requests[0].height,250); assert.equal(api.requests[0].width,560);
@@ -75,31 +89,33 @@ function setup() {
   function parity() {
     controller.update(input);
     const full = vm.runInContext('ReportView.renderLive(fullParent, input, fullState); fullState.watch.daily',context);
-    assert.ok(view.daily.textContent.startsWith(`Total Today ${full.children[1].textContent} · ${full.children[2].textContent}`));
+    assert.equal(full.children[0].textContent, 'CCost Today');
+    assert.equal(full.attributes['aria-label'], 'CCost Today');
+    assert.ok(view.daily.textContent.startsWith(`CCost Today ${full.children[1].textContent} · ${full.children[2].textContent}`));
   }
   parity();
   for (const [value,count,credit,usd] of [['6152',106,'6 152','$61.52'],['0',0,'0','$0.00']]) {
     input.view.daily_usage = {...daily,prompt_count:count,total:{...daily.total,known_ccost:value,observed_requests:count,priced_requests:count,
       display:{known_ccost:credit},display_units:{credits:{known_ccost:credit},usd:{known_ccost:usd}}}};
-    parity(); assert.equal(view.daily.textContent,`Total Today ${credit} · ${count} prompts`);
+    parity(); assert.equal(view.daily.textContent,`CCost Today ${credit} · ${count} prompts`);
     vm.runInContext('ReportView.setUnit("usd")', context); controller.settings(); parity();
-    assert.equal(view.daily.textContent,`Total Today ${usd} · ${count} prompts`);
+    assert.equal(view.daily.textContent,`CCost Today ${usd} · ${count} prompts`);
     vm.runInContext('ReportView.setUnit("credits")', context);
   }
   input.view.daily_usage = {...daily,total:{...daily.total,priced_requests:0,complete:false}};
-  parity(); assert.equal(view.daily.textContent,'Total Today N/A · 37 prompts');
+  parity(); assert.equal(view.daily.textContent,'CCost Today N/A · 37 prompts');
   assert.match(view.daily.title,/Partial pricing/);
   input.view.daily_usage = {...daily,total:{...daily.total,complete:false}};
-  parity(); assert.equal(view.daily.textContent,'Total Today 34 · 37 prompts');
+  parity(); assert.equal(view.daily.textContent,'CCost Today 34 · 37 prompts');
   for (const state of ['retrying','unavailable','loading','partial']) {
-    input.view.daily_state=state; parity(); assert.equal(view.daily.textContent,'Total Today 34 · 37 prompts');
+    input.view.daily_state=state; parity(); assert.equal(view.daily.textContent,'CCost Today 34 · 37 prompts');
     assert.equal(view.daily.className,'mini-daily'); assert.equal(view.health.hidden,true);
   }
-  input.view.daily_usage=null; input.view.daily_state='unavailable'; controller.update(input); assert.equal(view.daily.textContent,'Total Today · Loading…');
-  input.view.daily_state='loading'; controller.update(input); assert.equal(view.daily.textContent,'Total Today · Loading…');
+  input.view.daily_usage=null; input.view.daily_state='unavailable'; controller.update(input); assert.equal(view.daily.textContent,'CCost Today · Loading…');
+  input.view.daily_state='loading'; controller.update(input); assert.equal(view.daily.textContent,'CCost Today · Loading…');
   input.view.daily_usage={...daily,day_start_ms:daily.day_start_ms+86400000,day_end_ms:daily.day_end_ms+86400000,prompt_count:0,total:{...daily.total,observed_requests:0,priced_requests:0,display:{known_ccost:'0'},display_units:{credits:{known_ccost:'0'}}}};
-  input.view.daily_state='observed'; parity(); assert.equal(view.daily.textContent,'Total Today 0 · 0 prompts','new canonical local day replaces the old daily observation');
-  input.view.daily_usage=daily; parity(); assert.equal(view.daily.textContent,'Total Today 34 · 37 prompts','later source corrections replace, never accumulate');
+  input.view.daily_state='observed'; parity(); assert.equal(view.daily.textContent,'CCost Today 0 · 0 prompts','new canonical local day replaces the old daily observation');
+  input.view.daily_usage=daily; parity(); assert.equal(view.daily.textContent,'CCost Today 34 · 37 prompts','later source corrections replace, never accumulate');
   assert.ok(!/Running prompts|Running CCost|Longest running|×/.test(view.root.textContent));
    assert.equal(child.document.head.children.length, 3);
    assert.deepEqual(child.document.head.children.map(n => [n.rel, n.type, n.href]), [
@@ -158,17 +174,17 @@ function setup() {
   vm.runInContext('ReportView.setUnit("usd")', context); owner.document.documentElement.dataset.theme = 'web'; controller.settings();
   assert.equal(view.body.children[0].children[2].textContent, '$0.01'); assert.match(retained.textContent, /\(\$18.14\)/);
   assert.equal(child.document.documentElement.dataset.theme, 'web');
-  assert.equal(view.daily.textContent,'Total Today $0.34 · 37 prompts');
+  assert.equal(view.daily.textContent,'CCost Today $0.34 · 37 prompts');
   for (const kind of ['reconnecting', 'offline', 'source_unavailable', 'authorization_required', 'identity_changed', 'stopped']) {
     controller.health({kind});
     assert.equal(view.health.hidden, ['reconnecting','offline','source_unavailable'].includes(kind));
     if (!view.health.hidden) assert.match(view.health.textContent,/return to|reopen|restart/);
     assert.equal(view.body.children[1].children[3].textContent, '20m');
-    assert.equal(view.daily.textContent,'Total Today $0.34 · 37 prompts'); assert.match(view.daily.title,/retained observation/);
+    assert.equal(view.daily.textContent,'CCost Today $0.34 · 37 prompts'); assert.match(view.daily.title,/retained observation/);
   }
   controller.health({kind: 'connected'}); now += 16000;
   [...child.timers][0](); assert.equal(view.health.hidden,true); assert.equal(view.root.dataset.live,'false');
-  assert.equal(view.daily.textContent,'Total Today $0.34 · 37 prompts');
+  assert.equal(view.daily.textContent,'CCost Today $0.34 · 37 prompts');
   controller.update(input); assert.equal(view.root.dataset.live,'false', 'progress/repeated snapshot is not new Live evidence');
   input.view.now_ms++;
   controller.update(input); assert.equal(view.health.textContent, '');
@@ -194,7 +210,7 @@ function setup() {
   controller.update(input); assert.match(view.body.textContent,/No running or recently ended prompts/,'valid empty evicts retained rows');
   input.view = {...input.view,active_cards:originals,daily_usage:{...daily,day_end_ms:now+1}};
   controller.update(input); assert.equal(view.daily.textContent,beforeDaily);
-  now++; [...child.timers][0](); assert.equal(view.daily.textContent,'Total Today · Loading…','no yesterday total after configured midnight, even disconnected');
+  now++; [...child.timers][0](); assert.equal(view.daily.textContent,'CCost Today · Loading…','no yesterday total after configured midnight, even disconnected');
   input.view = {...healthy.view,now_ms:healthy.view.now_ms+3}; controller.update(input);
   view.summary.fire('click'); assert.equal(test.returned(), 1); assert.equal(test.focused(), 1);
   assert.equal(child.closed, false, 'return selects existing tab without closing Mini');
@@ -239,9 +255,13 @@ function setup() {
   lane.update(value);
   assert.equal(lane.observations.view.active_cards.length,2,'partial reads do not erase other retained prompt rows');
   assert.equal(lane.observations.view.active_cards[0].title,changed.title,'valid per-card corrections still apply');
-  const initial = setup().controller;
+  const initialTest = setup(), initial = initialTest.controller;
   initial.update({state:'recovering',view:null});
   assert.equal(initial.observations.snapshot(now),null,'no fabricated first values');
+  const initialOpening = initial.toggle(); initialTest.opened(win()); await initialOpening;
+  assert.equal(initial.view.daily.textContent, 'CCost Today · Loading…');
+  assert.match(initial.view.daily.attributes['aria-label'], /^CCost Today · Loading…/);
+  initial.close();
   now += 599999; assert.equal(initial.observations.delayed(now),false);
   now++; assert.equal(initial.observations.delayed(now),true);
   for (const change of [owner => {owner.isSecureContext = false;}, owner => {delete owner.documentPictureInPicture;},

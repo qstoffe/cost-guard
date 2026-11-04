@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.151 — 2026-11-04
+
+- Mini Watch: remove only the added CTX `~`; retain formatted values, N/A and the estimate tooltip. Mini and full Watch now label the canonical global daily summary **CCost Today**, including loading/accessibility text. Accounting, prompts, Token Mix, units and layout are unchanged.
+
 ## v80.150 — 2026-11-04
 
 - Mini Watch reuses the existing CG favicon in its separate PiP document. Native Windows Chrome icon adoption was verified at 150% scaling; taskbar-preview/Alt+Tab rendering and grouping remain unverified under an FR-scoped Decision Delegate exception. Normal-tab/tray branding, browser controls and shared Live ownership are unchanged; [evidence and limits](development/journal/web/mini-watch.md).

@@ -95,7 +95,7 @@ const MiniWatch = (() => {
       this.summary.title = 'Return to Watch. If the browser cannot restore a minimized window, use its native return-to-tab control.';
       this.summary.addEventListener('click', returnToWatch);
       this.summary.append(el('span', 'Cost Guard · Watch', 'mini-brand'));
-      this.daily = el('p', 'Total Today · Loading…', 'mini-daily'); this.daily.tabIndex = 0;
+      this.daily = el('p', 'CCost Today · Loading…', 'mini-daily'); this.daily.tabIndex = 0;
       const top = el('header', undefined, 'mini-header'); top.append(this.summary, this.daily);
       this.health = el('p', '', 'mini-health'); this.health.setAttribute('role', 'status');
       this.prompts = el('div', undefined, 'mini-prompts'); this.prompts.tabIndex = 0;
@@ -138,11 +138,11 @@ const MiniWatch = (() => {
     }
     drawDaily(view, fresh) {
       const value = view?.daily_usage, state = view?.daily_state;
-      let label = 'Total Today · Loading…';
+      let label = 'CCost Today · Loading…';
       const notes = [];
       if (value) {
         const cost = value.total.observed_requests && !value.total.priced_requests ? 'N/A' : ReportView.display(value.total, 'known_ccost');
-        label = `Total Today ${cost} · ${value.prompt_count} prompts`;
+        label = `CCost Today ${cost} · ${value.prompt_count} prompts`;
         if (!value.total.complete || !value.mix.cost_complete || value.mix.request_count && value.mix.totals.some(amount => amount == null))
           notes.push('Partial pricing / telemetry');
         if (state === 'unavailable') notes.push('Source unavailable · retained daily observation');
@@ -182,7 +182,7 @@ const MiniWatch = (() => {
         row.className = prompt.in_progress ? 'mini-running' : prompt.aborted || prompt.has_error ? 'mini-error' : prompt.completed_successfully ? 'mini-success' : '';
         text(row.children[0].children[0], card.title || card.session_id); row.children[0].title = row.children[0].textContent;
         const context = display(item.live_context, 'watch_next_context_tokens');
-        const cells = ['#' + prompt.prompt_number, display(prompt, 'ccost'), display(item, 'watch_duration_ms'), context === 'N/A' ? context : '~' + context];
+        const cells = ['#' + prompt.prompt_number, display(prompt, 'ccost'), display(item, 'watch_duration_ms'), context];
         cells.forEach((value, index) => text(row.children[index + 1], value)); wanted.push(row);
       }
       text(this.emptyPrompts.children[0].children[0], view?.cards_state === 'observed' ? 'No running or recently ended prompts' : 'Loading…');
