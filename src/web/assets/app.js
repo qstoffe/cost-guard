@@ -25,7 +25,7 @@ const miniWatch = typeof MiniWatch === 'undefined' ? null : new MiniWatch.Contro
 function applySettings(value) {
   const confirmed = WebSettings.apply(value, output);
   for (const state of views.values()) if (state.detail) ReportView.syncUnits(state.detail.root);
-  miniWatch?.settings();
+  miniWatch?.settings(confirmed.values, hostInstance);
   return confirmed;
 }
 function connectionStatus(message, state = {}) {

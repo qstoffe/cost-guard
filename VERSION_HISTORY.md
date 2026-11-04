@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.156 — 2026-11-04
+
+- Web Settings adds **Mini Watch placement** and a symbolic, selectable **Default (current default)** for all three controls. Explicit values stay pinned, including values equal to today's defaults; inherited values follow future defaults and bypass retained legacy theme overrides when selected. Mini defaults to browser-native **Remember last** in the same live opener/server; **Standard placement** always requests initial geometry. Reload/new openers and host restart begin standard, with no stored geometry. Fresh physical Windows-150%/manual/native-X/monitor proof remains unverified under an FR-only Decision Delegate exception; [evidence and limits](development/journal/web/mini-watch.md).
+
 ## v80.155 — 2026-11-04
 
 - Full Web Watch's **CCost (I + E)** column shows each prompt's canonical total followed by Incoming Context CCost + Extra CCost in both Running and Earlier tables. Shared Credits/USD formatting, accessible header help, partial/unknown states and intrinsic horizontal scrolling remain intact. Mini Watch, CLI and accounting are unchanged; no extra source acquisition or browser valuation.

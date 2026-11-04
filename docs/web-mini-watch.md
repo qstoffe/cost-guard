@@ -12,6 +12,37 @@ window depends on the browser/OS. If that request cannot restore it, use the nat
 return-to-tab control, which may close PiP. Closing/reloading the owning document ends
 Mini; a fresh page starts Off. Browser PiP replacement may also close it.
 
+## Placement preference
+
+**Settings → Web settings → Mini Watch placement** has **Default (Remember last)**,
+**Remember last** and **Standard placement**, saved immediately in the user config.
+Default follows the current application's shipped default; explicit Remember last
+stays pinned even if a later version changes it. Theme and CCost display use the same
+Default-versus-explicit convention. Missing preferences inherit without creating a file.
+
+- **Remember last:** the first opening in an opener/server instance requests the
+  standard **560×250 screen DIPs** and browser-initial placement. After moving/resizing
+  and closing, subsequent openings in that same live opener reuse the browser's last
+  size **and position**, as the browser permits.
+- **Standard placement:** every opening requests the standard size and initial
+  placement, regardless of prior move/resize. On the target Chrome setup this is
+  normally near bottom-right; browser/OS work areas may clamp or choose differently.
+- Switching modes only affects the **next opening**. It does not move/resize/close
+  the current window, disable manual controls or auto-open Mini.
+- The mode is persistent; **geometry is not**. Host restart starts standard again.
+  Reload/navigation/new tabs also start standard: this is per live opener, not a
+  server-wide remembered position shared between tabs. Later reopens can remember again.
+  No geometry is written to JSONC, SQLite, browser storage, cookies or URLs. Only the
+  browser owns cached bounds; the application keeps an in-memory first-open flag/host identity.
+
+Fresh headless Chrome 156 / Edge 156 tests verify the actual Document PiP API, both
+bounds dimensions and position, mode switching, close/reopen, reload and a Python
+server-process restart in the same disposable browser profile. They use CDP bounds
+changes and `Window.close()`/pagehide, not physical manual dragging or native-X clicks.
+Physical Windows-150% frames/edges, manual/native-X interaction and monitor/work-area
+transitions remain **UNVERIFIED**, under an FR-only Decision Delegate exception.
+Browser-imposed limitations and exact evidence are in the [Mini journal](../development/journal/web/mini-watch.md).
+
 ## What the figures mean
 
 - **CCost Today**, on the right, is the same global configured-local-day CCost and
@@ -106,8 +137,8 @@ extension, flag, notification permission, native helper or second sign-in flow.
 The unframed compact tables follow **Classic / Web light/dark** and live
 **Credits / USD**. Healthy Live text and transient operational warnings are omitted.
 Mini requests 560×250 **screen DIPs**, not physical screen pixels or zoomed document
-CSS pixels. On the tested Windows 150% display, its complete visible native frame
-opens/reopens at **428–429 physical pixels** high, below 470, including native chrome.
+CSS pixels. Historical standard-placement measurements on Windows 150% showed a
+complete visible native frame **428–429 physical pixels** high, below 470, including native chrome.
 The previous 450-DIP request measured 729 physical pixels. Chrome page zoom changes
 document dimensions, not that request's screen units. Other scales/platforms can
 produce different outer geometry; a universal 470-physical-pixel cap is not verified.
@@ -122,8 +153,9 @@ Earlier and running tables share **one vertical session viewport/scrollbar**, wi
 Mini-specific running-row limit. Each table's sticky headers stay within its own table.
 The subscription region still scrolls independently. Expanding history never resizes
 the native PiP window; larger lists may scroll immediately at the smaller opening size. Resize with the browser's
-controls; narrow widths wrap the header instead of overlapping it. Reopening requests
-the compact initial size again; later manual resizing is never forcibly undone.
+controls; narrow widths wrap the header instead of overlapping it. Remember last
+reopens at the browser's last bounds; Standard placement requests the compact initial
+geometry again. While open, later manual resizing is never forcibly undone.
 The browser
 owns outer chrome, origin/security indication, positioning, native return controls
 and final geometry; this is not a frameless, arbitrarily positioned tooltip.

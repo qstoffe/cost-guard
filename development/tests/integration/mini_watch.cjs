@@ -40,6 +40,8 @@ function setup() {
   }};
   const button = new Node('button'), feedback = new Node('span');
   const controller = new Controller(owner, button, feedback, () => returned++);
+  assert.equal(button.disabled,true,'no placement assumption before confirmed settings');
+  controller.settings({miniWatchPlacement:'remember-last'},'fixture-host');
   return {owner, api, button, feedback, controller, calls: () => calls, focused: () => focused, returned: () => returned,
     opened: value => {api.window = value; resolve(value);}, reject: () => reject(new Error('denied'))};
 }
@@ -220,20 +222,33 @@ function setup() {
   assert.equal(child.timers.size, 0); assert.equal(button.textContent, 'Mini Watch: Off');
    const reopen = controller.toggle(), second = win(); test.opened(second); await reopen;
    assert.equal(api.requests.at(-1).height,250,'reopening requests the compact size again');
+   assert.equal(api.requests.at(-1).preferInitialWindowPlacement,false,'Remember last permits browser-native bounds after first open');
    assert.equal(second.document.head.children.filter(n => n.rel === 'icon').length, 1);
    assert.equal(second.document.head.children[0].href, 'http://127.0.0.1:1234/favicon-cg1.ico');
     assert.notEqual(second.document.head.children[0], child.document.head.children[0], 'each PiP document owns its link');
    assert.equal(controller.view.earlier.hidden,true,'fresh Mini always opens Earlier Sessions collapsed');
   child.fire('pagehide'); assert.equal(button.textContent, 'Mini Watch: On', 'late old pagehide cannot retire a new window');
   second.close(); second.fire('pagehide'); assert.equal(button.textContent, 'Mini Watch: Off', 'native close');
+  controller.settings({miniWatchPlacement:'standard'},'same-host');
   const replaceOpen = controller.toggle(), replaced = win(); test.opened(replaced); await replaceOpen;
+  assert.equal(api.requests.at(-1).preferInitialWindowPlacement,true);
+  controller.settings({miniWatchPlacement:'remember-last'},'same-host');
+  assert.equal(controller.window,replaced,'mode changes never move or close existing PiP');
   api.window = win(); controller.update(input); assert.equal(button.textContent, 'Mini Watch: Off', 'ownership replacement');
   assert.equal(replaced.timers.size, 0);
   const reloadOpen = controller.toggle(), reloadChild = win(); test.opened(reloadChild); await reloadOpen;
+  assert.equal(api.requests.at(-1).preferInitialWindowPlacement,false);
   owner.fire('pagehide'); assert.equal(reloadChild.closed, true); assert.equal(button.textContent, 'Mini Watch: Off');
   await controller.toggle(); assert.equal(test.calls(), 6, 'ended owner cannot reopen');
   const pendingClose = setup(); const promise = pendingClose.controller.toggle(); pendingClose.owner.fire('pagehide');
   const late = win(); pendingClose.opened(late); await promise; assert.equal(late.closed, true);
+  const boundary = setup(); boundary.controller.settings({miniWatchPlacement:'remember-last'},'host-1');
+  for (const [identity,initial] of [['host-1',true],['host-1',false],['host-2',true],['host-2',false]]) {
+    boundary.controller.settings({miniWatchPlacement:'remember-last'},identity);
+    const opening = boundary.controller.toggle(); boundary.opened(win()); await opening;
+    assert.equal(boundary.api.requests.at(-1).preferInitialWindowPlacement,initial,'host identity resets first opening only');
+    boundary.controller.close();
+  }
   // Independent acquisition lanes: prompt progress cannot hide a stuck Daily read.
   const lane = setup().controller, start = now, value = JSON.parse(JSON.stringify(healthy));
   lane.update(value);

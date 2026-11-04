@@ -22,6 +22,11 @@ CONSOLE_COLORS = {
 }
 OPEN_CODE_SOURCES = {"auto", "v1", "v2"}
 BUILTIN_COLOR_SCHEMES = ("classic", "modus-operandi-tinted")
+WEB_PREFERENCES = {
+    "theme": ("classic", "web"),
+    "ccostDisplayUnit": ("credits", "usd"),
+    "miniWatchPlacement": ("remember-last", "standard"),
+}
 
 
 class ConfigError(ValueError):
@@ -234,9 +239,9 @@ def validate_configuration(config: dict[str, Any], defaults: dict[str, Any], ove
     if not isinstance(theme, str) or theme not in {"classic", "web"}:
         raise _invalid(_setting_source("webTheme", overrides), "webTheme", theme, "classic or web")
 
-    web = config.get("webSettings", {"theme": "classic", "ccostDisplayUnit": "credits"})
-    _assert_object(web, "webSettings", {"theme", "ccostDisplayUnit"}, _setting_source("webSettings", overrides))
-    for name, allowed in (("theme", {"classic", "web"}), ("ccostDisplayUnit", {"credits", "usd"})):
+    web = config.get("webSettings")
+    _assert_object(web, "webSettings", set(WEB_PREFERENCES), _setting_source("webSettings", overrides))
+    for name, allowed in WEB_PREFERENCES.items():
         value = web.get(name)
         path = "webSettings." + name
         if not isinstance(value, str) or value not in allowed:
@@ -449,6 +454,11 @@ def validated_values(defaults: dict[str, Any], overrides: dict[str, Any]) -> dic
     effective = merge_config(defaults, overrides)
     if not isinstance(effective, dict):
         raise ConfigError("File: config/default-config.jsonc\nSetting: root\nExpected: a JSON object")
+    web = effective.get("webSettings")
+    if isinstance(web, dict):
+        for name in WEB_PREFERENCES:
+            if web.get(name) == "default":
+                web[name] = defaults["webSettings"][name]
     validate_configuration(effective, defaults, overrides)
     resolved = resolve_colors(effective)
     validate_resolved_colors(resolved, defaults, overrides)

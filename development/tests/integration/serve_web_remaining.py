@@ -62,7 +62,7 @@ def main():
             if url.path == "/api/session":
                 return self.send(dict(csrf="synthetic-only"))
             if url.path == "/api/settings":
-                return self.send(dict(webSettings=settings.read()))
+                return self.send(settings.read())
             if url.path == "/api/status":
                 return self.send(dict(http="ready", analysis="ready", source="fixture", accounts="fixture", session_detail=True))
             if url.path == "/api/live":
@@ -92,7 +92,7 @@ def main():
                 return self.send(f'<!doctype html><html><title>Synthetic theme review</title><iframe title="Cost Guard fixture" style="color-scheme:{scheme};width:{width}px;height:1200px;border:0" src="/index.html#/settings"></iframe></html>'.encode(), "text/html")
             content = resources.get(url.path)
             if url.path == '/index.html':
-                content = content.replace(b'data-theme="classic"', f'data-theme="{settings.read()["theme"]}"'.encode(), 1)
+                content = content.replace(b'data-theme="classic"', f'data-theme="{settings.read()["webSettings"]["theme"]}"'.encode(), 1)
             if content is None:
                 self.send_error(404)
                 return
@@ -105,10 +105,11 @@ def main():
             if self.path == "/fixture/stop":
                 self.send(dict(stopped=True)); stopped.set()
                 Thread(target=self.server.shutdown).start()
-            elif self.path in {"/api/settings/theme", "/api/settings/ccost"}:
+            elif self.path in {"/api/settings/theme", "/api/settings/ccost", "/api/settings/mini-placement"}:
                 try:
-                    field = "theme" if self.path.endswith("/theme") else "ccostDisplayUnit"
-                    self.send(dict(webSettings=settings.write(field, value.get(field))))
+                    field = {"/api/settings/theme": "theme", "/api/settings/ccost": "ccostDisplayUnit",
+                             "/api/settings/mini-placement": "miniWatchPlacement"}[self.path]
+                    self.send(settings.write(field, value.get(field)))
                 except SettingsError as error:
                     self.send_response(503); self.end_headers()
                     self.wfile.write(json.dumps(dict(error=str(error))).encode())

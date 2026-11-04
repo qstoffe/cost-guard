@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v80.155, 2026-11-04), the supported distribution.
+Use **current `main`** (v80.156, 2026-11-04), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -361,7 +361,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.155 (2026-11-04):** Full Web Watch shows **CCost (I + E)**: prompt total followed by its canonical Incoming Context CCost + Extra CCost. Both Running and Earlier prompt tables share unit-aware amounts and accessible explanations; partial/unknown values remain distinct. Mini Watch stays total-only. See [Web Watch](docs/web-beta.md#global-watch-and-reconnect).
+**v80.156 (2026-11-04):** Web Settings distinguishes inherited **Default** from explicit Theme, CCost display and new Mini Watch placement choices. Mini defaults to **Remember last** within the live opener/server; **Standard placement**, reload or a new host starts from browser-initial geometry. Preferences persist, window bounds do not. Physical placement checks remain unverified under an FR-scoped Decision Delegate exception; see [Mini Watch](docs/web-mini-watch.md).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

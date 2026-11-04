@@ -16,16 +16,24 @@ const WebSettings = (() => {
     {key: 'theme', id: 'web-theme', label: 'Theme', endpoint: 'theme', choices: [['classic', 'Classic'], ['web', 'Web']],
       explanation: 'Classic uses a dark CLI-inspired palette. Web follows your system appearance. Terminal colors are unchanged.'},
     {key: 'ccostDisplayUnit', id: 'ccost-unit', label: 'CCost display', endpoint: 'ccost', choices: [['credits', 'Credits'], ['usd', 'USD']],
-      explanation: 'USD is reference token valuation, not billed spending. CLI display is unchanged.'}
+      explanation: 'USD is reference token valuation, not billed spending. CLI display is unchanged.'},
+    {key: 'miniWatchPlacement', id: 'mini-placement', label: 'Mini Watch placement', endpoint: 'mini-placement',
+      choices: [['remember-last', 'Remember last'], ['standard', 'Standard placement']],
+      explanation: 'Applies on the next opening. Remember last reuses browser-native bounds in this opener while the host lives; reload or host restart starts standard. Geometry is never saved.'}
   ];
   function apply(value, root) {
-    const settings = value?.webSettings;
-    if (fields.some(field => !field.choices.some(([choice]) => choice === settings?.[field.key]))) {
+    const settings = value?.webSettings, choices = value?.webSettingsChoices, defaults = value?.webSettingsDefaults;
+    if (fields.some(field => {
+      const valid = item => field.choices.some(([choice]) => choice === item);
+      return !valid(settings?.[field.key]) || !valid(defaults?.[field.key]) ||
+        !(choices?.[field.key] === 'default' || valid(choices?.[field.key])) ||
+        settings[field.key] !== (choices[field.key] === 'default' ? defaults[field.key] : choices[field.key]);
+    })) {
       throw new Error('settings_unavailable');
     }
     document.documentElement.dataset.theme = settings.theme;
     ReportView.setUnit(settings.ccostDisplayUnit, root);
-    return {...settings};
+    return {values: {...settings}, choices: {...choices}, defaults: {...defaults}};
   }
   class View {
     constructor(api, applySettings = apply) {
@@ -34,9 +42,10 @@ const WebSettings = (() => {
       this.root = e('section'); this.root.className = 'web-settings';
       this.root.append(e('h3', 'Web settings'), e('p', 'Changes save immediately and apply only to Web.'));
       this.controls = new Map();
-      this.confirmed = {theme: document.documentElement.dataset.theme, ccostDisplayUnit: 'credits'};
+      this.confirmed = Object.fromEntries(fields.map(field => [field.key, 'default']));
       for (const field of fields) {
         const select = e('select'); select.id = field.id;
+        const inherited = e('option', 'Default'); inherited.value = 'default'; select.append(inherited);
         for (const [value, text] of field.choices) {
           const option = e('option', text); option.value = value; select.append(option);
         }
@@ -61,7 +70,15 @@ const WebSettings = (() => {
     lock(busy) {
       this.busy = busy;
       for (const [key, select] of this.controls) {
-        select.disabled = busy; select.value = this.confirmed[key];
+        select.disabled = busy || !this.loaded; select.value = this.confirmed[key];
+      }
+    }
+    confirm(value) {
+      const state = this.applySettings(value);
+      this.confirmed = state.choices; this.loaded = true;
+      for (const field of fields) {
+        const label = field.choices.find(([choice]) => choice === state.defaults[field.key])[1];
+        this.controls.get(field.key).firstChild.textContent = `Default (${label})`;
       }
     }
     async read() {
@@ -69,19 +86,19 @@ const WebSettings = (() => {
       this.lock(true);
       this.feedback.className = ''; this.feedback.textContent = 'Reading saved Web settings…';
       try {
-        this.confirmed = this.applySettings(await this.api('/api/settings'));
+        this.confirm(await this.api('/api/settings'));
         this.feedback.textContent = '';
       } catch (error) { this.error(error); }
       finally { this.lock(false); }
     }
     async save(field) {
       const select = this.controls.get(field.key), value = select.value;
-      if (this.busy || value === this.confirmed[field.key]) return;
+      if (this.busy || !this.loaded || value === this.confirmed[field.key]) return;
       const focused = document.activeElement === select;
       this.lock(true);
       this.feedback.className = ''; this.feedback.textContent = 'Saving ' + field.label.toLowerCase() + '…';
       try {
-        this.confirmed = this.applySettings(await this.api('/api/settings/' + field.endpoint, {[field.key]: value}));
+        this.confirm(await this.api('/api/settings/' + field.endpoint, {[field.key]: value}));
         this.feedback.className = 'success'; this.feedback.textContent = field.label + ' saved.';
       } catch (error) { this.error(error); }
       finally {
