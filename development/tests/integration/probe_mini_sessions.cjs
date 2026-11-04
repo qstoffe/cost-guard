@@ -37,9 +37,9 @@ module.exports = async function sessions({evaluate,until,fixture,command,pipSess
     assert.equal(value.pageOverflow,false); assert.equal(value.onlyRegion,true); assert.equal(value.scroll,true);
     assert.equal(value.unframed,true,'earlier table does not inherit generic section-card chrome');
     assert.ok(value.accounts>=32); assert.equal(value.suffixVisible,true); assert.equal(value.ellipsis,true);
-    assert.deepEqual(value.headings,['Session / Total CCost','CTX']);
+    assert.deepEqual(value.headings,['Session | Total CCost','CTX']);
     assert.deepEqual(value.ids,Array.from({length:Math.min(count,3)},(_,index)=>'earlier-'+(Math.max(0,count-3)+index)));
-    assert.ok(value.columns.every(count=>count===2)); assert.ok(value.costs.every(cost=>cost===' / 4583'));
+    assert.ok(value.columns.every(count=>count===2)); assert.ok(value.costs.every(cost=>cost===' | 4583'));
     assert.match(value.accessible,/Whole-session CCost: 4583/); assert.match(value.title,/Active long title/);
     if (value.width>=540) assert.equal(value.sameHeaderRow,true);
     await evaluate(`miniWatch.view.prompts.scrollTop=miniWatch.view.prompts.scrollHeight`);
@@ -63,9 +63,26 @@ module.exports = async function sessions({evaluate,until,fixture,command,pipSess
   await evaluate(`miniWatch.view.earlierToggle.click()`);
   assert.equal(await evaluate(`miniWatch.view.earlier.hidden`),false,'mouse/touch click disclosure');
   await evaluate(`miniWatch.view.prompts.scrollTop=0`);
-  await command('Runtime.evaluate',{expression:`document.querySelector('.mini-session-value').parentNode.focus()`},pipSession);
+  await command('Runtime.evaluate',{expression:`document.querySelector('td .mini-session-value').parentNode.focus()`},pipSession);
   assert.equal(await evaluate(`miniWatch.view.historyBody.rows[0].cells[0].querySelector('.mini-session-help').matches(':popover-open')`),true);
   assert.equal(await evaluate(`miniWatch.view.historyBody.rows[0].cells[0].querySelector('.mini-session-help').textContent===miniWatch.view.historyBody.rows[0].cells[0].title`),true,'keyboard focus visibly exposes full title and cost scope outside clipping');
+  await command('Runtime.evaluate',{expression:`document.querySelector('.mini-earlier-toggle').focus()`},pipSession);
+  await evaluate(`miniWatch.view.prompts.scrollTop=0;new Promise(resolve=>miniWatch.window.requestAnimationFrame(()=>miniWatch.window.requestAnimationFrame(resolve)))`);
+  await command('Input.dispatchMouseEvent',{type:'mouseMoved',x:0,y:0},pipSession);
+  const point = await evaluate(`(() => {const v=miniWatch.view,r=v.historyBody.rows[0].cells[0].getBoundingClientRect(),
+    region=v.prompts.getBoundingClientRect(),header=v.historyBody.parentNode.querySelector('th').getBoundingClientRect();
+    return {x:(Math.max(r.left,region.left)+Math.min(r.right,region.right))/2,
+      y:(Math.max(r.top,header.bottom,region.top)+Math.min(r.bottom,region.bottom))/2};})()`);
+  assert.equal(await evaluate(`miniWatch.window.document.elementFromPoint(${point.x},${point.y})?.closest('td')===miniWatch.view.historyBody.rows[0].cells[0]`),true,'hover target is below the sticky header');
+  await command('Input.dispatchMouseEvent',{type:'mouseMoved',...point},pipSession);
+  await until(`miniWatch.view.historyBody.rows[0].cells[0].querySelector('.mini-session-help').matches(':popover-open')`);
+  await command('Input.dispatchMouseEvent',{type:'mouseMoved',x:0,y:0},pipSession);
+  await until(`!miniWatch.view.historyBody.rows[0].cells[0].querySelector('.mini-session-help').matches(':popover-open')`);
+  await command('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',clickCount:1,...point},pipSession);
+  await command('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,...point},pipSession);
+  assert.equal(await evaluate(`miniWatch.view.historyBody.rows[0].cells[0].querySelector('.mini-session-help').matches(':popover-open')`),true,'click exposes full title');
+  await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Tab',code:'Tab',windowsVirtualKeyCode:9},pipSession);
+  await command('Input.dispatchKeyEvent',{type:'keyUp',key:'Tab',code:'Tab',windowsVirtualKeyCode:9},pipSession);
   await command('Runtime.evaluate',{expression:`document.querySelector('.mini-earlier-toggle').focus()`},pipSession);
   const image = await command('Page.captureScreenshot',{format:'png',captureBeyondViewport:false},pipSession);
   const imagePath = output.replace(/\.json$/,'')+'-earlier.png';
@@ -80,7 +97,7 @@ module.exports = async function sessions({evaluate,until,fixture,command,pipSess
     } miniWatch.update(p);})()`);
   for (const unit of ['credits','usd']) {
     await evaluate(`ReportView.setUnit('${unit}');miniWatch.settings()`);
-    const valid = await evaluate(`(() => {const v=miniWatch.view;return [...v.prompts.querySelectorAll('.mini-session-total')].every(node=>{
+    const valid = await evaluate(`(() => {const v=miniWatch.view;return [...v.prompts.querySelectorAll('td .mini-session-total')].every(node=>{
       const r=node.getBoundingClientRect(),cell=node.closest('td').getBoundingClientRect();return r.right<=cell.right+1 && node.scrollWidth<=node.clientWidth+1;
     }) && v.doc.documentElement.scrollWidth<=miniWatch.window.innerWidth;})()`);
     assert.equal(valid,true,'large/partial full total never ellipsizes or overflows its cell');

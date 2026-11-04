@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v80.157, 2026-11-04), the supported distribution.
+Use **current `main`** (v80.158, 2026-11-04), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -361,7 +361,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.157 (2026-11-04):** Web Settings adds **Quota display: Default (Used) / Used / Remaining**. Finite native quota percentages, amounts and bars switch together across Accounts, Watch and an open Mini without new acquisition. Unlimited/unknown limits keep truthful Used/unknown presentation; exhausted Remaining stays red even with an empty bar. Observed period CCost stays independent and is labelled **CCost used** in Remaining. CLI and Remaining/day pace are unchanged. See [Web settings](docs/web-beta.md#web-settings).
+**v80.158 (2026-11-04):** Mini Watch's two session tables left-anchor Session/title and right-anchor **| Total CCost** / **| amount** within one column. Only long titles ellipsize; whole-session totals use their natural width and stay visible. Accessible scope, horizontal scrolling, prompt metrics, accounting and PiP geometry are unchanged. See [Mini Watch](docs/web-mini-watch.md).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

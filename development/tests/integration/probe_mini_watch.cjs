@@ -154,6 +154,7 @@ async function main() {
       return value;
     };
     await require('./probe_mini_sessions.cjs')({evaluate,until,fixture,command,pipSession,layouts,checks,output,screenshots});
+    await require('./probe_mini_session_alignment.cjs')({evaluate,until,fixture,command,pipSession,layouts,checks});
     await fixture('density-6-4-long'); await until(`miniWatch.view.body.rows.length===6`);
     assert.equal((await checkColumns('intrinsic-long-titles')).title,true);
     await evaluate(`(() => {const p=structuredClone(liveValue);p.state='running';p.view.now_ms++;
