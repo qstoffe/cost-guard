@@ -61,13 +61,20 @@ Its two unframed regions scroll independently, including shorter lists at compac
 primary Used bars stay thin and cyan until authoritative exhaustion. Estimated costs
 have accessible provenance without a visible approximation glyph. Native close and
 the filled Watch toggle own closing; the title still returns to the existing tab.
-Healthy Live text is omitted, not failure/freshness warnings. Earlier exports canonical
+Intrinsic metric/header minima leave all spare width to Session; only titles ellipsize,
+and narrow prompt regions scroll horizontally. Healthy/transient operational text is
+omitted. Independent usable-observation clocks for prompts, Daily and each quota
+produce one muted notice after ten minutes; definitive host/auth/identity failures
+remain immediately actionable. Partial reads retain unmatched rows but accept valid
+per-card corrections; observed empty publications still evict. Earlier exports canonical
 `completed_at_ms` and local finished display tokens; the Windows Stockholm fallback
 preserves repeated-hour fold/offset identity. No source, accounting or lifecycle owner moves.
 
 The separate, non-navigating right header reuses `daily_usage.total`/`prompt_count`,
-the full Watch display tokens and daily pricing/source state; app health also marks
-retained daily figures not current. Loading is not zero. The left title alone returns
+the full Watch display tokens and daily pricing/source state. Observation times and
+retained/partial provenance are accessible, not prominent warning suffixes. Additive
+`daily_usage.day_end_ms` uses configured timezone/DST so disconnected Mini clears the
+previous day without calculating any usage. Loading is not zero. The left title alone returns
 to Watch. Mini-only header alignment never changes full Watch tables. Chromium's
 560×250 opening request uses screen DIPs, not physical or zoomed document pixels;
 native Windows 150% measurements establish the <=470-physical-pixel opening cap on

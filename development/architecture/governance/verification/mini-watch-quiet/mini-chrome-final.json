@@ -1,0 +1,309 @@
+{
+  "outcome": "PASS",
+  "browser": "Chrome/156.0.8078.80",
+  "emulatedDeviceScale": 1,
+  "checks": [
+    "Real user-activated Document PiP opens prompt-local table with external CSP styles, no inner frame/close and selected On fill",
+    "Intrinsic metric/header minima grow/shrink with content, empty colspan does not distort, only Session ellipsizes; failed reads retain figures quietly and one ten-minute notice clears on recovery",
+    "Navigation, existing-opener return, live theme/USD propagation keep Mini and exactly one EventSource",
+    "Compact opening and higher-scale browser clamps keep reachable independent scroll regions; enlarged 5/3 fits at 100/150%, 6/4 scroll; centered headers, semantic data alignment, canonical separate daily summary",
+    "Classic/Web light/dark styles, long account labels, primary-only six-account content without page overflow",
+    "Keyboard summary focus/activation and user-activated native PiP resize remain usable",
+    "With main document actually hidden and PiP visible, real SSE preserves final prompt-local completion metrics and updates empty/recovery without rAF",
+    "Native API replacement, browser-owned close, main toggle, reopen and main reload synchronize Off; no auto-open",
+    "Real terminal shutdown reaches open Mini as not live"
+  ],
+  "layouts": [
+    {
+      "case": "initial-unattached-5-3",
+      "width": 560,
+      "height": 250,
+      "outerHeight": 295,
+      "dpr": 1,
+      "prompts": true,
+      "accounts": true,
+      "promptHeight": 109,
+      "accountHeight": 90,
+      "outer": false
+    },
+    {
+      "case": "intrinsic-long-titles",
+      "width": 560,
+      "pageOverflow": false,
+      "scroll": false,
+      "region": 530,
+      "widths": [
+        343.5,
+        31.03125,
+        44.40625,
+        64.78125,
+        46.28125
+      ],
+      "required": [
+        31.03125,
+        44.40625,
+        64.78125,
+        46.28125
+      ],
+      "wrap": [
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap"
+      ],
+      "ellipsis": false,
+      "title": true
+    },
+    {
+      "case": "intrinsic-growing-metrics",
+      "width": 560,
+      "pageOverflow": false,
+      "scroll": false,
+      "region": 530,
+      "widths": [
+        257.484375,
+        60.140625,
+        79.40625,
+        67.859375,
+        65.109375
+      ],
+      "required": [
+        60.140625,
+        79.40625,
+        67.859375,
+        65.109375
+      ],
+      "wrap": [
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap"
+      ],
+      "ellipsis": false,
+      "title": true
+    },
+    {
+      "case": "intrinsic-empty-colspan",
+      "width": 560,
+      "pageOverflow": false,
+      "scroll": false,
+      "region": 545,
+      "widths": [
+        385.65625,
+        16.5,
+        44.40625,
+        64.78125,
+        33.65625
+      ],
+      "required": [
+        16.5,
+        44.40625,
+        64.78125,
+        33.65625
+      ],
+      "wrap": [
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap"
+      ],
+      "ellipsis": false,
+      "title": false
+    },
+    {
+      "case": "intrinsic-shrinking-metrics",
+      "width": 560,
+      "pageOverflow": false,
+      "scroll": false,
+      "region": 530,
+      "widths": [
+        343.5,
+        31.03125,
+        44.40625,
+        64.78125,
+        46.28125
+      ],
+      "required": [
+        31.03125,
+        44.40625,
+        64.78125,
+        46.28125
+      ],
+      "wrap": [
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap"
+      ],
+      "ellipsis": false,
+      "title": false
+    },
+    {
+      "case": "native-resize-5-3",
+      "width": 538,
+      "height": 405,
+      "outer": false,
+      "horizontal": false,
+      "prompts": false,
+      "accounts": false,
+      "barHeight": 9.75,
+      "promptHeight": 155,
+      "promptContent": 155,
+      "accountHeight": 125,
+      "accountContent": 125,
+      "header": "sticky",
+      "healthyHidden": true
+    },
+    {
+      "case": "classic-light",
+      "width": 538,
+      "height": 405
+    },
+    {
+      "case": "web-light",
+      "width": 538,
+      "height": 405
+    },
+    {
+      "case": "web-dark",
+      "width": 538,
+      "height": 405
+    },
+    {
+      "case": "intrinsic-narrow-native-resize",
+      "width": 258,
+      "pageOverflow": false,
+      "scroll": true,
+      "region": 228,
+      "widths": [
+        56.515625,
+        31.03125,
+        44.40625,
+        64.78125,
+        46.28125
+      ],
+      "required": [
+        31.03125,
+        44.40625,
+        64.78125,
+        46.28125
+      ],
+      "wrap": [
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap"
+      ],
+      "ellipsis": false,
+      "title": true
+    },
+    {
+      "case": "intrinsic-narrow-large-metrics",
+      "width": 258,
+      "pageOverflow": false,
+      "scroll": true,
+      "region": 228,
+      "widths": [
+        56.515625,
+        81.984375,
+        86.6875,
+        67.859375,
+        65.109375
+      ],
+      "required": [
+        81.984375,
+        86.6875,
+        67.859375,
+        65.109375
+      ],
+      "wrap": [
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap"
+      ],
+      "ellipsis": false,
+      "title": true
+    }
+  ],
+  "screenshots": [
+    "mini-chrome-final-classic-light.png",
+    "mini-chrome-final-web-light.png",
+    "mini-chrome-final-web-dark.png"
+  ],
+  "limitations": [
+    "Headless Chromium only; no physical/native X, native return/replacement chrome, minimized-opener restoration, always-on-top OS geometry or screen-reader proof."
+  ]
+}

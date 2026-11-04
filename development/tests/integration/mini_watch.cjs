@@ -26,7 +26,8 @@ function win() {
   return node;
 }
 let now = 1000;
-const context = vm.createContext({document: doc(), window: win(), URL, Date: {now: () => now}, input});
+class Clock extends Date { static now() { return now; } }
+const context = vm.createContext({document: doc(), window: win(), URL, Date: Clock, input});
 for (const file of ['render', 'watch', 'mini']) vm.runInContext(fs.readFileSync(`src/web/assets/${file}.js`, 'utf8'), context);
 const Controller = vm.runInContext('MiniWatch.Controller', context);
 function setup() {
@@ -86,15 +87,17 @@ function setup() {
     vm.runInContext('ReportView.setUnit("credits")', context);
   }
   input.view.daily_usage = {...daily,total:{...daily.total,priced_requests:0,complete:false}};
-  parity(); assert.match(view.daily.textContent,/Total Today N\/A · 37 prompts · Partial/);
+  parity(); assert.equal(view.daily.textContent,'Total Today N/A · 37 prompts');
+  assert.match(view.daily.title,/Partial pricing/);
   input.view.daily_usage = {...daily,total:{...daily.total,complete:false}};
-  parity(); assert.match(view.daily.textContent,/34 · 37 prompts · Partial/);
+  parity(); assert.equal(view.daily.textContent,'Total Today 34 · 37 prompts');
   for (const state of ['retrying','unavailable','loading','partial']) {
-    input.view.daily_state=state; parity(); assert.match(view.daily.textContent,/Not current/);
+    input.view.daily_state=state; parity(); assert.equal(view.daily.textContent,'Total Today 34 · 37 prompts');
+    assert.equal(view.daily.className,'mini-daily'); assert.equal(view.health.hidden,true);
   }
-  input.view.daily_usage=null; input.view.daily_state='unavailable'; controller.update(input); assert.equal(view.daily.textContent,'Total Today · Unavailable');
+  input.view.daily_usage=null; input.view.daily_state='unavailable'; controller.update(input); assert.equal(view.daily.textContent,'Total Today · Loading…');
   input.view.daily_state='loading'; controller.update(input); assert.equal(view.daily.textContent,'Total Today · Loading…');
-  input.view.daily_usage={...daily,start_ms:daily.start_ms+86400000,prompt_count:0,total:{...daily.total,observed_requests:0,priced_requests:0,display:{known_ccost:'0'},display_units:{credits:{known_ccost:'0'}}}};
+  input.view.daily_usage={...daily,day_start_ms:daily.day_start_ms+86400000,day_end_ms:daily.day_end_ms+86400000,prompt_count:0,total:{...daily.total,observed_requests:0,priced_requests:0,display:{known_ccost:'0'},display_units:{credits:{known_ccost:'0'}}}};
   input.view.daily_state='observed'; parity(); assert.equal(view.daily.textContent,'Total Today 0 · 0 prompts','new canonical local day replaces the old daily observation');
   input.view.daily_usage=daily; parity(); assert.equal(view.daily.textContent,'Total Today 34 · 37 prompts','later source corrections replace, never accumulate');
   assert.ok(!/Running prompts|Running CCost|Longest running|×/.test(view.root.textContent));
@@ -154,17 +157,42 @@ function setup() {
   assert.equal(child.document.documentElement.dataset.theme, 'web');
   assert.equal(view.daily.textContent,'Total Today $0.34 · 37 prompts');
   for (const kind of ['reconnecting', 'offline', 'source_unavailable', 'authorization_required', 'identity_changed', 'stopped']) {
-    controller.health({kind}); assert.match(view.health.textContent, /not live/); assert.equal(view.body.children[1].children[3].textContent, '20m');
-    assert.match(view.daily.textContent,/Not current/); assert.match(view.daily.title,/retained observation/);
+    controller.health({kind});
+    assert.equal(view.health.hidden, ['reconnecting','offline','source_unavailable'].includes(kind));
+    if (!view.health.hidden) assert.match(view.health.textContent,/return to|reopen|restart/);
+    assert.equal(view.body.children[1].children[3].textContent, '20m');
+    assert.equal(view.daily.textContent,'Total Today $0.34 · 37 prompts'); assert.match(view.daily.title,/retained observation/);
   }
   controller.health({kind: 'connected'}); now += 16000;
-  [...child.timers][0](); assert.match(view.health.textContent, /Waiting for live update · not live/);
-  assert.match(view.daily.textContent,/Not current/);
-  controller.update(input); assert.match(view.health.textContent, /not live/, 'progress/repeated snapshot is not new Live evidence');
+  [...child.timers][0](); assert.equal(view.health.hidden,true); assert.equal(view.root.dataset.live,'false');
+  assert.equal(view.daily.textContent,'Total Today $0.34 · 37 prompts');
+  controller.update(input); assert.equal(view.root.dataset.live,'false', 'progress/repeated snapshot is not new Live evidence');
   input.view.now_ms++;
   controller.update(input); assert.equal(view.health.textContent, '');
-  controller.update({...input, state: 'recovering'}); assert.match(view.health.textContent, /not live/);
+  controller.update({...input, state: 'recovering'}); assert.equal(view.health.hidden,true); assert.equal(view.root.dataset.live,'false');
   controller.update(input);
+  // A failed/partial read cannot erase rows or advance the independent clocks.
+  const retainedText = view.body.textContent, beforeDaily = view.daily.textContent;
+  const healthy = JSON.parse(JSON.stringify(input));
+  input.view = {...input.view,active_cards:[],cards_state:'unavailable',daily_state:'retrying',quota_stale:true,
+    daily_usage:{...daily,total:{...daily.total,display_units:{usd:{known_ccost:'$999'}}}}};
+  controller.update(input); assert.equal(view.body.textContent,retainedText); assert.equal(view.daily.textContent,beforeDaily);
+  assert.ok(!/quota stale|Partial|Not current/.test(view.root.textContent));
+  now = 600999; controller.health({kind:'reconnecting'}); assert.equal(view.health.hidden,true);
+  now = 601000; controller.update(input); assert.equal(view.health.textContent,'Updates unavailable · showing last values');
+  const warning = view.health.textContent; now += 5000; controller.health({kind:'connected'});
+  input.view.now_ms++; controller.update(input); assert.equal(view.health.textContent,warning,'retry publications cannot fake recovery');
+  assert.equal(view.body.textContent,retainedText); assert.match(view.prompts.title,/Retained values are not new live observations/);
+  input.view = {...healthy.view,now_ms:healthy.view.now_ms+2,
+    daily_usage:{...daily,observed_at_ms:daily.observed_at_ms+1},accounts:{...healthy.view.accounts,accounts:healthy.view.accounts.accounts.map(item =>
+      ({...item,observation:{...item.observation,observed_at_ms:item.observation.observed_at_ms+1}}))}};
+  controller.update(input); assert.equal(view.health.hidden,true,'genuinely usable recovery clears the one status');
+  input.view = {...input.view,active_cards:[],cards_state:'observed',now_ms:input.view.now_ms+1};
+  controller.update(input); assert.match(view.body.textContent,/No running or recently ended prompts/,'valid empty evicts retained rows');
+  input.view = {...input.view,active_cards:originals,daily_usage:{...daily,day_end_ms:now+1}};
+  controller.update(input); assert.equal(view.daily.textContent,beforeDaily);
+  now++; [...child.timers][0](); assert.equal(view.daily.textContent,'Total Today · Loading…','no yesterday total after configured midnight, even disconnected');
+  input.view = {...healthy.view,now_ms:healthy.view.now_ms+3}; controller.update(input);
   view.summary.fire('click'); assert.equal(test.returned(), 1); assert.equal(test.focused(), 1);
   assert.equal(child.closed, false, 'return selects existing tab without closing Mini');
   await controller.toggle();
@@ -182,6 +210,34 @@ function setup() {
   await controller.toggle(); assert.equal(test.calls(), 6, 'ended owner cannot reopen');
   const pendingClose = setup(); const promise = pendingClose.controller.toggle(); pendingClose.owner.fire('pagehide');
   const late = win(); pendingClose.opened(late); await promise; assert.equal(late.closed, true);
+  // Independent acquisition lanes: prompt progress cannot hide a stuck Daily read.
+  const lane = setup().controller, start = now, value = JSON.parse(JSON.stringify(healthy));
+  lane.update(value);
+  const before = lane.observations.view.accounts.accounts[0];
+  value.view = {...value.view,daily_state:'retrying',accounts:{...value.view.accounts,accounts:value.view.accounts.accounts.map((item,index)=>
+    index ? item : {...item,observation:{...item.observation,availability:'unavailable'},primary:{...item.primary,used_percent:'—',used_fraction:null}})}};
+  lane.update(value);
+  assert.equal(lane.observations.view.accounts.accounts[0].primary.used_percent,before.primary.used_percent,'failed quota reads keep real percentages');
+  assert.equal(lane.observations.view.accounts.accounts[0].observation.availability,'unavailable','retention does not invent quota freshness');
+  now = start+599999; value.view = {...healthy.view,now_ms:healthy.view.now_ms+5,daily_state:'retrying',
+    accounts:{...healthy.view.accounts,accounts:healthy.view.accounts.accounts.map(item=>
+      ({...item,observation:{...item.observation,observed_at_ms:item.observation.observed_at_ms+1}}))}};
+  lane.update(value); assert.equal(lane.observations.delayed(now),false);
+  now++; value.view.now_ms++; lane.update(value);
+  assert.equal(lane.observations.delayed(now),true,'healthy prompt publications do not reset the daily failure clock');
+  value.view = {...value.view,daily_state:'observed',daily_usage:{...daily,observed_at_ms:daily.observed_at_ms+1}};
+  lane.update(value); assert.equal(lane.observations.delayed(now),false);
+  const priorCards = lane.observations.view.active_cards;
+  const changed = {...priorCards[0],title:'Fresh correction in a partial publication',state:'observed'};
+  value.view = {...value.view,cards_state:'partial',active_cards:[changed]};
+  lane.update(value);
+  assert.equal(lane.observations.view.active_cards.length,2,'partial reads do not erase other retained prompt rows');
+  assert.equal(lane.observations.view.active_cards[0].title,changed.title,'valid per-card corrections still apply');
+  const initial = setup().controller;
+  initial.update({state:'recovering',view:null});
+  assert.equal(initial.observations.snapshot(now),null,'no fabricated first values');
+  now += 599999; assert.equal(initial.observations.delayed(now),false);
+  now++; assert.equal(initial.observations.delayed(now),true);
   for (const change of [owner => {owner.isSecureContext = false;}, owner => {delete owner.documentPictureInPicture;},
       owner => {owner.top = {};}, owner => {owner.document.permissionsPolicy = {allowsFeature: () => false};}]) {
     const item = setup(); change(item.owner);

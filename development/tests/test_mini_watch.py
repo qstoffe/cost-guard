@@ -103,6 +103,22 @@ class MiniWatchTests(unittest.TestCase):
         self.assertEqual(('—', 'Unknown finish time'),
             (prompt['display']['finished_clock'], prompt['display']['finished_date_time']))
 
+    def test_daily_presentation_expiry_uses_configured_day_including_dst(self):
+        for day, start_hour, hours in (((2026, 3, 29), 23, 23), ((2026, 10, 25), 22, 25)):
+            # UTC instants of Stockholm midnight, deliberately not browser local time.
+            midnight = datetime(*day, tzinfo=timezone.utc).timestamp() * 1000 - (24 - start_hour) * 3600000
+            frame = replace(self.frame, daily_usage=replace(self.frame.daily_usage, day_start_ms=int(midnight)))
+
+            daily = project_live(frame, 'Europe/Stockholm').to_json()['daily_usage']
+
+            self.assertEqual(hours * 3600000, daily['day_end_ms'] - daily['day_start_ms'])
+            self.assertEqual(self.frame.daily_usage.observed_at_ms, daily['observed_at_ms'])
+
+        frame = replace(self.frame, daily_usage=replace(self.frame.daily_usage, day_start_ms=0))
+        self.assertEqual(86400000, project_live(frame, 'UTC').to_json()['daily_usage']['day_end_ms'])
+        frame = replace(frame, daily_usage=replace(frame.daily_usage, day_start_ms=-3600000))
+        self.assertEqual(82800000, project_live(frame, 'Europe/Stockholm').to_json()['daily_usage']['day_end_ms'])
+
     def test_windows_timezone_fallback_preserves_repeated_hour_identity(self):
         with patch('src.analysis.timezones.ZoneInfo', side_effect=ZoneInfoNotFoundError):
             zone = resolve_timezone('Europe/Stockholm')

@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.149 — 2026-11-04
+
+- Mini Watch: intrinsic metric/header widths leave spare space to Session, with horizontal scrolling when narrowed. Transient retries quietly retain figures; one muted notice follows ten minutes without usable observations, while terminal failures remain actionable. Accessible observation/provenance disclosure and configured-day expiry preserve truthfulness; full Watch and accounting are unchanged.
+
 ## v80.148 — 2026-11-04
 
 - Windows Web Beta: tray-only **Copy Cost Guard link** copies a fresh, two-minute, one-use browser handoff without opening a browser or restarting the server. Bounded independent pending credentials preserve other handoffs and active sessions; an already-loaded authorization-error tab accepts a pasted link safely. Unicode clipboard work is asynchronous/retryable and marks text ineligible for Windows history/cloud sync, with credential-free feedback. No new browser API or macOS menu. Real clipboard/physical desktop verification is explicitly deferred by Decision Delegate after private-isolation setup was denied; [evidence and limits](development/journal/web/browser-links.md).

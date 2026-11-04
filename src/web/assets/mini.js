@@ -18,6 +18,67 @@ const MiniWatch = (() => {
       return 'Picture-in-Picture is disabled by browser policy.';
     return '';
   }
+  // Presentation retention only. A retry/state change is not a new observation.
+  // Independent clocks prevent healthy prompt ticks from hiding a stuck Daily lane.
+  class Observations {
+    constructor() {
+      this.started = Date.now(); this.clocks = new Map(); this.view = null;
+    }
+    observed(key, token, now) {
+      if (token != null && this.clocks.get(key)?.token !== token) this.clocks.set(key, {token, at: now});
+    }
+    update(publication, now) {
+      const view = publication?.view;
+      if (!view || publication.state !== 'running') return;
+      const previous = this.view;
+      const prompts = view.cards_state === 'observed';
+      const oldCards = new Map((previous?.active_cards || []).map(card =>
+        [JSON.stringify([card.session_id, card.focal_id]), card]));
+      const cards = (view.active_cards || []).map(card => {
+        const key = JSON.stringify([card.session_id, card.focal_id]);
+        const value = card.state === 'observed' ? {...card, mini_observed_at_ms: view.now_ms} : oldCards.get(key) || card;
+        oldCards.set(key, value); return value;
+      });
+      if (prompts) {
+        this.observed('prompts', JSON.stringify([view.now_ms, publication.source_observed_at_ms]), now);
+        this.promptObservedAt = view.now_ms;
+      }
+      const daily = view.daily_usage;
+      const dailyUsable = daily && !(daily.day_end_ms <= now) && ['observed', 'refreshing'].includes(view.daily_state);
+      if (dailyUsable) this.observed('daily', daily.observed_at_ms, now);
+      const oldAccounts = new Map((previous?.accounts?.accounts || []).map(item =>
+        [JSON.stringify([item.observation.provider_id, item.observation.id]), item]));
+      const accounts = view.accounts?.accounts.map(item => {
+        const obs = item.observation, key = JSON.stringify([obs.provider_id, obs.id]);
+        if (!this.clocks.has('quota:' + key)) this.clocks.set('quota:' + key, {token: null, at: this.started});
+        const usable = !view.quota_stale && ['available', 'partial'].includes(obs.availability);
+        if (usable) this.observed('quota:' + key, obs.observed_at_ms, now);
+        const old = oldAccounts.get(key);
+        return usable || item.primary.restricted || item.primary.exhausted || !old ? item :
+          {...old, observation: {...old.observation, availability: obs.availability}};
+      });
+      const activeKeys = new Set((view.accounts?.accounts || previous?.accounts?.accounts || []).map(item =>
+        'quota:' + JSON.stringify([item.observation.provider_id, item.observation.id])));
+      for (const key of this.clocks.keys()) if (key.startsWith('quota:') && !activeKeys.has(key)) this.clocks.delete(key);
+      this.view = {...view,
+        active_cards: prompts ? cards : [...oldCards.values()],
+        // A canonical null clears the previous day. Never carry it across rollover.
+        daily_usage: !daily || dailyUsable || !previous?.daily_usage ||
+          daily.day_start_ms !== previous.daily_usage.day_start_ms ? daily : previous.daily_usage,
+        accounts: accounts ? {...view.accounts, accounts} : previous?.accounts};
+    }
+    snapshot(now) {
+      const view = this.view;
+      return view?.daily_usage?.day_end_ms <= now ? {...view, daily_usage: null} : view;
+    }
+    delayed(now) {
+      const keys = ['prompts', 'daily', ...[...this.clocks.keys()].filter(key => key.startsWith('quota:'))];
+      return keys.some(key => now - (this.clocks.get(key)?.at ?? this.started) >= 600000);
+    }
+  }
+  function observedAt(value) {
+    return Number.isFinite(value) ? new Date(value).toISOString() : 'unknown';
+  }
   class View {
     constructor(doc, returnToWatch) {
       this.doc = doc;
@@ -36,7 +97,7 @@ const MiniWatch = (() => {
       this.summary.append(el('span', 'Cost Guard · Watch', 'mini-brand'));
       this.daily = el('p', 'Total Today · Loading…', 'mini-daily'); this.daily.tabIndex = 0;
       const top = el('header', undefined, 'mini-header'); top.append(this.summary, this.daily);
-      this.health = el('p', 'Acquiring live prompts…', 'mini-health'); this.health.setAttribute('role', 'status');
+      this.health = el('p', '', 'mini-health'); this.health.setAttribute('role', 'status');
       this.prompts = el('div', undefined, 'mini-prompts'); this.prompts.tabIndex = 0;
       this.prompts.setAttribute('role', 'region'); this.prompts.setAttribute('aria-label', 'Active and recently ended prompts');
       const table = el('table', undefined, 'mini-prompt-table'), head = el('thead'), header = el('tr');
@@ -50,31 +111,34 @@ const MiniWatch = (() => {
       }
       head.append(header); this.body = el('tbody'); table.append(head, this.body); this.prompts.append(table);
       this.promptRows = new Map(); this.emptyPrompts = el('tr');
-      const empty = el('td', 'No running or recently ended prompts'); empty.colSpan = 5; this.emptyPrompts.append(empty);
+      const empty = el('td'); empty.colSpan = 5;
+      empty.append(el('span', 'No running or recently ended prompts', 'mini-empty')); this.emptyPrompts.append(empty);
       this.accounts = el('ul', undefined, 'mini-accounts'); this.lines = new Map();
       this.accounts.tabIndex = 0; this.accounts.setAttribute('aria-label', 'Primary subscription usage and same-period observed CCost');
       this.root.append(top, this.health, this.prompts, this.accounts); doc.body.replaceChildren(this.root);
     }
-    update(publication, health, overdue) {
-      const view = publication?.view, running = view?.running;
+    update(publication, health, overdue, observations, now) {
+      const view = observations.snapshot(now);
       const fresh = health.kind === 'connected' && publication?.state === 'running' && !overdue;
       const text = ReportView.text;
-      const state = {authorization_required: 'Authorization expired', identity_changed: 'Host changed',
-        stopped: 'Host stopped', offline: 'Offline', reconnecting: 'Reconnecting', source_unavailable: 'Source unavailable'}[health.kind];
-      text(this.health, !fresh ? `${state || (overdue ? 'Waiting for live update' : 'Acquiring live prompts')} · ${view ? 'not live' : 'no observation yet'}` :
-        running?.state === 'unavailable' ? 'Prompt source unavailable · retained values' :
-        running?.state === 'loading' || !running ? 'Acquiring prompts · partial observation' :
-        !running.complete || running.unresolved_cost ? 'Partial prompt / pricing data' : '');
+      const state = {authorization_required: 'Authorization expired · return to Cost Guard',
+        identity_changed: 'Host changed · reopen Cost Guard', stopped: 'Host stopped · restart Cost Guard'}[health.kind];
+      text(this.health, state || (observations.delayed(now) ? 'Updates unavailable' +
+        (view ? ' · showing last values' : '') : ''));
       this.health.hidden = !this.health.textContent;
-      this.root.dataset.live = fresh && running?.state === 'observed' ? 'true' : 'false';
-      this.health.title = 'Figures use the last canonical publication; elapsed time is never extrapolated while disconnected.';
+      this.root.dataset.live = fresh && publication?.view?.cards_state === 'observed' ? 'true' : 'false';
+      const disclosure = `Last coherent prompt publication: ${observedAt(observations.promptObservedAt)}. ` +
+        `Connection: ${health.kind}; source: ${publication?.state || 'loading'}; prompt acquisition: ${publication?.view?.cards_state || 'loading'}. ` +
+        'Retained values are not new live observations; elapsed time is never extrapolated.';
+      this.health.title = disclosure; this.prompts.title = disclosure;
+      this.prompts.setAttribute('aria-description', disclosure);
       this.drawDaily(view, fresh);
       this.drawPrompts(view);
       this.drawAccounts(view);
     }
     drawDaily(view, fresh) {
       const value = view?.daily_usage, state = view?.daily_state;
-      let label = 'Total Today · ' + (state === 'unavailable' ? 'Unavailable' : 'Loading…');
+      let label = 'Total Today · Loading…';
       const notes = [];
       if (value) {
         const cost = value.total.observed_requests && !value.total.priced_requests ? 'N/A' : ReportView.display(value.total, 'known_ccost');
@@ -85,11 +149,12 @@ const MiniWatch = (() => {
         else if (state === 'retrying') notes.push('Retrying daily refresh · retained observation, not current');
         else if (state !== 'observed') notes.push('Partial daily observation');
         if (!fresh) notes.push('Not live · retained observation');
+        notes.push('Last daily observation: ' + observedAt(value.observed_at_ms));
       }
-      ReportView.text(this.daily, label + (notes.length ? ' · ' + (fresh && state === 'observed' ? 'Partial' : 'Not current') : ''));
+      ReportView.text(this.daily, label);
       this.daily.title = 'Global configured local-day CCost and distinct initiating prompts, including pre-Watch activity; not visible-row totals. ' + notes.join('. ');
       this.daily.setAttribute('aria-label', this.daily.textContent + '. ' + this.daily.title);
-      this.daily.className = 'mini-daily' + (notes.length ? ' mini-warning' : '');
+      this.daily.className = 'mini-daily';
     }
     drawPrompts(view) {
       const wanted = [], seen = new Set(), text = ReportView.text, display = ReportView.display;
@@ -105,20 +170,22 @@ const MiniWatch = (() => {
         if (!row) {
           row = this.el('tr'); row.dataset.id = key;
           for (let index = 0; index < 5; index++) row.append(this.el('td'));
-          row.children[0].tabIndex = 0; this.promptRows.set(key, row);
+          row.children[0].tabIndex = 0; row.children[0].append(this.el('span', '', 'mini-session'));
+          this.promptRows.set(key, row);
         }
         const outcome = prompt.in_progress ? 'Running' : prompt.aborted ? 'Aborted' : prompt.has_error ? 'Error' : prompt.completed_successfully ? 'Completed' : 'Ended';
         const reason = !prompt.in_progress && prompt.abort_reason ? ' · ' + prompt.abort_reason.replaceAll('_', ' ') : '';
         const state = ['partial', 'retrying', 'unavailable'].includes(card.state) ? ' · ' + card.state + ' source evidence' : '';
         row.title = `${outcome}${reason}${state}; per-prompt CCost, Duration and CTX.${prompt.cost_estimated ? ' Estimated cost.' : ''}${prompt.unresolved_cost ? ' Partial pricing.' : ''}`;
+        row.title += ` Last prompt observation: ${observedAt(card.mini_observed_at_ms)}.`;
         row.setAttribute('aria-label', `${card.title} · Prompt ${prompt.prompt_number} · ${row.title}`);
         row.className = prompt.in_progress ? 'mini-running' : prompt.aborted || prompt.has_error ? 'mini-error' : prompt.completed_successfully ? 'mini-success' : '';
-        text(row.children[0], card.title || card.session_id); row.children[0].title = row.children[0].textContent;
+        text(row.children[0].children[0], card.title || card.session_id); row.children[0].title = row.children[0].textContent;
         const context = display(item.live_context, 'watch_next_context_tokens');
         const cells = ['#' + prompt.prompt_number, display(prompt, 'ccost'), display(item, 'watch_duration_ms'), context === 'N/A' ? context : '~' + context];
         cells.forEach((value, index) => text(row.children[index + 1], value)); wanted.push(row);
       }
-      text(this.emptyPrompts.children[0], view?.cards_state === 'observed' ? 'No running or recently ended prompts' : 'Prompt observations unavailable or pending');
+      text(this.emptyPrompts.children[0].children[0], view?.cards_state === 'observed' ? 'No running or recently ended prompts' : 'Loading…');
       reconcile(this.body, wanted.length ? wanted : [this.emptyPrompts]);
       for (const key of this.promptRows.keys()) if (!seen.has(key)) this.promptRows.delete(key);
     }
@@ -137,10 +204,12 @@ const MiniWatch = (() => {
         const used = primary.quota.unlimited ? 'Unlimited' : primary.used_percent === '—' ? 'Usage unavailable' : primary.used_percent + ' used';
         const cost = primary.cost, amount = cost == null || (cost.observed_requests && !cost.priced_requests) ? '—' : display(cost, 'known_ccost');
         const stale = !['available', 'partial'].includes(obs.availability) || view.quota_stale;
-        const warning = stale ? ' · quota stale/unavailable' : primary.restricted ? ' · provider restriction' : obs.availability === 'partial' ? ' · partial quota' : '';
+        const warning = primary.restricted ? ' · provider restriction' : '';
         text(line.children[0], `${obs.label} · ${used} (${amount})${warning}`);
         line.title = `${primary.quota.label} Used; same native-period observed CCost, independent of native usage and not billed spending. ${primary.note || 'Period cost unavailable until verified history and boundaries are available.'}${primary.estimated ? ' Estimated account attribution.' : ''}${cost && !cost.complete ? ' ? indicates partial pricing.' : ''}`;
-        line.className = stale || primary.restricted || obs.availability === 'partial' ? 'mini-warning' : '';
+        line.title += ` Last quota observation: ${observedAt(obs.observed_at_ms)}.${stale ? ' Retained quota; not current.' : ''}${obs.availability === 'partial' ? ' Partial quota data.' : ''}`;
+        line.setAttribute('aria-description', line.title);
+        line.className = primary.restricted ? 'mini-warning' : '';
         const bar = line.children[1]; bar.hidden = primary.quota.unlimited || primary.used_fraction == null;
         bar.max = 1; bar.value = primary.used_fraction ?? 0;
         bar.className = primary.exhausted && !bar.hidden ? 'mini-exhausted' : '';
@@ -160,6 +229,7 @@ const MiniWatch = (() => {
       this.owner = owner; this.button = button; this.feedback = feedback; this.returnToWatch = returnToWatch;
       this.window = null; this.view = null; this.pending = null; this.ended = false;
       this.publication = null; this.healthState = {kind: 'starting'}; this.receivedAt = 0;
+      this.observations = new Observations();
       this.reason = unavailable(owner);
       button.addEventListener('click', () => this.toggle());
       owner.addEventListener('pagehide', () => { this.ended = true; this.close(); });
@@ -228,8 +298,9 @@ const MiniWatch = (() => {
     update(value) {
       // Progress events and repeated HTTP snapshots may contain the same retained
       // Live value. They are not fresh source/presentation publications.
-      const epoch = JSON.stringify([value?.view?.now_ms, value?.source_observed_at_ms, value?.state]);
+      const epoch = JSON.stringify([value?.view?.now_ms, value?.source_observed_at_ms]);
       if (epoch !== this.epoch) { this.epoch = epoch; this.receivedAt = Date.now(); }
+      this.observations.update(value, Date.now());
       this.publication = value; this.sync(); this.render();
     }
     health(value) { this.healthState = value; this.sync(); this.render(); }
@@ -237,7 +308,8 @@ const MiniWatch = (() => {
     render() {
       if (!this.view) return;
       this.view.doc.documentElement.dataset.theme = this.owner.document.documentElement.dataset.theme;
-      this.view.update(this.publication, this.healthState, Date.now() - this.receivedAt > 15000);
+      const now = Date.now();
+      this.view.update(this.publication, this.healthState, now - this.receivedAt > 15000, this.observations, now);
     }
   }
   return {Controller};

@@ -1,0 +1,309 @@
+{
+  "outcome": "PASS",
+  "browser": "Edg/156.0.4314.58",
+  "emulatedDeviceScale": 1.5,
+  "checks": [
+    "Real user-activated Document PiP opens prompt-local table with external CSP styles, no inner frame/close and selected On fill",
+    "Intrinsic metric/header minima grow/shrink with content, empty colspan does not distort, only Session ellipsizes; failed reads retain figures quietly and one ten-minute notice clears on recovery",
+    "Navigation, existing-opener return, live theme/USD propagation keep Mini and exactly one EventSource",
+    "Compact opening and higher-scale browser clamps keep reachable independent scroll regions; enlarged 5/3 fits at 100/150%, 6/4 scroll; centered headers, semantic data alignment, canonical separate daily summary",
+    "Classic/Web light/dark styles, long account labels, primary-only six-account content without page overflow",
+    "Keyboard summary focus/activation and user-activated native PiP resize remain usable",
+    "With main document actually hidden and PiP visible, real SSE preserves final prompt-local completion metrics and updates empty/recovery without rAF",
+    "Native API replacement, browser-owned close, main toggle, reopen and main reload synchronize Off; no auto-open",
+    "Real terminal shutdown reaches open Mini as not live"
+  ],
+  "layouts": [
+    {
+      "case": "initial-unattached-5-3",
+      "width": 561,
+      "height": 250,
+      "outerHeight": 296,
+      "dpr": 1.5,
+      "prompts": true,
+      "accounts": true,
+      "promptHeight": 108,
+      "accountHeight": 91,
+      "outer": false
+    },
+    {
+      "case": "intrinsic-long-titles",
+      "width": 561,
+      "pageOverflow": false,
+      "scroll": false,
+      "region": 531,
+      "widths": [
+        345.85418701171875,
+        30.697917938232422,
+        44.0625,
+        64.4375,
+        45.94791793823242
+      ],
+      "required": [
+        30.697917,
+        44.06251050585937,
+        64.43751050585938,
+        45.94794751757812
+      ],
+      "wrap": [
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap"
+      ],
+      "ellipsis": false,
+      "title": true
+    },
+    {
+      "case": "intrinsic-growing-metrics",
+      "width": 561,
+      "pageOverflow": false,
+      "scroll": false,
+      "region": 531,
+      "widths": [
+        259.8333435058594,
+        59.8125,
+        79.0625,
+        67.52083587646484,
+        64.77083587646484
+      ],
+      "required": [
+        59.81251050585937,
+        79.06251050585938,
+        67.52082349414063,
+        64.77085401171875
+      ],
+      "wrap": [
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap"
+      ],
+      "ellipsis": false,
+      "title": true
+    },
+    {
+      "case": "intrinsic-empty-colspan",
+      "width": 561,
+      "pageOverflow": false,
+      "scroll": false,
+      "region": 546,
+      "widths": [
+        388.34375,
+        16.166667938232422,
+        44.0625,
+        64.4375,
+        33.32291793823242
+      ],
+      "required": [
+        16.166667,
+        44.06247998828125,
+        64.43747998828125,
+        33.322917
+      ],
+      "wrap": [
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap"
+      ],
+      "ellipsis": false,
+      "title": false
+    },
+    {
+      "case": "intrinsic-shrinking-metrics",
+      "width": 561,
+      "pageOverflow": false,
+      "scroll": false,
+      "region": 531,
+      "widths": [
+        345.85418701171875,
+        30.697917938232422,
+        44.0625,
+        64.4375,
+        45.94791793823242
+      ],
+      "required": [
+        30.697917,
+        44.06251050585937,
+        64.43751050585938,
+        45.94794751757812
+      ],
+      "wrap": [
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap"
+      ],
+      "ellipsis": false,
+      "title": false
+    },
+    {
+      "case": "native-resize-5-3",
+      "width": 513,
+      "height": 385,
+      "outer": false,
+      "horizontal": false,
+      "prompts": false,
+      "accounts": false,
+      "barHeight": 9.75,
+      "promptHeight": 153,
+      "promptContent": 153,
+      "accountHeight": 125,
+      "accountContent": 125,
+      "header": "sticky",
+      "healthyHidden": true
+    },
+    {
+      "case": "classic-light",
+      "width": 513,
+      "height": 385
+    },
+    {
+      "case": "web-light",
+      "width": 513,
+      "height": 385
+    },
+    {
+      "case": "web-dark",
+      "width": 513,
+      "height": 385
+    },
+    {
+      "case": "intrinsic-narrow-native-resize",
+      "width": 258,
+      "pageOverflow": false,
+      "scroll": false,
+      "region": 243,
+      "widths": [
+        57.85416793823242,
+        30.697917938232422,
+        44.0625,
+        64.4375,
+        45.94791793823242
+      ],
+      "required": [
+        30.697917,
+        44.06250287646484,
+        64.43749524707032,
+        45.947917
+      ],
+      "wrap": [
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap"
+      ],
+      "ellipsis": false,
+      "title": true
+    },
+    {
+      "case": "intrinsic-narrow-large-metrics",
+      "width": 258,
+      "pageOverflow": false,
+      "scroll": true,
+      "region": 228,
+      "widths": [
+        55.84375,
+        81.64583587646484,
+        86.34375,
+        67.52083587646484,
+        64.77083587646484
+      ],
+      "required": [
+        81.64583875292969,
+        86.34374524707032,
+        67.52082349414063,
+        64.77082349414063
+      ],
+      "wrap": [
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap",
+        "nowrap"
+      ],
+      "ellipsis": false,
+      "title": true
+    }
+  ],
+  "screenshots": [
+    "mini-edge-classic-light.png",
+    "mini-edge-web-light.png",
+    "mini-edge-web-dark.png"
+  ],
+  "limitations": [
+    "Headless Chromium only; no physical/native X, native return/replacement chrome, minimized-opener restoration, always-on-top OS geometry or screen-reader proof."
+  ]
+}

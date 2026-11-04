@@ -1,8 +1,11 @@
 """Explicit immutable Watch export. No raw provider/source observations."""
+from datetime import datetime
+
 from .contracts import ObjectValue, record
 from .projection import account, comparison, fields, prompt, token_mix
 from .display import with_display
 from .watch_accounts import watch_account
+from src.analysis.timezones import local_date_range, resolve_timezone
 
 
 def card_row(row, now_ms, context=None):
@@ -75,6 +78,8 @@ def project_live(value, timezone_id="UTC", ccost_display_unit="credits"):
         today_total=comparison(value.today_total), today_label=value.today_label,
         daily_usage=None if value.daily_usage is None else record(
             day_start_ms=value.daily_usage.day_start_ms, observed_at_ms=value.daily_usage.observed_at_ms,
+            day_end_ms=local_date_range(datetime.fromtimestamp(value.daily_usage.day_start_ms / 1000,
+                tz=resolve_timezone(timezone_id)).date().isoformat(), timezone_id).end_ms,
             total=comparison(value.daily_usage.total), mix=token_mix(value.daily_usage.mix),
             prompt_count=value.daily_usage.prompt_count, prompt_count_complete=value.daily_usage.prompt_count_complete),
         daily_state=value.daily_state,
