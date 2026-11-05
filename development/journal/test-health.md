@@ -1,15 +1,23 @@
 # Test system health
 
-Source revision: 55f74a4fb9b7e8347e3c407881a914dcbfb44745
-Checked revision: 55f74a4fb9b7e8347e3c407881a914dcbfb44745
-Last checked: 2026-11-04
+Source revision: 15bc39ea61eef6af1605216b113f6519758b4576
+Checked revision: 15bc39ea61eef6af1605216b113f6519758b4576
+Last checked: 2026-11-05
 Status: current
 
 ## Summary
 
-Schema-2 milestone 30 removes runtime/lifecycle/recovery test coupling; assertions, admission and deadlines stay unchanged. [Assessment](../architecture/governance/verification/test-health-30-20261104.md). Metadata identifies the observed base; the PR identifies the extraction. Results remain revision/platform-specific, not desktop acceptance. Older reports are historical, not progress counters.
+Milestone 45 replaces Daily's timing-dependent batch check with a controlled-age, real-HTTP catalog-count check. The 120s modeled budget, freshness/retry protection, product deadlines and gate fanout stay unchanged. [Assessment](../architecture/governance/verification/test-health-45-20261105.md). Metadata identifies the observed base; candidate CI belongs in its PR. Older reports are historical, not progress counters or desktop acceptance.
 
 ## Evidence
+
+### Daily batch-sharing harness — milestone 45 (2026-11-05)
+
+Fresh [42117653741 attempt 1](https://github.com/qstoffe/cost-guard/actions/runs/42117653741/attempts/1) and main [42121612211](https://github.com/qstoffe/cost-guard/actions/runs/42121612211) fail only Daily's one-second wait; validator/browser/native pass. The former reran successfully on unchanged HEAD, not a fix. A controlled 1.1s legitimate catalog response fails that wait despite one fetch/four intact requests/prompts; a three-second-old cache legitimately needs two brackets and triggers the fixture's artificial hold. Exact remote causes remain unknown.
+
+The four-root test now fixes only V2 catalog-age time and counts actual HTTP fetches synchronously. It removes a test-owned thread, two Events and unrelated wait/hold/join thresholds, not product timeouts. Two Daily and eight source-history tests pass; the unchanged 64-root model retains <=120s/34 fetches/all requests. Per-root hydration and lost-root mutations each fail both Daily tests with assertions/no harness errors; a 1.1s valid response passes the replacement. Source-history still tests expiry and revision retries. No requirement/test exception or new gate.
+
+Inventory: 864 text/config records, 247 exclusions; 144 top-level files/1,710 methods, Quick/Full 139/145 groups. The standalone developer benchmark regression is outside product Full; it passes directly. Seven fixture-import edges remain. Local Full/validator/live/desktop work is not selected for this development-only change; PR test-path CI remains normal. No controlled project-wide speed or effort claim.
 
 ### Watch lifecycle fixture ownership — milestone 30 (2026-11-04)
 
@@ -17,9 +25,9 @@ Schema-2 milestone 30 removes runtime/lifecycle/recovery test coupling; assertio
 
 Before/final: 30 runtime + 8 lifecycle + 9 recovery pass, no skips; privacy/fatal/clean-stop/pump/source protections stay intact. Dropping pump stop or returning zero on fatal errors yields four assertion failures, no harness errors. Two Daily tests pass locally. Focused results are not Full/validator/live proof or timing savings.
 
-Base: 792 text/config records, 225 exclusions; 138 test files/1,659 methods, no registration gaps; Quick/Full 135/140 selectors. Fresh [41922482417](https://github.com/qstoffe/cost-guard/actions/runs/41922482417): four successful jobs, common 1,639 passed/20 platform skips, Windows native 52 passed/no skips. Candidate CI belongs in the PR, not old-head PASS. Development-only work selects no local product gates/version update.
+Historical [milestone-30 assessment](../architecture/governance/verification/test-health-30-20261104.md) retains inventory, local/CI counts and limits. Development-only work selects no local product gates/version update; candidate CI belongs in its PR.
 
-Earlier [41918986747](https://github.com/qstoffe/cost-guard/actions/runs/41918986747) failed Daily's `finished.wait(1)` on `020e500`; validator/browser/native passed. Same guard remains; comparison removal did not fix it. Current default/local success leaves cause unknown. Scheduling sensitivity is unproven; retain deadlines and the separate modeled 120s budget. No exception/false PASS.
+Earlier [41918986747](https://github.com/qstoffe/cost-guard/actions/runs/41918986747) failed Daily's `finished.wait(1)` on `020e500`; validator/browser/native passed. Comparison removal did not fix it. Milestone 45 supersedes that harness, retaining the separate modeled 120s budget and uncertainty about individual remote failures.
 
 ### Shared hourly fixture ownership — milestone 15 (2026-11-03)
 
@@ -54,17 +62,11 @@ Watch Today rollover remains in watch/today_ccost and test_watch_today_ccost. Re
 
 ### Cross-platform causal findings
 
-`.github/workflows/web-beta.yml` owns the common/native scoped phases. Direct smoke refuses workstation execution. Offline entry shims suppress acquisition/browser dispatch but retain shipped HTTP/native APIs, OS locks and lifecycle. Public standard runners only; no paid/self-hosted fallback.
+The [historical milestone-30 assessment](../architecture/governance/verification/test-health-30-20261104.md) and earlier reports retain detailed run links. Keep numeric-loopback binding without reverse DNS, PID/birth/current-image ownership, platform-pinned compiler mocks, distinct synthetic credential versions and hidden console stubs. Never repair these by extending product deadlines or weakening ownership.
 
-- macOS numeric-loopback reverse DNS caused startup timeout: use TCPServer binding, not longer deadlines. Native identity compares original PID/birth/current image, allowing same-birth exec but denying foreign birth/forged image. Resolve temp aliases without weakening symlink guards.
-- Pin synthetic platform metadata around compiler mocks; platform discovery can otherwise enter mocked subprocess calls. Virtual settling clocks and distinct synthetic credential mtimes prevent wall-clock/file-version races.
-- Keep 55 list roots and full 151-row detail, but only one prompt in unrelated roots; do not multiply analysis or increase fixed VM UI deadlines. Keep expensive finite work off HTTP handlers.
-- Windows cold Add-Type skewed discovery fixtures: use the console stub, retain native launcher/Watch paths. [40411971939](https://github.com/qstoffe/cost-guard/actions/runs/40411971939) failed despite browser/native success; [40412977788](https://github.com/qstoffe/cost-guard/actions/runs/40412977788) repaired aggregate discovery/DACL fixtures without longer product/file deadlines.
-- Browser offline mode does not close SSE sockets: close the fixture's own recorded stream and verify real reconnect. NSApplication is process-global; run a second native fault case in a fresh bounded process. Await owned identity retirement before opening a Windows record being unlinked.
-- Darwin ENOTCONN can follow wire rejection at write-half-close; tolerate only that race, assert actual response bytes and retain EPERM propagation. [40413855775](https://github.com/qstoffe/cost-guard/actions/runs/40413855775), with a deterministic canary; never infer rejection by swallowing all errors.
-- Historical README CRLF cap failures motivated shortening; FR 000553 makes only three named product-prose caps advisory. All other protected caps stay hard.
+Keep 55 list roots/151 detail rows without multiplying unrelated analysis; warm separate observed-history acquisition before UI waits. Close actual SSE fixture sockets to prove reconnect; macOS process-global AppKit fault cases need isolated processes. Preserve Darwin wire bytes/EPERM checks rather than swallowing all socket errors. Only FR 000553's three named product-prose caps are advisory; instruction/context and other protected caps stay hard.
 
-Historical raw-log download returned HTTP 401; no identity bypass. Checks provide sanitized totals/failures/skips; split notices below truncation bounds. Failed/cancelled is not PASS; physical desktop/default-browser/accessibility remain separate acceptance.
+Hosted smoke refuses workstation execution; public native jobs retain real OS locks/APIs with synthetic acquisition. Historical raw-log HTTP 401 never authorizes identity bypass. Use bounded Checks evidence with actionable failures before skips. Failed/cancelled is not PASS; physical desktop/default-browser/accessibility remain separate acceptance.
 
 ### Historical causes retained
 
@@ -74,7 +76,7 @@ FR 000370: product IPC backpressure, retain 64-message drain canary. FR 000380: 
 
 ## Next investigations
 
-Inspect per-file durations/skips before changing Quick deadlines, especially Node/HTTP/spawn/PowerShell. Daily's unexplained one-second failure needs causal scheduling/catalog evidence before any harness/product diagnosis; a passing rerun is not a fix. The VM child permits 60 seconds while Quick bounds its whole file at 25 seconds: a known tighter outer limit, not authority to loosen it. Reproduce probe interference sequentially. Seven remaining test-import edges stay localized debt; preserve behavioral canaries when extracting their fixtures. Hosted API success does not close desktop/Finder/Gatekeeper/accessibility/suspend/soak acceptance.
+Inspect per-file durations/skips before changing Quick deadlines, especially Node/HTTP/spawn/PowerShell. Daily's demonstrated timing/expiry conflation is repaired; exact historical CI causes and long-run failure rate remain unknown, not proven by a green rerun. The VM child permits 60 seconds while Quick bounds its whole file at 25 seconds: a known tighter outer limit, not authority to loosen it. Seven test-import edges remain localized debt. Hosted API success does not close desktop/Finder/Gatekeeper/accessibility/suspend/soak acceptance.
 
 Architecture: no-update; runtime/validation ownership and triggers are unchanged.
 
