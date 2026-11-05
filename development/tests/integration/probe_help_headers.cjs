@@ -7,6 +7,8 @@ module.exports = function headers({command,evaluate,until,owner,mini,checks,layo
     await command('Page.bringToFront',{},id);
     await evaluate(id,`document.activeElement?.blur()`);
     await move(id,{x:0,y:0}); await settle(id);
+    const ready=await evaluate(id,`({present:!!document.querySelector(${JSON.stringify(selector)}),route:location.hash,section:document.body.dataset.section,text:document.getElementById('result')?.textContent.slice(0,300)})`);
+    assert.equal(ready.present,true,JSON.stringify({selector,...ready}));
     await evaluate(id,`document.querySelector(${JSON.stringify(selector)}).scrollIntoView({block:'center',inline:'center'})`);
     const points = await evaluate(id,`(() => {
       const label=document.querySelector(${JSON.stringify(selector)}),cell=label.closest('th');

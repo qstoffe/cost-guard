@@ -25,6 +25,14 @@ class SessionCost:
     valued_requests: int = 0
     cache_written: bool = False
     source_revision: str = ""
+    valuation_revision: str = ""
+
+
+def session_cost_source_key(snapshot):
+    """Constant-time source identity/revision gate, not a capture or wall clock."""
+    provenance = snapshot.root.provenance
+    return (provenance.source_type, provenance.source_generation, provenance.source_instance,
+        snapshot.root.session_id, snapshot.source_revision, snapshot.complete)
 
 
 def _checkpoint(payload):
@@ -98,4 +106,5 @@ def reconcile_session_cost(repository, snapshot, catalog):
             written = True
         except (sqlite3.Error, OSError):
             available = False
-    return SessionCost(coverage, snapshot.complete, available, len(entries), valued, written, snapshot.source_revision)
+    return SessionCost(coverage, snapshot.complete, available, len(entries), valued, written,
+        snapshot.source_revision, catalog.analysis_signature)

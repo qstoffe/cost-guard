@@ -1,9 +1,10 @@
 // Actual hidden Chromium + Document PiP, shipped HTTP/CSP/SSE; no personal profile.
 const assert = require('node:assert/strict'), fs = require('node:fs/promises'), path = require('node:path');
 const {spawn} = require('node:child_process'), readline = require('node:readline');
-const [browser, output] = process.argv.slice(2);
+const [browser, output, scope] = process.argv.slice(2);
 async function main() {
   assert.ok(path.isAbsolute(browser) && path.isAbsolute(output));
+  assert.ok(scope === undefined || scope === '--watch-only');
   await fs.stat(browser); await fs.stat(path.dirname(output));
   const profile = await fs.mkdtemp(path.join(path.dirname(output), 'help-browser-'));
   const config = await fs.mkdtemp(path.join(path.dirname(output), 'help-config-'));
@@ -69,7 +70,8 @@ async function main() {
      const headerHelp=require('./probe_help_headers.cjs')({command,evaluate,until,owner,mini,checks,layouts});
      await headerHelp.matrix();
      await require('./probe_help_lifecycle.cjs')({command,evaluate,until,owner,mini,checks});
-     await require('./probe_help_values.cjs')({command,evaluate,until,owner,mini,checks,layouts});
+      await require('./probe_help_values.cjs')({command,evaluate,until,owner,mini,checks,layouts});
+      await require('./probe_cost_groups.cjs')({command,evaluate,until,owner,mini,checks,layouts});
     async function focus(id,selector) {
       await key(id,'Tab');
       await evaluate(id,`(() => {const n=document.querySelector(${JSON.stringify(selector)});if(document.activeElement===n)n.blur();n.focus();})()`);
@@ -143,7 +145,7 @@ async function main() {
        layouts.push({case:'daily-value-targets',width,zoom,...layout});
        for (const table of ['watch-active','watch-history']) {
          const text=await focus(owner,`.${table} tbody td:nth-child(6) .help-value`);
-         assert.match(text,/Main prompt[\s\S]*Subagent 1[\s\S]*Total CCost: 33/);
+          assert.match(text,/Main prompt[\s\S]*Subagents[\s\S]*Total CCost: 33/);
          const bounds=await evaluate(owner,`(() => {const n=document.querySelector('#context-help'),r=n.getBoundingClientRect();return {left:r.left,top:r.top,right:r.right,bottom:r.bottom,width:innerWidth,height:innerHeight,scroll:n.scrollHeight>n.clientHeight};})()`);
          assert.ok(bounds.left>=0&&bounds.top>=0&&bounds.right<=bounds.width&&bounds.bottom<=bounds.height,JSON.stringify({table,zoom,...bounds}));
          layouts.push({case:'rich-cost-bounds',table,width,zoom,...bounds});await key(owner,'Escape');
@@ -177,7 +179,7 @@ async function main() {
     assert.equal(await evaluate(owner,`document.querySelectorAll('.watch-prompt-label .help-trigger').length`),0);
      checks.push('Verbatim selectable/accessible long hostile session title without row cues; distinct Mini headings, direct date/daily value help, retained warnings, no HTML injection and Mini 150% text zoom');
     await command('Page.bringToFront',{},owner);
-    for (const route of ['models','sessions','sessions/root','accounts','token-mix','cost-per-hour','settings']) {
+    for (const route of scope === '--watch-only' ? [] : ['models','sessions','sessions/root','accounts','token-mix','cost-per-hour','settings']) {
       await evaluate(owner,`location.hash='#/${route}'`);
       await until(owner,`document.body.dataset.section==='${route.split(/[?\/]/)[0]}'`);
       if (['token-mix','cost-per-hour'].includes(route)) await evaluate(owner,`acquire(current)`);
@@ -192,7 +194,7 @@ async function main() {
       checks.push(`${route}: rendered help/disclosure inventory (${count} focusable help targets); visible field/disclosure text retained`);
     }
     assert.deepEqual(errors,[]);
-    evidence={outcome:'PASS',browser:version.product,checks,layouts,limitations:['Immediate in-memory synthetic report jobs; no report-process lifecycle proof.','Headless Chromium only; no physical desktop, screen-reader or other-engine acceptance claimed.']};
+    evidence={outcome:'PASS',browser:version.product,scope:scope || 'all-routes',checks,layouts,limitations:['Immediate in-memory synthetic report jobs; no report-process lifecycle proof.','Headless Chromium only; no physical desktop, screen-reader or other-engine acceptance claimed.',...(scope ? ['Watch/Mini only; no unrelated report-route audit in this mode.'] : [])]};
   } finally {
     clearTimeout(deadline);
     await fs.writeFile(output,JSON.stringify(evidence,null,2));

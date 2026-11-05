@@ -3,6 +3,7 @@ from dataclasses import dataclass, field, replace
 
 from .models import WatchCard, WatchRow
 from .source_status import SourceStatus
+from .session_costs import SessionCostState
 from .tools import RUNNING_VISIBLE_AFTER_MS, without_live_activity
 
 
@@ -21,21 +22,13 @@ class CardSession:
     finished_ms: int = 0
     refresh_requested: bool = True
     source_status: SourceStatus = field(default_factory=SourceStatus)
-    cost_snapshot: object = None
-    session_cost: object = None
-    cost_generation: int = 0
-    cost_state: str = "loading"
-    cost_turn: int = 0
-    cost_evidence: object = None
-    cost_evidence_generation: int = 0
-    cost_due_ms: int = 0
+    cost: SessionCostState = field(default_factory=SessionCostState)
 
 
 class WatchCards:
     def __init__(self, workers, recent_seconds=30, on_duration=None, monotonic=None, costs=None):
         self.workers = workers
         self.costs = costs
-        self.cost_turn = 0
         self.recent_ms = int(recent_seconds * 1000)
         self.sessions = {}
         self.active_candidates = frozenset()
@@ -119,11 +112,7 @@ class WatchCards:
                     if old is not None and ((key in previous and not previous[key].in_progress)
                             or (old.completed_at_ms is not None and old.completed_at_ms <= row.at_ms)):
                         entry.terminals.pop(key, None)
-            entry.cost_snapshot = capture.cost_snapshot
-            entry.cost_evidence = capture.cost_snapshot
-            entry.cost_evidence_generation = entry.generation
-            if entry.session_cost is not None:
-                entry.cost_state = "refreshing"
+            entry.cost.observe(capture.cost_snapshot)
             entry.capture, entry.tools, entry.snapshot = replace(capture, cost_snapshot=None), dict(tools), snapshot
             entry.latest_ms = capture.latest_ms
             representative = capture.history_row
@@ -188,49 +177,21 @@ class WatchCards:
                 entry.snapshot = None
                 if key not in self.workers.jobs:
                     entry.capture = None
-                    entry.cost_snapshot = None
-                    entry.cost_evidence = None
+                    entry.cost.evidence = None
 
     def _tick_costs(self, now_ms):
         if self.costs is None:
             return
-        result = self.costs.drain()
-        if result is not None:
-            key, generation, value = result
-            entry = self.sessions.get(key)
-            if entry is not None and entry.generation == generation:
-                if value is None:
-                    entry.cost_state = "unavailable"
-                    entry.cost_due_ms = now_ms + 5000
-                else:
-                    entry.session_cost = value
-                    entry.cost_generation = generation
-                    entry.cost_state = ("refreshing" if entry.cost_snapshot is not None else
-                        "observed" if value.source_complete else "partial")
         visible = set(self.historical_ids(now_ms)) | {key for key, entry in self.sessions.items() if self._focals(entry, now_ms)}
-        for key in sorted(visible, key=lambda key: (self.sessions[key].cost_turn, key)):
-            entry = self.sessions[key]
-            # Recheck reference-catalog identity without rehydrating unchanged
-            # history. This uses the existing Live wake, never a browser poll.
-            if (entry.cost_snapshot is None and entry.cost_evidence_generation == entry.generation
-                    and now_ms >= entry.cost_due_ms):
-                entry.cost_snapshot = entry.cost_evidence
-            if entry.cost_snapshot is not None and self.costs.submit(key, entry.generation, entry.cost_snapshot, now_ms):
-                entry.cost_snapshot = None
-                entry.cost_due_ms = now_ms + 60000
-                if entry.session_cost is not None:
-                    entry.cost_state = "refreshing"
-                self.cost_turn += 1
-                entry.cost_turn = self.cost_turn
-                break
+        self.costs.tick({key: entry.cost for key, entry in self.sessions.items()}, visible, now_ms)
 
     def _card(self, entry, focal, now_ms):
         capture = entry.capture
         state = entry.source_status.state(retained=capture is not None) or entry.state
         if capture is None:
             return WatchCard(entry.root.session_id, entry.root.title or entry.root.session_id,
-                "", (), state=state, session_cost=entry.session_cost,
-                session_cost_state="refreshing" if entry.session_cost is not None else "loading")
+                "", (), state=state, session_cost=entry.cost.value,
+                session_cost_state=entry.cost.status)
         representative = focal if focal is not None else capture.history_row
         rows = (representative,) if representative is not None else ()
         projected = []
@@ -255,9 +216,8 @@ class WatchCards:
             projected.append(WatchRow(capture.session_id, capture.title, row, marker, tool))
         return WatchCard(capture.session_id, capture.title, focal.event_id if focal else "",
             tuple(projected), state,
-            capture.context if state != "unavailable" else None, entry.session_cost,
-            "unavailable" if state == "unavailable" or entry.cost_state == "unavailable" else
-                "refreshing" if entry.session_cost is not None and entry.cost_generation != entry.generation else entry.cost_state)
+            capture.context if state != "unavailable" else None, entry.cost.value,
+            "unavailable" if state == "unavailable" else entry.cost.status)
 
     def project(self, now_ms):
         active = []

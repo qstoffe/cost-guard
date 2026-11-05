@@ -1,8 +1,69 @@
 # Shared Web and Mini contextual help
 
-Current value-first follow-up: **FR 000590 / v80.171**, recorded below. The FR 000582
+Current grouping/freshness follow-up: **FR 000601 / v80.177**, recorded below. The FR 000582
 inventory and evidence here are historical; removed preview/row/freshness cues are
 not current UI recommendations. Current writing/placement policy lives in the module contract.
+
+## FR 000601: grouped request detail and stable totals (2026-11-06)
+
+Base `7d80b4d`; consumes the already-delivered canonical V2 subagent attribution.
+`reports/prompt_costs.py` retains unrounded individual valuations by original
+session/model/effort/actual price tier; `application/prompt_costs.py` sums those parts
+by main/subagent role and provider/model/effort/tier before exporting 24 groups.
+Contributing-session counts deduplicate nested sessions, independent roles never merge,
+and same-name provider identities are visibly qualified when ambiguous. Missing category
+telemetry remains N/A, unpriced costs remain unavailable/partial, and omitted groups
+retain exact group count/known subtotal/calls. No residual allocation, repeated per-agent
+totals, browser pricing, hover acquisition or per-cell Token Mix popup is added.
+
+The model popup requires two actual provider-qualified model identities; unknown
+identity is not a second model. Same-model child participation keeps its accessible star.
+Calls shares cost grouping and reports a reconciled total only with complete request
+evidence. Value-help spans now survive advancing row publications, updating their source
+content without duplicating keyboard handlers or tearing down an open hovered tooltip.
+600ms hover, focus/touch, Escape, unit formatting and shared viewport clamping remain.
+
+Session freshness/scheduling ownership and cache limits are described in
+[the session summary findings](watch-session-summary.md#fr-000601--stable-evidence-gated-totals-2026-11-06).
+No new causal child parser or cost engine is introduced; CLI/billing/account totals and
+canonical physical-request arithmetic remain unchanged.
+
+Verification and limits:
+
+- Local Full passed **148 files, zero failures, 92.7s**, four isolated workers.
+  Working-tree validation passed all **11 checks**, zero failures, six existing
+  advisory prose/design warnings; no cap or baseline was raised.
+- Owned headless **Chrome 156.0.8078.80**, shipped HTTP/assets/CSP/SSE and actual
+  Document PiP, passed the explicit `probe_web_help.cjs --watch-only` audit.
+  Both Full tables aggregate two child sessions and Calls, suppress same-model
+  help while retaining the accessible star, and retain an open hovered value
+  through ten advancing row publications. Full/Mini known totals stay quiet
+  through **241 virtual seconds**, other-prompt updates, disclosure and re-entry;
+  unknown totals show Loading in both. Thirty backend groups export 24 plus six
+  explicitly omitted groups (known omitted cost 150, total 750). All eight
+  active/history × 1280/360 × 100%/150% zoom long-scroll cases stayed in bounds.
+  Classic/Web light/Web dark Watch and Mini screenshots were visually inspected.
+- Read-only actual-installation `probe_web_live.py --watch-cards --prompt-cost
+  --session-cost` passed on V2: four physical requests matched canonical CLI raw
+  cost/category sums and independent session-report valuation. A fresh repository
+  replay valued zero requests and wrote no cache. One owner/two streams/three
+  accounts, stable run origin and advancing stream IDs were observed; 14.6399s
+  elapsed, with no final pending work, owned threads/processes or cleanup failures.
+  This prompt had no linked agents; canonical synthetic/nested tests, not this
+  observation, establish multi-agent behavior.
+- The earlier broader help command failed on the unrelated Sessions route with
+  “Live session source unavailable”: the synthetic help host has no live Sessions
+  catalog owner. The default broad audit remains intact; the explicit Watch-only
+  PASS is not a whole-application report-route or report-process lifecycle PASS.
+- Native blur was unavailable in headless Chrome (`native:false`); injected blur
+  proves the handler only. No physical desktop, screen-reader, macOS or other
+  browser-engine proof is claimed. The owner's original private incident was not
+  independently reproduced; its exact original cause remains unproven. No
+  requirement/test exception was requested or granted, no paid inference ran,
+  and the shared OpenCode service was not stopped. No ZIP/tag/Release was made.
+
+Compact durable evidence:
+`development/architecture/governance/verification/web-cost-groups-601.json`.
 
 ## FR 000590: direct values, delayed hover and attributed cost detail (2026-11-05)
 

@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.177 — 2026-11-06
+
+- Watch CCost/Calls value help consolidates canonically attributed requests by main/subagent role, provider-qualified model, actual effort and price tier before bounding the payload. Counts, unknown categories, partial prices and omitted evidence remain explicit; a single-model prompt keeps its accessible linked-agent star without a redundant model popup. Known Full/Mini session totals reuse source/valuation-matched baselines without per-root periodic scans or timer-generated delay warnings. A shared pricing-identity check, fair single cost lane and revision-qualified completed baselines retain corrections, deletions, late children, compaction, source failures and restart reuse. Initial unknown totals show Loading…; billing, CLI and Token Mix semantics are unchanged.
+
 ## v80.176 — 2026-11-06
 
 - OpenCode V2 `subagent` links now share ancestry- and time-qualified interpretation with legacy `task` links across causal usage and Watch activity. Structured `sessionID`/`sessionId` metadata wins over native output fallbacks; overlapping/replayed calls and nested/background work retain physical request identity and initiating-prompt scope. Prompt cost, Calls, token mix and linked-model detail include the child without changing independent root-tree totals, actual billing or unknown-coverage semantics. Derived caches invalidate the older interpretation.

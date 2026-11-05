@@ -89,6 +89,19 @@ const WatchView = (() => {
     const button = ContextHelp.button(name, explanation); button.className += ' watch-column-help';
     th.append(button); return th;
   }
+  function metricValue(row, column, value, help) {
+    const content = typeof help === 'function' ? help() : help;
+    const enabled = Boolean(content && content !== 'N/A');
+    const old = row.children[column]?.children[0];
+    const reusable = old && Boolean(old.className?.includes('help-value')) === enabled;
+    const node = reusable ? old : el('span');
+    text(node, value);
+    if (enabled) {
+      if (reusable) ContextHelp.attach(node, help, true);
+      else ContextHelp.value(node, help);
+    }
+    return node;
+  }
   function contextWarningIcon() {
     const node = el('span', undefined, 'watch-warning-icon');
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -195,13 +208,11 @@ const WatchView = (() => {
             label.append(el('span', '#' + prompt.prompt_number, 'watch-prompt-number'), preview);
             const started = el('span', display(prompt, historical ? 'finished_clock' : 'clock'));
             if (!historical || prompt.completed_at_ms != null) ContextHelp.value(started, display(prompt, historical ? 'finished_date_time' : 'date_time'));
-            const model = el('span', item.model + (prompt.linked_agent_count ? '*' : ''));
-            const modelHelp = display(prompt, 'model_detail_help');
-            if (modelHelp && modelHelp !== 'N/A') ContextHelp.value(model, modelHelp);
-            const cost = el('span', () => promptCost(prompt)), costHelp = () => display(prompt, 'cost_detail_help');
-            if (costHelp() && costHelp() !== 'N/A') ContextHelp.value(cost, costHelp);
-            const calls = el('span', String(prompt.calls)), callsHelp = display(prompt, 'calls_help');
-            if (callsHelp && callsHelp !== 'N/A') ContextHelp.value(calls, callsHelp);
+             const model = metricValue(row, 3, item.model + (prompt.linked_agent_count ? '*' : ''), display(prompt, 'model_detail_help'));
+             if (prompt.linked_agent_count) model.setAttribute('aria-label', `${item.model} · Linked subagents participated (${prompt.linked_agent_count})`);
+             else model.removeAttribute('aria-label');
+             const cost = metricValue(row, 5, () => promptCost(prompt), () => display(prompt, 'cost_detail_help'));
+             const calls = metricValue(row, 6, String(prompt.calls), display(prompt, 'calls_help'));
             const cells = [started, display(item, 'watch_duration_ms'), label, model, item.effort,
               cost, calls, display(prompt, 'token_mix_percent'),
               display(prompt, 'incoming_context_tokens'), display(item.live_context, 'watch_delta_context_tokens')];
@@ -217,7 +228,6 @@ const WatchView = (() => {
     }
     drawSummary(value) {
       const pending = !value || ['loading', 'refreshing', 'retrying'].includes(value.state);
-      const summaryDelayed = delayed(this, 'summarySince', pending);
       // Keep the last coherent footer through ordinary reacquisition, not through
       // an observed correction or a confirmed unavailable/partial result.
       if (pending) value = {...value, cost: value?.cost ?? this.summaryValue?.cost};
@@ -225,9 +235,8 @@ const WatchView = (() => {
       drawContext(this, value?.context);
       text(this.costLabel, () => value?.cost ?
         value.cost.observed_requests && !value.cost.priced_requests ? 'N/A' : display(value.cost, 'known_ccost') :
-        value?.state === 'unavailable' ? 'N/A' : '—');
-      text(this.costStatus, summaryDelayed ? ' (session total updates delayed; retained observation, not current)' :
-        value?.state === 'unavailable' ? ' (unavailable; retained observation, not current)' :
+        value?.state === 'unavailable' ? 'N/A' : 'Loading…');
+      text(this.costStatus, value?.state === 'unavailable' ? ' (unavailable; retained observation, not current)' :
         value?.state === 'partial' ? ' (partial source evidence)' : '');
       ContextHelp.refresh(this.costHelp);
     }

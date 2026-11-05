@@ -105,13 +105,22 @@ blind total reuse; unchanged contributions skip valuation. Authoritative omissio
 contributions, partial source brackets never overwrite a complete checkpoint. Canonical
 `trace_entries`, `unique_usage` and `comparison_cost` keep root-tree/report parity, including
 children, compaction and provisional usage. No private prompt content is persisted.
-`watch/session_costs.py` supplies one independent background future; `WatchCards` fairly
-admits visible sessions, shares results per root, retains totals through capture eviction
-and rejects superseded generations. Rows and account/daily work never wait for it.
+`watch/session_costs.py` owns one independent background future plus scalar
+`SessionCostState` and fair admission across visible roots. `WatchCards` hands off
+canonical evidence and releases evicted heavy snapshots, retaining the baseline and
+source key. Only source identity/revision/completeness or catalog identity changes
+require reconciliation; row generations/timestamps/publication ticks do not. Completed
+older same-source revisions can publish a checking baseline, never verified-current
+status for the newer evidence. Replaced source identities cannot borrow that result.
+Rows and account/daily work never wait for it.
 Presentation ticks do no cache/source work; optional cache failures recompute from source
 with honest persistence/coverage state. This is not a billing ledger or Sessions UI change.
-Reference-catalog identity is rechecked in the same bounded lane at 60-second admission
-intervals using exact fresh evidence, without rehydrating history. Production composition
+Reference-catalog identity is checked once globally in the same bounded lane at
+60-second admission intervals, without per-root reconciliation or history hydration.
+Only a changed signature schedules root work. Failed validation stays unavailable
+with a bounded retry; incomplete source results remain partial. Full/Mini consume
+the same scalar/state; initial unknown is Loading, normal checking is quiet, and no
+session-total presentation delay timer is used. Production composition
 supplies isolated pricing/cache resources without source selection or schema writes.
 
 Watch depends on shared reports/analysis/domain and abstract source contracts; reports/analysis never import Watch. Presentation consumes projections without fetching history or native quotas.
