@@ -19,7 +19,7 @@ Implementation: v80.173, 2026-11-05. The original FR is preserved unchanged.
 
 ## Verification and explicit scope
 
-The final local Full suite passed all 145 test files in 97.2s after the CI follow-up.
+The final local Full suite passed all 145 test files in 94.3s after both CI repairs.
 Regressions include cold/warm finite-list parity, source identity changes with
 unchanged revision and selected-row reclassification/order. Package validation passed
 all 11 checks with zero failures and six existing advisory prose/design warnings;
@@ -35,6 +35,17 @@ prioritizes sanitized failure evidence ahead of skips, and enriches bounded VM w
 diagnostics. Decision Delegate permits this justified correction, **not a CI waiver**;
 successful checks on corrected HEAD remain required before merge. Details are in the
 Sessions journal.
+
+The next CI run localized the regression to first cold observed-history capture
+inside the VM's fixed five-second UI wait. The fixture now warms the actual separate
+SessionHistory owner, not just finite-report caches; a controlled six-second cold
+delay passes without raising UI deadlines. The rendered smoke also exposed a real
+long-title overflow. The integrated OpenCode browser reproduced and isolated it;
+Sessions h1 now wraps unbroken titles, leaving numeric rows and table pan unchanged.
+Fresh served-CSS checks passed at 800/360/280px constrained content widths, not an
+emulated Linux viewport. The exact 360px CI assertion remains in place.
+The paired controlled ten-second cold delay fails the previous fixture's UI wait
+and passes the corrected fixture without changing that wait or any product timeout.
 
 Hidden Chrome 156.0.8078.80 over actual HTTP/assets and synthetic source passed:
 120-root catalog, global-key readiness, stable older pages, 1,001→1,002 unpaged prompts,

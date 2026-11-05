@@ -122,6 +122,35 @@ After the follow-up, local Full passed **145/145 files in 97.2s**, including the
 synthetic acquisition/cleanup and failure-priority regressions; the working-tree
 validator again reported **11 passes, zero failures, six existing warnings**.
 
+The corrected-head CI run exposed the exact recurring wait: first 151-prompt detail,
+5,063ms, 15 requests, detail still busy. Finite-report cache warming did not warm
+`SessionHistory`'s separate observed-history analysis. The transport/DOM fixture now
+warms that actual owner before its fixed five-second UI waits; dedicated cold/scale
+and polling tests remain unchanged. A controlled six-second first history-analysis
+delay passed the corrected test in 12.703s without changing its UI deadline.
+A paired ten-second delay then reproduced the bounded UI timeout with the exact
+previous committed fixture and passed with the corrected fixture. The first attempt
+at the historical comparison used host-default Git-output decoding and hit its
+Unicode assertion instead; that invalid comparison was discarded and repeated with
+explicit UTF-8. Neither the product nor test assertions/deadlines were weakened.
+
+The same run reached the new live history in rendered Chromium, then failed the
+360px document-overflow assertion. At the user's request, the **integrated OpenCode
+browser** was tried first; no Program Files inventory or external browser was used.
+Electron 44.9.1 / Chromium 152.0.7977.167 rendered the exact hostile-title fixture.
+Its viewport was 800px; narrowing the document's content area to 360px exposed the
+unbroken h1 at 342px scroll width inside 312px. Applying `overflow-wrap: anywhere`
+alone removed that spill. The shipped Sessions-only h1 rule now uses it. A fresh
+owned host served the actual updated CSS: heading scroll/client widths matched at
+752/752, 312/312 and 232/232 for 800/360/280px content widths, while the ten-column
+table retained its independent 892px horizontal pan. This is constrained-content
+causal proof, not an emulated 360px top-level viewport or the exact Linux browser.
+The CI smoke retains its exact viewport assertion and now also exports bounded
+layout dimensions and asserts the heading itself does not overflow.
+Final local Full after these two repairs passed **145/145 files in 94.3s**; package
+validation remained **11 passes, zero failures, six existing advisory warnings**.
+Both temporary integrated-browser fixture hosts joined cleanly with no host failure.
+
 ## Limits and retained lessons
 
 The real cold catalog is not fully indexed and churn/large-history warm-up latency

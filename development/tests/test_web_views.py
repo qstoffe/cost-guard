@@ -170,6 +170,14 @@ class WebViewTests(unittest.TestCase):
             shutil.copyfile(ROOT / "config/default-config.jsonc", settings_root / "config/default-config.jsonc")
             catalog = SessionCatalog()
             details = SessionDetails(clock=lambda: now / 1000)
+            # Finite report warming above cannot initialize SessionHistory's
+            # separate observed-history analysis. Keep that cold acquisition out
+            # of this transport/DOM test's fixed 5s waits, too; cold capture,
+            # polling and large-history work have dedicated owner tests.
+            warm_detail = details.open("root-0000", "live")
+            details.tick(factory(now, lambda _: None))
+            self.assertEqual(151, details.page(warm_detail, 0, begin=True)["total"])
+            details.close(warm_detail)
             lifecycle = SimpleNamespace(root=settings_root, live=SimpleNamespace(catalog=catalog, details=details),
                 stopping=Event(), observations=WebObservations(), nonce="sessions-fixture", public_status=lambda: {})
             server = LoopbackServer(jobs, lifecycle, settings=WebSettings(settings_root))

@@ -107,7 +107,14 @@ def main():
                 page.keyboard.press("Enter")
                 expect(page.locator("#content")).to_be_focused()
                 assert not page.locator("#refresh").is_visible()
-                assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+                evidence["narrow_layout"] = page.evaluate('''() => {
+                    const heading=document.querySelector('#result h1'), pan=document.querySelector('.sessions-table-pan');
+                    return {viewport:innerWidth,page_width:document.documentElement.scrollWidth,
+                        heading_width:heading.clientWidth,heading_scroll:heading.scrollWidth,
+                        pan_width:pan.clientWidth,table_width:pan.scrollWidth};
+                }''')
+                assert evidence["narrow_layout"]["page_width"] <= evidence["narrow_layout"]["viewport"]
+                assert evidence["narrow_layout"]["heading_scroll"] <= evidence["narrow_layout"]["heading_width"]
                 assert page.locator("th").first.evaluate("el => getComputedStyle(el).position") == "sticky"
                 page.emulate_media(color_scheme="dark", reduced_motion="reduce")
                 expect(page.locator("html")).to_have_attribute("data-theme", "classic")

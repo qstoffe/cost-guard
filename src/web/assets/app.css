@@ -170,7 +170,7 @@ p.warning { border-left: 3px solid var(--warn); padding: .65rem .85rem; backgrou
 .sessions-table .session-running, .sessions-table .session-running td { color: var(--watch-running); }
 .sessions-pager { margin-block: .8rem; justify-content: center; }
 .sessions-pager a[aria-disabled="true"] { color: var(--muted); pointer-events: none; text-decoration: none; }
-.session-detail h1 { margin-block: .75rem .25rem; }
+.session-detail h1 { margin-block: .75rem .25rem; overflow-wrap: anywhere; }
 .session-detail .watch-session-summary { margin-block: .75rem; border: 0; padding: 0; }
 .watch-view .account-card { box-shadow: none; font-size: .85rem; }
 .watch-view .account-card p { margin-block: var(--space-2); }
