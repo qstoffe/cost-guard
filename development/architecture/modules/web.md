@@ -141,11 +141,20 @@ fallbacks. Achieved bounds, native resize events and a bounded two-frame confirm
 permit collapse restoration without reinterpreting manual bounds or repeating attempts.
 `resizeBy(0, delta)` avoids fractional-DIP width drift; `resizeTo` is fallback.
 No rendering/data event invokes sizing. Full Watch's card/source presentation waits
-30 continuous seconds before retry/refresh delay guidance, keeps retained metric DOM
-quiet and exposes provenance in cost help; unavailable/partial and host/auth guidance
+30 continuous seconds before initial/retry/refresh delay guidance, keeps retained prompt,
+session, daily and account metric DOM quiet and exposes provenance in cost help.
+Initial placeholders never claim observed empty/zero; unavailable/partial and host/auth guidance
 remain explicit. Source states, timings and lifecycle are unchanged. Historical Windows150%
 standard-frame measurements do not prove fresh physical Remember-last behavior;
 the Mini journal records hidden API proof and the scoped physical-verification exception.
+
+Full Watch's cost-cell boundary replaces I/E with the selected unit's zero only when
+its formatted total displays zero (preserving `?`); raw values, unavailable totals,
+positive-total component availability, CLI and Mini are unchanged. Focal row/title
+ink shares confirmed `completed_successfully`, with errors/aborts taking precedence
+and no success inferred from idleness. Historical titles stay neutral. Deterministic
+cost/Live/summary tests and `integration/probe_watch_presentation.cjs` cover these
+presentation rules without new acquisition, timers or lifecycle/grace changes.
 
 `src/web/lifecycle.py` owns deliberate launcher restart, overlap coalescing, bounded readiness/stop and detached spawn. `src/web/instance_state.py` owns canonical checkout/user identity, transition and lifetime OS locks, private atomic records and bounded allowlisted lifecycle diagnostics. `src/web/process_identity.py` owns native birth/image proof and safe termination handles. `src/web/change_guard.py` owns the allowlisted five-second runtime metadata baseline and terminal source_changed state; it never reloads/restarts code.
 

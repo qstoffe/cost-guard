@@ -1,5 +1,73 @@
 # Full Web Watch cards, reset display and context markers
 
+Source revision: 678659f35bae71dddc0db987fcb1c5b41a58b8f3
+Checked revision: 678659f35bae71dddc0db987fcb1c5b41a58b8f3
+Last checked: 2026-11-05
+Status: current
+
+## Summary
+
+Current evidence below describes this base plus FR 000586's presentation diff;
+older sections retain their original dates and limits, not refreshed PASS claims.
+
+## v80.167 — FR 000586 (2026-11-05)
+
+The Full Watch cell alone overrides I/E when the selected unit's formatted total
+is zero, preserving `?` and all raw/component evidence. Positive totals and unknown
+totals keep their original availability semantics. Python-prepared Credits/USD
+regressions cover observed/no calls, missing components, tiny positive amounts,
+partial totals, unknown totals, repeat updates and unit round trips; CLI is unchanged.
+
+The status audit covered card messages, active/Earlier placeholders, session cost,
+daily acquisition/retries, accounts and the separate global Live health owner.
+Brief operations retain coherent values quietly; initial neutral placeholders do
+not claim observed empty data. Existing publication wakeups expose continuous
+30-second delays without another timer/poll/SSE. Confirmed unavailable/partial,
+pricing, provider/auth and global connection warnings remain immediate. Invalidated
+context guidance is never revived by retained cost. Actual running-tool text stays.
+Focal row/title success now requires `completed_successfully`; idle/unknown/abort/error
+never implies green. Historical titles stay neutral and each concurrent card owns
+its focal ink; backend grace and history membership remain unchanged.
+
+## Evidence
+
+Full passed 142 files / zero failures in 89.2s; working-tree validator passed all
+11 checks / zero failures / six existing advisory warnings. Hidden Chrome
+156.0.8078.80 passed Classic/Web light/Web dark × 1366/360px: exact retained card
+heights, virtual sustained delay/unavailable/recovery, cost units, success/unknown/
+abort/error/resumption, link focus/navigation, copy selection, no page overflow and
+success contrast >=4.5. [Structured browser evidence](../../tests/evidence/watch-presentation/browser.json)
+is synthetic publication/paint, not real-account end-to-end, physical desktop,
+screen-reader, Firefox/Safari or macOS proof. Reproduce via
+`probe_watch_presentation.cjs <absolute-Chromium> <owned-output-directory>`.
+
+The independent read-only V2 `probe_web_live.py --watch-cards --prompt-cost --daily`
+passed prompt CLI/raw cost parity (four calls) and daily reconciliation (651 requests,
+18 prompts; complete prices, incomplete prompt attribution retained). One owner,
+two advancing instance-bound streams, four one-row cards, four bounded pending
+captures, preserved run origin. All owned workers closed; shared OpenCode untouched.
+Shutdown instrumentation recorded an interrupted independent history read, not a
+complete-source/attribution claim. No inference or provider mutation was started.
+
+## Next investigations
+
+**Failed ancillary proof / scoped exception:** the additional command with
+`--session-cost` failed at `session_cost_observations.py:32`:
+`assert reused.valued_requests == 0 and not reused.cache_written`, after revision
+matching and total/report parity assertions succeeded. Actual valuation/write values
+were not captured; cause and live-cache reuse reliability remain unknown. Concurrent
+writes are only a hypothesis. Decision Delegate explicitly approved delivery of
+FR 000586 with this unresolved ancillary failure once the focused live probe passed
+(it did); no FR acceptance requirement or other applicable check was waived. The
+HTTP-only probe does not execute the changed assets. Backend/cache and its assertion
+were not modified or weakened. This is not a cache-reuse PASS or a blanket exception.
+
+## Rejected hypotheses
+
+Idleness alone is not successful completion. The failed cache assertion does not
+establish a presentation regression, but concurrency has not been established as
+its cause either. No unrelated cache repair was included.
+
 ## v80.165 — FR 000584 (2026-11-05)
 
 `watch/tools.py` classifies each existing deduplicated physical call once, preserving
@@ -122,67 +190,6 @@ of older captures/generations. Full passed all 133 files; the working-tree valid
 passed all 11 checks with six advisory/pre-existing warnings. No requirement/test
 exception, release ZIP, model call or provider mutation was requested or performed.
 
-## Historical v80.140 — FR 000560
+## Retired presentation measurements
 
-2026-11-03, v80.140. No acquisition, quota-accounting or lifecycle change.
-
-## Ownership and regressions
-
-- `app.css`: Watch-specific 30rem subscription tracks, .43rem title padding,
-  1.25rem rounded teal bars, per-quota red emphasis and muted header-only tint.
-  The grid selector must outrank the later generic `.account-grid` rule; progress
-  thickness must outrank the generic Accounts rule. Shared Watch session frames
-  replace sibling border-top rules; the expanded nonempty Earlier section keeps
-  exactly one stronger separator, with no outer group frame.
-- `application/display.py`: a Watch-slot token uses canonical deadline/timezone,
-  `duration_text` below seven days and unchanged `format_reset` otherwise. No
-  formatted-string parsing. Generic nested reset tokens remain unchanged.
-- `live_projection.py`: Watch account display uses the current publication clock,
-  not the retained account-history projection's older timestamp. Native observation
-  timestamps/provenance remain unchanged. No provider poll or browser timer added.
-- `watch.js`: canonical per-window `exhausted` flags alone select red styles;
-  restriction/stale/partial warnings survive. Rebuilt accepted account publications
-  clear obsolete exhaustion. Absolute reset dates remain keyboard-focusable titles.
-
-`test_web_watch_quota.py` pins seconds/minutes, 88min, multi-day/seven-day,
-expired/unknown/not-started, midnight and both DST transitions, both windows and
-advancing publication time. Generic reset tokens, native Used/Total and independent
-CCost remain covered. VM cases include 0/49.9/50/75/99.9/just-below-100/100%, missing
-denominators, unlimited, partial, stale and restriction-only observations.
-
-## Rendered checks
-
-`serve_web_watch.py` and `probe_watch_cards.cjs` passed 12 synthetic rendered cases
-in Windows headless Edge 156.0.4314.58: Classic/Web light/Web dark at 2560×1080,
-1920×1080, 1366×768 and 360×800. All load current shipped assets. Each also checks
-150% and 200% root-font enlargement (not physical browser zoom), long labels,
-single-card left alignment, overflow, capped widths, subgrid alignment, keyboard
-disclosures, ten-column horizontal scrolling, top-layer header help, keyed updates,
-selection/focus, warning/activity placement, history transitions and 100 cards.
-
-Measured default desktop cards are 450px, header padding 6.45px with unchanged
-12.75px font, bars 18.75px. Exhausted header/usage contrast ratios respectively:
-Classic 6.43/7.83, Web light 5.69/6.54, Web dark 7.23/8.25. Primary and secondary
-exhaustion independently and together, reset recovery, stale retained exhaustion,
-restriction without numeric usage and unlimited/no-bar states passed. Body and
-unrelated CCost colors stay unchanged. Representative Classic desktop, Web light
-mobile and Web dark laptop screenshots were inspected.
-
-## Real installation and limits
-
-Fresh `probe_web_live.py --watch-cards` passed against read-only V2: one acquisition
-owner, two advancing streams, three accounts, preserved run origin, one active and
-two historical cards, two cards with rows, one row/card and four bounded pending
-captures. First rows appeared at 6.734s. All owned workers closed, no pending work
-or cleanup failure; shared OpenCode remained untouched. The account-history batch
-was interrupted during shutdown; Daily publication/completeness is not claimed.
-
-Synthetic browser and real-source HTTP checks are complementary, not an end-to-end
-real-account browser run. No live exhaustion/reset mutation, inference, personal
-browser profile, physical input/zoom, screen-reader, Firefox/Safari or macOS proof
-is claimed. No requirement/test exception was requested or granted.
-
-Final local product checks: Full passed all 133 files with zero failed files in
-77.1s; working-tree validator passed all 11 checks with zero failures and six
-existing/advisory warnings (public prose plus three pre-existing module design
-budgets). No packaging, release ZIP, model call or provider mutation was performed.
+FR 000560's superseded geometry remains in Git history, not current proof.

@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.167 — 2026-11-05
+
+- Full Web Watch renders zero I/E components whenever the selected unit displays a zero prompt total, without changing raw pricing or unknown/partial totals. Initial prompt/history/session/daily acquisition stays neutral and brief retries retain figures quietly; sustained delays and confirmed errors remain actionable. Confirmed successful focal prompts share their grace-period success color with the session title; unknown/error/abort outcomes never imply success. Mini, CLI, connection warnings and acquisition are unchanged.
+
 ## v80.166 — 2026-11-05
 
 - Web quota parentheses switch observed Used CCost to same-window Remaining reference capacity. Full Watch adds Capacity before every quota bar and moves native ratios/money into accessible help; Mini stays compact and Accounts uses only existing matching period costs. Verified Copilot included AI credits use native limits/remainders; other valid quotas extrapolate cost / raw fraction used, with honest unknown/Unlimited states. Provider-confirmed idle rolling zero now shows healthy native 100% Remaining without inventing numeric reference capacity or resets. CLI, native accounting, polling and daily CCost are unchanged.

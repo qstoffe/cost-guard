@@ -73,6 +73,7 @@ async function tokenMix(context, frames) {
   const cost = () => row.children[5].textContent;
   const costText = prompt => {
     const d = prompt.display;
+    if (d.ccost === '0') return '0 (0 + 0)';
     return !d.ccost || d.ccost === 'N/A' ? d.ccost : `${d.ccost} (${d.incoming_context_ccost} + ${d.extra_ccost})`;
   };
   assert.equal(mix(), '100/0/0/0');
@@ -93,8 +94,26 @@ async function tokenMix(context, frames) {
   assert.equal(mix(), 'N/A', 'disconnect retains last observation, not invented current usage');
   stream.onopen(); await turns();
   assert.equal(mix(), 'N/A');
-  snapshot.sequence = 10;
-  stream.emit(10, frames[0]); await turns();
+  // Lifecycle ink consumes the accepted focal prompt, not session-wide idleness.
+  const success = JSON.parse(JSON.stringify(frames.at(-1)));
+  const focal = success.view.active_cards.at(-1).rows[0].prompt;
+  Object.assign(focal, {in_progress:false, aborted:false, has_error:false, completed_successfully:true});
+  snapshot = {instance_id:'mix', sequence:frames.length, values:{live:success}};
+  stream.emit(snapshot.sequence, success);
+  assert.equal(card.title.className, 'watch-success-title');
+  assert.equal(row.className, 'watch-success');
+  stream.emit(snapshot.sequence-1, frames[0]);
+  assert.equal(card.title.className, 'watch-success-title', 'older source revision cannot roll back completion ink');
+  for (const flags of [{completed_successfully:false}, {completed_successfully:true,aborted:true},
+      {aborted:false,has_error:true}, {has_error:false,in_progress:true}]) {
+    Object.assign(focal, flags); snapshot.sequence++;
+    stream.emit(snapshot.sequence, success);
+    const expected = focal.in_progress ? 'watch-running-title' : '';
+    assert.equal(card.title.className, expected, 'unknown/error/abort never imply successful completion; resumption clears green');
+    assert.notEqual(row.className, 'watch-success');
+  }
+  snapshot.sequence += 3;
+  stream.emit(snapshot.sequence, frames[0]); await turns();
   assert.equal(mix(), 'N/A', 'gap accepts HTTP snapshot, not unverified event body');
   console.log('web token mix SSE passed');
 }
@@ -171,6 +190,8 @@ async function main() {
   const firstCell = firstRow.children[0];
   const costText = (prompt, unit) => {
     const d = {...prompt.display, ...prompt.display_units?.[unit]};
+    if (d.ccost === '0') return '0 (0 + 0)';
+    if (d.ccost === '$0.00') return '$0.00 ($0.00 + $0.00)';
     return !d.ccost || d.ccost === 'N/A' ? d.ccost : `${d.ccost} (${d.incoming_context_ccost} + ${d.extra_ccost})`;
   };
   const canonical = input.view.active_cards[0].rows.map(r => costText(r.prompt, 'credits'));
@@ -203,6 +224,24 @@ async function main() {
   assert.equal(firstRow.children[8].textContent, input.view.active_cards[0].rows[0].prompt.display.incoming_context_tokens);
   assert.equal(firstRow.children[9].textContent, input.view.active_cards[0].rows[0].live_context.display.watch_delta_context_tokens);
   assert.equal(watch.earlier.open || false, false);
+  const concurrent = JSON.parse(JSON.stringify(input));
+  const completed = concurrent.view.active_cards[0];
+  const completedPrompt = completed.rows.find(row => row.prompt.event_id === completed.focal_id).prompt;
+  Object.assign(completedPrompt, {in_progress:false,aborted:false,has_error:false,completed_successfully:true});
+  const running = JSON.parse(JSON.stringify(completed));
+  running.focal_id = running.rows[0].prompt.event_id = 'concurrent-focal';
+  running.rows[0].prompt.in_progress = true;
+  concurrent.view.active_cards = [completed, running];
+  context.example = concurrent;
+  context.concurrentParent = new Node('div'); context.concurrentState = {connection:'Live connected.'};
+  vm.runInContext('ReportView.renderLive(concurrentParent, example, concurrentState)', context);
+  const concurrentWatch = context.concurrentState.watch;
+  assert.equal(concurrentWatch.active.children[0].children[0].children[0].className, 'watch-success-title');
+  assert.equal(concurrentWatch.active.children[1].children[0].children[0].className, 'watch-running-title');
+  concurrent.view.active_cards = [running];
+  concurrent.view.history_cards = [{...completed, focal_id:''}];
+  vm.runInContext('ReportView.renderLive(concurrentParent, example, concurrentState)', context);
+  assert.equal(concurrentWatch.history.children[0].children[0].children[0].className, '', 'Earlier title returns to historical presentation');
   // Independent keyed cards, no filter/pager or global cap.
   const multiple = JSON.parse(JSON.stringify(input));
   const other = JSON.parse(JSON.stringify(input.view.active_cards[0]));

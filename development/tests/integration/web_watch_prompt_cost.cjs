@@ -21,10 +21,14 @@ for (const name of ['render', 'watch']) vm.runInContext(fs.readFileSync(`src/web
 vm.runInContext('globalThis.state={connection:"Live connected."}; ReportView.renderLive(parent,input,state)', context);
 const cards = [...context.state.watch.cards.values()];
 assert.equal(cards.length, 2);
-const credits = ['1250 (900 + 350)', '?12 (5 + N/A)', '100 (N/A + N/A)', '0 (0 + 0)', 'N/A', '2 (2 + <0.1)', ''];
-const usd = ['$12.50 ($9.00 + $3.50)', '?$0.12 ($0.05 + N/A)', '$1.00 (N/A + N/A)', '$0.00 ($0.00 + $0.00)', 'N/A', '$0.01 ($0.01 + $0.00)', ''];
+const credits = ['1250 (900 + 350)', '?12 (5 + N/A)', '100 (N/A + N/A)', '0 (0 + 0)', 'N/A', '2 (2 + <0.1)',
+  '0 (0 + 0)', '<0.1 (N/A + N/A)', '?<0.1 (N/A + N/A)', '12 (N/A + 12)', '12 (12 + N/A)', '0 (0 + 0)', 'N/A', ''];
+const usd = ['$12.50 ($9.00 + $3.50)', '?$0.12 ($0.05 + N/A)', '$1.00 (N/A + N/A)', '$0.00 ($0.00 + $0.00)', 'N/A', '$0.01 ($0.01 + $0.00)',
+  '$0.00 ($0.00 + $0.00)', '$0.00 ($0.00 + $0.00)', '?$0.00 ($0.00 + $0.00)', '$0.12 (N/A + $0.12)', '$0.12 ($0.12 + N/A)', '$0.00 ($0.00 + $0.00)', 'N/A', ''];
+const canonical = JSON.stringify(input);
 for (const [unit, expected] of [['credits', credits], ['usd', usd], ['credits', credits]]) {
   vm.runInContext(`ReportView.setUnit('${unit}',parent)`, context);
+  vm.runInContext('ReportView.renderLive(parent,input,state)', context);
   for (const card of cards) {
     assert.deepEqual(card.body.children.map(row => row.children[5].textContent), expected);
     const [button] = card.root.children[2].children[0].children[0].children[0].children[5].children;
@@ -36,4 +40,5 @@ for (const [unit, expected] of [['credits', credits], ['usd', usd], ['credits', 
     assert.match(explanation, /not your bill[\s\S]*I — Incoming context cost on the first model request\.[\s\S]*E — Other cost[\s\S]*linked subagents[\s\S]*fully priced[\s\S]*rounding[\s\S]*N\/A[\s\S]*not zero[\s\S]*cannot be priced[\s\S]*not the Input token share/);
   }
 }
+assert.equal(JSON.stringify(input), canonical, 'zero display never rewrites raw costs, calls or component evidence');
 console.log('watch prompt cost passed');

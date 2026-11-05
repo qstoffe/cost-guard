@@ -85,6 +85,11 @@ widths across widths, font/CSS zoom, themes and units in the real hidden PiP pro
 `integration/probe_mini_disclosure.cjs` measures native pointer/keyboard outer/inner
 bounds and safe fallbacks. `integration/probe_watch_quiet.cjs` checks actual card
 heights/retained figures across transient and virtual sustained refresh failures.
+`integration/probe_watch_presentation.cjs` runs that proof plus displayed-zero I/E,
+confirmed focal title/row colors, focus/selection and contrast in Classic/Web light/dark
+at wide/narrow widths. `test_watch_prompt_cost.py`, `test_watch_daily.py` and
+`integration/web_live.cjs` own the matching formatted-zero, initial/delayed status and
+SSE/lifecycle regressions; no backend pricing/acquisition change is implied.
 The shared `session_summary` projection
 and cache/lifecycle tests retain valuation and history eligibility ownership.
 
