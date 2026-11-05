@@ -23,6 +23,7 @@ def main():
     parser.add_argument("--reports", action="store_true", help="Also capture finite reports beside Live and cancel deep history.")
     parser.add_argument("--models", action="store_true", help="Capture only task-focused Normal/full Models snapshots beside Live.")
     parser.add_argument("--watch-cards", action="store_true", help="Wait for independently published real one-row Watch cards.")
+    parser.add_argument("--tool-outcomes", action="store_true", help="Check evidenced tool outcome subsets in the published cards.")
     parser.add_argument("--prompt-token-mix", action="store_true", help="Observe card token mix over twelve seconds; no inference or extra capture.")
     parser.add_argument("--prompt-cost", action="store_true", help="Compare an observed completed prompt's raw cost split with a CLI session report.")
     parser.add_argument("--daily", action="store_true", help="Wait for coherent full-day cost, initiating prompts and category prices.")
@@ -89,7 +90,7 @@ def main():
         start = live['view']['started_at_ms']
         source_seconds = time.monotonic() - started
         card_evidence = None
-        if args.watch_cards:
+        if args.watch_cards or args.tool_outcomes:
             observations.stage = 'watch_cards'
             first_rows = None
             deadline = time.monotonic() + 90
@@ -116,6 +117,22 @@ def main():
                 time.sleep(.25)
             else:
                 raise RuntimeError('probe_watch_cards_timeout')
+        if args.tool_outcomes:
+            activities = [row['tool'] for card in cards for row in card['rows'] if row.get('tool')]
+            for activity in activities:
+                outcomes = activity['outcomes']
+                assert all(item['outcome'] in {'failed', 'cancelled'} and item['count'] > 0 for item in outcomes)
+                assert len({(item['tool_name'], item['outcome']) for item in outcomes}) == len(outcomes)
+                assert sum(item['count'] for item in outcomes if item['outcome'] == 'failed') == activity['failed_count']
+                assert sum(item['count'] for item in outcomes if item['outcome'] == 'cancelled') == activity['cancelled_count']
+                assert sum(item['count'] for item in outcomes) == activity['failed_or_cancelled_count']
+                counts = dict(activity['counts'])
+                for name, count in counts.items():
+                    assert sum(item['count'] for item in outcomes if item['tool_name'] == name) <= count
+                assert all(item['tool_name'] in counts for item in outcomes)
+            print(json.dumps(dict(tool_outcomes='ok' if activities else 'unobserved', cards_with_activity=len(activities),
+                failed=sum(item['failed_count'] for item in activities),
+                cancelled=sum(item['cancelled_count'] for item in activities), model_calls_started_by_probe=0)))
         if args.prompt_cost:
             from development.tests.integration.prompt_cost_observations import observe_prompt_cost
             observations.stage = 'prompt_cost'

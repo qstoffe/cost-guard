@@ -18,8 +18,13 @@ from src.application.live_projection import project_live
 
 def main():
     assets = ROOT / 'src/web/assets'
+    if '--tool-outcomes' in sys.argv:
+        from development.tests.fixtures.watch_tool_outcomes import outcome_watch
+        frame = outcome_watch()
+    else:
+        frame = summary_watch()
     resources = {'/' + name: (assets / name).read_bytes() for name in ('app.css', 'help.js', 'render.js', 'watch.js')}
-    resources['/data.js'] = ('const INPUT = ' + json.dumps(dict(state='running', view=project_live(summary_watch()).to_json())) + ';').encode()
+    resources['/data.js'] = ('const INPUT = ' + json.dumps(dict(state='running', view=project_live(frame).to_json())) + ';').encode()
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):

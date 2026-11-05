@@ -15,7 +15,7 @@ from src.domain import EventKind, NormalizedEvent
 from src.presentation import WatchRenderer
 from src.presentation.watch_activity import BASE_ROLE, FAILED_ROLE
 from src.reports.models import PromptProjection, SessionPromptBlock
-from src.watch.models import SkillObservation, WatchProjection
+from src.watch.models import SkillObservation, ToolOutcome, WatchProjection
 from src.watch.tools import observe_tools
 from src.watch.tracker import WatchRowTracker
 
@@ -163,6 +163,27 @@ class ActiveActivityLifecycleTests(unittest.TestCase):
         long_row = replace(row, prompt=replace(terminal, preview='x' * 500))
         self.assertIn('#1 [ERROR]', renderer._row_label(long_row))
         self.assertLessEqual(len(renderer._row_label(long_row)), 35)
+
+    def test_cancelled_breakdown_survives_terminal_grace_and_revision_reuse(self):
+        tracker = WatchRowTracker(started_at_ms=0, recent_seconds=30, max_rows=20)
+        parts = self.parts + (tool('cancelled', 'execute', status='error', error={'name': 'AbortError'}),)
+        active = self.project((prompt(in_progress=True),), snapshot(parts), tracker=tracker)
+        expected = (ToolOutcome('shell', 'failed', 1), ToolOutcome('execute', 'cancelled', 1))
+        self.assertEqual(expected, active[0].tool.tool_outcomes)
+        terminal_prompt = prompt(completed_successfully=True)
+        terminal_snapshot = snapshot(parts, running=False)
+        terminal = self.project((terminal_prompt,), terminal_snapshot, now=61_000, tracker=tracker)
+        with patch('src.watch.tracker.observe_tools', side_effect=AssertionError('unchanged revision rescan')):
+            retained = self.project((terminal_prompt,), terminal_snapshot, now=62_000, tracker=tracker)
+        self.assertEqual(expected, retained[0].tool.tool_outcomes)
+        self.assertEqual(terminal[0].tool, retained[0].tool)
+        self.assertFalse(retained[0].tool.has_status_row)
+        self.assertEqual(2, retained[0].tool.failed_or_cancelled_count)
+        corrected_snapshot = replace(snapshot(self.parts, running=False), source_revision='corrected')
+        corrected = self.project((terminal_prompt,), corrected_snapshot, now=63_000, tracker=tracker)
+        self.assertEqual((ToolOutcome('shell', 'failed', 1),), corrected[0].tool.tool_outcomes)
+        expired = self.project((terminal_prompt,), corrected_snapshot, now=91_000, tracker=tracker)
+        self.assertIsNone(expired[0].tool)
 
     def test_running_play_marker_outlives_recent_window_then_transitions_to_completion(self):
         tracker = WatchRowTracker(started_at_ms=0, recent_seconds=1, max_rows=20)

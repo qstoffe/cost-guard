@@ -237,6 +237,7 @@ async function main() {
   assert.equal(firstCard.tools.node.open, true); assert.equal(firstCard.skills.node.open, true);
   assert.equal(watch.earlier.open, true); assert.equal(watch.history.scrollTop, 93);
   document.activeElement = null;
+  require('../fixtures/watch_tool_outcomes.cjs')(firstCard, helpText, document, node => selected = node);
   for (const count of [0, 1, 5, 7]) {
     const tool = {counts: Array.from({length: count}, (_, n) => ['tool-' + n, n + 1]), skills: Array.from({length: count}, (_, n) => ({skill_id: 'skill-' + n, failed_count: n === 0 ? 1 : 0}))};
     multiple.view.active_cards[0].rows.at(-1).tool = tool;

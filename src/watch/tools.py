@@ -7,7 +7,7 @@ from dataclasses import replace
 from src.analysis.causal import prompt_parent_ids
 from src.domain import EventKind, MessageRole, NormalizedMessage, NormalizedPart, SessionSnapshot
 
-from .models import SkillObservation, ToolObservation
+from .models import SkillObservation, ToolObservation, ToolOutcome
 from .tool_contracts import (
     executed_skill_script, failure_skill, is_skill_tool, loaded_skill, skill_tool_id,
     structured_outcome, verified_skill_origin,
@@ -170,12 +170,12 @@ def observe_tools(
     snapshot: SessionSnapshot, event_id: str, *, is_compaction: bool = False, now_ms: int = 0,
     skill_origins_by_session: Mapping[str, Mapping[str, str]] | None = None,
 ) -> ToolObservation:
-    """Count tool calls by name, structured failures, the longest long-running tool and the newest reliable todo state."""
+    """Count physical calls and evidenced outcomes within the canonical prompt scope."""
     parents = _parent_ids(snapshot, event_id, is_compaction=is_compaction)
     candidates = []
     tool_count = 0
     counts: dict[str, int] = {}
-    failed = 0
+    outcomes: dict[tuple[str, str], int] = {}
     running_tool, running_ms = "", 0
     order = 0
     messages = _prompt_messages(snapshot, parents, is_compaction)
@@ -203,12 +203,16 @@ def observe_tools(
             skills[skill] = max(skills.get(skill, (0, 0)), (start, tool_count))
         script = executed_skill_script(part.data)
         outcome = structured_outcome(part.data, script) if not _is_cancellation(state) else "cancelled"
-        if outcome != "cancelled" and (status == "error" or outcome == "error"):
-            failed += 1
+        if outcome != "cancelled" and status == "error":
+            outcome = "error"
+        if outcome in {"error", "cancelled"}:
+            key = (name, "failed" if outcome == "error" else "cancelled")
+            outcomes[key] = outcomes.get(key, 0) + 1
+        if outcome == "error":
             owner = failure_skill(part.data, script)
             if owner:
                 skill_failures[owner] = skill_failures.get(owner, 0) + 1
-        elif status == "running" and now_ms - start >= RUNNING_VISIBLE_AFTER_MS and now_ms - start > running_ms:
+        elif not outcome and status == "running" and now_ms - start >= RUNNING_VISIBLE_AFTER_MS and now_ms - start > running_ms:
             running_tool, running_ms = name, now_ms - start
         if _is_todo_tool(part):
             order += 1
@@ -218,7 +222,10 @@ def observe_tools(
         _, _, todos = max(candidates, key=lambda item: (item[0], item[1]))
     summary = dict(
         tool_counts=tuple(sorted(counts.items(), key=lambda item: (-item[1], item[0]))),
-        failed_count=failed, running_tool=running_tool, running_ms=running_ms,
+        tool_outcomes=tuple(ToolOutcome(name, outcome, count) for (name, outcome), count in sorted(
+            outcomes.items(), key=lambda item: (item[0][1] != "failed", -item[1], item[0][0]))),
+        failed_count=sum(count for (_, outcome), count in outcomes.items() if outcome == "failed"),
+        running_tool=running_tool, running_ms=running_ms,
         skills=tuple(SkillObservation(skill, skill_failures.get(skill, 0))
                      for skill in sorted(skills, key=lambda item: skills[item], reverse=True)),
     )

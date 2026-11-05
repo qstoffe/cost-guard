@@ -306,6 +306,7 @@ footer { border-top: 1px solid var(--line); color: var(--muted); font-size: .8re
 .watch-activity { font-size: .8rem; margin-top: .4rem; overflow-wrap: anywhere; color: var(--watch-activity); }
 .watch-activity :is(details, summary) { color: inherit; }
 .watch-activity .watch-activity-error { color: var(--error); }
+.watch-activity .watch-running-tool { color: var(--watch-running); }
 .watch-activity details, .watch-activity p { margin-block: .2rem; }
 .watch-activity summary { max-width: 100%; }
 .watch-history { padding: 0; }

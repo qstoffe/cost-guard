@@ -19,6 +19,8 @@ def card_row(row, now_ms):
         watch_duration_ms=row.prompt.duration_ms,
         live_context=fields(row.prompt, "watch_delta_context_tokens watch_next_context_tokens"),
         tool=None if tool is None else record(counts=tool.tool_counts, failed_count=tool.failed_count,
+            cancelled_count=tool.cancelled_count, failed_or_cancelled_count=tool.failed_or_cancelled_count,
+            outcomes=tuple(fields(item, "tool_name outcome count") for item in tool.tool_outcomes),
             running_tool=tool.running_tool, running_ms=tool.running_ms,
             background_kinds=tool.background_kinds, background_ms=tool.background_ms,
             skills=tuple(fields(skill, "skill_id failed_count") for skill in tool.skills)))
@@ -52,6 +54,8 @@ def project_live(value, timezone_id="UTC", ccost_display_unit="credits"):
         tool = row.tool
         activity = None if tool is None else record(
             counts=tool.tool_counts, failed_count=tool.failed_count, running_tool=tool.running_tool,
+            cancelled_count=tool.cancelled_count, failed_or_cancelled_count=tool.failed_or_cancelled_count,
+            outcomes=tuple(fields(item, "tool_name outcome count") for item in tool.tool_outcomes),
             running_ms=tool.running_ms, background_kinds=tool.background_kinds,
             background_ms=tool.background_ms, todo_completed=tool.todo_completed,
             todo_total=tool.todo_total, active_todo=tool.active_todo,

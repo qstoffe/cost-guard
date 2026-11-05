@@ -1,5 +1,55 @@
 # Full Web Watch cards, reset display and context markers
 
+## v80.165 — FR 000584 (2026-11-05)
+
+`watch/tools.py` classifies each existing deduplicated physical call once, preserving
+native/verified-script rules and cancellation precedence. Ordered `ToolOutcome`
+tuples carry tool name, failed/cancelled category and count. Failure-only CLI/skill
+counts remain separate; cancellation and combined counts derive from canonical
+observation data. `live_projection.py` explicitly exports both totals and groups
+for shared rows/cards, without raw outputs, command strings or another source read.
+
+Full Watch appends every red outcome subset below its inclusive all-call groups.
+Only an unidentified difference is shown for an older/partial aggregate; the
+undifferentiated repeated total is removed. Header and list retain the same accepted
+counts while either contains focus/selected text, then apply the next publication
+together. Native disclosure nodes, focus and scroll remain intact. Expanded shared
+help explains subset arithmetic, unknown evidence and direct failure-only skill
+attribution. Only `.watch-running-tool` uses `--watch-running`; ordinary activity,
+background work and independently red errors keep their established colors.
+
+Regression coverage includes mixed success/failure/cancellation, cancellation-only,
+unknown/nonstandard names, untrusted output/exit codes, call-ID copies, terminal
+corrections/retention/expiry, child scope, skill separation, seven tool groups beyond
+the compact cap, literal hostile names, unidentified differences, focus/selection
+coherence and dynamic disappearance. CLI behavior is unchanged.
+
+Hidden fresh-profile Chrome 156.0.8078.80 passed six synthetic cases: Classic/Web
+light/Web dark at 1366×900 and 360×900. Native Enter disclosure, keyed/focus stability,
+shared help/ARIA and Escape, all nine expanded rows, no injected markup, no page or
+detail overflow, terminal hiding and exact semantic color equality passed. Classic
+running ink was `rgb(255, 255, 85)`; background and ordinary names stayed activity
+ink, with no running background fill. Representative Classic desktop and Web light
+narrow screenshots were inspected. Reproduce with `serve_watch_summary.py
+--tool-outcomes` and `probe_watch_tool_outcomes.cjs --browser <absolute-browser>
+--output <owned-directory>` in `development/tests/integration/`.
+
+The read-only real V2 probe `probe_web_live.py --watch-cards --tool-outcomes` passed:
+one activity card, four evidenced failures, zero observed cancellations; all per-name
+subsets and totals reconciled. One owner/two advancing streams, one active/two history
+cards, max one row/card, four bounded pending captures; first rows at 4.441s. All owned
+workers closed and shared OpenCode stayed untouched. Shutdown interrupted independent
+account-history work; Daily completeness is not claimed. Real mixed cancellations
+were not observed; deterministic canonical and synthetic-browser checks cover them.
+No inference, personal profile, native desktop input, provider mutation or end-to-end
+real-account paint is claimed. Integrated browser access was disconnected; hidden
+Chromium supplied the adequate browser evidence without a requirement/test waiver.
+
+Final product verification: Full passed all 141 files in 89.4s, zero failed files;
+working-tree validation passed all 11 checks with six existing/advisory warnings
+(README/Web guide/history prose and three pre-existing module design budgets).
+No requirement/test exception or release ZIP was requested or performed.
+
 The historical 450 CSS-pixel cap below is superseded by FR000566's
 [scale-aware physical-width correction](watch-account-pixels.md). Historical DPR1
 and root-font evidence is not proof of a 450-physical-pixel cap at Windows150%.

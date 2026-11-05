@@ -14,7 +14,7 @@ from src.reports.models import PromptProjection, SessionPromptBlock
 from src.sources.opencode_v2_normalization import normalize_message_bundle
 from src.sources.opencode_v2_wire import current_union_message_to_legacy_bundle
 from src.watch.skill_registry import active_skill_origins
-from src.watch.models import SkillObservation, ToolObservation
+from src.watch.models import SkillObservation, ToolObservation, ToolOutcome
 from src.watch.tools import observe_tools
 
 BROWSER = 'auto-agent-browser'
@@ -183,6 +183,8 @@ class FailureAttributionTests(unittest.TestCase):
         self.assertEqual(1, obs.failed_count)
         self.assertEqual((SkillObservation(BROWSER, 1),), obs.skills)
         self.assertEqual((), observe_snapshot(base, 'u_next', now_ms=60_000).skills)
+        self.assertEqual((ToolOutcome('shell', 'failed', 1),), obs.tool_outcomes)
+        self.assertEqual((), observe_snapshot(base, 'u_next', now_ms=60_000).tool_outcomes)
 
     def test_native_and_structured_failures_count_each_physical_call_once(self):
         failed = tool('failed', 'shell', status='error', inputs={'command': COMMAND},
@@ -289,6 +291,9 @@ class FailureAttributionTests(unittest.TestCase):
                  tool('d', 'shell', status='error', error='command failed', inputs={'command': COMMAND}, output=result(error_class='INTERRUPTED'))]
         obs = observe(calls)
         self.assertEqual(0, obs.failed_count)
+        self.assertEqual(4, obs.cancelled_count)
+        self.assertEqual(4, obs.failed_or_cancelled_count)
+        self.assertEqual((ToolOutcome('shell', 'cancelled', 4),), obs.tool_outcomes)
         self.assertEqual((SkillObservation(BROWSER),), obs.skills)
 
 
