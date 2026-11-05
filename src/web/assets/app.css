@@ -172,20 +172,20 @@ p.warning { border-left: 3px solid var(--warn); padding: .65rem .85rem; backgrou
 .sessions-pager a[aria-disabled="true"] { color: var(--muted); pointer-events: none; text-decoration: none; }
 .session-detail h1 { margin-block: .75rem .25rem; overflow-wrap: anywhere; }
 .session-detail .watch-session-summary { margin-block: .75rem; border: 0; padding: 0; }
-.watch-view .account-card { box-shadow: none; font-size: .85rem; }
-.watch-view .account-card p { margin-block: var(--space-2); }
-.watch-view .quota-summary { padding-block: var(--space-2); }
+.live-account-cards .account-card { box-shadow: none; font-size: .85rem; }
+.live-account-cards .account-card p { margin-block: var(--space-2); }
+.live-account-cards .quota-summary { padding-block: var(--space-2); }
 .account-grid.watch-account-grid { grid-template-columns: repeat(auto-fit, minmax(0, min(100%, var(--watch-account-width, 448px)))); justify-content: start; }
-.watch-view .watch-subscription { display: grid; grid-template-rows: subgrid; grid-row: span 7;
+.live-account-cards .watch-subscription { display: grid; grid-template-rows: subgrid; grid-row: span 7;
   gap: .25rem; max-width: var(--watch-account-width, 448px); min-width: 0; padding: 0 0 .8rem; text-align: left; overflow-wrap: anywhere; }
 .watch-subscription > h4 { overflow-wrap: anywhere; text-align: center; padding: .43rem .9rem;
   background: var(--accent-soft); color: var(--accent); font-weight: 750; border-bottom: 1px solid var(--line);
   border-radius: calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0; }
 .watch-subscription > :not(h4) { margin-inline: .9rem; min-width: 0; }
-.watch-view .watch-subscription > p { margin-block: 0; }
+.live-account-cards .watch-subscription > p { margin-block: 0; }
 .watch-quota-track { display: flex; align-items: flex-end; min-width: 0; }
-.watch-view .watch-subscription .watch-quota-track progress { margin-block: 0; }
-.watch-view .watch-primary-details > p:first-child, .watch-view .watch-secondary-quota > .watch-quota-track + p { margin-top: 0; }
+.live-account-cards .watch-subscription .watch-quota-track progress { margin-block: 0; }
+.live-account-cards .watch-primary-details > p:first-child, .live-account-cards .watch-secondary-quota > .watch-quota-track + p { margin-top: 0; }
 .watch-quota-summary { overflow-wrap: anywhere; }
 .watch-account-details { border-top: 1px solid var(--line); padding-top: .5rem; }
 .watch-secondary-quota + .watch-secondary-quota { margin-top: .65rem; }
@@ -295,6 +295,9 @@ footer { border-top: 1px solid var(--line); color: var(--muted); font-size: .8re
 [data-section="watch"] #scope-controls, [data-section="watch"] .report-search,
 [data-section="watch"] #status { display: none; }
 [data-section="watch"] main { padding-top: .65rem; }
+[data-section="accounts"] .toolbar, [data-section="accounts"] #notice,
+[data-section="accounts"] #scope-controls, [data-section="accounts"] .report-search { display: none; }
+[data-section="accounts"] main { padding-top: .65rem; }
 .watch-card { margin-block: .75rem; min-width: 0; padding: .75rem; border: 1px solid var(--line); border-radius: var(--radius); }
 .watch-card h3 { margin: 0; font-size: 1rem; font-weight: 600; }
 .watch-card h3 a { text-decoration: none; color: var(--ink); }

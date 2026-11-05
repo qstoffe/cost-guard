@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.174 — 2026-11-05
+
+- Web Accounts replaces its frozen Normal report with the exact shared live Watch subscription cards. Navigation reuses the latest retained account observation through the existing single stream, without new report jobs or acquisition owners. Account-keyed cards update metric/reset/help nodes in place, preserve truthful pending/empty/stale states, and share themes, physical width, Capacity and Credits/USD / Used/Remaining settings. Other reports, CLI and Diagnostics retain their layouts.
+
 ## v80.173 — 2026-11-05
 
 - Web Sessions replaces report/snapshot controls with a six-column live catalog, globally sorted canonical keys and stable older-page membership. A bounded disposable scalar index honestly withholds metric sorting while cold/invalidation coverage is incomplete. Unified session links open all chronological prompts in one document-scrolling table with structured Model/Effort, shared Watch Context/help, preserved selection and canonical complete-session totals. Source reads remain isolated/read-only; [actual performance and cold-index limits](development/journal/web/sessions-live.md) are explicit.

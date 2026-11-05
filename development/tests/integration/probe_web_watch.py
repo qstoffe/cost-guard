@@ -44,10 +44,10 @@ def main():
     assets = ROOT / 'src/web/assets'
     with tempfile.TemporaryDirectory(dir=args.output.parent, prefix='watch-browser-') as tmp:
         data = payload(Path(tmp) / 'fixture')
-        resources = {f'/{name}': (assets / name).read_bytes() for name in ('app.css', 'render.js', 'watch.js', 'live.js')}
+        resources = {f'/{name}': (assets / name).read_bytes() for name in ('app.css', 'help.js', 'render.js', 'account-cards.js', 'watch.js', 'live.js')}
         resources['/data.js'] = ('const INPUT = ' + json.dumps(data) + ';').encode()
         resources['/browser.js'] = (Path(__file__).with_name('web_watch_browser.js')).read_bytes()
-        resources['/case.html'] = b'''<!doctype html><html><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/app.css"><main><div id="result"></div></main><script src="/render.js"></script><script src="/watch.js"></script><script src="/live.js"></script><script src="/data.js"></script><script src="/browser.js"></script></html>'''
+        resources['/case.html'] = b'''<!doctype html><html><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/app.css"><main><div id="result"></div></main><script src="/help.js"></script><script src="/render.js"></script><script src="/account-cards.js"></script><script src="/watch.js"></script><script src="/live.js"></script><script src="/data.js"></script><script src="/browser.js"></script></html>'''
 
         class Handler(BaseHTTPRequestHandler):
             def do_GET(self):

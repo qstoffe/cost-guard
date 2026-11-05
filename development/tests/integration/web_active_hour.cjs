@@ -33,5 +33,6 @@ assert.equal(credits, output.textContent);
 assert.equal(true, vm.runInContext('ReportRoutes.resolve("#/cost-per-hour").explicit', context));
 assert.equal('cost-per-hour', vm.runInContext('ReportRoutes.resolve("#/cost-per-hour").request.kind', context));
 assert.equal(true, vm.runInContext('ReportRoutes.resolve("#/watch").live', context));
-assert.equal('normal', vm.runInContext('ReportRoutes.resolve("#/accounts").request.kind', context));
+assert.equal(null, vm.runInContext('ReportRoutes.resolve("#/accounts").request', context));
+assert.equal(true, vm.runInContext('ReportRoutes.resolve("#/accounts").live', context));
 console.log('PASS explicit hourly capture route, three scopes, frozen server display and reversible memory-only units');

@@ -44,78 +44,6 @@ const WatchView = (() => {
     }));
     target.list.signature = signature;
   }
-  function quotaTrack(value) {
-    const quota = value.quota, view = () => ReportView.quotaView(quota, value);
-    const summary = () => quota.unlimited ? 'Unlimited' : view().percent === '—' ? '—' : view().percent + ' ' + view().mode;
-    const label = el('div'); label.append(el('span', () => `${quota.label} · ${summary()}`));
-    ReportView.bind(label, () => label.className = 'watch-quota-summary metric-value' + (view().exhausted ? ' watch-quota-exhausted' : ''));
-    label.append(el('span', () => ` (${display(quota, 'ccost_' + view().mode)})`, 'watch-period-cost'));
-    const capacity = el('div', undefined, 'watch-quota-capacity metric-value');
-    capacity.append(ContextHelp.value(el('span', () => 'Capacity: ' + display(quota, 'ccost_capacity')), () => ReportView.quotaHelp(quota)));
-    if (view().note) label.append(el('span', ' · ' + view().note, 'warning'));
-    const track = el('div', undefined, 'watch-quota-track');
-    if (!quota.unlimited && value.used_fraction != null) {
-      const bar = el('progress'); bar.max = 1;
-      ReportView.bind(bar, () => {
-        bar.value = view().fraction;
-        bar.setAttribute('aria-label', quota.label + ' ' + view().mode);
-        bar.setAttribute('aria-valuetext', summary() + (view().exhausted ? ' · exhausted' : ''));
-        bar.className = view().exhausted ? 'watch-quota-exhausted' : '';
-      });
-      if (value.exhausted) bar.className = 'watch-quota-exhausted';
-      track.append(bar);
-    } else track.append(el('span', quota.unlimited ? 'No usage limit' : 'Usage unavailable', 'detail'));
-    return [label, capacity, track];
-  }
-  function quotaDetails(parent, value) {
-    const quota = value.quota;
-    const reset = el('p', undefined, 'detail'), clock = el('span', display(value, 'watch_reset')); reset.append(clock);
-    if (quota.reset_at_ms != null) ContextHelp.value(clock, display(quota, 'reset_at_ms'));
-    parent.append(reset);
-    if (value.pace) {
-      parent.append(el('p', `Remaining: ${display(value.pace, 'per_day')}/day`, 'detail'));
-      parent.append(el('p', value.pace.workdays === 0 ? 'Remaining: no workdays left' :
-        `Remaining: ${display(value.pace, 'per_workday')}/workday`, 'detail'));
-    }
-    if (value.restricted) parent.append(el('p', quota.label + ' · Provider restriction reported', 'warning'));
-  }
-  function accounts(parent, value) {
-    if (!value?.accounts.length) { parent.append(el('p', 'No configured accounts detected.')); return; }
-    const grid = el('div', undefined, 'account-grid watch-account-grid');
-    for (const item of value.accounts) {
-      const obs = item.observation, card = el('section', undefined, 'account-card watch-subscription');
-      card.dataset.availability = obs.availability;
-      ReportView.bind(card, () => card.dataset.exhausted = String([item.primary, ...item.secondary].some(value => ReportView.quotaView(value.quota, value).exhausted)));
-      const today = item.ccost_scopes.find(scope => scope.name === 'today');
-      const cost = el('p', undefined, 'metric-value');
-      cost.append(ContextHelp.value(el('span', () => `CCost Today: ${today?.cost == null ? '—' : display(today.cost, 'account_ccost')}`),
-        'This account’s reference cost in your configured local day.' + (item.today_note ? '\n' + item.today_note : '')));
-      const [label, capacity, track] = quotaTrack(item.primary), primary = el('div', undefined, 'watch-primary-details');
-      quotaDetails(primary, item.primary);
-      const lower = el('div', undefined, 'watch-account-footer');
-      const secondary = el('div', undefined, 'watch-account-details');
-      for (const quota of item.secondary) {
-        const group = el('div', undefined, 'watch-secondary-quota');
-        group.append(...quotaTrack(quota)); quotaDetails(group, quota); secondary.append(group);
-      }
-      if (item.secondary.length) lower.append(secondary);
-      const cause = {auth_failure: 'Authentication unavailable', transport_failure: 'Connection failed',
-        unsupported_auth_method: 'Unsupported authentication method', format_changed: 'Provider format changed',
-        software_failure: 'Account refresh failed', discovery_failure: 'Account metadata unavailable',
-        rate_limited: 'Rate limited', account_unavailable: 'Account unavailable'}[obs.error_code];
-      const state = {partial: 'Partial quota data', stale: 'Stale · last observation, not current',
-        unavailable: 'Quota unavailable', error: 'Refresh failed'}[obs.availability];
-      if (state || cause) lower.append(el('p', [state, cause].filter(Boolean).join(' · '), 'warning'));
-      if (obs.status === 'blocked' && ![item.primary, ...item.secondary].some(quota => quota.exhausted || quota.restricted))
-        lower.append(el('p', 'Provider restriction reported; utilization not established', 'warning'));
-      if (obs.has_warning) lower.append(el('p', 'Provider warning', 'warning'));
-      if (item.ccost_account_unknown) lower.append(el('p', 'CCost account attribution unavailable', 'detail'));
-      card.append(el('h4', obs.label), cost, label, capacity, track, primary);
-      if (lower.children.length) card.append(lower);
-      grid.append(card);
-    }
-    parent.append(grid);
-  }
   function daily(parent, value, state, waiting) {
     parent.replaceChildren(ContextHelp.value(el('strong', 'CCost Today'), 'Reference cost of today’s model activity in your configured local day.'));
     if (!value) { parent.append(el('span', state === 'unavailable' ? 'Daily activity unavailable' : waiting ? 'Daily updates delayed; check source availability.' : '—')); return; }
@@ -335,28 +263,13 @@ const WatchView = (() => {
     constructor(state) {
       this.state = state;
       this.root = el('div', undefined, 'watch-view');
-      // DPR already includes desktop page zoom. Only pinch zoom adds a separate
-      // visual-viewport factor. Keep text unscaled and reserve two raster pixels
-      // for fractional border/layout rounding beneath the 450-pixel ceiling.
-      let resolution;
-      const updateWidth = () => {
-        const ratio = window.devicePixelRatio || 1;
-        const scale = ratio * (window.visualViewport?.scale || 1);
-        this.root.style.setProperty('--watch-account-width', Math.floor(448 / scale) + 'px');
-        resolution?.removeEventListener('change', updateWidth);
-        resolution = window.matchMedia(`(resolution: ${ratio}dppx)`);
-        resolution.addEventListener('change', updateWidth);
-      };
-      // One retained View per document; also works while Watch is detached.
-      window.addEventListener('resize', updateWidth);
-      window.visualViewport?.addEventListener('resize', updateWidth);
-      updateWidth();
       this.earlier = el('details', undefined, 'watch-earlier');
       this.earlier.append(el('summary', 'Earlier Prompts'));
       this.history = el('div', undefined, 'watch-history'); this.earlier.append(this.history);
       this.active = el('div', undefined, 'watch-active');
       this.empty = el('p'); this.empty.setAttribute('role', 'status');
-      this.accounts = el('div'); this.cards = new Map();
+      this.accountCards = new AccountCards.View();
+      this.accounts = this.accountCards.root; this.cards = new Map();
       this.daily = el('section', undefined, 'watch-daily');
       this.daily.setAttribute('aria-label', 'CCost Today');
       this.root.append(this.earlier, this.empty, this.active, this.daily, this.accounts);
@@ -402,12 +315,7 @@ const WatchView = (() => {
       if (this.dailySignature !== dailySignature && !protectedNode(this.daily)) {
         daily(this.daily, dailyValue, dailyState, dailyDelayed); this.dailySignature = dailySignature;
       }
-      const signature = JSON.stringify([view.accounts, view.quota_stale, view.quota_recovering_count]);
-      if (view.accounts && this.accountSignature !== signature && !protectedNode(this.accounts)) {
-        this.accounts.replaceChildren();
-        accounts(this.accounts, view.accounts);
-        this.accountSignature = signature;
-      }
+      this.accountCards.update(view);
     }
   }
   return {View, ContextLine};

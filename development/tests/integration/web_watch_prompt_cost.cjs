@@ -17,7 +17,7 @@ const context = vm.createContext({input, parent:new Node('div'), document:{creat
   createElementNS:(namespaceURI,tag) => Object.assign(new Node(tag), {namespaceURI})},
   window:{addEventListener() {}, matchMedia:() => ({addEventListener() {}, removeEventListener() {}})}});
 const helpText = require('../fixtures/web_help_vm.cjs')(vm, context);
-for (const name of ['render', 'watch']) vm.runInContext(fs.readFileSync(`src/web/assets/${name}.js`, 'utf8'), context);
+for (const name of ['render', 'account-cards', 'watch']) vm.runInContext(fs.readFileSync(`src/web/assets/${name}.js`, 'utf8'), context);
 vm.runInContext('globalThis.state={connection:"Live connected."}; ReportView.renderLive(parent,input,state)', context);
 const cards = [...context.state.watch.cards.values()];
 assert.equal(cards.length, 2);

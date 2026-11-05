@@ -75,7 +75,8 @@ async function main() {
     return {resync() {}};
   }};
   const context = vm.createContext({LiveConnection: transport, AbortController, clearTimeout, document: {documentElement: new Node('html'), body: new Node('body'), querySelector: () => toolbar, createElement: tag => new Node(tag),
-    getElementById: id => ids[id], querySelectorAll: () => nav, addEventListener() {}}, window: {addEventListener: (key, fn) => { handlers[key] = fn; }},
+    getElementById: id => ids[id], querySelectorAll: () => nav, addEventListener() {}}, window: {addEventListener: (key, fn) => { handlers[key] = fn; },
+      matchMedia: () => ({addEventListener() {}, removeEventListener() {}})},
     location, history, URLSearchParams, fetch: wire, setTimeout: vmTimeout, Date, console});
   context.document.createElementNS = (_, tag) => new Node(tag);
   // Allowlisted synthetic state only: never cookie, CSRF or bootstrap values.
@@ -85,7 +86,7 @@ async function main() {
     detail: current?.detail && {busy:current.detail.busy, total:current.detail.data?.total,
       state:current.detail.data?.state}})`, context)});
   require('../fixtures/web_help_vm.cjs')(vm, context);
-  for (const path of ['/render.js', '/watch.js', '/session.js', '/sessions.js', '/reports.js', '/settings.js', '/app.js']) {
+  for (const path of ['/render.js', '/account-cards.js', '/watch.js', '/session.js', '/sessions.js', '/reports.js', '/settings.js', '/app.js']) {
     const response = await fetch(input.origin + path);
     assert.equal(response.status, 200);
     vm.runInContext(await response.text(), context);
@@ -275,8 +276,11 @@ async function main() {
   assert.equal(vm.runInContext('current.result.observed_at_ms', context), overviewTime);
   navigate('accounts');
   retainedHeartbeat();
-  assert.match(ids.result.textContent, /Accounts · independent/);
-  assert.equal(requests, beforePresentation, 'normal subviews reuse one frozen acquisition');
+  assert.equal(ids.result.textContent, 'Loading accounts…');
+  assert.equal(vm.runInContext('current.request', context), null);
+  assert.equal(vm.runInContext('current.live', context), true);
+  assert.equal(ids.refresh.disabled, true);
+  assert.equal(requests, beforePresentation, 'live Accounts never acquires a finite normal report');
   navigate('models/all');
   assert.equal(location.hash, '#/models');
   assert.equal(requests, beforePresentation, 'legacy alias never reacquires a different catalog');
@@ -374,7 +378,7 @@ async function main() {
   const reloaded = vm.createContext({LiveConnection: transport, AbortController, clearTimeout, document: context.document, window: context.window, location, history,
      URLSearchParams, fetch: wire, setTimeout: vmTimeout, Date, console});
   require('../fixtures/web_help_vm.cjs')(vm, reloaded);
-   for (const file of ['/render.js', '/watch.js', '/session.js', '/sessions.js']) vm.runInContext(await (await fetch(input.origin + file)).text(), reloaded);
+   for (const file of ['/render.js', '/account-cards.js', '/watch.js', '/session.js', '/sessions.js']) vm.runInContext(await (await fetch(input.origin + file)).text(), reloaded);
   vm.runInContext(await (await fetch(input.origin + '/reports.js')).text(), reloaded);
   vm.runInContext(await (await fetch(input.origin + '/settings.js')).text(), reloaded);
   ids.notice.textContent = 'reload pending';

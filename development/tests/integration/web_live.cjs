@@ -22,6 +22,7 @@ class Node {
 }
 function lifecycle(context, input) {
   vm.runInContext(fs.readFileSync('src/web/assets/render.js', 'utf8'), context);
+  vm.runInContext(fs.readFileSync('src/web/assets/account-cards.js', 'utf8'), context);
   vm.runInContext(fs.readFileSync('src/web/assets/watch.js', 'utf8'), context);
   context.parent = new Node('div');
   context.state = {connection: 'Live connected.'};
@@ -65,7 +66,7 @@ async function tokenMix(context, frames) {
   context.status = message => { context.state.connection = message; };
   context.sourceFactory = () => (stream = {listeners:{}, addEventListener(kind, fn) { this.listeners[kind] = fn; }, close() {},
     emit(number, frame) { this.listeners.live({lastEventId:'mix:' + number, data:JSON.stringify(frame)}); }});
-  for (const name of ['render', 'watch', 'live']) vm.runInContext(fs.readFileSync('src/web/assets/' + name + '.js', 'utf8'), context);
+  for (const name of ['render', 'account-cards', 'watch', 'live']) vm.runInContext(fs.readFileSync('src/web/assets/' + name + '.js', 'utf8'), context);
   vm.runInContext('LiveConnection.connect(api, update, status, sourceFactory)', context);
   await turns(); stream.onopen(); await turns();
   const card = [...context.state.watch.cards.values()].at(-1), row = card.body.children[0];
@@ -180,6 +181,7 @@ async function main() {
   context.example = input;
   context.parent = new Node('div');
   vm.runInContext(fs.readFileSync('src/web/assets/render.js', 'utf8'), context);
+  vm.runInContext(fs.readFileSync('src/web/assets/account-cards.js', 'utf8'), context);
   vm.runInContext(fs.readFileSync('src/web/assets/watch.js', 'utf8'), context);
   vm.runInContext("globalThis.state = {pages: {}, connection: 'Live connected.'}; ReportView.renderLive(parent, example, state)", context);
   assert.match(context.parent.textContent, /Earlier Prompts/);

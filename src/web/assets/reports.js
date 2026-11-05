@@ -9,7 +9,7 @@ const ReportRoutes = (() => {
     if (session) return {title: 'Session ' + session[1], section: 'sessions', session, request: null};
     const routes = {watch: ['Watch', null], live: ['Watch', null],
       models: ['Models', 'normal'],
-      accounts: ['Accounts', 'normal'], sessions: ['Sessions', 'sessions'],
+      accounts: ['Accounts', null], sessions: ['Sessions', 'sessions'],
       reports: ['Date reports', null], 'token-mix': ['Token Mix · deep history', 'token-mix'],
        'cost-per-hour': ['Cost per Active Hour', 'cost-per-hour'], settings: ['Settings', null]};
     if (!routes[path]) return {title: 'Page not found', section: '', request: null};
@@ -23,7 +23,7 @@ const ReportRoutes = (() => {
       request = null;
     }
     if (path === 'reports' && params.has('date')) request = {kind: 'date', date_text: params.get('date')};
-    return {title, section: path === 'live' ? 'watch' : path.split('/')[0], request, live: path === 'live' || path === 'watch',
+    return {title, section: path === 'live' ? 'watch' : path.split('/')[0], request, live: ['live', 'watch', 'accounts'].includes(path),
       catalog: path === 'sessions', explicit: path === 'token-mix' || path === 'cost-per-hour' || path === 'reports' && !request, params};
   }
   function controls(parent, route) {

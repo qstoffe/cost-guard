@@ -21,11 +21,11 @@ async function main() {
     for (const stream of streams) stream.write(`id: pre-response-fixture:${number}\nevent: live\ndata: ${JSON.stringify(body)}\n\n`);
   };
   const html = `<!doctype html><meta charset="utf-8"><div id="result"></div>
-    <script src="/render.js"></script><script src="/watch.js"></script><script src="/live.js"></script>
+    <script src="/help.js"></script><script src="/render.js"></script><script src="/account-cards.js"></script><script src="/watch.js"></script><script src="/live.js"></script>
     <script>window.state={connection:'Live connected.'};window.updates=0;window.last=null;
     LiveConnection.connect(async p=>(await fetch(p)).json(),live=>{window.last=live;window.updates++;
       ReportView.renderLive(document.getElementById('result'),live,state)},s=>{window.health=s});</script>`;
-  const assets = new Map(await Promise.all(['render','watch','live'].map(async name =>
+  const assets = new Map(await Promise.all(['help','render','account-cards','watch','live'].map(async name =>
     ['/' + name + '.js', await fs.readFile('src/web/assets/' + name + '.js')])));
   const server = http.createServer((request, response) => {
     if (request.url === '/api/events') {

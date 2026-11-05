@@ -92,7 +92,7 @@ Web quota reference Capacity/Remaining now lives in `application/quota_ccost.py`
 separate from provider-native orientation and observed Used CCost. It consumes only
 identity-bound existing period projections and emits Credits/USD display variants;
 browser code never extrapolates or acquires history. Full Watch adds per-window
-Capacity, Mini stays compact, and Accounts uses only its existing matching cost.
+Capacity, Accounts shares those live cards, and Mini stays compact.
 Provider-confirmed idle zero retains native 100% Remaining independently of unknown
 reference capacity. See the [Web module contract](modules/web.md).
 

@@ -72,7 +72,8 @@ def main():
         try:
             host.start()
             host.publish_ready()
-            publish()
+            if sys.argv[2:] != ["--accounts-live"]:
+                publish()
             timer.start()
             print(json.dumps({"url": host.browser_url()}), flush=True)
             for line in sys.stdin:
@@ -95,6 +96,13 @@ def main():
                         running=running_prompts((), 'unavailable'), daily_state='retrying', quota_stale=True))
                 elif command == "running":
                     publish()
+                elif command in {"accounts-empty", "accounts-failed-empty"}:
+                    publish(value=replace(frame, quota=replace(frame.quota, accounts=()),
+                        quota_stale=command == "accounts-failed-empty"))
+                elif command == "accounts-stale":
+                    stale = tuple(replace(item, account=replace(item.account, availability="stale",
+                        observations={"parser_reason": "transport_failure"})) for item in frame.quota.accounts)
+                    publish(value=replace(frame, quota=replace(frame.quota, accounts=stale), quota_stale=True))
                 elif command == "watch-starting":
                     host.events.publish("live", {"state": "running", "view": None})
                 elif command == "watch-retrying":
