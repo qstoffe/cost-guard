@@ -117,9 +117,9 @@ const WatchView = (() => {
     }
     parent.append(grid);
   }
-  function daily(parent, value, state) {
+  function daily(parent, value, state, waiting) {
     parent.replaceChildren(el('strong', 'CCost Today'));
-    if (!value) { parent.append(el('span', state === 'unavailable' ? 'Daily activity unavailable' : 'Loading daily activity…')); return; }
+    if (!value) { parent.append(el('span', state === 'unavailable' ? 'Daily activity unavailable' : waiting ? 'Daily updates delayed; check source availability.' : '—')); return; }
     parent.append(el('span', () => value.total.observed_requests && !value.total.priced_requests ? 'N/A' : display(value.total, 'known_ccost'), 'metric-value'));
     const count = el('span', `${value.prompt_count} prompts`);
     ContextHelp.beside(count, 'Prompts with model requests today (your configured local day).\nIncludes prompts started earlier and activity before Watch opened.', 'About today’s prompt count');
@@ -130,12 +130,20 @@ const WatchView = (() => {
       parent.append(el('span', 'Partial pricing / token data', 'warning'));
     if (!value.mix.request_count) parent.append(el('span', 'No recorded usage', 'detail'));
     if (state === 'unavailable') parent.append(el('span', 'Source unavailable · retained daily observation', 'warning'));
-    if (state === 'retrying') parent.append(el('span', 'Retrying daily refresh · retained observation, not current', 'detail'));
+    if (waiting) parent.append(el('span', 'Daily updates delayed · retained observation, not current', 'detail'));
   }
   function promptCost(prompt) {
     const total = display(prompt, 'ccost');
     if (!total || total === 'N/A') return total;
+    // Match only the selected unit's displayed zero, never missing/partial data
+    // or a small positive Credits token such as <0.1. Canonical values stay intact.
+    const zero = /^(\??)(\$?0(?:\.0+)?)$/.exec(total);
+    if (zero) return `${total} (${zero[2]} + ${zero[2]})`;
     return `${total} (${display(prompt, 'incoming_context_ccost')} + ${display(prompt, 'extra_ccost')})`;
+  }
+  function promptRole(prompt) {
+    return !prompt ? '' : prompt.in_progress ? 'running' : prompt.aborted || prompt.has_error ? 'error' :
+      prompt.completed_successfully ? 'success' : '';
   }
   const columns = [
     ['Started', 'When this prompt started, in local time.\nUse the time’s help button for the full date and time.'],
@@ -143,7 +151,7 @@ const WatchView = (() => {
     ['Prompt', 'The prompt’s number within its session and a preview of your message.\nUse the preview’s help button to read it in full.'],
     ['Model', 'The AI model used for the main prompt.\nLinked subagents’ work is included in CCost, Calls and Token Mix, even with different models. This column still shows the main model.\nWork that cannot be linked or priced may be missing.'],
     ['Effort', 'How much reasoning the model was asked to do.\nN/A — This setting is unavailable.'],
-    ['CCost (I + E)', 'Estimated reference cost of this prompt, not your bill.\n\nI — Incoming context cost on the first model request.\nE — Other cost: output, later requests and linked subagents.\nTotal = I + E when fully priced, before display rounding.\n\nN/A — Cost unavailable, not zero.\n? — Part of the cost cannot be priced.\nI is a cost here, not the Input token share.'],
+    ['CCost (I + E)', 'Estimated reference cost of this prompt, not your bill.\n\nI — Incoming context cost on the first model request.\nE — Other cost: output, later requests and linked subagents.\nTotal = I + E when fully priced, before display rounding.\nA displayed zero shows two zero components in this unit, even when component evidence is unavailable.\n\nN/A — Cost unavailable, not zero.\n? — Part of the cost cannot be priced.\nI is a cost here, not the Input token share.'],
     ['Calls', 'Model requests for this prompt, including linked subagents.\nNot tool calls.'],
     ['Token Mix %', 'Token percentages in I / C / W / O order, not cost or billing.\n\nI — Input: new input sent to the AI.\nC — Cached input: previously processed input reused.\nW — Cache write: input saved for reuse.\nO — Output: AI-generated tokens, including reasoning.\n\nN/A or running — No reliable breakdown yet.\nEvery linked request needs all four categories; total tokens must be above zero. Updates follow recorded usage, not streamed text.'],
     ['Ictx', 'Input context size on this prompt’s first request; may be estimated.\nN/A — First-request data unavailable, not zero.\nNot the next session context or a sum of requests.'],
@@ -206,9 +214,10 @@ const WatchView = (() => {
       this.root.dataset.session = value.session_id;
       text(this.title, value.title || value.session_id);
       if (/^[A-Za-z0-9_-]{1,200}$/.test(value.session_id)) this.title.href = '#/sessions/' + value.session_id;
-      this.title.className = !historical && value.rows.some(item => item.prompt.in_progress) ? 'watch-running-title' : '';
-      const retryDelayed = delayed(this, 'retrySince', value.state === 'retrying');
-      text(this.message, value.state === 'unavailable' ? 'Source unavailable; retained contents are not current.' : retryDelayed ? 'Prompt updates delayed; retained contents are not current.' : value.state === 'partial' ? 'Partial / retained evidence' : !value.rows.length ? 'Loading prompts…' : '');
+      const focalRole = historical ? '' : promptRole(value.rows.find(item => item.prompt.event_id === value.focal_id)?.prompt);
+      this.title.className = ['running', 'success'].includes(focalRole) ? `watch-${focalRole}-title` : '';
+      const retryDelayed = delayed(this, 'retrySince', value.state === 'retrying' || value.state === 'loading' || !value.rows.length);
+      text(this.message, value.state === 'unavailable' ? 'Source unavailable; retained contents are not current.' : value.state === 'partial' ? 'Partial / retained evidence' : retryDelayed ? 'Prompt updates delayed; check source availability. Retained contents are not current.' : '');
       this.message.hidden = !this.message.textContent;
       if (!protectedNode(this.body)) {
         const old = new Map([...this.body.children].map(node => [node.dataset.id, node]));
@@ -218,7 +227,8 @@ const WatchView = (() => {
           const signature = JSON.stringify([item, historical]);
           if (row.signature !== signature) {
             const focal = !historical && prompt.event_id === value.focal_id;
-            row.className = focal ? prompt.in_progress ? 'watch-running' : prompt.aborted || prompt.has_error ? 'watch-error' : 'watch-success' : '';
+            const role = focal ? promptRole(prompt) : '';
+            row.className = role ? `watch-${role}` : '';
             const outcome = prompt.in_progress ? 'Running' : prompt.aborted ? 'Aborted' : prompt.has_error ? 'Error' : prompt.completed_successfully ? 'Completed' : 'Ended';
             const reason = !prompt.in_progress && {quota_limit: 'quota limit', rate_limit: 'rate limit',
               tool_call_limit: 'tool-call limit', step_limit: 'step limit', user: 'by user'}[prompt.abort_reason];
@@ -245,6 +255,12 @@ const WatchView = (() => {
       this.drawSummary(value.session_summary);
     }
     drawSummary(value) {
+      const pending = !value || ['loading', 'refreshing', 'retrying'].includes(value.state);
+      const summaryDelayed = delayed(this, 'summarySince', pending);
+      // Keep the last coherent footer through ordinary reacquisition, not through
+      // an observed correction or a confirmed unavailable/partial result.
+      if (pending) value = {...value, cost: value?.cost ?? this.summaryValue?.cost};
+      this.summaryValue = value;
       const context = value?.context, warning = context?.warning;
       const visible = context?.watch_next_context_tokens != null && ['approaching', 'exceeded'].includes(warning?.severity);
       this.summary.dataset.severity = visible ? warning.severity : 'none';
@@ -265,8 +281,7 @@ const WatchView = (() => {
       text(this.warningEnd, visible ? ')' : '');
       text(this.costLabel, () => value?.cost ?
         value.cost.observed_requests && !value.cost.priced_requests ? 'N/A' : display(value.cost, 'known_ccost') :
-        value?.state === 'unavailable' ? 'N/A' : 'Loading…');
-      const summaryDelayed = delayed(this, 'summarySince', value?.state === 'refreshing');
+        value?.state === 'unavailable' ? 'N/A' : '—');
       text(this.costStatus, summaryDelayed ? ' (session total updates delayed; retained observation, not current)' :
         value?.state === 'unavailable' ? ' (unavailable; retained observation, not current)' :
         value?.state === 'partial' ? ' (partial source evidence)' : '');
@@ -337,11 +352,18 @@ const WatchView = (() => {
     update(result) {
       const view = result.view, active = view.active_cards || [], history = view.history_cards || [];
       this.earlier.dataset.hasHistory = String(history.length > 0);
-      const connected = this.state.connection === 'Live connected.';
+      // A healthy host/stream retrying its source is not a disconnected stream.
+      // Its global health warning remains visible; don't duplicate it as fleeting
+      // table-level acquisition prose or falsely announce a connection loss.
+      const connected = this.state.connection === 'Live connected.' || this.state.connectionKind === 'source_retrying';
       const retryDelayed = delayed(this, 'retrySince', result.state === 'retrying');
       const sourceState = result.state === 'retrying' ? retryDelayed ? 'Source updates delayed; last observation retained, not current.' : '' :
         result.state !== 'running' ? 'Source unavailable; last observation retained, not current.' : '';
-      text(this.empty, sourceState || (!connected ? 'Live connection interrupted; last observation retained, not live.' : view.cards_state === 'loading' || view.cards_state == null ? 'Loading active prompts…' : view.cards_state === 'unavailable' ? 'Some prompt sources are unavailable.' : !active.some(card => card.rows.some(row => row.prompt.in_progress)) ? 'No running prompts' : ''));
+      const loading = view.cards_state === 'loading' || view.cards_state == null;
+      const historyLoading = view.history_state === 'loading' || view.history_state == null;
+      const initialDelayed = delayed(this, 'initialSince', loading || historyLoading || !view.accounts);
+      text(this.empty, sourceState || (!connected ? 'Live connection interrupted; last observation retained, not live.' : view.cards_state === 'unavailable' ? 'Some prompt sources are unavailable.' : initialDelayed ? 'Still loading Watch data; check source availability.' : !loading && !active.some(card => card.rows.some(row => row.prompt.in_progress)) ? 'No running prompts' : ''));
+      this.empty.hidden = !this.empty.textContent;
       const keep = new Set();
       for (const [parent, values, historical] of [[this.active, active, false], [this.history, history, true]]) {
         const wanted = values.map(value => {
@@ -349,17 +371,21 @@ const WatchView = (() => {
           if (!this.cards.has(key)) this.cards.set(key, new Card(historical));
           const card = this.cards.get(key); card.update(value, historical); return card.root;
         });
-        if (historical && !wanted.length) wanted.push(el('p', view.history_state === 'loading' ? 'Loading earlier prompts…' : view.history_state === 'unavailable' ? 'Earlier prompts unavailable' : 'No earlier prompts'));
+        if (historical && !wanted.length && !historyLoading) wanted.push(el('p', view.history_state === 'unavailable' ? 'Earlier prompts unavailable' : 'No earlier prompts'));
         reconcile(parent, wanted);
       }
       for (const key of this.cards.keys()) if (!keep.has(key)) this.cards.delete(key);
-      const dailyState = view.daily_usage && !['retrying', 'unavailable'].includes(view.daily_state) ? 'observed' : view.daily_state;
-      const dailySignature = JSON.stringify([view.daily_usage, dailyState]);
+      const dailyPending = ['loading', 'refreshing', 'retrying'].includes(view.daily_state) || view.daily_state == null;
+      const dailyDelayed = delayed(this, 'dailySince', dailyPending);
+      const dailyValue = view.daily_usage ?? (dailyPending ? this.dailyValue : null);
+      this.dailyValue = dailyValue;
+      const dailyState = dailyValue && dailyPending && !dailyDelayed ? 'observed' : view.daily_state;
+      const dailySignature = JSON.stringify([dailyValue, dailyState, dailyDelayed]);
       if (this.dailySignature !== dailySignature && !protectedNode(this.daily)) {
-        daily(this.daily, view.daily_usage, view.daily_state); this.dailySignature = dailySignature;
+        daily(this.daily, dailyValue, dailyState, dailyDelayed); this.dailySignature = dailySignature;
       }
       const signature = JSON.stringify([view.accounts, view.quota_stale, view.quota_recovering_count]);
-      if (this.accountSignature !== signature && !protectedNode(this.accounts)) {
+      if (view.accounts && this.accountSignature !== signature && !protectedNode(this.accounts)) {
         this.accounts.replaceChildren();
         accounts(this.accounts, view.accounts);
         this.accountSignature = signature;

@@ -277,6 +277,7 @@ footer { border-top: 1px solid var(--line); color: var(--muted); font-size: .8re
 .watch-card h3 { margin: 0; font-size: 1rem; font-weight: 600; }
 .watch-card h3 a { text-decoration: none; color: var(--ink); }
 .watch-card h3 a.watch-running-title { color: var(--watch-running); }
+.watch-card h3 a.watch-success-title { color: var(--watch-success); }
 .watch-card > p:empty, .watch-view > p:empty { display: none; }
 .watch-table-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: .4rem; background: var(--panel); }
 .watch-prompt-table { display: grid; width: 100%; grid-template-columns: repeat(2, max-content) minmax(14rem, 1fr) repeat(7, max-content); }

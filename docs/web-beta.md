@@ -371,8 +371,12 @@ later requests and linked-child contributions. These are the CLI session report'
 existing diagnostics, not billing, quota usage or Token Mix's Input category. Raw
 I + E reconciles to the total when known; separately rounded Credits/USD values
 need not visually sum. All three use the selected Web unit and shared formatting.
-Partial totals retain `?`; unavailable components independently show `N/A`, never
-synthetic zero. Report-owned evidence flags require first-request input/cache-read/
+Partial totals retain `?`. Whenever the **displayed total is zero** in the selected
+unit, both displayed components are zero: `0 (0 + 0)` or `$0.00 ($0.00 + $0.00)`,
+even with observed calls or missing component evidence. This presentation override
+also covers tiny positive costs rounded to USD zero; it never changes precise values.
+Positive displayed totals keep independently unavailable components as `N/A`.
+Report-owned evidence flags require first-request input/cache-read/
 cache-write counters for I, and every attributed request's four token categories for E.
 Full Watch can therefore withhold an unsupported component even when the existing CLI
 diagnostic uses normalized placeholders; raw costs and CLI behavior are unchanged.
@@ -394,8 +398,11 @@ stay one line: Prompt alone flexes without a width cap and ellipsizes long text/
 complete metric columns and a 14rem Prompt minimum pan horizontally when necessary.
 Tables use theme-aware body/header surfaces and edges inside each session's frame.
 
-Running focal rows and linked titles are yellow; historical/terminal titles use
-neutral heading ink. Normal activity is gold/brown, failures independently red,
+Running focal rows and linked titles are yellow. Confirmed successful focal rows
+and their titles share the same semantic success green during existing terminal grace;
+Earlier titles return to neutral heading ink. Unknown outcomes never imply success,
+and resumed/concurrent prompts keep each card's own focal state.
+Normal activity is gold/brown, failures independently red,
 and context guidance severity-specific (gold/orange triangle, ordinary foreground
 approaching text; gold/orange triangle and text once exceeded). Observed success is lime, abort/error red, for
 `watchRecentEventSeconds` (30 seconds by default), then the session becomes
@@ -428,9 +435,9 @@ coherently. Routine refresh silently retains figures; only a scope without valid
 loads. Real failures remain visible. Midnight resets, rejecting yesterday's late results;
 CCost Today keeps its label before 03:00. Web Credits/USD and CLI scopes are unchanged.
 
-Retryable source-read failures with a retained observation first say **Retrying** in
-ordinary detail text, explicitly **not current**, instead of immediately announcing
-**Source unavailable**. Each source/card/daily lane confirms after five monotonic seconds
+Retryable source-read failures retain observations quietly in Full Watch's tables,
+footers and daily area; freshness remains accessible in help and the unchanged global
+connection/source-health notice. Each source/card/daily lane confirms after five monotonic seconds
 from its first failure (one existing source retry interval); further failures and
 partial/retained-only card publications cannot renew that window. Confirmation is
 evaluated on existing Live publications, normally every second, not on another timer
@@ -518,10 +525,12 @@ unrounded values in the disposable `session-ccost-v1` SQLite namespace. Unchange
 requests are not revalued; corrections/deletions and catalog/algorithm/source changes
 reconcile or invalidate. Complete source checkpoints survive Earlier-slot eviction,
 browser reload and host restart. No prompt content is stored in this namespace.
-First build may show localized Loading; known prompt/session figures stay visible quietly
-during routine refresh, with no Refreshing/Retrying label or temporary card-height change.
-Help still explains retained observations. After 30 continuous seconds of retrying prompt
-reads or refreshing session totals, meaningful delayed/not-current guidance appears;
+First acquisition uses blank/neutral placeholders, never invented empty/zero results.
+Known prompt/session/daily/account figures stay visible quietly during routine refresh,
+with no fleeting Loading/Refreshing/Retrying prose or temporary card-height change in
+Running or Earlier Prompts. Observed **No running prompts**/**No earlier prompts** remain.
+Help still explains retained observations. After 30 continuous seconds of pending initial
+acquisition, prompt retries, daily updates or session totals, delayed/availability guidance appears;
 observed recovery clears it. Explicit unavailable/partial evidence and host/auth/connection
 failures retain their existing guidance. These are presentation clocks only, not source
 observations or lifecycle changes. Optional cache

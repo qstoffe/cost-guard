@@ -130,13 +130,19 @@ class WatchPromptCostTests(unittest.TestCase):
         base = rows[-1]
         cases = (("1250", "900", "350", False), ("12", "5", None, True),
             ("100", None, None, False), ("0", "0", "0", False),
-            ("0", None, None, True), ("1.1", "1.05", ".05", False))
+            ("0", None, None, True), ("1.1", "1.05", ".05", False),
+            ("0", None, None, False), (".01", None, None, False),
+            (".01", None, None, True), ("12", None, "12", False),
+            ("12", "12", None, False))
         rows = tuple(replace(base, event_id=str(index), ccost=Decimal(total),
             incoming_context_ccost=None if incoming is None else Decimal(incoming),
             extra_ccost=None if extra is None else Decimal(extra), unresolved_cost=partial,
             incoming_context_ccost_known=True, extra_ccost_known=True)
             for index, (total, incoming, extra, partial) in enumerate(cases))
-        rows += (replace(base, event_id="sparse", is_compaction=True, calls=0, ccost=Decimal(0)),)
+        rows += (replace(base, event_id="zero-requests", calls=0, ccost=Decimal(0),
+            incoming_context_ccost=None, extra_ccost=None),
+            replace(base, event_id="unknown", ccost=None),
+            replace(base, event_id="sparse", is_compaction=True, calls=0, ccost=Decimal(0)))
         result = subprocess.run([shutil.which("node"),
             "development/tests/integration/web_watch_prompt_cost.cjs"],
             input=json.dumps(dict(state="running", view=self.wire(rows))),
