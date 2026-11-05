@@ -43,7 +43,7 @@ let now = 1000;
 class Clock extends Date { static now() { return now; } }
 const context = vm.createContext({document: doc(), window: win(), URL, Date: Clock, input});
 const helpText = require('../fixtures/web_help_vm.cjs')(vm, context);
-for (const file of ['render', 'watch', 'mini']) vm.runInContext(fs.readFileSync(`src/web/assets/${file}.js`, 'utf8'), context);
+for (const file of ['render', 'account-cards', 'watch', 'mini']) vm.runInContext(fs.readFileSync(`src/web/assets/${file}.js`, 'utf8'), context);
 const Controller = vm.runInContext('MiniWatch.Controller', context);
 function setup() {
   const owner = win(); owner.top = owner; owner.isSecureContext = true; owner.location = {href: 'http://127.0.0.1:1234/#/watch'};

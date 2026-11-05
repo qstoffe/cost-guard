@@ -16,7 +16,7 @@ current reference; older per-cell/native-tooltip descriptions below are historic
 
 `src/web/http.py` owns bounded loopback HTTP, fixed assets and routing; `src/web/security.py` owns one-use bootstrap/HttpOnly sessions/CSRF; `src/web/jobs.py` owns finite admission, process isolation, progress, cancellation and retention; at most 64 progress messages drain per host turn to prevent scan backpressure without starving control/Live. `src/web/composition.py` creates fresh canonical ReportApplication integrations.
 
-`src/web/assets/app.js` owns finite refresh/stale/cancel state and memory-only observations; unified Models/Accounts reuse one frozen normal report. `reports.js` owns scope forms and explicit-only deep-history admission. `render.js` presents DTOs with exact Decimal/vector sorting; generic reports retain presentation search/50-row paging, while Models has independent catalog/version filters and complete document-scrolling rows. Totals never come from cells. Sessions bypasses finite jobs and the report shell: `sessions.js` renders six-column live catalog pages; `session.js` renders one ten-column complete chronological history. Both use intrinsic metric tracks, elastic title/preview and document vertical scrolling. Shared Watch `ContextLine` and contextual-help components consume canonical report context, not a browser estimator.
+`src/web/assets/app.js` owns finite refresh/stale/cancel state and memory-only observations; Models keeps its frozen normal report. `reports.js` owns scope forms and explicit-only deep-history admission. Accounts bypasses finite jobs/report shell and consumes app-level retained Live, even without a Watch DOM. `account-cards.js` is the single Watch/Accounts subscription renderer: account-keyed membership, bound metric/reset/help updates, per-card signatures excluding the publication clock, shared physical-width cap and existing subgrid styles. Empty success clears membership; missing/failed empty publications retain usable cards with truthful warnings. Settings synchronize visible/detached roots without acquisition. `render.js` presents DTOs with exact Decimal/vector sorting; generic reports retain presentation search/50-row paging, while Models has independent catalog/version filters and complete document-scrolling rows. Totals never come from cells. Sessions bypasses finite jobs and the report shell: `sessions.js` renders six-column live catalog pages; `session.js` renders one ten-column complete chronological history. Both use intrinsic metric tracks, elastic title/preview and document vertical scrolling. Shared Watch `ContextLine` and contextual-help components consume canonical report context, not a browser estimator.
 
 `application/session_catalog.py` owns the full observed membership, six exact server comparators, fair bounded scalar warming and stable older-page epochs. `reports/session_summary.py` caches only reconstructible source/dependency/algorithm-checked scalar summaries. Active/running roots bypass reuse. All metric keys must be validated before global metric sorting; cold/invalidation pending state explicitly falls back to activity, never page-local ordering. `watch/web_coordinator.py` shares its full catalog observation, including archived revisions, and isolates the index in a single-worker lane separate from detail, account history and four card workers. A slice admits at most four roots and stops admission after two seconds; source timeout/cancellation still bounds each read. HTTP only reads the owner; no per-tab acquisition.
 
@@ -56,16 +56,16 @@ coverage, and Mini Watch still renders only the prompt total. Header help and in
 metric widths remain shared. `test_watch_prompt_cost.py`, `integration/web_watch_prompt_cost.cjs`
 and `fixtures/watch_cost_browser.cjs` pin parity, units, unknowns and actual hidden layout.
 
-Full Watch's `watch_accounts.py` quota slots bind identity-matched period cost to
-`projection.quota_record`; ordinary Accounts binds only existing report period scopes.
+Shared Watch/Accounts `watch_accounts.py` quota slots bind identity-matched period cost to
+`projection.quota_record`; legacy report account DTOs retain their original scopes.
 `application/quota_ccost.py` calculates reference Capacity/Remaining using Decimal:
 verified Copilot included credits use the native allowance/remainder; other current
 valid windows use observed cost / raw used fraction. Partial pricing, unknown or
 ambiguous scopes, invalid/expired evidence and zero-used ratios withhold estimates.
 `display.py` publishes both Credits/USD tokens; JavaScript only selects tokens.
-Full Watch shows Today, native percentage with bare reference parentheses, Capacity,
+Full Watch and Accounts show Today, native percentage with bare reference parentheses, Capacity,
 bar, reset and pace using seven subgrid rows. Only secondary regions have a divider.
-Native ratios/money/source/attribution stay in accessible help and Accounts details.
+Native ratios/money/source/attribution stay in accessible help.
 Mini keeps a single primary line and exposes Capacity in help. Known Used zero remains
 numeric; unknown reference amounts use ?. Unlimited Capacity is N/A with Used fallback.
 `application/quota_display.py` adds pure Web-only Used/Remaining variants from each
@@ -285,7 +285,7 @@ Only receipt of a full acquired result paints 100%; partial/error/lifecycle sema
 and frozen-navigation acquisition remain unchanged. Focused tests and headless real
 Normal-workflow browser fixture: `integration/web_minimal_overview.py`.
 
-Accounts' Normal-only detailed mode reuses `overviewAccounts` and shared card/semantic styles, not a new acquisition owner. `src/display.py` now owns the unchanged CLI `format_reset`, re-exported by terminal accounts; `with_display` propagates frozen `now_ms` to quota reset tokens in the configured timezone. Exact raw fields remain untouched. `test_web_accounts.py`, `fixtures/account_views.py` and `integration/web_accounts.cjs` cover equivalent CLI/DTO/DOM states, native amounts, periods, Pace and private-field exclusions. Explicit synthetic browser/keyboard evidence and its limits: [Accounts parity](../governance/verification/accounts-display-parity.md). No application/presentation import, report scope, formula, freshness or source/privacy boundary change; journal assessment: no-update, these durable owner facts suffice.
+The former Normal-only Accounts report is no longer a route consumer of `overviewAccounts`; report DTO/helper compatibility remains separately tested by `test_web_accounts.py`, `fixtures/account_views.py` and `integration/web_accounts.cjs`. Current shared live coverage is `integration/web_watch_summary.cjs`, `web_views.cjs`, hidden `probe_accounts_live.cjs` and read-only `probe_web_live.py --accounts --watch-cards`. [Current evidence](../../journal/web/accounts-live.md) supersedes historical [frozen Accounts parity](../governance/verification/accounts-display-parity.md). No acquisition, formula, source/privacy or application/presentation boundary changes.
 
 FR 000542 replaces Web's retained-row table with `watch.js` keyed prompt cards;
 `watch/cards.py` owns uncapped active membership, observed grace and top-five
@@ -317,7 +317,7 @@ pace from `QuotaPeriodProjection`, not label-based browser joins. Native monthly
 history shares the existing single-worker account lane and revision reuse. The
 subscription subgrid aligns title/Today/primary label/bar tracks; complete primary
 reset/pace precedes any secondary-only divider. Title bands use theme tokens while
-body values stay left aligned; Accounts detail semantics are unchanged.
+body values stay left aligned; Accounts now shares this exact subscription component.
 `watch.js` shares ten columns across active/history cards: local HH:mm Started/Finished,
 Duration, canonical #N Prompt, Model, Effort, CCost (I + E), Calls, Token Mix %, Ictx, Δ Ctx.
 The number does not ellipsize; only the preview flexes. Intrinsic non-Prompt subgrid
@@ -339,7 +339,7 @@ Full Watch's retained View gives subscription tracks/cards a scoped CSS width of
 floor(448 / (devicePixelRatio × visualViewport.scale)) pixels. DPR includes desktop
 page zoom; only pinch adds the visual-viewport factor. Resolution media changes and
 window/visual-viewport resize update the cap without replacing focused cards or
-changing text size, acquisition, Accounts or Mini. Both grid/card selectors share
+changing text size or acquisition. Accounts uses the same width owner; Mini is unchanged. Both grid/card selectors share
 the cap, and narrow tracks shrink. Headless raster proof and the scoped unverified
 native-desktop exception are in [physical-width findings](../../journal/web/watch-account-pixels.md).
 Slim .83rem teal bars use 2px track/fill corners
@@ -348,7 +348,7 @@ tints only its subscription header; stale/restriction warnings remain independen
 Application display prepares Watch-only reset tokens using shared `duration_text`
 and canonical deadline/local-clock timestamps. Live's existing publication time
 advances these tokens without provider polling or browser timers. The nested generic
-reset token remains unchanged for Accounts, CLI and Mini Watch. Focused formatting,
+reset token remains unchanged for CLI and Mini Watch; Accounts shares Watch's tokens. Focused formatting,
 DOM and rendered responsive evidence: [Watch polish](../../journal/web/watch-polish.md).
 `live_projection.card` exports the canonical session continuation and entire root-tree
 cost as `session_summary`, shared across concurrent/earlier cards, independently of row

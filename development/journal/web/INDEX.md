@@ -44,6 +44,8 @@ Status: current
   current-state regression and explicit synthetic-report/platform limits.
 - [Live Sessions](sessions-live.md): bounded full-catalog scalar keys, explicit pending
   global metric sorts, stable older pages, unpaged history and real-source timings.
+- [Shared live Accounts](accounts-live.md): one Watch/Accounts renderer and feed,
+  stable keyed cards, hidden Edge/Chrome parity and real V2 account-owner evidence.
 
 Historical observations keep their original dates and exceptions; this routing
 update does not refresh their validity or certify older failed probes. Parent

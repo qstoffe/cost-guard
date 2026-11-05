@@ -61,7 +61,7 @@ def fixture():
 def main():
     payload = fixture()
     assets = ROOT / "src/web/assets"
-    scripts = {"/" + name: (assets / name).read_bytes() for name in ("help.js", "render.js", "watch.js")}
+    scripts = {"/" + name: (assets / name).read_bytes() for name in ("help.js", "render.js", "account-cards.js", "watch.js")}
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
@@ -87,7 +87,7 @@ def main():
                     '<body data-section="watch"><header><div class="brand"><div class="brand-mark">CG</div>'
                     '<h1>Cost Guard <small>Web Beta</small></h1></div></header><nav><a href="#/models">Models</a>'
                     '<a href="#/watch" aria-current="page">Watch</a><a href="#/accounts">Accounts</a><a href="#/sessions">Sessions</a></nav>'
-                    '<main><div id="result"></div></main><script src="/help.js"></script><script src="/render.js"></script><script src="/watch.js"></script>'
+                    '<main><div id="result"></div></main><script src="/help.js"></script><script src="/render.js"></script><script src="/account-cards.js"></script><script src="/watch.js"></script>'
                     '<script>const INPUT=' + json.dumps(payload) + '; const state={connection:"Live connected."};'
                     'ReportView.renderLive(document.getElementById("result"),INPUT,state);'
                     'window.redraw=()=>ReportView.renderLive(document.getElementById("result"),INPUT,state);</script></body></html>').encode()

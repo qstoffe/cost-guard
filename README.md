@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v80.173, 2026-11-05), the supported distribution.
+Use **current `main`** (v80.174, 2026-11-05), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -361,7 +361,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.173 (2026-11-05):** Sessions becomes a minimal live six-column catalog with full-catalog server sorting, stable older pages and one complete chronological live prompt table. Context/help reuse Watch; whole-session totals and source truth remain canonical. Cold or invalidated metric sorting explicitly waits for all scalar keys instead of sorting only the visible page. See [Web Beta](docs/web-beta.md) and [measured limits](development/journal/web/sessions-live.md).
+**v80.174 (2026-11-05):** Accounts now shows only Full Watch's shared live subscription cards, including Capacity, quotas, reset/pace, Today CCost and contextual help. Both routes consume the same retained publication without new report jobs, streams or account workers. Keyed cards keep ordinary updates and settings changes stable. See [Web Beta](docs/web-beta.md) and [verification limits](development/journal/web/accounts-live.md).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

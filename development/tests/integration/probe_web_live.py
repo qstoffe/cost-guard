@@ -24,6 +24,7 @@ def main():
     parser.add_argument("--reports", action="store_true", help="Also capture finite reports beside Live and cancel deep history.")
     parser.add_argument("--models", action="store_true", help="Capture only task-focused Normal/full Models snapshots beside Live.")
     parser.add_argument("--watch-cards", action="store_true", help="Wait for independently published real one-row Watch cards.")
+    parser.add_argument("--accounts", action="store_true", help="Observe shared account publications without finite reports or new owners.")
     parser.add_argument("--tool-outcomes", action="store_true", help="Check evidenced tool outcome subsets in the published cards.")
     parser.add_argument("--prompt-token-mix", action="store_true", help="Observe card token mix over twelve seconds; no inference or extra capture.")
     parser.add_argument("--prompt-cost", action="store_true", help="Compare an observed completed prompt's raw cost split with a CLI session report.")
@@ -90,6 +91,31 @@ def main():
             raise RuntimeError('probe_live_timeout')
         start = live['view']['started_at_ms']
         source_seconds = time.monotonic() - started
+        if args.accounts:
+            observations.stage = 'accounts'
+            deadline = time.monotonic() + 90
+            while time.monotonic() < deadline:
+                state, _ = get('/api/live', cookie=cookie)
+                account_view = (state['values'].get('live', {}).get('view') or {}).get('accounts')
+                if account_view is not None:
+                    break
+                time.sleep(.25)
+            else:
+                raise RuntimeError('probe_accounts_timeout')
+            owner = owners[0].coordinator
+            account_owner = owner.accounts
+            first_sequence = state['sequence']
+            for _ in range(5):
+                time.sleep(1)
+                state, _ = get('/api/live', cookie=cookie)
+                current = state['values']['live']['view']
+                assert len(owners) == 1 and owners[0].coordinator is owner and owner.accounts is account_owner
+                assert current['started_at_ms'] == start
+                assert current['accounts'] is not None
+            assert state['sequence'] > first_sequence
+            print(json.dumps(dict(accounts='ok', account_cards=len(current['accounts']['accounts']),
+                account_refresh_owners=1, live_owners=len(owners), publication_advanced=True,
+                finite_jobs_started=0, model_calls_started_by_probe=0)))
         if args.sessions:
             from development.tests.integration.session_catalog_observations import observe_sessions
             observations.stage = 'sessions'
@@ -203,8 +229,14 @@ def main():
             if response.status != 200 or b'retry:' not in response.readline():
                 raise RuntimeError('probe_stream_failed')
             streams.append((connection, response))
-        time.sleep(2)
-        latest, _ = get('/api/live', cookie=cookie)
+        # A bounded source read can exceed two seconds without a stream fault.
+        # Wait for an actual later publication rather than guessing its cadence.
+        deadline = time.monotonic() + 15
+        while time.monotonic() < deadline:
+            latest, _ = get('/api/live', cookie=cookie)
+            if latest['sequence'] > state['sequence']:
+                break
+            time.sleep(.25)
         view = latest['values']['live']['view']
         if latest['instance_id'] != state['instance_id'] or latest['sequence'] <= state['sequence']:
             raise RuntimeError('probe_stream_continuity_failed')

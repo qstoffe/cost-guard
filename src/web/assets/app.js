@@ -28,6 +28,7 @@ function applySettings(value) {
     if (state.detail) ReportView.syncUnits(state.detail.root);
     if (state.catalog) ReportView.syncUnits(state.catalog.root);
     if (state.watch) ReportView.syncUnits(state.watch.root);
+    if (state.accounts) ReportView.syncUnits(state.accounts.root);
   }
   miniWatch?.settings(confirmed.values, hostInstance);
   return confirmed;
@@ -168,7 +169,11 @@ function show(state) {
   } else if (state.live) {
     state.connection = liveStatus;
     state.connectionKind = hostState.kind;
-    if (liveValue?.view) {
+    if (state.section === 'accounts') {
+      state.accounts ||= new AccountCards.View(true);
+      state.accounts.update(liveValue?.view || {});
+      state.accounts.attach(output);
+    } else if (liveValue?.view) {
       ReportView.renderLive(output, liveValue, state);
     } else {
       // Host/source health owns startup and failure feedback, not an elapsed timer.
@@ -284,8 +289,7 @@ function navigate() {
       if (victim) views.delete(victim[0]);
     }
     const request = route.request;
-    // Models and Accounts are projections of one finite normal report.
-    // Reuse its timestamp, never silently reacquire accounts just to change presentation.
+    // Reuse only matching finite observations. Live Accounts never owns a job.
     const cached = request && [...views.values()].find(value => value.result && JSON.stringify(value.request) === JSON.stringify(request));
     views.set(key, {request, live: route.live, section: route.section, result: cached?.result || null,
       pages: {}, loading: false, active: null, explicit: route.explicit,
