@@ -122,8 +122,10 @@ class PromptCostDetailTests(unittest.TestCase):
             replace(m, parts=(*m.parts, nested)) if m.message_id == "ca" else m for m in snapshot.messages)
         requests = tuple(ModelInvocation(sid, sid, 1300, MODEL, TokenUsage(input=100, output=10),
             prov(sid, sid), completed_at_ms=1350, variant=effort) for sid, effort in (("other", "low"), ("nested", "high")))
+        sessions = (*snapshot.sessions, replace(snapshot.sessions[1], session_id="other"),
+            replace(snapshot.sessions[1], session_id="nested", parent_session_id="child"))
 
-        row = self.project(replace(snapshot, messages=messages, invocations=(*snapshot.invocations, *requests)))
+        row = self.project(replace(snapshot, sessions=sessions, messages=messages, invocations=(*snapshot.invocations, *requests)))
 
         self.assertEqual(3, row.linked_agent_count)
         by_session = {item.session_id: item for item in row.cost_parts}

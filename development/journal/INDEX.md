@@ -11,6 +11,7 @@ Installed OpenCode Toolkit shared repository skills own development procedures. 
 - History acquisition and startup: `development/architecture/modules/history-loading.md` retains scopes, measurements and unresolved terminal/live proof.
 - [OpenAI identity, TLS and quota evidence](openai-identity.md): canonical aliases, method/resource boundaries, Windows expired-intermediate repair, live intended-account Watch refresh and explicit verification limits.
 - Architecture and owners: `development/architecture/OVERVIEW.md` routes module contracts and source/tests.
+- [V2 subagent attribution](subagent-attribution.md): shared child-link evidence/windows, native incident regression, physical request identity, independent root totals, Watch timing compatibility and real-source proof limits.
 - [Optional model-notice cache reliability](model-notice-cache.md): exact PRAGMA escape reproduction, narrow resource classification, bounded retries, recovery/first-sighting truth and unknown original environmental cause.
 - [Architecture assessment](architecture.md): milestone-30 two-level review, justified global no-change, removal of the unreachable weighted-comparison/cache engine, preserved exported evidence, full-suite/real-V2 results and platform limits.
 - [Test system health](test-health.md): retained critical risks, real hosted cross-platform revalidation, causal fixture/runtime repairs and desktop-proof limits.

@@ -174,7 +174,7 @@ class FailureAttributionTests(unittest.TestCase):
 
     def test_task_child_skill_and_failures_follow_existing_canonical_prompt_scope(self):
         base = make_snapshot()
-        child_parts = tuple(replace(p, session_id='child', message_id='ca') for p in (
+        child_parts = tuple(replace(p, session_id='child', message_id='ca', created_at_ms=1300, updated_at_ms=1350) for p in (
             skill('load', BROWSER), tool('fail', 'shell', inputs={'command': COMMAND}, output=result())))
         base = replace(base, messages=tuple(replace(m, parts=child_parts) if m.message_id == 'ca' else m
                                            for m in base.messages))

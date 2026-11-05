@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v80.175, 2026-11-05), the supported distribution.
+Use **current `main`** (v80.176, 2026-11-06), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -361,7 +361,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.175 (2026-11-05):** Web Beta removes Reports and its date form. Old Reports bookmarks safely redirect to Sessions without applying dates or starting a report. Browse historical sessions using Last activity and the other sortable catalog columns; CLI date/range reports and shared report APIs remain available. See [Web Beta](docs/web-beta.md).
+**v80.176 (2026-11-06):** OpenCode V2 `subagent` usage now joins its initiating prompt alongside legacy `task` work. Shared validated child windows keep cost, Calls, model markers, token mix and linked activity consistent across reports and Watch. Whole-session totals remain independent; missing prices, compactions and unassigned usage are not silently reconciled. See [usage and cost](docs/usage-and-cost.md).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 
