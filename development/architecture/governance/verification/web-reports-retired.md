@@ -45,3 +45,23 @@ The removed date-UI assertions were replaced by retired-hash/no-job/navigation
 assertions. Shared session display tests now use the session fixture; canonical
 date-report fixtures and core/API tests were not removed. Historical optional
 browser probes no longer navigate to Reports as an active page.
+
+## Real installation (read-only)
+
+`probe_web_live.py --sessions --reports` completed in 247.5 seconds against V2.
+One owner, two streams and advancing publication IDs preserved the Live run origin.
+The first Sessions page took 64ms; sampled catalog/detail HTTP requests peaked at
+128ms. A naturally changed first page was observed without creating a session.
+Revision-pinned detail returned two rows (13,718 bytes) in 56.1 seconds.
+
+Shared API reports completed: Normal 60.4s, all-models 8.8s, Sessions 4.6s and date
+79.1s. A subsequent deep-history job cancelled; none changed Live ownership.
+Shutdown left zero owned threads/processes and no cleanup failure. OpenCode was
+untouched; the probe started no inference.
+
+Limits: the existing cold scalar index stayed pending (0→4 of 2,720 roots during
+the bounded observation). This is not proof of complete real-catalog metric-sort
+readiness; synthetic global-sort proof remains separate. Probe instrumentation
+counted two history-stage exceptions during ongoing acquisition, while the requested
+report/stream/detail checks completed; no claim of exception-free history or a new
+root-cause finding is made. No backend/index behavior was changed in this FR.

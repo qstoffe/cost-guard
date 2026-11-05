@@ -272,13 +272,13 @@ function navigate() {
     const query = location.hash.includes('?') ? location.hash.slice(location.hash.indexOf('?')) : '';
     history.replaceState(null, '', '/#/models' + query);
   }
-   let route = ReportRoutes.resolve(location.hash);
-   const redirected = !!route.redirect;
-   if (redirected) {
-     history.replaceState(null, '', '/' + route.redirect);
-     route = ReportRoutes.resolve(location.hash);
-   }
-   const match = route.session;
+  let route = ReportRoutes.resolve(location.hash);
+  const redirected = !!route.redirect;
+  if (redirected) {
+    history.replaceState(null, '', '/' + route.redirect);
+    route = ReportRoutes.resolve(location.hash);
+  }
+  const match = route.session;
   document.title = `${route.title} · Cost Guard Web Beta`;
   document.body.dataset.section = route.section;
   const key = match ? 'session/' + match[1] : route.section === 'sessions' ? 'sessions-catalog' : location.hash || '#/models';
@@ -316,8 +316,8 @@ function navigate() {
    }
    if ((match || route.catalog) && csrf && !sessionDetailAvailable) current.message = 'Live session source unavailable.';
   document.getElementById('search').disabled = !!current.detail;
-   show(current);
-   if (redirected) document.getElementById('content').focus();
+  show(current);
+  if (redirected) document.getElementById('content').focus();
   if (route.section === 'settings' && csrf && !hostState.terminal) settingsView.read();
   if (csrf && hostState.writable && current.request && !current.explicit && !current.detail && !current.result && !current.attempted) {
     current.attempted = true;
