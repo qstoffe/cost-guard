@@ -344,7 +344,8 @@ class WatchCoordinator:
         self._defer_history = defer_history
         now_ms = int(self.clock_ms())
         self.report_service.set_now_ms(now_ms)
-        observation = observe_catalog(self.source, session_id=self.session_id)
+        observation = observe_catalog(self.source, session_id=self.session_id,
+            include_archived_revisions=getattr(self, "include_archived_revisions", False))
         self._record_catalog_counts(observation)
         self.observation = observation
         roots = self._selected_roots(observation)
@@ -487,7 +488,8 @@ class WatchCoordinator:
         self.model_discovery.refresh(now_ms, resumed=self._resume_pending)
         self._resume_pending = False
         old = self.observation
-        observation = observe_catalog(self.source, session_id=self.session_id)
+        observation = observe_catalog(self.source, session_id=self.session_id,
+            include_archived_revisions=getattr(self, "include_archived_revisions", False))
         self._record_catalog_counts(observation)
         roots = self._selected_roots(observation)
         changed = self._changed_roots(old, observation, force_resync=force_resync, hinted_session_ids=hinted_session_ids)

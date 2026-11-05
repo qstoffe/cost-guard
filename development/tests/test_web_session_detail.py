@@ -150,13 +150,34 @@ class SessionDetailTests(unittest.TestCase):
         first = self.details.page(token, 0)
         source.snapshots["root-0000"] = replace(make_root_snapshot(0, 101, month_start_ms=1000),
                                                 source_revision="appended")
+        first["result"]["view"]["prompt_blocks"][0]["rows"] += self.details.page(token, 50)["result"]["view"]["prompt_blocks"][0]["rows"]
         self.tick(service)
         changed = self.details.page(token, 0)
         latest = self.details.page(token, 2**52)
+        for offset in (50, 100):
+            changed["result"]["view"]["prompt_blocks"][0]["rows"] += self.details.page(token, offset)["result"]["view"]["prompt_blocks"][0]["rows"]
         result = subprocess.run([shutil.which("node"), "development/tests/integration/web_session.cjs"],
             input=json.dumps(dict(first=first, changed=changed, latest=latest)),
             cwd=ROOT, capture_output=True, text=True, timeout=20, encoding="utf-8")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_internal_chunks_pin_revision_while_live_acquisition_advances(self):
+        source = SyntheticMonthSource(1, 1000, month_start_ms=1000)
+        service = self.service(source)
+        token = self.details.open("root-0000", "live")
+        self.tick(service)
+        first = self.details.page(token, 0, begin=True)
+        source.snapshots["root-0000"] = replace(make_root_snapshot(0, 1001, month_start_ms=1000), source_revision="new")
+        self.tick(service)
+        ids = []
+        for offset in range(0, 1000, 25):
+            page = self.details.page(token, offset, first["revision"], chunk=True)
+            self.assertEqual(page["revision"], first["revision"])
+            self.assertEqual(page["total"], 1000)
+            self.assertLess(len(json.dumps(page)), 200_000)
+            ids.extend(row["id"] for row in page["result"]["view"]["prompt_blocks"][0]["rows"])
+        self.assertEqual(len(set(ids)), 1000)
+        self.assertEqual(self.details.page(token, 0, begin=True)["total"], 1001)
 
     def test_authenticated_http_detail_admission_paging_and_freeze(self):
         from src.web.observations import WebObservations

@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.173 — 2026-11-05
+
+- Web Sessions replaces report/snapshot controls with a six-column live catalog, globally sorted canonical keys and stable older-page membership. A bounded disposable scalar index honestly withholds metric sorting while cold/invalidation coverage is incomplete. Unified session links open all chronological prompts in one document-scrolling table with structured Model/Effort, shared Watch Context/help, preserved selection and canonical complete-session totals. Source reads remain isolated/read-only; [actual performance and cold-index limits](development/journal/web/sessions-live.md) are explicit.
+
 ## v80.172 — 2026-11-05
 
 - Full Web Watch removes both elapsed-time global loading warnings: slow history, accounts or daily summaries no longer label advancing prompts as stuck. Only observed healthy prompt membership establishes “No running prompts”; partial/loading/retained evidence stays uncertain. Existing host/source errors, component guidance, keyed DOM and shared acquisition remain unchanged.

@@ -271,15 +271,21 @@ class ReportService:
         for item in roots:
             valuation = self._range_comparison((item,), 0)
             model_spend = dict(valuation.by_model)
-            primary = max(model_spend, key=lambda model_id: (model_spend[model_id], model_id)) if model_spend else "N/A"
+            models = {entry.model.model: entry.model for entry in item.bundle.trace_entries}
+            primary = (max(model_spend, key=lambda model_id: (model_spend[model_id], model_id))
+                       if model_spend else next(iter(sorted(models)), "N/A"))
             resolved = catalog.resolve(primary)
-            name = resolved.model.display_name if resolved and resolved.model.display_name else primary
+            name = primary
+            if resolved and resolved.model.display_name:
+                name = resolved.model.display_name
+            elif primary in models:
+                name = models[primary].display_name or primary
             prompt_count = len(item.bundle.prompts)
             rows.append(SessionUsageRow(
                 session_id=item.session.session_id,
                 title=item.session.title or item.session.session_id,
                 model=name,
-                multiple_models=len(model_spend) > 1,
+                multiple_models=len({(entry.model.provider, entry.model.model) for entry in item.bundle.trace_entries}) > 1,
                 ccost=valuation.known_ccost,
                 prompt_count=prompt_count,
                 complete=valuation.complete,
@@ -288,6 +294,7 @@ class ReportService:
                     + [(record.created_at_ms, record.duration_ms) for record in item.bundle.compactions]),
                 archived=item.session.archived_at_ms is not None,
                 running=any(record.in_progress for record in item.bundle.prompts),
+                last_activity_ms=item.session.updated_at_ms,
             ))
         return tuple(rows)
 
@@ -678,7 +685,8 @@ class ReportService:
                   if selected and len(selected) < len(roots) else None)
         return ReportProjection(
             ReportKind.SESSIONS, "Available sessions", self.selection.selected.upper(), tuple(self.selection.warnings),
-            session_usage=self._session_rows(analyzed),
+            session_usage=tuple(replace(row, last_activity_ms=root_activity.get(row.session_id))
+                                for row in self._session_rows(analyzed)),
             notes=migration_gap_notes(self.selection.migration_gap, start_ms=cutoff),
             session_page=SessionListPage(request.session_offset, size, len(available), revision) if size else None,
         )

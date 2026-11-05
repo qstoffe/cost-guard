@@ -40,6 +40,10 @@ class WebWatchCoordinator(WatchCoordinator):
         self.history_revision = None
         self.detail_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cost-guard-detail")
         self.detail_job = None
+        self.include_archived_revisions = True
+        self.catalog_observation = None
+        self.catalog_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cost-guard-session-index")
+        self.catalog_job = None
         self.reads = SourceReads()
 
     def _record_refresh_duration(self, seconds):
@@ -76,9 +80,32 @@ class WebWatchCoordinator(WatchCoordinator):
                 service.close_accounts()
 
     def _selected_roots(self, observation):
+        self.catalog_observation = observation
         roots = super()._selected_roots(observation)
         self.cards.catalog(observation)
         return roots
+
+    def tick_catalog(self, catalog, *, unavailable=False):
+        catalog.observe(self.catalog_observation, unavailable=unavailable)
+        if self.catalog_job is not None:
+            if not self.catalog_job.done():
+                return
+            self.catalog_job.result()
+            self.catalog_job = None
+        if not self._closed and catalog.needed():
+            self.catalog_job = self.catalog_pool.submit(self._catalog_capture, catalog, int(self.clock_ms()))
+
+    def _catalog_capture(self, catalog, now_ms):
+        service = None
+        try:
+            service = self.history_factory(now_ms)
+            with self.reads.using(service.source):
+                catalog.tick(service)
+        except (SourceError, PricingUnavailableError):
+            pass  # Retained scalar evidence is not promoted to current coverage.
+        finally:
+            if service is not None:
+                service.close_accounts()
 
     def _hydrate(self, roots, *, now_ms, force_fresh_ids=()):
         # The card scheduler admits bounded work and publishes each session
@@ -187,6 +214,7 @@ class WebWatchCoordinator(WatchCoordinator):
             self.session_costs.close()
             self.history_pool.shutdown(wait=True, cancel_futures=True)
             self.detail_pool.shutdown(wait=True, cancel_futures=True)
-            for future in (self.history_job, self.detail_job):
+            self.catalog_pool.shutdown(wait=True, cancel_futures=True)
+            for future in (self.history_job, self.detail_job, self.catalog_job):
                 if future is not None and not future.cancelled():
                     future.result()

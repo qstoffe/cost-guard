@@ -1,13 +1,10 @@
-// Actual shipped assets in a deterministic VM/DOM, never browser automation.
-const assert = require('node:assert/strict');
-const vm = require('node:vm');
-const fs = require('node:fs');
+// Actual shipped complete-history assets in a deterministic VM/DOM.
+const assert = require('node:assert/strict'), vm = require('node:vm'), fs = require('node:fs');
 const input = JSON.parse(fs.readFileSync(0, 'utf8'));
 class Node {
-  constructor(tag) { this.tag = tag; this.children = []; this.dataset = {}; this.events = {}; this.text = ''; }
+  constructor(tag) { this.tag = tag; this.children = []; this.dataset = {}; this.events = {}; this.text = ''; this.attributes = {}; }
   set textContent(value) { this.text = String(value); this.replaceChildren(); }
   get textContent() { return this.text + this.children.map(c => c.textContent).join(''); }
-  get firstElementChild() { return this.children[0]; }
   get parentNode() { return this.parent; }
   get isConnected() { return Boolean(this.parent); }
   append(...children) { for (const child of children) { child.remove(); this.children.push(child); child.parent = this; } }
@@ -15,128 +12,115 @@ class Node {
   insertBefore(child, before) { child.remove(); const index = before ? this.children.indexOf(before) : this.children.length; this.children.splice(index, 0, child); child.parent = this; }
   remove() { if (this.parent) { this.parent.children.splice(this.parent.children.indexOf(this), 1); this.parent = null; } }
   contains(child) { return child === this || this.children.some(c => c.contains(child)); }
-  setAttribute() {}
+  setAttribute(key, value) { this.attributes[key] = value; }
+  removeAttribute(key) { delete this.attributes[key]; }
   addEventListener(key, fn) { this.events[key] = fn; }
-  getBoundingClientRect() { return {top: this.top || 100}; }
+  getBoundingClientRect() { return {top: 100, bottom: 120}; }
 }
 async function main() {
-  let selected = null, offline = false, page = input.first, opens = 0;
-  const calls = [], scrolls = [];
-  let duringPage = () => {};
-  const document = {createElement: tag => new Node(tag), activeElement: null, documentElement: {scrollHeight: 1000}};
-  const context = vm.createContext({document, console, Date, setTimeout: () => 1, clearTimeout: () => {},
-    window: {innerHeight: 500, scrollY: 0, addEventListener() {}, removeEventListener() {},
-      getSelection: () => ({isCollapsed: !selected, anchorNode: selected}), scrollBy: (...args) => scrolls.push(args)},
+  let selected = null, offline = false, page = input.first;
+  const calls = [], scrolls = [], timers = new Map(); let timerId = 0;
+  const document = {createElement: tag => new Node(tag), createElementNS: (_, tag) => new Node(tag), activeElement: null};
+  const context = vm.createContext({document, console, Date, URLSearchParams, location: {},
+    setTimeout: (fn, delay) => { const id = ++timerId; if (!delay) fn(); else timers.set(id, fn); return id; },
+    clearTimeout: id => timers.delete(id),
+    window: {getSelection: () => ({isCollapsed: !selected, anchorNode: selected}), scrollBy: (...args) => scrolls.push(args)},
     api: async (path, value) => {
       assert.equal(path, '/api/detail'); calls.push(value);
       if (offline) throw new Error('offline');
-      if (value.action === 'open') { opens++; return {token: 'owned'}; }
-      if (value.action === 'freeze' || value.action === 'close') return {};
-      duringPage();
-      return JSON.parse(JSON.stringify(page));
+      if (value.action === 'open') return {token: 'owned'};
+      if (value.action === 'close') return {};
+      const result = JSON.parse(JSON.stringify(page));
+      result.offset = value.offset;
+      result.result.view.prompt_blocks[0].rows = result.result.view.prompt_blocks[0].rows.slice(value.offset, value.offset + 25);
+      return result;
     }});
   require('../fixtures/web_help_vm.cjs')(vm, context);
-  for (const path of ['render', 'session']) vm.runInContext(fs.readFileSync(`src/web/assets/${path}.js`, 'utf8'), context);
-  vm.runInContext("globalThis.view = new SessionDetail.View(api, 'root-0000', 'live')", context);
-  const view = context.view;
-  view.attached = true;
-  const parent = new Node('main');
-  parent.append(view.root);
-  const replace = parent.replaceChildren.bind(parent);
-  let replacements = 0;
-  parent.replaceChildren = (...children) => { replacements++; replace(...children); };
-  view.attach(parent);
-  assert.equal(replacements, 0, 'a health check must not detach the connected detail tree');
+  for (const file of ['render', 'watch', 'session', 'sessions']) vm.runInContext(fs.readFileSync(`src/web/assets/${file}.js`, 'utf8'), context);
+  vm.runInContext("globalThis.view = new SessionDetail.View(api, 'root-0000')", context);
+  const view = context.view; view.attached = true;
+  new Node('main').append(view.root);
   await view.load();
-  assert.match(view.root.textContent, /I = Input; C = Cached input; W = Cache write; O = Output/);
-  assert.ok(!/\b(?:Cache|Write):/.test(view.root.textContent));
-  assert.ok(view.root.children.find(node => node === view.legend));
-  assert.ok(view.root.textContent.includes('Token Mix %'));
-  assert.equal(view.body.children.length, 50);
-  assert.equal(view.offset, 0);
-  assert.match(view.summary.textContent, /100 rows/);
-  const total = input.first.result.view.prompt_blocks[0];
-  assert.ok(view.summary.textContent.includes('CCost ' + total.display.total_ccost));
-  assert.ok(view.summary.textContent.includes('Billed ' + total.display.billed_cost));
-  assert.ok(view.summary.textContent.includes('Duration ' + total.display.duration_ms));
-  assert.ok(view.context.textContent.includes(total.display.next_context));
-  assert.equal(view.toggle.textContent, 'Freeze snapshot');
-  assert.equal(view.latest.textContent, 'Jump to latest', 'initial capture is not new activity');
-  const row = view.body.children[10], first = view.body.firstElementChild;
-  view.follow = false;
-  document.activeElement = view.next;
+  assert.equal(view.body.children.length, 100);
+  assert.equal(view.body.children[0].children.length, 10);
+  assert.match(view.root.textContent, /Show all sessions/);
+  assert.match(view.root.textContent, /Session ID: root-0000/);
+  assert.match(view.footer.textContent, /Complete session/);
+  assert.equal(view.footer.children.length, 10);
+  assert.ok(!/Freeze|Snapshot|Go to row|Refresh|Token Mix order/.test(view.root.textContent));
+  const row = view.body.children[10], cell = row.children[0];
   page = input.changed;
   await view.load();
-  assert.equal(view.body.children[10], row, 'unchanged rows keep canonical DOM identity');
-  assert.equal(view.body.firstElementChild, first);
-  assert.equal(document.activeElement, view.next, 'background updates never replace focused controls');
-  assert.match(view.latest.textContent, /New\/changed activity/);
-  assert.match(view.summary.textContent, /101 rows/);
-  assert.equal(calls.at(-1).anchor, input.first.result.view.prompt_blocks[0].rows[0].id);
-  // A selected row is never replaced by delayed model/warning/value changes.
+  assert.equal(view.body.children.length, 101);
+  assert.equal(view.body.children[10], row);
+  assert.equal(row.children[0], cell, 'unchanged rows keep their text and help DOM');
+  selected = cell;
+  page = JSON.parse(JSON.stringify(page)); page.revision = 'corrected';
+  page.result.view.prompt_blocks[0].rows[10].watch_model = 'Late model correction';
+  await view.load();
+  assert.equal(row.children[0], selected, 'selection survives a corrected live revision');
+  selected = null; await view.load();
+  assert.match(row.textContent, /Late model correction/);
   selected = row.children[0];
-  const revision = view.revision;
-  page = {...input.changed, revision: 'new-selection-revision'};
-  page.result.view.prompt_blocks[0].rows[10].model_effort = 'late model / warning';
+  page.result.view.prompt_blocks[0].rows.splice(10, 1); page.revision = 'row-reclassified';
+  page.total = page.result.view.prompt_blocks[0].rows.length;
   await view.load();
-  assert.equal(view.revision, revision);
-  assert.equal(row.children[0], selected);
-  selected = null;
+  assert.ok(view.body.contains(selected), 'reclassified selected row remains until selection is released');
+  selected = null; await view.load();
+  assert.equal(view.body.children.length, 100, 'same-revision retry removes the deferred obsolete row');
+  assert.deepEqual(view.body.children.map(item => item.dataset.id), page.result.view.prompt_blocks[0].rows.map(item => item.id));
+  const latest = page.result.view.prompt_blocks[0].rows.at(-1); latest.in_progress = true; page.revision = 'running';
   await view.load();
-  assert.match(row.textContent, /late model/);
-  offline = true;
-  const retained = view.body.textContent;
-  await view.load();
-  assert.equal(view.body.textContent, retained);
-  assert.match(view.status.textContent, /Last known result retained/);
+  assert.match(view.body.children.at(-1).textContent, /\[RUNNING\]/);
+  assert.equal(view.body.children.at(-1).className, 'session-running');
+  latest.in_progress = false; page.revision = 'ended'; await view.load();
+  assert.ok(!view.body.children.at(-1).textContent.includes('[RUNNING]'));
+  assert.equal(view.body.children.at(-1).className, '');
+  const retained = view.body.textContent; offline = true; await view.load();
+  assert.equal(view.body.textContent, retained); assert.match(view.status.textContent, /retained/);
+  assert.ok(calls.some(call => call.action === 'chunk' && call.offset === 100));
+  assert.equal(scrolls.length, 0, 'stable document geometry never scrolls');
+  view.detach();
+  assert.ok(calls.some(call => call.action === 'close' && call.token === 'owned'));
   offline = false;
-  await view.switchMode();
-  assert.equal(view.mode, 'snapshot');
-  assert.equal(view.toggle.textContent, 'Follow live');
-  assert.match(view.status.textContent, /Snapshot · frozen until Refresh/);
-  assert.ok(calls.some(c => c.action === 'freeze'));
-  await view.switchMode();
-  assert.equal(view.mode, 'live');
-  assert.equal(opens, 2, 'entering Live requests current authoritative state');
-  view.onScroll();
-  assert.equal(view.follow, false);
-  page = input.latest;
-  await view.page(2 ** 52, true);
-  assert.equal(view.body.children.length, 50);
-  assert.equal(view.body.children.at(-1).dataset.id, input.latest.result.view.prompt_blocks[0].rows.at(-1).id);
-  assert.ok(calls.at(-1).offset >= 2 ** 52);
-  assert.equal(view.toggle, view.controls.children[0]);
-  assert.equal(scrolls.length, 0, 'unchanged geometry does not move scroll');
-  const scroll = view.root.children.find(node => node.className === 'table-scroll');
-  scroll.scrollTop = 200; scroll.scrollLeft = 90;
-  scroll.clientHeight = 300; scroll.scrollHeight = 1200;
-  scroll.getBoundingClientRect = () => ({top: 100});
-  for (const [index, node] of view.body.children.entries()) {
-    node.getBoundingClientRect = () => ({top: 100 + index * 20 - scroll.scrollTop,
-      bottom: 120 + index * 20 - scroll.scrollTop});
-  }
-  view.follow = false;
-  // Movement while HTTP is in flight belongs to the user, not the old anchor.
-  duringPage = () => { scroll.scrollTop = 400; };
-  await view.load();
-  assert.equal(scroll.scrollTop, 400);
-  assert.equal(scrolls.length, 0, 'a delayed response must not undo user scrolling via the page');
-  duringPage = () => {};
-  const update = view.update.bind(view);
-  const visible = view.body.children[20];
-  view.update = data => {
-    update(data);
-    // Rows above the viewport grew; the visible row moved within the table.
-    visible.getBoundingClientRect = () => ({top: 160, bottom: 180});
+  let resolveOpen, opening = true;
+  const raceCalls = [];
+  context.raceApi = async (path, value) => {
+    raceCalls.push(value);
+    if (value.action === 'open') {
+      if (opening) { opening = false; return new Promise(resolve => { resolveOpen = resolve; }); }
+      return {token: 'new'};
+    }
+    if (value.action === 'close') return {};
+    return {state: 'loading', result: null};
   };
-  page = {...page, revision: 'geometry-change'};
-  await view.load();
-  assert.equal(scroll.scrollTop, 460, 'restore the visible anchor in the inner scroll owner');
-  assert.equal(scroll.scrollLeft, 90, 'vertical retention preserves horizontal navigation');
-  assert.equal(scrolls.length, 0, 'inner table changes must not move the document');
-  view.follow = true;
-  scroll.events.scroll();
-  assert.equal(view.follow, false, 'browsing older rows in the internal table disables follow');
-  console.log('PASS bounded DOM, canonical row identity, anchor, selection/focus, offline, mode transitions and latest');
+  vm.runInContext("globalThis.race = new SessionDetail.View(raceApi, 'root-0000')", context);
+  const race = context.race, parent = new Node('main');
+  race.attach(parent); race.detach(); race.attach(parent);
+  resolveOpen({token: 'late'});
+  await new Promise(setImmediate);
+  assert.ok(raceCalls.some(call => call.action === 'close' && call.token === 'late'));
+  assert.equal(race.token, 'new');
+  assert.equal(timers.size, 1, 'reattach during open leaves one polling timer');
+  race.detach(); assert.equal(timers.size, 0);
+  let resolveCatalog;
+  const catalogCalls = [];
+  const catalogData = {token: 'catalog', epoch: 'epoch', total: 0, size: 50, offset: 0,
+    sort: 'activity', direction: -1, state: 'observed', view: {session_usage: []}};
+  context.catalogApi = async (path, value) => {
+    catalogCalls.push(value);
+    if (catalogCalls.length === 1) return new Promise(resolve => { resolveCatalog = resolve; });
+    return catalogData;
+  };
+  vm.runInContext('globalThis.catalog = new SessionsCatalog.View(catalogApi)', context);
+  const catalog = context.catalog;
+  catalog.configure(new URLSearchParams()); catalog.attach(parent);
+  catalog.detach(); catalog.configure(new URLSearchParams('sort=ccost')); catalog.attach(parent);
+  resolveCatalog(catalogData); await new Promise(setImmediate);
+  assert.equal(catalogCalls.length, 2, 'changed route reruns after stale request completes');
+  assert.equal(catalogCalls[1].sort, 'ccost');
+  assert.equal(timers.size, 1, 'catalog route race leaves one polling timer');
+  catalog.detach(); assert.equal(timers.size, 0);
+  console.log('PASS complete history, keyed selection, running/end, retained errors, lease release and navigation races');
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

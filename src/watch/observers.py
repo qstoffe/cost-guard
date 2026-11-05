@@ -42,7 +42,8 @@ def _revisions(source: SessionSource, root_ids: Sequence[str]) -> Mapping[str, s
     return {root_id: source.get_session_tree_revision(root_id) for root_id in root_ids}
 
 
-def observe_catalog(source: SessionSource, *, session_id: str | None = None) -> CatalogObservation:
+def observe_catalog(source: SessionSource, *, session_id: str | None = None,
+                    include_archived_revisions=False) -> CatalogObservation:
     sessions = tuple(source.list_sessions())
     roots, root_by_session = _root_map(sessions)
     if session_id is not None:
@@ -50,7 +51,9 @@ def observe_catalog(source: SessionSource, *, session_id: str | None = None) -> 
         if root_id is None:
             return CatalogObservation(sessions, (), root_by_session, {})
         roots = tuple(item for item in roots if item.session_id == root_id)
-    revisions = _revisions(source, tuple(item.session_id for item in roots))
+    revision_roots = (tuple(item for item in sessions if item.parent_session_id is None)
+                      if include_archived_revisions and session_id is None else roots)
+    revisions = _revisions(source, tuple(item.session_id for item in revision_roots))
     candidate_reader = getattr(source, "watch_candidate_session_ids", None)
     candidates = (candidate_reader() if callable(candidate_reader)
                   else (item.session_id for item in sessions if item.active is not False))

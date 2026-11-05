@@ -6,6 +6,7 @@ from src.sources.errors import SourceError
 from .contracts import record
 from .live_projection import project_live
 from .session_detail import SessionDetails
+from .session_catalog import SessionCatalog
 
 
 class LiveRuntime:
@@ -17,6 +18,7 @@ class LiveRuntime:
         self.thread = None
         self.failure = None
         self.details = SessionDetails()
+        self.catalog = SessionCatalog()
         self.driver = None
 
     def start(self):
@@ -41,6 +43,8 @@ class LiveRuntime:
             self.driver = driver
             while not self.stopping.is_set():
                 frame = driver.tick()
+                if callable(getattr(type(driver.coordinator), "tick_catalog", None)):
+                    driver.coordinator.tick_catalog(self.catalog, unavailable=driver.error is not None)
                 if callable(getattr(type(driver.coordinator), "tick_details", None)):
                     driver.coordinator.tick_details(self.details, unavailable=driver.error is not None)
                 else:

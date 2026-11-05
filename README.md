@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v80.172, 2026-11-05), the supported distribution.
+Use **current `main`** (v80.173, 2026-11-05), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -361,7 +361,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.171 (2026-11-05):** Web and Mini use value-first help with a shared 600ms hover delay and no standalone question-mark controls. Full Watch adds canonical per-agent category-cost detail, linked-subagent model stars and separate Context/Total CCost rows. Inferred Capacity is visibly marked `(guesstimate)`; verified native limits are not. Mini's Session and Total CCost headings explain different scopes. See [Web Beta](docs/web-beta.md) and [Mini Watch](docs/web-mini-watch.md).
+**v80.173 (2026-11-05):** Sessions becomes a minimal live six-column catalog with full-catalog server sorting, stable older pages and one complete chronological live prompt table. Context/help reuse Watch; whole-session totals and source truth remain canonical. Cold or invalidated metric sorting explicitly waits for all scalar keys instead of sorting only the visible page. See [Web Beta](docs/web-beta.md) and [measured limits](development/journal/web/sessions-live.md).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

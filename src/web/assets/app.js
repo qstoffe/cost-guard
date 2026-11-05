@@ -26,6 +26,7 @@ function applySettings(value) {
   const confirmed = WebSettings.apply(value, output);
   for (const state of views.values()) {
     if (state.detail) ReportView.syncUnits(state.detail.root);
+    if (state.catalog) ReportView.syncUnits(state.catalog.root);
     if (state.watch) ReportView.syncUnits(state.watch.root);
   }
   miniWatch?.settings(confirmed.values, hostInstance);
@@ -53,7 +54,7 @@ function connectionStatus(message, state = {}) {
       warning.textContent = hostState.kind === 'source_starting' ? 'Starting OpenCode server…' : `${hostState.kind.replaceAll('_', ' ')} — ${recovery}`;
     }
   }
-  if (hostState.terminal) for (const view of views.values()) view.detail?.detach();
+  if (hostState.terminal) for (const view of views.values()) { view.detail?.detach(); view.catalog?.detach(); }
   document.getElementById('scope-controls').inert = !hostState.writable;
   if (current) show(current);
 }
@@ -160,7 +161,10 @@ function show(state) {
     ReportView.syncUnits(state.detail.root);
     if (!hostState.terminal) state.detail.attach(output);
     else output.replaceChildren(state.detail.root);
-    state.detail.controls.inert = !hostState.writable;
+  } else if (state.catalog) {
+    ReportView.syncUnits(state.catalog.root);
+    if (!hostState.terminal) state.catalog.attach(output);
+    else output.replaceChildren(state.catalog.root);
   } else if (state.live) {
     state.connection = liveStatus;
     state.connectionKind = hostState.kind;
@@ -258,6 +262,7 @@ async function acquire(state) {
 function navigate() {
   // Replace, never push: legacy bookmarks keep their place in Back/Forward history.
   if (/^#\/live(?:\?|$)/.test(location.hash)) history.replaceState(null, '', '/#/watch' + location.hash.slice(6));
+  if (/^#\/sessions\/[A-Za-z0-9_-]{1,200}\/live$/.test(location.hash)) history.replaceState(null, '', '/' + location.hash.replace(/\/live$/, ''));
   if (!location.hash || /^#\/(?:overview|models\/all)(?:\?|$)/.test(location.hash)) {
     const query = location.hash.includes('?') ? location.hash.slice(location.hash.indexOf('?')) : '';
     history.replaceState(null, '', '/#/models' + query);
@@ -265,19 +270,9 @@ function navigate() {
   const route = ReportRoutes.resolve(location.hash), match = route.session;
   document.title = `${route.title} · Cost Guard Web Beta`;
   document.body.dataset.section = route.section;
-  const key = match ? 'session/' + match[1] : location.hash || '#/models';
+  const key = match ? 'session/' + match[1] : route.section === 'sessions' ? 'sessions-catalog' : location.hash || '#/models';
   heading.textContent = route.title;
-  ReportRoutes.controls(document.getElementById('scope-controls'), route, event => {
-    event.preventDefault();
-    // Restart must not reuse a stale first-page revision from page-memory.
-    for (const state of views.values()) {
-      if (state.request?.kind === 'sessions' && !state.loading) {
-        state.result = null; state.attempted = false;
-      }
-    }
-    if (location.hash === '#/sessions') navigate();
-    else location.hash = '#/sessions';
-  });
+   ReportRoutes.controls(document.getElementById('scope-controls'), route);
   for (const item of document.querySelectorAll('nav a')) {
     if (item.getAttribute('href') === '#/' + route.section) item.setAttribute('aria-current', 'page');
     else item.removeAttribute('aria-current');
@@ -297,12 +292,19 @@ function navigate() {
       message: route.live ? 'Live acquisition starting; one runtime shared across tabs.' : cached ? 'Snapshot captured. Reused frozen observation.' : request ? 'Capture/Refresh to acquire this report.' : 'Choose a report scope.'});
   }
   if (current?.detail) current.detail.detach();
+  if (current?.catalog) current.catalog.detach();
   current = views.get(key);
   document.getElementById('search').value = current.search || '';
   if (match && csrf && !hostState.terminal && sessionDetailAvailable && !current.detail) {
-    current.detail = new SessionDetail.View(api, match[1], match[2] ? 'live' : 'snapshot');
-    current.message = 'Complete session history; explicit Snapshot/Live. Acquisition is shared across tabs.';
+    current.detail = new SessionDetail.View(api, match[1]);
+    current.message = '';
   }
+   if (route.catalog && csrf && sessionDetailAvailable && typeof SessionsCatalog !== 'undefined') {
+    current.catalog ||= new SessionsCatalog.View(api);
+    current.catalog.configure(route.params);
+     current.request = null; current.message = '';
+   }
+   if ((match || route.catalog) && csrf && !sessionDetailAvailable) current.message = 'Live session source unavailable.';
   document.getElementById('search').disabled = !!current.detail;
   show(current);
   if (route.section === 'settings' && csrf && !hostState.terminal) settingsView.read();
@@ -352,8 +354,7 @@ async function connect() {
 }
 refresh.addEventListener('click', () => {
   if (!hostState.writable) return;
-  if (current?.detail) current.detail.refresh();
-  else if (current?.request) acquire(current);
+   if (current?.request) acquire(current);
 });
 cancel.addEventListener('click', async () => {
   const state = current;

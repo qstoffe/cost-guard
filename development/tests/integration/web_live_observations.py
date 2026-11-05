@@ -72,7 +72,7 @@ class ProbeObservations:
             for owner, methods in (
                 (WebHost, ('close',)), (LiveRuntime, ('close', '_publish_frame')),
                 (AccountAcquisition, ('close',)), (AccountRefreshLoop, ('close',)),
-                (WebWatchCoordinator, ('_account_history', '_detail_capture', 'close')),
+                (WebWatchCoordinator, ('_account_history', '_detail_capture', '_catalog_capture', 'close')),
                 (CardWorkers, ('_capture', 'close')), (ReportJobs, ('tick', 'close')),
                 (EventHub, ('close',)), (LoopbackServer, ('server_close',)),
                 (WatchTodayCCost, ('schedule_history', 'advance_history')),

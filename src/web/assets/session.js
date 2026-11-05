@@ -1,191 +1,163 @@
 'use strict';
-// A bounded DOM page over shared Python report truth, not a browser billing engine.
+// Complete document-scrolling history, assembled from one pinned source revision.
 const SessionDetail = (() => {
   const el = (...args) => ReportView.element(...args);
+  const columns = [
+    ['Prompt', 'Local start time, prompt number and preview. [RUNNING] requires observed ongoing work.'],
+    ['Model', 'The canonical main prompt model. Linked subagents may use other models.'],
+    ['Effort', 'Reasoning effort requested for the main prompt.'],
+    ['CCost', 'Reference cost of this prompt, including linked work; not your bill. ? means partial pricing.'],
+    ['Calls', 'Recorded model requests, including linked subagents. Not tool calls.'],
+    ['Duration', 'Canonical execution time, excluding idle gaps. Retained observations do not advance.'],
+    ['Ictx', 'Context on the first request of this prompt, not the next session context. N/A is unknown.'],
+    ['Ictx CCost', 'Reference incoming-context cost component. Estimates and unavailable evidence retain their canonical meaning.'],
+    ['Extra CCost', 'Other reference cost: output, later requests and linked subagents.'],
+    ['Token Mix %', 'Token percentages in Input / Cached input / Cache write / Output order. Output includes reasoning. Not cost.']
+  ];
+  function protection() {
+    const selection = window.getSelection?.();
+    const targets = [document.activeElement, ...(selection && !selection.isCollapsed ? [selection.anchorNode, selection.focusNode] : [])].filter(Boolean);
+    return node => targets.some(target => node.contains(target));
+  }
+  function cells(value) {
+    const label = el('span', undefined, 'session-prompt-label');
+    const clock = ContextHelp.value(el('span', value.display?.clock || '—'), value.display?.date_time || 'Start time unavailable');
+    const preview = el('span', value.preview || value.label || 'Prompt', 'session-preview');
+    ContextHelp.value(preview, value.preview || value.label || 'Prompt');
+    label.append(clock, el('span', `${value.in_progress ? '[RUNNING] ' : ''}#${value.prompt_number ?? '—'}`), preview);
+    const cost = ContextHelp.value(el('span', () => ReportView.display(value, 'ccost')),
+      () => ReportView.display(value, 'cost_detail_help') + (value.retained ? '\nRetained source evidence.' : ''));
+    return [label, value.watch_model || 'N/A', value.watch_effort || 'N/A', cost,
+      value.display?.calls ?? String(value.calls ?? 'N/A'), ReportView.display(value, 'duration_ms'),
+      ReportView.display(value, 'incoming_context_tokens'), ReportView.display(value, 'incoming_context_ccost'),
+      ReportView.display(value, 'extra_ccost'), ReportView.display(value, 'token_mix_percent')];
+  }
   class View {
-    constructor(api, id, mode) {
-      Object.assign(this, {api, id, mode, offset: 0, revision: null, anchor: null,
-        token: null, data: null, follow: mode === 'live', busy: false, attached: false});
-      this.root = el('section', undefined, 'session-detail');
-      this.controls = el('div', undefined, 'pager');
-      this.toggle = el('button', mode === 'live' ? 'Freeze snapshot' : 'Follow live');
-      this.latest = el('button', 'Jump to latest');
-      this.first = el('button', 'First'); this.previous = el('button', 'Previous');
-      this.next = el('button', 'Next'); this.label = el('span');
-      this.label.setAttribute('aria-live', 'polite');
-      this.controls.append(this.toggle, this.first, this.previous, this.next, this.latest, this.label);
-      this.rowNumber = el('input'); this.rowNumber.type = 'number';
-      this.rowNumber.min = '1'; this.rowNumber.value = '1';
-      this.rowNumber.setAttribute('aria-label', 'Go to session history row');
-      const go = el('button', 'Go to row'); this.controls.append(this.rowNumber, go);
-      go.addEventListener('click', () => {
-        const row = Number(this.rowNumber.value);
-        if (Number.isSafeInteger(row) && row > 0) this.page(row - 1);
-      });
-      this.status = el('p'); this.status.setAttribute('role', 'status');
-      this.summary = el('p'); this.warning = el('p', undefined, 'warning');
-      this.hourly = el('p', undefined, 'detail');
-      this.legend = el('p', undefined, 'detail');
-      this.context = el('div'); this.heading = el('h3', 'Session history');
-      this.provenance = el('details'); this.provenance.append(el('summary', 'Source and reading guide'));
-      this.source = el('p'); this.provenance.append(this.source, el('p',
-        'CCost is reference valuation, not billing. Unknown is not zero. Duration unions execution intervals, excluding idle gaps. Totals cover all history, not this page. Refresh captures a new observation; Freeze snapshot keeps the current one. Copy and selection cover this page.'));
-      const back = el('a', 'All sessions'); back.href = '#/sessions';
-      const scroll = this.scroll = el('div', undefined, 'table-scroll'); scroll.tabIndex = 0;
-      scroll.setAttribute('role', 'region'); scroll.setAttribute('aria-label', 'Session prompt history');
-      const table = el('table'); table.append(el('caption', 'Complete session history — 50 rows per page'));
+    constructor(api, id) {
+      Object.assign(this, {api, id, token: null, data: null, busy: false, attached: false, generation: 0});
+      this.root = el('div', undefined, 'session-detail'); this.root.setAttribute('aria-label', 'Session detail');
+      const back = el('a', 'Show all sessions'); back.href = '#/sessions';
+      this.heading = el('h1');
+      this.status = el('p', 'Loading session…', 'warning'); this.status.setAttribute('role', 'status');
+      this.context = new WatchView.ContextLine();
+      const scroll = el('div', undefined, 'sessions-table-pan');
+      scroll.tabIndex = 0; scroll.setAttribute('role', 'region'); scroll.setAttribute('aria-label', 'Session prompt history');
+      const table = el('table', undefined, 'sessions-table session-history-table');
       const head = el('thead'), header = el('tr');
-      for (const name of ['Prompt', 'CCost', 'Calls', 'Duration', '~Ictx', '~Ictx CCost', '~Extra CCost', 'Token Mix %']) {
-        const th = el('th', name); th.scope = 'col'; header.append(th);
-      }
+      columns.forEach(([name, help]) => { const th = el('th'); th.scope = 'col'; th.append(ContextHelp.button(name, help)); header.append(th); });
       head.append(header); this.body = el('tbody'); this.footer = el('tr');
       const foot = el('tfoot'); foot.append(this.footer); table.append(head, this.body, foot); scroll.append(table);
-      this.root.append(back, this.heading, this.controls, this.status, this.summary, this.hourly, this.warning, this.context, this.legend, scroll, this.provenance);
-      this.first.addEventListener('click', () => this.page(0));
-      this.previous.addEventListener('click', () => this.page(Math.max(0, this.offset - 50)));
-      this.next.addEventListener('click', () => this.page(this.offset + 50));
-      this.latest.addEventListener('click', () => { this.follow = this.mode === 'live'; this.page(2 ** 52, true); });
-      this.toggle.addEventListener('click', () => this.switchMode());
-      this.onScroll = () => {
-        if (window.innerHeight + window.scrollY < document.documentElement.scrollHeight - 24) this.follow = false;
-      };
-      scroll.addEventListener('scroll', () => {
-        if (scroll.scrollTop + scroll.clientHeight < scroll.scrollHeight - 24) this.follow = false;
-      }, {passive: true});
-      this.root.addEventListener('focusin', () => { this.follow = false; });
+      this.root.append(back, this.heading, el('p', 'Session ID: ' + id), this.context.root, this.status, scroll);
     }
     attach(parent) {
       if (this.root.parentNode !== parent) parent.replaceChildren(this.root);
       if (this.attached) return;
-      this.attached = true;
-      window.addEventListener('scroll', this.onScroll, {passive: true});
-      if (this.mode === 'live' && this.token) {
-        this.api('/api/detail', {action: 'close', token: this.token}).catch(() => {});
-        this.token = null;
-      }
-      this.poll();
+      this.attached = true; this.poll();
     }
     detach() {
-      this.attached = false; clearTimeout(this.timer);
-      window.removeEventListener('scroll', this.onScroll);
-    }
-    async open() {
-      this.token = (await this.api('/api/detail', {action: 'open', session_id: this.id, mode: this.mode})).token;
-    }
-    protectedSelection() {
-      const selection = window.getSelection?.();
-      return Boolean(selection && !selection.isCollapsed && this.root.contains(selection.anchorNode));
+      this.attached = false; this.generation++; clearTimeout(this.timer);
+      const token = this.token; this.token = null;
+      if (token) this.api('/api/detail', {action: 'close', token}).catch(() => {});
     }
     async poll() {
       if (!this.attached || this.busy) return;
+      clearTimeout(this.timer);
+      const generation = this.generation;
       await this.load();
-      if (this.attached) this.timer = setTimeout(() => this.poll(), 1000);
+      if (this.attached) this.timer = setTimeout(() => this.poll(), generation === this.generation ? 5000 : 0);
     }
-    async page(offset, latest = false) {
-      this.follow = latest && this.mode === 'live';
-      this.anchor = null; this.offset = offset;
-      await this.load(true, latest);
-    }
-    async switchMode() {
-      if (this.busy) return;
-      try {
-        if (this.mode === 'live') {
-          await this.api('/api/detail', {action: 'freeze', token: this.token});
-          this.mode = 'snapshot'; this.follow = false;
-        } else {
-          await this.api('/api/detail', {action: 'close', token: this.token});
-          this.mode = 'live'; this.token = null;
-        }
-        this.toggle.textContent = this.mode === 'live' ? 'Freeze snapshot' : 'Follow live';
-        await this.load(true);
-      } catch (_) { this.status.textContent = 'Mode switch unavailable; last known result retained.'; }
-    }
-    async refresh() {
-      if (this.busy) return;
-      if (this.token) {
-        try { await this.api('/api/detail', {action: 'close', token: this.token}); }
-        catch (_) { /* A lost/expired lease still permits a fresh capture. */ }
-      }
-      this.token = null; await this.load();
-    }
-    async load(navigation = false, latest = false) {
+    async load() {
       if (this.busy) return;
       this.busy = true;
+      const generation = this.generation;
       try {
-        if (this.protectedSelection()) this.follow = false;
-        if (!this.token) await this.open();
-        const data = await this.api('/api/detail', {action: 'page', token: this.token,
-          offset: latest || this.follow ? 2 ** 52 : this.offset,
-          revision: this.revision, anchor: this.follow ? null : this.anchor});
-        if (!this.attached) return;
-        this.status.textContent = `${this.mode === 'live' ? 'Live · updates automatically' : 'Snapshot · frozen until Refresh'}${data.result ? '' : ' · waiting for source observation'}`;
-        if (!data.result) return;
-        if (this.mode === 'live' && this.revision !== null && data.revision !== this.revision && !this.follow) {
-          this.latest.textContent = 'New/changed activity — Jump to latest';
+        if (!this.token) {
+          const opened = (await this.api('/api/detail', {action: 'open', session_id: this.id, mode: 'live'})).token;
+          if (!this.attached || generation !== this.generation) { this.api('/api/detail', {action: 'close', token: opened}).catch(() => {}); return; }
+          this.token = opened;
         }
-        if (!navigation && (this.protectedSelection() || this.body.contains(document.activeElement))) return;
-        const healthChanged = data.state !== this.data?.state;
-        if (data.revision === this.revision && data.offset === this.offset && !navigation && !healthChanged) return;
-        // Capture after HTTP: the user may have scrolled while it was in flight.
-        // Retain a visible row relative to its actual scroll owner, not the page.
-        const edge = this.scroll.getBoundingClientRect().top;
-        const anchor = [...this.body.children].find(row => row.getBoundingClientRect().bottom > edge);
-        const top = anchor ? anchor.getBoundingClientRect().top - edge : null;
+        let data = await this.api('/api/detail', {action: 'begin', token: this.token, offset: 0});
+        if (!this.attached || generation !== this.generation) return;
+        if (!data.result) {
+          this.sourceStatus(data);
+          if (data.state === 'loading') { this.status.textContent = 'Waiting for session source observation…'; this.status.hidden = false; }
+          return;
+        }
+        this.sourceStatus(data);
+        if (this.data?.revision === data.revision) { if (this.pendingRender) this.update(this.data); return; }
+        const rows = [...data.result.view.prompt_blocks[0].rows];
+        while (rows.length < data.total) {
+          const chunk = await this.api('/api/detail', {action: 'chunk', token: this.token,
+            offset: rows.length, revision: data.revision});
+          if (!this.attached || generation !== this.generation) return;
+          const next = chunk.result?.view.prompt_blocks[0].rows;
+          if (chunk.revision !== data.revision || chunk.total !== data.total || chunk.offset !== rows.length || !next?.length) throw new Error('inconsistent_history');
+          rows.push(...next);
+          // Yield between bounded chunks without discarding a retained history.
+          await new Promise(resolve => setTimeout(resolve, 0));
+        }
+        data.result.view.prompt_blocks[0].rows = rows;
         this.update(data);
-        if (!navigation && !this.follow && anchor?.isConnected) {
-          this.scroll.scrollTop += anchor.getBoundingClientRect().top - this.scroll.getBoundingClientRect().top - top;
-        }
       } catch (error) {
-        this.status.textContent = `Unavailable (${error.message}). Last known result retained; Refresh to retry. Return via Sessions.`;
+        if (!this.attached || generation !== this.generation) return;
+        this.status.textContent = `Session unavailable (${error.message}); last observed rows retained.`;
+        this.status.hidden = false;
         if (error.message === 'detail_expired') this.token = null;
-        if (['instance_stopping', 'authentication_required'].includes(error.message)) {
-          this.status.textContent = 'Host stopped or authorization expired. Last known report retained; use a fresh launcher link.';
-          this.detach();
-        }
-      } finally {
-        this.busy = false;
-      }
+        if (['instance_stopping', 'authentication_required', 'host_identity_changed'].includes(error.message)) this.detach();
+      } finally { this.busy = false; }
+    }
+    sourceStatus(data) {
+      this.status.textContent = data.state === 'observed' ? '' :
+        ({history_retained: 'Partial history: retained observations included.', source_unavailable: 'Source unavailable; retained observations are not current.',
+          session_missing: 'Session unavailable; retained observations shown.', archived: 'Archived session; last observed history.'}[data.state] || 'Session data unavailable.');
+      this.status.hidden = !this.status.textContent;
     }
     update(data) {
-      ReportView.defaultUnit(data.result.view);
-      this.legend.textContent = 'Token Mix % order: ' + ReportView.mixLegend(data.result.view);
+      ReportView.defaultUnit();
       const block = data.result.view.prompt_blocks[0];
-      const existing = new Map([...this.body.children].map(row => [row.dataset.id, row]));
-      const desired = new Set(block.rows.map(row => row.id));
-      for (const row of [...this.body.children]) if (!desired.has(row.dataset.id)) row.remove();
+      this.pendingRender = false;
+      const protectedNode = protection();
+      ReportView.text(this.heading, block.title || 'Untitled session'); this.context.update(block.session_context);
+      const old = new Map([...this.body.children].map(row => [row.dataset.id, row]));
+      const wanted = new Set(block.rows.map(row => row.id));
+      const anchor = [...this.body.children].find(row => row.getBoundingClientRect().bottom > 0);
+      const top = anchor?.getBoundingClientRect().top;
+      let deferOrder = false;
+      for (const row of [...this.body.children]) if (!wanted.has(row.dataset.id)) {
+        if (protectedNode(row)) { this.pendingRender = true; deferOrder = true; }
+        else row.remove();
+      }
+      const initialLength = this.body.children.length, append = [];
       block.rows.forEach((value, index) => {
-        let row = existing.get(value.id);
-        if (!row) { row = el('tr'); row.dataset.id = value.id; }
-        row.className = [...(value.display_roles || []), ...(value.is_compaction ? ['compaction'] : [])].join(' ');
-        const signature = this.mode + JSON.stringify(value);
-        if (row.dataset.value !== signature) {
-          const live = this.mode === 'live';
-          row.replaceChildren(...ReportView.detailCells(value, live).map((content, index) => {
-            const cell = el('td'); cell.append(typeof content === 'object' ? content : el('span', () => ReportView.detailCells(value, live)[index])); return cell;
-          })); row.dataset.value = signature;
+        const row = old.get(value.id) || el('tr'); row.dataset.id = value.id;
+        row.className = value.in_progress ? 'session-running' : value.has_error || value.aborted ? 'error' : '';
+        const signature = JSON.stringify(value);
+        if (row.signature !== signature && protectedNode(row)) this.pendingRender = true;
+        if (row.signature !== signature && !protectedNode(row)) {
+          const content = cells(value);
+          row.replaceChildren(...content.map((item, column) => {
+            const td = el('td'); td.append(typeof item === 'object' ? item : el('span', () => cellsText(value, column))); return td;
+          })); row.signature = signature;
         }
-        if (this.body.children[index] !== row) this.body.insertBefore(row, this.body.children[index] || null);
+        if (deferOrder) { if (!row.parentNode) append.push(row); }
+        else if (index >= initialLength) append.push(row);
+        else if (this.body.children[index] !== row) this.body.insertBefore(row, this.body.children[index] || null);
       });
-      this.footer.replaceChildren(...ReportView.detailTotals(block).map((value, index) => el('td', () => ReportView.detailTotals(block)[index])));
-      this.heading.textContent = block.title || 'Session history';
-      ReportView.text(this.summary, () => `Whole session: ${data.total} rows · CCost ${ReportView.display(block, 'total_ccost')}${!block.comparison_cost_complete ? ' (incomplete)' : ''} · Billed ${ReportView.display(block, 'billed_cost')} · Duration ${ReportView.display(block, 'duration_ms')}` +
-        (block.total_has_cost_breakdown ? block.total_breakdown_known ? ` · Main CCost ${ReportView.display(block, 'total_main_ccost')} · Linked child CCost ${ReportView.display(block, 'total_subagent_ccost')}` : ' · Linked child breakdown unavailable' : ''));
-      this.context.replaceChildren(); ReportView.contextSummary(this.context, block);
-      ReportView.text(this.hourly, () => block.active_hour ? ReportView.hourlySummary(block.active_hour) +
-        (data.state !== 'observed' ? ` · ${data.state}: retained observation, not proof of completion` : '') : '');
-      this.source.textContent = `${data.result.view.source_label} · ${data.state} · Observed ${new Date(data.result.observed_at_ms).toLocaleString()} · ${this.id}. Complete history, 50 rows per page; totals are not page subtotals.`;
-      this.warning.textContent = (data.state === 'history_retained' ?
-        'Source history omitted previously observed evidence. Retained last observations are included, not newly completed. Deleted-before-observation history cannot be reconstructed. ' : '') +
-        (data.state === 'session_missing' || data.state === 'archived' ? 'Session missing or archived; last known report retained. Return via Sessions. ' : '') +
-        data.result.view.notes.join(' ');
-      if (this.mode === 'live' && this.revision !== null && !this.follow && data.revision !== this.revision) this.latest.textContent = 'New/changed activity — Jump to latest';
-      else this.latest.textContent = 'Jump to latest';
-      Object.assign(this, {data, offset: data.offset, revision: data.revision, anchor: block.rows[0]?.id || null});
-      this.label.textContent = data.total ? `${data.offset + 1}–${data.offset + block.rows.length} of ${data.total}` : 'No rows';
-      this.first.disabled = this.previous.disabled = data.offset === 0;
-      this.next.disabled = data.offset + block.rows.length >= data.total;
-      this.rowNumber.max = String(data.total);
+      for (let offset = 0; offset < append.length; offset += 200) this.body.append(...append.slice(offset, offset + 200));
+      const totals = () => { const values = ReportView.detailTotals(block); return [values[0], '', '', ...values.slice(1)]; };
+      if (!protectedNode(this.footer)) this.footer.replaceChildren(...totals().map((_, index) => el('td', () => totals()[index])));
+      else this.pendingRender = true;
+      if (anchor?.isConnected && top != null) {
+        const delta = anchor.getBoundingClientRect().top - top;
+        if (delta) window.scrollBy(0, delta);
+      }
+      this.data = data;
     }
+  }
+  // Unit bindings must not manufacture new tooltip DOM for unchanged text cells.
+  function cellsText(row, index) {
+    return [null, row.watch_model || 'N/A', row.watch_effort || 'N/A', null,
+      row.display?.calls ?? String(row.calls ?? 'N/A'), ...['duration_ms', 'incoming_context_tokens', 'incoming_context_ccost', 'extra_ccost', 'token_mix_percent'].map(key => ReportView.display(row, key))][index];
   }
   return {View};
 })();

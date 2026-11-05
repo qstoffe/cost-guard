@@ -20,6 +20,7 @@ from src.analysis.models import MixEvidence
 from src.analysis.comparisons import RelativePriceLevel
 from src.domain import AccountSnapshot, QuotaComponent
 from .prompt_costs import PromptCostPart
+from .watch_context import WatchContextGuidance
 
 
 class ReportKind(str, Enum):
@@ -131,6 +132,7 @@ class SessionPromptBlock:
     next_context_cost_multiplier: Decimal | None = None
     rate_usage_complete: bool = True
     rate_provisional: bool = False
+    session_context: WatchContextGuidance | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -145,6 +147,7 @@ class SessionUsageRow:
     duration_ms: int | None = None
     archived: bool = False
     running: bool = False
+    last_activity_ms: int | None = None
 
 
 @dataclass(frozen=True, slots=True)

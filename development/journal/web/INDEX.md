@@ -42,6 +42,8 @@ Status: current
 - [Shared contextual help](contextual-help.md): whole-app content inventory,
   singleton Web/PiP interaction owner, Chrome/Edge and broader Mini evidence,
   current-state regression and explicit synthetic-report/platform limits.
+- [Live Sessions](sessions-live.md): bounded full-catalog scalar keys, explicit pending
+  global metric sorts, stable older pages, unpaged history and real-source timings.
 
 Historical observations keep their original dates and exceptions; this routing
 update does not refresh their validity or certify older failed probes. Parent
