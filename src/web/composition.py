@@ -1,4 +1,4 @@
-"""One-shot Web composition, no CLI wake, Watch, browser or model inference."""
+"""Fresh report/Live integrations; only host startup owns a service wake."""
 from pathlib import Path
 import time
 
@@ -33,7 +33,7 @@ def application(request):
     return ReportApplication(factory)
 
 
-def live_acquisition():
+def live_acquisition(*, selection=None):
     """Transfer one fresh service to the process-lifetime live owner."""
     from src.bootstrap import _account_providers, _model_availability_source
     from src.watch.web_coordinator import WebWatchCoordinator
@@ -41,7 +41,8 @@ def live_acquisition():
 
     root = Path(__file__).resolve().parents[2]
     config = load_configuration(root).values
-    selection = SourceSelector().select(str(config["openCode"]["source"]))
+    if selection is None:
+        selection = SourceSelector().select(str(config["openCode"]["source"]))
     database = CacheDatabase(root)
     database.initialize()
     cache = CacheRepository(database)

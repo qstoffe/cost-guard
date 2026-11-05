@@ -13,6 +13,54 @@ CLI/Watch/Diagnostics must not asynchronously share an existing interactive cons
 
 ## Evidence
 
+### Web service wake — FR 000588, 2026-11-05
+
+The Web host's existing Live worker now owns one optional installed-CLI wake,
+separate from HTTP/native handoff. Config/source eligibility precedes discovery;
+invalid/unreadable registration, permissions/auth/contracts and selected V1 do not
+launch. A five-second hidden command plus the existing short readiness budget
+must finish before queued finite reports start. A process exit is never readiness.
+Fresh registered/authenticated V2 API health resumes Live/reports automatically;
+tabs/Refresh/reconnects cannot repeat the wake and shutdown never stops OpenCode.
+CLI bootstrap shares only the fixed primitive and retains its twenty-second bound.
+Actual Windows batch parsing required a fixed separately quoted `/c` tail rather
+than list2cmdline's escaped inner quotes. Space/Unicode shim execution is tested;
+expansion/operators in a batch install path are refused, not interpreted.
+
+Observed on Windows/Python 3.14: real healthy V2 startup selected in 0.134s with a
+guard proving zero wake calls; the installed CLI's read-only info command completed
+in 0.211s. Hidden Chrome 156.0.8078.80 exercised actual production HTTP/assets with
+fake registration/API and canonical synthetic Live/reports: success and false-CLI-
+success failure, visible/accessibly announced starting feedback, responsive Settings
+navigation, automatic initial report completion, two tabs/reload, wake count one,
+cleared status and manual-start/Refresh fallback. Report children use the same
+Windows pythonw interpreter as managed production; console-child/stdin diagnostics
+failed during fixture development and are not successful evidence.
+
+Real Live-only probe passed: one V2 owner/two streams, first view 2.729s, preserved
+run/sequence, host close 0.0742s and zero remaining owned threads/processes. This is
+not full history performance proof. The supplemental `probe_web_live.py --reports`
+campaign **FAILED**: Normal hit 120s during history sampling (93 completed units).
+HTTP stayed responsive (max 0.2904s), Live remained available and cleanup completed
+in 0.2568s with zero owned workers. That probe bypasses the new startup owner;
+neither the pre-existing nature nor the cause of the slowdown is established.
+No deadline/TTL/production history algorithm was changed to hide it.
+
+**Decision Delegate, 2026-11-05, FR 000588 only:** waived real stopped-service
+end-to-end, physical Windows launcher/tray/browser handoff and native macOS wake/
+launcher verification, because adequate hidden/deterministic/healthy-live evidence
+exists and stopping the session's shared service is forbidden. Accepted the above
+supplemental Normal timeout as unresolved/nonblocking, not PASS. No visible desktop
+action, alternate identity/configuration or shared-service stop/restart is authorized.
+Cold-start/native/platform behavior and real Normal completion within its deadline
+remain unverified. Deterministic Full and final validator are not waived. The
+delegate separately authorized the narrow historical-scale test-clock repair noted
+in `web/historical-reports.md`; no future blanket exception is created.
+
+Final FR 000588 local gates: Full **PASS** (143 runner units, 86.5s); working-tree
+validator **PASS** (zero failures, six advisory prose/design warnings). Earlier
+failed runs remain recorded above/in the completed task; no ZIP was generated.
+
 FR 000540 (2026-11-02): Decision Delegate authorized bounded owned console/tray
 and registered-browser probes, not the full native opt-in bundle or unrelated UI.
 Actual cold/warm console buffers supplied 41/62 samples, all four glyphs and no

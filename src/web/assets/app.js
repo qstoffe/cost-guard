@@ -36,7 +36,7 @@ function connectionStatus(message, state = {}) {
   hostState = {...hostState, ...state};
   liveStatus = message;
   miniWatch?.health(hostState);
-  statusLine.textContent = hostState.kind === 'connected' ? message : `Connection: ${hostState.kind.replaceAll('_', ' ')}. See notice below.`;
+  statusLine.textContent = ['connected', 'source_starting'].includes(hostState.kind) ? message : `Connection: ${hostState.kind.replaceAll('_', ' ')}. See notice below.`;
   const banner = document.getElementById('host-state');
   if (banner) {
     banner.dataset.kind = hostState.kind;
@@ -50,7 +50,7 @@ function connectionStatus(message, state = {}) {
     const warning = document.getElementById('host-warning');
     if (warning) {
       const recovery = ['authorization_required', 'identity_changed', 'stopped'].includes(hostState.kind) ? 'Use a fresh OS launcher link.' : 'Check the local source/host; reload to retry.';
-      warning.textContent = `${hostState.kind.replaceAll('_', ' ')} — ${recovery}`;
+      warning.textContent = hostState.kind === 'source_starting' ? 'Starting OpenCode server…' : `${hostState.kind.replaceAll('_', ' ')} — ${recovery}`;
     }
   }
   if (hostState.terminal) for (const view of views.values()) view.detail?.detach();

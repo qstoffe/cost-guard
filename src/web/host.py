@@ -33,9 +33,11 @@ class WebHost:
         self.jobs = jobs or ReportJobs()
         self.events = EventHub(self.nonce)
         self.observations = WebObservations()
+        self.source_startup = None
         if live_factory is None and jobs is None:
-            from .composition import live_acquisition
-            live_factory = live_acquisition
+            from .source_startup import SourceStartup
+            self.source_startup = SourceStartup(root, self.events.publish, self.stopping)
+            live_factory = self.source_startup.acquire
         self.live = LiveRuntime(live_factory, self.events.publish, self._live_failed) if live_factory else None
         self.server = None
         self.thread = None
@@ -123,7 +125,8 @@ class WebHost:
                     self.store.log(status)
                 self.observations.persist(self)
                 if not self.stopping.is_set():
-                    self.jobs.tick()
+                    if self.source_startup is None or self.source_startup.finished.is_set():
+                        self.jobs.tick()
                     self.events.publish("progress", self.jobs.updates() if hasattr(self.jobs, "updates")
                                         else self.jobs.readiness())
         except BaseException as error:

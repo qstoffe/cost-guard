@@ -49,7 +49,7 @@ class LifecycleTests(unittest.TestCase):
                 coordinator=SimpleNamespace(report_service=None,
                     today_ccost=SimpleNamespace(history_pending=False)))
 
-        acquisition = patch("src.web.composition.live_acquisition", side_effect=idle_acquisition)
+        acquisition = patch("src.web.source_startup.SourceStartup.acquire", side_effect=idle_acquisition)
         acquisition.start()
         self.addCleanup(acquisition.stop)
         self.temporary = tempfile.TemporaryDirectory()

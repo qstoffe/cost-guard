@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v80.168, 2026-11-05), the supported distribution.
+Use **current `main`** (v80.169, 2026-11-05), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -361,7 +361,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.167 (2026-11-05):** Full Watch shows two zero cost components whenever the displayed prompt total is zero, quietly retains values during brief acquisition/retries, and shares confirmed completion's success color with the focal session title. Unknown totals/outcomes and genuine warnings remain distinct; Mini, CLI, pricing and acquisition are unchanged. See [Web Beta](docs/web-beta.md).
+**v80.169 (2026-11-05):** Web Beta can wake an unavailable OpenCode V2 background service once at host launch using the installed CLI, then automatically continue reports and Watch after actual readiness checks. Starting feedback is bounded; failures keep honest manual-start/Refresh guidance. Tabs and reconnects never launch services; shared OpenCode is never stopped. See [Web Beta](docs/web-beta.md) and [connectivity](docs/connectivity.md).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

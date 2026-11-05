@@ -1,5 +1,27 @@
 # Historical date report acquisition
 
+## Scale-fixture clock determinism — 2026-11-05
+
+During FR 000588 verification, the unchanged 872-root correctness test passed one
+Full run and failed another with four catalog calls against the old two-or-three
+bound. Its two-second production catalog-hint lifetime depended on elapsed test
+execution and a later revision observation. Load-induced expiry is supported by
+the source, but the exact fourth call in that run was not traced.
+
+Decision Delegate explicitly authorized a test-only repair: replace only the V2
+module's local `time` binding for this synthetic build/revision-observation context,
+freeze monotonic catalog age and retain real perf_counter metrics. No global clock,
+production TTL, deadline or algorithm changes. All 872 prompt/request/revision/
+message/context and exact 12.20800-cost assertions remain. The fixture now requires
+exactly three catalog calls. Traced fake-wire stacks identified initial catalog,
+revision lookup and mandatory after bracket: mocked `_client` defers endpoint
+initialization, and provenance's first endpoint read clears the initial complete
+catalog before revision lookup. Three is fixture-specific, not a general requirement
+for an incomplete recent catalog. The delegate's initial exact-two directive was
+explicitly superseded after this investigation; the first controlled attempt failed
+that mistaken expectation, not a correctness assertion. Focused historical-report
+and source-history tests passed afterward. Full/validator remain required, not waived.
+
 FR 000563; Windows/Python 3.14, 2026-11-03. Pre-repair product baseline:
 `f737a3f44f8d61fcf433062e7b89aa946fb23bf9` (v80.142).
 

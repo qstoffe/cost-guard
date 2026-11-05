@@ -20,7 +20,7 @@ from unittest.mock import Mock, patch
 from development.tests.fixtures.opencode_v2_service import FakeV2Service, fixture, source_with_service
 from development.tools.diagnostic_connectivity import connectivity_summary
 from development.tools.diagnostic_logs import create_bundle
-from src import bootstrap
+from src import bootstrap, opencode_service
 from src.presentation.source_errors import source_error_message
 from src.pricing.release_metadata import classify_transport
 from src.sources import connectivity_events
@@ -93,7 +93,7 @@ class StartupRecoveryTests(unittest.TestCase):
         with patch.object(bootstrap, "SourceSelector", return_value=selector), \
              patch.object(bootstrap, "ReadRecovery", side_effect=clock.budget), \
              patch.object(bootstrap, "find_opencode_executable", return_value="opencode"), \
-             patch.object(bootstrap.subprocess, "run", return_value=Mock(returncode=0)) as run:
+             patch.object(opencode_service.subprocess, "run", return_value=Mock(returncode=0)) as run:
             result = bootstrap._select_source("v2")
         self.assertIs(selection, result)
         self.assertEqual(3, selector.select.call_count)
@@ -121,7 +121,7 @@ class StartupRecoveryTests(unittest.TestCase):
         selected = Mock(selected="v2")
         with patch.object(bootstrap, "SourceSelector") as selector, \
              patch.object(bootstrap, "find_opencode_executable") as executable, \
-             patch.object(bootstrap.subprocess, "run") as run:
+             patch.object(opencode_service.subprocess, "run") as run:
             selector.return_value.select.return_value = selected
             self.assertIs(selected, bootstrap._select_source("auto"))
         executable.assert_not_called()
@@ -131,7 +131,7 @@ class StartupRecoveryTests(unittest.TestCase):
         for error in (SourceSchemaError("unsupported"), http_failure(401, phase="probe"),
                       SourceUnavailableError("bad registration", code=FailureCode.REGISTRATION_INVALID)):
             with self.subTest(error=error.code), patch.object(bootstrap, "SourceSelector") as selector, \
-                 patch.object(bootstrap.subprocess, "run") as run:
+                 patch.object(opencode_service.subprocess, "run") as run:
                 selector.return_value.select.side_effect = error
                 with self.assertRaises(type(error)):
                     bootstrap._select_source("v2")
