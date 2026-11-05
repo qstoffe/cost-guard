@@ -352,7 +352,10 @@ const WatchView = (() => {
     update(result) {
       const view = result.view, active = view.active_cards || [], history = view.history_cards || [];
       this.earlier.dataset.hasHistory = String(history.length > 0);
-      const connected = this.state.connection === 'Live connected.';
+      // A healthy host/stream retrying its source is not a disconnected stream.
+      // Its global health warning remains visible; don't duplicate it as fleeting
+      // table-level acquisition prose or falsely announce a connection loss.
+      const connected = this.state.connection === 'Live connected.' || this.state.connectionKind === 'source_retrying';
       const retryDelayed = delayed(this, 'retrySince', result.state === 'retrying');
       const sourceState = result.state === 'retrying' ? retryDelayed ? 'Source updates delayed; last observation retained, not current.' : '' :
         result.state !== 'running' ? 'Source unavailable; last observation retained, not current.' : '';

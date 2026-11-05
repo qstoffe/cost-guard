@@ -1,14 +1,13 @@
 # Full Web Watch cards, reset display and context markers
 
-Source revision: 678659f35bae71dddc0db987fcb1c5b41a58b8f3
-Checked revision: 678659f35bae71dddc0db987fcb1c5b41a58b8f3
+Source revision: 31c914ac3142eb6e6bfb9eb5f6f7d7ad8085e6b1
+Checked revision: 31c914ac3142eb6e6bfb9eb5f6f7d7ad8085e6b1
 Last checked: 2026-11-05
 Status: current
 
 ## Summary
 
-Current evidence below describes this base plus FR 000586's presentation diff;
-older sections retain their original dates and limits, not refreshed PASS claims.
+Evidence covers this base plus the FR diff; older results keep their original limits.
 
 ## v80.167 — FR 000586 (2026-11-05)
 
@@ -18,8 +17,9 @@ totals keep their original availability semantics. Python-prepared Credits/USD
 regressions cover observed/no calls, missing components, tiny positive amounts,
 partial totals, unknown totals, repeat updates and unit round trips; CLI is unchanged.
 
-The status audit covered card messages, active/Earlier placeholders, session cost,
-daily acquisition/retries, accounts and the separate global Live health owner.
+The status audit covered route entry, card messages, active/Earlier placeholders,
+session cost, daily, accounts and global Live health. Source retries retain their
+host-health kind instead of flashing a false table-level connection interruption.
 Brief operations retain coherent values quietly; initial neutral placeholders do
 not claim observed empty data. Existing publication wakeups expose continuous
 30-second delays without another timer/poll/SSE. Confirmed unavailable/partial,
@@ -31,7 +31,7 @@ its focal ink; backend grace and history membership remain unchanged.
 
 ## Evidence
 
-Full passed 142 files / zero failures in 89.2s; working-tree validator passed all
+Full passed 142 files / zero failures in 90.0s; working-tree validator passed all
 11 checks / zero failures / six existing advisory warnings. Hidden Chrome
 156.0.8078.80 passed Classic/Web light/Web dark × 1366/360px: exact retained card
 heights, virtual sustained delay/unavailable/recovery, cost units, success/unknown/

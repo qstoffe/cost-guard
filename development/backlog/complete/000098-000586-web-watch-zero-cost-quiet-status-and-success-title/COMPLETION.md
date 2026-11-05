@@ -24,7 +24,7 @@ Implemented in v80.167, 2026-11-05.
 
 ## Actual verification
 
-- Full product suite: **PASS**, 142 test files, zero failed files, 89.2 seconds.
+- Final Full product suite: **PASS**, 142 test files, zero failed files, 90.0 seconds.
 - Working-tree validator: **PASS**, 11 checks, zero failures; six existing/advisory
   prose/module-design warnings. No hard cap raised and no ZIP/release created.
 - Python/JavaScript regressions: prepared cost variants/raw parity, missing/positive/
@@ -43,8 +43,9 @@ Implemented in v80.167, 2026-11-05.
   preserved run origin, four one-row cards and bounded four pending captures.
   All owned workers closed; shared OpenCode untouched; no inference started.
   Shutdown interrupted independent history work; full-source completeness is not claimed.
-- The final added empty-card initial/delayed DOM assertions are covered by a focused
-  rerun of `test_watch_daily.py` / `test_web_watch_quota.py` after the Full run.
+- Final Full includes empty-card and route-entry blank/delayed assertions, typed
+  source-retry health without false table-level interruption, and unchanged global
+  warnings. Focused daily/quota reruns and the final six-case browser rerun also passed.
 
 ## Failed ancillary check and explicit exception
 

@@ -163,8 +163,15 @@ function show(state) {
     state.detail.controls.inert = !hostState.writable;
   } else if (state.live) {
     state.connection = liveStatus;
-    if (liveValue?.view) ReportView.renderLive(output, liveValue, state);
-    else output.replaceChildren(ReportView.element('p', liveValue?.state || 'Live acquisition starting…'));
+    state.connectionKind = hostState.kind;
+    if (liveValue?.view) {
+      state.livePendingSince = null;
+      ReportView.renderLive(output, liveValue, state);
+    } else {
+      state.livePendingSince ??= Date.now();
+      output.replaceChildren(ReportView.element('p', Date.now() - state.livePendingSince >= 30000 ?
+        'Still loading Watch data; check source availability.' : ''));
+    }
   } else if (state.result) {
     // Connection/source status is not a new frozen report. Replacing its DOM
     // discards scroll, focus and selection during ordinary health checks.
