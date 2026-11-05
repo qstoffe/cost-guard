@@ -19,10 +19,10 @@ class Node {
 }
 async function main() {
   let selected = null, offline = false, page = input.first;
-  const calls = [], scrolls = [], timers = new Map(); let timerId = 0;
+  const calls = [], scrolls = [], delays = [], timers = new Map(); let timerId = 0;
   const document = {createElement: tag => new Node(tag), createElementNS: (_, tag) => new Node(tag), activeElement: null};
   const context = vm.createContext({document, console, Date, URLSearchParams, location: {},
-    setTimeout: (fn, delay) => { const id = ++timerId; if (!delay) fn(); else timers.set(id, fn); return id; },
+    setTimeout: (fn, delay) => { const id = ++timerId; if (!delay) fn(); else { timers.set(id, fn); delays.push(delay); } return id; },
     clearTimeout: id => timers.delete(id),
     window: {getSelection: () => ({isCollapsed: !selected, anchorNode: selected}), scrollBy: (...args) => scrolls.push(args)},
     api: async (path, value) => {
@@ -83,6 +83,33 @@ async function main() {
   view.detach();
   assert.ok(calls.some(call => call.action === 'close' && call.token === 'owned'));
   offline = false;
+  let pending = true, pendingState = 'observed';
+  context.pendingApi = async (path, value) => {
+    if (value.action === 'open') return {token:'pending-lease'};
+    if (value.action === 'close') return {};
+    if (pending) return {state:pendingState,pending:true,result:null};
+    const result = JSON.parse(JSON.stringify(input.first));
+    result.offset = value.offset;
+    result.result.view.prompt_blocks[0].rows = result.result.view.prompt_blocks[0].rows.slice(value.offset, value.offset + 25);
+    return result;
+  };
+  vm.runInContext("globalThis.pendingView = new SessionDetail.View(pendingApi, 'root-0000')", context);
+  const pendingView = context.pendingView;
+  pendingView.attach(new Node('main')); await new Promise(setImmediate);
+  assert.equal(pendingView.body.children.length, 0);
+  assert.match(pendingView.status.textContent, /Waiting for session source observation/);
+  assert.equal(pendingView.status.hidden, false);
+  assert.equal(delays.at(-1), 5000, 'pending capture retains the configured five-second polling cadence');
+  assert.equal(timers.size, 1);
+  pendingState = 'source_unavailable'; await pendingView.load();
+  assert.match(pendingView.status.textContent, /Source unavailable/);
+  assert.ok(!pendingView.status.textContent.includes('Waiting'), 'a pending lease cannot hide explicit source failure');
+  pending = false;
+  const [pendingTimer, resume] = timers.entries().next().value;
+  timers.delete(pendingTimer); resume(); await new Promise(setImmediate);
+  assert.equal(pendingView.body.children.length, 100);
+  assert.equal(pendingView.status.hidden, true);
+  pendingView.detach(); assert.equal(timers.size, 0);
   let resolveOpen, opening = true;
   const raceCalls = [];
   context.raceApi = async (path, value) => {

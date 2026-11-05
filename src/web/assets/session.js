@@ -80,7 +80,9 @@ const SessionDetail = (() => {
         if (!this.attached || generation !== this.generation) return;
         if (!data.result) {
           this.sourceStatus(data);
-          if (data.state === 'loading') { this.status.textContent = 'Waiting for session source observation…'; this.status.hidden = false; }
+          if (data.state === 'loading' || data.pending && data.state === 'observed') {
+            this.status.textContent = 'Waiting for session source observation…'; this.status.hidden = false;
+          }
           return;
         }
         this.sourceStatus(data);

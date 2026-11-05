@@ -151,6 +151,24 @@ Final local Full after these two repairs passed **145/145 files in 94.3s**; pack
 validation remained **11 passes, zero failures, six existing advisory warnings**.
 Both temporary integrated-browser fixture hosts joined cleanly with no host failure.
 
+The following Linux CI run passed Full (145 files, 1,709 tests: 1,688 passed and
+21 named platform skips) and the validator. The exact 360px rendered check also
+passed: page 360px, heading 330/330px and independent table pan 919px. Smoke then
+stopped after Settings reload → Back, whose default five-second assertion raced
+the actual five-second session poll. The integrated browser reproduced this path:
+reload left no retained detail view, the first read had no rows, then the next read
+rendered all three rows **5,032ms** later (26ms/17ms individual loads). This is normal
+lease/capture freshness, not a lost title or missing history. The two post-navigation
+CI waits now use the same explicit 30s acquisition bound as first entry; offline
+retention, product cadence, broad-VM waits and all other assertions remain unchanged.
+An observed-but-pending lease now also keeps the compact waiting message instead
+of temporarily showing a blank history/status. Deterministic VM coverage exercises
+pending → next 5,000ms poll → complete history, and ensures pending cannot hide an
+explicit source-unavailable warning. No wider browser access was needed.
+Local Full after the navigation/pending-state regression passed **145/145 files in
+97.2s**, with **11 validator passes, zero failures and six existing warnings**. The
+third integrated-browser host also joined with no host failure; its tab was closed.
+
 ## Limits and retained lessons
 
 The real cold catalog is not fully indexed and churn/large-history warm-up latency

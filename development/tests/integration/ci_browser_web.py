@@ -186,7 +186,10 @@ def main():
                 assert json.loads(user_config.read_text()) == {"webSettings": {"theme": "classic", "ccostDisplayUnit": "usd", "miniWatchPlacement": "default", "quotaDisplayMode": "default"}}
                 assert not report_requests, "Settings must not acquire reports"
                 page.go_back()
-                expect(page.locator("#result")).to_contain_text("<script>PRIVATE_TEXT</script>")
+                # Settings reload discarded process-local view state. Reopening
+                # a live lease can await the next 5s poll, just like first entry;
+                # Playwright's default 5s assertion would race that valid cadence.
+                expect(page.locator("#result")).to_contain_text("<script>PRIVATE_TEXT</script>", timeout=30000)
                 page.emulate_media(color_scheme="light")
                 evidence["checks"].append("actual Settings saves in disposable canonical config, Classic/Web round trip, adaptive Web, reload/new tab and no Settings report acquisition")
                 owner.events.publish("live", {"state": "CI synthetic Live observation"})
@@ -213,7 +216,7 @@ def main():
                 page.go_back()
                 page.go_back()
                 page.go_back()
-                expect(page.locator("#result")).to_contain_text("<script>PRIVATE_TEXT</script>")
+                expect(page.locator("#result")).to_contain_text("<script>PRIVATE_TEXT</script>", timeout=30000)
                 evidence["checks"].append("actual synthetic SSE updates source health; initial Watch stays quiet even after three virtual minutes")
                 context.set_offline(True)
                 # Browser offline emulation does not necessarily drop an already

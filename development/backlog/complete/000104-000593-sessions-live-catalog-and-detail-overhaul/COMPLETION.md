@@ -19,7 +19,7 @@ Implementation: v80.173, 2026-11-05. The original FR is preserved unchanged.
 
 ## Verification and explicit scope
 
-The final local Full suite passed all 145 test files in 94.3s after both CI repairs.
+The final local Full suite passed all 145 test files in 97.2s after the navigation repair.
 Regressions include cold/warm finite-list parity, source identity changes with
 unchanged revision and selected-row reclassification/order. Package validation passed
 all 11 checks with zero failures and six existing advisory prose/design warnings;
@@ -46,6 +46,12 @@ Fresh served-CSS checks passed at 800/360/280px constrained content widths, not 
 emulated Linux viewport. The exact 360px CI assertion remains in place.
 The paired controlled ten-second cold delay fails the previous fixture's UI wait
 and passes the corrected fixture without changing that wait or any product timeout.
+The next Linux CI run passed Full (1,709 tests; 1,688 passed, 21 platform skips),
+validator and exact 360px layout. A later smoke wait after Settings reload → Back
+raced the unchanged five-second poll; the integrated browser measured 5,032ms to
+the next complete history. Only those navigation acquisition waits now share the
+initial-open 30s bound. A pending lease retains truthful compact waiting feedback,
+with deterministic pending/recovery/cadence and source-failure regression coverage.
 
 Hidden Chrome 156.0.8078.80 over actual HTTP/assets and synthetic source passed:
 120-root catalog, global-key readiness, stable older pages, 1,001→1,002 unpaged prompts,
