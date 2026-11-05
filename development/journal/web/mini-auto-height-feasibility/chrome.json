@@ -1,0 +1,206 @@
+{
+  "frId": "000591",
+  "measuredAt": "2026-11-05T19:09:34.430Z",
+  "fixture": "Minimal loopback document; no product changes, real source, or credentials",
+  "mode": "Strictly headless, disposable profile, CDP input to open; every evaluation userGesture:false",
+  "physicalDesktopGeometry": "UNVERIFIED",
+  "cases": [
+    {
+      "context": "opener",
+      "method": "resizeTo",
+      "userGesture": false,
+      "requestedHeightDelta": 61,
+      "before": {
+        "activation": {
+          "opener": false,
+          "pip": false
+        },
+        "outer": {
+          "width": 531,
+          "height": 280
+        },
+        "inner": {
+          "width": 509,
+          "height": 235
+        }
+      },
+      "invocation": {
+        "activation": {
+          "opener": false,
+          "pip": false
+        },
+        "returned": false,
+        "error": {
+          "name": "NotAllowedError",
+          "message": "Failed to execute 'resizeTo' on 'Window': resizeTo() requires user activation in document picture-in-picture"
+        }
+      },
+      "after": {
+        "activation": {
+          "opener": false,
+          "pip": false
+        },
+        "outer": {
+          "width": 531,
+          "height": 280
+        },
+        "inner": {
+          "width": 509,
+          "height": 235
+        }
+      }
+    },
+    {
+      "context": "opener",
+      "method": "resizeBy",
+      "userGesture": false,
+      "requestedHeightDelta": -47,
+      "before": {
+        "activation": {
+          "opener": false,
+          "pip": false
+        },
+        "outer": {
+          "width": 531,
+          "height": 280
+        },
+        "inner": {
+          "width": 509,
+          "height": 235
+        }
+      },
+      "invocation": {
+        "activation": {
+          "opener": false,
+          "pip": false
+        },
+        "returned": false,
+        "error": {
+          "name": "NotAllowedError",
+          "message": "Failed to execute 'resizeBy' on 'Window': resizeBy() requires user activation in document picture-in-picture"
+        }
+      },
+      "after": {
+        "activation": {
+          "opener": false,
+          "pip": false
+        },
+        "outer": {
+          "width": 531,
+          "height": 280
+        },
+        "inner": {
+          "width": 509,
+          "height": 235
+        }
+      }
+    },
+    {
+      "context": "pip",
+      "method": "resizeTo",
+      "userGesture": false,
+      "requestedHeightDelta": 61,
+      "before": {
+        "activation": {
+          "opener": false,
+          "pip": false
+        },
+        "outer": {
+          "width": 531,
+          "height": 280
+        },
+        "inner": {
+          "width": 509,
+          "height": 235
+        }
+      },
+      "invocation": {
+        "activation": {
+          "opener": false,
+          "pip": false
+        },
+        "returned": false,
+        "error": {
+          "name": "NotAllowedError",
+          "message": "Failed to execute 'resizeTo' on 'Window': resizeTo() requires user activation in document picture-in-picture"
+        }
+      },
+      "after": {
+        "activation": {
+          "opener": false,
+          "pip": false
+        },
+        "outer": {
+          "width": 531,
+          "height": 280
+        },
+        "inner": {
+          "width": 509,
+          "height": 235
+        }
+      }
+    },
+    {
+      "context": "pip",
+      "method": "resizeBy",
+      "userGesture": false,
+      "requestedHeightDelta": -47,
+      "before": {
+        "activation": {
+          "opener": false,
+          "pip": false
+        },
+        "outer": {
+          "width": 531,
+          "height": 280
+        },
+        "inner": {
+          "width": 509,
+          "height": 235
+        }
+      },
+      "invocation": {
+        "activation": {
+          "opener": false,
+          "pip": false
+        },
+        "returned": false,
+        "error": {
+          "name": "NotAllowedError",
+          "message": "Failed to execute 'resizeBy' on 'Window': resizeBy() requires user activation in document picture-in-picture"
+        }
+      },
+      "after": {
+        "activation": {
+          "opener": false,
+          "pip": false
+        },
+        "outer": {
+          "width": 531,
+          "height": 280
+        },
+        "inner": {
+          "width": 509,
+          "height": 235
+        }
+      }
+    }
+  ],
+  "browser": {
+    "protocolVersion": "1.3",
+    "product": "Chrome/156.0.8078.80",
+    "revision": "@fb096c0011f9d50f0a264a9376420cdea9c421e3",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
+    "jsVersion": "15.6.75.27"
+  },
+  "support": {
+    "secure": true,
+    "requestWindow": "function"
+  },
+  "open": {
+    "finished": true,
+    "error": null,
+    "activationAtClick": true
+  },
+  "outcome": "MEASURED"
+}

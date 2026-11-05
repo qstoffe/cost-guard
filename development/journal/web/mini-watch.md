@@ -1,5 +1,44 @@
 # Mini Watch and finished history
 
+## FR 000591 — On Hold feasibility, 2026-11-05
+
+Fresh installed **Chrome 156.0.8078.80** and **Edge 156.0.4314.58** opened genuine
+Document PiP in disposable strictly headless profiles through browser-input clicks.
+Native `resizeTo` (+61 height) and `resizeBy` (-47 height), from both opener and PiP,
+all threw `NotAllowedError`: the method requires user activation in document
+picture-in-picture. Both transient activation states were inactive before and within
+each call; every evaluation explicitly used `userGesture:false`. All **eight**
+before/after measurements remained **531×280 outer / 509×235 inner**. Native APIs
+were unmodified. This measures an API blocker, not physical Windows geometry.
+
+[Chrome raw results](mini-auto-height-feasibility/chrome.json),
+[Edge raw results](mini-auto-height-feasibility/edge.json), and
+[standalone diagnostic](mini-auto-height-feasibility/probe.cjs) preserve the evidence.
+The diagnostic takes absolute browser/output paths, uses only Node built-ins and a
+minimal local fixture, and closes its owned browser/server. No real source, provider,
+personal browser state, visible desktop or shared OpenCode service was touched.
+The freshly read [specification §6.8](https://wicg.github.io/document-picture-in-picture/#resizing-the-pip-window)
+corroborates the activation requirement; opening consumes activation too. Live
+observers/timers do not grant it. Eligible-click fitting plus scroll therefore
+cannot fulfill this FR's principal hands-free Live-resizing goal.
+
+**Decision Delegate, not the owner**, first authorized an **FR 000591-only,
+measurement-only exception** to the FR's browser-automation prohibition, constrained
+to hidden genuine PiP input, unmodified APIs and verified absent activation. After
+the measurements, the same delegate directed **only FR 000591 On Hold**, not partial
+implementation or delivery. The original specification and local implementation
+branch are retained. Release requires an explicit owner-approved click/open-fit plus
+scroll fallback with disclosed geometry limitations, or an approved alternative
+capable of hands-free resizing. No requirement waiver or future-task authority exists.
+
+Independent position/size combinations, native vertical lock and physical
+DPI/monitor/work-area behavior remain **UNVERIFIED**; no broad acceptance matrix was
+run. No product edits, product tests/validator/live probe, version/release work,
+Complete move or progress increment accompanies this development-only hold.
+Architecture/user guides need no update: shipped behavior is unchanged.
+The hold rationale and release prerequisite are preserved with the
+[intact held FR](../../backlog/on-hold/000591-mini-watch-position-and-auto-height-sizing/HOLD.md).
+
 ## FR 000583 — v80.164, 2026-11-05
 
 Base `30736ab6`, later backlog-only default `8147b1f9` retained. Mini's disclosure
