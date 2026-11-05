@@ -8,6 +8,7 @@ class Node {
   get textContent() { return this.text + this.children.map(n => n.textContent).join(''); }
   append(...nodes) { this.children.push(...nodes); }
   setAttribute() {}
+  addEventListener() {}
 }
 const account = JSON.parse(fs.readFileSync(0, 'utf8'));
 const output = new Node('main');

@@ -1,0 +1,45 @@
+{
+  "date": "2026-11-05",
+  "feature": "FR 000585",
+  "version": "80.166",
+  "environment": "Windows local workstation",
+  "fullSuite": {"command": "py -3 development/tools/run_tests.py --suite full", "files": 142, "failures": 0, "seconds": 88.4},
+  "packageValidation": {"command": "py -3 development/tools/validate_package.py --working-tree", "passes": 11, "failures": 0, "existingWarnings": 6},
+  "browser": {
+    "script": "development/tests/integration/probe_mini_watch.cjs",
+    "version": "Chrome/156.0.8078.80",
+    "outcome": "PASS",
+    "checks": [
+      "Native included Capacity 25000 and Remaining 22912 remain distinct from observed Used 1814",
+      "Raw 10% Used with observed 100 yields Capacity 1000 and Remaining 900; reference USD 1.00/10.00/9.00",
+      "Already-open Accounts, Full Watch and actual Document PiP switch together via authenticated Settings",
+      "Exact provider-confirmed idle primary and secondary show full healthy 100% Remaining and unknown CCost Capacity/Remaining",
+      "Used zero and Window not started remain intact",
+      "Seven-row subgrid aligns neighboring primary bars; native ratios are absent from compact headlines",
+      "Light/dark, 360/560px and 100/125% zoom have no document overflow",
+      "Retained bar/cost nodes, one EventSource and no local/session storage"
+    ]
+  },
+  "realInstallation": {
+    "command": "py -3 development/tests/integration/probe_mini_source.py",
+    "source": "V2",
+    "coherentPublications": 20,
+    "accounts": 3,
+    "quotaCostProjections": 4,
+    "numericCapacities": 2,
+    "idleWindowsObserved": 0,
+    "primaryPeriodCostsAvailable": 1,
+    "runningCount": 1,
+    "runningComplete": false,
+    "runningCostComplete": false,
+    "seconds": 11.728,
+    "ownedCloseSeconds": 0.088,
+    "sharedOpenCodeUntouched": true
+  },
+  "limitations": [
+    "Live idle quota boundary not observed; exact boundaries covered by provider normalization, deterministic and browser fixtures",
+    "Live running summary had partial source/pricing coverage",
+    "Headless Chromium, not physical desktop/native chrome, screen-reader speech or macOS-native certification"
+  ],
+  "requirementExceptions": []
+}

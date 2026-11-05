@@ -119,9 +119,16 @@ The bar fills with available capacity; zero Remaining is still exhausted/red, wh
 full Remaining bar is healthy. Unrounded native evidence determines exhaustion.
 Unlimited plans keep Used with no finite bar; unknown limits/usage never acquire a
 synthetic remaining amount. Stale/partial observations keep their existing warnings.
-Observed period CCost is independent: Remaining labels its unchanged parentheses
-**CCost used**, never a guessed remaining CCost budget. Native money, Credits/USD,
-Remaining/day/workday pace and CLI orientation keep their separate meanings.
+The bare CCost parentheses switch too: Used is observed period reference cost;
+Remaining is a same-window reference-capacity proxy. Full Watch adds **Capacity**
+above each quota bar. A verified Copilot included AI-credit limit supplies nominal
+Capacity and native Remaining; other valid windows extrapolate `observed CCost / raw
+fraction used`. These are not guaranteed budgets or billed balances. Unknown evidence
+shows **?**, Unlimited Capacity **N/A**. Focus/tap the help cue for native amounts,
+attribution and limitations. Credits/USD converts all three reference figures together.
+A provider-confirmed idle 0%-Used window shows a healthy **100% remaining** bar while
+its CCost Capacity/Remaining can remain unknown; **Window not started** is preserved.
+Native money, Remaining/day/workday pace and CLI orientation remain independent.
 
 Only these four nested fields are writable. A setting stays shared while Web only
 consumes it; promotion to an editable Web control requires a separate approved
@@ -445,21 +452,22 @@ without smaller text. Native declarations/order, never depletion or
 provider identity, select the primary. Missing primary stays unavailable; weekly-only
 accounts have no invented five-hour slot or duplicate secondary.
 
-By default, each finite known quota shows **period · N% used (period CCost) · Used/Total native units**,
+Each quota shows **period · N% used/remaining (CCost)**, then **Capacity: number / ? / N/A**,
 its bar, a tightly adjacent reset and applicable canonical
 **Remaining: …/day** and **Remaining: …/workday** (or **no workdays left**). Only real
 secondaries follow a divider. No routine rolling/fixed boilerplate appears. Exact
 account/window/model costs include pre-Watch native-month history, never Today/30-day
-substitutions. Unavailable period costs omit the parentheses; confirmed empty windows
-show **(0)** independently of Today. Unlimited, sub-100% precision and genuine warnings
+substitutions. Unavailable reference costs show **(?)**; confirmed empty windows
+show Used **(0)** independently of Today. Unlimited, sub-100% precision and genuine warnings
 remain distinct. Today keeps daily scope/attribution without an estimate suffix (basis
-on hover). Period CCost's focusable parentheses describe the independent window and
-partial/estimated provenance nonvisually, without an extra cost row. Native Used/Total comes
-from the same quota observation as the percentage, never from observed CCost; the two
-amounts need not agree. Missing native usage never borrows CCost. Credits/USD changes
-CCost, not native quota units. Quota display **Remaining** instead shows the same
-window's remaining percent, native Remaining/Total and remaining fill, labelling the
-unchanged parenthetical amount **CCost used**. Accounts and Mini follow the same choice.
+on hover). Accessible help retains native Used/Total and Remaining/Total, native money,
+reset, source and partial/estimated attribution without cluttering the headline.
+For Copilot the observed Used cost and native Remaining need not sum to Capacity.
+For other quotas Capacity/Remaining are explicitly explained extrapolations, not
+provider-promised allocation. Missing native usage never borrows CCost. Credits/USD
+changes CCost, not native units. Accounts adds the reference figures only where its
+existing report has matching period cost; Mini keeps one compact primary line with
+Capacity in help. All three follow the same choice immediately, without more polling.
 
 Watch's slim .83rem quota bars have subtle 2px corners and stay teal throughout the non-exhausted range,
 including **<100%**. Canonical numeric exhaustion alone makes that quota's entire

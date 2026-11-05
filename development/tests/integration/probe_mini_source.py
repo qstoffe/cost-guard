@@ -54,10 +54,24 @@ def main():
                 checked += 1
             if checked >= 3 and wire["daily_usage"] is not None:
                 accounts = (wire["accounts"] or {}).get("accounts", [])
+                quotas = [slot['quota'] for item in accounts for slot in (item['primary'], *item['secondary'])]
+                for quota in quotas:
+                    tokens = quota['display']
+                    assert all('ccost_' + key in tokens for key in ('used', 'remaining', 'capacity', 'help'))
+                    if tokens['ccost_capacity'] not in {'?', 'N/A'}:
+                        assert 'ccost_capacity' in quota['display_units']['usd']
+                    idle = (quota['window_active'] is False and quota['remaining_fraction'] == '1' and
+                            quota['availability'] in {'available', 'partial'} and quota['limit'] is None)
+                    if idle:
+                        assert quota['quota_display']['remaining']['fraction'] == '1'
+                        assert quota['display']['reset'] == 'Window not started'
                 print(json.dumps({"source": frame.source_label, "coherent_publications_checked": checked,
                     "running_count": running["count"], "running_complete": running["complete"],
                     "running_cost_complete": not running["unresolved_cost"], "accounts": len(accounts),
                     "primary_period_costs_available": sum(item["primary"]["cost"] is not None for item in accounts),
+                    "quota_cost_projections_checked": len(quotas),
+                    "numeric_capacities": sum(q['display']['ccost_capacity'] not in {'?', 'N/A'} for q in quotas),
+                    "idle_windows_observed": sum(q['window_active'] is False for q in quotas),
                     "finished_history_cards": len(history), "known_finish_times": sum(bool(value) for value in finishes),
                     "single_acquisition_owner": True, "seconds": round(time.monotonic() - started, 3)}))
                 break

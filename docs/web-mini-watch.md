@@ -137,19 +137,26 @@ bar below it: cyan/teal below exhaustion, red only for authoritative finite 100%
 Unlimited/unknown quota has no fabricated bar. Transient stale/partial acquisition is
 disclosed on focus/hover, not in repeated warning suffixes. Genuine provider restrictions
 remain visible; exhausted finite quota stays red. There are no reset/secondary-window paragraphs.
-Focus/hover a row for its period/estimated-attribution basis; unavailable cost does
-not hide a known percentage. `?` retains partial pricing; cost has no visible `~`.
+Focus/hover/tap a row for its period, Capacity and attribution basis; unavailable cost
+shows **(?)** without hiding a known percentage. Partial observed subtotals are
+disclosed in help; the compact cost has no visible estimate decoration.
 
 **Settings → Web settings → Quota display** offers **Default (Used) / Used / Remaining**.
 Remaining switches this already-open window along with Accounts and full Watch, without
-quota refresh, restart or another stream. A finite quota shows e.g. **91.6% remaining
-(CCost used: 1814)**; focus/hover also identifies native Remaining/Total. CCost is the
-unchanged observed reference spending, never a native remaining amount. Full remaining
+quota refresh, restart or another stream. A Copilot quota can show **91.6% remaining
+(22912)** beside independently observed Used **(1814)** and native Capacity 25000.
+Help explains why these do not reconcile. Other valid windows extrapolate Capacity
+from observed CCost divided by the unrounded fraction Used, then subtract observed
+CCost for Remaining. These are reference proxies, not guaranteed allocation or bills.
+Capacity stays in help, not an extra visible Mini row. Full remaining
 bars are healthy; empty, truly exhausted bars retain a red text warning and accessible
 exhaustion description. Tiny positive capacity is not marked exhausted by rounding.
 Unlimited keeps Used with no bar, and missing capacity/usage stays unknown rather than
-inventing Remaining. Default follows the shipped Used orientation; explicit Used pins it.
-CLI, remaining pace, period attribution and native money are unaffected.
+inventing Remaining. A provider-confirmed idle window still shows **100% remaining**
+with a full healthy bar, but unknown reference Remaining **(?)** and Capacity **?**;
+Used preserves independently proven **(0)**. Credits/USD updates all reference figures.
+Default follows the shipped Used orientation; explicit Used pins it. CLI, remaining
+pace, period attribution and native money are unaffected.
 
 Cost uses verified native boundaries and acquired history **before Watch/Mini
 opened**, including earlier days of a supported fixed UTC calendar month.

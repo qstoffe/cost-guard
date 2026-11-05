@@ -47,19 +47,12 @@ const WatchView = (() => {
   function quotaTrack(value) {
     const quota = value.quota, view = () => ReportView.quotaView(quota, value);
     const summary = () => quota.unlimited ? 'Unlimited' : view().percent === '—' ? '—' : view().percent + ' ' + view().mode;
-    const usage = () => (view().native.startsWith('N/A') ? '' : ` · ${view().native}${quota.unlimited || value.used_fraction == null ? ' ' + view().mode : ''}`) +
-      (view().mode === 'remaining' && view().money !== 'N/A' ? ` · Native money remaining ${view().money} / ${display(quota, 'limit_money')}` : '');
     const label = el('div'); label.append(el('span', () => `${quota.label} · ${summary()}`));
     ReportView.bind(label, () => label.className = 'watch-quota-summary metric-value' + (view().exhausted ? ' watch-quota-exhausted' : ''));
-    if (!quota.unlimited && value.used_fraction != null && value.cost != null &&
-        (!value.cost.observed_requests || value.cost.priced_requests)) {
-      const cost = el('span', () => ` (${view().mode === 'remaining' ? 'CCost used: ' : ''}${display(value.cost, 'account_ccost')})`, 'watch-period-cost');
-      const provenance = [!value.cost.complete ? 'partial attribution' : '', value.estimated ? 'estimated attribution' : ''].filter(Boolean);
-      label.append(cost);
-      ContextHelp.beside(label, () => `CCost used during ${quota.label}, not your bill.\nSeparate from the provider’s ${view().mode} quota; not remaining CCost.` +
-        (provenance.length ? '\n' + provenance.join('; ') + '.' : '') + (value.note ? '\n' + value.note : ''), 'About period CCost');
-    }
-    label.append(el('span', usage));
+    label.append(el('span', () => ` (${display(quota, 'ccost_' + view().mode)})`, 'watch-period-cost'));
+    ContextHelp.beside(label, () => ReportView.quotaHelp(quota), 'About quota CCost and native usage');
+    const capacity = el('div', () => 'Capacity: ' + display(quota, 'ccost_capacity'), 'watch-quota-capacity metric-value');
+    ContextHelp.beside(capacity, () => ReportView.quotaHelp(quota), 'About quota Capacity');
     if (view().note) label.append(el('span', ' · ' + view().note, 'warning'));
     const track = el('div', undefined, 'watch-quota-track');
     if (!quota.unlimited && value.used_fraction != null) {
@@ -73,7 +66,7 @@ const WatchView = (() => {
       if (value.exhausted) bar.className = 'watch-quota-exhausted';
       track.append(bar);
     } else track.append(el('span', quota.unlimited ? 'No usage limit' : 'Usage unavailable', 'detail'));
-    return [label, track];
+    return [label, capacity, track];
   }
   function quotaDetails(parent, value) {
     const quota = value.quota;
@@ -98,7 +91,7 @@ const WatchView = (() => {
       const cost = el('p', undefined, 'metric-value');
       cost.append(el('span', () => `CCost Today: ${today?.cost == null ? '—' : display(today.cost, 'account_ccost')}`));
       ContextHelp.beside(cost, 'This account’s estimated cost today, not your bill.' + (item.today_note ? '\n' + item.today_note : ''), 'About account CCost Today');
-      const [label, track] = quotaTrack(item.primary), primary = el('div', undefined, 'watch-primary-details');
+      const [label, capacity, track] = quotaTrack(item.primary), primary = el('div', undefined, 'watch-primary-details');
       quotaDetails(primary, item.primary);
       const lower = el('div', undefined, 'watch-account-footer');
       const secondary = el('div', undefined, 'watch-account-details');
@@ -118,7 +111,7 @@ const WatchView = (() => {
         lower.append(el('p', 'Provider restriction reported; utilization not established', 'warning'));
       if (obs.has_warning) lower.append(el('p', 'Provider warning', 'warning'));
       if (item.ccost_account_unknown) lower.append(el('p', 'CCost account attribution unavailable', 'detail'));
-      card.append(el('h4', obs.label), cost, label, track, primary);
+      card.append(el('h4', obs.label), cost, label, capacity, track, primary);
       if (lower.children.length) card.append(lower);
       grid.append(card);
     }
