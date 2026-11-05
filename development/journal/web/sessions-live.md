@@ -96,6 +96,32 @@ working-tree validator **11 passes, zero failures, six existing advisory warning
 The final hidden Chrome repeat passed separately, avoiding competing browser work
 during the unchanged native discovery fixture. No hard caps or baselines were raised.
 
+## PR CI follow-up
+
+The first PR run failed Linux Full in `test_web_views.py` (one failure; validator
+passed), and the rendered smoke stopped at its obsolete Sessions `Snapshot captured`
+expectation. All three narrower native jobs passed; that did not waive Linux Full.
+Raw job-log retrieval returned HTTP 401, so the existing supported Checks API was
+used without changing authentication. Final annotations identify the failed file,
+but omit its exact test/diagnostic. Two independent local focused runs passed both
+web-view tests; the original Linux regression cause remains unestablished.
+
+The current read-only Decision Delegate approved a justified corrective push, not
+an unexplained-failure waiver: migrate the independently obsolete browser fixture,
+prioritize failure notices before platform skips and require successful checks on
+the corrected HEAD. The smoke now has an owned synthetic Sessions acquisition lane,
+asserts the complete ten-column history/footer and hidden finite toolbar, and tests
+keyboard focus on an actual visible heading-help button. It still proves the absence
+of a Watch source observation and retains finite-report/security/reconnection checks.
+A regression pins late failure notices before 30 earlier skips without dropping
+either inventory or sanitization. VM wait failures additionally report allowlisted
+synthetic catalog/detail state, not credentials; deadlines/assertions are unchanged.
+Annotation truncation and fixture/poll timing remain hypotheses, not established
+causes of the original regression. No unchanged CI run was restarted for evidence.
+After the follow-up, local Full passed **145/145 files in 97.2s**, including the
+synthetic acquisition/cleanup and failure-priority regressions; the working-tree
+validator again reported **11 passes, zero failures, six existing warnings**.
+
 ## Limits and retained lessons
 
 The real cold catalog is not fully indexed and churn/large-history warm-up latency

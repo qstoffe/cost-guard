@@ -19,11 +19,22 @@ Implementation: v80.173, 2026-11-05. The original FR is preserved unchanged.
 
 ## Verification and explicit scope
 
-The final local Full suite passed all 145 test files in 90.9s after every repair.
+The final local Full suite passed all 145 test files in 97.2s after the CI follow-up.
 Regressions include cold/warm finite-list parity, source identity changes with
 unchanged revision and selected-row reclassification/order. Package validation passed
 all 11 checks with zero failures and six existing advisory prose/design warnings;
 hard caps were not raised. No local release ZIP was generated.
+
+The first PR Linux run subsequently failed one `test_web_views.py` test and an
+obsolete rendered-smoke Sessions snapshot assertion; its package validator and all
+three narrower native jobs passed. Raw logs returned HTTP 401; supported final Checks
+annotations identified the file but not its exact failure. Local focused web-view
+reruns passed unchanged, so that historical regression cause remains unknown. The
+corrective change migrates the smoke to an owned synthetic live Sessions fixture,
+prioritizes sanitized failure evidence ahead of skips, and enriches bounded VM wait
+diagnostics. Decision Delegate permits this justified correction, **not a CI waiver**;
+successful checks on corrected HEAD remain required before merge. Details are in the
+Sessions journal.
 
 Hidden Chrome 156.0.8078.80 over actual HTTP/assets and synthetic source passed:
 120-root catalog, global-key readiness, stable older pages, 1,001→1,002 unpaged prompts,

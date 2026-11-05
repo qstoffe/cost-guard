@@ -29,10 +29,13 @@ class Node {
 }
 const all = (node, tag) => [...(!tag || node.tag === tag ? [node] : []), ...node.children.flatMap(child => all(child, tag))];
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+let diagnostics = () => ({});
 async function until(condition) {
   const caller = new Error().stack.split('\n')[2].match(/web_views\.cjs:(\d+)/)?.[1];
+  const started = Date.now();
   for (let i = 0; i < 500; i++) { if (condition()) return; await delay(10); }
-  assert.fail('bounded UI condition timed out (web_views.cjs:' + caller + ')');
+  assert.fail('bounded UI condition timed out (web_views.cjs:' + caller + '); ' +
+    JSON.stringify({elapsed_ms: Date.now() - started, ...diagnostics()}));
 }
 async function main() {
   const input = JSON.parse(fs.readFileSync(0, 'utf8'));
@@ -75,6 +78,12 @@ async function main() {
     getElementById: id => ids[id], querySelectorAll: () => nav, addEventListener() {}}, window: {addEventListener: (key, fn) => { handlers[key] = fn; }},
     location, history, URLSearchParams, fetch: wire, setTimeout: vmTimeout, Date, console});
   context.document.createElementNS = (_, tag) => new Node(tag);
+  // Allowlisted synthetic state only: never cookie, CSRF or bootstrap values.
+  diagnostics = () => ({requests, ...vm.runInContext(`({route: current?.section,
+    catalog: current?.catalog && {busy:current.catalog.busy, pending:current.catalog.data?.pending_sort,
+      sort:current.catalog.data?.sort, indexed:current.catalog.data?.indexed, available:current.catalog.data?.available},
+    detail: current?.detail && {busy:current.detail.busy, total:current.detail.data?.total,
+      state:current.detail.data?.state}})`, context)});
   require('../fixtures/web_help_vm.cjs')(vm, context);
   for (const path of ['/render.js', '/watch.js', '/session.js', '/sessions.js', '/reports.js', '/settings.js', '/app.js']) {
     const response = await fetch(input.origin + path);
