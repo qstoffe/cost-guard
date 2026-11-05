@@ -1,7 +1,7 @@
 # FR 000592 — Watch loading status truth
 
-Implementation: v80.172, 2026-11-05. Final full-app browser verification and PR
-checks are pending; this report is not a merge/delivery claim.
+Implemented and locally verified: v80.172, 2026-11-05. Remote checks and merge
+truth are recorded in [PR #178](https://github.com/qstoffe/cost-guard/pull/178).
 
 ## Change
 
@@ -13,7 +13,7 @@ checks are pending; this report is not a merge/delivery claim.
   keyed DOM, one SSE owner and source/account cadence remain unchanged.
 - Preserved the whole specification bundle and advanced ordinary progress to 42.
 
-## Verified so far
+## Verification
 
 - Baseline headless real DOM reproduced the generic warning after 30 seconds of
   history loading through 180 virtual seconds, with changing calls/duration and
@@ -25,6 +25,14 @@ checks are pending; this report is not a merge/delivery claim.
 - Edge 156.0.4314.58: six Classic/Web-light/Web-dark × 1366px/360px cases passed,
   including separate three-minute virtual history/accounts/daily/partial delays,
   new cards, counters/durations, selection/focus/scroll and disclosure retention.
+- Full app/HTTP/SSE browser probe passed 19 publications across 180.265 wall-clock
+  seconds with delayed history, absent accounts and pending Daily, advancing prompt
+  counters, card arrival and route changes. Initial missing-view fallback remained
+  quiet at three virtual minutes. Source retry/unavailable/recovery, offline/online
+  and terminal shutdown retained accurate feedback; one EventSource, zero page errors.
+  An earlier run reached the final instrumentation assertion but failed because
+  the probe had not enabled the CDP Page domain; explicit enablement repaired the
+  harness, and the entire three-minute probe then passed. No product gate was waived.
 - Read-only installed V2 probe: one Live owner, two streams, three accounts,
   one active/two history cards, coherent run origin/sequence, joined owned workers,
   shared OpenCode untouched. No model calls initiated. Daily had not published

@@ -150,3 +150,15 @@ had not published during this short observation and its phase instrumentation
 recorded a history-batch error; this is not a Daily success or proof that every
 source lane was available. Real-source transport and synthetic browser checks
 are complementary, not end-to-end capture of the original desktop incident.
+
+`probe_watch_loading_app.cjs` subsequently passed the shipped app/HTTP/SSE path
+over 180.265 wall-clock seconds (19 accepted synthetic publications). History
+stayed loading, accounts absent and Daily pending while calls/duration advanced
+and another card arrived. Initial no-view startup stayed quiet after three virtual
+minutes; route away/back kept the View/row, real source-state publications and
+offline/revalidation kept their existing notices, and terminal shutdown remained
+explicit. Exactly one EventSource and no page exceptions were observed. An initial
+run failed only its late stream-instrumentation assertion: enabling the CDP Page
+domain before installing the new-document observer fixed the harness, after which
+the full three-minute run passed. This does not waive a product check or convert
+synthetic source states into real-provider outage/auth proof.
