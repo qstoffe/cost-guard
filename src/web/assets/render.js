@@ -139,7 +139,7 @@ const ReportView = (() => {
     const headers = [];
     columns.forEach((column, index) => {
       const th = element('th'), button = element('button', column); th.scope = 'col';
-      ContextHelp.attach(button, 'Sort this column; activate again to reverse or clear sorting.\nUnknown values stay last. Sorting does not change totals.');
+      ContextHelp.heading(button, 'Sort this column; activate again to reverse or clear sorting.\nUnknown values stay last. Sorting does not change totals.');
       button.addEventListener('click', () => {
         const old = state.sorts[key];
         if (old?.index === index && old.direction === -1) delete state.sorts[key];
@@ -292,7 +292,8 @@ const ReportView = (() => {
       button.addEventListener('keydown', event => {
         if (event.shiftKey && ['Enter', ' '].includes(event.key)) { event.preventDefault(); activate(event); }
       });
-      cell.setAttribute('role', 'columnheader'); cell.append(button); header.append(cell); headers.push([cell, button]);
+      const label = ContextHelp.heading(button, 'Activate to sort or reverse direction.\nHold Shift to keep earlier sort columns (click, Enter or Space).\nUnknown values stay last.');
+      cell.setAttribute('role', 'columnheader'); cell.append(button); header.append(cell); headers.push([cell, button, label]);
     });
     head.append(header);
     const promotion = element('div'), empty = element('p', undefined, 'warning');
@@ -318,12 +319,11 @@ const ReportView = (() => {
         }
         return models.indexOf(a) - models.indexOf(b);
       });
-      headers.forEach(([cell, button], index) => {
+      headers.forEach(([cell, button, label], index) => {
         const priority = choice.sorts.findIndex(sort => sort.index === index), sort = choice.sorts[priority];
         cell.setAttribute('aria-sort', priority === 0 ? sort.direction === 1 ? 'ascending' : 'descending' : 'none');
-        text(button, names[index] + (sort ? (sort.direction === 1 ? ' ↑' : ' ↓') + (choice.sorts.length > 1 ? ' ' + (priority + 1) : '') : ' ↕'));
+        text(label, names[index] + (sort ? (sort.direction === 1 ? ' ↑' : ' ↓') + (choice.sorts.length > 1 ? ' ' + (priority + 1) : '') : ' ↕'));
         button.setAttribute('aria-label', names[index] + (sort ? `, ${sort.direction === 1 ? 'ascending' : 'descending'}, priority ${priority + 1}` : ', not sorted') + '. Activate to sort; Shift adds a key.');
-        ContextHelp.attach(button, 'Activate to sort or reverse direction.\nHold Shift to keep earlier sort columns (click, Enter or Space).\nUnknown values stay last.');
       });
       body.replaceChildren();
       for (const model of shown) {

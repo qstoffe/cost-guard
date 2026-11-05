@@ -1,6 +1,6 @@
 # Shared Web and Mini contextual help
 
-Current selective follow-up: **FR 000587 / v80.168**, recorded below. The FR 000582
+Current text-target follow-up: **FR 000589 / v80.170**, recorded below. The FR 000582
 inventory and evidence here are historical; removed preview/row/freshness cues are
 not current UI recommendations. Current writing/placement policy lives in the module contract.
 
@@ -164,3 +164,56 @@ checks with the six existing advisory budgets. No cap/baseline/dependency, infer
 runtime restart, release ZIP, tag or GitHub Release change.
 
 Compact portable evidence: `development/architecture/governance/verification/web-help-587.json`.
+
+## FR 000589: undecorated text-only header help (2026-11-05)
+
+Base `9ad321b`, integrated default `f63e175`; product v80.170. Shared help buttons
+have intrinsic text width and no underline or hover background. The generic button
+hover rule excludes passive help and sorting-help actions; text alone changes color.
+Mini replaces its full-width combined Session/Total CCost button with two intrinsic
+buttons in the same edge-anchored grid. Useful help, question marks and unrelated
+link/semantic-threshold decoration remain. No accounting/acquisition change.
+
+`ContextHelp.heading` separates the pointer label from an existing sort action.
+Pointer entry/leave, movement fallback and positioning use the label; original
+focus, ARIA descriptions and click actions stay on the button. Models updates its
+retained label rather than replacing the hover target. Empty action space still
+sorts but never opens help or highlights text/background. The prior shared
+hover/focus/pinned owner, exit grace, suppression and document cleanup are unchanged.
+
+Actual hidden **Edge 156.0.4314.58** and **Chrome 156.0.8078.80** help probes PASS:
+24 Running/Earlier main/PiP header cases per browser across Classic/Web light/dark,
+wide/360px and 100%/150% CSS zoom, plus sortable Models/Sessions. Computed label
+and text widths match; left/right padding and Mini's empty middle track have no
+help cursor, popup or text/cell background change. Text-to-padding exit, genuine
+re-entry, panel transfer, fast document exit and no refresh resurrection pass.
+The same probes preserve keyboard focus/ARIA/Escape, touch pin/outside-dismiss,
+date/cue help, exact hostile text and all report/settings surfaces. Real mouse
+clicks outside sorting labels still sort. Fresh main/Mini screenshots were inspected.
+
+The initial probe used Chromium's small default virtual screen. At 150% zoom a
+readable Mini popover covered the purported padding point, so that coordinate was
+actually over the panel and correctly retained help. The fixture now declares its
+1920×1080 virtual screen and tests exposed padding with a taller real PiP viewport;
+the existing compact viewport/clamping checks remain. No product geometry fix,
+physical pointer proof or guessed failure cause is claimed.
+
+The complete Edge Mini probe also PASS: sticky headers/scrolling, selectable long
+titles, natural suffix edges, 560/800/280 widths, enlarged font/CSS zoom, theme/unit/
+quota variants, disclosure resize and unchanged one-SSE ownership. The read-only
+real-installation `probe_web_live.py --watch-cards --daily` PASS: V2, one owner/two
+streams/three accounts, one active/two history cards, coherent daily category costs,
+advancing IDs, zero owned threads/processes and no cleanup failures. The shared
+OpenCode service was not stopped.
+
+Full suite PASS: **143 files**, **1,687 passed tests**, zero failures/errors, **89.5s**;
+one existing macOS zsh/PTY case is skipped on Windows. Working-tree validator PASS
+all **11 checks**, with the six existing advisory budgets; no caps/baselines changed.
+No user/delegate verification exception was requested or applied. Headless native
+blur delivery was unavailable (five switches per browser); synthetic blur-handler
+checks are not native blur evidence. Physical desktop/browser-chrome pointer,
+screen-reader, macOS and other-engine acceptance remain unperformed/unverified.
+The FR's actual-browser/PiP geometry is exercised by real CDP pointer input, not a
+DOM-only fake. No inference, dependency, release ZIP, tag or GitHub Release change.
+
+Portable summary: `development/architecture/governance/verification/web-help-589.json`.

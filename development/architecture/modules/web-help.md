@@ -1,7 +1,7 @@
 # Web contextual help: writing and interaction
 
 Owner: `src/web/assets/help.js`; shared styles: `app.css`. Applies to the main
-application and separate Mini Watch document. FR 000587 selective follow-up: 2026-11-05.
+application and separate Mini Watch document. FR 000589 text-target follow-up: 2026-11-05.
 
 ## Writing patterns
 
@@ -26,8 +26,10 @@ application and separate Mini Watch document. FR 000587 selective follow-up: 202
 ## Interaction and implementation
 
 - `ContextHelp.button(label, textOrFunction, document)` creates a labelled,
-  keyboard/touch/hover passive trigger. Dotted underline and `cursor: help` make
-  help discoverable without relying on a cursor change alone.
+  keyboard/touch/hover passive trigger. Labels use `cursor: help`, without dotted
+  or dashed underline/border decoration. Keep explicit `?` cues where useful.
+  Header buttons have intrinsic text width, zero padding and no hover background;
+  only hovering their text changes its color. Never stretch help across a header.
 - `ContextHelp.beside(valueContainer, textOrFunction, accessibleName)` adds an
   explicit `?` button beside a value when it adds useful information. Do not turn
   selectable data into help-only buttons or override its selection cursor.
@@ -35,6 +37,13 @@ application and separate Mini Watch document. FR 000587 selective follow-up: 202
   and checkboxes without replacing click behavior or their pointer cursor. Activation
   immediately dismisses help instead of pinning it. Prefer
   a separate cue when the explanation should be independently tappable.
+- `ContextHelp.heading(action, text)` returns a text-sized inline label for a
+  sortable header. Keep click, keyboard focus and ARIA descriptions on the original
+  action; bind pointer entry/exit, movement fallback and panel positioning to the
+  label. Update that returned label, not the action's entire content. Empty action
+  space still sorts but neither opens help nor highlights the header/label.
+  Mini's Session and Total CCost are separate intrinsic buttons in the existing
+  edge-anchored grid; its empty middle track is not a help target.
 - Functions read current display tokens. `ContextHelp.refresh(container)` updates
   open help without reopening it; `ReportView.syncUnits` refreshes once after text
   updates. Never price or total data inside a help function.
@@ -87,9 +96,13 @@ not tooltip APIs. No native-title metadata exception is needed: exact metadata u
 the same accessible helper. Visible provider notes and true disclosures intentionally
 retain source-specific facts.
 
-Regression owners: deterministic `integration/web_help.cjs` covers origin, missed
+Regression owners: deterministic `integration/web_help.cjs` covers split action/label targets, origin, missed
 leave/document exit, repeated movement, suppression, blur/visibility/teardown and
 document isolation. Hidden `probe_web_help.cjs` / `probe_help_lifecycle.cjs` use
 actual Chromium Document PiP plus main Watch with real CDP pointer/key/touch input.
+`probe_help_headers.cjs` adds computed decoration/cursor/background checks and
+text-to-padding hit tests in both tables, themes and narrow/zoomed layouts, plus
+sortable Models/Sessions labels. Compact panels can cover their source header;
+pointer hit tests use exposed padding, not coordinates underneath the popover.
 Mini probes retain selection, sticky headers, narrow/zoom/theme/unit/disclosure
 coverage. Headless evidence does not prove physical OS pointer/window transitions.

@@ -12,7 +12,7 @@ const ContextHelp = (() => {
     function position() {
       if (!active) return;
       if (!active.isConnected) { close(); return; }
-      const rect = active.getBoundingClientRect(), box = panel.getBoundingClientRect();
+      const rect = entries.get(active).pointerTarget.getBoundingClientRect(), box = panel.getBoundingClientRect();
       const width = win.innerWidth, height = win.innerHeight;
       const top = rect.bottom + box.height + 8 <= height ? rect.bottom + 4 : rect.top - box.height - 4;
       panel.style.left = Math.max(8, Math.min(rect.left, width - box.width - 8)) + 'px';
@@ -86,7 +86,7 @@ const ContextHelp = (() => {
     }, true);
     doc.addEventListener?.('pointermove', event => {
       if (!active || origin !== 'hover') return;
-      if (active.contains(event.target) || panel.contains(event.target)) cancel();
+      if (entries.get(active).pointerTarget.contains(event.target) || panel.contains(event.target)) cancel();
       else exit();
     }, true);
     win.addEventListener?.('blur', () => { if (origin === 'hover') close(); });
@@ -109,13 +109,13 @@ const ContextHelp = (() => {
     }};
     documents.set(doc, value); return value;
   }
-  function attach(target, content, passive = false) {
+  function attach(target, content, passive = false, pointerTarget = target) {
     const entry = entries.get(target);
     if (entry) { entry.content = content; refresh(target); return target; }
-    entries.set(target, {content}); target.removeAttribute('title');
+    entries.set(target, {content, pointerTarget}); target.removeAttribute('title');
     const owner = () => controller(target.ownerDocument);
-    target.addEventListener('pointerenter', event => owner().enter(target, event));
-    target.addEventListener('pointerleave', () => owner().leave(target));
+    pointerTarget.addEventListener('pointerenter', event => owner().enter(target, event));
+    pointerTarget.addEventListener('pointerleave', () => owner().leave(target));
     target.addEventListener('focus', () => owner().focus(target));
     target.addEventListener('blur', () => owner().blur(target));
     target.addEventListener('click', () => owner().click(target, passive));
@@ -126,11 +126,18 @@ const ContextHelp = (() => {
     target.className = 'help-trigger'; target.textContent = label;
     return attach(target, content, true);
   }
+  // Sorting keeps its original click/focus target; only the visible label owns hover.
+  function heading(action, content) {
+    const label = action.ownerDocument.createElement('span');
+    label.className = 'help-label'; label.textContent = action.textContent;
+    action.textContent = ''; action.append(label); action.className = 'help-action';
+    attach(action, content, false, label); return label;
+  }
   function beside(parent, content, label = 'About this value') {
     const target = button('', content, parent.ownerDocument);
     target.className += ' help-cue'; target.setAttribute('aria-label', label);
     parent.append(target); return target;
   }
   function refresh(target) { documents.get(target.ownerDocument)?.refresh(target); }
-  return {attach, button, beside, refresh};
+  return {attach, button, heading, beside, refresh};
 })();

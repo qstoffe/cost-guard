@@ -11,7 +11,7 @@ async function main() {
   let serverErrors = '';
   server.stderr.on('data', chunk => {serverErrors = (serverErrors + chunk.toString()).slice(-12000);});
   const lines = readline.createInterface({input:server.stdout})[Symbol.asyncIterator]();
-  const child = spawn(browser, ['--headless=new','--no-first-run','--no-default-browser-check','--disable-extensions',
+   const child = spawn(browser, ['--headless=new','--screen-info={1920x1080}','--no-first-run','--no-default-browser-check','--disable-extensions',
     '--disable-background-networking','--remote-debugging-pipe','--user-data-dir='+profile,'about:blank'],
     {windowsHide:true,stdio:['ignore','ignore','ignore','pipe','pipe']});
   const pending = new Map(); let sequence = 0, buffer = '', errors = [];
@@ -43,7 +43,7 @@ async function main() {
     await command('Input.dispatchKeyEvent',{type:'keyUp',key,code:key,windowsVirtualKeyCode:key==='Escape'?27:9},id);
   };
   const checks=[],layouts=[]; let evidence={outcome:'FAIL'};
-  const deadline=setTimeout(()=>{child.kill();server.kill();},150000);
+   const deadline=setTimeout(()=>{child.kill();server.kill();},170000);
   try {
     const launch=JSON.parse((await lines.next()).value); // Never log bootstrap credentials.
     const version=await command('Browser.getVersion');
@@ -65,7 +65,9 @@ async function main() {
     }
     assert.ok(mini, 'actual Document PiP target');
     await command('Runtime.enable',{},mini);await command('Page.enable',{},mini);
-    await until(mini,`document.querySelector('.mini-prompt-table .help-trigger') && document.styleSheets.length===2`);
+     await until(mini,`document.querySelector('.mini-prompt-table .help-trigger') && document.styleSheets.length===2`);
+     const headerHelp=require('./probe_help_headers.cjs')({command,evaluate,until,owner,mini,checks,layouts});
+     await headerHelp.matrix();
     await require('./probe_help_lifecycle.cjs')({command,evaluate,until,owner,mini,checks});
     async function focus(id,selector) {
       await key(id,'Tab');
@@ -168,8 +170,12 @@ async function main() {
       await evaluate(owner,`location.hash='#/${route}'`);
       await until(owner,`document.body.dataset.section==='${route.split(/[?\/]/)[0]}'`);
       if (['token-mix','cost-per-hour'].includes(route)) await evaluate(owner,`acquire(current)`);
-      await until(owner,`!current.loading && !document.getElementById('result').getAttribute('aria-busy')?.includes('true')`);
-      assert.equal(await evaluate(owner,`current.failed===true`),false,route+' report is usable');
+       await until(owner,`!current.loading && !document.getElementById('result').getAttribute('aria-busy')?.includes('true')`);
+       assert.equal(await evaluate(owner,`current.failed===true`),false,route+' report is usable');
+       await headerHelp.audit(owner);
+       if (['models','sessions'].includes(route)) {
+         layouts.push({case:'sort-label-hover',route,...await headerHelp.target(owner,'#result th:first-child .help-label')});
+       }
       const count=await evaluate(owner,`(async () => {const targets=[...document.querySelectorAll('#result button,#result input')].filter(n=>!n.disabled);let checked=0;for(const n of targets){n.focus();const p=document.querySelector('#context-help');if(n.getAttribute('aria-describedby')?.split(' ').includes('context-help')){if(!p.textContent||n.hasAttribute('title'))throw Error('invalid help');checked++;}}document.activeElement?.blur();return checked;})()`);
       checks.push(`${route}: rendered help/disclosure inventory (${count} focusable help targets); visible field/disclosure text retained`);
     }

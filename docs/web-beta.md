@@ -5,8 +5,13 @@ not a release lookup or newly edited source. Offline views retain their original
 
 ## Contextual help
 
-Dotted-underlined headings and **?** buttons explain metrics in both Web and Mini
-Watch. Hover or focus with Tab to read; press Escape to dismiss without moving
+Heading labels and **?** buttons explain metrics in both Web and Mini
+Watch, without dotted or dashed underlines. Hover the actual heading text, not
+the surrounding header padding, to see its help cursor and explanation. Only the
+text highlights; empty header space does not open help or highlight the column.
+Mini's Session and Total CCost labels are separate targets with no help in the gap.
+Sorting controls still sort when clicked outside their help label.
+Hover or focus with Tab to read; press Escape to dismiss without moving
 focus. You can move the pointer into the help to keep reading. Tap a help button
 to keep it open; tap again or outside to close it. Only one explanation opens in
 each window. Values remain selectable; action buttons and links stay clickable.
