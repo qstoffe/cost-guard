@@ -41,6 +41,10 @@ is synthetic publication/paint, not real-account end-to-end, physical desktop,
 screen-reader, Firefox/Safari or macOS proof. Reproduce via
 `probe_watch_presentation.cjs <absolute-Chromium> <owned-output-directory>`.
 
+The hosted browser smoke's raw initial-state echo assertion failed after the quiet
+route correction. Its replacement verifies actual SSE receipt, unchanged source-health
+DOM, blank initial content and virtual 30-second guidance, not an exposed internal state.
+
 The independent read-only V2 `probe_web_live.py --watch-cards --prompt-cost --daily`
 passed prompt CLI/raw cost parity (four calls) and daily reconciliation (651 requests,
 18 prompts; complete prices, incomplete prompt attribution retained). One owner,
@@ -161,13 +165,8 @@ Font enlargement is text-size emulation, not physical browser zoom; viewport sca
 and device-pixel ratio were 1. Browser zoom may enlarge physical pixels while CSS
 pixels remain the layout unit. No page overflow or clipped account text occurred.
 
-At the default root, bars measured **12.4375px** (.83rem), versus the previous
-18.75px: 66.3% of their former height. Track radius is **2px**, with matching
-Chromium/WebKit/Gecko fill selectors. Primary Reset gaps were **3.75px** and
-secondary gaps **0px**. The probe checks per-window native/cost currency independence,
-aligned subgrid tracks, singleton cap, exhausted/partial/unlimited/reset recovery,
-theme contrast, keyboard focus, warning transitions and ownership, unknown compaction,
-multiple rows, preserved selection, history transitions and 100-card layout.
+Historical bars measured 12.4375px (.83rem), track radius 2px; these dated DPR1
+measurements are not fresh physical-device proof.
 Representative Classic desktop, Web light subscriptions and Web dark mobile
 screenshots were inspected. Firefox/Safari engines, physical zoom, screen readers,
 native desktop input and real-account browser paint were not executed or claimed.

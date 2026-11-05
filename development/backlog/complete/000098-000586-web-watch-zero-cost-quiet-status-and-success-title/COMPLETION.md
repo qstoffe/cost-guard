@@ -46,6 +46,10 @@ Implemented in v80.167, 2026-11-05.
 - Final Full includes empty-card and route-entry blank/delayed assertions, typed
   source-retry health without false table-level interruption, and unchanged global
   warnings. Focused daily/quota reruns and the final six-case browser rerun also passed.
+- Hosted browser smoke initially failed its obsolete expectation that the initial
+  Watch result echoed the raw synthetic acquisition-state string. The causal test
+  correction verifies actual SSE receipt, unchanged source-health DOM, blank initial
+  content and virtual 30-second guidance instead; no application behavior was reverted.
 
 ## Failed ancillary check and explicit exception
 
