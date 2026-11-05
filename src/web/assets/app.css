@@ -92,7 +92,8 @@ button:disabled, select:disabled { cursor: default; color: var(--muted); backgro
 input::placeholder { color: var(--muted); opacity: 1; }
 button, input, select, a { transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease; }
 @media (hover: hover) {
-  button:not(:disabled):not(.primary):hover, nav a:hover { background: var(--hover); color: var(--accent); }
+  button:not(:disabled):not(.primary):not(.help-trigger):not(.help-action):hover, nav a:hover { background: var(--hover); color: var(--accent); }
+  .help-trigger:hover, .help-label:hover { color: var(--accent); }
   button.primary:not(:disabled):hover { box-shadow: inset 0 0 0 2px var(--accent-ink); }
   tbody tr:hover { background: var(--hover); }
 }
@@ -293,8 +294,9 @@ footer { border-top: 1px solid var(--line); color: var(--muted); font-size: .8re
 .watch-prompt-preview { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .watch-prompt-table th:nth-child(4), .watch-prompt-table td:nth-child(4),
 .watch-prompt-table th:nth-child(5), .watch-prompt-table td:nth-child(5) { text-align: left; }
-.help-trigger { border: 0; padding: 0; min-height: 0; background: transparent; color: inherit; font: inherit; cursor: help;
-  text-decoration: underline dotted; text-underline-offset: .2em; }
+.help-trigger { width: auto; border: 0; padding: 0; min-height: 0; background: transparent; color: inherit; font: inherit; cursor: help;
+  text-decoration: none; }
+.help-label { display: inline-block; cursor: help; }
 .help-trigger:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .help-cue { margin-inline-start: .25em; padding-inline: .2em; font-size: .8em; color: var(--accent); }
 .help-cue::before { content: '?'; }

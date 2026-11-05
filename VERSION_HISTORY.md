@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.170 — 2026-11-05
+
+- Web and Mini tooltip labels and retained **?** cues no longer use dotted underlines. Table-header help uses intrinsic text targets with text-only hover color, not empty header padding or a background/column highlight. Mini separates Session/Total CCost targets without changing their alignment; sortable headers retain full click and keyboard actions while only their labels trigger hover help. Existing accessible focus, touch pinning and bounded pointer-exit behavior remain shared.
+
 ## v80.169 — 2026-11-05
 
 - Web Beta makes one bounded, hidden installed-CLI wake attempt when host startup finds an eligible unavailable V2 service. Actual registration/API readiness, not command exit, releases queued reports and Live automatically. Accessible starting feedback ends on success or failure; missing CLI, invalid registration, permissions, authentication, incompatible contracts and selected V1 never trigger inappropriate launch. Tabs, Refresh and later reconnects stay process-free; shared OpenCode is never stopped.

@@ -189,17 +189,19 @@ const MiniWatch = (() => {
         'Active prompts: whole-session CCost in Session; per-prompt CCost, Duration and estimated next incoming context (Ctx)');
       for (const name of historical ? ['Session', 'Ctx'] : ['Session', '#', 'CCost', 'Duration', 'Ctx']) {
         const cell = this.el('th'); cell.scope = 'col';
-        const button = ContextHelp.button(name, {Session: 'Session — The name of the session.\n\nTotal CCost — Estimated cost of the entire session, including earlier prompts and linked subagents. Not your bill.\nN/A means unavailable; ? means partial pricing or data.',
+        const explanation = {Session: 'Session — The name of the session.\n\nTotal CCost — Estimated cost of the entire session, including earlier prompts and linked subagents. Not your bill.\nN/A means unavailable; ? means partial pricing or data.',
           '#': 'The prompt’s number within its session.', CCost: 'Estimated cost of this prompt only, not your bill.\nN/A means unavailable, not zero; ? means partial pricing.',
           Duration: 'Time spent on this prompt; freezes when updates are unavailable.', Ctx: historical ?
             'Last valid estimate of the next request’s context in this session.\nNot historical prompt context or a sum. N/A means unavailable.' :
-            'Estimated context for this prompt’s next request.\nN/A means unavailable, not zero.'}[name], this.doc);
+            'Estimated context for this prompt’s next request.\nN/A means unavailable, not zero.'}[name];
+        const button = ContextHelp.button(name, explanation, this.doc);
         if (name === 'Session') {
           const value = this.el('span', undefined, 'mini-session-value mini-session-heading');
-          value.append(this.el('span', 'Session'), this.el('span', ' (Total CCost)', 'mini-session-total'));
-          button.replaceChildren(value);
-        }
-        cell.append(button); header.append(cell);
+          const total = ContextHelp.button(' (Total CCost)', explanation, this.doc);
+          total.className += ' mini-session-total';
+          value.append(button, total); cell.append(value);
+        } else cell.append(button);
+        header.append(cell);
       }
       head.append(header); const body = this.el('tbody'); table.append(head, body); parent.append(table); return body;
     }

@@ -1,0 +1,30 @@
+{
+  "feature": "FR 000589",
+  "version": "80.170",
+  "date": "2026-11-05",
+  "implementationBase": "9ad321bd34d80d25c037b100a344e53405f300f7",
+  "browsers": [
+    {"browser": "Edg/156.0.4314.58", "help": "PASS", "headerMatrixCases": 24, "layoutObservations": 36, "miniRegression": "PASS"},
+    {"browser": "Chrome/156.0.8078.80", "help": "PASS", "headerMatrixCases": 24, "layoutObservations": 36}
+  ],
+  "checks": [
+    "Actual main Watch and Document PiP Running/Earlier text-sized header hit testing",
+    "No tooltip underline, help cursor or text/cell background highlight in exposed padding or Mini heading gap",
+    "Text-to-padding bounded exit, panel transfer, genuine re-entry, fast document exit and no refresh resurrection",
+    "Classic, Web light/dark, wide/narrow, CSS zoom, keyboard focus/ARIA/Escape and touch pin/outside dismissal",
+    "Models/Sessions sorting help uses text labels; clicks outside labels still sort",
+    "Broader Mini regression: sticky headers, selection, suffix alignment, widths/fonts/zoom, themes/units/quotas, disclosure and one SSE",
+    "Fresh synthetic main/Mini screenshots inspected"
+  ],
+  "fullSuite": {"outcome": "PASS", "files": 143, "tests": 1688, "passed": 1687, "skipped": 1, "failures": 0, "errors": 0, "seconds": 89.5,
+    "skipReason": "Existing macOS shell case: zsh/PTY unavailable on Windows"},
+  "workingTreeValidator": {"outcome": "PASS", "checks": 11, "failures": 0, "existingAdvisoryBudgets": 6},
+  "realInstallation": {"outcome": "PASS", "probe": "probe_web_live.py --watch-cards --daily", "source": "V2", "owners": 1, "streams": 2, "accounts": 3, "activeCards": 1, "historyCards": 2, "categoryCostsReconcile": true, "sequenceAdvanced": true, "ownedThreadsAfterClose": 0, "ownedProcessesAfterClose": 0, "cleanupFailures": [], "sharedOpenCodeStopped": false},
+  "approvedExceptions": [],
+  "limitations": [
+    "Hidden Chromium with fresh owned profiles and actual Document PiP; no physical desktop/browser-chrome/other-app pointer proof",
+    "Headless focus switches emitted no native blur; synthetic blur-handler checks are not native event-delivery proof",
+    "No screen-reader, macOS or non-Chromium engine acceptance",
+    "Immediate synthetic report jobs prove UI, not report-process lifecycle"
+  ]
+}

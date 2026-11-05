@@ -33,10 +33,11 @@ body { padding: .5rem; max-width: none; }
 .mini-source-note:empty { display: none; }
 .mini-daily-note { display: block; font-size: .7rem; color: var(--warn); }
 .mini-session-heading { grid-template-columns: minmax(max-content, 1fr) max-content; text-align: left; }
+.mini-session-heading > .help-trigger { justify-self: start; }
 .mini-session, .mini-empty { display: block; width: 0; min-width: 100%; }
 .mini-session { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mini-session-total { white-space: pre; }
-.mini-prompt-table th > .help-trigger { width: 100%; white-space: nowrap; }
+.mini-prompt-table th .help-trigger { white-space: pre; }
 .mini-empty { white-space: normal; overflow-wrap: anywhere; }
 .mini-prompt-table td { font-variant-numeric: tabular-nums; text-align: right; }
 .mini-prompt-table td:first-child { text-align: left; }
