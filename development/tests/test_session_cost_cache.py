@@ -25,7 +25,7 @@ from src.reports.sampling import AnalyzedRoot
 from src.watch.card_workers import CardResult, CardWorkers
 from src.watch.cards import CardSession, WatchCards
 from src.watch.models import WatchProjection
-from src.watch.session_costs import SessionCosts
+from src.watch.session_costs import SessionCosts, SessionCostState
 
 
 class SessionCostCacheTests(unittest.TestCase):
@@ -153,7 +153,7 @@ print(json.dumps(dict(valued=value.valued_requests, written=value.cache_written,
         rows = tuple(replace(row, in_progress=True) for row in capture.rows[-2:])
         cost = reconcile_session_cost(self.repository, snapshot, catalog())
         entry = CardSession(snapshot.root, 'revision', 1, capture=replace(capture, rows=rows),
-            session_cost=cost, cost_generation=1, cost_state='observed', state='observed')
+            cost=SessionCostState(value=cost), state='observed')
         cards = WatchCards(None)
         cards.sessions[snapshot.root.session_id] = entry
 
@@ -197,7 +197,7 @@ print(json.dumps(dict(valued=value.valued_requests, written=value.cache_written,
             costs.job.result(timeout=3)
             self.assertEqual((root.session_id, 1), costs.drain()[:2])
 
-    def test_scheduler_rejects_superseded_total_and_reconciles_new_capture(self):
+    def test_scheduler_retains_superseded_baseline_and_reconciles_new_capture(self):
         source = MutableSource(replace(make_snapshot(), complete=True))
         factory = lambda now: make_service(self.tmp.name, source, now_ms=now)[2]
         capture, _ = capture_rows(factory(10000), source.snapshot.root)
@@ -216,14 +216,16 @@ print(json.dumps(dict(valued=value.valued_requests, written=value.cache_written,
 
         cards.accept(CardResult('root', 2, 'rows', (newer, (), None)), 10001)
         cards._tick_costs(10001)
-        self.assertIsNone(entry.session_cost, 'old generation is not a current total')
+        self.assertEqual(capture.cost_snapshot.source_revision,
+            entry.cost.value.source_revision, 'completed old evidence is a baseline, not a current revision')
+        self.assertEqual('checking', entry.cost.status)
         costs.job.result(timeout=3)
         cards._tick_costs(10002)
 
-        self.assertEqual('observed', entry.cost_state)
-        self.assertEqual('changed', entry.session_cost.source_revision)
-        self.assertEqual(len(changed.invocations), entry.session_cost.total.observed_requests)
-        self.assertIsNone(entry.cost_snapshot)
+        self.assertEqual('observed', entry.cost.status)
+        self.assertEqual('changed', entry.cost.value.source_revision)
+        self.assertEqual(len(changed.invocations), entry.cost.value.total.observed_requests)
+        self.assertFalse(entry.cost.needs_work)
 
     def test_pricing_only_refresh_reuses_exact_evidence_without_source_hydration(self):
         source = MutableSource(replace(make_snapshot(), complete=True))
@@ -242,7 +244,7 @@ print(json.dumps(dict(valued=value.valued_requests, written=value.cache_written,
         cards._tick_costs(10000)
         costs.job.result(timeout=3)
         cards._tick_costs(10001)
-        self.assertTrue(entry.session_cost.total.complete)
+        self.assertTrue(entry.cost.value.total.complete)
         loads = source.load_count
         prices[0] = replace(prices[0], models=())
 
@@ -250,10 +252,12 @@ print(json.dumps(dict(valued=value.valued_requests, written=value.cache_written,
         self.assertIsNotNone(costs.job)
         costs.job.result(timeout=3)
         cards._tick_costs(70001)
+        costs.job.result(timeout=3)
+        cards._tick_costs(70002)
 
-        self.assertFalse(entry.session_cost.total.complete)
+        self.assertFalse(entry.cost.value.total.complete)
         self.assertEqual(loads, source.load_count)
-        self.assertEqual('observed', entry.cost_state, 'pricing coverage remains distinct from source coverage')
+        self.assertEqual('observed', entry.cost.status, 'pricing coverage remains distinct from source coverage')
 
     def test_aggregate_resources_need_no_source_service_or_schema_writes(self):
         snapshot = replace(make_snapshot(), complete=True)

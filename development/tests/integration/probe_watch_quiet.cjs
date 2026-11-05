@@ -11,7 +11,7 @@ module.exports = async function quiet({evaluate,layouts,checks}) {
     p.state='retrying';
     const cycles=[];
     for(let i=0;i<5;i++) {view.update(p);cycles.push(snapshot());}
-    for(const c of view.cards.values()) {c.retrySince=Date.now()-30001;c.summarySince=Date.now()-30001;}
+    for(const c of view.cards.values()) c.retrySince=Date.now()-30001;
     view.retrySince=Date.now()-30001;view.update(p);const sustained=snapshot(),source=view.empty.textContent;
     for(const c of cards) {c.state='unavailable';c.session_summary.state='unavailable';}
     view.update(p);const unavailable=snapshot();
@@ -23,7 +23,7 @@ module.exports = async function quiet({evaluate,layouts,checks}) {
     assert.doesNotMatch(card.summary,/refreshing|retrying|retained total/i);
   });
   assert.match(result.source,/Source updates delayed.*not current/);
-  for(const card of result.sustained) {assert.match(card.message,/Prompt updates delayed.*not current/); assert.match(card.summary,/session total updates delayed.*not current/);}
+  for(const card of result.sustained) {assert.match(card.message,/Prompt updates delayed.*not current/); assert.doesNotMatch(card.summary,/session total updates delayed/);}
   for(const card of result.unavailable) assert.match(card.message,/Source unavailable.*not current/);
   result.recovered.forEach((card,i)=>assert.equal(card.height,result.before[i].height));
   layouts.push({case:'quiet-watch-refresh',...result});

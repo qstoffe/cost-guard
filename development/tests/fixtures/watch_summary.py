@@ -63,7 +63,7 @@ def summary_watch():
                 2, D(25), 2, True, (D(8), D(2), D(1), D(14))),
             PromptCostPart('child', 1, 'fixture', 'child-model', 'low', 'Child Model', 'Low',
                 1, D(8), 1, True, (D(3), D(1), D(0), D(4))),
-            PromptCostPart('nested', 2, 'fixture', 'child-model', None, 'Child Model', '',
+            PromptCostPart('nested', 2, 'fixture', 'child-model', 'low', 'Child Model', 'Low',
                 1, D(0), 1, True, (D(0), D(0), D(0), D(0)))))
     guidance = WatchContextGuidance("prompt", 120000, "[Price threshold >100.0K exceeded]",
         PriceWarningSeverity.EXCEEDED, D("2.4"), D(2), D(12))
@@ -83,3 +83,15 @@ def summary_watch():
     return WatchProjection("Watch", "Synthetic", (), now_ms=NOW,
         quota=replace(quotas, accounts=tuple(accounts)), active_cards=(card,), history_cards=(history,),
         cards_state="observed", history_state="observed", daily_usage=daily, daily_state="observed")
+
+
+def many_cost_groups(frame):
+    """Thirty distinct synthetic groups through the real bounded cost exporter."""
+    card = frame.active_cards[0]
+    row = card.rows[0]
+    original = row.prompt.cost_parts[0]
+    parts = tuple(replace(original, agent=index, session_id=f"agent-{index}",
+        variant=f"effort-{index}", effort=f"Effort {index}") for index in range(30))
+    prompt = replace(row.prompt, cost_parts=parts, linked_agent_count=29,
+        calls=60, ccost=D(750), incoming_context_ccost=D(8), extra_ccost=D(742))
+    return replace(frame, active_cards=(replace(card, rows=(replace(row, prompt=prompt),)),))

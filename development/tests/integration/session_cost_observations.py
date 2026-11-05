@@ -13,10 +13,10 @@ def observe_session_cost(get, cookie, owner):
         view = state['values'].get('live', {}).get('view') or {}
         for card in view.get('history_cards', []):
             entry = owner.coordinator.cards.sessions.get(card['session_id'])
-            if (entry is None or entry.session_cost is None or entry.cost_state != 'observed'
+            if (entry is None or entry.cost.value is None or entry.cost.status != 'observed'
                     or card.get('session_summary', {}).get('cost') is None):
                 continue
-            observed = entry.session_cost
+            observed = entry.cost.value
             service = owner.coordinator.history_factory(int(time.time() * 1000))
             try:
                 snapshot = service.source.load_session_snapshot(card['session_id'])

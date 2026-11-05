@@ -62,7 +62,10 @@ Browser-imposed limitations and exact evidence are in the [Mini journal](../deve
   and provisional running usage, not just visible prompts, this Watch run or Today.
   Concurrent prompts share the same session total. Credits/USD, zero, missing/partial
   pricing and retained/corrected totals use the same canonical cache as full Watch;
-  loading is never replaced with prompt cost or fabricated zero.
+   an initially unknown total shows **Loading…**, never prompt cost or fabricated zero.
+   Complete unchanged totals remain quiet through Earlier re-entry and normal checks;
+   new/corrected root-tree usage reuses the existing incremental request cache. Full
+   Watch uses this same source/valuation-qualified total and failure/partial state.
 - **#:** canonical session-local prompt ordinal, not a Mini list index. Concurrent
   prompts within one session remain separate rows, ordered by actual start.
 - **CCost:** accumulated reference-price cost of that one prompt, not session/Today

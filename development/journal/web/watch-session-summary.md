@@ -1,5 +1,33 @@
 # Watch session summary and incremental CCost
 
+## FR 000601 — stable evidence-gated totals (2026-11-06)
+
+v80.177; base `7d80b4d`. The earlier per-root periodic recheck and generation-rejection
+description below is historical. No inference about the exact owner's private incident
+is claimed: the inspected mechanism could mark a known amount refreshing on every
+capture/recheck and discard completed results as generations advanced.
+
+`SessionCostState` now holds the scalar baseline and canonical source/valuation keys.
+`SessionCosts` owns the existing single lane and fair root order. Identical source
+identity/revision/completeness plus unchanged valuation identity submits no root job.
+Heavy evidence still evicts with cards; re-entry retains the scalar and uses the same
+persisted contribution cache. New work reconciles real physical requests, not row-cost
+deltas. A completed older revision can provide a checking baseline for the same source,
+but cannot claim validation of the latest revision or cross a source-instance change.
+One shared 60-second pricing-identity job replaces all per-root periodic scans; only
+signature changes reconcile retained evidence. Real failed validation remains unavailable
+until successful retry, source-incomplete results remain partial, and pricing coverage
+is independent of source coverage. Full and Mini receive the same state and amount.
+Unknown first totals show Loading; known checks never become timer-generated delayed prose.
+
+Verification for this change is recorded with [grouped Watch cost evidence](contextual-help.md#fr-000601-grouped-request-detail-and-stable-totals-2026-11-06)
+and in the completed FR. The deterministic four-minute scheduler regression instruments
+root job submissions/reconciliation and cache writes, not merely the absence of UI text.
+Root-tree reconciliation still scans authoritative request fingerprints on a real
+revision; this is not a constant-time source delta API or a new accounting engine.
+
+## Historical FR 000572
+
 FR 000572 · 2026-11-04 · v80.152. Baseline: `780a54ed6676ec711d0a07d63b6d174fd7501b12`.
 
 ## Ownership and invalidation

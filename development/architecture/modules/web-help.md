@@ -1,7 +1,7 @@
 # Web contextual help: writing and interaction
 
 Owner: `src/web/assets/help.js`; shared styles: `app.css`. Applies to the main
-application and separate Mini Watch document. FR 000590 value-first follow-up: 2026-11-05.
+application and separate Mini Watch document. FR 000601 grouped-detail follow-up: 2026-11-06.
 
 ## Writing patterns
 
@@ -79,7 +79,7 @@ application and separate Mini Watch document. FR 000590 value-first follow-up: 2
 | Surface / entry points | Disposition |
 | --- | --- |
 | Full Watch: all ten active/historical headings | Shared buttons; explicit I/C/W/O and I+E lines, exactly two Model bullets, concise Effort without N/A tautology, Ictx versus next context |
-| Watch: Started/Finished, Model, Calls, CCost cells | Clock text reveals real dates; model trailing star proves causal linked agents even with same model. Conditional actual model/effort and call splits; canonical per-agent category-cost detail on CCost value. No preview popups or generic N/A help |
+| Watch: Started/Finished, Model, Calls, CCost cells | Clock text reveals real dates; accessible model star proves causal linked agents even when one model suppresses the popup. Model help requires distinct provider-qualified models. CCost/Calls share main/subagent role/model/effort/tier groups and contributing-session counts, not per-agent sections. Token Mix remains header-only; no preview popups or generic N/A help |
 | Watch: session Context/CCost and price warning | Concise shared context/cost help; severity and canonical threshold remain visible |
 | Watch: daily summary, account Today, primary/secondary quotas, exact reset | Four scoped daily text targets; Today/Capacity labels and numbers share intrinsic targets, reset clock owns exact date. Numeric inferred Capacity has `(guesstimate)`; verified native and unknown figures do not. Preserve native factual lower block |
 | Watch: activity and Earlier Prompts | Native disclosures retain full lists/counts; expanded activity cues explain all-call totals, red outcome subsets, missing evidence and direct skill failures without repeating lists |
@@ -115,11 +115,15 @@ coverage. Headless evidence does not prove physical OS pointer/window transition
 
 Analysis retains canonical linked-session evidence (including links without requests) in
 the revisioned analysis cache. `reports/prompt_costs.py` groups canonically attributed
-requests by session/model/effort and values categories at each request's actual catalog
+requests by session/model/effort/tier and values categories at each request's actual catalog
 tier. Unknown counters never become fabricated zero. `application/prompt_costs.py`
-exports at most 24 groups, honest omitted cost/calls and preformatted Credits/USD text;
+combines those unrounded parts by producer role/provider/model/effort/tier before
+exporting at most 24 groups, honest omitted cost/calls, full distinct-model count and
+preformatted Credits/USD text. Missing request evidence cannot claim a full Calls sum;
 the browser never prices, allocates aggregate cost or reacquires source data on hover.
 `test_prompt_cost_detail.py` owns causal scopes, same-model links, model-only switches,
 concurrent/nested work, partial telemetry/pricing, tiers, corrections and bounded detail.
 `probe_help_values.cjs` adds real delayed value/PiP flows and both-table cost/unit checks.
+`probe_cost_groups.cjs` checks grouped backend wire data, conditional accessible model
+stars, Calls/header-only Mix, 241 virtual seconds of stable Full/Mini totals and Loading.
 Full Watch footer keeps Context/warning first and Total CCost second with unchanged math.

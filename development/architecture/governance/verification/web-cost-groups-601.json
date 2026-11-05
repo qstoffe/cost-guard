@@ -1,0 +1,56 @@
+{
+  "fr": "000601",
+  "version": "80.177",
+  "date": "2026-11-06",
+  "base": "7d80b4dda51991d8e46d0fe8a3eb7132a76c1076",
+  "full": {"files": 148, "failures": 0, "workers": 4, "seconds": 92.7},
+  "validator": {"checks": 11, "failures": 0, "existingAdvisoryWarnings": 6},
+  "browser": {
+    "outcome": "PASS",
+    "engine": "Chrome/156.0.8078.80",
+    "scope": "probe_web_help.cjs --watch-only; shipped HTTP/assets/CSP/SSE and actual headless Document PiP",
+    "themes": ["classic", "web-light", "web-dark"],
+    "screenshotsVisuallyInspected": ["classic-watch", "classic-mini", "light-watch", "light-mini", "dark-watch", "dark-mini"],
+    "checks": [
+      "Both Full tables: backend-aggregated two-child cost/Calls groups, physical Calls total 4, no Token Mix cell help",
+      "Same-model popup suppressed with accessible positive-evidence linked star",
+      "Ten advancing row publications preserve the connected open hovered cost target",
+      "600ms hover, focus/touch/Escape, intrinsic hitboxes, units, hostile text and viewport clamping",
+      "241 virtual seconds of healthy updates, other-prompt changes, disclosure and eviction/re-entry retain Full 4583 and Mini (4583), with no cost-status note",
+      "Unknown Full and Mini totals both show Loading",
+      "30 backend groups: 24 shown and 6 honestly omitted, known omitted cost 150, total 750; all 8 table/width/zoom long-scroll cases in bounds"
+    ],
+    "longGroupMatrix": {"tables": ["active", "history"], "widths": [1280, 360], "zoom": [1, 1.5], "passedCases": 8},
+    "nativeBlurObserved": false,
+    "rawEvidence": "scratch:/cost-groups-browser.json"
+  },
+  "actualInstallation": {
+    "command": "py -3 development/tests/integration/probe_web_live.py --watch-cards --prompt-cost --session-cost",
+    "outcome": "PASS",
+    "source": "V2",
+    "requests": 4,
+    "pricedRequests": 4,
+    "canonicalCliRawParity": true,
+    "categoryReconciliation": true,
+    "independentSessionReportParity": true,
+    "freshRepositoryValuations": 0,
+    "freshRepositoryCacheWrites": false,
+    "linkedAgentsObserved": 0,
+    "owners": 1,
+    "streams": 2,
+    "accounts": 3,
+    "seconds": 14.6399,
+    "finalPending": [],
+    "finalOwnedThreads": 0,
+    "finalOwnedProcesses": 0,
+    "cleanupFailures": [],
+    "modelCallsStartedByProbe": 0
+  },
+  "limits": [
+    "Earlier broad help audit failed at unrelated Sessions: Live session source unavailable. Synthetic help host has no live Sessions catalog owner; default broad audit retained. No whole-application report-route PASS claimed.",
+    "Headless native blur unavailable; injected blur proves handler only. No physical desktop, screen-reader, macOS or other-engine proof.",
+    "Actual observed prompt had no linked agents; canonical synthetic/nested tests establish multi-agent grouping.",
+    "Original private incident not independently reproduced; exact original cause remains unproven.",
+    "No requirement/test waiver, paid inference, shared OpenCode stop, ZIP, tag, Release or runtime installation."
+  ]
+}

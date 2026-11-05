@@ -1,4 +1,4 @@
-"""Per-agent category costs preserve canonical scopes, evidence, tiers and updates."""
+"""Model/effort groups preserve canonical role scopes, evidence, tiers and updates."""
 from dataclasses import replace
 from decimal import Decimal as D
 import unittest
@@ -49,7 +49,7 @@ class PromptCostDetailTests(unittest.TestCase):
         for kind in ("active_cards", "history_cards"):
             prompt = wire[kind][0]["rows"][0]["prompt"]
             self.assertIn("Main prompt — GPT Test · High", prompt["display"]["cost_detail_help"])
-            self.assertIn("Subagent 1 — Claude Test · Low", prompt["display"]["cost_detail_help"])
+            self.assertIn("Subagents — Claude Test · Low (1 agent)", prompt["display"]["cost_detail_help"])
             self.assertIn("• Cached input: $0.04", prompt["display_units"]["usd"]["cost_detail_help"])
             self.assertIn("github-copilot/claude-test", prompt["display"]["model_detail_help"])
             self.assertEqual(str(row.ccost), prompt["ccost"])
@@ -69,7 +69,9 @@ class PromptCostDetailTests(unittest.TestCase):
         self.assertIn("Claude Test · Low", help_text)
         self.assertNotIn("*", help_text)
         cost_help = self.wire(row)["active_cards"][0]["rows"][0]["prompt"]["display"]["cost_detail_help"]
-        self.assertIn("Main prompt total: " + ccost_amount(row.ccost), cost_help)
+        self.assertIn("Total CCost: " + ccost_amount(row.ccost), cost_help)
+        self.assertIn("Total Calls: " + str(row.calls),
+            self.wire(row)["active_cards"][0]["rows"][0]["prompt"]["display"]["calls_help"])
 
     def test_same_model_and_link_without_usage_still_prove_participation_and_survive_cache(self):
         snapshot = make_uncompacted_snapshot()
@@ -82,8 +84,11 @@ class PromptCostDetailTests(unittest.TestCase):
         without_usage = replace(snapshot, invocations=tuple(i for i in snapshot.invocations if i.session_id == "root"))
         waiting = self.project(without_usage)
         self.assertEqual(1, waiting.linked_agent_count)
-        self.assertIn("1 linked subagent(s) have no recorded request usage",
-            self.wire(waiting)["active_cards"][0]["rows"][0]["prompt"]["display"]["model_detail_help"])
+        displayed = self.wire(waiting)["active_cards"][0]["rows"][0]["prompt"]["display"]
+        self.assertEqual("", displayed["model_detail_help"])
+        self.assertIn("1 linked subagent(s) have no recorded request usage", displayed["cost_detail_help"])
+        self.assertIn("incomplete request evidence", displayed["calls_help"])
+        self.assertEqual("", self.wire(row)["active_cards"][0]["rows"][0]["prompt"]["display"]["model_detail_help"])
 
     def test_partial_telemetry_and_unpriced_agents_never_manufacture_category_zeroes(self):
         snapshot = make_uncompacted_snapshot()
@@ -114,14 +119,14 @@ class PromptCostDetailTests(unittest.TestCase):
 
     def test_concurrent_and_nested_links_keep_distinct_sessions_and_own_efforts(self):
         snapshot = make_uncompacted_snapshot()
-        direct = part("other-task", "a_sub", "root", "tool", {"tool": "task", "state": {
-            "time": {"start": 1200, "end": 1450}, "metadata": {"sessionId": "other"}}}, 1200)
-        nested = part("nested-task", "ca", "child", "tool", {"tool": "task", "state": {
-            "time": {"start": 1250, "end": 1390}, "metadata": {"sessionId": "nested"}}}, 1250)
+        direct = part("other-task", "a_sub", "root", "tool", {"tool": "subagent", "state": {
+            "time": {"start": 1200, "end": 1450}, "metadata": {"sessionID": "other"}}}, 1200)
+        nested = part("nested-task", "ca", "child", "tool", {"tool": "subagent", "state": {
+            "time": {"start": 1250, "end": 1390}, "metadata": {"sessionID": "nested"}}}, 1250)
         messages = tuple(replace(m, parts=(*m.parts, direct)) if m.message_id == "a_sub" else
             replace(m, parts=(*m.parts, nested)) if m.message_id == "ca" else m for m in snapshot.messages)
         requests = tuple(ModelInvocation(sid, sid, 1300, MODEL, TokenUsage(input=100, output=10),
-            prov(sid, sid), completed_at_ms=1350, variant=effort) for sid, effort in (("other", "low"), ("nested", "high")))
+            prov(sid, sid), completed_at_ms=1350, variant="low") for sid in ("other", "nested"))
         sessions = (*snapshot.sessions, replace(snapshot.sessions[1], session_id="other"),
             replace(snapshot.sessions[1], session_id="nested", parent_session_id="child"))
 
@@ -130,11 +135,20 @@ class PromptCostDetailTests(unittest.TestCase):
         self.assertEqual(3, row.linked_agent_count)
         by_session = {item.session_id: item for item in row.cost_parts}
         self.assertEqual({"root", "child", "other", "nested"}, set(by_session))
-        self.assertEqual(("low", "high"), (by_session["other"].variant, by_session["nested"].variant))
+        self.assertEqual(("low", "low"), (by_session["other"].variant, by_session["nested"].variant))
         self.assertEqual(row.ccost, sum(item.known_ccost for item in row.cost_parts))
         self.assertEqual(row.calls, sum(item.calls for item in row.cost_parts))
+        displayed = self.wire(row)["active_cards"][0]["rows"][0]["prompt"]
+        groups = displayed["cost_detail"]["parts"]
+        combined = next(group for group in groups if group["variant"] == "low")
+        self.assertEqual(("subagents", 2, 2), (combined["role"], combined["agent_count"], combined["calls"]))
+        # Two physical requests, each (100 input * 1 + 10 output * 4) / 10000 Credits.
+        self.assertEqual(D(".028"), D(combined["known_ccost"]))
+        self.assertEqual((D(".02"), D(0), D(0), D(".008")), tuple(D(value) for value in combined["categories"]))
+        self.assertIn("Subagents — GPT Test · Low (2 agents): 2", displayed["display"]["calls_help"])
+        self.assertEqual("", displayed["display"]["model_detail_help"])
 
-    def test_one_linked_agent_with_multiple_efforts_has_group_and_agent_subtotals(self):
+    def test_one_linked_agent_with_multiple_efforts_has_distinct_group_subtotals(self):
         snapshot = make_uncompacted_snapshot()
         extra = ModelInvocation("extra", "child", 1300, ModelRef("github-copilot", "claude-test"),
             TokenUsage(input=100000), prov("extra", "child"), completed_at_ms=1350, variant="high")
@@ -146,24 +160,58 @@ class PromptCostDetailTests(unittest.TestCase):
         self.assertEqual(1, row.linked_agent_count)
         self.assertEqual((1, 1), tuple(part.agent for part in child_parts))
         self.assertEqual(D(20), next(part.known_ccost for part in child_parts if part.model_id == "claude-test"))
-        self.assertIn("Subagent 1 — Claude Test · High", text)
-        self.assertIn("Subagent 1 total: " + ccost_amount(sum(part.known_ccost for part in child_parts)), text)
+        self.assertIn("Subagents — Claude Test · High (1 agent)", text)
+        self.assertNotIn("Subagent 1", text)
         self.assertEqual(row.ccost, sum(part.known_ccost for part in row.cost_parts))
 
     def test_bounded_export_preserves_honest_omitted_count_and_subtotal(self):
         row = self.project(make_uncompacted_snapshot())
         original = row.cost_parts[0]
-        parts = tuple(replace(original, session_id=str(i), agent=i) for i in range(30))
-        row = replace(row, cost_parts=parts, ccost=sum(p.known_ccost for p in parts), linked_agent_count=29)
+        parts = tuple(replace(original, session_id=str(i), agent=i, variant=str(i)) for i in range(30))
+        row = replace(row, cost_parts=parts, ccost=sum(p.known_ccost for p in parts),
+            calls=sum(p.calls for p in parts), linked_agent_count=29)
 
         prompt = self.wire(row)["active_cards"][0]["rows"][0]["prompt"]
 
         self.assertEqual(24, len(prompt["cost_detail"]["parts"]))
         self.assertEqual(6, prompt["cost_detail"]["omitted_parts"])
         self.assertEqual(original.known_ccost * 6, D(prompt["cost_detail"]["omitted_ccost"]))
-        self.assertIn("6 additional agent/model groups not shown", prompt["display"]["cost_detail_help"])
+        self.assertIn("6 additional role/model/effort groups not shown", prompt["display"]["cost_detail_help"])
         self.assertEqual(original.calls * 6, prompt["cost_detail"]["omitted_calls"])
         self.assertIn(f"not shown: {original.calls * 6} calls", prompt["display"]["calls_help"])
+
+        same = replace(row, cost_parts=tuple(replace(p, variant=None) for p in parts))
+        detail = self.wire(same)["active_cards"][0]["rows"][0]["prompt"]["cost_detail"]
+        self.assertEqual((2, 0, 29), (len(detail["parts"]), detail["omitted_parts"], detail["parts"][1]["agent_count"]))
+
+    def test_provider_identity_zero_calls_and_missing_category_data_stay_honest(self):
+        row = self.project(make_uncompacted_snapshot())
+        original = row.cost_parts[0]
+        unknown = replace(original, session_id="another", agent=2, provider_id="another-provider",
+            categories=(None, D(0), D(0), D(1)), known_ccost=D(1))
+        row = replace(row, cost_parts=(*row.cost_parts, unknown), linked_agent_count=2)
+        displayed = self.wire(row)["active_cards"][0]["rows"][0]["prompt"]["display"]
+        self.assertIn("another-provider/gpt-test", displayed["model_detail_help"])
+        self.assertIn("[another-provider/gpt-test]", displayed["cost_detail_help"])
+        self.assertIn("• Input: N/A", displayed["cost_detail_help"])
+        self.assertIn("incomplete request evidence", displayed["calls_help"])
+        empty = self.wire(replace(row, calls=0, ccost=D(0), cost_parts=(), linked_agent_count=0))
+        self.assertEqual("", empty["active_cards"][0]["rows"][0]["prompt"]["display"]["calls_help"])
+        unrecorded = replace(unknown, provider_id="", model_id="", model="")
+        missing = self.wire(replace(row, cost_parts=(*row.cost_parts[:2], unrecorded)))
+        tokens = missing["active_cards"][0]["rows"][0]["prompt"]["display"]
+        self.assertEqual("", tokens["model_detail_help"], 'missing identity is not evidence of another model')
+        self.assertIn("Unrecorded model", tokens["cost_detail_help"])
+
+    def test_distinct_request_price_tiers_never_pool_their_rates(self):
+        snapshot = make_uncompacted_snapshot()
+        requests = tuple(replace(item, tokens=TokenUsage(input=100001 if item.invocation_id == "i_syn" else 100000,
+            output=1000)) for item in snapshot.invocations)
+        row = self.project(replace(snapshot, invocations=requests), threshold_catalog())
+        main = [part for part in row.cost_parts if not part.agent]
+        self.assertEqual(2, len(main))
+        self.assertNotEqual(main[0].price_tier, main[1].price_tier)
+        self.assertEqual(D("41.6002"), row.ccost)
 
 
 if __name__ == "__main__":

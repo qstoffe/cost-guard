@@ -26,6 +26,16 @@ shares, not prices. **Model** names the main model even when other linked models
 contribute to totals. **N/A** means unavailable, not zero; **?** marks partial
 pricing/data. CCost is an estimated reference cost, not your bill or native quota.
 
+Hover/focus the **CCost value** in either Watch table for Input, Cached input,
+Cache write, Output and Subtotal, grouped into **Main prompt** and **Subagents**
+by provider/model, actual effort and price tier. Repeated agents share a group with
+their contributing-session count; categories are unrounded reference-cost contributions,
+not token percentages. Unknown categories remain N/A and omitted groups retain their
+known cost/call coverage. **Calls** uses the same groups for physical model requests,
+not tools. **Model** value help opens only when two or more distinct provider-qualified
+models contributed; the accessible linked-subagent `*` remains even for a single model.
+**Token Mix %** has header help only, not another per-cell popup.
+
 Use the clock text itself for exact Started/Finished or quota-reset dates. Prompt previews
 have no full-text popup in either Watch table. Mini uses column-heading help, not
 row/header question marks; its full session text remains selectable and accessible.
@@ -558,7 +568,15 @@ unrounded values in the disposable `session-ccost-v1` SQLite namespace. Unchange
 requests are not revalued; corrections/deletions and catalog/algorithm/source changes
 reconcile or invalidate. Complete source checkpoints survive Earlier-slot eviction,
 browser reload and host restart. No prompt content is stored in this namespace.
-First acquisition uses blank/neutral placeholders, never invented empty/zero results.
+An unknown initial session total shows **Loading…** in Full and Mini Watch, never
+a fabricated zero or elapsed-time delay warning. A complete source/valuation-matched
+total stays stable through unchanged captures, disclosure, reconnect and Earlier
+eviction/re-entry. No per-root periodic snapshot or reconciliation is scheduled for
+unchanged evidence. One shared background pricing-identity check uses the existing
+Wake/pricing-cache cadence; changed prices invalidate only the relevant derived work.
+New/changed root-tree revisions reconcile against the persisted request baseline,
+not the visible prompt-cost delta. Completed same-source results remain useful
+baselines while newer evidence catches up; lifecycle generations cannot starve them.
 Known prompt/session/daily/account figures stay visible quietly during routine refresh,
 with no fleeting Loading/Refreshing/Retrying prose or temporary card-height change in
 Running or Earlier Prompts. Observed **No running prompts**/**No earlier prompts** remain.
@@ -566,9 +584,10 @@ Column/summary help explains metric scope rather than internal freshness logs. M
 Watch data remains quiet; elapsed time or independent Earlier/account/daily loading never
 creates a global Watch failure warning. **No running prompts** requires observed membership
 and a healthy running source/connection, not partial or retained evidence.
-After 30 continuous seconds of component acquisition, prompt retries, daily updates or session totals, localized delayed/availability guidance appears;
+After 30 continuous seconds of prompt retries or daily updates, localized delayed/availability guidance appears;
 observed recovery clears it. Explicit unavailable/partial evidence and host/auth/connection
-failures retain their existing guidance. These are presentation clocks only, not source
+failures retain their existing guidance. Routine session-total checks have no delayed timer;
+real failed validation or partial evidence remains localized and explicit. These are presentation clocks only, not source
 observations or lifecycle changes. Optional cache
 failure safely computes from source; disposable-cache details are not default metric help.
 No Session Total Duration returns. CLI, Sessions UI and daily/account totals retain

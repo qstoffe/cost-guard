@@ -361,7 +361,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.176 (2026-11-06):** OpenCode V2 `subagent` usage now joins its initiating prompt alongside legacy `task` work. Shared validated child windows keep cost, Calls, model markers, token mix and linked activity consistent across reports and Watch. Whole-session totals remain independent; missing prices, compactions and unassigned usage are not silently reconciled. See [usage and cost](docs/usage-and-cost.md).
+**v80.177 (2026-11-06):** Watch cost and Calls help groups main/subagent requests by model, effort and price tier, with contributing-agent counts instead of repeated agent sections. Model help appears only when distinct models contributed. Known session totals stay quiet through unchanged publications and Earlier re-entry; genuine source/pricing changes reconcile on the existing incremental cache. Unknown totals show **Loading…** consistently in Full and Mini Watch. See [Web Beta](docs/web-beta.md).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 
