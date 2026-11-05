@@ -54,14 +54,71 @@ async function main() {
       if (value.exceptionDetails) throw new Error(JSON.stringify(value.exceptionDetails));
       return value.result.value;
     };
-    const until=async expression => {
+     const until=async expression => {
       const end=Date.now()+30000;
       while (Date.now()<end) {if(await evaluate(expression))return;await new Promise(resolve=>setTimeout(resolve,50));}
       throw new Error('Condition not reached: '+expression+'; '+await evaluate('document.body.innerText'));
-    };
-    await command('Page.navigate',{url:launch.url},sessionId);
-    await until('typeof csrf !== "undefined" && csrf && hostState.kind === "connected"');
-    await evaluate("location.hash='#/sessions'");
+     };
+     await command('Page.addScriptToEvaluateOnNewDocument',{source:`window.reportKinds=[];
+       const request=fetch;window.fetch=(url,options)=>{if(url==='/api/reports')reportKinds.push(JSON.parse(options.body).kind);return request(url,options);};`},sessionId);
+     await command('Page.navigate',{url:launch.url},sessionId);
+     await until('typeof csrf !== "undefined" && csrf && hostState.kind === "connected"');
+     await until('current?.result && !current.loading');
+     const retiredHashes=['#/reports','#/reports?date=2026-11-05','#/reports?date=2026-10-01:2026-11-05',
+       '#/reports?date=2026-02-30','#/reports?date=%ZZ&sort=ccost&offset=50'];
+     const captures=await evaluate('reportKinds.length');
+     for(const hash of retiredHashes) {
+       await command('Page.navigate',{url:launch.url.split('#')[0]+hash},sessionId);
+       await until('location.hash === "#/sessions" && current?.catalog?.data?.total === 120');
+       assert.equal(await evaluate('current.catalog.data.sort'),'activity');
+       assert.equal(await evaluate('current.catalog.data.direction'),-1);
+       assert.equal(await evaluate('document.querySelectorAll("input[type=date], #scope-controls form").length'),0);
+       assert.doesNotMatch(await evaluate('document.querySelector("#result").textContent'),/Capture date report|Snapshot:|Inclusive local range/);
+       assert.equal(await evaluate('reportKinds.length'),captures);
+       assert.equal(await evaluate('document.querySelector("nav a[aria-current=page]").getAttribute("href")'),'#/sessions');
+     }
+     await evaluate("history.replaceState(null,'','/#/reports?date=invalid')");
+     await command('Page.reload',{},sessionId);
+     await until('location.hash === "#/sessions" && current?.catalog?.data?.total === 120');
+     assert.deepEqual(await evaluate('reportKinds'),[],'cold legacy reload never starts even a Normal/date report');
+     for(const width of [1920,360]) {
+       await command('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false},sessionId);
+       assert.deepEqual(await evaluate('[...document.querySelectorAll("nav a")].map(node=>node.textContent)'),
+         ['Models','Watch','Sessions','Accounts','Token Mix','Cost per Active Hour','Settings']);
+       assert.equal(await evaluate(`[...document.querySelectorAll('a')].filter(node=>node.getAttribute('href')?.startsWith('#/reports')).length`),0);
+       assert.equal(await evaluate('document.documentElement.scrollWidth <= innerWidth'),true);
+     }
+     await evaluate("location.hash='#/settings'"); await until('current.section === "settings"');
+     await evaluate("location.hash='#/reports?date=invalid'"); await until('location.hash === "#/sessions"');
+     await evaluate("location.hash='#/token-mix'"); await until('current.section === "token-mix"');
+     await evaluate('history.back()'); await until('location.hash === "#/sessions" && current.catalog');
+     await evaluate('history.back()'); await until('location.hash === "#/settings"');
+     await evaluate('history.forward()'); await until('location.hash === "#/sessions" && current.catalog');
+     assert.deepEqual(await evaluate('reportKinds'),[]);
+     checks.push('retired-hashes-valid-invalid-reload-back-forward-no-jobs-or-date-filter-wide-narrow-nav');
+     for(const section of ['token-mix','cost-per-hour']) {
+       const before=await evaluate('reportKinds.length');
+       await evaluate(`location.hash='#/${section}'`); await until(`current.section === '${section}'`);
+       assert.equal(await evaluate('reportKinds.length'),before,'opening remains explicit');
+       assert.equal(await evaluate('document.querySelector("#refresh").disabled'),false);
+       await evaluate('document.querySelector("#refresh").click()');
+       await until('current.result && !current.loading');
+       assert.equal(await evaluate('reportKinds.at(-1)'),section);
+       await evaluate('document.querySelector("#refresh").click()');
+       await until('!current.loading');
+       assert.equal(await evaluate('reportKinds.length'),before+2,'explicit Refresh reacquires only this report');
+       const frozen=await evaluate('document.querySelector("#result").textContent');
+       await fixture('hold-captures');
+       await evaluate('document.querySelector("#refresh").click()');
+       await until('current.active && !document.querySelector("#cancel").disabled');
+       await evaluate('document.querySelector("#cancel").click()');
+       await until('!current.loading && document.querySelector("#notice").textContent.includes("cancelled")');
+       assert.equal(await evaluate('document.querySelector("#result").textContent'),frozen);
+       await fixture('resume-captures');
+     }
+     assert.equal(await evaluate('reportKinds.includes("date")'),false);
+     checks.push('token-mix-and-active-hour-explicit-capture-refresh-cancel-retained-result');
+     await evaluate("location.hash='#/sessions'");
     await until('current?.catalog?.data?.total === 120');
     assert.deepEqual(await evaluate('[...document.querySelectorAll("#result th")].map(node=>node.textContent.replace(/ [↑↓↕]$/, ""))'),
       ['Last activity','Session name','Model','CCost','Prompts','Duration']);

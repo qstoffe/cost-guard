@@ -89,7 +89,7 @@ application and separate Mini Watch document. FR 000590 value-first follow-up: 2
 | Mini: subscriptions | Visible subscription text groups Primary/Additional quotas, native orientation/amounts/limits, real resets, observed Used CCost and server-owned capacity/provenance. No extra cue, timestamps/raw sources or acquisition |
 | Models: checkboxes and multi-sort | Short action help on focus/hover/tap, preserving action cursors and sorting/filtering |
 | Models: More information, price evidence and promotion notes | Concepts shortened into named lines; exact source evidence/terms remain optional visible data |
-| Sessions, Snapshot/Live, reports/date range, Token Mix, active-hour | Shared report-sort help; Reading this report and Sample/price coverage shortened and line-separated. Scope forms and visible context/retention/billing/active-hour details remain persistent disclosures/data |
+| Sessions/detail, Token Mix, active-hour | Shared sort help; Reading this report and Sample/price coverage are line-separated. Session context/retention and finite-capture guidance remain visible; the retired Reports date form has no help surface |
 | Accounts | Observation details stays a keyboard/touch-native disclosure with exact source/native-money/pace/billing facts; no native title explanations existed |
 | Settings | Visible ARIA-associated explanations rewritten; retain native selects, save feedback and default labels, no redundant popovers |
 | Navigation / host status | Visible action labels retained. Host warning becomes one real details disclosure, not CSS-hover plus native tooltip. Observation lines shortened; hidden status has no redundant title |

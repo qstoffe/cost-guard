@@ -65,10 +65,10 @@ class RemainingViewTests(unittest.TestCase):
         self.assertEqual("2.149", dto["next_context_cost_multiplier"])
 
     @unittest.skipUnless(shutil.which("node"), "optional JS VM unavailable")
-    def test_visible_date_and_history_columns_match_frozen_cli(self):
+    def test_shared_session_and_history_columns_match_frozen_cli(self):
         reports = remaining_reports(self)
         cases = {}
-        for kind in ("date", "token-mix"):
+        for kind in ("session", "token-mix"):
             report = reports[kind]
             cases[kind] = result(report)
             text = rendered(report, {"timezone": ZONE}, width=300)

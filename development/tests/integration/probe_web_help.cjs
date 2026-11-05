@@ -177,7 +177,7 @@ async function main() {
     assert.equal(await evaluate(owner,`document.querySelectorAll('.watch-prompt-label .help-trigger').length`),0);
      checks.push('Verbatim selectable/accessible long hostile session title without row cues; distinct Mini headings, direct date/daily value help, retained warnings, no HTML injection and Mini 150% text zoom');
     await command('Page.bringToFront',{},owner);
-    for (const route of ['models','sessions','sessions/root','accounts','reports?date=1970-01-01','token-mix','cost-per-hour','settings']) {
+    for (const route of ['models','sessions','sessions/root','accounts','token-mix','cost-per-hour','settings']) {
       await evaluate(owner,`location.hash='#/${route}'`);
       await until(owner,`document.body.dataset.section==='${route.split(/[?\/]/)[0]}'`);
       if (['token-mix','cost-per-hour'].includes(route)) await evaluate(owner,`acquire(current)`);

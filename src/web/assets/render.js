@@ -483,18 +483,18 @@ const ReportView = (() => {
       () => `Main CCost ${ccost(row, 'main_ccost')} · Linked child CCost ${ccost(row, 'subagent_ccost')}`, 'detail'));
     return node;
   }
-  function prompts(parent, block, state, index, ranged = false) {
+  function prompts(parent, block, state, index) {
     const title = element('h3', block.title || 'Session'); parent.append(title, link(block.session_id));
-    parent.append(element('p', () => `${ranged ? 'Selected-range' : 'Full-session'} CCost ${ccost(block, 'total_ccost')} · Billing ${display(block, 'billed_cost')} · Duration ${display(block, 'duration_ms')}`));
-    if (!ranged && block.active_hour) parent.append(element('p', () => hourlySummary(block.active_hour), 'detail'));
+    parent.append(element('p', () => `Full-session CCost ${ccost(block, 'total_ccost')} · Billing ${display(block, 'billed_cost')} · Duration ${display(block, 'duration_ms')}`));
+    if (block.active_hour) parent.append(element('p', () => hourlySummary(block.active_hour), 'detail'));
     if (block.total_has_cost_breakdown) parent.append(element('p',
       () => block.total_breakdown_known ? `Main CCost ${ccost(block, 'total_main_ccost')} · Linked child CCost ${ccost(block, 'total_subagent_ccost')}` : 'Linked child breakdown unavailable.'));
     contextSummary(parent, block);
     if (!block.rows.length) parent.append(element('p', 'This session exists but has no prompt rows.'));
-    table(parent, `Prompts · ${ranged ? 'selected range' : 'complete session'} totals, independent of page`,
+    table(parent, 'Prompts · complete session totals, independent of page',
       ['Prompt', 'CCost', 'Calls', 'Duration', '~Ictx', '~Ictx CCost', '~Extra CCost', 'Token Mix %'], block.rows,
       row => detailCells(row),
-       () => [ranged ? 'Selected range' : 'Complete session', ccost(block, 'total_ccost'), known(block.total_calls),
+       () => ['Complete session', ccost(block, 'total_ccost'), known(block.total_calls),
          display(block, 'duration_ms'), '—', known(block.total_ictx_cost_text), known(block.total_extra_cost_text), known(block.total_mix_text)],
       state, 'prompts-' + index,
       row => [row.prompt_number, row.ccost, row.calls, row.duration_ms, row.incoming_context_tokens,
@@ -534,7 +534,6 @@ const ReportView = (() => {
     if (result.source.status === 'partial') parent.append(element('p', `Partial source data (${view.source_warning_count} warnings). Values may be incomplete.`, 'warning'));
     if (view.model_availability_unverified) parent.append(element('p', 'Model availability unverified: showing the full catalog or all historically used models, not a verified selectable list.', 'warning'));
     if (view.model_availability_empty) parent.append(element('p', 'No available OpenCode models match the pricing catalog.', 'warning'));
-    if (view.kind === 'date') parent.append(element('p', `Inclusive local range ${result.scope.date_text} · ${result.scope.timezone_id} · inclusive local calendar dates. Session links open complete history; Back returns to this frozen range.`, 'snapshot'));
     const definitions = element('details');
     definitions.append(element('summary', 'Reading this report'), element('p', 'CCost — Estimated reference cost, not your bill. Unknown prices are not zero.\nDuration — Recorded execution time, frozen with this snapshot.\nSearch, sorting and pages change what you see, not the totals or report scope.\nRefresh acquires a new snapshot. Navigation and live updates do not refresh reports.\nClosing this tab does not stop Cost Guard; the CLI runs separately.', 'help-copy'));
     if (!overview) parent.append(definitions);
@@ -553,8 +552,7 @@ const ReportView = (() => {
           return [name, row.model + (row.multiple_models ? ' · multiple models' : ''), ccost(row), known(row.prompt_count), display(row, 'duration_ms')]; },
         null, state, 'sessions', row => [row.title + ' ' + row.session_id, row.model, row.ccost, row.prompt_count, row.duration_ms]);
     }
-    view.prompt_blocks.forEach((block, index) => prompts(parent, block, state, index, view.kind === 'date'));
-    if (view.kind === 'date' && !view.prompt_blocks.length) parent.append(element('p', 'No prompt rows in this local date range.'));
+    view.prompt_blocks.forEach((block, index) => prompts(parent, block, state, index));
     const accounts = view.accounts_quotas;
     if (overview) overviewAccounts(parent, accounts, 'Accounts Overview', true);
     if (view.kind === 'normal' && section === 'accounts') {
@@ -577,8 +575,7 @@ const ReportView = (() => {
           row => [row.publisher, row.prompts, row.calls, row.mix.known_total_tokens ?? row.mix.total_tokens, ...row.mix.shares, row.mix.total_cost]);
       }
     }
-    if (view.range_comparison) parent.append(element('p', () => `CCost for range: ${display(view.range_comparison, 'known_ccost')}; reference valuation, not billing.`, 'warning'));
-    for (const note of (view.notes || []).slice(view.range_comparison ? 1 : 0)) parent.append(element('p', note, 'warning'));
+    for (const note of view.notes || []) parent.append(element('p', note, 'warning'));
   }
   function mixSummary(parent, mix) {
     parent.append(element('p', () => `Total Token Mix % · ${display(mix, 'total_tokens')} tokens · ` +

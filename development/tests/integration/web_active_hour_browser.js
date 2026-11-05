@@ -34,7 +34,7 @@
     check(output.textContent === frozen, 'credits restored without recomputation');
     const nav = document.querySelector('a[href="#/cost-per-hour"]');
     nav.focus(); check(document.activeElement === nav, 'hourly navigation is focusable link');
-    location.hash = '#/reports'; await until(() => document.getElementById('heading').textContent === 'Date reports', 'navigate away');
+    location.hash = '#/token-mix'; await until(() => document.getElementById('heading').textContent === 'Token Mix · deep history', 'navigate away');
     nav.click(); await until(() => document.getElementById('heading').textContent === 'Cost per Active Hour', 'navigate back');
     check(output.textContent === frozen && (await captures()).length === 1, 'navigation reuses frozen scope');
     await fixture({fail: true}); button.click();

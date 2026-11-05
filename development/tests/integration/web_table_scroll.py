@@ -176,7 +176,7 @@ def main():
                 assert abs(after['page'] - during['page']) < 1 and abs(after['top'] - during['top']) < 1, evidence['response_race']
                 for width in (() if args.skip_layout_matrix else (1000, 360)):
                     page.set_viewport_size(dict(width=width, height=800))
-                    for route in ('watch', 'models', 'models/all', 'sessions', 'token-mix', 'reports?date=2026-10-26:2026-10-27', 'sessions/root-0000', 'sessions/root-0000/live'):
+                    for route in ('watch', 'models', 'models/all', 'sessions', 'token-mix', 'sessions/root-0000', 'sessions/root-0000/live'):
                         page.goto(origin + '/#/' + route)
                         # Wait for hash routing, not the still-visible previous table.
                         # Keep one EventSource: rapid document reloads consume server

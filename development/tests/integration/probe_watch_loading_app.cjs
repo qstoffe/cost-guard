@@ -76,7 +76,7 @@ async function main() {
       assert.equal(sample.sameRow,true);assert.equal(sample.loading,'loading');assert.equal(sample.accounts,null);
       assert.equal(sample.cards,seconds<60?1:2);assert.equal(sample.progress,0);samples.push(sample);
       if(seconds===90) {
-        await evaluate(`location.hash='#/reports'`);await until(`!current.live`);
+        await evaluate(`location.hash='#/token-mix'`);await until(`!current.live`);
         await evaluate(`location.hash='#/watch'`);await until(`current.live`);
         assert.equal(await evaluate(`current.watch.root===anchoredWatch.root`),true);
       }
