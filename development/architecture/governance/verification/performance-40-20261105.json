@@ -1,0 +1,2181 @@
+{
+  "source_revision": "bf3ae51d45184e8546b4d0d7af3c37d1a59fe11e",
+  "environment": {
+    "system": "Windows",
+    "release": "11",
+    "version": "10.0.26300",
+    "machine": "AMD64",
+    "processor": "AMD64 Family 25 Model 33 Stepping 2, AuthenticAMD",
+    "python": "3.14.7"
+  },
+  "setup": {
+    "timezone": "UTC",
+    "now_ms": 1790510400000,
+    "month_start_ms": 1788220800000,
+    "pricing": "synthetic-prices; input 1/cache-read .1/output 4 USD per million",
+    "cache": "Fresh temporary SQLite per process and separate Watch cache; warm reuses that cache",
+    "os_cache": "Not flushed; background workstation load uncontrolled",
+    "network": "No network/provider/model calls",
+    "monetary_cost": "unknown/not measured",
+    "peak_memory": "unknown/not measured",
+    "watch_cpu": "unknown/not measured",
+    "units": "seconds; source operations are counts"
+  },
+  "file_sha256": {
+    "development/tools/benchmark_large_month.py": "2daae013945151949e5a7b4031fa015d9d7e92788d287fa743f3c21f00922d38",
+    "development/tests/fixtures/synthetic_month.py": "a16d85d750663a6269ab72ac3f2082b46109096aa4720e01e7ab84d9cfcbc22a",
+    "config/default-config.jsonc": "5d073f6a7dc0deae8f8e6ee70c5d5b9e3232653aa00de4fe4b6b10937f533625",
+    "src/reports/service.py": "728dc99634de14cf7c1d6f405046a37c8cf762907683ea0adb025ff58a2fa506",
+    "src/reports/token_mix_history.py": "caf078ed0e4d6ff2a9390176d412f1bacdae9ea9dda2a31054cc2f6e6c369bf3",
+    "src/cache/database.py": "cace603c18c8240c470873db06705d410bddf25f099b9b489671e90faad52e27"
+  },
+  "normal_watch": [
+    {
+      "scenario": "idle-100x50",
+      "repeat": 1,
+      "arguments": [
+        "--roots",
+        "100",
+        "--prompts",
+        "50",
+        "--watch"
+      ],
+      "exit_code": 0,
+      "result": {
+        "children_per_root": 0,
+        "first_revision_checks": 4,
+        "first_seconds": 0.0376,
+        "first_source_hydrations": 2,
+        "prompts_per_root": 50,
+        "roots": 100,
+        "running_roots": 0,
+        "sample_prompts_first": 100,
+        "sample_prompts_second": 100,
+        "sampled_roots": 2,
+        "sampled_running_roots": 0,
+        "second_additional_hydrations": 0,
+        "second_revision_checks": 2,
+        "second_seconds": 0.0166,
+        "today_roots": 0,
+        "total_prompts": 5000,
+        "watch": {
+          "cold": {
+            "acquisition": {
+              "counts": {
+                "analysis_candidate_roots": 20,
+                "analyzed_prompts": 1000,
+                "analyzed_requests": 1000,
+                "cache_hits": 0,
+                "cache_misses": 40,
+                "cache_reads": 40,
+                "cache_writes": 20,
+                "catalog_pages": 0,
+                "catalog_roots": 100,
+                "catalog_sessions": 100,
+                "daily_usage_projections": 1,
+                "dashboard_candidate_roots": 20,
+                "full_catalog_fetches": 2,
+                "history_candidate_roots": 0,
+                "hydrated_roots": 20,
+                "message_operations": 0,
+                "message_pages": 0,
+                "revision_calculations": 0,
+                "revision_checks": 260
+              },
+              "generation": "synthetic",
+              "milliseconds": {
+                "analysis": 43.538,
+                "cache_and_acquisition": 315.324,
+                "cache_reads": 68.058,
+                "catalog": 0.0,
+                "first_usable_dashboard": 493.607,
+                "fully_populated_dashboard": 494.59,
+                "historical_accounting": 0.0,
+                "hydration": 0.0,
+                "liveness": 0.0,
+                "projection": 131.695,
+                "rendering": 0.0,
+                "revision": 0.0,
+                "watch_refresh": 0.37
+              },
+              "mode": "watch-global"
+            },
+            "first_usable_seconds": 0.4936,
+            "fully_populated_seconds": 0.4946,
+            "initial_hydrations": 20,
+            "initial_today_pending": true,
+            "refresh_hydrations": 0,
+            "refresh_seconds": 0.0011,
+            "total_hydrations": 20
+          },
+          "warm": {
+            "acquisition": {
+              "counts": {
+                "analysis_candidate_roots": 2,
+                "analyzed_prompts": 0,
+                "analyzed_requests": 0,
+                "cache_hits": 22,
+                "cache_misses": 0,
+                "cache_reads": 22,
+                "cache_writes": 0,
+                "catalog_pages": 0,
+                "catalog_roots": 100,
+                "catalog_sessions": 100,
+                "daily_usage_projections": 1,
+                "dashboard_candidate_roots": 20,
+                "full_catalog_fetches": 2,
+                "history_candidate_roots": 0,
+                "hydrated_roots": 2,
+                "message_operations": 0,
+                "message_pages": 0,
+                "revision_calculations": 0,
+                "revision_checks": 222
+              },
+              "generation": "synthetic",
+              "milliseconds": {
+                "analysis": 0.0,
+                "cache_and_acquisition": 11.457,
+                "cache_reads": 115.589,
+                "catalog": 0.0,
+                "first_usable_dashboard": 135.782,
+                "fully_populated_dashboard": 136.166,
+                "historical_accounting": 0.0,
+                "hydration": 0.0,
+                "liveness": 0.0,
+                "projection": 13.455,
+                "rendering": 0.0,
+                "revision": 0.0,
+                "watch_refresh": 0.293
+              },
+              "mode": "watch-global"
+            },
+            "first_usable_seconds": 0.1358,
+            "fully_populated_seconds": 0.1362,
+            "initial_hydrations": 2,
+            "initial_today_pending": true,
+            "refresh_hydrations": 0,
+            "refresh_seconds": 0.0005,
+            "total_hydrations": 2
+          }
+        }
+      }
+    },
+    {
+      "scenario": "idle-100x50",
+      "repeat": 2,
+      "arguments": [
+        "--roots",
+        "100",
+        "--prompts",
+        "50",
+        "--watch"
+      ],
+      "exit_code": 0,
+      "result": {
+        "children_per_root": 0,
+        "first_revision_checks": 4,
+        "first_seconds": 0.0374,
+        "first_source_hydrations": 2,
+        "prompts_per_root": 50,
+        "roots": 100,
+        "running_roots": 0,
+        "sample_prompts_first": 100,
+        "sample_prompts_second": 100,
+        "sampled_roots": 2,
+        "sampled_running_roots": 0,
+        "second_additional_hydrations": 0,
+        "second_revision_checks": 2,
+        "second_seconds": 0.0155,
+        "today_roots": 0,
+        "total_prompts": 5000,
+        "watch": {
+          "cold": {
+            "acquisition": {
+              "counts": {
+                "analysis_candidate_roots": 20,
+                "analyzed_prompts": 1000,
+                "analyzed_requests": 1000,
+                "cache_hits": 0,
+                "cache_misses": 40,
+                "cache_reads": 40,
+                "cache_writes": 20,
+                "catalog_pages": 0,
+                "catalog_roots": 100,
+                "catalog_sessions": 100,
+                "daily_usage_projections": 1,
+                "dashboard_candidate_roots": 20,
+                "full_catalog_fetches": 2,
+                "history_candidate_roots": 0,
+                "hydrated_roots": 20,
+                "message_operations": 0,
+                "message_pages": 0,
+                "revision_calculations": 0,
+                "revision_checks": 260
+              },
+              "generation": "synthetic",
+              "milliseconds": {
+                "analysis": 43.303,
+                "cache_and_acquisition": 342.213,
+                "cache_reads": 67.109,
+                "catalog": 0.0,
+                "first_usable_dashboard": 521.381,
+                "fully_populated_dashboard": 522.363,
+                "historical_accounting": 0.0,
+                "hydration": 0.0,
+                "liveness": 0.0,
+                "projection": 131.127,
+                "rendering": 0.0,
+                "revision": 0.0,
+                "watch_refresh": 0.339
+              },
+              "mode": "watch-global"
+            },
+            "first_usable_seconds": 0.5214,
+            "fully_populated_seconds": 0.5224,
+            "initial_hydrations": 20,
+            "initial_today_pending": true,
+            "refresh_hydrations": 0,
+            "refresh_seconds": 0.0011,
+            "total_hydrations": 20
+          },
+          "warm": {
+            "acquisition": {
+              "counts": {
+                "analysis_candidate_roots": 2,
+                "analyzed_prompts": 0,
+                "analyzed_requests": 0,
+                "cache_hits": 22,
+                "cache_misses": 0,
+                "cache_reads": 22,
+                "cache_writes": 0,
+                "catalog_pages": 0,
+                "catalog_roots": 100,
+                "catalog_sessions": 100,
+                "daily_usage_projections": 1,
+                "dashboard_candidate_roots": 20,
+                "full_catalog_fetches": 2,
+                "history_candidate_roots": 0,
+                "hydrated_roots": 2,
+                "message_operations": 0,
+                "message_pages": 0,
+                "revision_calculations": 0,
+                "revision_checks": 222
+              },
+              "generation": "synthetic",
+              "milliseconds": {
+                "analysis": 0.0,
+                "cache_and_acquisition": 11.619,
+                "cache_reads": 116.463,
+                "catalog": 0.0,
+                "first_usable_dashboard": 136.799,
+                "fully_populated_dashboard": 137.183,
+                "historical_accounting": 0.0,
+                "hydration": 0.0,
+                "liveness": 0.0,
+                "projection": 13.435,
+                "rendering": 0.0,
+                "revision": 0.0,
+                "watch_refresh": 0.298
+              },
+              "mode": "watch-global"
+            },
+            "first_usable_seconds": 0.1368,
+            "fully_populated_seconds": 0.1372,
+            "initial_hydrations": 2,
+            "initial_today_pending": true,
+            "refresh_hydrations": 0,
+            "refresh_seconds": 0.0005,
+            "total_hydrations": 2
+          }
+        }
+      }
+    },
+    {
+      "scenario": "idle-100x50",
+      "repeat": 3,
+      "arguments": [
+        "--roots",
+        "100",
+        "--prompts",
+        "50",
+        "--watch"
+      ],
+      "exit_code": 0,
+      "result": {
+        "children_per_root": 0,
+        "first_revision_checks": 4,
+        "first_seconds": 0.0371,
+        "first_source_hydrations": 2,
+        "prompts_per_root": 50,
+        "roots": 100,
+        "running_roots": 0,
+        "sample_prompts_first": 100,
+        "sample_prompts_second": 100,
+        "sampled_roots": 2,
+        "sampled_running_roots": 0,
+        "second_additional_hydrations": 0,
+        "second_revision_checks": 2,
+        "second_seconds": 0.0158,
+        "today_roots": 0,
+        "total_prompts": 5000,
+        "watch": {
+          "cold": {
+            "acquisition": {
+              "counts": {
+                "analysis_candidate_roots": 20,
+                "analyzed_prompts": 1000,
+                "analyzed_requests": 1000,
+                "cache_hits": 0,
+                "cache_misses": 40,
+                "cache_reads": 40,
+                "cache_writes": 20,
+                "catalog_pages": 0,
+                "catalog_roots": 100,
+                "catalog_sessions": 100,
+                "daily_usage_projections": 1,
+                "dashboard_candidate_roots": 20,
+                "full_catalog_fetches": 2,
+                "history_candidate_roots": 0,
+                "hydrated_roots": 20,
+                "message_operations": 0,
+                "message_pages": 0,
+                "revision_calculations": 0,
+                "revision_checks": 260
+              },
+              "generation": "synthetic",
+              "milliseconds": {
+                "analysis": 43.11,
+                "cache_and_acquisition": 311.922,
+                "cache_reads": 67.054,
+                "catalog": 0.0,
+                "first_usable_dashboard": 494.508,
+                "fully_populated_dashboard": 495.794,
+                "historical_accounting": 0.0,
+                "hydration": 0.0,
+                "liveness": 0.0,
+                "projection": 135.529,
+                "rendering": 0.0,
+                "revision": 0.0,
+                "watch_refresh": 0.463
+              },
+              "mode": "watch-global"
+            },
+            "first_usable_seconds": 0.4945,
+            "fully_populated_seconds": 0.4958,
+            "initial_hydrations": 20,
+            "initial_today_pending": true,
+            "refresh_hydrations": 0,
+            "refresh_seconds": 0.0013,
+            "total_hydrations": 20
+          },
+          "warm": {
+            "acquisition": {
+              "counts": {
+                "analysis_candidate_roots": 2,
+                "analyzed_prompts": 0,
+                "analyzed_requests": 0,
+                "cache_hits": 22,
+                "cache_misses": 0,
+                "cache_reads": 22,
+                "cache_writes": 0,
+                "catalog_pages": 0,
+                "catalog_roots": 100,
+                "catalog_sessions": 100,
+                "daily_usage_projections": 1,
+                "dashboard_candidate_roots": 20,
+                "full_catalog_fetches": 2,
+                "history_candidate_roots": 0,
+                "hydrated_roots": 2,
+                "message_operations": 0,
+                "message_pages": 0,
+                "revision_calculations": 0,
+                "revision_checks": 222
+              },
+              "generation": "synthetic",
+              "milliseconds": {
+                "analysis": 0.0,
+                "cache_and_acquisition": 11.555,
+                "cache_reads": 118.753,
+                "catalog": 0.0,
+                "first_usable_dashboard": 139.066,
+                "fully_populated_dashboard": 139.47,
+                "historical_accounting": 0.0,
+                "hydration": 0.0,
+                "liveness": 0.0,
+                "projection": 13.567,
+                "rendering": 0.0,
+                "revision": 0.0,
+                "watch_refresh": 0.293
+              },
+              "mode": "watch-global"
+            },
+            "first_usable_seconds": 0.1391,
+            "fully_populated_seconds": 0.1395,
+            "initial_hydrations": 2,
+            "initial_today_pending": true,
+            "refresh_hydrations": 0,
+            "refresh_seconds": 0.0005,
+            "total_hydrations": 2
+          }
+        }
+      }
+    },
+    {
+      "scenario": "children-active-20x50",
+      "repeat": 1,
+      "arguments": [
+        "--roots",
+        "20",
+        "--prompts",
+        "50",
+        "--children",
+        "2",
+        "--today-roots",
+        "5",
+        "--running-roots",
+        "2",
+        "--watch"
+      ],
+      "exit_code": 0,
+      "result": {
+        "children_per_root": 2,
+        "first_revision_checks": 10,
+        "first_seconds": 0.0967,
+        "first_source_hydrations": 5,
+        "prompts_per_root": 50,
+        "roots": 20,
+        "running_roots": 2,
+        "sample_prompts_first": 100,
+        "sample_prompts_second": 100,
+        "sampled_roots": 5,
+        "sampled_running_roots": 0,
+        "second_additional_hydrations": 0,
+        "second_revision_checks": 5,
+        "second_seconds": 0.0411,
+        "today_roots": 5,
+        "total_prompts": 3000,
+        "watch": {
+          "cold": {
+            "acquisition": {
+              "counts": {
+                "analysis_candidate_roots": 22,
+                "analyzed_prompts": 1100,
+                "analyzed_requests": 3300,
+                "cache_hits": 0,
+                "cache_misses": 36,
+                "cache_reads": 36,
+                "cache_writes": 18,
+                "catalog_pages": 0,
+                "catalog_roots": 20,
+                "catalog_sessions": 60,
+                "daily_usage_projections": 2,
+                "dashboard_candidate_roots": 20,
+                "full_catalog_fetches": 2,
+                "history_candidate_roots": 7,
+                "hydrated_roots": 22,
+                "message_operations": 0,
+                "message_pages": 0,
+                "revision_calculations": 0,
+                "revision_checks": 101
+              },
+              "generation": "synthetic",
+              "milliseconds": {
+                "analysis": 61.069,
+                "cache_and_acquisition": 309.916,
+                "cache_reads": 61.208,
+                "catalog": 0.0,
+                "first_usable_dashboard": 510.841,
+                "fully_populated_dashboard": 552.57,
+                "historical_accounting": 0.822,
+                "hydration": 0.0,
+                "liveness": 0.0,
+                "projection": 166.265,
+                "rendering": 0.0,
+                "revision": 0.0,
+                "watch_refresh": 20.116
+              },
+              "mode": "watch-global"
+            },
+            "first_usable_seconds": 0.5108,
+            "fully_populated_seconds": 0.5526,
+            "initial_hydrations": 20,
+            "initial_today_pending": true,
+            "refresh_hydrations": 2,
+            "refresh_seconds": 0.0212,
+            "total_hydrations": 20
+          },
+          "warm": {
+            "acquisition": {
+              "counts": {
+                "analysis_candidate_roots": 6,
+                "analyzed_prompts": 200,
+                "analyzed_requests": 600,
+                "cache_hits": 20,
+                "cache_misses": 0,
+                "cache_reads": 20,
+                "cache_writes": 0,
+                "catalog_pages": 0,
+                "catalog_roots": 20,
+                "catalog_sessions": 60,
+                "daily_usage_projections": 2,
+                "dashboard_candidate_roots": 20,
+                "full_catalog_fetches": 2,
+                "history_candidate_roots": 7,
+                "hydrated_roots": 6,
+                "message_operations": 0,
+                "message_pages": 0,
+                "revision_calculations": 0,
+                "revision_checks": 67
+              },
+              "generation": "synthetic",
+              "milliseconds": {
+                "analysis": 10.613,
+                "cache_and_acquisition": 11.848,
+                "cache_reads": 124.862,
+                "catalog": 0.0,
+                "first_usable_dashboard": 181.995,
+                "fully_populated_dashboard": 216.749,
+                "historical_accounting": 0.98,
+                "hydration": 0.0,
+                "liveness": 0.0,
+                "projection": 50.032,
+                "rendering": 0.0,
+                "revision": 0.0,
+                "watch_refresh": 20.188
+              },
+              "mode": "watch-global"
+            },
+            "first_usable_seconds": 0.182,
+            "fully_populated_seconds": 0.2168,
+            "initial_hydrations": 4,
+            "initial_today_pending": true,
+            "refresh_hydrations": 2,
+            "refresh_seconds": 0.0207,
+            "total_hydrations": 4
+          }
+        }
+      }
+    },
+    {
+      "scenario": "children-active-20x50",
+      "repeat": 2,
+      "arguments": [
+        "--roots",
+        "20",
+        "--prompts",
+        "50",
+        "--children",
+        "2",
+        "--today-roots",
+        "5",
+        "--running-roots",
+        "2",
+        "--watch"
+      ],
+      "exit_code": 0,
+      "result": {
+        "children_per_root": 2,
+        "first_revision_checks": 10,
+        "first_seconds": 0.1024,
+        "first_source_hydrations": 5,
+        "prompts_per_root": 50,
+        "roots": 20,
+        "running_roots": 2,
+        "sample_prompts_first": 100,
+        "sample_prompts_second": 100,
+        "sampled_roots": 5,
+        "sampled_running_roots": 0,
+        "second_additional_hydrations": 0,
+        "second_revision_checks": 5,
+        "second_seconds": 0.0416,
+        "today_roots": 5,
+        "total_prompts": 3000,
+        "watch": {
+          "cold": {
+            "acquisition": {
+              "counts": {
+                "analysis_candidate_roots": 22,
+                "analyzed_prompts": 1100,
+                "analyzed_requests": 3300,
+                "cache_hits": 0,
+                "cache_misses": 36,
+                "cache_reads": 36,
+                "cache_writes": 18,
+                "catalog_pages": 0,
+                "catalog_roots": 20,
+                "catalog_sessions": 60,
+                "daily_usage_projections": 2,
+                "dashboard_candidate_roots": 20,
+                "full_catalog_fetches": 2,
+                "history_candidate_roots": 7,
+                "hydrated_roots": 22,
+                "message_operations": 0,
+                "message_pages": 0,
+                "revision_calculations": 0,
+                "revision_checks": 101
+              },
+              "generation": "synthetic",
+              "milliseconds": {
+                "analysis": 65.455,
+                "cache_and_acquisition": 335.168,
+                "cache_reads": 67.205,
+                "catalog": 0.0,
+                "first_usable_dashboard": 547.243,
+                "fully_populated_dashboard": 589.012,
+                "historical_accounting": 0.978,
+                "hydration": 0.0,
+                "liveness": 0.0,
+                "projection": 176.711,
+                "rendering": 0.0,
+                "revision": 0.0,
+                "watch_refresh": 21.612
+              },
+              "mode": "watch-global"
+            },
+            "first_usable_seconds": 0.5472,
+            "fully_populated_seconds": 0.589,
+            "initial_hydrations": 20,
+            "initial_today_pending": true,
+            "refresh_hydrations": 2,
+            "refresh_seconds": 0.0231,
+            "total_hydrations": 20
+          },
+          "warm": {
+            "acquisition": {
+              "counts": {
+                "analysis_candidate_roots": 6,
+                "analyzed_prompts": 200,
+                "analyzed_requests": 600,
+                "cache_hits": 20,
+                "cache_misses": 0,
+                "cache_reads": 20,
+                "cache_writes": 0,
+                "catalog_pages": 0,
+                "catalog_roots": 20,
+                "catalog_sessions": 60,
+                "daily_usage_projections": 2,
+                "dashboard_candidate_roots": 20,
+                "full_catalog_fetches": 2,
+                "history_candidate_roots": 7,
+                "hydrated_roots": 6,
+                "message_operations": 0,
+                "message_pages": 0,
+                "revision_calculations": 0,
+                "revision_checks": 67
+              },
+              "generation": "synthetic",
+              "milliseconds": {
+                "analysis": 10.651,
+                "cache_and_acquisition": 13.423,
+                "cache_reads": 140.367,
+                "catalog": 0.0,
+                "first_usable_dashboard": 189.349,
+                "fully_populated_dashboard": 224.383,
+                "historical_accounting": 1.126,
+                "hydration": 0.0,
+                "liveness": 0.0,
+                "projection": 54.337,
+                "rendering": 0.0,
+                "revision": 0.0,
+                "watch_refresh": 20.337
+              },
+              "mode": "watch-global"
+            },
+            "first_usable_seconds": 0.1894,
+            "fully_populated_seconds": 0.2244,
+            "initial_hydrations": 4,
+            "initial_today_pending": true,
+            "refresh_hydrations": 2,
+            "refresh_seconds": 0.0209,
+            "total_hydrations": 4
+          }
+        }
+      }
+    },
+    {
+      "scenario": "children-active-20x50",
+      "repeat": 3,
+      "arguments": [
+        "--roots",
+        "20",
+        "--prompts",
+        "50",
+        "--children",
+        "2",
+        "--today-roots",
+        "5",
+        "--running-roots",
+        "2",
+        "--watch"
+      ],
+      "exit_code": 0,
+      "result": {
+        "children_per_root": 2,
+        "first_revision_checks": 10,
+        "first_seconds": 0.0958,
+        "first_source_hydrations": 5,
+        "prompts_per_root": 50,
+        "roots": 20,
+        "running_roots": 2,
+        "sample_prompts_first": 100,
+        "sample_prompts_second": 100,
+        "sampled_roots": 5,
+        "sampled_running_roots": 0,
+        "second_additional_hydrations": 0,
+        "second_revision_checks": 5,
+        "second_seconds": 0.042,
+        "today_roots": 5,
+        "total_prompts": 3000,
+        "watch": {
+          "cold": {
+            "acquisition": {
+              "counts": {
+                "analysis_candidate_roots": 22,
+                "analyzed_prompts": 1100,
+                "analyzed_requests": 3300,
+                "cache_hits": 0,
+                "cache_misses": 36,
+                "cache_reads": 36,
+                "cache_writes": 18,
+                "catalog_pages": 0,
+                "catalog_roots": 20,
+                "catalog_sessions": 60,
+                "daily_usage_projections": 2,
+                "dashboard_candidate_roots": 20,
+                "full_catalog_fetches": 2,
+                "history_candidate_roots": 7,
+                "hydrated_roots": 22,
+                "message_operations": 0,
+                "message_pages": 0,
+                "revision_calculations": 0,
+                "revision_checks": 101
+              },
+              "generation": "synthetic",
+              "milliseconds": {
+                "analysis": 60.98,
+                "cache_and_acquisition": 322.631,
+                "cache_reads": 60.057,
+                "catalog": 0.0,
+                "first_usable_dashboard": 774.227,
+                "fully_populated_dashboard": 816.031,
+                "historical_accounting": 0.851,
+                "hydration": 0.0,
+                "liveness": 0.0,
+                "projection": 165.044,
+                "rendering": 0.0,
+                "revision": 0.0,
+                "watch_refresh": 20.307
+              },
+              "mode": "watch-global"
+            },
+            "first_usable_seconds": 0.7742,
+            "fully_populated_seconds": 0.816,
+            "initial_hydrations": 20,
+            "initial_today_pending": true,
+            "refresh_hydrations": 2,
+            "refresh_seconds": 0.0215,
+            "total_hydrations": 20
+          },
+          "warm": {
+            "acquisition": {
+              "counts": {
+                "analysis_candidate_roots": 6,
+                "analyzed_prompts": 200,
+                "analyzed_requests": 600,
+                "cache_hits": 20,
+                "cache_misses": 0,
+                "cache_reads": 20,
+                "cache_writes": 0,
+                "catalog_pages": 0,
+                "catalog_roots": 20,
+                "catalog_sessions": 60,
+                "daily_usage_projections": 2,
+                "dashboard_candidate_roots": 20,
+                "full_catalog_fetches": 2,
+                "history_candidate_roots": 7,
+                "hydrated_roots": 6,
+                "message_operations": 0,
+                "message_pages": 0,
+                "revision_calculations": 0,
+                "revision_checks": 67
+              },
+              "generation": "synthetic",
+              "milliseconds": {
+                "analysis": 10.556,
+                "cache_and_acquisition": 12.562,
+                "cache_reads": 125.148,
+                "catalog": 0.0,
+                "first_usable_dashboard": 184.455,
+                "fully_populated_dashboard": 219.229,
+                "historical_accounting": 1.052,
+                "hydration": 0.0,
+                "liveness": 0.0,
+                "projection": 50.188,
+                "rendering": 0.0,
+                "revision": 0.0,
+                "watch_refresh": 20.042
+              },
+              "mode": "watch-global"
+            },
+            "first_usable_seconds": 0.1845,
+            "fully_populated_seconds": 0.2192,
+            "initial_hydrations": 4,
+            "initial_today_pending": true,
+            "refresh_hydrations": 2,
+            "refresh_seconds": 0.0206,
+            "total_hydrations": 4
+          }
+        }
+      }
+    },
+    {
+      "scenario": "idle-1000x20",
+      "repeat": 1,
+      "arguments": [
+        "--roots",
+        "1000",
+        "--prompts",
+        "20",
+        "--watch"
+      ],
+      "exit_code": 0,
+      "result": {
+        "children_per_root": 0,
+        "first_revision_checks": 10,
+        "first_seconds": 0.0702,
+        "first_source_hydrations": 5,
+        "prompts_per_root": 20,
+        "roots": 1000,
+        "running_roots": 0,
+        "sample_prompts_first": 100,
+        "sample_prompts_second": 100,
+        "sampled_roots": 5,
+        "sampled_running_roots": 0,
+        "second_additional_hydrations": 0,
+        "second_revision_checks": 5,
+        "second_seconds": 0.0213,
+        "today_roots": 0,
+        "total_prompts": 20000,
+        "watch": {
+          "cold": {
+            "acquisition": {
+              "counts": {
+                "analysis_candidate_roots": 20,
+                "analyzed_prompts": 400,
+                "analyzed_requests": 400,
+                "cache_hits": 0,
+                "cache_misses": 40,
+                "cache_reads": 40,
+                "cache_writes": 20,
+                "catalog_pages": 0,
+                "catalog_roots": 1000,
+                "catalog_sessions": 1000,
+                "daily_usage_projections": 1,
+                "dashboard_candidate_roots": 20,
+                "full_catalog_fetches": 2,
+                "history_candidate_roots": 0,
+                "hydrated_roots": 20,
+                "message_operations": 0,
+                "message_pages": 0,
+                "revision_calculations": 0,
+                "revision_checks": 2060
+              },
+              "generation": "synthetic",
+              "milliseconds": {
+                "analysis": 22.34,
+                "cache_and_acquisition": 251.983,
+                "cache_reads": 69.972,
+                "catalog": 0.0,
+                "first_usable_dashboard": 376.615,
+                "fully_populated_dashboard": 378.066,
+                "historical_accounting": 0.0,
+                "hydration": 0.0,
+                "liveness": 0.0,
+                "projection": 64.337,
+                "rendering": 0.0,
+                "revision": 0.0,
+                "watch_refresh": 2.489
+              },
+              "mode": "watch-global"
+            },
+            "first_usable_seconds": 0.3766,
+            "fully_populated_seconds": 0.3781,
+            "initial_hydrations": 20,
+            "initial_today_pending": true,
+            "refresh_hydrations": 0,
+            "refresh_seconds": 0.003,
+            "total_hydrations": 20
+          },
+          "warm": {
+            "acquisition": {
+              "counts": {
+                "analysis_candidate_roots": 2,
+                "analyzed_prompts": 0,
+                "analyzed_requests": 0,
+                "cache_hits": 22,
+                "cache_misses": 0,
+                "cache_reads": 22,
+                "cache_writes": 0,
+                "catalog_pages": 0,
+                "catalog_roots": 1000,
+                "catalog_sessions": 1000,
+                "daily_usage_projections": 1,
+                "dashboard_candidate_roots": 20,
+                "full_catalog_fetches": 2,
+                "history_candidate_roots": 0,
+                "hydrated_roots": 2,
+                "message_operations": 0,
+                "message_pages": 0,
+                "revision_calculations": 0,
+                "revision_checks": 2022
+              },
+              "generation": "synthetic",
+              "milliseconds": {
+                "analysis": 0.0,
+                "cache_and_acquisition": 5.656,
+                "cache_reads": 64.607,
+                "catalog": 0.0,
+                "first_usable_dashboard": 79.716,
+                "fully_populated_dashboard": 80.773,
+                "historical_accounting": 0.0,
+                "hydration": 0.0,
+                "liveness": 0.0,
+                "projection": 5.983,
+                "rendering": 0.0,
+                "revision": 0.0,
+                "watch_refresh": 2.459
+              },
+              "mode": "watch-global"
+            },
+            "first_usable_seconds": 0.0797,
+            "fully_populated_seconds": 0.0808,
+            "initial_hydrations": 2,
+            "initial_today_pending": true,
+            "refresh_hydrations": 0,
+            "refresh_seconds": 0.0027,
+            "total_hydrations": 2
+          }
+        }
+      }
+    },
+    {
+      "scenario": "idle-1000x20",
+      "repeat": 2,
+      "arguments": [
+        "--roots",
+        "1000",
+        "--prompts",
+        "20",
+        "--watch"
+      ],
+      "exit_code": 0,
+      "result": {
+        "children_per_root": 0,
+        "first_revision_checks": 10,
+        "first_seconds": 0.0707,
+        "first_source_hydrations": 5,
+        "prompts_per_root": 20,
+        "roots": 1000,
+        "running_roots": 0,
+        "sample_prompts_first": 100,
+        "sample_prompts_second": 100,
+        "sampled_roots": 5,
+        "sampled_running_roots": 0,
+        "second_additional_hydrations": 0,
+        "second_revision_checks": 5,
+        "second_seconds": 0.0209,
+        "today_roots": 0,
+        "total_prompts": 20000,
+        "watch": {
+          "cold": {
+            "acquisition": {
+              "counts": {
+                "analysis_candidate_roots": 20,
+                "analyzed_prompts": 400,
+                "analyzed_requests": 400,
+                "cache_hits": 0,
+                "cache_misses": 40,
+                "cache_reads": 40,
+                "cache_writes": 20,
+                "catalog_pages": 0,
+                "catalog_roots": 1000,
+                "catalog_sessions": 1000,
+                "daily_usage_projections": 1,
+                "dashboard_candidate_roots": 20,
+                "full_catalog_fetches": 2,
+                "history_candidate_roots": 0,
+                "hydrated_roots": 20,
+                "message_operations": 0,
+                "message_pages": 0,
+                "revision_calculations": 0,
+                "revision_checks": 2060
+              },
+              "generation": "synthetic",
+              "milliseconds": {
+                "analysis": 21.561,
+                "cache_and_acquisition": 278.223,
+                "cache_reads": 65.487,
+                "catalog": 0.0,
+                "first_usable_dashboard": 390.327,
+                "fully_populated_dashboard": 391.671,
+                "historical_accounting": 0.0,
+                "hydration": 0.0,
+                "liveness": 0.0,
+                "projection": 56.339,
+                "rendering": 0.0,
+                "revision": 0.0,
+                "watch_refresh": 2.528
+              },
+              "mode": "watch-global"
+            },
+            "first_usable_seconds": 0.3903,
+            "fully_populated_seconds": 0.3917,
+            "initial_hydrations": 20,
+            "initial_today_pending": true,
+            "refresh_hydrations": 0,
+            "refresh_seconds": 0.003,
+            "total_hydrations": 20
+          },
+          "warm": {
+            "acquisition": {
+              "counts": {
+                "analysis_candidate_roots": 2,
+                "analyzed_prompts": 0,
+                "analyzed_requests": 0,
+                "cache_hits": 22,
+                "cache_misses": 0,
+                "cache_reads": 22,
+                "cache_writes": 0,
+                "catalog_pages": 0,
+                "catalog_roots": 1000,
+                "catalog_sessions": 1000,
+                "daily_usage_projections": 1,
+                "dashboard_candidate_roots": 20,
+                "full_catalog_fetches": 2,
+                "history_candidate_roots": 0,
+                "hydrated_roots": 2,
+                "message_operations": 0,
+                "message_pages": 0,
+                "revision_calculations": 0,
+                "revision_checks": 2022
+              },
+              "generation": "synthetic",
+              "milliseconds": {
+                "analysis": 0.0,
+                "cache_and_acquisition": 5.513,
+                "cache_reads": 62.508,
+                "catalog": 0.0,
+                "first_usable_dashboard": 75.955,
+                "fully_populated_dashboard": 76.997,
+                "historical_accounting": 0.0,
+                "hydration": 0.0,
+                "liveness": 0.0,
+                "projection": 5.908,
+                "rendering": 0.0,
+                "revision": 0.0,
+                "watch_refresh": 2.362
+              },
+              "mode": "watch-global"
+            },
+            "first_usable_seconds": 0.076,
+            "fully_populated_seconds": 0.077,
+            "initial_hydrations": 2,
+            "initial_today_pending": true,
+            "refresh_hydrations": 0,
+            "refresh_seconds": 0.0026,
+            "total_hydrations": 2
+          }
+        }
+      }
+    },
+    {
+      "scenario": "idle-1000x20",
+      "repeat": 3,
+      "arguments": [
+        "--roots",
+        "1000",
+        "--prompts",
+        "20",
+        "--watch"
+      ],
+      "exit_code": 0,
+      "result": {
+        "children_per_root": 0,
+        "first_revision_checks": 10,
+        "first_seconds": 0.0695,
+        "first_source_hydrations": 5,
+        "prompts_per_root": 20,
+        "roots": 1000,
+        "running_roots": 0,
+        "sample_prompts_first": 100,
+        "sample_prompts_second": 100,
+        "sampled_roots": 5,
+        "sampled_running_roots": 0,
+        "second_additional_hydrations": 0,
+        "second_revision_checks": 5,
+        "second_seconds": 0.0216,
+        "today_roots": 0,
+        "total_prompts": 20000,
+        "watch": {
+          "cold": {
+            "acquisition": {
+              "counts": {
+                "analysis_candidate_roots": 20,
+                "analyzed_prompts": 400,
+                "analyzed_requests": 400,
+                "cache_hits": 0,
+                "cache_misses": 40,
+                "cache_reads": 40,
+                "cache_writes": 20,
+                "catalog_pages": 0,
+                "catalog_roots": 1000,
+                "catalog_sessions": 1000,
+                "daily_usage_projections": 1,
+                "dashboard_candidate_roots": 20,
+                "full_catalog_fetches": 2,
+                "history_candidate_roots": 0,
+                "hydrated_roots": 20,
+                "message_operations": 0,
+                "message_pages": 0,
+                "revision_calculations": 0,
+                "revision_checks": 2060
+              },
+              "generation": "synthetic",
+              "milliseconds": {
+                "analysis": 21.459,
+                "cache_and_acquisition": 268.372,
+                "cache_reads": 64.86,
+                "catalog": 0.0,
+                "first_usable_dashboard": 381.064,
+                "fully_populated_dashboard": 382.399,
+                "historical_accounting": 0.0,
+                "hydration": 0.0,
+                "liveness": 0.0,
+                "projection": 56.817,
+                "rendering": 0.0,
+                "revision": 0.0,
+                "watch_refresh": 2.533
+              },
+              "mode": "watch-global"
+            },
+            "first_usable_seconds": 0.3811,
+            "fully_populated_seconds": 0.3824,
+            "initial_hydrations": 20,
+            "initial_today_pending": true,
+            "refresh_hydrations": 0,
+            "refresh_seconds": 0.003,
+            "total_hydrations": 20
+          },
+          "warm": {
+            "acquisition": {
+              "counts": {
+                "analysis_candidate_roots": 2,
+                "analyzed_prompts": 0,
+                "analyzed_requests": 0,
+                "cache_hits": 22,
+                "cache_misses": 0,
+                "cache_reads": 22,
+                "cache_writes": 0,
+                "catalog_pages": 0,
+                "catalog_roots": 1000,
+                "catalog_sessions": 1000,
+                "daily_usage_projections": 1,
+                "dashboard_candidate_roots": 20,
+                "full_catalog_fetches": 2,
+                "history_candidate_roots": 0,
+                "hydrated_roots": 2,
+                "message_operations": 0,
+                "message_pages": 0,
+                "revision_calculations": 0,
+                "revision_checks": 2022
+              },
+              "generation": "synthetic",
+              "milliseconds": {
+                "analysis": 0.0,
+                "cache_and_acquisition": 5.5,
+                "cache_reads": 62.923,
+                "catalog": 0.0,
+                "first_usable_dashboard": 77.095,
+                "fully_populated_dashboard": 78.189,
+                "historical_accounting": 0.0,
+                "hydration": 0.0,
+                "liveness": 0.0,
+                "projection": 5.871,
+                "rendering": 0.0,
+                "revision": 0.0,
+                "watch_refresh": 2.444
+              },
+              "mode": "watch-global"
+            },
+            "first_usable_seconds": 0.0771,
+            "fully_populated_seconds": 0.0782,
+            "initial_hydrations": 2,
+            "initial_today_pending": true,
+            "refresh_hydrations": 0,
+            "refresh_seconds": 0.0026,
+            "total_hydrations": 2
+          }
+        }
+      }
+    }
+  ],
+  "token_mix": [
+    {
+      "scenario": "deep-100x50",
+      "repeat": 1,
+      "exit_code": 0,
+      "result": {
+        "cold": {
+          "wall_seconds": 1.9856007999997018,
+          "cpu_seconds": 1.078125,
+          "hydrations": 100,
+          "revision_checks": 200,
+          "sample_prompts": 5000,
+          "calls": 5000,
+          "output_sha256": "a40b21f2d6071af0f9fe8a0cb667567968d0bf5aecc54c757ebdf6624b969365",
+          "acquisition": {
+            "mode": "token-mix-history",
+            "generation": "synthetic",
+            "counts": {
+              "catalog_sessions": 0,
+              "catalog_roots": 0,
+              "analysis_candidate_roots": 100,
+              "dashboard_candidate_roots": 0,
+              "history_candidate_roots": 0,
+              "hydrated_roots": 100,
+              "cache_reads": 100,
+              "cache_hits": 0,
+              "cache_misses": 100,
+              "cache_writes": 100,
+              "revision_checks": 200,
+              "revision_calculations": 0,
+              "full_catalog_fetches": 1,
+              "catalog_pages": 0,
+              "message_operations": 0,
+              "message_pages": 0,
+              "analyzed_prompts": 5000,
+              "analyzed_requests": 5000
+            },
+            "milliseconds": {
+              "catalog": 0.0,
+              "revision": 0.0,
+              "liveness": 0.0,
+              "cache_reads": 210.145,
+              "hydration": 0.0,
+              "analysis": 224.428,
+              "historical_accounting": 0.0,
+              "projection": 0.0,
+              "rendering": 0.0,
+              "watch_refresh": 0.0,
+              "cache_and_acquisition": 1837.202
+            }
+          }
+        },
+        "warm": {
+          "wall_seconds": 0.7039442000004783,
+          "cpu_seconds": 0.703125,
+          "hydrations": 0,
+          "revision_checks": 100,
+          "sample_prompts": 5000,
+          "calls": 5000,
+          "output_sha256": "a40b21f2d6071af0f9fe8a0cb667567968d0bf5aecc54c757ebdf6624b969365",
+          "acquisition": {
+            "mode": "token-mix-history",
+            "generation": "synthetic",
+            "counts": {
+              "catalog_sessions": 0,
+              "catalog_roots": 0,
+              "analysis_candidate_roots": 100,
+              "dashboard_candidate_roots": 0,
+              "history_candidate_roots": 0,
+              "hydrated_roots": 0,
+              "cache_reads": 100,
+              "cache_hits": 100,
+              "cache_misses": 0,
+              "cache_writes": 0,
+              "revision_checks": 100,
+              "revision_calculations": 0,
+              "full_catalog_fetches": 1,
+              "catalog_pages": 0,
+              "message_operations": 0,
+              "message_pages": 0,
+              "analyzed_prompts": 0,
+              "analyzed_requests": 0
+            },
+            "milliseconds": {
+              "catalog": 0.0,
+              "revision": 0.0,
+              "liveness": 0.0,
+              "cache_reads": 530.346,
+              "hydration": 0.0,
+              "analysis": 0.0,
+              "historical_accounting": 0.0,
+              "projection": 0.0,
+              "rendering": 0.0,
+              "watch_refresh": 0.0,
+              "cache_and_acquisition": 532.703
+            }
+          }
+        }
+      }
+    },
+    {
+      "scenario": "deep-100x50",
+      "repeat": 2,
+      "exit_code": 0,
+      "result": {
+        "cold": {
+          "wall_seconds": 2.855604200000016,
+          "cpu_seconds": 1.140625,
+          "hydrations": 100,
+          "revision_checks": 200,
+          "sample_prompts": 5000,
+          "calls": 5000,
+          "output_sha256": "a40b21f2d6071af0f9fe8a0cb667567968d0bf5aecc54c757ebdf6624b969365",
+          "acquisition": {
+            "mode": "token-mix-history",
+            "generation": "synthetic",
+            "counts": {
+              "catalog_sessions": 0,
+              "catalog_roots": 0,
+              "analysis_candidate_roots": 100,
+              "dashboard_candidate_roots": 0,
+              "history_candidate_roots": 0,
+              "hydrated_roots": 100,
+              "cache_reads": 100,
+              "cache_hits": 0,
+              "cache_misses": 100,
+              "cache_writes": 100,
+              "revision_checks": 200,
+              "revision_calculations": 0,
+              "full_catalog_fetches": 1,
+              "catalog_pages": 0,
+              "message_operations": 0,
+              "message_pages": 0,
+              "analyzed_prompts": 5000,
+              "analyzed_requests": 5000
+            },
+            "milliseconds": {
+              "catalog": 0.0,
+              "revision": 0.0,
+              "liveness": 0.0,
+              "cache_reads": 202.6,
+              "hydration": 0.0,
+              "analysis": 219.231,
+              "historical_accounting": 0.0,
+              "projection": 0.0,
+              "rendering": 0.0,
+              "watch_refresh": 0.0,
+              "cache_and_acquisition": 2707.966
+            }
+          }
+        },
+        "warm": {
+          "wall_seconds": 0.6994264000004478,
+          "cpu_seconds": 0.6875,
+          "hydrations": 0,
+          "revision_checks": 100,
+          "sample_prompts": 5000,
+          "calls": 5000,
+          "output_sha256": "a40b21f2d6071af0f9fe8a0cb667567968d0bf5aecc54c757ebdf6624b969365",
+          "acquisition": {
+            "mode": "token-mix-history",
+            "generation": "synthetic",
+            "counts": {
+              "catalog_sessions": 0,
+              "catalog_roots": 0,
+              "analysis_candidate_roots": 100,
+              "dashboard_candidate_roots": 0,
+              "history_candidate_roots": 0,
+              "hydrated_roots": 0,
+              "cache_reads": 100,
+              "cache_hits": 100,
+              "cache_misses": 0,
+              "cache_writes": 0,
+              "revision_checks": 100,
+              "revision_calculations": 0,
+              "full_catalog_fetches": 1,
+              "catalog_pages": 0,
+              "message_operations": 0,
+              "message_pages": 0,
+              "analyzed_prompts": 0,
+              "analyzed_requests": 0
+            },
+            "milliseconds": {
+              "catalog": 0.0,
+              "revision": 0.0,
+              "liveness": 0.0,
+              "cache_reads": 519.052,
+              "hydration": 0.0,
+              "analysis": 0.0,
+              "historical_accounting": 0.0,
+              "projection": 0.0,
+              "rendering": 0.0,
+              "watch_refresh": 0.0,
+              "cache_and_acquisition": 521.361
+            }
+          }
+        }
+      }
+    },
+    {
+      "scenario": "deep-100x50",
+      "repeat": 3,
+      "exit_code": 0,
+      "result": {
+        "cold": {
+          "wall_seconds": 2.0641765000000305,
+          "cpu_seconds": 1.09375,
+          "hydrations": 100,
+          "revision_checks": 200,
+          "sample_prompts": 5000,
+          "calls": 5000,
+          "output_sha256": "a40b21f2d6071af0f9fe8a0cb667567968d0bf5aecc54c757ebdf6624b969365",
+          "acquisition": {
+            "mode": "token-mix-history",
+            "generation": "synthetic",
+            "counts": {
+              "catalog_sessions": 0,
+              "catalog_roots": 0,
+              "analysis_candidate_roots": 100,
+              "dashboard_candidate_roots": 0,
+              "history_candidate_roots": 0,
+              "hydrated_roots": 100,
+              "cache_reads": 100,
+              "cache_hits": 0,
+              "cache_misses": 100,
+              "cache_writes": 100,
+              "revision_checks": 200,
+              "revision_calculations": 0,
+              "full_catalog_fetches": 1,
+              "catalog_pages": 0,
+              "message_operations": 0,
+              "message_pages": 0,
+              "analyzed_prompts": 5000,
+              "analyzed_requests": 5000
+            },
+            "milliseconds": {
+              "catalog": 0.0,
+              "revision": 0.0,
+              "liveness": 0.0,
+              "cache_reads": 203.859,
+              "hydration": 0.0,
+              "analysis": 218.626,
+              "historical_accounting": 0.0,
+              "projection": 0.0,
+              "rendering": 0.0,
+              "watch_refresh": 0.0,
+              "cache_and_acquisition": 1918.1
+            }
+          }
+        },
+        "warm": {
+          "wall_seconds": 0.7022604999992836,
+          "cpu_seconds": 0.703125,
+          "hydrations": 0,
+          "revision_checks": 100,
+          "sample_prompts": 5000,
+          "calls": 5000,
+          "output_sha256": "a40b21f2d6071af0f9fe8a0cb667567968d0bf5aecc54c757ebdf6624b969365",
+          "acquisition": {
+            "mode": "token-mix-history",
+            "generation": "synthetic",
+            "counts": {
+              "catalog_sessions": 0,
+              "catalog_roots": 0,
+              "analysis_candidate_roots": 100,
+              "dashboard_candidate_roots": 0,
+              "history_candidate_roots": 0,
+              "hydrated_roots": 0,
+              "cache_reads": 100,
+              "cache_hits": 100,
+              "cache_misses": 0,
+              "cache_writes": 0,
+              "revision_checks": 100,
+              "revision_calculations": 0,
+              "full_catalog_fetches": 1,
+              "catalog_pages": 0,
+              "message_operations": 0,
+              "message_pages": 0,
+              "analyzed_prompts": 0,
+              "analyzed_requests": 0
+            },
+            "milliseconds": {
+              "catalog": 0.0,
+              "revision": 0.0,
+              "liveness": 0.0,
+              "cache_reads": 521.532,
+              "hydration": 0.0,
+              "analysis": 0.0,
+              "historical_accounting": 0.0,
+              "projection": 0.0,
+              "rendering": 0.0,
+              "watch_refresh": 0.0,
+              "cache_and_acquisition": 523.861
+            }
+          }
+        }
+      }
+    }
+  ],
+  "outcome": "NO_GAIN",
+  "assessment_date": "2026-11-05",
+  "scope": "Fresh milestone-40 assessment after maintenance-state adoption; no runtime candidate or speedup claim",
+  "inventory": {
+    "scope": "Git tracked + nonignored untracked text/config, excluding runtime artifacts",
+    "sourceHead": "bf3ae51d45184e8546b4d0d7af3c37d1a59fe11e",
+    "summary": {
+      "inventoried": 831,
+      "kinds": {
+        "source-or-config": 281,
+        "documentation": 305,
+        "test": 245
+      },
+      "excluded": {
+        "binary-or-over-1MiB": 241
+      },
+      "exactDuplicateGroups": 0,
+      "hotspots": [
+        {
+          "path": "development/architecture/governance/verification/watch-account-pixels/measurements.json",
+          "kind": "source-or-config",
+          "bytes": 66430,
+          "lines": 3786
+        },
+        {
+          "path": "development/architecture/governance/verification/mini-session-alignment/chrome.json",
+          "kind": "source-or-config",
+          "bytes": 62926,
+          "lines": 2325
+        },
+        {
+          "path": "development/architecture/governance/verification/mini-session-alignment/edge.json",
+          "kind": "source-or-config",
+          "bytes": 62911,
+          "lines": 2325
+        },
+        {
+          "path": "development/architecture/governance/verification/mini-placement/full-tests.json",
+          "kind": "test",
+          "bytes": 43348,
+          "lines": 1970
+        },
+        {
+          "path": "development/architecture/governance/verification/mini-session-alignment/full-tests.json",
+          "kind": "test",
+          "bytes": 43355,
+          "lines": 1970
+        },
+        {
+          "path": "development/architecture/governance/verification/mini-session-tables/full-tests.json",
+          "kind": "test",
+          "bytes": 43048,
+          "lines": 1956
+        },
+        {
+          "path": "development/architecture/governance/verification/watch-account-pixels/full-tests.json",
+          "kind": "test",
+          "bytes": 42119,
+          "lines": 1914
+        },
+        {
+          "path": "development/architecture/governance/verification/mini-web-theme/chrome.json",
+          "kind": "source-or-config",
+          "bytes": 58731,
+          "lines": 1888
+        },
+        {
+          "path": "development/architecture/governance/verification/mini-web-theme/edge.json",
+          "kind": "source-or-config",
+          "bytes": 58714,
+          "lines": 1888
+        },
+        {
+          "path": "development/tests/evidence/fr000533-full.json",
+          "kind": "test",
+          "bytes": 38691,
+          "lines": 1671
+        },
+        {
+          "path": "development/tests/evidence/fr000533-full-final.json",
+          "kind": "test",
+          "bytes": 37877,
+          "lines": 1663
+        },
+        {
+          "path": "development/tests/evidence/fr000533-quick.json",
+          "kind": "test",
+          "bytes": 38237,
+          "lines": 1607
+        }
+      ]
+    },
+    "areas": {
+      "src": 208,
+      "development/tests": 244,
+      "development/tools": 15
+    }
+  },
+  "profiles": {
+    "normal": {
+      "total_calls": 789436,
+      "total_seconds": 0.8553675999999997,
+      "top_cumulative": [
+        {
+          "file": "~",
+          "line": 0,
+          "function": "<built-in method builtins.exec>",
+          "calls": 321,
+          "self_seconds": 0.0643604,
+          "cumulative_seconds": 1.1852499
+        },
+        {
+          "file": "benchmark_large_month.py",
+          "line": 1,
+          "function": "<module>",
+          "calls": 1,
+          "self_seconds": 7.280000000000001e-05,
+          "cumulative_seconds": 1.1852402
+        },
+        {
+          "file": "benchmark_large_month.py",
+          "line": 97,
+          "function": "main",
+          "calls": 1,
+          "self_seconds": 0.0001112,
+          "cumulative_seconds": 0.871171
+        },
+        {
+          "file": "development/tests/fixtures/synthetic_month.py",
+          "line": 58,
+          "function": "__init__",
+          "calls": 1,
+          "self_seconds": 0.0008990000000000001,
+          "cumulative_seconds": 0.6694803
+        },
+        {
+          "file": "development/tests/fixtures/synthetic_month.py",
+          "line": 63,
+          "function": "<genexpr>",
+          "calls": 1001,
+          "self_seconds": 0.0006302,
+          "cumulative_seconds": 0.6685788
+        },
+        {
+          "file": "development/tests/fixtures/synthetic_month.py",
+          "line": 22,
+          "function": "make_root_snapshot",
+          "calls": 1000,
+          "self_seconds": 0.25042210000000004,
+          "cumulative_seconds": 0.6679486
+        },
+        {
+          "file": "<frozen importlib._bootstrap>",
+          "line": 1360,
+          "function": "_find_and_load",
+          "calls": 244,
+          "self_seconds": 0.0010146,
+          "cumulative_seconds": 0.3136314
+        },
+        {
+          "file": "<frozen importlib._bootstrap>",
+          "line": 1308,
+          "function": "_find_and_load_unlocked",
+          "calls": 244,
+          "self_seconds": 0.0009172000000000001,
+          "cumulative_seconds": 0.3132952
+        },
+        {
+          "file": "<frozen importlib._bootstrap>",
+          "line": 914,
+          "function": "_load_unlocked",
+          "calls": 234,
+          "self_seconds": 0.0006458000000000001,
+          "cumulative_seconds": 0.30799350000000003
+        },
+        {
+          "file": "<frozen importlib._bootstrap_external>",
+          "line": 753,
+          "function": "exec_module",
+          "calls": 199,
+          "self_seconds": 0.00043170000000000003,
+          "cumulative_seconds": 0.3075467
+        },
+        {
+          "file": "<frozen importlib._bootstrap>",
+          "line": 483,
+          "function": "_call_with_frames_removed",
+          "calls": 596,
+          "self_seconds": 0.000537,
+          "cumulative_seconds": 0.3055948
+        },
+        {
+          "file": "src/reports/__init__.py",
+          "line": 1,
+          "function": "<module>",
+          "calls": 1,
+          "self_seconds": 2.19e-05,
+          "cumulative_seconds": 0.18531730000000002
+        },
+        {
+          "file": "~",
+          "line": 0,
+          "function": "<built-in method builtins.__import__>",
+          "calls": 106,
+          "self_seconds": 0.0001629,
+          "cumulative_seconds": 0.1801181
+        },
+        {
+          "file": "src/reports/service.py",
+          "line": 616,
+          "function": "build",
+          "calls": 2,
+          "self_seconds": 5.75e-05,
+          "cumulative_seconds": 0.1591526
+        },
+        {
+          "file": "src/reports/service.py",
+          "line": 640,
+          "function": "_build",
+          "calls": 2,
+          "self_seconds": 3.83e-05,
+          "cumulative_seconds": 0.1588686
+        },
+        {
+          "file": "src/reports/service.py",
+          "line": 734,
+          "function": "_build_dashboard",
+          "calls": 2,
+          "self_seconds": 0.0001065,
+          "cumulative_seconds": 0.15264080000000002
+        },
+        {
+          "file": "src/reports/sampling.py",
+          "line": 50,
+          "function": "recent_sample_roots",
+          "calls": 2,
+          "self_seconds": 0.00011990000000000001,
+          "cumulative_seconds": 0.13520410000000002
+        },
+        {
+          "file": "src/reports/service.py",
+          "line": 186,
+          "function": "_analyze",
+          "calls": 10,
+          "self_seconds": 2.79e-05,
+          "cumulative_seconds": 0.1302316
+        },
+        {
+          "file": "src/reports/acquisition.py",
+          "line": 30,
+          "function": "analyze",
+          "calls": 10,
+          "self_seconds": 0.000135,
+          "cumulative_seconds": 0.1302037
+        },
+        {
+          "file": "src/analysis/cache.py",
+          "line": 246,
+          "function": "analyze_with_cache",
+          "calls": 10,
+          "self_seconds": 6.55e-05,
+          "cumulative_seconds": 0.12960660000000002
+        }
+      ],
+      "top_self": [
+        {
+          "file": "development/tests/fixtures/synthetic_month.py",
+          "line": 22,
+          "function": "make_root_snapshot",
+          "calls": 1000,
+          "self_seconds": 0.25042210000000004,
+          "cumulative_seconds": 0.6679486
+        },
+        {
+          "file": "~",
+          "line": 0,
+          "function": "<built-in method builtins.exec>",
+          "calls": 321,
+          "self_seconds": 0.0643604,
+          "cumulative_seconds": 1.1852499
+        },
+        {
+          "file": "~",
+          "line": 0,
+          "function": "<method 'close' of 'sqlite3.Connection' objects>",
+          "calls": 16,
+          "self_seconds": 0.0509391,
+          "cumulative_seconds": 0.0509391
+        },
+        {
+          "file": "~",
+          "line": 0,
+          "function": "<built-in method _io.open_code>",
+          "calls": 199,
+          "self_seconds": 0.0500326,
+          "cumulative_seconds": 0.0500326
+        },
+        {
+          "file": "development/tests/fixtures/synthetic_month.py",
+          "line": 18,
+          "function": "_prov",
+          "calls": 101000,
+          "self_seconds": 0.049748,
+          "cumulative_seconds": 0.1206046
+        },
+        {
+          "file": "~",
+          "line": 0,
+          "function": "<method 'commit' of 'sqlite3.Connection' objects>",
+          "calls": 16,
+          "self_seconds": 0.0266763,
+          "cumulative_seconds": 0.0266763
+        },
+        {
+          "file": "~",
+          "line": 0,
+          "function": "<method 'execute' of 'sqlite3.Connection' objects>",
+          "calls": 65,
+          "self_seconds": 0.015375400000000001,
+          "cumulative_seconds": 0.015375400000000001
+        },
+        {
+          "file": "src/domain/models.py",
+          "line": 111,
+          "function": "__post_init__",
+          "calls": 20490,
+          "self_seconds": 0.0146963,
+          "cumulative_seconds": 0.0229835
+        },
+        {
+          "file": "~",
+          "line": 0,
+          "function": "<method 'append' of 'list' objects>",
+          "calls": 128397,
+          "self_seconds": 0.014035,
+          "cumulative_seconds": 0.014035
+        },
+        {
+          "file": "~",
+          "line": 0,
+          "function": "<built-in method marshal.loads>",
+          "calls": 199,
+          "self_seconds": 0.014002,
+          "cumulative_seconds": 0.014002
+        },
+        {
+          "file": "~",
+          "line": 0,
+          "function": "<built-in method nt.stat>",
+          "calls": 979,
+          "self_seconds": 0.012462800000000001,
+          "cumulative_seconds": 0.012462800000000001
+        },
+        {
+          "file": "~",
+          "line": 0,
+          "function": "<built-in method builtins.getattr>",
+          "calls": 122884,
+          "self_seconds": 0.011143700000000001,
+          "cumulative_seconds": 0.012114000000000002
+        }
+      ]
+    },
+    "deep": {
+      "total_calls": 4605257,
+      "total_seconds": 3.7773145999999986,
+      "top_cumulative": [
+        {
+          "file": "~",
+          "line": 0,
+          "function": "<built-in method builtins.exec>",
+          "calls": 324,
+          "self_seconds": 0.06127610000000001,
+          "cumulative_seconds": 4.073004200000001
+        },
+        {
+          "file": "measure_performance.py",
+          "line": 1,
+          "function": "<module>",
+          "calls": 1,
+          "self_seconds": 7.680000000000001e-05,
+          "cumulative_seconds": 4.0729923
+        },
+        {
+          "file": "measure_performance.py",
+          "line": 25,
+          "function": "deep",
+          "calls": 1,
+          "self_seconds": 0.0001432,
+          "cumulative_seconds": 4.0257928000000005
+        },
+        {
+          "file": "src/reports/service.py",
+          "line": 410,
+          "function": "build_token_mix_history",
+          "calls": 2,
+          "self_seconds": 0.0052692,
+          "cumulative_seconds": 3.5651582000000004
+        },
+        {
+          "file": "src/reports/token_mix_history.py",
+          "line": 33,
+          "function": "build_token_mix_history",
+          "calls": 2,
+          "self_seconds": 0.0222216,
+          "cumulative_seconds": 3.559889
+        },
+        {
+          "file": "src/reports/service.py",
+          "line": 186,
+          "function": "_analyze",
+          "calls": 200,
+          "self_seconds": 0.0002686,
+          "cumulative_seconds": 2.8547977
+        },
+        {
+          "file": "src/reports/acquisition.py",
+          "line": 30,
+          "function": "analyze",
+          "calls": 200,
+          "self_seconds": 0.0017674000000000001,
+          "cumulative_seconds": 2.8545291
+        },
+        {
+          "file": "src/analysis/cache.py",
+          "line": 246,
+          "function": "analyze_with_cache",
+          "calls": 200,
+          "self_seconds": 0.0008116000000000001,
+          "cumulative_seconds": 2.8449997000000002
+        },
+        {
+          "file": "src/analysis/cache.py",
+          "line": 210,
+          "function": "store",
+          "calls": 100,
+          "self_seconds": 0.0091549,
+          "cumulative_seconds": 1.4100569
+        },
+        {
+          "file": "~",
+          "line": 0,
+          "function": "<built-in method builtins.next>",
+          "calls": 41609,
+          "self_seconds": 0.007757300000000001,
+          "cumulative_seconds": 1.3369846
+        },
+        {
+          "file": "src/cache/database.py",
+          "line": 68,
+          "function": "connect",
+          "calls": 602,
+          "self_seconds": 0.0022171,
+          "cumulative_seconds": 1.3189303
+        },
+        {
+          "file": "src/cache/repository.py",
+          "line": 26,
+          "function": "put",
+          "calls": 100,
+          "self_seconds": 0.0006068,
+          "cumulative_seconds": 1.1364157000000001
+        },
+        {
+          "file": "src/analysis/cache.py",
+          "line": 230,
+          "function": "cached_analysis",
+          "calls": 200,
+          "self_seconds": 0.00030950000000000004,
+          "cumulative_seconds": 1.000121
+        },
+        {
+          "file": "src/analysis/cache.py",
+          "line": 174,
+          "function": "load",
+          "calls": 200,
+          "self_seconds": 0.0067558,
+          "cumulative_seconds": 0.9994498
+        },
+        {
+          "file": "src/analysis/cache.py",
+          "line": 190,
+          "function": "_load",
+          "calls": 200,
+          "self_seconds": 0.0006536000000000001,
+          "cumulative_seconds": 0.9909693
+        },
+        {
+          "file": "contextlib.py",
+          "line": 145,
+          "function": "__exit__",
+          "calls": 801,
+          "self_seconds": 0.0009164,
+          "cumulative_seconds": 0.9438860000000001
+        },
+        {
+          "file": "~",
+          "line": 0,
+          "function": "<method 'close' of 'sqlite3.Connection' objects>",
+          "calls": 301,
+          "self_seconds": 0.5703896,
+          "cumulative_seconds": 0.5703896
+        },
+        {
+          "file": "src/analysis/cache.py",
+          "line": 143,
+          "function": "_bundle_from_dict",
+          "calls": 100,
+          "self_seconds": 0.0021236000000000002,
+          "cumulative_seconds": 0.49614220000000003
+        },
+        {
+          "file": "src/cache/repository.py",
+          "line": 50,
+          "function": "get",
+          "calls": 200,
+          "self_seconds": 0.0011142,
+          "cumulative_seconds": 0.4929252
+        },
+        {
+          "file": "src/reports/service.py",
+          "line": 192,
+          "function": "_analyze_snapshot",
+          "calls": 100,
+          "self_seconds": 0.0005458,
+          "cumulative_seconds": 0.43342450000000005
+        }
+      ],
+      "top_self": [
+        {
+          "file": "~",
+          "line": 0,
+          "function": "<method 'close' of 'sqlite3.Connection' objects>",
+          "calls": 301,
+          "self_seconds": 0.5703896,
+          "cumulative_seconds": 0.5703896
+        },
+        {
+          "file": "~",
+          "line": 0,
+          "function": "<method 'commit' of 'sqlite3.Connection' objects>",
+          "calls": 301,
+          "self_seconds": 0.37025660000000005,
+          "cumulative_seconds": 0.37025660000000005
+        },
+        {
+          "file": "~",
+          "line": 0,
+          "function": "<method 'execute' of 'sqlite3.Connection' objects>",
+          "calls": 1205,
+          "self_seconds": 0.2548258,
+          "cumulative_seconds": 0.2548258
+        },
+        {
+          "file": "src/analysis/cache.py",
+          "line": 65,
+          "function": "_trace_from_dict",
+          "calls": 24800,
+          "self_seconds": 0.1680208,
+          "cumulative_seconds": 0.3401998
+        },
+        {
+          "file": "encoder.py",
+          "line": 207,
+          "function": "iterencode",
+          "calls": 305,
+          "self_seconds": 0.16677270000000002,
+          "cumulative_seconds": 0.16677270000000002
+        },
+        {
+          "file": "decoder.py",
+          "line": 351,
+          "function": "raw_decode",
+          "calls": 101,
+          "self_seconds": 0.1155631,
+          "cumulative_seconds": 0.1155631
+        },
+        {
+          "file": "~",
+          "line": 0,
+          "function": "<built-in method _sqlite3.connect>",
+          "calls": 301,
+          "self_seconds": 0.10794530000000001,
+          "cumulative_seconds": 0.1125145
+        },
+        {
+          "file": "src/analysis/cache.py",
+          "line": 103,
+          "function": "_prompt_from_dict",
+          "calls": 5000,
+          "self_seconds": 0.10665640000000001,
+          "cumulative_seconds": 0.42047100000000004
+        },
+        {
+          "file": "src/analysis/causal.py",
+          "line": 475,
+          "function": "build_prompt_record",
+          "calls": 5000,
+          "self_seconds": 0.0862712,
+          "cumulative_seconds": 0.30136260000000004
+        },
+        {
+          "file": "src/analysis/token_mix.py",
+          "line": 87,
+          "function": "priced_token_mix",
+          "calls": 6,
+          "self_seconds": 0.0850159,
+          "cumulative_seconds": 0.3820809
+        },
+        {
+          "file": "~",
+          "line": 0,
+          "function": "<built-in method builtins.getattr>",
+          "calls": 824632,
+          "self_seconds": 0.07069840000000001,
+          "cumulative_seconds": 0.07407140000000001
+        },
+        {
+          "file": "src/analysis/cache.py",
+          "line": 39,
+          "function": "_flat_fields",
+          "calls": 29800,
+          "self_seconds": 0.0706383,
+          "cumulative_seconds": 0.2028811
+        }
+      ]
+    }
+  },
+  "profile_commands": [
+    "py -3 -m cProfile -o normal-profile.pstats development/tools/benchmark_large_month.py --roots 1000 --prompts 20",
+    "py -3 -m cProfile -o deep-profile.pstats <script containing deep_probe>"
+  ],
+  "deep_probe": "from dataclasses import asdict\nimport hashlib, json, tempfile, time\nfrom pathlib import Path\nROOT = Path.cwd()\ndef deep():\n    from development.tools.benchmark_large_month import _service, MONTH_START_MS, NOW_MS\n    from development.tests.fixtures.synthetic_month import SyntheticMonthSource\n    from src.cache import CacheDatabase, CacheRepository\n    from src.config import load_configuration\n\n    source = SyntheticMonthSource(100, 50, month_start_ms=MONTH_START_MS)\n    config = dict(load_configuration(ROOT).values)\n    config[\"timezone\"] = \"UTC\"\n    result = {}\n    with tempfile.TemporaryDirectory() as directory:\n        database = CacheDatabase(Path(directory))\n        database.initialize()\n        repository = CacheRepository(database)\n        for phase in (\"cold\", \"warm\"):\n            source.metrics.counts.clear()\n            source.metrics.milliseconds.clear()\n            before = source.load_count\n            revisions = source.revision_count\n            service = _service(source, repository, config)\n            wall = time.perf_counter()\n            cpu = time.process_time()\n            report = service.build_token_mix_history()\n            cpu = time.process_time() - cpu\n            wall = time.perf_counter() - wall\n            encoded = json.dumps(asdict(report), sort_keys=True, default=str, separators=(\",\", \":\")).encode()\n            result[phase] = {\n                \"wall_seconds\": wall, \"cpu_seconds\": cpu,\n                \"hydrations\": source.load_count - before,\n                \"revision_checks\": source.revision_count - revisions,\n                \"sample_prompts\": report.token_mix.sample_size,\n                \"calls\": sum(row.calls for row in report.model_token_mix),\n                \"output_sha256\": hashlib.sha256(encoded).hexdigest(),\n                \"acquisition\": service.metrics.snapshot(),\n            }\n            assert report.token_mix.sample_size == 5000\n            assert result[phase][\"calls\"] == 5000\n            assert result[phase][\"hydrations\"] == (100 if phase == \"cold\" else 0)\n            assert not service._analyzed, \"Deep scans must release analyzed snapshots\"\n    assert result[\"cold\"][\"output_sha256\"] == result[\"warm\"][\"output_sha256\"]\n    print(json.dumps(result))\ndeep()\n",
+  "exploratory_failure": {
+    "command": "py -3 development/tools/benchmark_large_month.py --roots 20 --prompts 50 --children 2 --today-roots 5 --running-roots 2 --watch",
+    "exit_code": 1,
+    "stderr": "FAIL: second run must hydrate only the running roots",
+    "observed": {
+      "sample_prompts_first": 100,
+      "sample_prompts_second": 100,
+      "first_source_hydrations": 5,
+      "second_additional_hydrations": 0
+    },
+    "cause": "Old assertion expected all two running roots, although both predate the bounded Normal sample. Not a runtime cache failure."
+  },
+  "verification": {
+    "command": "py -3 -m unittest development.tests.test_benchmark_large_month -v",
+    "tests": 1,
+    "subcases": 3,
+    "result": "passed",
+    "cases": "4 roots x 60 prompts; 0/1/4 running roots; exactly 2 sampled and 0/0/2 warm hydrations"
+  },
+  "limitations": [
+    "Synthetic source only; no live V2/service, browser or desktop timings",
+    "No runtime implementation changed; cold/warm are cache states, not baseline/candidate revisions",
+    "Deep wall/CPU exclude fixture creation, database initialization and output hashing",
+    "Instrumented inclusive profile timings overlap and are not additive or comparable with unprofiled medians",
+    "Normal and Watch process CPU, peak memory, billing and real-provider latency not measured",
+    "No local product suite, validator, version bump or package: development-only changes; remote PR checks reported separately"
+  ]
+}

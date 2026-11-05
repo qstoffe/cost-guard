@@ -117,10 +117,14 @@ def main() -> int:
         db = CacheDatabase(Path(td)); db.initialize()
         repo = CacheRepository(db)
         started = time.perf_counter()
-        first = _service(source, repo, config).build(ReportRequest())
+        first_service = _service(source, repo, config)
+        first = first_service.build(ReportRequest())
         first_seconds = time.perf_counter() - started
         loads_after_first = source.load_count
         revisions_after_first = source.revision_count
+        sampled_roots = {root_id for root_id, _revision in first_service.report_source_revisions()}
+        sampled_running_roots = sum(source.snapshots[root_id].root.active is True for root_id in sampled_roots)
+        del first_service
 
         started = time.perf_counter()
         second = _service(source, repo, config).build(ReportRequest())
@@ -138,14 +142,17 @@ def main() -> int:
             "second_revision_checks": source.revision_count - revisions_after_first,
             "sample_prompts_first": first.pricing_diagnostics["relcost_sample_prompts"],
             "sample_prompts_second": second.pricing_diagnostics["relcost_sample_prompts"],
+            "sampled_roots": len(sampled_roots),
+            "sampled_running_roots": sampled_running_roots,
         }
         if args.watch:
             result["watch"] = benchmark_watch(source, Path(td), config)
         print(json.dumps(result, indent=2, sort_keys=True))
-        # Running roots must bypass the stable cache even with unchanged revisions.
-        # The comparison scan visits every root, so each active root is read once.
-        if result["second_additional_hydrations"] != args.running_roots:
-            print("FAIL: second run must hydrate only the running roots", file=sys.stderr)
+        # Only roots reached by the bounded report sample need acquisition.
+        # Sampled running roots must bypass the stable cache; old unsampled work
+        # does not turn a Normal report into an all-history scan.
+        if result["second_additional_hydrations"] != sampled_running_roots:
+            print("FAIL: second run must hydrate only the sampled running roots", file=sys.stderr)
             return 1
         if result["second_revision_checks"] > args.roots:
             print("FAIL: stable second run exceeded O(root) revision checks", file=sys.stderr)
