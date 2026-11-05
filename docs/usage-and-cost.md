@@ -26,9 +26,22 @@ The session-table Total mix also stays `N/A` when a contributing prompt/compacti
 
 ## Account-period CCost
 
+Web quota parentheses follow Used/Remaining. Used retains observed period CCost;
+Remaining is a reference-capacity proxy. With valid same-window cost `U` and raw
+positive used fraction `f`, Capacity is `U/f` and Remaining is `U*(1-f)/f`.
+For verified account-scoped Copilot monthly AI credits, Capacity instead uses the
+actual included native limit and Remaining uses native credits remaining; independent
+observed Used CCost need not reconcile with them. No plan limits are hardcoded.
+Partial/unpriced/missing history, ambiguous attribution, stale/reset or invalid evidence
+withhold the extrapolation. Zero native usage alone cannot establish numeric Capacity.
+Full Watch shows Capacity above every quota bar; Mini keeps it in accessible help;
+Accounts uses only matching cost already present in its report, without more scans.
+Credits/USD converts all reference figures, not native allocation/billing or percentages.
+Clean figures have no estimate suffix; help explains their basis and uncertainty.
+
 Normal `Accounts Overview` sections show numeric `CCost today` and a separate `CCost this month`, with rolling CCost beside each existing quota percentage (`5h … 35% (37)`, `Week … 62% (150)`). No separate rolling-cost rows, provenance paragraphs or account footer are printed. Month-to-date uses the configured local calendar month from its first day's 00:00 through now for **all** detected providers, including subscriptions without a native monthly quota. It is not an extrapolation or sum of overlapping windows. History acquisition is independent of the latest-100 model-comparison sample; missing/deleted source history cannot be reconstructed.
 
-Watch uses the same request valuation: `Today: <CCost>` before Remaining on monthly/fixed quota rows; `<percentage>% (<CCost>)` for each duration-bearing window. No month-to-date comparison line appears in Watch. Unknown percentages retain textual `CCost: ...`, never fabricated bars. Both account surfaces use `0` for no observed requests only after the selected period has been acquired, and `—` for unavailable, wholly unpriceable or ambiguous scopes. Account CCost displays the known priced subtotal without a partial marker, using ordinary upward rounding (`37.2` → `38`, tiny positive values → `<0.1`). If some requests lack price data, this subtotal may understate the period's complete reference valuation. Global/prompt/session partial markers are unchanged. A credential's attribution capability alone does not prove available history. Windows can overlap; never add them to estimate disjoint spend. Overall Total today and provider-window figures can differ because scopes and attribution differ.
+CLI Watch uses the same request valuation: `Today: <CCost>` before Remaining on monthly/fixed quota rows; `<percentage>% (<CCost>)` for each duration-bearing window. No month-to-date comparison line appears in Watch. Unknown percentages retain textual `CCost: ...`, never fabricated bars. Account totals use `0` for no observed requests only after the selected period has been acquired, and `—` for unavailable, wholly unpriceable or ambiguous scopes (Web quota reference slots use `?`). Account CCost displays the known priced subtotal without a partial marker, using ordinary upward rounding (`37.2` → `38`, tiny positive values → `<0.1`). If some requests lack price data, this subtotal may understate the period's complete reference valuation. Global/prompt/session partial markers are unchanged. A credential's attribution capability alone does not prove available history. Windows can overlap; never add them to estimate disjoint spend. Overall Total today and provider-window figures can differ because scopes and attribution differ.
 
 The **canonical request provider** owns grouping, not the model publisher: GPT through Copilot stays with Copilot; Claude Code subscriptions remain separate from direct Anthropic API. Supported Copilot enterprise and Codex aliases are normalized only for compatible usage grouping. Verified request account references support account-specific figures. With exactly one compatible detected account, otherwise unassigned requests may contribute to a **provider-attributed estimate**, not verified account/billing attribution. Several possible accounts leave unassigned usage unknown; the report explains safely observed provider totals once without copying them to each account. History proven to another account is never reassigned. An API key alone proves no subscription entitlement.
 

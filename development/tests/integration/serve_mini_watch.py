@@ -23,6 +23,9 @@ from src.application.live_projection import project_live
 from src.application.display import with_display
 from src.application.projection import accounts as project_accounts
 from src.analysis.timezones import local_day_start_ms
+from src.domain import QuotaComponent
+from src.analysis.valuation import ComparisonCost
+from src.reports.models import QuotaPeriodProjection
 from src.watch.models import WatchRow
 from src.watch.running import running_prompts
 from src.web.host import WebHost
@@ -42,6 +45,13 @@ def main():
         now = int(time.time() * 1000)
         frame = replace(frame, now_ms=now, daily_usage=replace(frame.daily_usage,
             day_start_ms=local_day_start_ms('UTC', now_ms=now), observed_at_ms=now))
+        # Synthetic quota observations stay current when the probe runs later.
+        refreshed = []
+        for item in frame.quota.accounts:
+            quotas = tuple(replace(q, reset_at_ms=now + 3600000) if q.reset_at_ms else q for q in item.account.quotas)
+            periods = tuple(replace(p, quota=q) for p, q in zip(item.quota_periods, quotas))
+            refreshed.append(replace(item, account=replace(item.account, quotas=quotas), quota_periods=periods))
+        frame = replace(frame, quota=replace(frame.quota, accounts=tuple(refreshed)))
         base = frame.active_cards[0]
         cards = tuple(replace(base, focal_id=str(index), rows=(WatchRow(base.session_id, base.title,
             replace(base.rows[0].prompt, event_id=str(index), prompt_number=22 + index,
@@ -51,7 +61,8 @@ def main():
         frame = replace(frame, active_cards=cards, running=running_prompts(cards, "observed"))
 
         def publish(state="running", value=frame):
-            value = replace(value, now_ms=int(time.time() * 1000))
+            current = int(time.time() * 1000)
+            value = replace(value, now_ms=current, quota=replace(value.quota, now_ms=current))
             host.events.publish("live", {"state": state, "source_observed_at_ms": value.now_ms,
                 "view": project_live(value).to_json(),
                 "probe_accounts": with_display(project_accounts(value.quota), now_ms=value.now_ms).to_json()})
@@ -82,6 +93,19 @@ def main():
                         running=running_prompts((), 'unavailable'), daily_state='retrying', quota_stale=True))
                 elif command == "running":
                     publish()
+                elif command in {"quota-idle", "quota-ratio"}:
+                    base_account = frame.quota.accounts[0]
+                    idle_window = command == 'quota-idle'
+                    primary = QuotaComponent('5-hour', 'rolling', remaining_fraction=Decimal(1) if idle_window else Decimal('.9'),
+                        duration_seconds=18000, window_active=False if idle_window else None,
+                        reset_at_ms=None if idle_window else int(time.time() * 1000) + 3600000, primary=True)
+                    secondary = replace(primary, label='Weekly', duration_seconds=604800, primary=False)
+                    quotas = (primary, secondary)
+                    periods = tuple(QuotaPeriodProjection(q, ComparisonCost(Decimal(0) if idle_window else Decimal(100),
+                        0 if idle_window else 1, 0 if idle_window else 1), None) for q in quotas)
+                    idle = replace(base_account, account=replace(base_account.account, quotas=quotas,
+                        primary_quota_label='5-hour'), quota_periods=periods)
+                    publish(value=replace(frame, quota=replace(frame.quota, accounts=(idle,))))
                 elif command.startswith('history-'):
                     _, count, prompt_count = command.split('-')
                     history = tuple(replace(frame.history_cards[0], session_id=f'earlier-{index}',

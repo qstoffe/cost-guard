@@ -60,8 +60,9 @@ def account_projections(
         # Pace derives from current quota state and the calendar, never usage history.
         paces = tuple(quota_pace(component, now_ms=now_ms, timezone_id=timezone_id,
                                 workday_calendar=workday_calendar) for component in account.quotas)
-        quota_periods = tuple(QuotaPeriodProjection(component, cost, pace)
-            for component, (_name, cost), pace in zip(account.quotas, scopes[1:], paces)) if watch else ()
+        period_costs = iter(scopes[1:] if watch else scopes[2:])
+        quota_periods = tuple(QuotaPeriodProjection(component, next(period_costs)[1], pace)
+            for component, pace in zip(account.quotas, paces) if watch or component.duration_seconds)
         projections.append(AccountProjection(
             account, label, tuple(scopes),
             actual_billing(today_start_ms), actual_billing(month_start_ms),

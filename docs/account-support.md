@@ -11,8 +11,14 @@ Aligned 10-cell **Used** bars, percentages and Used/Total native amounts share a
 Web alone offers **Settings → Web settings → Quota display → Remaining** (Default is Used).
 Finite native percentages, Remaining/Total amounts and bars change together in Accounts,
 Watch and Mini. Unlimited or insufficient evidence keeps Used/unknown; zero Remaining
-remains exhausted/red even with no fill. Adjacent **CCost used** is unchanged observed
-period reference spending, not a remaining quota budget. CLI and Remaining/day pace do not change.
+remains exhausted/red even with no fill. CCost parentheses now switch between observed
+Used and a same-window Remaining reference proxy; Full Watch shows **Capacity** above
+each bar, Mini exposes it in help, and Accounts adds it only with matching period cost.
+Copilot uses its actual included AI-credit allowance and native remaining credits;
+other valid windows extrapolate from observed cost / raw fraction used. Neither is a
+guaranteed budget. Unknown estimates show **?**, Unlimited Capacity **N/A**. A verified
+idle 0%-Used window has native 100% Remaining even when reference Capacity is unknown.
+Native amounts remain in Accounts/help; CLI and Remaining/day pace do not change.
 
 Bars represent genuine provider-reported capacity: a real denominator or an explicitly reported percentage, never a fabricated allocation. Balance/informational spend without capacity stays textual. Native currencies are not added or converted; balances/spend are not CCost or historical usage. A current credential never establishes historical request-account attribution. There are no provider-specific Report/Watch renderer branches.
 

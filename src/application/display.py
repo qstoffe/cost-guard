@@ -12,6 +12,7 @@ from src.numbers import balanced_share_percents, ccost_amount, ccost_display, cc
 
 from .contracts import ObjectValue, record
 from .quota_display import quota_displays
+from .quota_ccost import quota_ccost_tokens
 
 
 def decimal(value):
@@ -246,6 +247,7 @@ def _with_display(value, timezone_id, now_ms):
             alternate = amount_tokens(values)
             alternate.update(metric_tokens(values, timezone_id, now_ms))
             alternate.update(history_tokens(values, timezone_id))
+            alternate.update(quota_ccost_tokens(values, now_ms))
         variants[unit] = alternate
     tokens = dict(variants[ccost_unit()])
     tokens.update(quota_tokens(values))

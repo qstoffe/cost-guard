@@ -76,6 +76,13 @@ def block(value, *, source_complete=True):
     ))
 
 
+def quota_record(quota, cost=None, *, provider_id="", availability="available", estimated=False, note=""):
+    base = fields(quota, """label period used limit remaining remaining_fraction unit reset_at_ms
+        duration_seconds status unlimited remaining_money limit_money origin model_id scope window_active""")
+    return ObjectValue(base.fields + (("availability", availability), ("period_ccost", record(
+        cost=comparison(cost), provider_id=provider_id, estimated=estimated, note=note))))
+
+
 def account(value):
     native = value.account
     # No AccountRef.source_account/source_instance, observations, raw reason/warnings.
@@ -86,8 +93,10 @@ def account(value):
         has_warning=bool(native.warnings), has_error=native.availability in {"error", "unavailable"},
         error_code=account_error(native),
         usage_attribution_complete=native.usage_attribution_complete, capacity_kind=native.capacity_kind,
-        quotas=tuple(fields(quota, """label period used limit remaining remaining_fraction unit reset_at_ms
-            duration_seconds status unlimited remaining_money limit_money origin model_id scope window_active""")
+        quotas=tuple(quota_record(quota, next((period.cost for period in value.quota_periods if period.quota is quota), None),
+            provider_id=native.ref.provider_id, availability=native.availability,
+            estimated=quota.label in value.ccost_estimated_scopes,
+            note=next((note for note in value.ccost_notes if note.startswith(f"CCost {quota.label}:")), ""))
             for quota in native.quotas),
         billing=tuple(fields(item, "label amount currency period kind status") for item in native.billing),
     )

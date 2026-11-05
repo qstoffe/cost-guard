@@ -352,15 +352,12 @@ const MiniWatch = (() => {
         }
         const quota = ReportView.quotaView(primary.quota, primary);
         const used = primary.quota.unlimited ? 'Unlimited' : quota.percent === '—' ? 'Usage unavailable' : quota.percent + ' ' + quota.mode;
-        const cost = primary.cost, amount = cost == null || (cost.observed_requests && !cost.priced_requests) ? '—' : display(cost, 'known_ccost');
+        const amount = display(primary.quota, 'ccost_' + quota.mode);
         const stale = !['available', 'partial'].includes(obs.availability) || view.quota_stale;
         const warning = primary.restricted ? ' · provider restriction' : '';
-        const period = quota.mode === 'remaining' ? amount === '—' ? '' : ` (CCost used: ${amount})` : ` (${amount})`;
+        const period = ` (${amount})`;
         text(line.children[0].children[0], `${obs.label} · ${used}${period}${warning}`);
-        line.helpText = `${primary.quota.label} — ${quota.native} ${quota.mode}\nCCost used in this quota period; separate from native quota, not remaining CCost or your bill.` +
-          (quota.note ? '\n' + quota.note : '') + (primary.note ? '\n' + primary.note : amount === '—' ? '\nPeriod CCost unavailable: history or period boundaries are missing.' : '') +
-          (primary.estimated ? '\nEstimated account attribution.' : '') + (cost && !cost.complete ? '\n? — Partial pricing.' : '');
-        if (quota.mode === 'remaining' && quota.money !== 'N/A') line.helpText += `\nNative money remaining ${quota.money} / ${display(primary.quota, 'limit_money')}.`;
+        line.helpText = ReportView.quotaHelp(primary.quota);
         line.helpText += `\nLast quota update: ${observedAt(obs.observed_at_ms)}` + (stale ? '\nRetained quota; not current.' : '') + (obs.availability === 'partial' ? '\nPartial quota data.' : '');
         ContextHelp.refresh(line);
         line.className = quota.exhausted && quota.mode === 'remaining' ? 'mini-exhausted' : primary.restricted ? 'mini-warning' : '';

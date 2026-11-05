@@ -1,5 +1,9 @@
 # Web native quota orientation
 
+The original FR 000577 evidence below is historical. FR 000585's reference-capacity
+extension and provider-confirmed idle-zero correction supersede its presentation-only
+CCost and blanket unstarted-window fallback rules; native accounting stays unchanged.
+
 FR 000577, 2026-11-04, v80.157. This is a Web presentation preference, not a
 provider/accounting change. `webSettings.quotaDisplayMode` stores `default`, `used`
 or `remaining`; the shipped effective default is Used. Explicit Used stays pinned.
@@ -69,3 +73,45 @@ No test/requirement exception was requested or approved. Browser evidence is
 headless Windows Chromium, not physical desktop placement, native chrome,
 screen-reader speech or macOS-native certification. Existing unrelated physical
 placement exceptions remain confined to their original FRs.
+
+## Reference Capacity and Remaining — FR 000585, 2026-11-05
+
+v80.166 binds native quotas and their exact identity-matched existing period costs
+at the application boundary. `quota_ccost.py` emits reference Used/Remaining/Capacity
+tokens for both units using Decimal before presentation rounding. Copilot included
+monthly AI credits use the actual native limit/remainder, never limit minus observed
+CCost. Other valid current windows extrapolate observed CCost / raw used fraction.
+Single-provider estimated attribution is disclosed; ambiguity/missing history,
+partial pricing, invalid/expired windows and zero-use ratios cannot invent capacity.
+Unlimited Capacity is N/A, unknown capacity/remainder is ?, actual observed zero is 0.
+
+The idle correction accepts only native exact zero/remaining=1 with a valid bounded
+rolling window and current provider observation; it retains Window not started.
+Unknown, stale, inferred, contradictory and merely rounded-zero controls do not get
+a fabricated full Remaining bar. Native fractions and reference-cost uncertainty
+remain independent. No new history scan, provider refresh, SSE or CLI change.
+
+Full Watch uses seven aligned rows with Capacity before the bar and native detail
+in accessible help, preserving the sole secondary-region divider. Mini remains one
+primary line; Accounts binds only period cost already available in its report.
+
+Verification: Full passed all 142 registered files (88.4s). Package validation passed
+11 checks with zero failures and six existing advisory/design warnings; caps unchanged.
+Hidden Chrome 156.0.8078.80 passed actual HTTP/CSP/SSE/PiP Settings switches, native
+25000/22912 versus observed 1814, the 100/900/1000 ratio in Credits/USD, full Watch
+bar alignment, unknown idle primary/secondary estimates with healthy 100% native
+bars, Used zero, preserved resets, and light/dark narrow/zoom layouts.
+
+The bounded real V2 installation probe checked 20 coherent publications, three
+accounts/four quota projections and two numeric capacities in 11.728s. Its one
+running summary was partial, not complete pricing proof. No idle window happened
+to be observed live; exact idle boundaries use normalization/deterministic/browser
+fixtures. Owned acquisition closed in 0.088s; shared OpenCode remained untouched.
+Sanitized evidence: `../../architecture/governance/verification/web-quota-ccost.json`.
+
+The initial Full failure exposed an Accounts test-DOM missing addEventListener;
+the fixture was repaired, not the assertions weakened. An expanded browser run
+exposed the synthetic Accounts clock still using its historical fixture time;
+the fixture now publishes matching current clocks and the rerun passed.
+No requirement/test exception was requested. Physical desktop/native chrome,
+screen-reader speech and macOS-native behavior were not newly certified.

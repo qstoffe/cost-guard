@@ -52,19 +52,25 @@ coverage, and Mini Watch still renders only the prompt total. Header help and in
 metric widths remain shared. `test_watch_prompt_cost.py`, `integration/web_watch_prompt_cost.cjs`
 and `fixtures/watch_cost_browser.cjs` pin parity, units, unknowns and actual hidden layout.
 
-Full Watch's `watch_accounts.py` quota slots export native amount/limit/unit inputs
-to the shared application display tokens. By default `watch.js` keeps Used/Total with the native
-percentage/bar and appends independent period CCost in bare parentheses after Used.
-Focusable provenance explains the window, independence and partial/estimated attribution;
-unavailable costs are omitted, while known zero remains numeric. Reset sits directly
-under its own bar, followed by pace; there is no separate cost/provenance row.
-Primary and secondary slots share this presentation; currency switches only CCost.
+Full Watch's `watch_accounts.py` quota slots bind identity-matched period cost to
+`projection.quota_record`; ordinary Accounts binds only existing report period scopes.
+`application/quota_ccost.py` calculates reference Capacity/Remaining using Decimal:
+verified Copilot included credits use the native allowance/remainder; other current
+valid windows use observed cost / raw used fraction. Partial pricing, unknown or
+ambiguous scopes, invalid/expired evidence and zero-used ratios withhold estimates.
+`display.py` publishes both Credits/USD tokens; JavaScript only selects tokens.
+Full Watch shows Today, native percentage with bare reference parentheses, Capacity,
+bar, reset and pace using seven subgrid rows. Only secondary regions have a divider.
+Native ratios/money/source/attribution stay in accessible help and Accounts details.
+Mini keeps a single primary line and exposes Capacity in help. Known Used zero remains
+numeric; unknown reference amounts use ?. Unlimited Capacity is N/A with Used fallback.
 `application/quota_display.py` adds pure Web-only Used/Remaining variants from each
 quota's normalized native facts. A trustworthy native remainder wins; a finite
 usage complement is safe fallback. Unlimited, zero/missing limits or unknown usage
 never invent Remaining. `render.js` selects variants and updates bound text/bars in
 place, including detached Watch views; `mini.js` redraws its retained keyed rows.
-Remaining explicitly labels unchanged period spending as CCost used. Native
+Provider-confirmed idle rolling zero keeps native 100% Remaining/full healthy fill
+independently of unknown reference Capacity, without fabricating a reset. Native
 exhaustion is independent of fill orientation/rounding. Acquisition, period
 accounting, CLI and remaining pace semantics are unchanged.
 

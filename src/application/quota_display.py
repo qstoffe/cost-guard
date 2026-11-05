@@ -30,7 +30,14 @@ def quota_displays(values):
         fraction = numbers["remaining_fraction"]
     elif finite and used_fraction is not None:
         fraction = 1 - used_fraction
-    if values.get("window_active") is False:
+    idle_zero = (values.get("availability") in {"available", "partial"} and
+                 values.get("status") not in {"blocked", "stale", "unavailable", "error", "paused"} and
+                 values.get("period") == "rolling" and values.get("duration_seconds") and
+                 values.get("origin") == "provider_native" and numbers["used"] in (None, 0) and
+                 (limit is None or limit > 0) and numbers["remaining_fraction"] == 1 and used_fraction == 0 and
+                 (numbers["remaining"] is None or numbers["remaining"] == limit) and
+                 values.get("reset_at_ms") is None)
+    if values.get("window_active") is False and not idle_zero:
         fraction = None
     if remaining is None and limit is not None and fraction is not None:
         remaining = max(Decimal(0), limit - used) if used is not None else fraction * limit
@@ -51,8 +58,11 @@ def quota_displays(values):
         bounded = None if fill is None else max(Decimal(0), min(Decimal(1), fill))
         used_percent = "—" if bounded is None else ("<100%" if bounded < 1 and bounded * 100 >= Decimal("99.95")
             else f"{bounded * 100:.1f}".removesuffix(".0") + "%")
+        account_percent = "N/A" if bounded is None else f"{bounded * 100:.0f}%"
+        if mode == "remaining" and bounded is not None and 0 < bounded < 1:
+            account_percent = {"0%": ">0%", "100%": "<100%"}.get(account_percent, account_percent)
         return record(mode=mode, fraction=bounded, percent=percent(bounded) if mode == "remaining" else used_percent,
-            account_percent="N/A" if bounded is None else f"{bounded * 100:.0f}%",
+            account_percent=account_percent,
             native=native + " " + unit, money=money(native_money),
             exhausted=exhausted if mode == "remaining" else used_fraction == 1, note=overage)
 

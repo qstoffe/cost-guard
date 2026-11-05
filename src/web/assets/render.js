@@ -15,6 +15,14 @@ const ReportView = (() => {
       fraction: watch?.used_fraction, percent: watch?.used_percent, exhausted: watch?.exhausted, note: ''};
   }
   const display = (row, key) => row?.display_units?.[unit]?.[key] ?? row?.display?.[key] ?? 'N/A';
+  function quotaHelp(quota) {
+    const view = quotaView(quota), native = quota.quota_display;
+    return `${display(quota, 'ccost_help')}\nCapacity: ${display(quota, 'ccost_capacity')}\n` +
+      `${quota.label} · ${quota.period} · ${quota.scope}${quota.model_id ? ' · ' + quota.model_id : ''}\n` +
+      `Native Used: ${native?.used.native || view.native}\nNative Remaining: ${native?.remaining.mode === 'remaining' ? native.remaining.native : 'unknown / inapplicable'}\n` +
+      `Native money ${view.mode}: ${view.money} / ${display(quota, 'limit_money')}\n` +
+      `${display(quota, 'reset')} · Source: ${quota.origin}\nAvailability: ${quota.availability}` + (view.note ? '\n' + view.note : '');
+  }
   const mixLabels = row => Object.values(row?.display?.token_categories || {});
   const mixText = row => Object.entries(row?.display?.token_categories || {})
     .map(([key, label]) => label + ': ' + display(row, key)).join(' · ');
@@ -363,7 +371,13 @@ const ReportView = (() => {
     const view = () => quotaView(quota);
     const summary = () => quota.unlimited ? 'Unlimited' : view().account_percent === 'N/A' ? 'Used percentage unavailable' :
       view().account_percent + ' ' + view().mode;
-    const label = element('span', summary, 'metric-value'); row.append(label);
+    const hasCost = quota.period_ccost?.cost != null;
+    const label = element('span', () => summary() + (hasCost ? ` (${display(quota, 'ccost_' + view().mode)})` : ''), 'metric-value'); row.append(label);
+    if (hasCost) {
+      const capacity = element('span', () => 'Capacity: ' + display(quota, 'ccost_capacity'), 'metric-value');
+      ContextHelp.beside(capacity, () => quotaHelp(quota), 'About quota Capacity and period CCost');
+      row.append(capacity);
+    }
     bind(label, () => label.className = 'metric-value' + (view().mode === 'remaining' && view().exhausted ? ' quota-exhausted' : ''));
     // Only a known server-formatted fraction creates a determinate bar. Never coerce null to zero.
     if (!compact && !quota.unlimited && view().account_percent !== 'N/A') {
@@ -584,5 +598,5 @@ const ReportView = (() => {
     return ['Complete session', ccost(block, 'total_ccost'), known(block.total_calls),
       display(block, 'duration_ms'), '—', known(block.total_ictx_cost_text), known(block.total_extra_cost_text), known(block.total_mix_text)];
   }
-  return {render, renderLive, element, detailCells, detailTotals, compare, overviewAccounts, display, contextSummary, text, setUnit, syncUnits, defaultUnit, mixLegend, hourlySummary, bind, setQuotaMode, quotaView};
+  return {render, renderLive, element, detailCells, detailTotals, compare, overviewAccounts, display, contextSummary, text, setUnit, syncUnits, defaultUnit, mixLegend, hourlySummary, bind, setQuotaMode, quotaView, quotaHelp};
 })();

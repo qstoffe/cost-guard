@@ -4,16 +4,17 @@ from decimal import Decimal
 from src.display import quota_usage
 from src.domain import QuotaComponent
 from .contracts import record
-from .projection import account, comparison, fields
+from .projection import account, comparison, fields, quota_record
 
 
-def watch_quota(quota, period=None, *, estimated=False, note=""):
+def watch_quota(quota, period=None, *, estimated=False, note="", provider_id="", availability="available"):
+    period = period if period is not None and period.quota is quota else None
     fraction, _used, _money = quota_usage(**{key: getattr(quota, key) for key in
         ("used", "limit", "remaining", "remaining_fraction", "unlimited", "remaining_money", "limit_money")})
     percent = "—" if fraction is None else ("<100%" if fraction < 1 and fraction * 100 >= Decimal("99.95")
         else f"{fraction * 100:.1f}".removesuffix(".0") + "%")
-    return record(quota=fields(quota, """label period duration_seconds reset_at_ms window_active unlimited
-            used limit remaining remaining_fraction unit remaining_money limit_money"""),
+    return record(quota=quota_record(quota, period.cost if period is not None else None,
+            provider_id=provider_id, availability=availability, estimated=estimated, note=note),
         used_fraction=fraction, used_percent=percent, exhausted=fraction == 1,
         restricted=quota.status == "blocked" and fraction != 1,
         cost=comparison(period.cost) if period is not None else None,
@@ -40,7 +41,8 @@ def watch_account(item):
     def projected(quota):
         period = next((period for period in item.quota_periods if period.quota is quota), None)
         note = next((note for note in item.ccost_notes if note.startswith(f"CCost {quota.label}:")), "")
-        return watch_quota(quota, period, estimated=quota.label in item.ccost_estimated_scopes, note=note)
+        return watch_quota(quota, period, estimated=quota.label in item.ccost_estimated_scopes, note=note,
+                           provider_id=native.ref.provider_id, availability=native.availability)
     allowed = {"observation", "ccost_scopes", "ccost_account_unknown"}
     return record(**{name: value for name, value in base.fields if name in allowed},
         primary=projected(primary), secondary=tuple(projected(quota) for quota in native.quotas if quota is not primary),

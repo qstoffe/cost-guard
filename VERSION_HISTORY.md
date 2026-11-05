@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.166 — 2026-11-05
+
+- Web quota parentheses switch observed Used CCost to same-window Remaining reference capacity. Full Watch adds Capacity before every quota bar and moves native ratios/money into accessible help; Mini stays compact and Accounts uses only existing matching period costs. Verified Copilot included AI credits use native limits/remainders; other valid quotas extrapolate cost / raw fraction used, with honest unknown/Unlimited states. Provider-confirmed idle rolling zero now shows healthy native 100% Remaining without inventing numeric reference capacity or resets. CLI, native accounting, polling and daily CCost are unchanged.
+
 ## v80.165 — 2026-11-05
 
 - Full Web Watch counts evidenced failed and cancelled physical tool calls separately, with a combined compact summary and red tool-name/outcome groups in the expanded list. All-call totals remain inclusive; missing outcome evidence is not inferred. The active running-tool line shares the prompt’s semantic yellow, without recoloring background work or ordinary activity. Skill attribution, CLI, acquisition and accounting are unchanged.
