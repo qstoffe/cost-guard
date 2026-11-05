@@ -17,14 +17,14 @@ require('../fixtures/web_help_vm.cjs')(vm, context);
 vm.runInContext(fs.readFileSync('src/web/assets/render.js', 'utf8'), context);
 for (const [kind, result] of Object.entries(input)) {
   context.result = result;
-  vm.runInContext('ReportView.render(output, result, {pages: {}, section: "reports"})', context);
+  vm.runInContext('ReportView.render(output, result, {pages: {}, section: result.view.kind})', context);
   assert.ok(output.textContent.includes('I = Input; C = Cached input; W = Cache write; O = Output'));
   assert.ok(!/\b(?:Cache|Write):/.test(output.textContent));
   assert.ok(!all(output, 'th').some(n => ['Cache', 'Write', 'I/C/W/O %'].includes(n.textContent)));
   for (const node of all(output, 'th')) assert.equal(node.scope, 'col');
-  if (kind === 'date') {
+  if (kind === 'session') {
     assert.ok(!output.textContent.includes(String(result.scope.start_ms)), 'no epoch range prose');
-    assert.match(output.textContent, /2026-10-26:2026-10-27.*Europe\/Stockholm/);
+    assert.doesNotMatch(output.textContent, /Inclusive local range|CCost for range/);
     assert.match(output.textContent, /Next Ictx:/);
     assert.equal(all(output, 'tbody')[0].children.length, 50);
     const raw = result.view.prompt_blocks[0].rows[0].ccost;
@@ -52,10 +52,9 @@ for (const [kind, result] of Object.entries(input)) {
   assert.notEqual(output.textContent, credits);
   assert.deepEqual(all(output, 'table'), tables, 'unit change keeps table identity');
   assert.deepEqual(all(output, 'tr'), rows, 'unit change keeps ordering and row identity');
-  if (kind === 'date') {
+  if (kind === 'session') {
     const block = result.view.prompt_blocks[0];
     assert.equal(all(output, 'tfoot')[0].children[0].children[1].textContent, block.display_units.usd.total_ccost);
-    assert.ok(output.textContent.includes('CCost for range: ' + result.view.range_comparison.display_units.usd.known_ccost));
   } else {
     const mix = result.view.model_token_mix[0].mix;
     assert.deepEqual(all(output, 'tbody')[0].children[0].children.slice(3).map(cell => cell.textContent),
@@ -64,20 +63,20 @@ for (const [kind, result] of Object.entries(input)) {
   vm.runInContext('ReportView.setUnit("credits", output)', context);
   assert.equal(output.textContent, credits, 'reversible without jobs, repricing or replacing DOM');
 }
-console.log('PASS date scope, configured prompt clocks/context, bounded rows/full totals, CLI historical mix columns');
+console.log('PASS shared session clocks/context, bounded rows/full totals, CLI historical mix columns');
 
 // A CLI/report USD default never leaks into the independent Web default.
 const freshOutput = new Node('main');
 const fresh = vm.createContext({document: {createElement: tag => new Node(tag)}, output: freshOutput,
-  result: {...input.date, view: {...input.date.view, ccost_display_unit: 'usd'}}, Date});
+  result: {...input.session, view: {...input.session.view, ccost_display_unit: 'usd'}}, Date});
 require('../fixtures/web_help_vm.cjs')(vm, fresh);
 vm.runInContext(fs.readFileSync('src/web/assets/render.js', 'utf8'), fresh);
-vm.runInContext('ReportView.render(output, result, {pages: {}, section: "reports"})', fresh);
+vm.runInContext('ReportView.render(output, result, {pages: {}, section: "sessions"})', fresh);
 assert.equal(all(freshOutput, 'tfoot')[0].children[0].children[1].textContent,
-  input.date.view.prompt_blocks[0].display.total_ccost);
+   input.session.view.prompt_blocks[0].display.total_ccost);
 vm.runInContext('ReportView.setUnit("usd", output)', fresh);
 assert.equal(all(freshOutput, 'tfoot')[0].children[0].children[1].textContent,
-  input.date.view.prompt_blocks[0].display_units.usd.total_ccost);
+   input.session.view.prompt_blocks[0].display_units.usd.total_ccost);
 
 // Identical rounded labels, very large adjacent integers and partial/unknown volumes.
 const sorted = JSON.parse(JSON.stringify(input['token-mix']));
@@ -90,7 +89,7 @@ sorted.view.model_token_mix = [
 ].map(([model, raw, label]) => ({...base, model, mix: {...base.mix,
   total_tokens: null, known_total_tokens: raw, display: {...base.mix.display, total_tokens: label}}}));
 context.result = sorted;
-vm.runInContext('ReportView.render(output, result, {pages: {}, section: "reports"})', context);
+vm.runInContext('ReportView.render(output, result, {pages: {}, section: "token-mix"})', context);
 const header = all(output, 'th')[3].children[0];
 header.events.click();
 const names = () => all(output, 'tbody')[0].children.map(row => row.children[0].textContent);

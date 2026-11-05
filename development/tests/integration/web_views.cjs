@@ -42,13 +42,14 @@ async function main() {
   const ids = Object.fromEntries(['product-version', 'host-state', 'host-message', 'host-details', 'status', 'result', 'notice', 'refresh', 'cancel', 'heading', 'skip', 'content', 'scope-controls', 'search'].map(id => [id, new Node('div')]));
   const toolbar = new Node('div');
   ids['host-state'].append(ids['host-message'], ids['host-details']);
-  const nav = ['models', 'sessions', 'watch', 'accounts', 'reports', 'token-mix', 'settings'].map(key => {
+  const nav = ['models', 'sessions', 'watch', 'accounts', 'token-mix', 'cost-per-hour', 'settings'].map(key => {
     const node = new Node('a'); node.setAttribute('href', '#/' + key); return node;
   });
   const handlers = {};
   const location = {hash: '#bootstrap=' + input.credential};
   const history = {replaceState: (_, __, value) => { location.hash = value.slice(value.indexOf('#')); }};
   let cookie = '', requests = 0, offline = false;
+  const reportKinds = [];
   const bootstrapStatuses = [];
   let releaseBootstrap, releaseReport;
   const bootstrapGate = new Promise(resolve => { releaseBootstrap = resolve; });
@@ -60,7 +61,7 @@ async function main() {
       assert.equal(location.hash, '#/models', 'erase bootstrap before any exchange request');
       await bootstrapGate;
     }
-    if (path === '/api/reports') await reportGate;
+    if (path === '/api/reports') { reportKinds.push(JSON.parse(options.body).kind); await reportGate; }
     const headers = {...options.headers, Origin: input.origin};
     if (cookie) headers.Cookie = cookie;
     requests++;
@@ -128,6 +129,9 @@ async function main() {
   releaseReport();
   await until(() => ids.notice.textContent.includes('Snapshot captured'));
   assert.equal(location.hash, '#/models');
+  const shell = await (await fetch(input.origin + '/', {headers: {Cookie: cookie}})).text();
+  assert.doesNotMatch(shell, /href=["']#\/reports/);
+  assert.doesNotMatch(shell, /Capture date report|type=["']date/);
   assert.match(ids.result.textContent, /Estimated reference cost, not your bill/);
   const creditsText = ids.result.textContent, beforeToggle = requests;
   const retainedChildren = [...ids.result.children];
@@ -286,16 +290,21 @@ async function main() {
   assert.equal(requests, beforePresentation, 'legacy alias never reacquires a different catalog');
   assert.equal(nav.find(node => node.getAttribute('href') === '#/models').attrs['aria-current'], 'page');
   assert.doesNotMatch(ids.result.textContent, /GitHub USD\/M I\/C\/W\/O/);
-  navigate('reports');
-  const beforeDate = requests;
-  assert.equal(all(ids['scope-controls'], 'form').length, 1);
-  assert.equal(requests, beforeDate);
-  navigate('reports?date=2026-03-29');
-  await until(() => ids.notice.textContent.includes('Snapshot captured'));
-  assert.match(ids.result.textContent, /Inclusive local range 2026-03-29/);
-  assert.match(ids.result.textContent, /No prompt rows/);
-  navigate('reports?date=2026-02-30');
-  await until(() => ids.notice.textContent.includes('Invalid report scope'));
+  const beforeRetired = reportKinds.length;
+  for (const hash of ['reports', 'reports?date=2026-03-29', 'reports?date=2026-03-01:2026-03-29',
+      'reports?date=2026-02-30', 'reports?date=%ZZ&sort=ccost&offset=50']) {
+    navigate(hash);
+    await until(() => ids.result.textContent.includes('1–50 of 55'));
+    assert.equal(location.hash, '#/sessions', 'retired scope is discarded, not applied to Sessions');
+    assert.equal(ids.heading.textContent, 'Sessions');
+    assert.equal(ids.content.focused, true, 'redirect target receives keyboard focus');
+    assert.equal(all(ids['scope-controls'], 'form').length, 0);
+    assert.equal(all(ids['scope-controls'], 'input').length, 0);
+    assert.doesNotMatch(ids.result.textContent, /Inclusive local range|Capture date report|Snapshot:/);
+    assert.equal(reportKinds.length, beforeRetired, 'legacy bookmarks cannot submit hidden date jobs');
+    assert.equal(vm.runInContext('current.request', context), null);
+  }
+  assert.equal(vm.runInContext('[...views.values()].some(state => state.section === "reports")', context), false);
   navigate('sessions?limit=3');
    await until(() => ids.result.textContent.includes('1–50 of 55'));
    assert.equal(all(ids['scope-controls'], 'form').length, 0, 'obsolete limits cannot truncate the live catalog');

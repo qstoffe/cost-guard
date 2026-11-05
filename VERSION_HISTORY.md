@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.175 — 2026-11-05
+
+- Web Beta retires the Reports page, date form and navigation entry. Old Reports bookmarks replace their history entry with the live Sessions catalog, discarding date parameters without starting a hidden report or adding a date filter. CLI date/range reporting, shared report APIs and surviving Web capture/refresh/cancel controls remain supported.
+
 ## v80.174 — 2026-11-05
 
 - Web Accounts replaces its frozen Normal report with the exact shared live Watch subscription cards. Navigation reuses the latest retained account observation through the existing single stream, without new report jobs or acquisition owners. Account-keyed cards update metric/reset/help nodes in place, preserve truthful pending/empty/stale states, and share themes, physical width, Capacity and Credits/USD / Used/Remaining settings. Other reports, CLI and Diagnostics retain their layouts.

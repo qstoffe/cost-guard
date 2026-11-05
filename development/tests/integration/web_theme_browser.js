@@ -26,7 +26,7 @@ window.checkThemeLayouts = async () => {
     await frame(); await frame();
   };
   const routes = ['settings', 'models', 'accounts', 'sessions',
-    'reports?date=2026-10-26:2026-10-27', 'token-mix', 'cost-per-hour', 'watch', 'sessions/root-0000'];
+    'token-mix', 'cost-per-hour', 'watch', 'sessions/root-0000'];
   for (const route of routes) {
     await go(route);
     if (route === 'token-mix') {
@@ -34,7 +34,7 @@ window.checkThemeLayouts = async () => {
       await until(() => doc.querySelector('#notice').textContent.includes('running:'));
       await fetch('/fixture/finish-history', {method: 'POST'});
     }
-    if (['models', 'accounts', 'sessions', 'token-mix'].includes(route) || route.startsWith('reports?')) {
+    if (['models', 'accounts', 'sessions', 'token-mix'].includes(route)) {
       await until(() => doc.querySelector('#notice').textContent.includes('Snapshot captured'));
     }
     if (route === 'sessions/root-0000') await until(() => doc.querySelector('.session-detail table'));
@@ -93,7 +93,7 @@ window.checkWebCCost = async unit => {
     if (doc.querySelector('#settings-feedback').className !== 'success') throw new Error('save failed');
   }
   const results = [];
-  for (const route of ['models', 'accounts', 'sessions', 'reports?date=2026-10-26:2026-10-27',
+  for (const route of ['models', 'accounts', 'sessions',
       'token-mix', 'cost-per-hour', 'watch', 'sessions/root-0000', 'sessions/root-0000/live']) {
     await go(route);
     if (['token-mix', 'cost-per-hour'].includes(route) && !doc.querySelector('#notice').textContent.includes('Snapshot captured')) {

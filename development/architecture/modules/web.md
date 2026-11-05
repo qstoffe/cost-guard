@@ -16,7 +16,17 @@ current reference; older per-cell/native-tooltip descriptions below are historic
 
 `src/web/http.py` owns bounded loopback HTTP, fixed assets and routing; `src/web/security.py` owns one-use bootstrap/HttpOnly sessions/CSRF; `src/web/jobs.py` owns finite admission, process isolation, progress, cancellation and retention; at most 64 progress messages drain per host turn to prevent scan backpressure without starving control/Live. `src/web/composition.py` creates fresh canonical ReportApplication integrations.
 
-`src/web/assets/app.js` owns finite refresh/stale/cancel state and memory-only observations; Models keeps its frozen normal report. `reports.js` owns scope forms and explicit-only deep-history admission. Accounts bypasses finite jobs/report shell and consumes app-level retained Live, even without a Watch DOM. `account-cards.js` is the single Watch/Accounts subscription renderer: account-keyed membership, bound metric/reset/help updates, per-card signatures excluding the publication clock, shared physical-width cap and existing subgrid styles. Empty success clears membership; missing/failed empty publications retain usable cards with truthful warnings. Settings synchronize visible/detached roots without acquisition. `render.js` presents DTOs with exact Decimal/vector sorting; generic reports retain presentation search/50-row paging, while Models has independent catalog/version filters and complete document-scrolling rows. Totals never come from cells. Sessions bypasses finite jobs and the report shell: `sessions.js` renders six-column live catalog pages; `session.js` renders one ten-column complete chronological history. Both use intrinsic metric tracks, elastic title/preview and document vertical scrolling. Shared Watch `ContextLine` and contextual-help components consume canonical report context, not a browser estimator.
+`src/web/assets/app.js` owns finite refresh/stale/cancel state and memory-only observations; Models keeps its frozen normal report. `reports.js` owns route resolution and explicit-only deep-history admission. Accounts bypasses finite jobs/report shell and consumes app-level retained Live, even without a Watch DOM. `account-cards.js` is the single Watch/Accounts subscription renderer: account-keyed membership, bound metric/reset/help updates, per-card signatures excluding the publication clock, shared physical-width cap and existing subgrid styles. Empty success clears membership; missing/failed empty publications retain usable cards with truthful warnings. Settings synchronize visible/detached roots without acquisition. `render.js` presents DTOs with exact Decimal/vector sorting; generic reports retain presentation search/50-row paging, while Models has independent catalog/version filters and complete document-scrolling rows. Totals never come from cells. Sessions bypasses finite jobs and the report shell: `sessions.js` renders six-column live catalog pages; `session.js` renders one ten-column complete chronological history. Both use intrinsic metric tracks, elastic title/preview and document vertical scrolling. Shared Watch `ContextLine` and contextual-help components consume canonical report context, not a browser estimator.
+
+The Web Reports menu, date form and date-only renderer are retired. `reports.js`
+resolves old `#/reports` hashes to a scope-free Sessions redirect; `app.js` replaces
+the history entry before constructing view state or acquiring anything. Queries are
+discarded, including invalid dates and unrelated sort/page parameters. No hidden
+date job or Sessions date filter remains. CLI date/range engines, canonical DTOs,
+shared `/api/reports` validation/jobs and date-history progress labels used by
+surviving captures are unchanged. Current routes: Models, Watch, Sessions/detail,
+Accounts, Token Mix, Cost per Active Hour and Settings (`docs/web-beta.md`).
+Actual checks and explicit proof limits: [Reports retirement verification](../governance/verification/web-reports-retired.md).
 
 `application/session_catalog.py` owns the full observed membership, six exact server comparators, fair bounded scalar warming and stable older-page epochs. `reports/session_summary.py` caches only reconstructible source/dependency/algorithm-checked scalar summaries. Active/running roots bypass reuse. All metric keys must be validated before global metric sorting; cold/invalidation pending state explicitly falls back to activity, never page-local ordering. `watch/web_coordinator.py` shares its full catalog observation, including archived revisions, and isolates the index in a single-worker lane separate from detail, account history and four card workers. A slice admits at most four roots and stops admission after two seconds; source timeout/cancellation still bounds each read. HTTP only reads the owner; no per-tab acquisition.
 
@@ -399,14 +409,12 @@ Remaining report presentation shares `display.history_tokens` for configured pro
 Next Ictx guidance and CLI historical mix category cells. `projection.token_mix` exports the
 exact aggregate cost separately for sorting; JavaScript never totals displayed cells.
 Session footer uses canonical block tokens and stable row IDs; internal pinned chunks
-do not create a user-facing frozen mode. Date range prose omits raw
-epoch boundaries. `test_web_remaining.py` / `integration/web_remaining.cjs` compare the same
-CLI fixtures, including partial/unknown mix coverage. Approval-only
-`integration/serve_web_remaining.py` serves the actual app over synthetic HTTP fixtures,
-never a product host or provider. The [owner matrix](../governance/verification/remaining-web-parity.md)
-records Windows built-in-browser inspection and remaining native/assistive limitations.
-Architecture boundaries are unchanged; journal assessment: no-update, these owner facts
-and the focused evidence are sufficient.
+do not create a user-facing frozen mode. `test_web_remaining.py` /
+`integration/web_remaining.cjs` compare shared session and historical Token Mix tokens
+against CLI fixtures, including partial/unknown coverage. The older
+[owner matrix](../governance/verification/remaining-web-parity.md) retains historical
+Date UI evidence, not a current route inventory. `integration/probe_web_sessions.cjs`
+also checks retired bookmarks, actual navigation, reload and browser Back/Forward.
 
 Session detail now captures the visible document row immediately before DOM mutation,
 preserving its pixel anchor without forcing follow-latest. There is no inner vertical

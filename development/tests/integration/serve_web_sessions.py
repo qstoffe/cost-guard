@@ -10,6 +10,7 @@ import sys
 from threading import Event, Thread
 import time
 import unittest
+from uuid import uuid4
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
@@ -25,6 +26,26 @@ from src.application.session_detail import SessionDetails
 from src.web.host import WebHost
 from src.web.jobs import ReportJobs
 from src.watch.observers import observe_catalog
+
+
+class CaptureJobs(HelpAuditJobs):
+    """Optional held synthetic captures exercise the shipped HTTP cancel control."""
+
+    hold = False
+
+    def submit(self, request):
+        if not self.hold:
+            return super().submit(request)
+        key = uuid4().hex
+        self.jobs[key] = dict(id=key, status="running", result=None, error=None,
+                             progress=dict(phase="history", completed=1, total=10))
+        return key
+
+    def cancel(self, key):
+        if key not in self.jobs:
+            return False
+        self.jobs[key].update(status="cancelled")
+        return True
 
 
 class FixtureRuntime:
@@ -66,7 +87,8 @@ def main():
     source = SyntheticMonthSource(120, 1, month_start_ms=1000)
     source.snapshots["root-0000"] = SyntheticMonthSource(1, 1001, month_start_ms=1000, running_roots=1).snapshots["root-0000"]
     service = report_service(owner, source, now_ms=100_000_000)
-    host = WebHost(config, jobs=HelpAuditJobs())
+    jobs = CaptureJobs()
+    host = WebHost(config, jobs=jobs)
     host.live = FixtureRuntime(service, host.events.publish)
     host.start()
     host.publish_ready()
@@ -80,6 +102,8 @@ def main():
                 host.live.unavailable = command == "fail"
             elif command == "end":
                 source.snapshots["root-0000"] = replace(make_root_snapshot(0, 1002, month_start_ms=1000), source_revision="ended")
+            elif command in ("hold-captures", "resume-captures"):
+                jobs.hold = command == "hold-captures"
             elif command == "stop":
                 break
             print(json.dumps(dict(ok=True, command=command)), flush=True)

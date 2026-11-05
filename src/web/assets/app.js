@@ -206,7 +206,7 @@ function failure(code) {
   const errors = {session_not_found: 'No matching session. It may have been removed or is unavailable in this source.',
     result_too_large: 'Report exceeds the finite result size limit; no truncated totals are shown. Use a specific session or the CLI.',
     report_timeout: 'Report reached its 120-second limit; no empty result was substituted. Live continues. The CLI can scan without the Web job deadline.', cancelled: 'Report cancelled.',
-    invalid_request: 'Invalid report scope. Check dates/limits; no alternate range was substituted.',
+    invalid_request: 'Invalid report scope or limits; no alternate scope was substituted.',
     session_catalog_changed: 'Session catalog changed. Use Latest sessions / restart browsing to avoid skipped or duplicate rows.',
      pricing_unavailable: 'Reference pricing unavailable.', busy: 'Report service busy. Retry Refresh.'};
   return errors[code] || 'Source/report unavailable. Check the local source and retry Refresh.';
@@ -272,7 +272,13 @@ function navigate() {
     const query = location.hash.includes('?') ? location.hash.slice(location.hash.indexOf('?')) : '';
     history.replaceState(null, '', '/#/models' + query);
   }
-  const route = ReportRoutes.resolve(location.hash), match = route.session;
+  let route = ReportRoutes.resolve(location.hash);
+  const redirected = !!route.redirect;
+  if (redirected) {
+    history.replaceState(null, '', '/' + route.redirect);
+    route = ReportRoutes.resolve(location.hash);
+  }
+  const match = route.session;
   document.title = `${route.title} · Cost Guard Web Beta`;
   document.body.dataset.section = route.section;
   const key = match ? 'session/' + match[1] : route.section === 'sessions' ? 'sessions-catalog' : location.hash || '#/models';
@@ -311,6 +317,7 @@ function navigate() {
    if ((match || route.catalog) && csrf && !sessionDetailAvailable) current.message = 'Live session source unavailable.';
   document.getElementById('search').disabled = !!current.detail;
   show(current);
+  if (redirected) document.getElementById('content').focus();
   if (route.section === 'settings' && csrf && !hostState.terminal) settingsView.read();
   if (csrf && hostState.writable && current.request && !current.explicit && !current.detail && !current.result && !current.attempted) {
     current.attempted = true;
