@@ -8,6 +8,7 @@ import tempfile
 from threading import Event, Lock, Thread
 import threading
 import time
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -150,20 +151,27 @@ class HistoricalReportScaleTests(unittest.TestCase):
 
     def test_872_root_date_report_keeps_all_prompts_costs_and_revision_proofs(self):
         wire = HistoricalWire(872)
+        # This is a work-count/correctness check, not a two-second CPU-speed
+        # requirement. Source-local catalog time stays fresh; metrics stay real.
+        source_clock = SimpleNamespace(monotonic=lambda: 0, perf_counter=time.perf_counter)
         with source_with_current_service() as (source, _, _), tempfile.TemporaryDirectory() as directory:
-            with patch.object(source, '_client', return_value=wire):
+            with patch.object(source, '_client', return_value=wire), \
+                 patch('src.sources.opencode_v2.time', source_clock):
                 _, _, service, _ = make_service(directory, source, now_ms=DAY + 86_400_000)
                 result = service.build(ReportRequest(ReportKind.DATE, date_text='2026-10-25'))
+                revisions = service.report_source_revisions()
 
         self.assertEqual(872, len(result.prompt_blocks))
         self.assertEqual(872, sum(len(block.rows) for block in result.prompt_blocks))
         self.assertEqual(872, result.range_comparison.observed_requests)
         self.assertEqual(Decimal('12.20800'), result.range_comparison.known_ccost)
         self.assertTrue(result.range_comparison.complete)
-        self.assertEqual(872, len(service.report_source_revisions()))
+        self.assertEqual(872, len(revisions))
         self.assertEqual(872, wire.calls['messages'])
         self.assertEqual(872, wire.calls['context'])
-        self.assertIn(wire.calls['catalog'], (2, 3), 'Only before/after catalogs, allowing an expired initial hint')
+        # Mocking _client defers endpoint initialization: provenance retires the
+        # initial catalog, then revision lookup and the after bracket read once.
+        self.assertEqual(3, wire.calls['catalog'], 'Initial catalog, endpoint-bound before, mandatory after')
 
 
 class HistoricalReportSourceTests(unittest.TestCase):

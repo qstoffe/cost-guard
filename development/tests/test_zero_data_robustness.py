@@ -158,7 +158,7 @@ class ReportStartupTests(unittest.TestCase):
                                       v2_factory=lambda: healthy if generation == "v2" else missing)
             with patch.object(bootstrap, "SourceSelector", return_value=selector), \
                  patch.object(bootstrap.shutil, "which", return_value=None) as which, \
-                 patch.object(bootstrap.subprocess, "run") as run:
+                  patch("src.opencode_service.subprocess.run") as run:
                 self.assertIs(healthy, bootstrap._select_source("auto").source)
                 which.assert_not_called()
                 run.assert_not_called()

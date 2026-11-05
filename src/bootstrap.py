@@ -2,10 +2,8 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-import os
 from pathlib import Path
 import shutil
-import subprocess
 import sys
 import time
 
@@ -34,6 +32,7 @@ from .watch import WatchCoordinator
 from .watch.coordinator import WatchedSessionEnded
 from .runtime_errors import check_pending, context, diagnostics_hint
 from .launcher_feedback import release_launcher_status
+from .opencode_service import wake_cli_service as _wake_cli_service
 from .domain.progress import WorkProgress
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
@@ -99,23 +98,6 @@ def _prepare_console_output() -> None:
         reconfigure = getattr(sys.stdout, "reconfigure", None)
         if callable(reconfigure):
             reconfigure(errors="replace")
-
-
-def _wake_cli_service(executable: str) -> None:
-    """The single supported CLI wake, never a recurring discovery action."""
-    command = [executable, "api", "get", "/api/info"]
-    if executable.lower().endswith((".cmd", ".bat")):
-        command = [os.environ.get("COMSPEC") or "cmd.exe", "/d", "/s", "/c",
-                   subprocess.list2cmdline(command)]
-    try:
-        result = subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                timeout=20, check=False)
-    except (OSError, subprocess.TimeoutExpired):
-        raise SourceUnavailableError("OpenCode V2 background service could not be started",
-            code=FailureCode.ENDPOINT_UNRESPONSIVE, phase="selection", generation="v2") from None
-    if result.returncode != 0:
-        raise SourceUnavailableError("OpenCode V2 background service could not be started",
-            code=FailureCode.ENDPOINT_UNRESPONSIVE, phase="selection", generation="v2")
 
 
 def _select_source(requested: str, *, inspect_migration_gap: bool = True):

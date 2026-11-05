@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.169 — 2026-11-05
+
+- Web Beta makes one bounded, hidden installed-CLI wake attempt when host startup finds an eligible unavailable V2 service. Actual registration/API readiness, not command exit, releases queued reports and Live automatically. Accessible starting feedback ends on success or failure; missing CLI, invalid registration, permissions, authentication, incompatible contracts and selected V1 never trigger inappropriate launch. Tabs, Refresh and later reconnects stay process-free; shared OpenCode is never stopped.
+
 ## v80.168 — 2026-11-05
 
 - Mini Watch keeps helpful column headings and return-to-Watch guidance without routine row/header question marks or observation logs; one subscription cue groups real primary/additional quota details. Full Watch removes prompt-preview popups, consolidates quota help and right-aligns one whole-daily-summary explanation. Shared help distinguishes hover, keyboard focus and pinned touch ownership, closes orphaned hover help on document/window exit, and dismisses actions immediately without Live/focus resurrection. Accounting, acquisition, CLI and native PiP ownership are unchanged.

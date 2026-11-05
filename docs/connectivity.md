@@ -28,6 +28,31 @@ fallback. Explicit `v1`/`v2` never silently switches. Histories are never merged
 
 ## Watch waits and recovers
 
+### Web Beta host startup
+
+Launching the Web host checks the configured source on its Live worker, without
+delaying the HTTP shell/browser handoff. A healthy source, selected V1 (including
+healthy `auto` fallback), invalid/unreadable registration, permission denial,
+authentication or incompatible API never triggers a wake. For an eligible absent
+or unreachable V2 service, an installed `opencode` CLI can receive one fixed
+`api get /api/info` command, bounded to five seconds and hidden on Windows.
+No Desktop UI is opened. Unsupported/missing CLI installations fall back without
+inventing another launch mechanism; unusual unsafe Windows batch paths are refused.
+
+**Starting OpenCode server…** is a distinct accessible status during this attempt.
+Fresh registration and authenticated loopback `/api/info` probes must confirm V2
+readiness, even after CLI success (or a CLI timeout). The short three-failure,
+half-second/four-second read-recovery budget bounds re-probing. Queued initial
+reports and Live continue automatically; browser navigation/settings stay usable.
+Failure clears the starting indicator and retains unavailable/wait/Refresh and
+manual-start guidance. Later restored connectivity uses ordinary Live recovery;
+failed finite reports can be refreshed/reloaded.
+
+There is at most one attempt per host lifetime, not per tab, Refresh, route or
+reconnect. There is no browser launch endpoint, repeated process start, service
+restart/stop, registration edit or change to source-selection/fallback policy.
+Closing Web stops only its own work, never the shared OpenCode service.
+
 Before selection, Watch waits at approximately five-second intervals and suggests
 starting Desktop when appropriate. Ctrl+C stops only Watch. Cache, accounts and
 pricing are not repeatedly constructed during this wait.

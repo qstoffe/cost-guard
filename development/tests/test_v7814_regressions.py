@@ -11,7 +11,7 @@ from unittest import mock
 
 from development.tests.fixtures.session_snapshots import make_snapshot, message, MODEL
 from development.tests.fixtures.watch_runtime import MutableSource, make_service
-from src import bootstrap
+from src import bootstrap, opencode_service
 from src.config import load_configuration
 from src.domain import CostKind, CostObservation, MessageRole, TokenUsage
 from src.presentation import WatchRenderer
@@ -31,7 +31,7 @@ class StartupTests(unittest.TestCase):
         renderer = mock.Mock(interactive=True)
         delays = []
         with mock.patch.object(bootstrap, "SourceSelector", return_value=selector), \
-             mock.patch.object(bootstrap.subprocess, "run") as run:
+             mock.patch.object(opencode_service.subprocess, "run") as run:
             self.assertIs(bootstrap._wait_for_watch_source("v2", renderer, sleep=delays.append), selected)
         self.assertEqual([5, 5], delays)
         self.assertEqual([mock.call("v2"), mock.call("v2")], selector.select.call_args_list)
@@ -69,19 +69,19 @@ class StartupTests(unittest.TestCase):
         selector.select.side_effect = [SourceUnavailableError("no source", code=FailureCode.REFUSED), selected]
         with mock.patch.object(bootstrap, "SourceSelector", return_value=selector), \
              mock.patch.object(bootstrap.shutil, "which", return_value="opencode"), \
-             mock.patch.object(bootstrap.subprocess, "run", return_value=mock.Mock(returncode=0)) as run:
+             mock.patch.object(opencode_service.subprocess, "run", return_value=mock.Mock(returncode=0)) as run:
             self.assertIs(bootstrap._select_source("auto"), selected)
         self.assertEqual([mock.call("auto"), mock.call("auto")], selector.select.call_args_list)
         self.assertEqual(["opencode", "api", "get", "/api/info"], run.call_args.args[0])
         self.assertEqual(20, run.call_args.kwargs["timeout"])
-        self.assertEqual(bootstrap.subprocess.DEVNULL, run.call_args.kwargs["stderr"])
+        self.assertEqual(opencode_service.subprocess.DEVNULL, run.call_args.kwargs["stderr"])
 
     def test_healthy_selection_and_forced_v1_do_not_start_cli(self):
         selector = mock.Mock()
         selected = object()
         selector.select.side_effect = [selected, SourceUnavailableError("V1 missing")]
         with mock.patch.object(bootstrap, "SourceSelector", return_value=selector), \
-             mock.patch.object(bootstrap.subprocess, "run") as run:
+             mock.patch.object(opencode_service.subprocess, "run") as run:
             self.assertIs(bootstrap._select_source("auto"), selected)
             with self.assertRaises(SourceUnavailableError):
                 bootstrap._select_source("v1")
@@ -92,18 +92,17 @@ class StartupTests(unittest.TestCase):
         selector.select.side_effect = [SourceUnavailableError("offline", code=FailureCode.REFUSED), object()]
         with mock.patch.object(bootstrap, "SourceSelector", return_value=selector), \
              mock.patch.object(bootstrap.shutil, "which", return_value=r"C:\tools\opencode.cmd"), \
-             mock.patch.dict(bootstrap.os.environ, {"COMSPEC": r"C:\Windows\System32\cmd.exe"}), \
-             mock.patch.object(bootstrap.subprocess, "run", return_value=mock.Mock(returncode=0)) as run:
+             mock.patch.dict(opencode_service.os.environ, {"COMSPEC": r"C:\Windows\System32\cmd.exe"}), \
+             mock.patch.object(opencode_service.subprocess, "run", return_value=mock.Mock(returncode=0)) as run:
             bootstrap._select_source("v2")
         command = run.call_args.args[0]
-        self.assertEqual([r"C:\Windows\System32\cmd.exe", "/d", "/s", "/c"], command[:4])
-        self.assertIn("opencode.cmd", command[4])
-        self.assertIn("/api/info", command[4])
+        self.assertEqual(r'C:\Windows\System32\cmd.exe /d /s /c ""C:\tools\opencode.cmd" api get /api/info"', command)
+        self.assertFalse(run.call_args.kwargs.get("shell", False))
 
     def test_cli_failure_is_bounded_and_does_not_expose_cli_output(self):
         with mock.patch.object(bootstrap, "SourceSelector") as factory, \
              mock.patch.object(bootstrap.shutil, "which", return_value="opencode"), \
-             mock.patch.object(bootstrap.subprocess, "run", return_value=mock.Mock(returncode=1)):
+             mock.patch.object(opencode_service.subprocess, "run", return_value=mock.Mock(returncode=1)):
             factory.return_value.select.side_effect = SourceUnavailableError("offline", code=FailureCode.REFUSED)
             with self.assertRaisesRegex(SourceUnavailableError, "background service could not be started"):
                 bootstrap._select_source("v2")

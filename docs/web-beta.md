@@ -717,7 +717,19 @@ Reports select `kind`: `normal` (overview/Models/Accounts), `all-models` (catalo
 - Each finite report child monitors multiprocessing's exact parent kernel sentinel. A crashed/force-stopped Web parent or lost ownership proof exits that child nonzero, including a blocked scan; PID reuse is not a liveness signal. This child-only safety monitor stops/joins on ordinary completion.
 - Results are limited to 8 MiB per job. Oversize: `result_too_large`; scope the request. Long Token Mix may time out but never blocks shutdown. Progress exports only approved phase/stage/counts and a stale-safe job sequence, not source text. Child IPC coalesces at 100ms; host drains at most 64 messages/turn.
 
-The shell remains reachable with offline/loading sources. There is no autostart. Tests use synthetic read-only sources; local read-only source probes are separate from paid/live-model tests.
+The shell remains reachable with offline/loading sources. At host launch only,
+an eligible unavailable V2 service gets one hidden installed-CLI wake (five-second
+command bound), followed by bounded fresh registration/API readiness probes.
+**Starting OpenCode server…** is visible and accessible; queued reports and Watch
+continue automatically after readiness. Failure clears that status and keeps
+manual-start/wait/Refresh guidance. Healthy sources, selected V1, invalid/unreadable
+registration, permission/authentication or incompatible contracts never launch.
+Missing/unsupported CLI falls back transparently. Tabs, Refresh, routes and later
+reconnects never repeat the attempt; Web shutdown never stops shared OpenCode.
+There is no OS-login autostart or browser process-launch endpoint.
+[Exact recovery bounds and source policy](connectivity.md#web-beta-host-startup).
+Tests use synthetic read-only sources; local read-only source probes are separate
+from paid/live-model tests.
 
 ## Shared managed lifecycle (native launcher integration contract)
 

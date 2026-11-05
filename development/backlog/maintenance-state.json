@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "ordinaryCount": 38,
+  "ordinaryCount": 39,
   "completed": {
     "architecture": 30,
     "test-health": 30,
@@ -8,5 +8,5 @@
     "session-learning": 0
   },
   "deferred": {},
-  "lastOrdinaryId": "fr/000587"
+  "lastOrdinaryId": "fr/000588"
 }

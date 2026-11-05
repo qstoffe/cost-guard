@@ -147,9 +147,15 @@ async function main() {
   assert.equal(streams.length, 1);
   const stream = streams[0];
   stream.onopen(); await turns();
-  stream.emit('live', 1, input);
+  stream.emit('live', 1, {state:'starting_opencode',view:null});
+  assert.equal(statuses.at(-1), 'Starting OpenCode server…');
+  stream.emit('live', 2, {state:'source_unavailable',view:null});
+  assert.match(statuses.at(-1), /Start OpenCode manually.*Refresh/);
+  stream.emit('live', 3, input);
+  assert.match(statuses.at(-1), /Live connected/);
+  stream.emit('live', 3, input);
   const count = rendered.length;
-  stream.emit('live', 1, {view: null});
+  stream.emit('live', 3, {view: null});
   stream.emit('live', 0, {view: null});
   assert.equal(rendered.length, count, 'duplicates/older updates cannot replace state');
   snapshot = {...snapshot, sequence: 5};
