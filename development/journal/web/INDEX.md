@@ -14,6 +14,9 @@ Status: current
   read-only V2 evidence without new acquisition or a test exception.
 - [Watch cards](watch-cards.md): isolated two-phase acquisition, continuous history,
   canonical totals, nine-case rendered-browser evidence and separate V2/detail proof.
+- [Watch tool outcomes](watch-polish.md): canonical failed/cancelled subsets,
+  focus-coherent disclosures, semantic running-tool colors, six-case browser and
+  read-only V2 evidence with real cancellation/Daily proof limits.
 - [Watch account physical-width correction](watch-account-pixels.md): CSS/raster
   mismatch, scale-aware cap, independent screenshot measurements and the scoped
   unverified native/owner-desktop acceptance exception.

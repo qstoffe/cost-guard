@@ -1,4 +1,4 @@
-# Watch lifecycle and activity — v80.125
+# Watch lifecycle and activity — v80.165
 
 Watch derives prompt activity from already-hydrated normalized snapshots and existing causal prompt scope, including attributed task children. It does not run tools, scan skill files, mutate OpenCode data, or change usage, billing, token accounting or quota refresh.
 
@@ -43,8 +43,18 @@ For V2, Watch consults the read-only, location-scoped `/api/skill` registry only
 
 Native `state.status = error` counts unless structured cancellation/interruption evidence applies. Completed shell/bash calls also count when a directly executed known Toolkit Python script returns one bounded JSON object with its exact recognized schema, `status = error` and a nonempty `error.class`. Native and structured evidence for one physical call count once. Output decoding remains restricted to known scripts; arbitrary output, reads, mentions, compound commands and nonzero exit codes alone are not failure evidence.
 
+## Full Web Watch outcomes
+
+The collapsed Tool Calls summary shows one combined **N failed / cancelled** count from evidenced physical calls. Expanding it lists every ordinary tool group, then red outcome subsets such as **2 × grep failed** and **1 × execute cancelled**. Failed groups precede cancelled groups, then sort by count descending and name. The summary’s five-group cap never hides expanded outcome details.
+
+Ordinary tool groups include **all** calls, including failures and cancellations; red lines are subsets, not extra calls or evidence that the other calls succeeded. Explicit cancellation wins over error evidence for the same call. Unknown names use `unknown`; a retained/older aggregate without a complete breakdown shows only the unidentified difference. Missing outcome evidence never supplies a label or count. The shared accessible help explains these distinctions without showing commands, output or traces.
+
+Skills retain confirmed custom load identities and directly attributed **failure-only** counts. Tool cancellations are not allocated to a recently loaded skill; skill counts need not sum to overall outcomes. Canonical failure-only data and CLI presentation remain unchanged.
+
 ## Width and colors
 
 Tool totals and failures retain priority over category detail. Hidden tool calls aggregate into `other`, so the visible breakdown still sums to the total. The Skills row keeps distinct count, newest whole IDs and verified failure indicators before older names; omitted IDs use exact `+N more` and are never partially truncated.
 
-Tool-call, Skills and running-status prefixes/text use the same `watchToolActivity` styling. Verified failure totals and per-skill failure indicators remain red. The legacy `watchSkillActivity` color setting is retained for configuration compatibility but no longer styles a separate row; customize `watchToolActivity` for all normal activity text.
+CLI tool-call, Skills and running-status prefixes/text use the same `watchToolActivity` styling. Verified failure totals and per-skill failure indicators remain red. The legacy `watchSkillActivity` color setting is retained for configuration compatibility but no longer styles a separate row; customize `watchToolActivity` for normal CLI activity text.
+
+In full Web Watch, only the active **Running: tool duration** line shares the prompt/session `--watch-running` foreground (yellow in Classic; theme-aware Web light/dark). It keeps the ten-second threshold and clears on authoritative completion, failure or cancellation. Ordinary groups and separate background/subagent lines keep their gold/brown activity color; outcome details stay red. No background highlight is added.

@@ -20,6 +20,14 @@ class SkillObservation:
 
 
 @dataclass(frozen=True, slots=True)
+class ToolOutcome:
+    """Evidenced physical calls grouped by tool name and terminal outcome."""
+    tool_name: str
+    outcome: str
+    count: int
+
+
+@dataclass(frozen=True, slots=True)
 class ToolObservation:
     tool_count: int = 0
     todo_completed: int = 0
@@ -32,6 +40,15 @@ class ToolObservation:
     background_kinds: tuple[str, ...] = ()
     background_ms: int = 0
     skills: tuple[SkillObservation, ...] = ()
+    tool_outcomes: tuple[ToolOutcome, ...] = ()
+
+    @property
+    def cancelled_count(self) -> int:
+        return sum(item.count for item in self.tool_outcomes if item.outcome == "cancelled")
+
+    @property
+    def failed_or_cancelled_count(self) -> int:
+        return self.failed_count + self.cancelled_count
 
     @property
     def has_open_todo(self) -> bool:

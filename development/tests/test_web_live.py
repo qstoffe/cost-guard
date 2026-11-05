@@ -16,6 +16,7 @@ from unittest.mock import Mock, patch
 
 from development.tests.fixtures.session_snapshots import make_snapshot, make_uncompacted_snapshot
 from development.tests.fixtures.watch_runtime import MutableSource, make_service
+from development.tests.fixtures.watch_tool_outcomes import outcome_watch
 from src.application.live import LiveRuntime
 from src.application.live_projection import project_live
 from src.sources.errors import SourceUnavailableError, SourceSchemaError
@@ -39,6 +40,19 @@ def slow_report(sender, request):
 
 
 class LiveTests(unittest.TestCase):
+    def test_card_and_shared_activity_export_the_same_canonical_outcomes(self):
+        payload = project_live(outcome_watch()).to_json()
+        shared = payload['rows'][0]['tool']
+        card = payload['active_cards'][0]['rows'][0]['tool']
+        for activity in (shared, card):
+            self.assertEqual(2, activity['failed_count'])
+            self.assertEqual(1, activity['cancelled_count'])
+            self.assertEqual(3, activity['failed_or_cancelled_count'])
+            self.assertEqual([{'tool_name': 'grep', 'outcome': 'failed', 'count': 2},
+                              {'tool_name': 'execute', 'outcome': 'cancelled', 'count': 1}], activity['outcomes'])
+            self.assertEqual(12, sum(count for _name, count in activity['counts']))
+            self.assertEqual([{'skill_id': 'custom-skill', 'failed_count': 1}], activity['skills'])
+
     def owner(self, root, snapshot=None, clock=None):
         source = MutableSource(snapshot or make_snapshot())
         config, selection, service, _ = make_service(root, source)

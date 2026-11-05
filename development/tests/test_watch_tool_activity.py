@@ -10,8 +10,8 @@ from development.tests.fixtures.session_snapshots import make_snapshot, part
 from development.tests.test_watch_rendering import tall_projection
 from src.presentation import WatchRenderer
 from src.presentation.watch_activity import FAILED_ROLE, status_segments, tool_summary_segments
-from src.watch.models import SkillObservation, ToolObservation
-from src.watch.tools import observe_tools
+from src.watch.models import SkillObservation, ToolObservation, ToolOutcome
+from src.watch.tools import observe_tools, without_live_activity
 
 
 def tool_part(pid, name, state=None, start=2190):
@@ -67,6 +67,57 @@ class ToolAggregationTests(unittest.TestCase):
         ])
         self.assertEqual(4, obs.tool_count)
         self.assertEqual(1, obs.failed_count)
+        self.assertEqual(3, obs.cancelled_count)
+        self.assertEqual(4, obs.failed_or_cancelled_count)
+        self.assertEqual((ToolOutcome("bash", "failed", 1), ToolOutcome("bash", "cancelled", 3)), obs.tool_outcomes)
+
+    def test_mixed_outcomes_are_subsets_of_all_physical_calls(self):
+        obs = observe([
+            tool_part("good", "grep", {"status": "completed"}),
+            tool_part("bad-1", "grep", {"status": "error", "error": "bad pattern"}),
+            tool_part("bad-2", "grep", {"status": "error", "error": "bad pattern"}),
+            tool_part("cancel", "grep", {"status": "error", "error": {"code": "CANCELLED"}}),
+            tool_part("other", "execute", {"status": "error", "error": "missing"}),
+            tool_part("unknown", "", {"status": "error", "metadata": {"interrupted": True}}),
+            tool_part("custom", "<custom-tool>", {"status": "error", "error": "missing"}),
+        ])
+        self.assertEqual(7, obs.tool_count)
+        self.assertEqual((("grep", 4), ("<custom-tool>", 1), ("execute", 1), ("unknown", 1)), obs.tool_counts)
+        self.assertEqual((ToolOutcome("grep", "failed", 2), ToolOutcome("<custom-tool>", "failed", 1),
+                          ToolOutcome("execute", "failed", 1), ToolOutcome("grep", "cancelled", 1),
+                          ToolOutcome("unknown", "cancelled", 1)), obs.tool_outcomes)
+        self.assertEqual(4, obs.failed_count)
+        self.assertEqual(2, obs.cancelled_count)
+        self.assertEqual(6, sum(item.count for item in obs.tool_outcomes))
+        self.assertEqual(6, obs.failed_or_cancelled_count)
+
+    def test_untrusted_or_missing_outcomes_do_not_invent_failure_or_cancellation(self):
+        obs = observe([
+            tool_part("a", "execute", {"status": "completed", "output": "error cancelled interrupted"}),
+            tool_part("b", "execute", {"status": "completed", "metadata": {"exit": 1}}),
+            tool_part("c", "execute", {"error": "command failed"}),
+            tool_part("d", "execute", {"status": "completed", "output": {
+                "schema": "unverified/v1", "status": "error", "error": {"class": "CANCELLED"}}}),
+            tool_part("e", "execute"),
+        ])
+        self.assertEqual(5, obs.tool_count)
+        self.assertEqual((), obs.tool_outcomes)
+        self.assertEqual(0, obs.failed_or_cancelled_count)
+
+    def test_latest_call_copy_and_authoritative_correction_replace_outcomes(self):
+        early = tool_part("early", "grep", {"status": "error", "error": "bad pattern"})
+        early = replace(early, data={**early.data, "callID": "same"})
+        final = tool_part("late", "grep", {"status": "error", "error": {"type": "AbortError"}})
+        final = replace(final, data={**final.data, "callID": "same"}, updated_at_ms=2300)
+        obs = observe([early, final, final, early])
+        self.assertEqual(1, obs.tool_count)
+        self.assertEqual((ToolOutcome("grep", "cancelled", 1),), obs.tool_outcomes)
+        self.assertEqual((0, 1), (obs.failed_count, obs.cancelled_count))
+        retained = without_live_activity(replace(obs, running_tool="grep", running_ms=10_000))
+        self.assertEqual(obs.tool_outcomes, retained.tool_outcomes)
+        self.assertFalse(retained.has_status_row)
+        corrected = replace(final, data={**final.data, "state": {"status": "completed"}}, updated_at_ms=2400)
+        self.assertEqual((), observe([early, final, corrected]).tool_outcomes)
 
 
 class RunningToolTests(unittest.TestCase):
@@ -87,6 +138,12 @@ class RunningToolTests(unittest.TestCase):
         finished = observe([tool_part("a", "bash", {"status": "completed"}, start)], 61_000)
         self.assertTrue(running.has_status_row)
         self.assertFalse(finished.has_status_row)
+
+    def test_explicit_interruption_cannot_linger_as_running(self):
+        obs = observe([tool_part("a", "execute", {
+            "status": "running", "metadata": {"interrupted": True}}, 1000)], 60_000)
+        self.assertEqual((ToolOutcome("execute", "cancelled", 1),), obs.tool_outcomes)
+        self.assertFalse(obs.has_status_row)
 
 
 class TodoCompatibilityTests(unittest.TestCase):

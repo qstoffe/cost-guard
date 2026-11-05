@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.165 — 2026-11-05
+
+- Full Web Watch counts evidenced failed and cancelled physical tool calls separately, with a combined compact summary and red tool-name/outcome groups in the expanded list. All-call totals remain inclusive; missing outcome evidence is not inferred. The active running-tool line shares the prompt’s semantic yellow, without recoloring background work or ordinary activity. Skill attribution, CLI, acquisition and accounting are unchanged.
+
 ## v80.164 — 2026-11-05
 
 - Mini Watch attempts one height-only native enlargement when Earlier Sessions activation introduces vertical overflow, restores the pre-expansion size on collapse unless manually resized, and silently retains scrolling on refusal/clamps. Both session tables keep aligned titles and parenthesized whole-session totals. Full Watch removes fleeting prompt/session refresh labels while retaining figures, help provenance and meaningful sustained-delay/source-failure guidance. Placement defaults, acquisition, accounting and CLI are unchanged.

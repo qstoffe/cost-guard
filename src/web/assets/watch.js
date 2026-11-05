@@ -33,6 +33,17 @@ const WatchView = (() => {
     target.replaceChildren(...parts.map(([label, role]) => el('span', label, role)));
     target.signature = signature;
   }
+  function drawDisclosure(target, summary, lines, empty) {
+    // Retain header and breakdown together while focus/selection protects either.
+    if (protectedNode(target.node)) return;
+    fragments(target.summary, summary);
+    const signature = JSON.stringify(lines);
+    if (target.list.signature === signature) return;
+    target.list.replaceChildren(...(lines.length ? lines : [[[empty, '']]]).map(parts => {
+      const line = el('div'); fragments(line, parts); return line;
+    }));
+    target.list.signature = signature;
+  }
   function quotaTrack(value) {
     const quota = value.quota, view = () => ReportView.quotaView(quota, value);
     const summary = () => quota.unlimited ? 'Unlimited' : view().percent === '—' ? '—' : view().percent + ' ' + view().mode;
@@ -176,7 +187,9 @@ const WatchView = (() => {
         historical && index === 0 ? 'When this prompt ended, including stopped or failed work.\n— means the finish time is unknown.\nUse the time’s help button for the full local date, time and UTC offset.' : explanation));
       head.append(header); this.body = el('tbody'); table.append(head, this.body); scroll.append(table);
       this.activity = el('div', undefined, 'watch-activity');
-      this.tools = disclosure(); this.skills = disclosure(); this.running = el('p'); this.background = el('p');
+      this.tools = disclosure(); this.skills = disclosure(); this.running = el('p', undefined, 'watch-running-tool'); this.background = el('p');
+      ContextHelp.beside(this.tools.node, 'Tool groups include all calls, including failures and cancellations.\nRed outcome groups are a subset, not extra calls. Only recorded errors or explicit cancellations are counted; missing evidence is not success.\nThe running-tool line uses the active prompt’s color after ten seconds and clears when work ends.', 'About tool call counts and outcomes');
+      ContextHelp.beside(this.skills.node, 'Confirmed custom skill loads only.\nRed failure counts require direct skill attribution; unrelated tool failures and cancellations are not assigned to a recently loaded skill.', 'About skill activity');
       this.activity.append(this.tools.node, this.skills.node, this.running, this.background);
       this.summary = el('div', undefined, 'watch-session-summary');
       const icon = contextWarningIcon(); this.warningIcon = icon.node; this.warningOutline = icon.outline;
@@ -272,25 +285,20 @@ const WatchView = (() => {
       const omitted = groups.slice(5).reduce((sum, pair) => sum + pair[1], 0);
       const toolParts = [[`${total} tool calls`, ''], ...groups.slice(0, 5).map(([name, count]) => [` · ${count} × ${name}`, ''])];
       if (omitted) toolParts.push([` · ${omitted} × other`, '']);
-      if (tool?.failed_count) toolParts.push([` · ${tool.failed_count} failed / cancelled`, 'watch-activity-error']);
-      fragments(this.tools.summary, toolParts);
+      const outcomeTotal = tool?.failed_or_cancelled_count ?? tool?.failed_count ?? 0;
+      if (outcomeTotal) toolParts.push([` · ${outcomeTotal} failed / cancelled`, 'watch-activity-error']);
       const skills = tool?.skills || [];
       const skillParts = skill => [[skill.skill_id, ''], ...(skill.failed_count ? [[` (${skill.failed_count} failed)`, 'watch-activity-error']] : [])];
       const summary = [[`${skills.length} skills`, '']];
       for (const skill of skills.slice(0, 5)) summary.push([' · ', ''], ...skillParts(skill));
       if (skills.length > 5) summary.push([` · ${skills.length - 5} other`, '']);
-      fragments(this.skills.summary, summary);
       const toolLines = groups.map(([name, count]) => [[`${count} × ${name}`, '']]);
-      if (tool?.failed_count) toolLines.push([[`${tool.failed_count} failed / cancelled`, 'watch-activity-error']]);
-      for (const [target, lines, empty] of [[this.tools.list, toolLines, 'No tool calls'], [this.skills.list, skills.map(skillParts), 'No confirmed custom skills']]) {
-        const signature = JSON.stringify(lines);
-        if (target.signature !== signature && !protectedNode(target)) {
-          target.replaceChildren(...(lines.length ? lines : [[[empty, '']]]).map(parts => {
-            const line = el('div'); fragments(line, parts); return line;
-          }));
-          target.signature = signature;
-        }
-      }
+      const outcomes = tool?.outcomes || [];
+      for (const item of outcomes) toolLines.push([[`${item.count} × ${item.tool_name} ${item.outcome}`, 'watch-activity-error']]);
+      const unidentified = outcomeTotal - outcomes.reduce((sum, item) => sum + item.count, 0);
+      if (unidentified > 0) toolLines.push([[`${unidentified} × unidentified tool/outcome`, 'watch-activity-error']]);
+      drawDisclosure(this.tools, toolParts, toolLines, 'No tool calls');
+      drawDisclosure(this.skills, summary, skills.map(skillParts), 'No confirmed custom skills');
       text(this.running, tool?.running_tool ? `Running: ${tool.running_tool} ${display(tool, 'running_ms')}` : '');
       this.running.hidden = !tool?.running_tool;
       const kinds = tool?.background_kinds || [];

@@ -396,8 +396,17 @@ history-eligible when no other running/grace card remains. Old history does not
 replay completion flashes. Active cards show count-first tool/custom-skill
 summaries with five named groups and truthful other totals; native disclosures
 expand every group and retain their state/focus across updates. The longest
-running tool appears at the shared ten-second threshold. Tool and canonical
-background/subagent lines explicitly start **Running:** and clear on completion.
+running tool appears at the shared ten-second threshold, in the same semantic yellow
+as the running prompt (theme-aware in Web light/dark). Separate background/subagent
+lines retain ordinary activity color. Both start **Running:** and clear on completion.
+The compact **N failed / cancelled** count includes only evidenced, distinct tool
+outcomes. Expanded Tool Calls shows red tool-name/outcome subsets, for example
+**2 × grep failed** and **1 × execute cancelled**, below the ordinary all-call groups.
+Those red calls are already included in the ordinary totals, not extra calls.
+Explicit cancellation wins over error for one physical call; missing evidence is not
+success or an invented outcome. Unidentified retained aggregate differences are
+labelled honestly. Expanded help explains counts and direct failure-only skill
+attribution; a recently loaded skill never inherits unrelated tool outcomes.
 Historical cards have no activity section. Narrow tables pan horizontally.
 
 **CCost Today**, four pixels above subscriptions, shows current-local-day reference cost,

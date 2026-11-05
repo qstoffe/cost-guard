@@ -58,7 +58,7 @@ application and separate Mini Watch document. FR 000582 audit: 2026-11-05.
 | Watch: exact Started/Finished dates, full preview, extra-model flag | Verbatim metadata/short explanation on adjacent buttons; values remain selectable |
 | Watch: session Context/CCost and price warning | Concise shared context/cost help; severity and canonical threshold remain visible |
 | Watch: Today count, account Today, primary/secondary period CCost, exact reset | Shared cues; scope, native independence, partial/estimated attribution and reset retained |
-| Watch: activity and Earlier Prompts | Native disclosures retain full actual lists/counts; no duplicate tooltip |
+| Watch: activity and Earlier Prompts | Native disclosures retain full lists/counts; expanded activity cues explain all-call totals, red outcome subsets, missing evidence and direct skill failures without repeating lists |
 | Mini: both tables’ headings | Shared buttons; session/prompt and historical-next context explicit, no I-beam help targets |
 | Mini: session title/cost and prompt/history status | Verbatim title on explicit cue, short status/observation lines; row ARIA no longer repeats the entire tooltip |
 | Mini: Today, freshness, Earlier Sessions, quota bars, return-to-tab | Shared help; relevant retained/partial/estimated notes, native quota versus period CCost, visible critical notices |
