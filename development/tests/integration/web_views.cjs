@@ -244,13 +244,13 @@ async function main() {
   assert.equal(nav.find(node => node.getAttribute('href') === '#/watch').attrs['aria-current'], 'page');
   assert.match(ids.notice.textContent, /Live acquisition/);
   assert.equal(ids.result.textContent, '', 'first Watch acquisition has no fleeting route-level progress prose');
-  vm.runInContext('current.livePendingSince=Date.now()-30001; show(current)', context);
-  assert.match(ids.result.textContent, /Still loading Watch data/);
+  vm.runInContext('globalThis.originalNow=Date.now; Date.now=()=>originalNow()+180000; show(current); Date.now=originalNow', context);
+  assert.equal(ids.result.textContent, '', 'elapsed startup time cannot invent a Watch failure');
   vm.runInContext(`connectionStatus('Retrying source read — last observation retained, not current.',
     {kind:'source_retrying',writable:true}); show(current)`, context);
   assert.equal(vm.runInContext('current.connectionKind', context), 'source_retrying');
   assert.match(ids['host-message'].textContent, /Retrying source read/,'global source-health notice is not suppressed');
-  vm.runInContext("connectionStatus('Live connected.',{kind:'connected',writable:true}); current.livePendingSince=Date.now();show(current)", context);
+  vm.runInContext("connectionStatus('Live connected.',{kind:'connected',writable:true}); show(current)", context);
   assert.equal(ids.refresh.disabled, true);
   navigate('watch');
   assert.equal(ids.heading.textContent, 'Watch');

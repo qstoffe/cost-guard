@@ -180,8 +180,11 @@ def main():
                 page.wait_for_function("() => liveValue?.state === 'CI synthetic Live observation'", timeout=15000)
                 expect(page.locator("#host-message")).to_contain_text("SOURCE UNAVAILABLE")
                 expect(page.locator("#result")).to_have_text("")
-                page.evaluate("current.livePendingSince = Date.now() - 30001; show(current)")
-                expect(page.locator("#result")).to_contain_text("Still loading Watch data")
+                page.evaluate("""() => {const now=Date.now; try {
+                    Date.now=()=>now()+180000; show(current);
+                } finally {Date.now=now;}}""")
+                expect(page.locator("#result")).to_have_text("")
+                expect(page.locator("#host-message")).to_contain_text("SOURCE UNAVAILABLE")
                 assert page.url.endswith("/#/watch")
                 page.goto(origin + "/#/live")
                 expect(page.locator("#heading")).to_have_text("Watch")
@@ -197,7 +200,7 @@ def main():
                 page.go_back()
                 page.go_back()
                 expect(page.locator("#result")).to_contain_text("<script>PRIVATE_TEXT</script>")
-                evidence["checks"].append("actual synthetic SSE updates source health; initial Watch stays quiet until delayed availability guidance")
+                evidence["checks"].append("actual synthetic SSE updates source health; initial Watch stays quiet even after three virtual minutes")
                 context.set_offline(True)
                 # Browser offline emulation does not necessarily drop an already
                 # open SSE TCP socket. Inject actual loss of our owned connection.

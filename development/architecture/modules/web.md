@@ -141,9 +141,12 @@ fallbacks. Achieved bounds, native resize events and a bounded two-frame confirm
 permit collapse restoration without reinterpreting manual bounds or repeating attempts.
 `resizeBy(0, delta)` avoids fractional-DIP width drift; `resizeTo` is fallback.
 No rendering/data event invokes sizing. Full Watch's card/source presentation waits
-30 continuous seconds before initial/retry/refresh delay guidance, keeps retained prompt,
+30 continuous seconds before component/retry/refresh delay guidance, keeps retained prompt,
 session, daily and account metric DOM quiet and exposes provenance in cost help.
-Initial placeholders never claim observed empty/zero; unavailable/partial and host/auth guidance
+Neither app startup without a frame nor independent history/accounts/daily loading
+creates an elapsed-time global Watch warning. Only observed prompt membership on a
+healthy running source/connection establishes “No running prompts”; partial, missing
+and retained observations do not. Initial placeholders never claim observed empty/zero; unavailable/partial and host/auth guidance
 remain explicit. Source states, timings and lifecycle are unchanged. Historical Windows150%
 standard-frame measurements do not prove fresh physical Remember-last behavior;
 the Mini journal records hidden API proof and the scoped physical-verification exception.

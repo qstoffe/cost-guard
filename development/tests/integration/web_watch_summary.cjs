@@ -323,7 +323,7 @@ vm.runInContext('fresh.update(initial)', context);
 assert.doesNotMatch(context.fresh.root.textContent, /loading|delayed/i);
 now++;
 vm.runInContext('fresh.update(initial)', context);
-assert.match(context.fresh.empty.textContent, /Still loading Watch data/);
+assert.equal(context.fresh.empty.textContent, '', 'elapsed startup time is not a global failure');
 assert.match(context.fresh.daily.textContent, /Daily updates delayed/);
 assert.match(initialCard.message.textContent, /Prompt updates delayed/);
 Object.assign(initial.view, {cards_state:'observed', history_state:'observed', daily_state:'unavailable', accounts:{accounts:[]}});
@@ -332,6 +332,48 @@ vm.runInContext('fresh.update(initial)', context);
 assert.equal(context.fresh.empty.textContent, 'No running prompts');
 assert.equal(context.fresh.history.textContent, 'No earlier prompts');
 assert.match(context.fresh.daily.textContent, /Daily activity unavailable/);
+// Independent sublanes cannot turn advancing prompt observations into a global delay.
+const advancing = structuredClone(input);
+advancing.view.active_cards[0].rows[0].prompt.in_progress = true;
+context.advancing = advancing;
+vm.runInContext('globalThis.healthy = new WatchView.View({connection:"Live connected."}); healthy.update(advancing)', context);
+const healthy = context.healthy, anchored = healthy.active.children[0];
+for (const lane of ['history', 'accounts', 'daily', 'partial']) {
+  Object.assign(advancing.view, {history_state:'observed', accounts:input.view.accounts,
+    daily_state:'observed', cards_state:'observed'});
+  if (lane === 'history') advancing.view.history_state = 'loading';
+  if (lane === 'accounts') advancing.view.accounts = null;
+  if (lane === 'daily') advancing.view.daily_state = 'loading';
+  if (lane === 'partial') advancing.view.cards_state = 'partial';
+  for (let seconds = 0; seconds <= 180; seconds += 10) {
+    now += 10000;
+    advancing.view.active_cards[0].rows[0].prompt.calls = seconds + 1;
+    vm.runInContext('healthy.update(advancing)', context);
+    assert.equal(healthy.empty.textContent, '', lane + ' must not gate running prompts');
+    assert.equal(healthy.active.children[0], anchored);
+    assert.equal(anchored.querySelectorAll('tr')[1].children[6].textContent, String(seconds + 1));
+  }
+}
+// Only confirmed healthy observations establish an empty running population.
+advancing.view.active_cards = [];
+for (const cardsState of [null, 'loading', 'partial', 'retrying', 'unavailable', 'observed']) {
+  advancing.view.cards_state = cardsState;
+  vm.runInContext('healthy.update(advancing)', context);
+  assert.equal(healthy.empty.textContent === 'No running prompts', cardsState === 'observed');
+}
+for (const sourceState of ['retrying', 'unavailable', 'failed']) {
+  advancing.state = sourceState;
+  vm.runInContext('healthy.update(advancing)', context);
+  now += 180000;
+  vm.runInContext('healthy.update(advancing)', context);
+  assert.match(healthy.empty.textContent, /not current/);
+  assert.doesNotMatch(healthy.empty.textContent, /No running prompts|Still loading Watch data/);
+}
+advancing.state = 'running';
+vm.runInContext('healthy.state.connection="RECONNECTING"; healthy.state.connectionKind="reconnecting"; healthy.update(advancing)', context);
+assert.match(healthy.empty.textContent, /interrupted.*not live/);
+vm.runInContext('healthy.state.connection="Live connected."; healthy.state.connectionKind="connected"; healthy.update(advancing)', context);
+assert.equal(healthy.empty.textContent, 'No running prompts');
 const baseHistory = context.input.view.history_cards[0];
 const historyCard = id => ({...baseHistory, session_id: id});
 context.input.view.history_cards = ['oldest', 'middle', 'newest'].map(historyCard);

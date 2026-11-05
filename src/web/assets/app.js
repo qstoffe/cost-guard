@@ -165,12 +165,10 @@ function show(state) {
     state.connection = liveStatus;
     state.connectionKind = hostState.kind;
     if (liveValue?.view) {
-      state.livePendingSince = null;
       ReportView.renderLive(output, liveValue, state);
     } else {
-      state.livePendingSince ??= Date.now();
-      output.replaceChildren(ReportView.element('p', Date.now() - state.livePendingSince >= 30000 ?
-        'Still loading Watch data; check source availability.' : ''));
+      // Host/source health owns startup and failure feedback, not an elapsed timer.
+      output.replaceChildren();
     }
   } else if (state.result) {
     // Connection/source status is not a new frozen report. Replacing its DOM
