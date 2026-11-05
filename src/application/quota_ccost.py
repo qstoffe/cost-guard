@@ -57,20 +57,15 @@ def quota_ccost_tokens(values, now_ms):
                 remaining = capacity - used
     amount = lambda value: "?" if value is None else ccost_amount(value)
     explanation = {
-        "native": "Capacity comes from the provider’s reported included AI-credit limit.\n"
-                  "Remaining uses native available AI credits on the same reference scale.\n"
-                  "Used CCost is a separate observed reference estimate; Used + Remaining need not equal Capacity.",
-        "ratio": "Capacity — Estimated CCost equivalent of 100% of this quota period.\n"
-                 "Based on: CCost used ÷ provider-reported fraction used.\n"
-                 "The amount can change with your models, external activity and the provider’s limits.\n"
-                 "It is not a guaranteed budget or billed balance.",
+        "native": "Provider-reported included AI-credit limit.\n"
+                  "Observed Used CCost is separate; Used + Remaining need not equal Capacity.",
+        "ratio": "Guesstimated full-period CCost: observed CCost ÷ native fraction used.\n"
+                 "Changes with model usage; not a guaranteed budget.",
         "unlimited": "Capacity: N/A — The provider reports no finite usage limit.\n"
                      "Remaining mode keeps the observed Used CCost; no finite remaining amount applies.",
-        "unknown": "Capacity / Remaining: ? — No reliable same-window estimate is available.\n"
-                   "A valid native remaining percentage does not establish remaining CCost.\n"
-                   "Zero usage, missing history, partial pricing, uncertain attribution or stale data can prevent an estimate.",
+        "unknown": "No reliable same-window CCost Capacity / Remaining estimate.\n"
+                   "A native quota percentage alone is not enough.",
     }[basis]
-    explanation += "\nAmounts use the selected CCost Credits / reference USD unit (100 CCost = $1.00), not your bill."
     if cost and not cost.get("complete"):
         explanation += "\nUsed CCost has partial attribution / pricing."
     if context["estimated"]:
@@ -90,5 +85,7 @@ def quota_ccost_tokens(values, now_ms):
     if context["note"]:
         brief += "\n" + context["note"]
     return {"ccost_used": amount(used), "ccost_remaining": amount(remaining),
-            "ccost_capacity": "N/A" if basis == "unlimited" else amount(capacity),
+            "ccost_capacity": ("N/A" if basis == "unlimited" else amount(capacity)) +
+                (" (guesstimate)" if basis == "ratio" and capacity is not None else ""),
+            "capacity_basis": basis,
             "ccost_help": explanation, "ccost_brief": brief}

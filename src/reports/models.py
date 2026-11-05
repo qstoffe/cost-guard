@@ -19,6 +19,7 @@ from src.analysis.token_mix import TokenMix
 from src.analysis.models import MixEvidence
 from src.analysis.comparisons import RelativePriceLevel
 from src.domain import AccountSnapshot, QuotaComponent
+from .prompt_costs import PromptCostPart
 
 
 class ReportKind(str, Enum):
@@ -95,6 +96,8 @@ class PromptProjection:
     # Independent token evidence for full-Watch diagnostics, not new valuations.
     incoming_context_ccost_known: bool = False
     extra_ccost_known: bool = False
+    linked_agent_count: int = 0
+    cost_parts: tuple[PromptCostPart, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

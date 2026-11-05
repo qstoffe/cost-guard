@@ -19,9 +19,10 @@ module.exports = function sessionTables(vm, context, controller, view, input, he
     const header = body.parentNode.querySelectorAll('th')[0];
     assert.deepEqual(header.children[0].children.map(node => node.textContent), ['Session', ' (Total CCost)']);
     assert.equal(header.querySelectorAll('button').length, 2, 'separate text-sized targets, no help in the grid gap');
-    for (const label of header.children[0].children) {
-      assert.match(helpText(label), /Session — The name of the session\.\n\nTotal CCost — Estimated cost of the entire session[\s\S]*earlier prompts and linked subagents/);
-    }
+    const [session, total] = header.children[0].children;
+    assert.equal(helpText(session), 'The name of the session.');
+    assert.match(helpText(total), /Reference cost of the entire session[\s\S]*earlier prompts and linked subagents/);
+    assert.doesNotMatch(helpText(session), /CCost/);
   }
   const cost = row => row.children[0].children[0].children[1].textContent;
   assert.deepEqual(view.body.children.map(cost), [' (4583)', ' (4583)']);

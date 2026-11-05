@@ -21,10 +21,11 @@ class Node {
 function document() {
   const doc={events:{},addEventListener:Node.prototype.addEventListener,fire:Node.prototype.fire,
     createElement(tag){return new Node(doc,tag);}};
-  const timers=new Map();let sequence=0;
+  const timers=new Map();let sequence=0,now=0;
   doc.defaultView={innerWidth:560,innerHeight:250,events:{},addEventListener:Node.prototype.addEventListener,fire:Node.prototype.fire,
-    setTimeout(fn){timers.set(++sequence,fn);return sequence;},clearTimeout(id){timers.delete(id);}};
-  doc.flush=()=>{for(const [id,fn]of [...timers]){timers.delete(id);fn();}};
+    setTimeout(fn,delay){timers.set(++sequence,{fn,at:now+delay});return sequence;},clearTimeout(id){timers.delete(id);}};
+  doc.tick=ms=>{now+=ms;for(const [id,value]of [...timers])if(value.at<=now){timers.delete(id);value.fn();}};
+  doc.flush=()=>doc.tick(600);
   doc.timerCount=()=>timers.size;doc.body=doc.createElement('body');return doc;
 }
 const main=document(),mini=document(),context=vm.createContext({document:main,window:main.defaultView,mini});
@@ -41,6 +42,7 @@ assert.equal(panel.hidden,true);assert.equal(main.activeElement,first);assert.eq
 value='Updated USD value';help.attach(first,()=>value,true);help.refresh(first);first.fire('pointerenter');
 assert.equal(panel.hidden,true,'updates and stationary focus do not reopen Escape-dismissed help');
 first.blur();first.fire('pointerleave');main.flush();first.fire('pointerenter');
+assert.equal(panel.hidden,true);main.tick(599);assert.equal(panel.hidden,true);main.tick(1);
 assert.equal(panel.textContent,value);assert.equal(panel.open,true);
 first.fire('pointerleave');panel.fire('pointerenter');main.flush();assert.equal(panel.open,true,'pointer transfer');
 panel.fire('pointerleave');main.flush();assert.equal(panel.hidden,true,'unfocused exit closes');
@@ -50,14 +52,14 @@ second.focus();assert.equal(panel.textContent,'Other explanation');assert.equal(
 assert.equal(main.body.children.filter(node=>node.getAttribute('role')==='tooltip').length,1,'one surface per document');
 main.fire('pointerdown',{target:main.body});assert.equal(panel.hidden,true,'outside tap closes');
 const action=main.createElement('button');let clicks=0;action.addEventListener('click',()=>clicks++);main.body.append(action);
-help.attach(action,'Sort help');action.fire('pointerenter');assert.equal(panel.textContent,'Sort help');
+help.attach(action,'Sort help');action.fire('pointerenter');main.tick(600);assert.equal(panel.textContent,'Sort help');
 action.fire('click');assert.equal(clicks,1);assert.equal(panel.hidden,true,'actions dismiss rather than pin');
 help.refresh(action);action.fire('focus');main.defaultView.fire('focus');assert.equal(panel.hidden,true,'stationary focus and rerenders cannot reopen action help');
-action.fire('pointerleave');action.fire('pointerenter');assert.equal(panel.hidden,false,'new hover rearms action help');
+action.fire('pointerleave');action.fire('pointerenter');main.tick(600);assert.equal(panel.hidden,false,'new hover rearms action help');
 main.fire('pointerdown',{target:action});action.focus();action.fire('pointerleave');main.flush();
 assert.equal(panel.hidden,true,'mouse-owned focus cannot strand hover help');assert.equal(main.activeElement,action);
 action.fire('pointerenter');main.fire('pointerout',{relatedTarget:null});main.flush();assert.equal(panel.hidden,true,'missed trigger leave closes at document boundary');
-action.fire('pointerenter');main.fire('pointermove',{target:main.body});main.fire('pointermove',{target:main.body});
+action.fire('pointerenter');main.tick(600);main.fire('pointermove',{target:main.body});main.fire('pointermove',{target:main.body});
 assert.equal(main.timerCount(),1,'repeated outside movement cannot defer the bounded exit');main.flush();assert.equal(panel.hidden,true);
 action.fire('pointerenter');main.defaultView.fire('blur');assert.equal(panel.hidden,true,'window exit dismisses hover');assert.equal(main.timerCount(),0);
 action.blur();main.fire('keydown',{key:'Tab'});action.focus();action.fire('pointerleave');main.fire('pointerout',{relatedTarget:null});main.flush();
@@ -76,10 +78,10 @@ const sort=main.createElement('button');sort.textContent='Model';main.body.appen
 const label=help.heading(sort,'Sort models');let sorts=0;sort.addEventListener('click',()=>sorts++);
 sort.fire('pointerenter');main.fire('pointermove',{target:sort});
 assert.equal(panel.hidden,true,'action padding is not a help target');
-label.fire('pointerenter');assert.equal(panel.textContent,'Sort models');
+label.fire('pointerenter');main.tick(600);assert.equal(panel.textContent,'Sort models');
 label.fire('pointerleave');main.fire('pointermove',{target:sort});main.flush();
 assert.equal(panel.hidden,true,'text to same-action whitespace closes hover help');
-label.fire('pointerenter');main.fire('pointermove',{target:sort});main.fire('pointermove',{target:sort});
+label.fire('pointerenter');main.tick(600);main.fire('pointermove',{target:sort});main.fire('pointermove',{target:sort});
 assert.equal(main.timerCount(),1,'missed text leave still gets one bounded exit');main.flush();
 assert.equal(panel.hidden,true);
 main.fire('keydown',{key:'Tab'});sort.focus();main.fire('pointermove',{target:sort});main.flush();
@@ -87,7 +89,30 @@ assert.equal(panel.hidden,false,'keyboard help belongs to the actual action');
 assert.equal(sort.getAttribute('aria-describedby'),'context-help');
 assert.equal(label.getAttribute('aria-describedby'),null,'nonfocusable label does not steal ARIA description');
 sort.fire('click');assert.equal(sorts,1);assert.equal(panel.hidden,true,'normal sort action preserved');
-sort.blur();label.fire('pointerleave');label.fire('pointerenter');panel.fire('pointerenter');main.flush();
+sort.blur();label.fire('pointerleave');label.fire('pointerenter');main.tick(600);panel.fire('pointerenter');main.flush();
 assert.equal(panel.hidden,false,'text-only action still transfers to panel');
 main.defaultView.fire('pagehide');
+// Opening and closing clocks are independent; a flyover never gets a popup.
+main.body.append(second);
+first.fire('pointerenter');main.tick(400);first.fire('pointerleave');main.tick(600);
+assert.equal(panel.hidden,true);assert.equal(main.timerCount(),0);
+first.fire('pointerenter');main.tick(400);second.fire('pointerenter');main.tick(200);
+assert.equal(panel.hidden,true,'changing targets starts a fresh delay');main.tick(400);
+assert.equal(panel.textContent,'Other explanation');assert.equal(panel.hidden,false);
+second.fire('pointerleave');main.tick(150);
+first.fire('pointerenter');main.tick(400);main.fire('pointerout',{relatedTarget:null});main.tick(600);
+assert.equal(panel.hidden,true,'document exit cancels pending opening');
+first.fire('pointerenter');main.defaultView.fire('blur');main.tick(600);assert.equal(panel.hidden,true);
+first.fire('pointerenter');first.remove();main.tick(600);assert.equal(panel.hidden,true,'removed pending target cannot open');
+child.blur();child.fire('pointerenter');mini.tick(599);assert.equal(childPanel.hidden,true);mini.tick(1);
+assert.equal(childPanel.hidden,false,'separate document shares the 600ms policy');
+const metric=help.value(main.createElement('span'),'Exact metric facts');metric.textContent='12';main.body.append(metric);
+metric.focus();assert.equal(panel.hidden,false,'passive text focus opens promptly');
+assert.equal(metric.tabIndex,0);assert.match(metric.className,/help-value/);
+metric.fire('keydown',{key:'Escape'});main.fire('keydown',{key:'Escape'});metric.fire('click');
+assert.equal(panel.hidden,false,'explicit text tap opens promptly');
+panel.currentCSSZoom=1.5;help.refresh(metric);
+assert.equal(panel.style.left,(20/1.5)+'px','viewport coordinates convert to zoomed CSS coordinates');
+assert.equal(panel.style.maxWidth,'min(34rem, '+(544/1.5)+'px)');
+assert.equal(panel.style.maxHeight,(234/1.5)+'px','long help remains scrollable within the zoomed viewport');
 console.log('shared Web/Mini help events passed');

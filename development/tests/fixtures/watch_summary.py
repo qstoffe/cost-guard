@@ -16,6 +16,7 @@ from src.analysis.session_cost import SessionCost
 from src.domain import AccountRef, AccountUsageStatus as Status, QuotaComponent
 from src.reports.watch_context import WatchContextGuidance
 from src.reports.models import QuotaPeriodProjection
+from src.reports.prompt_costs import PromptCostPart
 from src.watch.models import SkillObservation, ToolObservation, WatchCard, WatchProjection, WatchRow
 
 
@@ -55,7 +56,15 @@ def summary_watch():
     item = replace(warning_prompt(PriceWarningSeverity.EXCEEDED), event_id="prompt", in_progress=True,
         watch_model="Model", watch_effort="High", prompt_number=37,
         preview="Keep completed literally\nhttps://example.test/" + "long" * 200,
-        has_additional_model=True)
+        has_additional_model=True, linked_agent_count=2,
+        ccost=D(33), incoming_context_ccost=D(11), extra_ccost=D(22), calls=4,
+        cost_parts=(
+            PromptCostPart('root', 0, 'fixture', 'main-model', 'high', 'Main Model', 'High',
+                2, D(25), 2, True, (D(8), D(2), D(1), D(14))),
+            PromptCostPart('child', 1, 'fixture', 'child-model', 'low', 'Child Model', 'Low',
+                1, D(8), 1, True, (D(3), D(1), D(0), D(4))),
+            PromptCostPart('nested', 2, 'fixture', 'child-model', None, 'Child Model', '',
+                1, D(0), 1, True, (D(0), D(0), D(0), D(0)))))
     guidance = WatchContextGuidance("prompt", 120000, "[Price threshold >100.0K exceeded]",
         PriceWarningSeverity.EXCEEDED, D("2.4"), D(2), D(12))
     tool = ToolObservation(tool_counts=(("shell", 2), ("read", 1)), failed_count=1,
@@ -65,7 +74,7 @@ def summary_watch():
         state="observed", session_context=guidance,
         session_cost=SessionCost(ComparisonCost(D("4582.125"), 2000, 2000), True, True), session_cost_state="observed")
     history = replace(card, session_id="past", title="Synthetic earlier session", focal_id="",
-        rows=(WatchRow("past", "Earlier", replace(item, in_progress=False)),),
+        rows=(WatchRow("past", "Earlier", replace(item, in_progress=False, completed_at_ms=NOW - 1000)),),
         session_context=replace(guidance, severity=PriceWarningSeverity.APPROACHING,
             text="[Approaching price threshold >100.0K]", multiplier=None))
     mix = TokenMix((5000, 3000, 1000, 1000), (50, 30, 10, 10), 37, 100,

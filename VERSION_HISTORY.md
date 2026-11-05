@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.171 — 2026-11-05
+
+- Web/Mini help moves from standalone question marks to precise visible text, with shared 600ms hover opening and prompt keyboard/tap access. Full Watch adds canonical main/subagent category-cost detail, linked-agent model stars, exact clock help and separate Context/Total CCost footer rows. Inferred numeric Capacity shows `(guesstimate)` consistently; verified native limits and unknown values do not. Mini Session and Total CCost retain distinct scoped help. Accounting, source acquisition, CLI and native PiP ownership are unchanged.
+
 ## v80.170 — 2026-11-05
 
 - Web and Mini tooltip labels and retained **?** cues no longer use dotted underlines. Table-header help uses intrinsic text targets with text-only hover color, not empty header padding or a background/column highlight. Mini separates Session/Total CCost targets without changing their alignment; sortable headers retain full click and keyboard actions while only their labels trigger hover help. Existing accessible focus, touch pinning and bounded pointer-exit behavior remain shared.

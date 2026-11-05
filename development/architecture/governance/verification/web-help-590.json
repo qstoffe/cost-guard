@@ -1,0 +1,60 @@
+{
+  "featureRequest": "000590",
+  "date": "2026-11-05",
+  "productVersion": "80.171",
+  "browser": "Chrome/156.0.8078.80",
+  "localGates": {
+    "fullSuite": {"outcome": "PASS", "files": 144, "failures": 0, "seconds": 89.4},
+    "validator": {"outcome": "PASS", "checks": 11, "failures": 0, "existingAdvisoryWarnings": 6},
+    "diffCheck": "PASS",
+    "newCostDetailTests": 8,
+    "newTestRegisteredInQuickAndFull": true
+  },
+  "sharedHelp": {
+    "outcome": "PASS",
+    "runner": "development/tests/integration/probe_web_help.cjs",
+    "actualDocumentPiP": true,
+    "themes": ["classic", "light", "dark"],
+    "widths": [1280, 360],
+    "cssZoom": [1, 1.5],
+    "hoverDelayMs": 600,
+    "separateExitGraceMs": 150,
+    "richCostViewportChecks": true,
+    "screenshotsInspected": true,
+    "routeKeyboardHelpCounts": [6, 5, 8, 2, 8, 18, 0, 0],
+    "nativeWindowBlurObserved": false
+  },
+  "miniWatch": {
+    "outcome": "PASS",
+    "runner": "development/tests/integration/probe_mini_watch.cjs",
+    "scope": "Actual PiP lifecycle, themes, quotas/provenance/units/orientation, session layout/selection, disclosure sizing and retained updates"
+  },
+  "fullWatch": {
+    "outcome": "PASS",
+    "runner": "development/tests/integration/probe_watch_cards.cjs",
+    "cases": 12,
+    "widths": [2560, 1920, 1366, 360]
+  },
+  "readOnlyInstallation": {
+    "outcome": "PASS",
+    "runner": "development/tests/integration/probe_web_live.py --watch-cards --prompt-cost --daily",
+    "source": "V2",
+    "cliRawCostParity": true,
+    "categoryCostsReconcile": true,
+    "linkedAgentsObserved": 0,
+    "dailyPromptCountComplete": false,
+    "dailyCostComplete": true,
+    "recoveredHistoryFailureObserved": true,
+    "modelCallsStarted": 0,
+    "ownedThreadsAfterClose": 0,
+    "ownedProcessesAfterClose": 0,
+    "cleanupFailures": []
+  },
+  "limitations": [
+    "Headless Chromium; no physical desktop, screen-reader, macOS or other-engine proof.",
+    "Injected blur verifies the handler, not native OS event delivery.",
+    "Synthetic immediate report jobs verify UI, not finite-report-process lifecycle.",
+    "Real linked-agent usage was not observed; deterministic canonical fixtures cover it."
+  ],
+  "exceptions": []
+}

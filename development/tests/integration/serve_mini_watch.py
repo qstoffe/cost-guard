@@ -56,7 +56,9 @@ def main():
         cards = tuple(replace(base, focal_id=str(index), rows=(WatchRow(base.session_id, base.title,
             replace(base.rows[0].prompt, event_id=str(index), prompt_number=22 + index,
                 at_ms=frame.now_ms - duration, duration_ms=duration,
-                ccost=Decimal(cost), unresolved_cost=False, cost_estimated=False)),))
+                 ccost=Decimal(33) if sys.argv[2:] == ["--help-audit"] else Decimal(cost),
+                 cost_parts=base.rows[0].prompt.cost_parts if sys.argv[2:] == ["--help-audit"] else (),
+                 unresolved_cost=False, cost_estimated=False)),))
             for index, duration, cost in ((1, 600_000, "1.25"), (2, 1_200_000, "2.75")))
         frame = replace(frame, active_cards=cards, running=running_prompts(cards, "observed"))
 

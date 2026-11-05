@@ -1,8 +1,73 @@
 # Shared Web and Mini contextual help
 
-Current text-target follow-up: **FR 000589 / v80.170**, recorded below. The FR 000582
+Current value-first follow-up: **FR 000590 / v80.171**, recorded below. The FR 000582
 inventory and evidence here are historical; removed preview/row/freshness cues are
 not current UI recommendations. Current writing/placement policy lives in the module contract.
+
+## FR 000590: direct values, delayed hover and attributed cost detail (2026-11-05)
+
+Base `d947355`; delivery incorporates the later documentation-only main updates.
+Standalone help cues are removed, genuine unknown-data question marks preserved.
+Intrinsic visible labels/values own passive help; action cursors/selection and native
+disclosures remain. Shared opening is 600ms, distinct from 150ms exit grace, with
+event-driven pending cancellation and existing focus/pinned/PiP isolation.
+
+Canonical causal links survive analysis caching even without request usage. Immutable
+report detail groups original session/provider/model/effort, with each physical request's
+actual reference-price tier and known category contributions. The bounded application
+projection exports 24 groups, omitted cost/calls and honest missing usage/pricing;
+unit-formatted text does no client repricing or aggregate allocation. Per-agent combined
+totals supplement multiple model/effort subtotals. I+E and CLI/accounting remain unchanged.
+Linked-agent stars, exact clock help, provenance-qualified Capacity and two-row
+Context/Total CCost summaries share active/historical behavior. Mini retains one first
+column with different Session and Total CCost help.
+
+Actual owned headless **Chrome 156.0.8078.80** checks passed:
+
+- Shared help through shipped HTTP/CSP/SSE and real Document PiP: delayed/flyover/re-entry,
+  keyboard/touch/actions, panel transfer, removal/exit/suppression, both Watch tables,
+  scoped account/daily text, distinct Mini headings and units. Classic/Web light/dark,
+  1280/360 widths and 100%/150% CSS zoom; rich detail wraps/scrolls within bounds.
+- The new long-detail zoom check initially caught viewport overflow. Top-layer geometry
+  now converts effective CSS zoom for both bounds and coordinates; deterministic and
+  real-browser regression checks cover it. Rich-cost screenshots in all three themes
+  and the Mini scoped-heading screenshot were visually inspected.
+- Full Mini browser suite: actual PiP placement/reopen/restart, theme-role/contrast,
+  primary/secondary quotas, verified/inferred/unknown Capacity and immediate units/
+  orientation in Watch/Accounts/Mini, session edge alignment, selection/scrolling,
+  user disclosure resize, retained/live updates and one SSE.
+- Full Watch browser suite: **12 cases**, three themes and 2560/1920/1366/360 widths;
+  footer severity/icon/contrast/focus-safe transitions, quotas, units, layout/zoom,
+  selection, canonical I+E and 100-card behavior. Old native-title, cue and combined
+  heading assumptions in existing browser owners were updated, not assertions weakened.
+- Route keyboard-help inventory now intentionally enters keyboard mode and includes
+  passive values: Models 6, Sessions 5, detail 8, Accounts 2, Date 8, Token Mix 18;
+  active-hour and Settings retain visible/native disclosure guidance.
+
+Read-only real-installation `probe_web_live.py --watch-cards --prompt-cost --daily`
+passed: V2, one owner/two streams/three accounts, advancing sequence/stable run origin,
+one active/two historical cards. An observed four-call prompt matched raw CLI cost,
+I+E and one group's category sum. No linked agents were observed in that real prompt;
+deterministic fixtures establish multi-agent/nested/multiple-effort behavior. Daily
+1523 requests/75 prompts had complete cost/category reconciliation but incomplete
+prompt attribution. One history-batch/advance failure was observed during recovery;
+the coherent daily result subsequently published. Total 14.7233s; final pending work,
+owned threads/processes and cleanup failures were empty/zero. No inference or shared
+OpenCode stop occurred.
+
+Headless focus switches emitted no native window blur (`native:false`); injected blur
+tests only prove the handler. No physical desktop, screen-reader, macOS or other-engine
+proof is claimed. In-memory report fixtures are UI evidence, not finite-report-process
+lifecycle proof. No model inference, shared-service stop, release ZIP, tag or GitHub
+Release is used; no verification exception has been requested or granted for this FR.
+
+Final local Full suite passed **144 files, zero failures, 89.4s**, four workers;
+the eight new cost-detail tests are explicitly registered in Quick and Full.
+Working-tree validator passed all **11 checks**, zero failures, six existing advisory
+prose/design warnings; no cap or baseline changed. `git diff --check` was clean.
+Compact durable evidence: `development/architecture/governance/verification/web-help-590.json`.
+
+## Historical FR 000582
 
 FR 000582, 2026-11-05, product v80.163. Implementation base: `02c6800`.
 

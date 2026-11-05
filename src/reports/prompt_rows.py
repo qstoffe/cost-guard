@@ -17,6 +17,7 @@ from src.domain import SessionSnapshot
 from src.pricing.catalog import PricingCatalog
 
 from .models import PromptProjection
+from .prompt_costs import prompt_cost_parts
 from .semantics import input_context_above_price_threshold, prompt_has_additional_model
 
 ThresholdMultiplier = Callable[[str, int], Decimal | None]
@@ -177,6 +178,10 @@ class PromptRowProjector:
             main_estimated=not main.complete,
             subagent_estimated=not subagent.complete,
             has_additional_model=prompt_has_additional_model(record),
+            linked_agent_count=len(set(record.linked_session_ids) |
+                {entry.session_id for entry in record.entries[record.root_entry_count:]
+                 if entry.session_id != record.session_id}),
+            cost_parts=prompt_cost_parts(record, catalog),
             abort_at_ms=record.abort_time_ms,
             completed_successfully=record.completed_successfully,
             running_cost_warning=bool(record.in_progress and self.running_warning_ccost > 0

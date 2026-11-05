@@ -111,17 +111,22 @@ async function main() {
        assert.equal(layout.tableVerticalScroll, false); assert.equal(layout.stable, true);
         assert.equal(layout.border, '1px'); assert.equal(layout.background, 'rgba(0, 0, 0, 0)');
          if (width === 360) assert.equal(layout.horizontalPan, true);
+       await command('Input.dispatchKeyEvent', {type:'keyDown',key:'Tab',code:'Tab',windowsVirtualKeyCode:9}, sessionId);
        const headers = await evaluate(`(() => {
-          const names=['Started','Duration','Prompt','Model','Effort','CCost (I + E)','Calls','Token Mix %','Ictx','Δ Ctx'];
+           const names=['Started','Duration','Prompt','Model','Effort','CCost (I + E)','Calls','Token Mix %','Ictx','Δ Ctx'];
+           const help=n=>{n.focus({preventScroll:true});return document.querySelector('#context-help').textContent;};
           return [...document.querySelectorAll('table')].every(table=>[...table.querySelectorAll('th')]
-            .every((th,i)=>th.querySelector('button').textContent===(i===0&&table.closest('.watch-history')?'Finished':names[i]) && th.querySelector('button').title.length>20))
+             .every((th,i)=>th.querySelector('button').textContent===(i===0&&table.closest('.watch-history')?'Finished':names[i]) && help(th.querySelector('button')).length>20))
             && [...document.querySelectorAll('tbody tr')].every(row=>row.cells.length===10 && /^\\d\\d:\\d\\d$/.test(row.cells[0].textContent)
-              && (row.closest('.watch-history')?/^\\d{4}-\\d\\d-\\d\\d \\d\\d:\\d\\d [+-]\\d{4}$/:/^\\d{4}-\\d\\d-\\d\\d \\d\\d:\\d\\d$/).test(row.cells[0].firstChild.title)); })()`);
+               && (row.closest('.watch-history')?/^\\d{4}-\\d\\d-\\d\\d \\d\\d:\\d\\d [+-]\\d{4}$/:/^\\d{4}-\\d\\d-\\d\\d \\d\\d:\\d\\d$/).test(help(row.cells[0].firstChild))); })()`);
        assert.equal(headers, true, 'both tables share the ten columns and local clock disclosures');
+       await evaluate(`document.activeElement.blur();window.scrollTo(0,0)`);
        const hover = await evaluate(`(() => { const r=document.querySelector('.watch-history th button').getBoundingClientRect(); return {x:r.x+r.width/2,y:r.y+r.height/2}; })()`);
-       await command('Input.dispatchMouseEvent', {type:'mouseMoved',...hover}, sessionId);
+        await command('Input.dispatchMouseEvent', {type:'mouseMoved',...hover}, sessionId);
+        await new Promise(resolve=>setTimeout(resolve,650));
        assert.equal(await evaluate(`document.querySelectorAll(':popover-open').length`), 1, 'pointer hover opens header explanation');
-       await command('Input.dispatchMouseEvent', {type:'mouseMoved',x:0,y:0}, sessionId);
+        await command('Input.dispatchMouseEvent', {type:'mouseMoved',x:0,y:0}, sessionId);
+        await new Promise(resolve=>setTimeout(resolve,200));
        assert.equal(await evaluate(`document.querySelectorAll(':popover-open').length`), 0);
        // Real focus, Escape and touch-style click exercise native top-layer help.
        await evaluate(`document.querySelector('.watch-active th:nth-child(8) button').focus({preventScroll:true})`);
@@ -129,7 +134,7 @@ async function main() {
          const button=document.activeElement, panel=document.getElementById(button.getAttribute('aria-describedby'));
          return {open:panel.matches(':popover-open'),text:panel.textContent,within:panel.getBoundingClientRect().right<=innerWidth}; })()`);
        assert.equal(help.open, true); assert.equal(help.within, true);
-       assert.match(help.text, /1 = Input.*2 = Cached input.*3 = Cache write.*4 = Output.*reasoning.*not billed cost/);
+       assert.match(help.text, /I — Input[\s\S]*C — Cached input[\s\S]*W — Cache write[\s\S]*O — Output[\s\S]*reasoning/);
        await command('Input.dispatchKeyEvent', {type:'keyDown',key:'Escape',code:'Escape',windowsVirtualKeyCode:27}, sessionId);
        await command('Input.dispatchKeyEvent', {type:'keyUp',key:'Escape',code:'Escape',windowsVirtualKeyCode:27}, sessionId);
        assert.equal(await evaluate(`document.querySelectorAll(':popover-open').length`), 0);
@@ -139,20 +144,20 @@ async function main() {
         const ictxHelp = await evaluate(`(() => {
           const panel=document.getElementById(document.activeElement.getAttribute('aria-describedby'));
           return {open:panel.matches(':popover-open'),text:panel.textContent}; })()`);
-        assert.equal(ictxHelp.open, true); assert.match(ictxHelp.text, /first request.*estimated\/approximate.*N\/A.*unavailable/);
-        assert.match(await evaluate(`document.querySelector('.watch-session-summary [title]').title`), /Not the prompt Ictx or summed usage/);
+        assert.equal(ictxHelp.open, true); assert.match(ictxHelp.text, /first request[\s\S]*estimated[\s\S]*N\/A[\s\S]*unavailable/);
+        await evaluate(`document.querySelector('.watch-session-summary .help-value').focus({preventScroll:true})`);
+        assert.match(await evaluate(`document.querySelector('#context-help').textContent`), /next request[\s\S]*not a session spending limit/);
        await evaluate(`document.activeElement.blur(); document.querySelector('.watch-earlier').open=false`);
        assert.equal(await evaluate(`parseFloat(getComputedStyle(document.querySelector('.watch-earlier')).borderBottomWidth)`), 0);
        await evaluate(`document.querySelector('.watch-earlier').open=true`);
        const quotas = await evaluate(`(() => {
          const cards=[...document.querySelectorAll('.watch-subscription')], monthly=cards[0];
          const summary=monthly.querySelector('.watch-quota-summary'), details=monthly.querySelector('.watch-primary-details');
-          const native=summary.lastChild.textContent, cost=summary.querySelector('.watch-period-cost').textContent, fill=monthly.querySelector('progress').value;
-          summary.querySelector('.watch-period-cost').focus({preventScroll:true});
-          const costHelp=document.activeElement.title.includes('independent of provider-native Used') &&
-            document.activeElement.getAttribute('aria-description')===document.activeElement.title;
+          const native=summary.firstChild.textContent, cost=summary.querySelector('.watch-period-cost').textContent, fill=monthly.querySelector('progress').value;
+          monthly.querySelector('.watch-quota-capacity .help-value').focus({preventScroll:true});
+          const costHelp=document.querySelector('#context-help').textContent.includes('Native Used: 2088/25000 AI credits');
           ReportView.setUnit('usd', document.getElementById('result'));
-          const usd=summary.querySelector('.watch-period-cost').textContent, unchanged=summary.lastChild.textContent===native && monthly.querySelector('progress').value===fill;
+          const usd=summary.querySelector('.watch-period-cost').textContent, unchanged=summary.firstChild.textContent===native && monthly.querySelector('progress').value===fill;
           ReportView.setUnit('credits', document.getElementById('result'));
           document.activeElement.blur();
          const rect=node=>node.getBoundingClientRect();
@@ -167,14 +172,14 @@ async function main() {
              .every(node=>node.scrollWidth<=node.clientWidth)),
            monthlyDivider:monthly.querySelector('.watch-account-details')!==null,
            secondary:cards[1].querySelector('.watch-secondary-quota').textContent}; })()`);
-        assert.equal(quotas.native, ' · 2088/25000 AI credits');
+        assert.equal(quotas.native, 'Monthly · 8.4% used');
         assert.equal(quotas.cost, ' (1814)'); assert.equal(quotas.usd, ' ($18.14)');
         assert.equal(quotas.fill, .08352); assert.equal(quotas.unchanged, true);
         assert.equal(quotas.costHelp, true);
         assert.ok(quotas.resetGaps.every(gap=>gap>=0 && gap<=4), JSON.stringify(quotas.resetGaps));
        assert.equal(quotas.aligned, true); assert.equal(quotas.legible, true);
         assert.equal(quotas.monthlyDivider, false);
-         assert.match(quotas.secondary, /Weekly · 100% used \(840\) · 100\/100 requestsReset/);
+         assert.match(quotas.secondary, /Weekly · 100% used \(840\)Capacity: 840 \(guesstimate\)Reset/);
        const polish = await evaluate(`(() => {
          const style=n=>getComputedStyle(n), rect=n=>n.getBoundingClientRect();
          const cards=[...document.querySelectorAll('.watch-subscription')], first=cards[0], grid=first.parentNode;

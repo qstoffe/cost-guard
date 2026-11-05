@@ -68,7 +68,8 @@ async function main() {
      await until(mini,`document.querySelector('.mini-prompt-table .help-trigger') && document.styleSheets.length===2`);
      const headerHelp=require('./probe_help_headers.cjs')({command,evaluate,until,owner,mini,checks,layouts});
      await headerHelp.matrix();
-    await require('./probe_help_lifecycle.cjs')({command,evaluate,until,owner,mini,checks});
+     await require('./probe_help_lifecycle.cjs')({command,evaluate,until,owner,mini,checks});
+     await require('./probe_help_values.cjs')({command,evaluate,until,owner,mini,checks,layouts});
     async function focus(id,selector) {
       await key(id,'Tab');
       await evaluate(id,`(() => {const n=document.querySelector(${JSON.stringify(selector)});if(document.activeElement===n)n.blur();n.focus();})()`);
@@ -116,11 +117,12 @@ async function main() {
       const mix=await focus(owner,'.watch-active th:nth-child(8) button');
       assert.match(mix,/I \/ C \/ W \/ O[\s\S]*I — Input[\s\S]*C — Cached[\s\S]*W — Cache write[\s\S]*O — Output[\s\S]*reasoning/);
       const model=await focus(owner,'.watch-active th:nth-child(4) button');
-      assert.match(model,/Linked subagents[\s\S]*different models[\s\S]*Unlinked or unpriced/);
+       assert.match(model,/^• Main prompt[^\n]*\n• Linked subagents/);
+       assert.doesNotMatch(model,/Unlinked or unpriced/);
       await key(owner,'Escape');
       await interaction(mini,'.mini-prompts > table th:last-child button');
       for (const id of [owner,mini]) {
-        const selector=id===owner?'.watch-active th:nth-child(6) button':'.mini-prompts > table th:first-child button';
+        const selector=id===owner?'.watch-active tbody td:nth-child(6) .help-value':'.mini-prompts > table th:first-child button';
         await focus(id,selector);
         const facts=await evaluate(id,`(() => {const p=document.querySelector('#context-help'),r=p.getBoundingClientRect(),s=getComputedStyle(p);return {width:innerWidth,height:innerHeight,left:r.left,top:r.top,right:r.right,bottom:r.bottom,whiteSpace:s.whiteSpace,cursor:getComputedStyle(document.activeElement).cursor,theme:document.documentElement.dataset.theme};})()`);
         assert.equal(facts.whiteSpace,'pre-line');assert.equal(facts.cursor,'help');
@@ -135,14 +137,21 @@ async function main() {
     for (const width of [1280,360]) for (const zoom of [1,1.5]) {
       await command('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false},owner);
       await evaluate(owner,`document.documentElement.style.zoom='${zoom}'`);
-      const layout=await evaluate(owner,`(() => {const d=document.querySelector('.watch-daily'),h=d.querySelector('.help-cue'),r=h.getBoundingClientRect(),b=d.getBoundingClientRect(),s=getComputedStyle(d);return {cues:d.querySelectorAll('.help-cue').length,direct:h.parentNode===d,rightGap:b.right-r.right-(parseFloat(s.paddingRight)+parseFloat(s.borderRightWidth))*${zoom},overlaps:[...d.children].filter(n=>n!==h).some(n=>{const a=n.getBoundingClientRect();return a.left<r.right&&a.right>r.left&&a.top<r.bottom&&a.bottom>r.top;}),pageOverflow:document.documentElement.scrollWidth>innerWidth};})()`);
-      assert.equal(layout.cues,1);assert.equal(layout.direct,true);assert.ok(Math.abs(layout.rightGap)<2,JSON.stringify(layout));
+       const layout=await evaluate(owner,`(() => {const d=document.querySelector('.watch-daily');return {cues:document.querySelectorAll('.help-cue').length,targets:d.querySelectorAll('.help-value').length,overlaps:[...d.children].some((n,i)=>[...d.children].slice(i+1).some(m=>{const a=n.getBoundingClientRect(),b=m.getBoundingClientRect();return a.left<b.right&&a.right>b.left&&a.top<b.bottom&&a.bottom>b.top;})),pageOverflow:document.documentElement.scrollWidth>innerWidth};})()`);
+       assert.equal(layout.cues,0);assert.equal(layout.targets,4);
       assert.equal(layout.overlaps,false);assert.equal(layout.pageOverflow,false);
-      layouts.push({case:'daily-far-right',width,zoom,...layout});
+       layouts.push({case:'daily-value-targets',width,zoom,...layout});
+       for (const table of ['watch-active','watch-history']) {
+         const text=await focus(owner,`.${table} tbody td:nth-child(6) .help-value`);
+         assert.match(text,/Main prompt[\s\S]*Subagent 1[\s\S]*Total CCost: 33/);
+         const bounds=await evaluate(owner,`(() => {const n=document.querySelector('#context-help'),r=n.getBoundingClientRect();return {left:r.left,top:r.top,right:r.right,bottom:r.bottom,width:innerWidth,height:innerHeight,scroll:n.scrollHeight>n.clientHeight};})()`);
+         assert.ok(bounds.left>=0&&bounds.top>=0&&bounds.right<=bounds.width&&bounds.bottom<=bounds.height,JSON.stringify({table,zoom,...bounds}));
+         layouts.push({case:'rich-cost-bounds',table,width,zoom,...bounds});await key(owner,'Escape');
+       }
     }
     await evaluate(owner,`document.documentElement.style.zoom=''`);
     await command('Emulation.setDeviceMetricsOverride',{width:1280,height:900,deviceScaleFactor:1,mobile:false},owner);
-    const quota=await focus(mini,'.mini-accounts li:nth-child(2) .help-cue');
+     const quota=await focus(mini,'.mini-accounts li:nth-child(2) .help-value');
     assert.match(quota,/Primary quota\n5-hour[\s\S]*\n\nAdditional quotas\nWeekly[\s\S]*Native Used:[\s\S]*CCost Used:/);
     assert.doesNotMatch(quota,/Last quota update|Source:|Availability:/);
     await key(mini,'Escape');
@@ -152,11 +161,13 @@ async function main() {
     assert.match(await evaluate(mini,`document.querySelector('.mini-prompts > table .mini-source-note').textContent`),/not current/);
     assert.equal(await evaluate(mini,`document.querySelectorAll('tbody .help-trigger,.mini-header .help-cue').length`),0);
     const heading=await focus(mini,'.mini-prompts > table th:first-child button');
-    assert.match(heading,/Session —[^\n]+\n\nTotal CCost —[\s\S]*entire session/);
+     assert.equal(heading,'The name of the session.');
+     const totalHeading=await focus(mini,'.mini-prompts > table th:first-child button.mini-session-total');
+     assert.match(totalHeading,/Reference cost of the entire session/);
     assert.equal(await evaluate(mini,`document.querySelector('#context-help script')===null`),true);
     await key(mini,'Escape');
     await evaluate(owner,`miniWatch.update(liveValue)`);
-    for (const selector of ['.watch-active tbody td:first-child .help-trigger','.watch-daily-help']) {
+     for (const selector of ['.watch-active tbody td:first-child .help-value','.watch-daily > strong']) {
       const metadata=await focus(owner,selector);assert.ok(metadata.length>0);await key(owner,'Escape');
     }
     await evaluate(mini,`document.documentElement.style.fontSize='150%'`);
@@ -164,7 +175,7 @@ async function main() {
     assert.equal(await evaluate(mini,`(() => {const r=document.querySelector('#context-help').getBoundingClientRect();return r.right<=innerWidth&&r.bottom<=innerHeight;})()`),true);
     await key(mini,'Escape');await evaluate(mini,`document.documentElement.style.fontSize=''`);
     assert.equal(await evaluate(owner,`document.querySelectorAll('.watch-prompt-label .help-trigger').length`),0);
-    checks.push('Verbatim selectable/accessible long hostile session title without row cues; two-part Mini heading, date reveal, consolidated daily help, retained warnings, no HTML injection and Mini 150% text zoom');
+     checks.push('Verbatim selectable/accessible long hostile session title without row cues; distinct Mini headings, direct date/daily value help, retained warnings, no HTML injection and Mini 150% text zoom');
     await command('Page.bringToFront',{},owner);
     for (const route of ['models','sessions','sessions/root','accounts','reports?date=1970-01-01','token-mix','cost-per-hour','settings']) {
       await evaluate(owner,`location.hash='#/${route}'`);
@@ -176,7 +187,8 @@ async function main() {
        if (['models','sessions'].includes(route)) {
          layouts.push({case:'sort-label-hover',route,...await headerHelp.target(owner,'#result th:first-child .help-label')});
        }
-      const count=await evaluate(owner,`(async () => {const targets=[...document.querySelectorAll('#result button,#result input')].filter(n=>!n.disabled);let checked=0;for(const n of targets){n.focus();const p=document.querySelector('#context-help');if(n.getAttribute('aria-describedby')?.split(' ').includes('context-help')){if(!p.textContent||n.hasAttribute('title'))throw Error('invalid help');checked++;}}document.activeElement?.blur();return checked;})()`);
+      await key(owner,'Tab');
+      const count=await evaluate(owner,`(async () => {const targets=[...document.querySelectorAll('#result button,#result input,#result .help-value')].filter(n=>!n.disabled);let checked=0;for(const n of targets){n.focus();const p=document.querySelector('#context-help');if(n.getAttribute('aria-describedby')?.split(' ').includes('context-help')){if(!p.textContent||n.hasAttribute('title'))throw Error('invalid help');checked++;}}document.activeElement?.blur();return checked;})()`);
       checks.push(`${route}: rendered help/disclosure inventory (${count} focusable help targets); visible field/disclosure text retained`);
     }
     assert.deepEqual(errors,[]);

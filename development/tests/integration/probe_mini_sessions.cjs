@@ -68,7 +68,9 @@ module.exports = async function sessions({evaluate,until,fixture,command,pipSess
   await evaluate(`miniWatch.view.prompts.scrollTop=0`);
    await command('Runtime.evaluate',{expression:`document.querySelector('th .help-trigger').focus({preventScroll:true})`},pipSession);
   assert.equal(await evaluate(`miniWatch.view.doc.getElementById('context-help').matches(':popover-open')`),true);
-   assert.match(await evaluate(`miniWatch.view.doc.getElementById('context-help').textContent`),/Session —[^\n]+\n\nTotal CCost —/,'keyboard focus explains the combined heading');
+   assert.equal(await evaluate(`miniWatch.view.doc.getElementById('context-help').textContent`),'The name of the session.','Session has name-only help');
+   await command('Runtime.evaluate',{expression:`document.querySelector('th .mini-session-total').focus({preventScroll:true})`},pipSession);
+   assert.match(await evaluate(`miniWatch.view.doc.getElementById('context-help').textContent`),/Reference cost of the entire session/,'separate total heading explains whole-session cost');
    const selected = await evaluate(`(() => {const d=miniWatch.view.doc,n=miniWatch.view.historyBody.rows[0].querySelector('.mini-session'),r=d.createRange();r.selectNodeContents(n);d.getSelection().removeAllRanges();d.getSelection().addRange(r);return {copy:d.getSelection().toString(),title:n.textContent};})()`);
    assert.equal(selected.copy.trim(),selected.title.trim(),'full underlying title remains selectable (normal rendered whitespace)');
    await evaluate(`miniWatch.view.doc.getSelection().removeAllRanges()`);

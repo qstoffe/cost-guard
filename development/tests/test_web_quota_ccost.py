@@ -21,18 +21,19 @@ class WebQuotaCCostTests(unittest.TestCase):
         wire = with_display(watch_quota(quota, QuotaPeriodProjection(quota, ComparisonCost(D(100), 2, 2), None)),
             now_ms=1000).to_json()['quota']
 
-        self.assertEqual(('100', '900', '1000'), tuple(wire['display']['ccost_' + key]
+        self.assertEqual(('100', '900', '1000 (guesstimate)'), tuple(wire['display']['ccost_' + key]
             for key in ('used', 'remaining', 'capacity')))
-        self.assertEqual(('$1.00', '$9.00', '$10.00'), tuple(wire['display_units']['usd']['ccost_' + key]
+        self.assertEqual(('$1.00', '$9.00', '$10.00 (guesstimate)'), tuple(wire['display_units']['usd']['ccost_' + key]
             for key in ('used', 'remaining', 'capacity')))
-        self.assertIn('CCost used ÷ provider-reported fraction used', wire['display']['ccost_help'])
+        self.assertIn('observed CCost ÷ native fraction used', wire['display']['ccost_help'])
+        self.assertEqual('ratio', wire['display']['capacity_basis'])
         self.assertIn('not a guaranteed budget', wire['display']['ccost_help'])
         self.assertIn('observed CCost ÷ native fraction used', wire['display']['ccost_brief'])
         tiny = replace(quota, remaining_fraction=D('.99999'))
         exact = with_display(watch_quota(tiny, QuotaPeriodProjection(tiny, ComparisonCost(D(1), 1, 1), None)),
             now_ms=1000).to_json()['quota']
         self.assertEqual('0%', exact['quota_display']['used']['percent'])
-        self.assertEqual(('100000', '99999'), (exact['display']['ccost_capacity'], exact['display']['ccost_remaining']))
+        self.assertEqual(('100000 (guesstimate)', '99999'), (exact['display']['ccost_capacity'], exact['display']['ccost_remaining']))
 
     def test_copilot_native_remaining_never_subtracts_independent_observed_cost(self):
         for limit, used, remaining, observed in ((7000, 16, 6984, 120), (25000, 2088, 22912, 1814)):
@@ -47,6 +48,7 @@ class WebQuotaCCostTests(unittest.TestCase):
                 self.assertIn('Used + Remaining need not equal Capacity', wire['display']['ccost_help'])
                 self.assertIn('Used + Remaining need not equal Capacity', wire['display']['ccost_brief'])
                 self.assertEqual(f'${D(limit) / 100:.2f}', wire['display_units']['usd']['ccost_capacity'])
+                self.assertEqual('native', wire['display']['capacity_basis'])
 
     def test_known_native_limit_survives_missing_usage_but_does_not_invent_remaining(self):
         base = QuotaComponent('Monthly', 'fixed', limit=D(7000), unit='AI credits')
@@ -94,7 +96,7 @@ class WebQuotaCCostTests(unittest.TestCase):
     def test_full_usage_and_unlimited_have_distinct_zero_and_inapplicable_states(self):
         base = QuotaComponent('Weekly', 'rolling', remaining_fraction=D(0), reset_at_ms=20000)
         cost = ComparisonCost(D(100), 2, 2)
-        for quota, capacity, remaining in ((base, '100', '0'), (replace(base, unlimited=True), 'N/A', '?')):
+        for quota, capacity, remaining in ((base, '100 (guesstimate)', '0'), (replace(base, unlimited=True), 'N/A', '?')):
             wire = with_display(watch_quota(quota, QuotaPeriodProjection(quota, cost, None)), now_ms=1000).to_json()['quota']
             with self.subTest(quota=quota):
                 self.assertEqual((capacity, remaining), (wire['display']['ccost_capacity'], wire['display']['ccost_remaining']))
@@ -141,8 +143,8 @@ class WebQuotaCCostTests(unittest.TestCase):
         watch = with_display(watch_account(item), now_ms=1000).to_json()
         accounts = with_display(account(item), now_ms=1000).to_json()['observation']['quotas']
 
-        self.assertEqual(('1000', '80'), tuple(q['display']['ccost_capacity'] for q in accounts))
-        self.assertEqual(('1000', '80'), (watch['primary']['quota']['display']['ccost_capacity'],
+        self.assertEqual(('1000 (guesstimate)', '80 (guesstimate)'), tuple(q['display']['ccost_capacity'] for q in accounts))
+        self.assertEqual(('1000 (guesstimate)', '80 (guesstimate)'), (watch['primary']['quota']['display']['ccost_capacity'],
             watch['secondary'][0]['quota']['display']['ccost_capacity']))
         reset = replace(primary, reset_at_ms=40000)
         delayed = with_display(watch_quota(reset, item.quota_periods[1]), now_ms=1000).to_json()['quota']['display']

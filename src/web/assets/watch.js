@@ -50,8 +50,8 @@ const WatchView = (() => {
     const label = el('div'); label.append(el('span', () => `${quota.label} · ${summary()}`));
     ReportView.bind(label, () => label.className = 'watch-quota-summary metric-value' + (view().exhausted ? ' watch-quota-exhausted' : ''));
     label.append(el('span', () => ` (${display(quota, 'ccost_' + view().mode)})`, 'watch-period-cost'));
-    const capacity = el('div', () => 'Capacity: ' + display(quota, 'ccost_capacity'), 'watch-quota-capacity metric-value');
-    ContextHelp.beside(capacity, () => ReportView.quotaHelp(quota), 'About quota Capacity');
+    const capacity = el('div', undefined, 'watch-quota-capacity metric-value');
+    capacity.append(ContextHelp.value(el('span', () => 'Capacity: ' + display(quota, 'ccost_capacity')), () => ReportView.quotaHelp(quota)));
     if (view().note) label.append(el('span', ' · ' + view().note, 'warning'));
     const track = el('div', undefined, 'watch-quota-track');
     if (!quota.unlimited && value.used_fraction != null) {
@@ -69,8 +69,8 @@ const WatchView = (() => {
   }
   function quotaDetails(parent, value) {
     const quota = value.quota;
-    const reset = el('p', display(value, 'watch_reset'), 'detail');
-    if (quota.reset_at_ms != null) ContextHelp.beside(reset, display(quota, 'reset_at_ms'), 'Exact quota reset date and time');
+    const reset = el('p', undefined, 'detail'), clock = el('span', display(value, 'watch_reset')); reset.append(clock);
+    if (quota.reset_at_ms != null) ContextHelp.value(clock, display(quota, 'reset_at_ms'));
     parent.append(reset);
     if (value.pace) {
       parent.append(el('p', `Remaining: ${display(value.pace, 'per_day')}/day`, 'detail'));
@@ -88,8 +88,8 @@ const WatchView = (() => {
       ReportView.bind(card, () => card.dataset.exhausted = String([item.primary, ...item.secondary].some(value => ReportView.quotaView(value.quota, value).exhausted)));
       const today = item.ccost_scopes.find(scope => scope.name === 'today');
       const cost = el('p', undefined, 'metric-value');
-      cost.append(el('span', () => `CCost Today: ${today?.cost == null ? '—' : display(today.cost, 'account_ccost')}`));
-      if (item.today_note) ContextHelp.beside(cost, 'This account’s estimated cost today, not your bill.\n' + item.today_note, 'About account CCost Today attribution');
+      cost.append(ContextHelp.value(el('span', () => `CCost Today: ${today?.cost == null ? '—' : display(today.cost, 'account_ccost')}`),
+        'This account’s reference cost in your configured local day.' + (item.today_note ? '\n' + item.today_note : '')));
       const [label, capacity, track] = quotaTrack(item.primary), primary = el('div', undefined, 'watch-primary-details');
       quotaDetails(primary, item.primary);
       const lower = el('div', undefined, 'watch-account-footer');
@@ -117,11 +117,12 @@ const WatchView = (() => {
     parent.append(grid);
   }
   function daily(parent, value, state, waiting) {
-    parent.replaceChildren(el('strong', 'CCost Today'));
+    parent.replaceChildren(ContextHelp.value(el('strong', 'CCost Today'), 'Reference cost of today’s model activity in your configured local day.'));
     if (!value) { parent.append(el('span', state === 'unavailable' ? 'Daily activity unavailable' : waiting ? 'Daily updates delayed; check source availability.' : '—')); return; }
-    parent.append(el('span', () => value.total.observed_requests && !value.total.priced_requests ? 'N/A' : display(value.total, 'known_ccost'), 'metric-value'));
-    const count = el('span', `${value.prompt_count} prompts`);
-    parent.append(count, el('span', 'Token Mix %'));
+    parent.append(ContextHelp.value(el('span', () => value.total.observed_requests && !value.total.priced_requests ? 'N/A' : display(value.total, 'known_ccost'), 'metric-value'),
+      'Today’s reference CCost, including recorded activity before Watch opened.' + (!value.total.complete ? '\n? — Partial pricing.' : '')));
+    const count = ContextHelp.value(el('span', `${value.prompt_count} prompts`), 'Prompts with model requests today, including activity before Watch opened.');
+    parent.append(count, ContextHelp.value(el('span', 'Token Mix %'), 'Token shares, not cost: Input / Cached input / Cache write / Output (including reasoning).'));
     for (const [key, label] of Object.entries(value.mix.display.token_categories))
       parent.append(el('span', () => `${label}: ${display(value.mix, key)}`, 'watch-daily-category'));
     if (!value.total.complete || !value.mix.cost_complete || value.mix.totals.some(amount => amount == null) && value.mix.request_count)
@@ -129,8 +130,6 @@ const WatchView = (() => {
     if (!value.mix.request_count) parent.append(el('span', 'No recorded usage', 'detail'));
     if (state === 'unavailable') parent.append(el('span', 'Source unavailable · retained daily observation', 'warning'));
     if (waiting) parent.append(el('span', 'Daily updates delayed · retained observation, not current', 'detail'));
-    const help = ContextHelp.beside(parent, 'CCost Today — Estimated reference cost of today’s model activity, not your bill.\nPrompts — Prompts with model requests today, including activity before Watch opened (your configured local day).\n\nToken Mix % — Token shares, not cost: input (I), reused input (C), cache write (W) and output including reasoning (O).', 'About the daily summary');
-    help.className += ' watch-daily-help';
   }
   function promptCost(prompt) {
     const total = display(prompt, 'ccost');
@@ -146,11 +145,11 @@ const WatchView = (() => {
       prompt.completed_successfully ? 'success' : '';
   }
   const columns = [
-    ['Started', 'When this prompt started, in local time.\nUse the time’s help button for the full date and time.'],
+    ['Started', 'When this prompt started, in local time. Hover or focus the clock for the full date.'],
     ['Duration', 'Time spent on this prompt.\nStops advancing when work ends or updates are unavailable.'],
     ['Prompt', 'The prompt’s number within its session and a short preview of your message.'],
-    ['Model', 'The main prompt’s model.\nLinked subagents may use different models; their work contributes to CCost, Calls and Token Mix.\nUnlinked or unpriced work may be missing.'],
-    ['Effort', 'How much reasoning the model was asked to do.\nN/A — This setting is unavailable.'],
+    ['Model', '• Main prompt — The model shown in this column.\n• Linked subagents — May use other models; their activity is included in prompt totals.'],
+    ['Effort', 'How much reasoning the model was asked to do.'],
     ['CCost (I + E)', 'Estimated reference cost of this prompt, not your bill.\n\nI — Incoming context cost on the first model request.\nE — Other cost: output, later requests and linked subagents.\nTotal = I + E when fully priced, before display rounding.\nA displayed zero shows two zero components in this unit, even when component evidence is unavailable.\n\nN/A — Cost unavailable, not zero.\n? — Part of the cost cannot be priced.\nI is a cost here, not the Input token share.'],
     ['Calls', 'Model requests for this prompt, including linked subagents.\nNot tool calls.'],
     ['Token Mix %', 'Token percentages in I / C / W / O order, not cost.\n\nI — Input: new input.\nC — Cached input: reused input.\nW — Cache write: input saved for reuse.\nO — Output: generated tokens, including reasoning.\n\nN/A or running — No reliable breakdown yet. Requires recorded usage with all four categories.'],
@@ -185,26 +184,29 @@ const WatchView = (() => {
       const head = el('thead'), header = el('tr');
       for (const [index, [name, explanation]] of columns.entries()) header.append(columnHeader(
         historical && index === 0 ? 'Finished' : name,
-        historical && index === 0 ? 'When this prompt ended, including stopped or failed work.\n— means the finish time is unknown.\nUse the time’s help button for the full local date, time and UTC offset.' : explanation));
+        historical && index === 0 ? 'When this prompt ended, including stopped or failed work.\nHover or focus the clock for the full local date and UTC offset.\n— means the finish time is unknown.' : explanation));
       head.append(header); this.body = el('tbody'); table.append(head, this.body); scroll.append(table);
       this.activity = el('div', undefined, 'watch-activity');
       this.tools = disclosure(); this.skills = disclosure(); this.running = el('p', undefined, 'watch-running-tool'); this.background = el('p');
-      ContextHelp.beside(this.tools.node, 'Counts include failures and cancellations. Red outcomes are a subset, not extra calls.\nOnly recorded errors or cancellations count; missing evidence is not success.', 'About tool call counts and outcomes');
-      ContextHelp.beside(this.skills.node, 'Confirmed custom skill loads only.\nRed failure counts require direct skill attribution; unrelated tool failures and cancellations are not assigned to a recently loaded skill.', 'About skill activity');
+      ContextHelp.attach(this.tools.summary, '• Counts include failures and cancellations; red outcomes are a subset, not extra calls.\n• Only recorded errors or cancellations count; missing evidence is not success.');
+      ContextHelp.attach(this.skills.summary, 'Confirmed custom skill loads only.\nFailure counts require direct skill attribution.');
       this.activity.append(this.tools.node, this.skills.node, this.running, this.background);
       this.summary = el('div', undefined, 'watch-session-summary');
       const icon = contextWarningIcon(); this.warningIcon = icon.node; this.warningOutline = icon.outline;
-      this.contextLabel = ContextHelp.button('Session Context / CCost: ', 'Estimated context for the next request in this session.\nNot prompt Ictx or summed usage. N/A means unavailable.\nPrice warnings concern the next context’s price tier, not a session spending limit.');
+      this.contextLabel = el('span', 'Context: ');
       this.contextValue = el('span', undefined, 'watch-session-context');
+      const contextLine = el('div'), contextTarget = ContextHelp.value(el('span'), 'Estimated context for the next request in this session.\nPrice warnings concern its price tier, not a session spending limit.');
+      contextTarget.append(this.contextLabel, this.contextValue);
       this.costLabel = el('span'); this.costStatus = el('span');
-      this.costHelp = ContextHelp.button('', () => 'Session CCost — Estimated cost of the entire session, including earlier prompts, linked subagents and provisional work. Not your bill.' +
+      this.costHelp = ContextHelp.value(el('span'), () => 'Reference cost of the entire session, including earlier prompts, linked subagents and provisional work.' +
         (this.summaryValue?.cost && !this.summaryValue.cost.complete ? '\n? — Partial pricing or source data.' : ''));
-      this.costHelp.className += ' help-cue'; this.costHelp.setAttribute('aria-label', 'About session CCost');
+      this.costHelp.append(el('span', 'Total CCost: '), this.costLabel);
+      const costLine = el('div'); costLine.append(this.costHelp, this.costStatus);
       this.warningText = el('span'); this.warningLead = el('span');
       this.warningImpact = el('span'); this.warningEnd = el('span');
       this.warningText.append(this.warningLead, this.warningImpact, this.warningEnd);
-      this.summary.append(this.warningIcon, this.contextLabel, this.contextValue, el('span', ' / '),
-        this.costLabel, this.costHelp, this.costStatus, this.warningText);
+      contextLine.append(this.warningIcon, contextTarget, this.warningText);
+      this.summary.append(contextLine, costLine);
       this.root.append(heading, this.message, scroll, this.summary, this.activity);
     }
     update(value, historical) {
@@ -235,11 +237,16 @@ const WatchView = (() => {
             const preview = el('span', prompt.preview || '', 'watch-prompt-preview');
             label.append(el('span', '#' + prompt.prompt_number, 'watch-prompt-number'), preview);
             const started = el('span', display(prompt, historical ? 'finished_clock' : 'clock'));
-            ContextHelp.beside(started, display(prompt, historical ? 'finished_date_time' : 'date_time'), 'Full local date and time');
-            const model = el('span', item.model);
-            if (prompt.has_additional_model) ContextHelp.beside(model, 'Other models contributed to this prompt’s CCost, Calls and Token Mix.', 'About additional models');
+            if (!historical || prompt.completed_at_ms != null) ContextHelp.value(started, display(prompt, historical ? 'finished_date_time' : 'date_time'));
+            const model = el('span', item.model + (prompt.linked_agent_count ? '*' : ''));
+            const modelHelp = display(prompt, 'model_detail_help');
+            if (modelHelp && modelHelp !== 'N/A') ContextHelp.value(model, modelHelp);
+            const cost = el('span', () => promptCost(prompt)), costHelp = () => display(prompt, 'cost_detail_help');
+            if (costHelp() && costHelp() !== 'N/A') ContextHelp.value(cost, costHelp);
+            const calls = el('span', String(prompt.calls)), callsHelp = display(prompt, 'calls_help');
+            if (callsHelp && callsHelp !== 'N/A') ContextHelp.value(calls, callsHelp);
             const cells = [started, display(item, 'watch_duration_ms'), label, model, item.effort,
-              () => promptCost(prompt), String(prompt.calls), display(prompt, 'token_mix_percent'),
+              cost, calls, display(prompt, 'token_mix_percent'),
               display(prompt, 'incoming_context_tokens'), display(item.live_context, 'watch_delta_context_tokens')];
             row.replaceChildren(...cells.map(value => { const cell = el('td'); cell.append(typeof value === 'object' ? value : el('span', value)); return cell; }));
             row.signature = signature;

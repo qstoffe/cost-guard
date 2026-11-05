@@ -16,7 +16,8 @@ Used and a same-window Remaining reference proxy; Full Watch shows **Capacity** 
 each bar, Mini exposes it in help, and Accounts adds it only with matching period cost.
 Copilot uses its actual included AI-credit allowance and native remaining credits;
 other valid windows extrapolate from observed cost / raw fraction used. Neither is a
-guaranteed budget. Unknown estimates show **?**, Unlimited Capacity **N/A**. A verified
+guaranteed budget. Numeric inferred Capacity carries **(guesstimate)** in Web text/help;
+verified comparable native limits do not. Unknown estimates show **?**, Unlimited Capacity **N/A**, without that suffix. A verified
 idle 0%-Used window has native 100% Remaining even when reference Capacity is unknown.
 Native amounts remain in Accounts/help; CLI and Remaining/day pace do not change.
 

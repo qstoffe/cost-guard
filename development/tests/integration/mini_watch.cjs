@@ -159,7 +159,9 @@ function setup() {
   assert.match(retained.helpText, /22912\/25000 AI credits[\s\S]*Used \+ Remaining need not equal Capacity/);
   assert.match(retained.helpText, /Primary quota\nMonthly[\s\S]*Native Used: 2088\/25000 AI credits/);
   assert.match(view.accounts.children[1].helpText,/Primary quota\n5-hour[\s\S]*\n\nAdditional quotas\nWeekly/);
-  assert.equal(retained.querySelectorAll('button').length,1,'at most one cue per subscription');
+  assert.equal(retained.querySelectorAll('button').length,0,'subscription text owns help without a cue');
+  assert.equal(retained.children[0].children[0].tabIndex,0);
+  assert.match(helpText(retained.children[0].children[0]), /Primary quota/);
   assert.doesNotMatch(retained.helpText,/Last quota update|Source:|Availability:/);
   assert.doesNotMatch(retained.helpText, /Period CCost unavailable/);
   assert.equal(view.accounts.children[0], retained); assert.equal(retained.children[1], retainedBar);

@@ -31,7 +31,7 @@ module.exports = function headers({command,evaluate,until,owner,mini,checks,layo
       assert.equal(state.cellColor,points.cell.color);assert.equal(state.background,points.cell.background);
     }
     const hit=await evaluate(id,`(() => {const n=document.elementFromPoint(${points.text.x},${points.text.y}),label=document.querySelector(${JSON.stringify(selector)});return {label:label.contains(n),cursor:getComputedStyle(n).cursor};})()`);
-    assert.equal(hit.label,true,JSON.stringify({selector,points,hit}));assert.equal(hit.cursor,'help');
+    assert.equal(hit.label,true,JSON.stringify({selector,points,hit}));assert.equal(hit.cursor,selector.includes('.help-label')?'pointer':'help');
     await move(id,points.text);await until(id,`document.querySelector('#context-help')?.matches(':popover-open')`);
     const hovered=await evaluate(id,`(() => {const label=document.querySelector(${JSON.stringify(selector)});
       return {labelBackground:getComputedStyle(label).backgroundColor,cellBackground:getComputedStyle(label.closest('th')).backgroundColor};})()`);
@@ -61,9 +61,10 @@ module.exports = function headers({command,evaluate,until,owner,mini,checks,layo
     return {selector,deadPoints:points.dead.length,labelWidth:points.width,textWidth:points.textWidth};
   }
   async function audit(id) {
-    const errors=await evaluate(id,`[...document.querySelectorAll('.help-trigger,.help-label')].flatMap(n=>{const s=getComputedStyle(n);
+    const errors=await evaluate(id,`[...document.querySelectorAll('.help-trigger,.help-label,.help-value')].flatMap(n=>{const s=getComputedStyle(n);
       return s.textDecorationLine.includes('underline')||['dotted','dashed'].includes(s.borderBottomStyle)?[n.textContent||n.getAttribute('aria-label')]:[];})`);
     assert.deepEqual(errors,[],'no tooltip underline, including standalone ? cues');
+    assert.equal(await evaluate(id,`document.querySelectorAll('.help-cue').length`),0,'no standalone question-mark help icons');
   }
   async function matrix() {
     await evaluate(owner,`document.querySelector('.watch-earlier').open=true;miniWatch.view.earlier.hidden=false`);
