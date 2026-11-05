@@ -47,6 +47,7 @@ async function main() {
       await evaluate('globalThis.current=state;globalThis.liveValue=INPUT');
       const layouts = [], checks = [];
       await require('./probe_watch_quiet.cjs')({evaluate,layouts,checks});
+      await require('./probe_watch_loading.cjs')({evaluate,layouts,checks});
       const transitions = await evaluate(`(() => {
         const view=state.watch,p=structuredClone(INPUT),value=p.view.active_cards[0],prompt=value.rows[0].prompt;
         const card=[...view.cards.values()][0],history=[...view.cards.values()][1],style=n=>getComputedStyle(n);

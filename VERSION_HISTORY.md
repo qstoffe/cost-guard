@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.172 — 2026-11-05
+
+- Full Web Watch removes both elapsed-time global loading warnings: slow history, accounts or daily summaries no longer label advancing prompts as stuck. Only observed healthy prompt membership establishes “No running prompts”; partial/loading/retained evidence stays uncertain. Existing host/source errors, component guidance, keyed DOM and shared acquisition remain unchanged.
+
 ## v80.171 — 2026-11-05
 
 - Web/Mini help moves from standalone question marks to precise visible text, with shared 600ms hover opening and prompt keyboard/tap access. Full Watch adds canonical main/subagent category-cost detail, linked-agent model stars, exact clock help and separate Context/Total CCost footer rows. Inferred numeric Capacity shows `(guesstimate)` consistently; verified native limits and unknown values do not. Mini Session and Total CCost retain distinct scoped help. Accounting, source acquisition, CLI and native PiP ownership are unchanged.

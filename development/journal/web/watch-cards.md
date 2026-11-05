@@ -114,3 +114,39 @@ macOS, real-source browser/SSE integration and independently measured live
 progressive timing remain unverified. Exact headless viewport geometry is not
 native-fullscreen proof. Keep these unknowns separate from the actual passing
 deterministic, rendered-fixture and read-only V2 results.
+
+## Global loading notice correction — FR 000592
+
+2026-11-05, v80.172. The shipped `WatchView.View.update()` used one 30-second
+timer across prompt membership, Earlier history and absent accounts. A fresh
+headless Edge DOM reproduction against the unmodified assets showed the generic
+warning at 30 seconds through 180 virtual seconds of history loading, while calls
+advanced to 181, duration to 180s and a second card arrived. Keyed row/selection/
+scroll remained intact. That proves the timer branch can produce the reported
+contradiction; it is not a capture of the owner's original incident. The separate
+app fallback requires a missing view and cannot explain simultaneously rendered
+advancing cards, but it displayed the same unsupported elapsed-time warning.
+
+Both global timers/text paths are removed. Host/source health and component-local
+retry/unavailable/partial messages retain their existing ownership. Only observed
+prompt membership with a connected, running source establishes **No running
+prompts**; loading, missing, partial and retained evidence do not. No backend,
+polling, provider cadence or lifecycle change is involved.
+
+Verification: Full passed 144 files in 89.5s (1,695 passed tests, one existing
+macOS zsh/PTY platform skip). Validator passed all 11 checks, with six existing
+advisory size warnings; no caps were changed. Focused DOM tests cover independent
+three-minute virtual delays and uncertain/healthy-empty/source-recovery states.
+Headless Edge 156.0.4314.58 passed Classic/Web-light/Web-dark at 1366px/360px,
+including four independent delay lanes, card arrival, changing calls/duration,
+keyed DOM, selection, focus, scroll and disclosure retention. The integrated
+browser was disconnected; hidden owned Chromium used no personal profile/OS input.
+
+Fresh read-only `probe_web_live.py --watch-cards` observed V2, one owner, two
+streams, three accounts, one active/two historical one-row cards, source view at
+1.673s and first rows at 4.746s. Sequence and run origin stayed coherent; all owned
+workers closed, shared OpenCode untouched, no model calls initiated. Daily history
+had not published during this short observation and its phase instrumentation
+recorded a history-batch error; this is not a Daily success or proof that every
+source lane was available. Real-source transport and synthetic browser checks
+are complementary, not end-to-end capture of the original desktop incident.

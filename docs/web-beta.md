@@ -556,8 +556,11 @@ First acquisition uses blank/neutral placeholders, never invented empty/zero res
 Known prompt/session/daily/account figures stay visible quietly during routine refresh,
 with no fleeting Loading/Refreshing/Retrying prose or temporary card-height change in
 Running or Earlier Prompts. Observed **No running prompts**/**No earlier prompts** remain.
-Column/summary help explains metric scope rather than internal freshness logs. After 30 continuous seconds of pending initial
-acquisition, prompt retries, daily updates or session totals, delayed/availability guidance appears;
+Column/summary help explains metric scope rather than internal freshness logs. Missing initial
+Watch data remains quiet; elapsed time or independent Earlier/account/daily loading never
+creates a global Watch failure warning. **No running prompts** requires observed membership
+and a healthy running source/connection, not partial or retained evidence.
+After 30 continuous seconds of component acquisition, prompt retries, daily updates or session totals, localized delayed/availability guidance appears;
 observed recovery clears it. Explicit unavailable/partial evidence and host/auth/connection
 failures retain their existing guidance. These are presentation clocks only, not source
 observations or lifecycle changes. Optional cache

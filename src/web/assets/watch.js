@@ -363,10 +363,12 @@ const WatchView = (() => {
       const retryDelayed = delayed(this, 'retrySince', result.state === 'retrying');
       const sourceState = result.state === 'retrying' ? retryDelayed ? 'Source updates delayed; last observation retained, not current.' : '' :
         result.state !== 'running' ? 'Source unavailable; last observation retained, not current.' : '';
-      const loading = view.cards_state === 'loading' || view.cards_state == null;
       const historyLoading = view.history_state === 'loading' || view.history_state == null;
-      const initialDelayed = delayed(this, 'initialSince', loading || historyLoading || !view.accounts);
-      text(this.empty, sourceState || (!connected ? 'Live connection interrupted; last observation retained, not live.' : view.cards_state === 'unavailable' ? 'Some prompt sources are unavailable.' : initialDelayed ? 'Still loading Watch data; check source availability.' : !loading && !active.some(card => card.rows.some(row => row.prompt.in_progress)) ? 'No running prompts' : ''));
+      // Only observed prompt membership establishes empty success. Independent
+      // history/accounts/daily acquisition and elapsed time say nothing about it.
+      const noRunning = this.state.connection === 'Live connected.' && view.cards_state === 'observed' &&
+        !active.some(card => card.rows.some(row => row.prompt.in_progress));
+      text(this.empty, sourceState || (!connected ? 'Live connection interrupted; last observation retained, not live.' : view.cards_state === 'unavailable' ? 'Some prompt sources are unavailable.' : noRunning ? 'No running prompts' : ''));
       this.empty.hidden = !this.empty.textContent;
       const keep = new Set();
       for (const [parent, values, historical] of [[this.active, active, false], [this.history, history, true]]) {

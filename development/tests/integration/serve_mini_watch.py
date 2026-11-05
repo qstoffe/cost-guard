@@ -40,7 +40,7 @@ def main():
             shutil.copyfile(ROOT / "config/default-config.jsonc", root / "config/default-config.jsonc")
         jobs = HelpAuditJobs() if sys.argv[2:] == ["--help-audit"] else ReportJobs(target=finite_report)
         host = WebHost(root, jobs=jobs)
-        timer = Timer(180, host.stop)
+        timer = Timer(300, host.stop)
         frame = summary_watch()
         now = int(time.time() * 1000)
         frame = replace(frame, now_ms=now, daily_usage=replace(frame.daily_usage,
@@ -95,6 +95,23 @@ def main():
                         running=running_prompts((), 'unavailable'), daily_state='retrying', quota_stale=True))
                 elif command == "running":
                     publish()
+                elif command == "watch-starting":
+                    host.events.publish("live", {"state": "running", "view": None})
+                elif command == "watch-retrying":
+                    publish(state="retrying")
+                elif command.startswith("watch-delay-"):
+                    seconds = int(command.removeprefix("watch-delay-"))
+                    assert 0 <= seconds <= 300
+                    payload = project_live(frame).to_json()
+                    payload.update(history_state="loading", accounts=None,
+                        daily_state="loading", daily_usage=None)
+                    payload["active_cards"] = payload["active_cards"][:1 if seconds < 60 else 2]
+                    for card in payload["active_cards"]:
+                        row = card["rows"][0]
+                        row["prompt"]["calls"] = seconds + 1
+                        row["display"]["watch_duration_ms"] = f"{seconds}s"
+                    host.events.publish("live", {"state": "running", "view": payload,
+                        "source_observed_at_ms": int(time.time() * 1000)})
                 elif command in {"quota-idle", "quota-ratio"}:
                     base_account = frame.quota.accounts[0]
                     idle_window = command == 'quota-idle'

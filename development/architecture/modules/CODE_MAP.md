@@ -92,6 +92,12 @@ confirmed focal title/row colors, focus/selection and contrast in Classic/Web li
 at wide/narrow widths. `test_watch_prompt_cost.py`, `test_watch_daily.py` and
 `integration/web_live.cjs` own the matching formatted-zero, initial/delayed status and
 SSE/lifecycle regressions; no backend pricing/acquisition change is implied.
+`integration/probe_watch_loading.cjs` adds three virtual minutes per independent
+history/accounts/daily/partial lane to that theme/width matrix.
+`integration/probe_watch_loading_app.cjs` uses the shipped app/HTTP/SSE and synthetic
+`serve_mini_watch.py` publications for three wall-clock minutes, initial missing-frame
+feedback, new cards, route retention and host/source/offline recovery. It never
+starts model work or accesses a personal browser; the real-installation probe is separate.
 The shared `session_summary` projection
 and cache/lifecycle tests retain valuation and history eligibility ownership.
 
