@@ -1,0 +1,70 @@
+{
+  "frId": "000587",
+  "date": "2026-11-05",
+  "version": "80.168",
+  "base": "a7b41c14341f253e9d5876f6d53b345a64665aa5",
+  "browser": "Edg/156.0.4314.58",
+  "mode": "Fresh owned hidden Chromium profile; shipped HTTP/CSP/SSE and actual Document Picture-in-Picture",
+  "before": {
+    "hoverClosedAfterDocumentExitWithMouseFocus": false,
+    "observedBrowserEvents": ["pointerout:null", "pointerleave:null"]
+  },
+  "after": {
+    "sharedHelpProbe": "PASS",
+    "miniProbe": "PASS",
+    "hoverExitWithLingeringMouseFocus": ["Mini return action", "Mini Session heading", "Mini quota cue", "Watch CCost heading", "Watch daily cue"],
+    "documentOnlyExitWithMissedElementLeave": "PASS",
+    "keyboardFocusSurvivesPointerExit": "PASS",
+    "returnActionDismissesAndNavigates": ["mouse", "touch", "Enter", "Space"],
+    "stationaryFocusAndLiveDoNotResurrect": "PASS",
+    "pointerTransferEscapeTouchOutsideDismiss": "PASS",
+    "themes": ["Classic", "Web light", "Web dark"],
+    "dailyFarRight": {
+      "widths": [1280, 360],
+      "cssZoom": [1, 1.5],
+      "cueCount": 1,
+      "cueIsDirectCardChild": true,
+      "rightEdgeGapPixels": 0,
+      "overlapOrPageOverflow": false
+    },
+    "mini": ["both tables", "zero/one/multiple quota periods", "native Used/Remaining and Credits/USD", "two-part heading", "long hostile title as text", "full underlying title selection", "sticky headers", "narrow/zoom", "history disclosure and resize", "live keyed rerenders", "one SSE", "open/close/replacement/teardown"],
+    "otherRoutes": ["Models", "Sessions", "session Snapshot", "Accounts", "date report", "Token Mix", "Cost per Active Hour", "Settings"],
+    "syntheticWindowBlur": {
+      "native": false,
+      "cases": 5,
+      "handlerResult": "PASS",
+      "reason": "Headless target-focus switches emitted no native blur; explicit window event exercises the handler, not OS event delivery."
+    }
+  },
+  "deterministic": {
+    "suite": "full",
+    "files": 142,
+    "failures": 0,
+    "seconds": 87.0,
+    "browserMatrixConcurrent": false,
+    "priorFailure": "One overlapping Full run saw historical catalog TTL count 4 vs allowed 2/3. Unchanged subsequent Full passed; timing causation not established; no assertion weakened."
+  },
+  "realInstallation": {
+    "probe": "probe_web_live.py --watch-cards --daily",
+    "outcome": "PASS",
+    "source": "V2",
+    "owners": 1,
+    "streams": 2,
+    "accounts": 3,
+    "dailyCategoryCostsReconcile": true,
+    "streamIdsVerified": true,
+    "ownedCleanupFailures": 0,
+    "sharedOpenCodeStopped": false,
+    "modelCallsStartedByProbe": 0
+  },
+  "validator": {"checks": 11, "failures": 0, "existingAdvisoryWarnings": 6},
+  "exception": {
+    "decider": "Decision Delegate, not user",
+    "scope": "FR 000587 only; physical pointer travel into native browser chrome/another app and native blur where headless emits none",
+    "reason": "Adequate actual hidden PiP reproduction/regression; residual physical proof does not justify desktop disruption.",
+    "visibleDesktopActionAuthorized": false,
+    "physicalChecksPerformed": false,
+    "unverified": ["native OS event delivery", "physical OS pointer/window focus", "monitor behavior", "screen reader", "other engines and macOS"],
+    "futureAuthority": false
+  }
+}

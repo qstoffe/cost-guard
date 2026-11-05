@@ -42,9 +42,9 @@ const row = card.body.children[0], prompt = context.input.view.active_cards[0].r
 assert.equal(card.body.children.length, 1);
 assert.equal(row.children[0].textContent, prompt.display.clock);
 assert.equal(row.children[2].textContent, '#37' + prompt.preview);
-assert.equal(helpText(row.children[2].children[0].children[2]), prompt.preview);
+assert.equal(row.children[2].querySelectorAll('button').length,0,'no full-preview cue on running rows');
 assert.equal(row.attributes['aria-label'], 'Prompt 37 · Running');
-assert.match(helpText(row.children[3].children[0].children[0]), /Other models also contributed/);
+assert.match(helpText(row.children[3].children[0].children[0]), /Other models contributed/);
 assert.equal(card.title.className, 'watch-running-title');
 assert.ok(!/Session Total|provisional|Loading/.test(card.root.textContent));
 assert.equal(card.running.textContent, 'Running: shell 41s');
@@ -54,6 +54,7 @@ assert.match(card.tools.summary.children.at(-1).textContent, /1 failed/);
 assert.equal(card.skills.summary.children.at(-1).className, 'watch-activity-error');
 assert.equal(card.skills.list.children[0].children.at(-1).className, 'watch-activity-error');
 const earlier = [...watch.cards.values()][1];
+assert.equal(earlier.body.children[0].children[2].querySelectorAll('button').length,0,'no full-preview cue on earlier rows');
 assert.equal(earlier.title.className, '');
 assert.equal(earlier.body.children[0].children[0].textContent,
    context.input.view.history_cards[0].rows[0].prompt.display.finished_clock);
@@ -71,7 +72,10 @@ vm.runInContext('ReportView.renderLive(parent, input, state)', context);
 assert.equal(card.title.className, '', 'terminal title stops looking running');
 assert.equal(watch.daily.attributes['aria-label'], 'CCost Today');
 assert.deepEqual(watch.daily.children.map(node => node.textContent), ['CCost Today', '34', '37 prompts', 'Token Mix %',
-  'Input: 50% (15)', 'Cached input: 30% (3)', 'Cache write: 10% (4)', 'Output: 10% (12)']);
+  'Input: 50% (15)', 'Cached input: 30% (3)', 'Cache write: 10% (4)', 'Output: 10% (12)', '']);
+assert.equal(watch.daily.querySelectorAll('button').length,1);
+assert.match(watch.daily.children.at(-1).className,/watch-daily-help/);
+assert.match(helpText(watch.daily.children.at(-1)),/CCost Today —[\s\S]*Prompts —[\s\S]*\n\nToken Mix % — Token shares, not cost/);
 assert.equal(watch.root.children.at(-2), watch.daily);
 assert.match(watch.accounts.textContent, /5-hour · 25% used/);
 assert.match(watch.accounts.textContent, /Weekly · 100% used/);
@@ -85,8 +89,9 @@ assert.equal(monthlyCard.children[3].textContent, 'Capacity: 25000');
 assert.equal(monthlyCard.children[4].children[0].value, '0.08352');
 const periodCost = monthlyCard.children[2].children[1];
 assert.equal(periodCost.title, undefined);
-assert.match(helpText(monthlyCard.children[2].children[2]), /provider’s reported included AI-credit limit[\s\S]*Used \+ Remaining need not equal Capacity/);
-assert.match(helpText(monthlyCard.children[2].children[2]), /Native Used: 2088\/25000 AI credits/);
+assert.equal(monthlyCard.children[2].querySelectorAll('button').length,0,'quota and capacity share one explanation');
+assert.match(helpText(monthlyCard.children[3].children[0]), /provider’s reported included AI-credit limit[\s\S]*Used \+ Remaining need not equal Capacity/);
+assert.match(helpText(monthlyCard.children[3].children[0]), /Native Used: 2088\/25000 AI credits/);
 assert.equal(monthlyCard.children[5].children.length, 3, 'reset and two pace rows; no period cost row');
 assert.match(monthlyCard.children[5].children[0].textContent, /^Reset/);
 assert.match(monthlyCard.children[5].children[1].textContent, /^Remaining: .*\/day$/);
@@ -200,7 +205,7 @@ summaryValue.state = 'refreshing';
 vm.runInContext('ReportView.renderLive(parent, input, state)', context);
 assert.match(card.summary.textContent, /4583$/);
 assert.doesNotMatch(card.summary.textContent, /refreshing|retained total/i);
-assert.match(helpText(card.costHelp), /updating; retained observation, not current/);
+assert.doesNotMatch(helpText(card.costHelp), /updating|Cache unavailable|source is retrying/);
 assert.ok(!card.summary.textContent.includes('Loading'));
 summaryValue.cost = null; summaryValue.state = 'loading';
 vm.runInContext('ReportView.renderLive(parent, input, state)', context);
@@ -222,7 +227,7 @@ for (const complete of [true, false]) {
   assert.equal(context.input.view.daily_usage.prompt_count_complete, complete);
 }
 const retainedDaily = watch.daily.children[1], retainedText = watch.daily.textContent;
-const dailyCategories = watch.daily.children.slice(3).map(node => node.textContent);
+const dailyCategories = watch.daily.children.slice(3,8).map(node => node.textContent);
 for (const state of ['refreshing', 'observed', 'refreshing']) {
   context.input.view.daily_state = state;
   vm.runInContext('ReportView.renderLive(parent, input, state)', context);
@@ -257,7 +262,7 @@ assert.equal(card.message.textContent, '');
 assert.equal(card.message.hidden, true);
 assert.doesNotMatch(watch.empty.textContent, /Retrying|delayed/);
 assert.doesNotMatch(watch.empty.textContent, /connection interrupted/i);
-assert.match(helpText(card.costHelp), /Prompt source is retrying.*not current/);
+assert.match(helpText(card.costHelp), /Estimated cost of the entire session/);
 now += 29999;
 vm.runInContext('ReportView.renderLive(parent, input, state)', context);
 assert.equal(card.message.textContent, '');
@@ -344,7 +349,7 @@ for (const fixture of context.input.quota_cases || []) {
   const expected = fixture.percent === '—' ? '—' : fixture.percent + ' used';
   assert.ok(label.includes(fixture.value.quota.unlimited ? 'Unlimited' : expected), fixture.name);
   assert.ok(!label.includes('/'), 'native ratios belong in accessible help, not the headline');
-  assert.ok(helpText(account.children[2].children[2]).includes(fixture.native), fixture.name);
+  assert.ok(helpText(account.children[3].children[0]).includes(fixture.native), fixture.name);
   assert.ok(!/CCost:|estimated|partial|[~≈]/.test(label), 'compact value has no visible provenance marker');
   assert.equal(account.children[5].children[0].textContent, 'Reset unknown');
   assert.match(account.textContent, /Stale.*not current/);
@@ -357,16 +362,16 @@ for (const fixture of context.input.quota_cases || []) {
   if (fixture.name === 'empty period') assert.ok(label.includes('used (0)'));
   if (['unknown cost', 'unpriced period'].includes(fixture.name))
     assert.match(label, /\(\?\)/);
-  if (fixture.name === 'partial period') assert.match(helpText(account.children[2].children[2]), /partial attribution/);
-  if (fixture.name === 'estimated period') assert.match(helpText(account.children[2].children[2]), /estimated attribution/);
+  if (fixture.name === 'partial period') assert.match(helpText(account.children[3].children[0]), /partial attribution/);
+  if (fixture.name === 'estimated period') assert.match(helpText(account.children[3].children[0]), /estimated attribution/);
   if (fixture.name === 'owner example') assert.equal(label, '5 hours · 16% used (94)');
   vm.runInContext('ReportView.setQuotaMode("remaining"); ReportView.syncUnits(parent)', context);
   const shown = fixture.value.quota.quota_display.remaining;
   if (fixture.name === 'native money') {
-    assert.match(helpText(account.children[2].children[2]), /Native money remaining: \$91.65 \/ \$100.00/);
+    assert.match(helpText(account.children[3].children[0]), /Native money remaining: \$91.65 \/ \$100.00/);
     vm.runInContext('ReportView.setUnit("usd", parent)', context);
     assert.equal(account.children[2].textContent.includes('CCost used:'), false);
-    assert.match(helpText(account.children[2].children[2]), /Native money remaining: \$91.65 \/ \$100.00/);
+    assert.match(helpText(account.children[3].children[0]), /Native money remaining: \$91.65 \/ \$100.00/);
   }
   if (shown.mode === 'remaining') {
     assert.match(account.children[2].textContent, /remaining/);

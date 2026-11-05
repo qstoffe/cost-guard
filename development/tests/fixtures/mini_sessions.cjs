@@ -13,12 +13,12 @@ module.exports = function sessionTables(vm, context, controller, view, input, he
     ['Session (Total CCost)', 'Ctx']);
   assert.match(view.historyBody.parentNode.attributes['aria-label'], /latest valid session context \(Ctx\)/);
   const contextHeader = view.historyBody.parentNode.querySelectorAll('th')[1];
-  assert.match(helpText(contextHeader.children[0]), /next request in this earlier session[\s\S]*Not its historical prompt context or a sum[\s\S]*N\/A means unavailable/);
+  assert.match(helpText(contextHeader.children[0]), /Last valid estimate of the next request’s context[\s\S]*Not historical prompt context or a sum[\s\S]*N\/A means unavailable/);
   assert.equal(contextHeader.title, undefined);
   for (const body of [view.body, view.historyBody]) {
     const header = body.parentNode.querySelectorAll('th')[0];
     assert.deepEqual(header.children[0].children[0].children.map(node => node.textContent), ['Session', ' (Total CCost)']);
-    assert.match(helpText(header.children[0]), /total estimated session cost[\s\S]*earlier prompts, linked subagents/);
+    assert.match(helpText(header.children[0]), /Session — The name of the session\.\n\nTotal CCost — Estimated cost of the entire session[\s\S]*earlier prompts and linked subagents/);
   }
   const cost = row => row.children[0].children[0].children[1].textContent;
   assert.deepEqual(view.body.children.map(cost), [' (4583)', ' (4583)']);
@@ -36,7 +36,7 @@ module.exports = function sessionTables(vm, context, controller, view, input, he
   assert.ok(view.historyBody.children.every(row => row.children.length === 2 && cost(row) === ' (4583)'));
   assert.equal(view.earlier.parentNode, view.prompts, 'both tables use one region');
   const row = view.historyBody.children[0];
-  assert.match(row.helpText, /Latest valid session Ctx: 902/);
+  assert.equal(row.querySelectorAll('button').length,0,'history values have no duplicate cues');
   assert.match(row.attributes['aria-label'], /Earlier session · Earlier 2/);
   for (let index=0;index<20;index++) {input.view.now_ms++; controller.update(input);}
   assert.equal(view.historyBody.children[0],row,'publication preserves row/focus identity');
@@ -57,7 +57,8 @@ module.exports = function sessionTables(vm, context, controller, view, input, he
     input.view.active_cards = saved.active_cards.map(card=>({...card,session_summary:value}));
     input.view.history_cards = [history(0)].map(card=>({...card,session_summary:value})); controller.update(input);
     assert.ok([...view.body.children,...view.historyBody.children].every(row=>cost(row)===' ('+expected+')'));
-    assert.match(view.body.children[0].children[0].helpText,/Session CCost/);
+    const note=view.body.children[0].children[0].children[0].children[2].textContent;
+    assert.equal(Boolean(note),['partial','unavailable'].includes(value.state),'confirmed retained/partial evidence stays visible, routine refresh stays quiet');
   }
   const resumed = {...history(3),focal_id:active.focal_id};
   input.view = {...saved, active_cards:[...saved.active_cards,resumed],history_cards:[history(3),history(4)]};
@@ -69,7 +70,7 @@ module.exports = function sessionTables(vm, context, controller, view, input, he
   assert.equal(view.historyBody.children.length,1,'unknown finish fallback keeps server order');
   input.view = {...input.view,history_cards:[],history_state:'unavailable'}; controller.update(input);
   assert.equal(view.historyBody.children[0].dataset.id,'history-0','failed read retains real history');
-  assert.match(view.observationHelp,/Retained values are not live updates/);
+  assert.equal(view.observationHelp,undefined);
   input.view.history_state='observed'; controller.update(input);
   assert.equal(view.historyBody.textContent,'No earlier sessions','canonical empty clears retained history');
   input.view.history_state='loading'; controller.update(input);
@@ -78,6 +79,6 @@ module.exports = function sessionTables(vm, context, controller, view, input, he
   assert.equal(view.historyBody.textContent,'Earlier sessions unavailable');
   input.view = {...saved,active_cards:saved.active_cards.map(card=>({...card,title:''}))}; controller.update(input);
   assert.equal(view.body.children[0].children[0].children[0].children[0].textContent,active.session_id);
-  assert.match(view.body.children[0].children[0].helpText,/Entire session[\s\S]*linked subagents/);
+  assert.equal(view.body.children[0].children[0].querySelectorAll('button').length,0);
   view.earlierToggle.fire('click'); input.view=saved; controller.update(input);
 };

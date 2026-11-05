@@ -19,7 +19,7 @@ module.exports = async ({evaluate,until,command,sessionId,pipSession,checks,layo
   const parity = async () => {
     await until(`miniWatch.window.getComputedStyle(miniWatch.window.document.body).backgroundColor === getComputedStyle(document.body).backgroundColor`);
     return evaluate(`(() => {const w=miniWatch.window,d=w.document,v=miniWatch.view;
-      v.body.querySelector('.help-trigger').focus();
+       v.body.parentNode.querySelector('th .help-trigger').focus();
       const roles=win=>{const style=win.getComputedStyle(win.document.documentElement);return Object.fromEntries(
         [...style].filter(key=>key.startsWith('--')).map(key=>[key,style.getPropertyValue(key).trim()]));};
       const color=(node,property='color')=>w.getComputedStyle(node)[property];
@@ -80,7 +80,7 @@ module.exports = async ({evaluate,until,command,sessionId,pipSession,checks,layo
     await evaluate(`miniWatch.window.resizeTo(${width},250)`,true);
     await until(`miniWatch.window.innerWidth<=${width}`);
     await media(scheme);const result=await parity();assertWeb(result);
-    await command('Runtime.evaluate',{expression:`document.querySelector('.mini-running td .help-trigger').focus()`},pipSession);
+    await command('Runtime.evaluate',{expression:`document.querySelector('.mini-prompts > table th button').focus()`},pipSession);
     await until(`(() => {const w=miniWatch.window,p=w.document.getElementById('context-help'),r=p.getBoundingClientRect();return p.matches(':popover-open') && r.left>=0 && r.right<=w.innerWidth+1 && r.bottom<=w.innerHeight+1;})()`);
     const focus=await evaluate(`(() => {const v=miniWatch.view,w=miniWatch.window,help=v.doc.getElementById('context-help');
       const box=help.getBoundingClientRect();return {open:help.matches(':popover-open'),outline:w.getComputedStyle(v.doc.activeElement).outlineStyle,

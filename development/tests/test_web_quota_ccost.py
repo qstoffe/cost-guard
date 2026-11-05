@@ -27,6 +27,7 @@ class WebQuotaCCostTests(unittest.TestCase):
             for key in ('used', 'remaining', 'capacity')))
         self.assertIn('CCost used ÷ provider-reported fraction used', wire['display']['ccost_help'])
         self.assertIn('not a guaranteed budget', wire['display']['ccost_help'])
+        self.assertIn('observed CCost ÷ native fraction used', wire['display']['ccost_brief'])
         tiny = replace(quota, remaining_fraction=D('.99999'))
         exact = with_display(watch_quota(tiny, QuotaPeriodProjection(tiny, ComparisonCost(D(1), 1, 1), None)),
             now_ms=1000).to_json()['quota']
@@ -44,6 +45,7 @@ class WebQuotaCCostTests(unittest.TestCase):
                 self.assertEqual((str(observed), str(remaining), str(limit)), tuple(wire['display']['ccost_' + key]
                     for key in ('used', 'remaining', 'capacity')))
                 self.assertIn('Used + Remaining need not equal Capacity', wire['display']['ccost_help'])
+                self.assertIn('Used + Remaining need not equal Capacity', wire['display']['ccost_brief'])
                 self.assertEqual(f'${D(limit) / 100:.2f}', wire['display_units']['usd']['ccost_capacity'])
 
     def test_known_native_limit_survives_missing_usage_but_does_not_invent_remaining(self):
@@ -65,6 +67,7 @@ class WebQuotaCCostTests(unittest.TestCase):
             wire = with_display(watch_quota(quota, provider_id=provider)).to_json()['quota']['display']
             with self.subTest(provider=provider, quota=quota):
                 self.assertEqual(('?', '?'), (wire['ccost_capacity'], wire['ccost_remaining']))
+                self.assertIn('Reference Capacity / Remaining unavailable', wire['ccost_brief'])
 
     def test_unreliable_or_out_of_window_ratio_is_unknown_not_zero_or_negative(self):
         base = QuotaComponent('5-hour', 'rolling', remaining_fraction=D('.9'), duration_seconds=18000, reset_at_ms=20000)
@@ -96,6 +99,8 @@ class WebQuotaCCostTests(unittest.TestCase):
             with self.subTest(quota=quota):
                 self.assertEqual((capacity, remaining), (wire['display']['ccost_capacity'], wire['display']['ccost_remaining']))
                 self.assertEqual('used' if quota.unlimited else 'remaining', wire['quota_display']['remaining']['mode'])
+                if quota.unlimited:
+                    self.assertIn('Unlimited quota', wire['display']['ccost_brief'])
 
     def test_idle_sdk_zero_has_native_full_remaining_without_numeric_cost_capacity(self):
         base = summary_watch().quota.accounts[0]

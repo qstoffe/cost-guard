@@ -86,7 +86,9 @@ function setup() {
   assert.equal(headers[4].textContent, 'Ctx');
   assert.match(helpText(headers[4].children[0]), /Estimated context for this prompt’s next request[\s\S]*N\/A means unavailable, not zero/);
   assert.match(table.attributes['aria-label'], /estimated next incoming context \(Ctx\)/);
-  assert.match(view.body.children[0].helpText, /CCost, Duration and Ctx describe this prompt/);
+  assert.equal(view.body.querySelectorAll('button').length,0,'ordinary values have no duplicate help controls');
+  assert.equal(view.earlierToggle.events.focus,undefined,'disclosure has no tooltip');
+  assert.equal(view.daily.querySelectorAll('button').length,0,'daily has no help cue');
   assert.match(view.body.children[0].attributes['aria-label'], /Prompt 23 · Running/);
   const contextItem = input.view.active_cards[0].rows[0], originalContext = contextItem.live_context;
   for (const formatted of ['123 456', '234 567', '0', 'N/A', '~source-format']) {
@@ -98,7 +100,7 @@ function setup() {
   assert.equal(view.body.children[0].children[4].textContent, 'N/A');
   contextItem.live_context = originalContext; controller.update(input);
   assert.equal(view.daily.textContent, 'CCost Today 34 · 37 prompts', 'prior activity is not the two prompt rows or account-period costs');
-  assert.match(view.dailyHelp, /Today’s estimated cost and prompt count across sessions/);
+  assert.equal(view.dailyNote.textContent,'');
   assert.notEqual(view.daily.parentNode, view.summary, 'daily metric is outside the navigation target');
   view.daily.fire('click'); view.daily.fire('keydown'); assert.equal(test.returned(),0);
   assert.equal(api.requests[0].height,250); assert.equal(api.requests[0].width,560);
@@ -124,15 +126,15 @@ function setup() {
     vm.runInContext('ReportView.setUnit("credits")', context);
   }
   input.view.daily_usage = {...daily,total:{...daily.total,priced_requests:0,complete:false}};
-  parity(); assert.equal(view.daily.textContent,'CCost Today N/A · 37 prompts');
-  assert.match(view.dailyHelp,/Partial pricing/);
+  parity(); assert.equal(view.dailyText.textContent,'CCost Today N/A · 37 prompts');
+  assert.match(view.dailyNote.textContent,/Partial pricing/);
   input.view.daily_usage = {...daily,total:{...daily.total,complete:false}};
-  parity(); assert.equal(view.daily.textContent,'CCost Today 34 · 37 prompts');
+  parity(); assert.equal(view.dailyText.textContent,'CCost Today 34 · 37 prompts');
   for (const state of ['retrying','unavailable','loading','partial']) {
-    input.view.daily_state=state; parity(); assert.equal(view.daily.textContent,'CCost Today 34 · 37 prompts');
+    input.view.daily_state=state; parity(); assert.equal(view.dailyText.textContent,'CCost Today 34 · 37 prompts');
     assert.equal(view.daily.className,'mini-daily'); assert.equal(view.health.hidden,true);
   }
-  input.view.daily_usage=null; input.view.daily_state='unavailable'; controller.update(input); assert.equal(view.daily.textContent,'CCost Today · Loading…');
+  input.view.daily_usage=null; input.view.daily_state='unavailable'; controller.update(input); assert.equal(view.daily.textContent,'CCost Today · Unavailable');
   input.view.daily_state='loading'; controller.update(input); assert.equal(view.daily.textContent,'CCost Today · Loading…');
   input.view.daily_usage={...daily,day_start_ms:daily.day_start_ms+86400000,day_end_ms:daily.day_end_ms+86400000,prompt_count:0,total:{...daily.total,observed_requests:0,priced_requests:0,display:{known_ccost:'0'},display_units:{credits:{known_ccost:'0'}}}};
   input.view.daily_state='observed'; parity(); assert.equal(view.daily.textContent,'CCost Today 0 · 0 prompts','new canonical local day replaces the old daily observation');
@@ -154,7 +156,11 @@ function setup() {
   vm.runInContext('ReportView.setQuotaMode("remaining")', context); controller.settings();
   assert.match(retained.textContent, /91.6% remaining \(22912\)/);
   assert.equal(retainedBar.value, '0.91648'); assert.match(retainedBar.attributes['aria-label'], /remaining/);
-  assert.match(retained.helpText, /Used \+ Remaining need not equal Capacity[\s\S]*22912\/25000 AI credits/);
+  assert.match(retained.helpText, /22912\/25000 AI credits[\s\S]*Used \+ Remaining need not equal Capacity/);
+  assert.match(retained.helpText, /Primary quota\nMonthly[\s\S]*Native Used: 2088\/25000 AI credits/);
+  assert.match(view.accounts.children[1].helpText,/Primary quota\n5-hour[\s\S]*\n\nAdditional quotas\nWeekly/);
+  assert.equal(retained.querySelectorAll('button').length,1,'at most one cue per subscription');
+  assert.doesNotMatch(retained.helpText,/Last quota update|Source:|Availability:/);
   assert.doesNotMatch(retained.helpText, /Period CCost unavailable/);
   assert.equal(view.accounts.children[0], retained); assert.equal(retained.children[1], retainedBar);
   vm.runInContext('ReportView.setQuotaMode("used")', context); controller.settings();
@@ -167,8 +173,7 @@ function setup() {
   assert.equal(view.body.children.length, 2, 'deduplicated by source session and event, not aggregate count');
   assert.equal(view.body.children[0], firstRow, 'canonical ascending start order and keyed row');
   assert.equal(firstRow.children[0], firstCell, 'focusable title cell survives updates');
-  const statusHelp = view.body.children[1].children[1].children[1];
-  assert.match(helpText(statusHelp), /Running/);
+  assert.match(view.body.children[1].children[1].attributes['aria-label'], /Running/);
   for (const [outcome, className, label] of [
     [{in_progress:false,completed_successfully:true},'mini-success','Completed'],
     [{in_progress:false,completed_successfully:false,aborted:true,abort_reason:'quota_limit'},'mini-error','Aborted · quota limit'],
@@ -176,8 +181,8 @@ function setup() {
     [{in_progress:false,completed_successfully:false,aborted:false,has_error:false},'','Ended']]) {
     const saved = {...prompt}; Object.assign(prompt, outcome); controller.update(input);
     const terminal = view.body.children[1];
-    assert.equal(terminal.className,className); assert.ok(terminal.helpText.startsWith(label));
-    assert.ok(view.doc.body.children.at(-1).textContent.startsWith(label), 'open help follows current prompt status without refocusing');
+    assert.equal(terminal.className,className); assert.ok(terminal.attributes['aria-label'].includes(label));
+    assert.equal(terminal.querySelectorAll('button').length,0,'status has no popover');
     assert.equal(terminal.children[3].textContent,'20m'); Object.assign(prompt,saved);
   }
   input.view.active_cards = []; controller.update(input);
@@ -190,7 +195,7 @@ function setup() {
   const primary = input.view.accounts.accounts[0].primary, savedCost = primary.cost;
   const savedQuota = primary.quota;
   primary.estimated = true; primary.cost = {...savedCost,complete:false,display:{known_ccost:'?1814'},display_units:{credits:{known_ccost:'?1814'}}};
-  primary.quota = {...savedQuota,display:{...savedQuota.display,ccost_help:'Used CCost has partial attribution / pricing.\nUsed CCost has estimated attribution.'}};
+  primary.quota = {...savedQuota,display_units:{},display:{...savedQuota.display,ccost_brief:'Used CCost has partial attribution / pricing.\nUsed CCost has estimated attribution.'}};
   controller.update(input); assert.match(retained.textContent,/8.4% used \(1814\)/);
   assert.match(retained.helpText,/partial attribution \/ pricing[\s\S]*estimated attribution/);
   assert.ok(!retained.textContent.includes('~'));
@@ -232,7 +237,7 @@ function setup() {
     assert.equal(view.health.hidden, ['reconnecting','offline','source_unavailable'].includes(kind));
     if (!view.health.hidden) assert.match(view.health.textContent,/return to|reopen|restart/);
     assert.equal(view.body.children[1].children[3].textContent, '20m');
-    assert.equal(view.daily.textContent,'CCost Today $0.34 · 37 prompts'); assert.match(view.dailyHelp,/retained observation/);
+    assert.equal(view.daily.textContent,'CCost Today $0.34 · 37 prompts');
   }
   controller.health({kind: 'connected'}); now += 16000;
   [...child.timers][0](); assert.equal(view.health.hidden,true); assert.equal(view.root.dataset.live,'false');
@@ -248,12 +253,12 @@ function setup() {
   input.view = {...input.view,active_cards:[],cards_state:'unavailable',daily_state:'retrying',quota_stale:true,
     daily_usage:{...daily,total:{...daily.total,display_units:{usd:{known_ccost:'$999'}}}}};
   controller.update(input); assert.equal(view.body.textContent,retainedText); assert.equal(view.daily.textContent,beforeDaily);
-  assert.ok(!/quota stale|Partial|Not current/.test(view.root.textContent));
+  assert.match(view.accounts.textContent,/Retained quota · not current/,'real stale quota stays meaningful without observation logs');
   now = 600999; controller.health({kind:'reconnecting'}); assert.equal(view.health.hidden,true);
   now = 601000; controller.update(input); assert.equal(view.health.textContent,'Updates unavailable · showing last values');
   const warning = view.health.textContent; now += 5000; controller.health({kind:'connected'});
   input.view.now_ms++; controller.update(input); assert.equal(view.health.textContent,warning,'retry publications cannot fake recovery');
-  assert.equal(view.body.textContent,retainedText); assert.match(view.observationHelp,/Retained values are not live updates/);
+  assert.equal(view.body.textContent,retainedText); assert.equal(view.observationHelp,undefined);
   input.view = {...healthy.view,now_ms:healthy.view.now_ms+2,
     daily_usage:{...daily,observed_at_ms:daily.observed_at_ms+1},accounts:{...healthy.view.accounts,accounts:healthy.view.accounts.accounts.map(item =>
       ({...item,observation:{...item.observation,observed_at_ms:item.observation.observed_at_ms+1}}))}};

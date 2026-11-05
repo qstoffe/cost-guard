@@ -7,8 +7,8 @@ const ContextHelp = (() => {
     const win = doc.defaultView || window, panel = doc.createElement('div');
     panel.id = 'context-help'; panel.className = 'context-help'; panel.hidden = true;
     panel.setAttribute('role', 'tooltip'); panel.setAttribute('popover', 'manual');
-    let active = null, blocked = null, timer, pinned = false, overPanel = false;
-    const cancel = () => win.clearTimeout(timer);
+    let active = null, blocked = null, timer, origin = null, keyboard = true;
+    const cancel = () => { win.clearTimeout(timer); timer = undefined; };
     function position() {
       if (!active) return;
       if (!active.isConnected) { close(); return; }
@@ -35,14 +35,15 @@ const ContextHelp = (() => {
         if (ids.length) active.setAttribute('aria-describedby', ids.join(' '));
         else active.removeAttribute('aria-describedby');
       }
-      active = null; pinned = overPanel = false;
+      active = null; origin = null;
       panel.hidePopover?.(); panel.hidden = true;
     }
-    function show(target, pin = false) {
+    function show(target, source) {
       cancel();
       if (target === blocked || !target.isConnected) return;
       if (active !== target) { close(); active = target; }
-      pinned ||= pin;
+      // Hover must never take ownership from deliberate keyboard/touch help.
+      if (origin !== 'pinned' && (source !== 'hover' || origin !== 'focus')) origin = source;
       if (panel.parentNode !== doc.body) doc.body.append(panel);
       panel.hidden = false;
       const ids = new Set((target.getAttribute('aria-describedby') || '').split(/\s+/).filter(Boolean));
@@ -52,17 +53,24 @@ const ContextHelp = (() => {
       refresh();
     }
     function leave(target) {
-      if (blocked === target && doc.activeElement !== target) blocked = null;
-      cancel(); timer = win.setTimeout(() => {
-        if (active === target && !pinned && !overPanel && doc.activeElement !== target) close();
+      if (blocked === target) blocked = null;
+      exit(target);
+    }
+    function exit(target = active) {
+      if (timer !== undefined || origin !== 'hover') return;
+      timer = win.setTimeout(() => {
+        timer = undefined;
+        if (active === target && origin === 'hover') close();
       }, 150); // Lets the pointer cross the small gap into the help surface.
     }
-    panel.addEventListener('pointerenter', () => { overPanel = true; cancel(); });
-    panel.addEventListener('pointerleave', () => { overPanel = false; if (active) leave(active); });
+    panel.addEventListener('pointerenter', cancel);
+    panel.addEventListener('pointerleave', () => { if (active) exit(); });
     doc.addEventListener?.('keydown', event => {
+      if (!['Shift', 'Control', 'Alt', 'Meta'].includes(event.key)) keyboard = true;
       if (event.key === 'Escape' && active) { close(true); event.preventDefault(); }
     }, true);
     doc.addEventListener?.('pointerdown', event => {
+      keyboard = false;
       if (active && !active.contains(event.target) && !panel.contains(event.target)) close(true);
       if (blocked && !blocked.contains(event.target)) blocked = null;
     }, true);
@@ -70,17 +78,35 @@ const ContextHelp = (() => {
       if (active && event.target !== active && !panel.contains(event.target)) close();
       if (blocked && event.target !== blocked) blocked = null;
     });
+    // Document exit can arrive without a trigger leave (notably in Document PiP).
+    // Pointer focus is NOT evidence of hover. No polling or work while closed.
+    doc.addEventListener?.('pointerout', event => { if (!event.relatedTarget && active) exit(); }, true);
+    doc.addEventListener?.('pointerleave', event => {
+      if (active && (event.target === doc || event.target === doc.documentElement)) exit();
+    }, true);
+    doc.addEventListener?.('pointermove', event => {
+      if (!active || origin !== 'hover') return;
+      if (active.contains(event.target) || panel.contains(event.target)) cancel();
+      else exit();
+    }, true);
+    win.addEventListener?.('blur', () => { if (origin === 'hover') close(); });
+    doc.addEventListener?.('visibilitychange', () => { if (doc.visibilityState === 'hidden') close(true); });
+    win.addEventListener?.('pagehide', () => close());
     win.addEventListener?.('resize', position);
     doc.addEventListener?.('scroll', position, true);
     // A route/row replacement may remove a hovered trigger without pointerleave.
     if (win.MutationObserver) new win.MutationObserver(() => {
       if (active && !active.isConnected) close();
     }).observe(doc.body, {childList: true, subtree: true});
-    const value = {show, close, leave, refresh, click(target) {
-      if (active === target && pinned) close(true);
-      else { blocked = null; show(target, true); }
-    }, enter(target) { if (blocked === target && doc.activeElement !== target) blocked = null; show(target); },
-    blur(target) { if (blocked === target) blocked = null; pinned = false; leave(target); }};
+    const value = {leave, refresh, click(target, passive) {
+      if (!passive || active === target && origin === 'pinned') { close(); blocked = target; }
+      else { blocked = null; show(target, 'pinned'); }
+    }, enter(target, event) { if (event?.pointerType !== 'touch') show(target, 'hover'); },
+    focus(target) { if (keyboard) show(target, 'focus'); },
+    blur(target) {
+      if (blocked === target && doc.hasFocus?.() !== false) blocked = null;
+      if (active === target) close();
+    }};
     documents.set(doc, value); return value;
   }
   function attach(target, content, passive = false) {
@@ -88,11 +114,11 @@ const ContextHelp = (() => {
     if (entry) { entry.content = content; refresh(target); return target; }
     entries.set(target, {content}); target.removeAttribute('title');
     const owner = () => controller(target.ownerDocument);
-    target.addEventListener('pointerenter', () => owner().enter(target));
+    target.addEventListener('pointerenter', event => owner().enter(target, event));
     target.addEventListener('pointerleave', () => owner().leave(target));
-    target.addEventListener('focus', () => owner().show(target));
+    target.addEventListener('focus', () => owner().focus(target));
     target.addEventListener('blur', () => owner().blur(target));
-    target.addEventListener('click', () => passive ? owner().click(target) : owner().show(target));
+    target.addEventListener('click', () => owner().click(target, passive));
     return target;
   }
   function button(label, content, doc = document) {
