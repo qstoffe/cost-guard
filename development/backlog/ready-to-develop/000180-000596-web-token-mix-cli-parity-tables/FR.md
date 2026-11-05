@@ -1,0 +1,87 @@
+# FR 000596 — Web Beta Token Mix: CLI-aligned summary and two sortable split-metric tables
+
+## Owner request and decision
+
+**Owner-approved executable Ready Feature Request, 2026-11-05.** **Completely redesign the Web Beta `Token Mix` page** rather than incrementally polishing the current frozen-report layout. Use the established **CLI `python cost-guard.py --token-mix`** report as the **semantic and column baseline**. The healthy, fully loaded Web page should contain **one compact total Token Mix summary and exactly two clean, sortable, single-line tables**, one **by model**, one **by publisher**, with no verbose prose, repeated definition blocks or old boxed report chrome.
+
+**Specific difference from CLI:** each of the four combined percentage-plus-parenthesized-CCost category cells becomes **two independent sortable Web columns**: percentage and category CCost. Retain `Prompts`, `Calls`, absolute `Tokens` and total `CCost`. The user prefers readable full column names rather than cryptic abbreviations, and **does not want standalone question-mark help icons or visible CLI-style `?` prefix clutter** in the Web tables. Important unknown/partial pricing still needs truthful accessible indication, not fabricated full precision.
+
+**Priority/coordination:** new Ready FR after FR000595 (retire Web Reports). Coordinate with **FR000590**'s global tooltip style (direct text hover, approximately 600ms hover-open delay, concise help, no standalone `?` icons) and current Models/Watch/Sessions table styling. Do not reintroduce obsolete tooltip behavior. **Author this FR only**, not source code/tests/docs/version/release changes during publication.
+
+## 1. Replace existing Token Mix page UI, preserve its report meaning
+
+- Keep the main nav entry **Token Mix** and `/#/token-mix` URL.
+- **Remove the old visible Token Mix page composition**: generic `Token Mix · deep history` report-shell heading, Snapshot / frozen status, Reading this report and equivalent text, `Token category order` prose, `Sample and price coverage`/long explanations, presentation search and per-table filters, generic bordered sections/cards, per-table vertical scroll containers, generic 50-row presentation pager, and other nonessential report text/controls. Do not simply wrap the old `render.js::table()` twice; create a deliberate two-table view consistent with the now-cleaner Web UI.
+- **The successful view's main content hierarchy is exactly:**
+  1. **`Total Token Mix % · <volume> tokens`** prominently at the top, using the same scope as CLI, e.g. `Total Token Mix % · 6.1T tokens` when supported by the actual recorded data. The owner wants the actual *total token volume used in this mix*, not the number of prompts or a fabricated denominator.
+  2. Immediately beneath, one compact overview of the total **Input / Cached input / Cache write / Output** mix, displaying each actual percentage **and corresponding category CCost** in the current unit, aligned/readable as a simple metric row or compact wrapped group. **This is not a third table**, and not a stack of disclaimers.
+  3. Heading **`Token Mix % by model`** and the **model table**.
+  4. Heading **`Token Mix % by publisher`** and the **publisher table**.
+- Both tables use the actual report snapshot/source and **same eligible shown usage** as current CLI semantics: canonical deduplicated OpenCode request evidence, same model filtering/availability handling, publisher grouping, pricing tiers and total. These totals are for **the set of available, shown historical usage**, not a recent up-to-100-prompt Models comparison mix. Deleted/pruned history remains unrecoverable; do not invent old usage or new persistent history.
+- Retain only **necessary concise state messages** for no data, incomplete source/pricing, acquisition failure, cancellation and stale data, ideally adjacent to the affected summary/table. No generic wall of user-facing disclaimers or progress/status boxes after a healthy result.
+
+## 2. Exact table columns — 13 per table
+
+**Model table column order (single-line headers):**
+
+| # | Heading | Underlying value |
+| --- | --- | --- |
+| 1 | **Model** | Model display name from the current canonical report |
+| 2 | **Prompts** | Distinct user prompts to which this model contributed |
+| 3 | **Calls** | Attributed model requests for this model |
+| 4 | **Tokens** | Absolute known I/C/W/O token volume in the model's historical mix |
+| 5 | **Input %** | Input share of this model's token volume |
+| 6 | **Input CCost** | Priced Input-category CCost |
+| 7 | **Cached input %** | Cached-input/read share |
+| 8 | **Cached input CCost** | Priced cached-input/read CCost |
+| 9 | **Cache write %** | Cache-write share |
+| 10 | **Cache write CCost** | Priced cache-write CCost |
+| 11 | **Output %** | Output share (including reasoning) |
+| 12 | **Output CCost** | Priced Output-category CCost |
+| 13 | **Total CCost** | Whole model's summed known reference CCost |
+
+The **Publisher** table is **identical in metric order and meaning**, except the first heading is **`Publisher`** and rows group publisher usage as the CLI already does. Do not introduce the model list inside the publisher rows or confuse publisher grouping with user subscriptions/providers.
+
+- **One model/publisher per row; no multi-line details**, combined `37% (123 CCost)` cells or cells that wrap to show extra metadata. Percentages and their costs occupy distinct cells and can be sorted separately.
+- Prefer **intrinsic minimal widths** for numeric columns/headers with aligned numerals; **Model/Publisher may take remaining space** if available but do **not** ellipsize/truncate their names by default. Preserve full names. When the 13 columns exceed viewport width, permit **horizontal table panning** and appropriate sticky/accessible headers; do not compress numbers until they wrap/hide. The **document itself scrolls vertically**, not a fixed-height table region. A long table renders all genuine available rows without an unnecessary 50-row UI pager.
+- Display percentages with the **existing CLI-compatible share semantics** (including balanced rounding and unknowns), not percentages inferred from category **CCost**. Use clear percent formatting, without inventing one decimal place solely to fill a column. Include token counts in familiar K/M/B/T-style representation when needed and format large amounts consistently with existing Cost Guard display units; **sorting never uses compact strings**.
+
+## 3. All columns sortable, using real values
+
+- **Every one of the 13 headings in both tables** must support ascending/descending sorting, including Model/Publisher, Prompts, Calls, Tokens, each of the four percentages, each category CCost and total CCost. Sorting in one table must **not change the other table** or its overall Total summary.
+- Sort by underlying **exact numeric source data**: arbitrarily large integer token counts, true raw share values or canonical category totals used to derive them, and unrounded Decimal CCost values for the selected unit. Never lexically compare e.g. `9K` vs `10M`, `2.3%` vs `12%` or displayed rounded currency. Text sort locale/natural as appropriate; use deterministic ties, stable rows and **missing/unknown last in both directions**.
+- Default ordering should retain CLI's **total CCost descending**, with existing deterministic Calls and name tie breakers where appropriate; display the sort direction accessibly. Header interactions follow the proven Models sortable-table UX, including focus/keyboard/touch and compact arrow indication. No separate dropdown, filters, sort panel or extra bulk controls are needed.
+- Re-sorting must be a cheap **browser-local ordering of already returned report rows**, not a new history scan, source query or repricing operation. Unit switch Credits/USD should re-render prepared values and retain the same numeric ordering without triggering acquisition.
+
+## 4. Contextual help instead of visible prose/question marks
+
+- Use **shared `ContextHelp`** on each **actual column header text**, not the entire header cell/dead space; conditional help on individual values **only when it adds useful facts**. No standalone `?` help icons, dotted underlines, duplicate browser-native `title` popups or row-level disclosure panels.
+- Short tooltips can clarify: what `Prompts` and `Calls` count (one mixed-model prompt may appear in several model/publisher rows), what `Tokens` includes, Input/Cached input/Cache write/Output definitions, the distinction between **token shares vs category CCost**, and that `Total CCost` is a reference valuation rather than billing. The overall total/token count may also carry short focus/hover guidance.
+- **Remove literal `?` icon/prefix clutter** from the Token Mix Web display, **including CLI-style leading `?` on partial CCost strings** for this redesigned screen. Replace it with a readable, accurately scoped **`Partial`/unavailable state, subdued text style and/or accessible explanation** for affected values; a hidden ambiguous precision loss is not acceptable. A genuine `N/A` remains appropriate for fully unavailable values. Never turn unknown into zero or present a known subtotal as a certified total.
+- Avoid explanatory paragraphs **beneath either table** and avoid old `Token category order: ...` or `Output includes reasoning` prose. The relevant heading's tooltip can explain that **reasoning is included in Output**. Any important global source/availability limitation must still be accessible and visible concisely where its interpretation matters, not erased.
+- Show precise useful additional per-cell context only where there is source-backed extra meaning (e.g. unrounded token count or incomplete category pricing); don't add tooltips to every routine cell merely to restate the cell.
+
+## 5. Source, valuation, and acquisition boundaries
+
+- Preserve current **`src/reports/token_mix_history.py::build_token_mix_history()`**, canonical `src/analysis/token_mix.py::TokenMix` and shared CLI/projection pricing semantics. The full-history report currently exports `view.token_mix`, `model_token_mix[]`, `publisher_token_mix[]`, each row's `mix.totals`, `mix.shares`, `mix.costs`, `cost_complete`, `priced_requests`, `known_total_tokens` and `total_tokens`; derive separate Web cells from these server-owned facts. A bounded display/DTO extension is fine if needed, **not** a separate pricing engine or client-side revaluation.
+- **Cost/category aggregation is per request at its actual model and price tier**, then grouped by model or publisher. Do not calculate category cost as `aggregated category tokens × one sample rate`, redistribute known total costs by percentages, double count reasoning or multiply model totals to infer unique prompt count.
+- **The total displayed at the top must reconcile** with the report's same shown model/publisher request scope, including the important exception that `Prompts` counts are **not additive** across mixed-model rows. Preserve exact large integer token values and correct partial/missing token coverage; don't fabricate `6.1T` if data do not support it.
+- Keep the **Token Mix deep-history acquisition** an intentionally **bounded, one-shot, opt-in** potentially expensive operation rather than starting a full rescanning loop on every tab switch, SSE tick or sort. If no usable retained result exists, a small unobtrusive `Load Token Mix` action may initiate the existing report; show focused progress/Cancel only while an actual capture is running, then leave **only summary + two tables** in the successful state. Reuse already captured result when navigating away/back in the same live page, and never make the old Snapshot/Refresh controls part of the permanent healthy UI. Do not remove existing timeout/cancel/resource protections or put a heavy scan into the global Live/Watch worker.
+- Keep the CLI output and its detailed warnings/helpers unchanged unless a genuine shared bug is found; all requests here target **Web presentation** only. Preserve the private authenticated job API, read-only OpenCode history, source availability checks, bounded results, reference Credits/USD display, security/privacy and no new paid model inference.
+
+## 6. Affected code and acceptance
+
+Likely owners, to verify against current code when selected: `src/web/assets/render.js::render(), mixSummary(), table()` (generic current report has old Snapshot, column filters, 50-row paging, combined mix cells); `src/web/assets/reports.js` route/control hints; `src/web/assets/app.js` page chrome/capture handling; `src/web/assets/app.css` table layout; existing `src/application/projection.py` and `src/application/display.py::history_tokens()` display fields; `docs/web-beta.md`, `docs/usage-and-cost.md` and active Web/module accessibility guidance. Do not break Models, Watch, new Sessions, Accounts, other surviving reports or shared code when removing only Token Mix presentation. Preserve historical FRs/releases.
+
+**Acceptance criteria:**
+
+1. At `/#/token-mix`, after a successful scan the content is **one top Total Token Mix % + token volume, one compact overall four-category summary and exactly two tables** headed **Token Mix % by model** and **Token Mix % by publisher**. No generic Snapshot/Reading this report/filter, explanations beneath tables, report panel/card or nested vertical table scrollbars; unrelated app navigation remains.
+2. Both tables render the specified **13 columns** in the exact order, **one line per row** and no combined `% (CCost)` category cells; Model/Publisher remain fully readable with responsive horizontal pan as needed. The document scrolls vertically.
+3. **Every column sorts correctly**, independently per table, by exact values including very large Tokens and Decimal CCost; missing sorts last, stable ties, meaningful default `Total CCost ↓`, accessible keyboard/hover/touch sort state.
+4. Overall total tokens and four I/C/W/O percentages and category CCost match CLI report semantics and reconcile with shown model/publisher usage; reasoning is in Output once. Cases with all-known, partially missing token telemetry, unpriceable requests, zero volume and extremely large volume remain truthful.
+5. **No standalone question-mark cues or literal CLI-style partial-cost `?` prefixes** in Web Token Mix. Partial/unknown coverage remains identifiable through concise accessible status/tooltip, with no unjustified zeros or silent full-total claims.
+6. Tooltip targets exist for table headings and useful exceptional cell values, respecting FR000590 text-only hitbox, approximate hover delay, focus/touch and keyboard behavior, no duplicate native tooltip and no long explanatory footers.
+7. Existing full-history scanning remains bounded and opt-in: no expensive history job on every visit, sorting, unit/theme change or Live event; actual in-flight progress and cancellation remain functional. Navigating back to the page does not needlessly discard a good captured result. CLI `--token-mix` and all other Web pages keep their semantics.
+8. Update unit/integration/real browser tests for summary, model/publisher cost split, sorting on all columns and partial/unknown states, huge values, themes, unit changes, narrow viewport/panning, accessible tooltips and acquisition/resource bounds. Update current user docs/route descriptions, without changing historical evidence.
+
+**Publication boundary:** create this Ready FR and advance permanent identity watermark only. No implementation, source/tests/docs/version changes in this authoring session.
