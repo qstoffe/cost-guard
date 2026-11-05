@@ -22,10 +22,10 @@ function document() {
   const doc={events:{},addEventListener:Node.prototype.addEventListener,fire:Node.prototype.fire,
     createElement(tag){return new Node(doc,tag);}};
   const timers=new Map();let sequence=0;
-  doc.defaultView={innerWidth:560,innerHeight:250,addEventListener(){},
+  doc.defaultView={innerWidth:560,innerHeight:250,events:{},addEventListener:Node.prototype.addEventListener,fire:Node.prototype.fire,
     setTimeout(fn){timers.set(++sequence,fn);return sequence;},clearTimeout(id){timers.delete(id);}};
   doc.flush=()=>{for(const [id,fn]of [...timers]){timers.delete(id);fn();}};
-  doc.body=doc.createElement('body');return doc;
+  doc.timerCount=()=>timers.size;doc.body=doc.createElement('body');return doc;
 }
 const main=document(),mini=document(),context=vm.createContext({document:main,window:main.defaultView,mini});
 vm.runInContext(fs.readFileSync('src/web/assets/help.js','utf8'),context);
@@ -50,9 +50,26 @@ second.focus();assert.equal(panel.textContent,'Other explanation');assert.equal(
 assert.equal(main.body.children.filter(node=>node.getAttribute('role')==='tooltip').length,1,'one surface per document');
 main.fire('pointerdown',{target:main.body});assert.equal(panel.hidden,true,'outside tap closes');
 const action=main.createElement('button');let clicks=0;action.addEventListener('click',()=>clicks++);main.body.append(action);
-help.attach(action,'Sort help');action.fire('click');assert.equal(clicks,1);assert.equal(panel.textContent,'Sort help');
+help.attach(action,'Sort help');action.fire('pointerenter');assert.equal(panel.textContent,'Sort help');
+action.fire('click');assert.equal(clicks,1);assert.equal(panel.hidden,true,'actions dismiss rather than pin');
+help.refresh(action);action.fire('focus');main.defaultView.fire('focus');assert.equal(panel.hidden,true,'stationary focus and rerenders cannot reopen action help');
+action.fire('pointerleave');action.fire('pointerenter');assert.equal(panel.hidden,false,'new hover rearms action help');
+main.fire('pointerdown',{target:action});action.focus();action.fire('pointerleave');main.flush();
+assert.equal(panel.hidden,true,'mouse-owned focus cannot strand hover help');assert.equal(main.activeElement,action);
+action.fire('pointerenter');main.fire('pointerout',{relatedTarget:null});main.flush();assert.equal(panel.hidden,true,'missed trigger leave closes at document boundary');
+action.fire('pointerenter');main.fire('pointermove',{target:main.body});main.fire('pointermove',{target:main.body});
+assert.equal(main.timerCount(),1,'repeated outside movement cannot defer the bounded exit');main.flush();assert.equal(panel.hidden,true);
+action.fire('pointerenter');main.defaultView.fire('blur');assert.equal(panel.hidden,true,'window exit dismisses hover');assert.equal(main.timerCount(),0);
+action.blur();main.fire('keydown',{key:'Tab'});action.focus();action.fire('pointerleave');main.fire('pointerout',{relatedTarget:null});main.flush();
+assert.equal(panel.hidden,false,'keyboard ownership survives unrelated pointer exit');
+action.fire('click');assert.equal(panel.hidden,true);action.blur();action.focus();assert.equal(panel.hidden,false,'new intentional focus rearms help');
+action.blur();first.fire('click');main.fire('pointerout',{relatedTarget:null});main.defaultView.fire('blur');main.flush();
+assert.equal(panel.hidden,false,'passive pinned help survives hover/window exit');
+main.visibilityState='hidden';main.fire('visibilitychange');assert.equal(panel.hidden,true);main.visibilityState='visible';
 const child=help.button('Ctx','Mini context',mini);mini.body.append(child);child.focus();const childPanel=mini.body.children.at(-1);
 assert.notEqual(childPanel,panel);assert.equal(childPanel.textContent,'Mini context');
 assert.equal(child.ownerDocument,mini);assert.equal(mini.activeElement,child);
 second.focus();second.remove();help.refresh(main.body);assert.equal(panel.hidden,true,'removed trigger closes without reopening');
+action.fire('pointerenter');action.fire('pointerleave');main.defaultView.fire('pagehide');main.flush();
+assert.equal(panel.hidden,true);assert.equal(main.timerCount(),0,'teardown cancels pending exits');
 console.log('shared Web/Mini help events passed');

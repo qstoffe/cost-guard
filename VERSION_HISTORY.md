@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.168 — 2026-11-05
+
+- Mini Watch keeps helpful column headings and return-to-Watch guidance without routine row/header question marks or observation logs; one subscription cue groups real primary/additional quota details. Full Watch removes prompt-preview popups, consolidates quota help and right-aligns one whole-daily-summary explanation. Shared help distinguishes hover, keyboard focus and pinned touch ownership, closes orphaned hover help on document/window exit, and dismisses actions immediately without Live/focus resurrection. Accounting, acquisition, CLI and native PiP ownership are unchanged.
+
 ## v80.167 — 2026-11-05
 
 - Full Web Watch renders zero I/E components whenever the selected unit displays a zero prompt total, without changing raw pricing or unknown/partial totals. Initial prompt/history/session/daily acquisition stays neutral and brief retries retain figures quietly; sustained delays and confirmed errors remain actionable. Confirmed successful focal prompts share their grace-period success color with the session title; unknown/error/abort outcomes never imply success. Mini, CLI, connection warnings and acquisition are unchanged.

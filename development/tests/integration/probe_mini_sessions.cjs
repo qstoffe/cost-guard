@@ -31,7 +31,7 @@ module.exports = async function sessions({evaluate,until,fixture,command,pipSess
         costs:cells.map(cell=>cell.querySelector('.mini-session-total').textContent),
         suffixVisible:cells.every(cell=>{const total=cell.querySelector('.mini-session-total');return rect(total).right<=rect(cell).right+1 && total.scrollWidth<=total.clientWidth+1;}),
         ellipsis:active.querySelector('.mini-session').scrollWidth>active.querySelector('.mini-session').clientWidth,
-        title:active.querySelector('.mini-session').textContent,accessible:active.helpText,
+         title:active.querySelector('.mini-session').textContent,accessible:active.parentNode.getAttribute('aria-label'),
         sameHeaderRow:Math.abs(rect(v.earlierToggle).top-rect(v.summary).top)<8 && Math.abs(rect(v.daily).top-rect(v.summary).top)<8};})()`);
     layouts.push({case:'earlier-'+count,...value});
     assert.deepEqual({width:value.width,height:value.height},initial,'SSE never resizes PiP');
@@ -40,10 +40,10 @@ module.exports = async function sessions({evaluate,until,fixture,command,pipSess
     assert.ok(value.accounts>=32); assert.equal(value.suffixVisible,true); assert.equal(value.ellipsis,true);
     assert.deepEqual(value.headings,['Session (Total CCost)','Ctx']);
     assert.match(await evaluate(`miniWatch.view.historyBody.parentNode.getAttribute('aria-label')`), /latest valid session context \(Ctx\)/);
-    if (count) assert.match(await evaluate(`miniWatch.view.historyBody.rows[0].helpText`), /Latest valid session Ctx:/);
+     assert.equal(await evaluate(`miniWatch.view.historyBody.querySelectorAll('button').length`),0);
     assert.deepEqual(value.ids,Array.from({length:Math.min(count,3)},(_,index)=>'earlier-'+(Math.max(0,count-3)+index)));
     assert.ok(value.columns.every(count=>count===2)); assert.ok(value.costs.every(cost=>cost===' (4583)'));
-    assert.match(value.accessible,/Session CCost: 4583/); assert.match(value.title,/Active long title/);
+     assert.ok(value.accessible.includes(value.title)); assert.match(value.title,/Active long title/);
     if (value.width>=540) assert.equal(value.sameHeaderRow,true);
     await evaluate(`miniWatch.view.prompts.scrollTop=miniWatch.view.prompts.scrollHeight`);
     assert.equal(await evaluate(`(() => {const v=miniWatch.view,r=v.body.rows[11].getBoundingClientRect(),p=v.prompts.getBoundingClientRect();return r.bottom<=p.bottom+1 && r.top>=p.top;})()`),true,'last running prompt remains reachable');
@@ -66,28 +66,31 @@ module.exports = async function sessions({evaluate,until,fixture,command,pipSess
   await evaluate(`miniWatch.view.earlierToggle.click()`);
   assert.equal(await evaluate(`miniWatch.view.earlier.hidden`),false,'mouse/touch click disclosure');
   await evaluate(`miniWatch.view.prompts.scrollTop=0`);
-  await command('Runtime.evaluate',{expression:`document.querySelector('td .mini-session-value .help-trigger').focus({preventScroll:true})`},pipSession);
+   await command('Runtime.evaluate',{expression:`document.querySelector('th .help-trigger').focus({preventScroll:true})`},pipSession);
   assert.equal(await evaluate(`miniWatch.view.doc.getElementById('context-help').matches(':popover-open')`),true);
-  assert.equal(await evaluate(`miniWatch.view.doc.getElementById('context-help').textContent===miniWatch.view.historyBody.rows[0].cells[0].helpText`),true,'keyboard focus visibly exposes full title and cost scope outside clipping');
+   assert.match(await evaluate(`miniWatch.view.doc.getElementById('context-help').textContent`),/Session —[^\n]+\n\nTotal CCost —/,'keyboard focus explains the combined heading');
+   const selected = await evaluate(`(() => {const d=miniWatch.view.doc,n=miniWatch.view.historyBody.rows[0].querySelector('.mini-session'),r=d.createRange();r.selectNodeContents(n);d.getSelection().removeAllRanges();d.getSelection().addRange(r);return {copy:d.getSelection().toString(),title:n.textContent};})()`);
+   assert.equal(selected.copy.trim(),selected.title.trim(),'full underlying title remains selectable (normal rendered whitespace)');
+   await evaluate(`miniWatch.view.doc.getSelection().removeAllRanges()`);
   await command('Runtime.evaluate',{expression:`document.activeElement.blur()`},pipSession);
   await evaluate(`miniWatch.view.prompts.scrollTop=0;new Promise(resolve=>miniWatch.window.requestAnimationFrame(()=>miniWatch.window.requestAnimationFrame(resolve)))`);
   await command('Input.dispatchMouseEvent',{type:'mouseMoved',x:0,y:0},pipSession);
   await until(`!miniWatch.view.doc.getElementById('context-help').matches(':popover-open')`);
   await evaluate(`miniWatch.view.prompts.scrollTop=0`);
   await until(`miniWatch.view.prompts.scrollTop===0`);
-  const point = await evaluate(`(() => {const v=miniWatch.view,r=v.historyBody.rows[0].cells[0].querySelector('.help-trigger').getBoundingClientRect(),
+   const point = await evaluate(`(() => {const v=miniWatch.view,r=v.historyBody.parentNode.querySelector('th .help-trigger').getBoundingClientRect(),
     region=v.prompts.getBoundingClientRect(),header=v.historyBody.parentNode.querySelector('th').getBoundingClientRect();
     return {x:(Math.max(r.left,region.left)+Math.min(r.right,region.right))/2,
-      y:(Math.max(r.top,header.bottom,region.top)+Math.min(r.bottom,region.bottom))/2};})()`);
-  const hit = await evaluate(`(() => {const v=miniWatch.view,n=v.doc.elementFromPoint(${point.x},${point.y}),r=v.historyBody.rows[0].cells[0].querySelector('.help-trigger').getBoundingClientRect();return {valid:n?.closest('td')===v.historyBody.rows[0].cells[0],tag:n?.tagName,className:n?.className,point:${JSON.stringify(point)},trigger:{top:r.top,bottom:r.bottom,left:r.left,right:r.right},scroll:v.prompts.scrollTop};})()`);
-  assert.equal(hit.valid,true,'hover target is below the sticky header: '+JSON.stringify(hit));
+       y:(Math.max(r.top,region.top)+Math.min(r.bottom,region.bottom))/2};})()`);
+   const hit = await evaluate(`(() => {const v=miniWatch.view,n=v.doc.elementFromPoint(${point.x},${point.y});return {valid:n?.closest('th')===v.historyBody.parentNode.querySelector('th')};})()`);
+   assert.equal(hit.valid,true,'header is the actual hover target');
   await command('Input.dispatchMouseEvent',{type:'mouseMoved',...point},pipSession);
   await until(`miniWatch.view.doc.getElementById('context-help').matches(':popover-open')`);
   await command('Input.dispatchMouseEvent',{type:'mouseMoved',x:0,y:0},pipSession);
   await until(`!miniWatch.view.doc.getElementById('context-help').matches(':popover-open')`);
   await command('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',clickCount:1,...point},pipSession);
   await command('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,...point},pipSession);
-  assert.equal(await evaluate(`miniWatch.view.doc.getElementById('context-help').matches(':popover-open')`),true,'click exposes full title');
+   assert.equal(await evaluate(`miniWatch.view.doc.getElementById('context-help').matches(':popover-open')`),true,'click pins column help');
   await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Tab',code:'Tab',windowsVirtualKeyCode:9},pipSession);
   await command('Input.dispatchKeyEvent',{type:'keyUp',key:'Tab',code:'Tab',windowsVirtualKeyCode:9},pipSession);
   await command('Runtime.evaluate',{expression:`document.querySelector('.mini-earlier-toggle').focus()`},pipSession);

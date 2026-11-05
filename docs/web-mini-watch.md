@@ -50,13 +50,14 @@ Browser-imposed limitations and exact evidence are in the [Mini journal](../deve
   distinct initiating-prompt count as full Watch, including earlier pre-Watch activity
   across sessions/providers. It is not a sum of Mini rows or subscription periods.
    Only the left title navigates; the daily summary is non-clickable. Loading and unknown
-   pricing remain explicit; focus/hover discloses partial data and observation time. Genuine
+   pricing remain explicit; meaningful partial/unavailable notes stay visible, without polling timestamps. Genuine
   observed zero is zero; the next canonical day/correction replaces the prior value.
 - **Session (Total CCost):** within one column, Session/title stays at the left edge
   and `(Total CCost)` / `(<whole-session cost>)` stays at the right edge. Only the title's
   end ellipsizes; the parentheses and complete cost remain visible. Short amounts use only
-  their natural width, not a header-sized reserved block. Focus/hover/click
-  retains the full title (or canonical session ID). This server-owned total covers the
+   their natural width, not a header-sized reserved block. The full underlying title
+   (or canonical session ID) remains selectable and in the row’s accessible name, with no row popup.
+   The column heading explains Session and Total CCost in two separated sections. This server-owned total covers the
   entire available root/session tree: pre-Watch history, compactions, causal children
   and provisional running usage, not just visible prompts, this Watch run or Today.
   Concurrent prompts share the same session total. Credits/USD, zero, missing/partial
@@ -66,7 +67,7 @@ Browser-imposed limitations and exact evidence are in the [Mini journal](../deve
   prompts within one session remain separate rows, ordered by actual start.
 - **CCost:** accumulated reference-price cost of that one prompt, not session/Today
   cost or billed spending. Missing/partial pricing retains N/A or `?` conventions;
-  focus a row for estimated/partial provenance without a distracting cost `~` glyph.
+   the column heading explains these conventions without per-row help controls.
 - **Duration:** that prompt's canonical elapsed execution time, frozen when ended.
 - **Ctx:** estimated next incoming context for the prompt, shown as a formatted number
   without an added `~`. The header tooltip explains the estimate; N/A means unavailable.
@@ -78,10 +79,10 @@ outcome and known stop cause remain accessible without color. Ended rows retain
 their final prompt-local metrics for Watch's existing ~30-second grace, then leave.
 An acquired empty set shows a compact empty message, never dummy zero-cost rows.
 Initial/partial/unavailable acquisition is not an empty success.
-Brief delays, reconnects and incomplete reads quietly retain the last usable figures;
-they do not append orange “Not current” / “Partial” labels or flash retry banners.
-Focus/hover discloses observation times and retained-data state: retention is **not**
-a new live observation. Valid empty publications still remove rows after the shared
+Brief delays and reconnects quietly retain the last usable figures without retry banners.
+Confirmed unavailable/partial session or daily data and stale/partial quota remain
+readable where relevant; internal observation timestamps never appear as default help.
+Retention is **not** a new live observation. Valid empty publications still remove rows after the shared
 grace policy. No browser timer invents cost, completion or growing elapsed time.
 
 ### Earlier Sessions
@@ -100,8 +101,15 @@ Earlier rows show the **whole-session** total and the **latest valid session/cur
 Ctx**, not the last prompt's cost/context, nor a sum of contexts. Ctx remains an estimate
 with N/A for missing evidence and accessible help, without an added `~`. No prompt
 number, duration or state badge is added. Empty, loading and unavailable history are
-explicit; retained source/aggregate states are disclosed on focus/hover. Collapsing
+explicit; confirmed retained/partial totals remain indicated in the row. Collapsing
 does not revalue or reacquire history.
+
+Earlier Sessions has no tooltip. Both tables use their actual headings for help,
+without a table-level `?`, row cues or daily/header help icons. The return-to-Watch
+action retains concise help, dismissed immediately on activation by mouse, touch,
+Enter or Space. Hover help closes within a short exit grace when leaving its target
+or the PiP document; keyboard-focus and intentionally pinned quota/header help have
+separate ownership. Stationary focus and Live rerenders cannot reopen dismissed help.
 
 If explicit pointer/keyboard activation introduces a **new vertical session scrollbar**,
 Mini attempts one height-only enlargement of the existing PiP window, directly within
@@ -134,10 +142,13 @@ provider-declared stable primary wins; a missing primary never promotes a more
 depleted secondary. Names retain account distinctions. Unlimited and exhausted
 values retain native semantics. Each text row has a thin full-width primary Used
 bar below it: cyan/teal below exhaustion, red only for authoritative finite 100%.
-Unlimited/unknown quota has no fabricated bar. Transient stale/partial acquisition is
-disclosed on focus/hover, not in repeated warning suffixes. Genuine provider restrictions
+Unlimited/unknown quota has no fabricated bar. Stale/partial quota and authentication
+problems have concise visible notes. Genuine provider restrictions
 remain visible; exhausted finite quota stays red. There are no reset/secondary-window paragraphs.
-Focus/hover/tap a row for its period, Capacity and attribution basis; unavailable cost
+At most one optional `?` per subscription exposes its **Primary quota** and, when present,
+**Additional quotas**, separated by a blank line: actual period, native Used/Remaining
+amounts, limits, resets, same-period CCost and concise reference-capacity/attribution caveats.
+No `Last quota update` or raw source enums appear. Unavailable cost
 shows **(?)** without hiding a known percentage. Partial observed subtotals are
 disclosed in help; the compact cost has no visible estimate decoration.
 

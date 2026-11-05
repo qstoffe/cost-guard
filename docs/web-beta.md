@@ -10,6 +10,10 @@ Watch. Hover or focus with Tab to read; press Escape to dismiss without moving
 focus. You can move the pointer into the help to keep reading. Tap a help button
 to keep it open; tap again or outside to close it. Only one explanation opens in
 each window. Values remain selectable; action buttons and links stay clickable.
+Hover help also closes after leaving the document/window, even if a mouse-clicked
+button retains focus. Keyboard-focus help and deliberately pinned passive help are
+distinct; action activation dismisses its help immediately. Live updates never reopen
+dismissed help without a new interaction.
 
 Full Watch’s **CCost (I + E)** help separates first-request incoming-context cost
 from output/later/linked-subagent work. **Token Mix %** explains I/C/W/O token
@@ -17,8 +21,10 @@ shares, not prices. **Model** names the main model even when other linked models
 contribute to totals. **N/A** means unavailable, not zero; **?** marks partial
 pricing/data. CCost is an estimated reference cost, not your bill or native quota.
 
-Use adjacent help for an exact date, full prompt preview or untruncated Mini
-session title. Connection warnings, settings explanations and longer report/account
+Use adjacent help for exact Started/Finished or quota-reset dates. Prompt previews
+have no full-text popup in either Watch table. Mini uses column-heading help, not
+row/header question marks; its full session text remains selectable and accessible.
+One optional subscription cue groups primary/additional quota details. Connection warnings, settings explanations and longer report/account
 details remain visible or expandable rather than hidden exclusively on hover.
 
 ## Open in another browser (Windows)
@@ -361,7 +367,7 @@ with full local date/time on hover/accessible focus; Finished includes the UTC o
 for repeated DST hours. Unknown supported endings show **—**, never start plus duration
 or observation time. Prompt starts with
 its canonical session-local `#N`, never a visible-row index. Only preview text ellipsizes;
-the number stays visible, the full preview is available on hover/accessible focus,
+the number stays visible, with no per-row preview question mark or full-text popup,
 and lifecycle state remains accessible on the row. Every header explains its metric
 on hover, keyboard focus or touch/click; Escape or leaving focus dismisses the explanation.
 Both prompt tables show **total CCost (Incoming Context CCost + Extra CCost)** in
@@ -434,9 +440,11 @@ loading. Source changes/minute fallback update retained history and publish cost
 coherently. Routine refresh silently retains figures; only a scope without valid data
 loads. Real failures remain visible. Midnight resets, rejecting yesterday's late results;
 CCost Today keeps its label before 03:00. Web Credits/USD and CLI scopes are unchanged.
+One help cue at the far right explains the entire daily summary: CCost Today,
+today’s prompt count and Token Mix token shares. It is not inserted between metrics.
 
 Retryable source-read failures retain observations quietly in Full Watch's tables,
-footers and daily area; freshness remains accessible in help and the unchanged global
+footers and daily area; meaningful freshness remains in the unchanged global
 connection/source-health notice. Each source/card/daily lane confirms after five monotonic seconds
 from its first failure (one existing source retry interval); further failures and
 partial/retained-only card publications cannot renew that window. Confirmation is
@@ -468,7 +476,9 @@ substitutions. Unavailable reference costs show **(?)**; confirmed empty windows
 show Used **(0)** independently of Today. Unlimited, sub-100% precision and genuine warnings
 remain distinct. Today keeps daily scope/attribution without an estimate suffix (basis
 on hover). Accessible help retains native Used/Total and Remaining/Total, native money,
-reset, source and partial/estimated attribution without cluttering the headline.
+reset and partial/estimated attribution without raw source/observation logs.
+Each quota’s Capacity cue explains usage and reference capacity together; the usage
+line has no duplicate cue. Account Today help appears only for a real attribution note.
 For Copilot the observed Used cost and native Remaining need not sum to Capacity.
 For other quotas Capacity/Remaining are explicitly explained extrapolations, not
 provider-promised allocation. Missing native usage never borrows CCost. Credits/USD
@@ -529,12 +539,12 @@ First acquisition uses blank/neutral placeholders, never invented empty/zero res
 Known prompt/session/daily/account figures stay visible quietly during routine refresh,
 with no fleeting Loading/Refreshing/Retrying prose or temporary card-height change in
 Running or Earlier Prompts. Observed **No running prompts**/**No earlier prompts** remain.
-Help still explains retained observations. After 30 continuous seconds of pending initial
+Column/summary help explains metric scope rather than internal freshness logs. After 30 continuous seconds of pending initial
 acquisition, prompt retries, daily updates or session totals, delayed/availability guidance appears;
 observed recovery clears it. Explicit unavailable/partial evidence and host/auth/connection
 failures retain their existing guidance. These are presentation clocks only, not source
 observations or lifecycle changes. Optional cache
-failure safely computes from source and discloses unavailable persistence in cost help.
+failure safely computes from source; disposable-cache details are not default metric help.
 No Session Total Duration returns. CLI, Sessions UI and daily/account totals retain
 their existing meanings. Mini consumes this same session-cost/context projection below.
 

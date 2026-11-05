@@ -34,7 +34,7 @@ module.exports = async function alignment({evaluate,until,fixture,command,sessio
               if(table.querySelectorAll('th').length!==(body===v.body?5:2)) errors.push('extra column');
               if(head.children[0].textContent!=='Session'||head.children[1].textContent!==' (Total CCost)') errors.push('header text');
               header.querySelector('button').focus();
-              if(!v.doc.getElementById('context-help').textContent.includes('total estimated session cost')) errors.push('header scope');
+               if(!v.doc.getElementById('context-help').textContent.includes('Session — The name of the session.\\n\\nTotal CCost —')) errors.push('header scope');
               for(const cell of cells) {
                 const value=cell.querySelector('.mini-session-value'),left=value.children[0],right=value.children[1],s=style(cell);
                 const start=rect(cell).left+(parseFloat(s.borderLeftWidth)+parseFloat(s.paddingLeft))*zoom;
@@ -47,8 +47,7 @@ module.exports = async function alignment({evaluate,until,fixture,command,sessio
                 if(cell!==header) {
                   if(!right.textContent.startsWith(' (')||!right.textContent.endsWith(')')) errors.push('row parentheses');
                   if(style(left).textOverflow!=='ellipsis'||style(left).whiteSpace!=='nowrap') errors.push('title overflow');
-                  if(!cell.helpText?.startsWith(left.textContent) || !cell.helpText.includes('Session CCost: '+right.textContent.slice(2,-1)) ||
-                    cell.querySelector('.help-trigger')?.getAttribute('aria-label')!=='Full session title and cost details') errors.push('accessible title');
+                   if(!cell.parentNode.getAttribute('aria-label').includes(left.textContent) || cell.querySelector('.help-trigger')) errors.push('accessible title without row cue');
                   if(left.textContent==='Short'&&left.scrollWidth>left.clientWidth+1) errors.push('short title clipped');
                   suffixes.push(right.textContent);titleWidths.push(rect(left).width);
                 } else if(range.getBoundingClientRect().height>rect(right).height+1) errors.push('wrapped heading');

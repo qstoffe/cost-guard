@@ -93,10 +93,10 @@ async function main() {
     await evaluate(`miniWatch.window.document.activeElement.blur()`);
     assert.equal(await evaluate(`miniWatch.view.body.parentNode.querySelectorAll('th')[4].textContent`), 'Ctx');
     assert.match(await evaluate(`miniWatch.view.body.parentNode.getAttribute('aria-label')`), /estimated next incoming context \(Ctx\)/);
-    assert.match(await evaluate(`miniWatch.view.body.rows[0].helpText`), /CCost, Duration and Ctx describe this prompt/);
+    assert.equal(await evaluate(`miniWatch.view.body.querySelectorAll('button').length`),0);
     await evaluate(`miniWatch.view.drawDaily(null,false)`);
     assert.equal(await evaluate(`miniWatch.view.daily.textContent`),'CCost Today · Loading…');
-    assert.equal(await evaluate(`miniWatch.view.daily.querySelector('button').getAttribute('aria-label')`), 'About CCost Today');
+    assert.equal(await evaluate(`miniWatch.view.daily.querySelector('button')`),null);
     await evaluate(`miniWatch.settings()`);
     assert.equal(await evaluate(`documentPictureInPicture.window === miniWatch.window`),true);
     await until(`miniWatch.window.getComputedStyle(miniWatch.view.prompts).overflowY === 'auto'`);

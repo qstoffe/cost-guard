@@ -15,13 +15,19 @@ const ReportView = (() => {
       fraction: watch?.used_fraction, percent: watch?.used_percent, exhausted: watch?.exhausted, note: ''};
   }
   const display = (row, key) => row?.display_units?.[unit]?.[key] ?? row?.display?.[key] ?? 'N/A';
-  function quotaHelp(quota) {
+  function quotaHelp(quota, compact = false) {
     const view = quotaView(quota), native = quota.quota_display;
-    return `${display(quota, 'ccost_help')}\nCapacity: ${display(quota, 'ccost_capacity')}\n` +
-      `${quota.label} · ${quota.period} · ${quota.scope}${quota.model_id ? ' · ' + quota.model_id : ''}\n` +
+    const scope = [quota.label, quota.period !== 'unknown' && quota.period,
+      quota.duration_seconds && display(quota, 'window') + ' window',
+      quota.scope !== 'account' && quota.scope, quota.model_id].filter(Boolean).join(' · ');
+    return (compact ? '' : `${display(quota, 'ccost_help')}\nCapacity: ${display(quota, 'ccost_capacity')}\n\n`) + scope + '\n' +
       `Native Used: ${native?.used.native || view.native}\nNative Remaining: ${native?.remaining.mode === 'remaining' ? native.remaining.native : 'unknown / inapplicable'}\n` +
-      `Native money ${view.mode}: ${view.money} / ${display(quota, 'limit_money')}\n` +
-      `${display(quota, 'reset')} · Source: ${quota.origin}\nAvailability: ${quota.availability}` + (view.note ? '\n' + view.note : '');
+      (quota.limit_money != null || quota.remaining_money != null ? `Native money ${view.mode}: ${view.money} / ${display(quota, 'limit_money')}\n` : '') +
+      (compact ? `CCost Used: ${display(quota, 'ccost_used')} · Capacity: ${display(quota, 'ccost_capacity')}\n${display(quota, 'ccost_brief')}\n` : '') +
+      (quota.unlimited ? 'Unlimited\n' : '') + display(quota, 'reset') +
+      (quota.status === 'blocked' ? '\nProvider restriction reported.' : '') +
+      ({partial: '\nPartial quota data.', stale: '\nRetained quota · not current.', unavailable: '\nQuota unavailable.', error: '\nQuota refresh failed.'}[quota.availability] || '') +
+      (view.note ? '\n' + view.note : '');
   }
   const mixLabels = row => Object.values(row?.display?.token_categories || {});
   const mixText = row => Object.entries(row?.display?.token_categories || {})

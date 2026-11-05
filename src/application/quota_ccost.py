@@ -77,5 +77,18 @@ def quota_ccost_tokens(values, now_ms):
         explanation += "\nUsed CCost has estimated attribution, not verified account attribution."
     if context["note"]:
         explanation += "\n" + context["note"]
+    brief = {
+        "native": "Reference Remaining uses native AI credits; Used + Remaining need not equal Capacity.",
+        "ratio": "Reference Capacity estimates a full period from observed CCost ÷ native fraction used; not a guaranteed budget.",
+        "unlimited": "Unlimited quota; no finite reference Remaining applies.",
+        "unknown": "Reference Capacity / Remaining unavailable; a native percentage alone is not enough.",
+    }[basis]
+    if cost and not cost.get("complete"):
+        brief += "\nUsed CCost has partial attribution / pricing."
+    if context["estimated"]:
+        brief += "\nUsed CCost has estimated attribution."
+    if context["note"]:
+        brief += "\n" + context["note"]
     return {"ccost_used": amount(used), "ccost_remaining": amount(remaining),
-            "ccost_capacity": "N/A" if basis == "unlimited" else amount(capacity), "ccost_help": explanation}
+            "ccost_capacity": "N/A" if basis == "unlimited" else amount(capacity),
+            "ccost_help": explanation, "ccost_brief": brief}

@@ -35,7 +35,7 @@ async function main() {
   const until=async (id,expression)=>{
     const end=Date.now()+15000;
     while(Date.now()<end) {if(await evaluate(id,expression))return;await new Promise(resolve=>setTimeout(resolve,30));}
-    const state=await evaluate(id,`(async () => {const job=current?.active ? await api('/api/jobs/'+current.active) : null;return {section:document.body.dataset.section,notice:document.getElementById('notice')?.textContent,text:document.getElementById('result')?.textContent.slice(0,300),loading:current?.loading,job:job&&{status:job.status,error:job.error,result:!!job.result},visibility:document.visibilityState};})()`);
+    const state=await evaluate(id,`(async () => {const state=typeof current==='undefined'?null:current;const job=state?.active ? await api('/api/jobs/'+state.active) : null;return {section:document.body.dataset.section,notice:document.getElementById('notice')?.textContent,text:document.getElementById('result')?.textContent.slice(0,300),loading:state?.loading,job:job&&{status:job.status,error:job.error,result:!!job.result},visibility:document.visibilityState,focus:document.hasFocus(),events:window.helpEvents};})()`);
     throw new Error('Condition not reached: '+expression+' '+JSON.stringify({state,errors})+'\n'+serverErrors);
   };
   const key=async (id,key)=>{
@@ -66,7 +66,9 @@ async function main() {
     assert.ok(mini, 'actual Document PiP target');
     await command('Runtime.enable',{},mini);await command('Page.enable',{},mini);
     await until(mini,`document.querySelector('.mini-prompt-table .help-trigger') && document.styleSheets.length===2`);
+    await require('./probe_help_lifecycle.cjs')({command,evaluate,until,owner,mini,checks});
     async function focus(id,selector) {
+      await key(id,'Tab');
       await evaluate(id,`(() => {const n=document.querySelector(${JSON.stringify(selector)});if(document.activeElement===n)n.blur();n.focus();})()`);
       await until(id,`document.querySelector('#context-help')?.matches(':popover-open')`);
       return evaluate(id,`document.querySelector('#context-help').textContent`);
@@ -112,7 +114,7 @@ async function main() {
       const mix=await focus(owner,'.watch-active th:nth-child(8) button');
       assert.match(mix,/I \/ C \/ W \/ O[\s\S]*I — Input[\s\S]*C — Cached[\s\S]*W — Cache write[\s\S]*O — Output[\s\S]*reasoning/);
       const model=await focus(owner,'.watch-active th:nth-child(4) button');
-      assert.match(model,/Linked subagents[\s\S]*different models[\s\S]*cannot be linked or priced/);
+      assert.match(model,/Linked subagents[\s\S]*different models[\s\S]*Unlinked or unpriced/);
       await key(owner,'Escape');
       await interaction(mini,'.mini-prompts > table th:last-child button');
       for (const id of [owner,mini]) {
@@ -128,20 +130,39 @@ async function main() {
       }
     }
     checks.push('Classic/Web light/Web dark: real keyboard, hover, pointer transfer, Escape, touch and outside-dismiss in full Watch and actual Document PiP');
+    for (const width of [1280,360]) for (const zoom of [1,1.5]) {
+      await command('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false},owner);
+      await evaluate(owner,`document.documentElement.style.zoom='${zoom}'`);
+      const layout=await evaluate(owner,`(() => {const d=document.querySelector('.watch-daily'),h=d.querySelector('.help-cue'),r=h.getBoundingClientRect(),b=d.getBoundingClientRect(),s=getComputedStyle(d);return {cues:d.querySelectorAll('.help-cue').length,direct:h.parentNode===d,rightGap:b.right-r.right-(parseFloat(s.paddingRight)+parseFloat(s.borderRightWidth))*${zoom},overlaps:[...d.children].filter(n=>n!==h).some(n=>{const a=n.getBoundingClientRect();return a.left<r.right&&a.right>r.left&&a.top<r.bottom&&a.bottom>r.top;}),pageOverflow:document.documentElement.scrollWidth>innerWidth};})()`);
+      assert.equal(layout.cues,1);assert.equal(layout.direct,true);assert.ok(Math.abs(layout.rightGap)<2,JSON.stringify(layout));
+      assert.equal(layout.overlaps,false);assert.equal(layout.pageOverflow,false);
+      layouts.push({case:'daily-far-right',width,zoom,...layout});
+    }
+    await evaluate(owner,`document.documentElement.style.zoom=''`);
+    await command('Emulation.setDeviceMetricsOverride',{width:1280,height:900,deviceScaleFactor:1,mobile:false},owner);
+    const quota=await focus(mini,'.mini-accounts li:nth-child(2) .help-cue');
+    assert.match(quota,/Primary quota\n5-hour[\s\S]*\n\nAdditional quotas\nWeekly[\s\S]*Native Used:[\s\S]*CCost Used:/);
+    assert.doesNotMatch(quota,/Last quota update|Source:|Availability:/);
+    await key(mini,'Escape');
     await evaluate(owner,`(() => {const p=structuredClone(liveValue);p.view.now_ms++;for(const card of p.view.active_cards){card.title='<script>Exact title</script> '+ 'long title '.repeat(30);card.session_summary.cost.display.known_ccost='?12';card.session_summary.cost.display_units.credits.known_ccost='?12';card.session_summary.cost.complete=false;card.state='observed';}miniWatch.update(p);p.view.now_ms++;for(const card of p.view.active_cards){card.state='retrying';card.session_summary.state='unavailable';}miniWatch.update(p);})()`);
-    const title=await focus(mini,'.mini-prompts > table tbody td:first-child .help-trigger');
-    assert.ok(title.startsWith('<script>Exact title</script> '));assert.match(title,/Session CCost: \?12[\s\S]*linked subagents[\s\S]*not be current[\s\S]*Incomplete pricing/i);
+    const title=await evaluate(mini,`document.querySelector('.mini-prompts > table .mini-session').textContent`);
+    assert.ok(title.startsWith('<script>Exact title</script> '));
+    assert.match(await evaluate(mini,`document.querySelector('.mini-prompts > table .mini-source-note').textContent`),/not current/);
+    assert.equal(await evaluate(mini,`document.querySelectorAll('tbody .help-trigger,.mini-header .help-cue').length`),0);
+    const heading=await focus(mini,'.mini-prompts > table th:first-child button');
+    assert.match(heading,/Session —[^\n]+\n\nTotal CCost —[\s\S]*entire session/);
     assert.equal(await evaluate(mini,`document.querySelector('#context-help script')===null`),true);
     await key(mini,'Escape');
     await evaluate(owner,`miniWatch.update(liveValue)`);
-    for (const selector of ['.watch-active tbody td:first-child .help-trigger','.watch-active .watch-prompt-label .help-trigger']) {
+    for (const selector of ['.watch-active tbody td:first-child .help-trigger','.watch-daily-help']) {
       const metadata=await focus(owner,selector);assert.ok(metadata.length>0);await key(owner,'Escape');
     }
     await evaluate(mini,`document.documentElement.style.fontSize='150%'`);
     await focus(mini,'.mini-prompts > table th:last-child button');
     assert.equal(await evaluate(mini,`(() => {const r=document.querySelector('#context-help').getBoundingClientRect();return r.right<=innerWidth&&r.bottom<=innerHeight;})()`),true);
     await key(mini,'Escape');await evaluate(mini,`document.documentElement.style.fontSize=''`);
-    checks.push('Verbatim long/hostile full session title, prompt/date reveals, partial pricing, retained-source notes, no HTML injection and Mini 150% text zoom');
+    assert.equal(await evaluate(owner,`document.querySelectorAll('.watch-prompt-label .help-trigger').length`),0);
+    checks.push('Verbatim selectable/accessible long hostile session title without row cues; two-part Mini heading, date reveal, consolidated daily help, retained warnings, no HTML injection and Mini 150% text zoom');
     await command('Page.bringToFront',{},owner);
     for (const route of ['models','sessions','sessions/root','accounts','reports?date=1970-01-01','token-mix','cost-per-hour','settings']) {
       await evaluate(owner,`location.hash='#/${route}'`);
