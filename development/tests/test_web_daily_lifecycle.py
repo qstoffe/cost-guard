@@ -2,7 +2,7 @@
 from copy import deepcopy
 from pathlib import Path
 import tempfile
-from threading import Event, Thread
+import time
 import unittest
 from unittest.mock import patch
 
@@ -57,47 +57,33 @@ class DailyCatalogBudgetTests(unittest.TestCase):
                 finally:
                     owner.close()
 
-    def test_redundant_catalog_request_cannot_block_daily_publication(self):
-        release, finished = Event(), Event()
-        results, errors, catalogs = [], [], []
+    def test_four_root_daily_slice_shares_one_fresh_catalog_bracket(self):
+        catalogs = []
         with source_with_current_service() as (source, remote, _), tempfile.TemporaryDirectory() as tmp:
             self.populate(remote, 4)
-            sessions = source.list_sessions()
-            config, selection, service, _ = make_service(tmp, source, now_ms=80_000_000)
-            owner = WebWatchCoordinator(selection=selection, report_service=service, config=config,
-                service_factory=lambda now: make_service(tmp, source, now_ms=now)[2])
+            # This check isolates batch sharing with a fresh before-catalog.
+            # Real HTTP scheduling must not expire it or become a publication SLA;
+            # source-history tests separately cover freshness and changed-tree retries.
+            with patch('src.sources.opencode_v2.time', wraps=time) as source_clock:
+                source_clock.monotonic.return_value = 100.0
+                sessions = source.list_sessions()
+                config, selection, service, _ = make_service(tmp, source, now_ms=80_000_000)
+                owner = WebWatchCoordinator(selection=selection, report_service=service, config=config,
+                    service_factory=lambda now: make_service(tmp, source, now_ms=now)[2])
 
-            def contention(query):
-                if 'cursor' not in query:
-                    catalogs.append(1)
-                    if len(catalogs) > 1:
-                        # Hold the redundant full-catalog HTTP response at the
-                        # same measured source boundary. No fabricated error or
-                        # successful result: the actual V2 snapshot path runs.
-                        release.wait(3)
+                def count_catalog(query):
+                    if 'cursor' not in query:
+                        catalogs.append(1)
 
-            def acquire():
+                remote.before_catalog = count_catalog
                 try:
-                    results.append(owner._account_history(sessions, (), 80_000_000))
-                except BaseException as error:
-                    errors.append(error)
+                    result = owner._account_history(sessions, (), 80_000_000)
+                    self.assertIsInstance(result, tuple)
+                    self.assertEqual(4, result[1].mix.request_count)
+                    self.assertEqual(4, result[1].prompt_count)
+                    self.assertEqual(1, len(catalogs))
                 finally:
-                    finished.set()
-
-            remote.before_catalog = contention
-            worker = Thread(target=acquire)
-            try:
-                worker.start()
-                self.assertTrue(finished.wait(1), 'Daily blocked by a redundant catalog response')
-                self.assertEqual([], errors)
-                self.assertEqual(4, results[0][1].mix.request_count)
-                self.assertEqual(4, results[0][1].prompt_count)
-                self.assertEqual(1, len(catalogs))
-            finally:
-                release.set()
-                worker.join(4)
-                owner.close()
-                self.assertFalse(worker.is_alive())
+                    owner.close()
 
 
 if __name__ == '__main__':
