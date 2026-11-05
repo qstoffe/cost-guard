@@ -104,6 +104,7 @@ function setup() {
   assert.equal(api.requests[0].height,250); assert.equal(api.requests[0].width,560);
   assert.equal(api.requests[0].preferInitialWindowPlacement,true);
   require('../fixtures/mini_sessions.cjs')(vm,context,controller,view,input,helpText);
+  require('../fixtures/mini_disclosure.cjs')(view,child,controller,input);
   context.fullParent = new Node('div'); context.fullState = {connection:'Live connected.'};
   const daily = input.view.daily_usage;
   function parity() {

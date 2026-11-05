@@ -3,7 +3,6 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs/promises'), path = require('node:path');
 module.exports = async function sessions({evaluate,until,fixture,command,pipSession,layouts,checks,output,screenshots}) {
   assert.equal(await evaluate(`miniWatch.view.earlier.hidden`),true);
-  const initial = await evaluate(`({width:miniWatch.window.innerWidth,height:miniWatch.window.innerHeight})`);
   const activate = async key => {
     await command('Page.bringToFront',{},pipSession);
     await command('Runtime.evaluate',{expression:`document.querySelector('.mini-earlier-toggle').focus()`},pipSession);
@@ -12,6 +11,8 @@ module.exports = async function sessions({evaluate,until,fixture,command,pipSess
     await command('Input.dispatchKeyEvent',{type:'keyUp',key,code:key==='Enter'?'Enter':'Space',windowsVirtualKeyCode:code},pipSession);
   };
   await activate('Enter');
+  await until(`!miniWatch.view.disclosureSize.pending`);
+  const initial = await evaluate(`({width:miniWatch.window.innerWidth,height:miniWatch.window.innerHeight})`);
   assert.equal(await evaluate(`miniWatch.view.earlierToggle.getAttribute('aria-expanded')`),'true');
   assert.equal(await evaluate(`miniWatch.window.getComputedStyle(miniWatch.view.earlierToggle).outlineStyle !== 'none'`),true);
   for (const count of [0,1,3,5]) {
@@ -33,15 +34,15 @@ module.exports = async function sessions({evaluate,until,fixture,command,pipSess
         title:active.querySelector('.mini-session').textContent,accessible:active.helpText,
         sameHeaderRow:Math.abs(rect(v.earlierToggle).top-rect(v.summary).top)<8 && Math.abs(rect(v.daily).top-rect(v.summary).top)<8};})()`);
     layouts.push({case:'earlier-'+count,...value});
-    assert.deepEqual({width:value.width,height:value.height},initial,'disclosure never resizes PiP');
+    assert.deepEqual({width:value.width,height:value.height},initial,'SSE never resizes PiP');
     assert.equal(value.pageOverflow,false); assert.equal(value.onlyRegion,true); assert.equal(value.scroll,true);
     assert.equal(value.unframed,true,'earlier table does not inherit generic section-card chrome');
     assert.ok(value.accounts>=32); assert.equal(value.suffixVisible,true); assert.equal(value.ellipsis,true);
-    assert.deepEqual(value.headings,['Session | Total CCost','Ctx']);
+    assert.deepEqual(value.headings,['Session (Total CCost)','Ctx']);
     assert.match(await evaluate(`miniWatch.view.historyBody.parentNode.getAttribute('aria-label')`), /latest valid session context \(Ctx\)/);
     if (count) assert.match(await evaluate(`miniWatch.view.historyBody.rows[0].helpText`), /Latest valid session Ctx:/);
     assert.deepEqual(value.ids,Array.from({length:Math.min(count,3)},(_,index)=>'earlier-'+(Math.max(0,count-3)+index)));
-    assert.ok(value.columns.every(count=>count===2)); assert.ok(value.costs.every(cost=>cost===' | 4583'));
+    assert.ok(value.columns.every(count=>count===2)); assert.ok(value.costs.every(cost=>cost===' (4583)'));
     assert.match(value.accessible,/Session CCost: 4583/); assert.match(value.title,/Active long title/);
     if (value.width>=540) assert.equal(value.sameHeaderRow,true);
     await evaluate(`miniWatch.view.prompts.scrollTop=miniWatch.view.prompts.scrollHeight`);
@@ -117,5 +118,5 @@ module.exports = async function sessions({evaluate,until,fixture,command,pipSess
   assert.equal(headersSafe,true,'table-scoped sticky headers never cover each other');
   await fixture('running'); await until(`miniWatch.view.body.rows.length===2`);
   await evaluate(`miniWatch.view.earlierToggle.click();miniWatch.view.prompts.scrollTop=0`);
-  checks.push('Whole-session suffix stays visible before/after title ellipsis; canonical newest-three Earlier Sessions, zero/one/three/five history, keyboard/click disclosure, stable SSE choice and shared scroll keep every running row reachable without PiP resize or second SSE');
+   checks.push('Parenthesized whole-session suffix stays visible before/after title ellipsis; canonical newest-three history, keyboard/click disclosure and shared scroll preserve every running row without content-driven resizing or second SSE');
 };

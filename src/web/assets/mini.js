@@ -88,6 +88,64 @@ const MiniWatch = (() => {
   function observedAt(value) {
     return Number.isFinite(value) ? new Date(value).toISOString() : 'unknown';
   }
+  // One bounded native adjustment per user disclosure, never per publication.
+  class DisclosureSize {
+    constructor(win, prompts, accounts) {
+      this.win = win; this.prompts = prompts; this.accounts = accounts;
+      this.restore = null; this.pending = null;
+      win.addEventListener('resize', () => {
+        if (this.pending) this.confirm(this.pending);
+        else if (this.restore && !this.same(this.bounds(), this.restore.after)) this.restore = null;
+      });
+    }
+    bounds() { return {width: this.win.outerWidth, height: this.win.outerHeight}; }
+    same(a, b) { return Math.abs(a.width - b.width) <= 1 && Math.abs(a.height - b.height) <= 1; }
+    resize(width, height) {
+      // A zero width delta avoids fractional-DIP resizeTo rounding drift.
+      if (typeof this.win.resizeBy === 'function') this.win.resizeBy(0, height - this.win.outerHeight);
+      else this.win.resizeTo(width, height);
+    }
+    confirm(request) {
+      const after = this.bounds();
+      if (request.after && !this.same(after, request.after)) { this.restore = null; return; }
+      if (Math.abs(after.width - request.before.width) <= 1 && after.height > request.before.height) {
+        request.after = after; this.restore = {before: request.before, after};
+      }
+    }
+    toggle(earlier) {
+      const {win, prompts, accounts} = this;
+      const scrolled = prompts.scrollHeight > prompts.clientHeight + 1;
+      const before = this.bounds();
+      earlier.hidden = !earlier.hidden;
+      prompts.dataset.expanded = String(!earlier.hidden);
+      if (earlier.hidden) {
+        if (this.pending) this.confirm(this.pending);
+        this.pending = null;
+        const restore = this.restore; this.restore = null;
+        if (restore && this.same(before, restore.after)) {
+          try { this.resize(restore.before.width, restore.before.height); } catch (_) {}
+        }
+        return;
+      }
+      this.restore = null;
+      if (scrolled || !(typeof win.resizeBy === 'function' || typeof win.resizeTo === 'function') || !win.innerWidth) return;
+      const overflow = prompts.scrollHeight - prompts.clientHeight;
+      if (overflow <= 1) return; // Horizontal panning alone is not a height request.
+      // Flex shrink may also have reduced the independent accounts viewport.
+      const limit = parseFloat(win.getComputedStyle(accounts).maxHeight);
+      const accountHeight = Math.min(accounts.scrollHeight, Number.isFinite(limit) ? limit : accounts.scrollHeight);
+      const scale = before.width / win.innerWidth;
+      const height = before.height + Math.ceil((overflow + Math.max(0, accountHeight - accounts.clientHeight) + 2) * scale);
+      const request = {before}; this.pending = request;
+      try { this.resize(before.width, height); }
+      catch (_) { this.pending = null; return; }
+      // Observe achieved bounds, not API return success. No later resize/retry.
+      win.requestAnimationFrame(() => win.requestAnimationFrame(() => {
+        if (this.pending !== request) return;
+        this.confirm(request); this.pending = null;
+      }));
+    }
+  }
   class View {
     constructor(doc, returnToWatch) {
       this.doc = doc;
@@ -112,7 +170,7 @@ const MiniWatch = (() => {
       this.earlierToggle.setAttribute('aria-expanded', 'false');
       this.earlierToggle.setAttribute('aria-controls', 'mini-earlier-sessions');
       this.earlierToggle.addEventListener('click', () => {
-        this.earlier.hidden = !this.earlier.hidden;
+        this.disclosureSize.toggle(this.earlier);
         this.earlierToggle.setAttribute('aria-expanded', String(!this.earlier.hidden));
       });
       const top = el('header', undefined, 'mini-header'); top.append(this.summary, this.earlierToggle, this.daily);
@@ -127,6 +185,7 @@ const MiniWatch = (() => {
       this.promptRows = new Map(); this.emptyPrompts = this.emptyRow(5); this.emptyHistory = this.emptyRow(2);
       this.accounts = el('ul', undefined, 'mini-accounts'); this.lines = new Map();
       this.accounts.tabIndex = 0; this.accounts.setAttribute('aria-label', 'Primary subscription usage and same-period observed CCost');
+      this.disclosureSize = new DisclosureSize(doc.defaultView, this.prompts, this.accounts);
       this.root.append(top, this.health, this.prompts, this.accounts); doc.body.replaceChildren(this.root);
     }
     table(parent, historical) {
@@ -142,7 +201,7 @@ const MiniWatch = (() => {
             'Estimated context for this prompt’s next request.\nN/A means unavailable, not zero.'}[name], this.doc);
         if (name === 'Session') {
           const value = this.el('span', undefined, 'mini-session-value mini-session-heading');
-          value.append(this.el('span', 'Session'), this.el('span', ' | Total CCost', 'mini-session-total'));
+          value.append(this.el('span', 'Session'), this.el('span', ' (Total CCost)', 'mini-session-total'));
           button.replaceChildren(value);
         }
         cell.append(button); header.append(cell);
@@ -167,7 +226,7 @@ const MiniWatch = (() => {
         summary?.state === 'unavailable' ? 'N/A' : 'Loading…';
       const title = card.title || card.session_id;
       ReportView.text(cell.children[0].children[0], title);
-      ReportView.text(cell.children[0].children[1], ' | ' + amount);
+      ReportView.text(cell.children[0].children[1], ' (' + amount + ')');
       cell.helpText = `${title}\n\nSession CCost: ${amount} — Entire session, including earlier prompts, linked subagents and provisional work. Not your bill.` +
         (summary?.state && summary.state !== 'observed' ? `\nSession total: ${summary.state}; retained values may not be current.` : '') +
         (card.state && card.state !== 'observed' ? `\nPrompt source: ${card.state}.` : '') +
