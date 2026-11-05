@@ -131,7 +131,7 @@ full Remaining bar is healthy. Unrounded native evidence determines exhaustion.
 Unlimited plans keep Used with no finite bar; unknown limits/usage never acquire a
 synthetic remaining amount. Stale/partial observations keep their existing warnings.
 The bare CCost parentheses switch too: Used is observed period reference cost;
-Remaining is a same-window reference-capacity proxy. Full Watch adds **Capacity**
+Remaining is a same-window reference-capacity proxy. Full Watch and Accounts show **Capacity**
 above each quota bar. A verified Copilot included AI-credit limit supplies nominal
 Capacity and native Remaining; other valid windows extrapolate `observed CCost / raw
 fraction used`. These are not guaranteed budgets or billed balances. Unknown evidence
@@ -255,13 +255,12 @@ limit because they carried unused month-wide causal request identities. Normal n
 retains per-root revision evidence without that detail-only payload; no model rows,
 account periods or totals are capped. Models renders every matching reference-model
 row with document scrolling. Token Mix phase costs are available in More information;
-account provenance is on Accounts.
+current account provenance is available through the shared live cards' help.
 
 Classic defaults to dark; Web follows system light/dark. Both use local fonts, visible
 keyboard focus, sticky headings and narrow-table scrolling; reduced motion disables
-transitions. “Reading this report” contains definitions, not rows/totals. Accounts keeps
-native quotas, Remaining/Pace, known bills and independent warnings; observation/billing
-detail is expandable. Models follows the hierarchy above.
+transitions. “Reading this report” contains definitions, not rows/totals. Accounts uses
+only the live Watch subscription cards described below. Models follows the hierarchy above.
 See the [synthetic before/after gallery](../development/architecture/governance/verification/web-design/index.html)
 and [visual evidence/limits](../development/architecture/governance/verification/web-design.md).
 
@@ -281,22 +280,40 @@ Run `python cost-guard-web.py --foreground` using already installed Python 3.11+
 
 ## Navigation and static reports
 
-The Beta shell provides Models, global Watch, Accounts, a live Sessions catalog, local date/range Reports, explicit historical Token Mix, and complete live session detail. Global `/#/watch` is canonical; legacy `/#/live` links replace the same history entry. Models and Accounts reuse the same normal-report observation when retained; presentation changes do not multiply account acquisition. Explicit Refresh on finite report views creates a new observation for that view, not a silent cross-view update.
+The Beta shell provides Models, global Watch, live Accounts, a live Sessions catalog, local date/range Reports, explicit historical Token Mix, and complete live session detail. Global `/#/watch` is canonical; legacy `/#/live` links replace the same history entry. Accounts consumes the same latest retained account publication as Watch, not Models' frozen Normal report. Explicit Refresh on finite report views creates a new observation for that view, not a silent cross-view update.
 
-Accounts uses the shared provider/account cards with native quota windows, known-only remaining bars, configured-timezone CLI reset wording, Pace, billed USD and Normal local-month/Today CCost. Unknown, zero, unlimited, blocked, partial, rate-limited and stale observations remain distinct. Stale quota values are visibly muted and labeled as last observations, not current availability. Native-money equivalents, Copilot Unaccounted usage and attribution notes remain visible; observation/used details expand through keyboard-accessible native disclosures. Classified method failures use readable labels; arbitrary private provider reasons/warnings and credentials remain excluded. No account editing or additional acquisition is introduced.
+### Live Accounts
+
+`/#/accounts` shows only the **same subscription-card grid as the bottom of Full Watch**:
+account title, CCost Today, native primary percentage and period CCost, Capacity, bar,
+reset/remaining pace, secondary quotas and truthful provider/freshness warnings. It has
+no report title, Refresh/Cancel, snapshot/search, billing panel or observation disclosure.
+Shared navigation and actionable authentication/source/host notices remain available.
+Native amounts and attribution live in the existing focus/tap/600ms-hover help, not a
+second report. CLI and Diagnostics keep their detailed account layouts.
+
+The existing single authenticated Live stream updates Accounts even if Watch has never
+opened. Switching routes uses the latest retained common observation immediately;
+it starts no finite report, account refresh owner, provider call, history scan or second
+stream. Initial pending data shows **Loading accounts…**, not a confirmed empty list.
+Observed empty, unavailable/partial and retained stale observations stay distinct.
+Stable account identities and bound metric/help nodes retain focus, selection and
+scroll through ordinary updates. Real account removal/reordering is still applied.
+Credits/USD, Used/Remaining and themes apply to visible and retained cards without
+acquisition or client-side valuation. [Verification and limits](../development/journal/web/accounts-live.md).
 
 | CLI use case | Discoverable fragment route | Protected scope |
 | --- | --- | --- |
 | Global Watch | `/#/watch` (legacy `/#/live` alias) | One host-owned engine; one-prompt cards, five historical sessions and independent daily/account observations |
 | Models | `/#/models` (legacy `/#/overview`, `/#/models/all` normalize here) | Independent selectable/full and latest-version filters, exact tier-aware multi-sort, four columns and full document scrolling. Blank relative cells without completed priced prompts; unknown ratios retained. No account cards or native-rate fifth column. |
-| Accounts | `/#/accounts` | Native units/windows, Remaining/Pace, independent observations and method errors, report local-month/Today CCost and Copilot Unaccounted usage; never Watch rolling substitution |
+| Accounts | `/#/accounts` | Shared live Watch subscription cards, native windows/pace, Today/period CCost, Capacity and account-specific warnings; no finite report |
 | Sessions | `/#/sessions` | Live six-column catalog, 50 sessions/page, globally sorted canonical keys and stable older-page membership; available archived roots included |
 | Session detail | `/#/sessions/<id>` (legacy `/live` alias) | Complete chronological live history, no user-facing pages or modes; links from session names and Watch |
 | Date / inclusive range | `/#/reports?date=2026-10-25`, `/#/reports?date=2026-10-24:2026-10-25` | Configured-local boundaries/DST; canonical range valuation and union duration; impossible/reversed dates fail explicitly |
 | Historical Token Mix | `/#/token-mix` | Explicit Capture/Refresh only, never navigation/prefetch; CLI Input / Cached input / Cache write / Output share-and-CCost cells, model/publisher Prompts/Calls/Tokens/CCost, exact-volume sorting with compact K/M/B labels and explicit partial/unknown telemetry, full-report total above the table and optional sample/price coverage |
 | Web Settings | `/#/settings` | Theme, CCost display, Mini placement and Quota display; inherited/explicit intent, authenticated narrow config read/write, no report acquisition |
 
-Finite report tables retain their search/filter/page controls. Their column clicks cycle ascending, descending, then original server order. Models uses its independent filter/multi-sort contract; Watch keeps fixed chronological cards. Sessions has no report toolbar, search, filters or snapshot controls. Its catalog headings request full-catalog server sorting, not presentation-only page sorting. Detail has no sort or pager. Decimal keys stay exact and unknowns sort last.
+Finite report tables retain their search/filter/page controls. Their column clicks cycle ascending, descending, then original server order. Models uses its independent filter/multi-sort contract; Watch keeps fixed chronological cards. Accounts and Sessions have no report toolbar, search, filters or snapshot controls. Sessions' catalog headings request full-catalog server sorting, not presentation-only page sorting. Detail has no sort or pager. Decimal keys stay exact and unknowns sort last.
 
 Token Mix shows actual phase/completed/total progress and Cancel terminates only that finite scan. Reopening a retained view reuses its timestamped result; explicit recapture checks the real source/config/pricing dependencies through the existing derived-analysis cache (`src/reports/acquisition.py`, `src/analysis/cache.py`), not a browser ledger or request-name-only cache. Deleted/pruned history stays unavailable. Timeout/cancellation/empty history are distinct; Live and its account scheduler continue independently. Date prompt links open full session detail; Back restores the retained range. URL fragments contain only scope/locators, never prompt content.
 
@@ -304,7 +321,7 @@ Date/range acquisition overlaps at most four V2 tree reads within the isolated r
 
 Session-ID links open `/#/sessions/<id>`. Fragment routes support direct links, reload and browser Back/Forward without expanding the HTTP path allowlist. The one-use bootstrap fragment is removed before requests; ordinary session routes are preserved on reload. Names/prompts are text, never links or tooltips containing source paths. Navigation and paging never put prompt/history payloads in browser storage or history state.
 
-Every result retains observation time, source status and per-root revision evidence; Models hides the verbose snapshot paragraph, not partial/error warnings. A running prompt is **running at that snapshot**, with frozen provisional values. **Refresh snapshot** reacquires other views; reload reacquires Models. Source events, elapsed time, navigation and paging cannot update a frozen report. Failed refresh preserves the last known result with **STALE** status. Missing/empty/partial/source-failure and independently unavailable accounts remain distinct from acquired zero.
+Every finite result retains observation time, source status and per-root revision evidence; Models hides the verbose snapshot paragraph, not partial/error warnings. A running prompt is **running at that snapshot**, with frozen provisional values. **Refresh snapshot** reacquires finite report views; reload reacquires Models. Source events, elapsed time, navigation and paging cannot update a frozen report. Accounts, Watch and Sessions remain live consumers. Failed refresh preserves the last known result with **STALE** status. Missing/empty/partial/source-failure and independently unavailable accounts remain distinct from acquired zero.
 
 Session detail shows **Prompt | Model | Effort | CCost | Calls | Duration | Ictx | Ictx CCost | Extra CCost | Token Mix %**. Python's category order remains **I = Input; C = Cached input; W = Cache write; O = Output**. Input is uncached, Cached input is cache read, Cache write is cache creation, and Output includes reasoning. Full-session totals and main/linked-child breakdown come from the canonical result, never from loaded chunks. Unknown, incomplete and estimated amounts remain honest; a published Cache write price does not imply observed tokens. CCost is not billing. The browser performs no valuation or token attribution.
 
@@ -488,8 +505,8 @@ provider-promised allocation. Numeric ratio-derived Capacity shows exactly **(gu
 after the number; verified directly comparable native allowances do not. Unknown **?**,
 missing and **N/A** never get the suffix. Provenance follows each quota across units
 and orientations, including Accounts and Mini's Capacity help. Missing native usage never borrows CCost. Credits/USD
-changes CCost, not native units. Accounts adds the reference figures only where its
-existing report has matching period cost; Mini keeps one compact primary line with
+changes CCost, not native units. Accounts shares Full Watch's identity-matched
+period costs and reference figures; Mini keeps one compact primary line with
 Capacity in help. All three follow the same choice immediately, without more polling.
 
 Watch's slim .83rem quota bars have subtle 2px corners and stay teal throughout the non-exhausted range,
@@ -504,7 +521,7 @@ rows: **Reset in 1h28m, 20:09**, or **Reset in 1d3h, 14:30**. The local clock co
 from the actual deadline; its full date/time is available on hover/focus. Seven days
 or more keeps the calendar date. Expired, unknown and not-started windows remain
 explicit. Existing Live publications update countdowns without browser clocks or
-additional provider polls; CLI, Accounts and Mini Watch retain their reset wording.
+additional provider polls; Accounts shares this wording, while CLI and Mini retain theirs.
 
 Both prompt tables end **Token Mix %, Ictx, Δ Ctx** (ten columns in total).
 **Ictx** is the effective incoming context at that prompt's first request, not its
@@ -716,7 +733,7 @@ The historical synthetic parity and bounded integration inventory is [Beta stabi
 | `/api/jobs/<id>` | GET | Authenticated status/progress/result |
 | `/api/jobs/<id>/cancel` | POST | Cancel owned queued/running work with `{}` |
 
-Reports select `kind`: `normal` (overview/Models/Accounts), `all-models` (catalog), `sessions`, `session`, `date` or `token-mix`. `session` requires an alphanumeric/underscore/hyphen `session_id` (max 200); `date` requires `YYYY-MM-DD` or `YYYY-MM-DD:YYYY-MM-DD` (max 32), with impossible/reversed/overflow dates rejected. `sessions` accepts `session_limit`: 1–10000 or null for all, legacy default 20. Paged requests add `session_page_size` (1–100; Web uses 50; omitted limit means all available), `session_offset` (0–1000000), and `session_catalog_revision` (64 lowercase hex digits, required for nonzero offsets). Response `session_page` exports offset/size/total/catalog_revision; a revision covers catalog identity/order, not atomic prompt values. Paged lists omit unused prompt request identities, retaining every session row and its canonical values. Page fields on other report kinds, invalid bounds and unknown fields are rejected. There are no HTTP query-string or arbitrary path parameters; client scope fragments become validated POST bodies. Reports export the shared application's explicit DTOs, retaining exact decimal **strings**, null unknowns, provisional flags and CLI-projected labels; the page does not calculate costs. Empty acquired lists, acquisition errors, partial source evidence and genuine priced zero remain distinct. Account `reported` means inspect the report's independent observation statuses, not that all accounts are healthy or atomic with history.
+Reports select `kind`: `normal` (Models, including report account DTOs), `all-models` (catalog), `sessions`, `session`, `date` or `token-mix`. The live Accounts route never submits one. `session` requires an alphanumeric/underscore/hyphen `session_id` (max 200); `date` requires `YYYY-MM-DD` or `YYYY-MM-DD:YYYY-MM-DD` (max 32), with impossible/reversed/overflow dates rejected. `sessions` accepts `session_limit`: 1–10000 or null for all, legacy default 20. Paged requests add `session_page_size` (1–100; Web uses 50; omitted limit means all available), `session_offset` (0–1000000), and `session_catalog_revision` (64 lowercase hex digits, required for nonzero offsets). Response `session_page` exports offset/size/total/catalog_revision; a revision covers catalog identity/order, not atomic prompt values. Paged lists omit unused prompt request identities, retaining every session row and its canonical values. Page fields on other report kinds, invalid bounds and unknown fields are rejected. There are no HTTP query-string or arbitrary path parameters; client scope fragments become validated POST bodies. Reports export the shared application's explicit DTOs, retaining exact decimal **strings**, null unknowns, provisional flags and CLI-projected labels; the page does not calculate costs. Empty acquired lists, acquisition errors, partial source evidence and genuine priced zero remain distinct. Account `reported` means inspect the report's independent observation statuses, not that all accounts are healthy or atomic with history.
 
 ## Resource and failure boundaries
 
