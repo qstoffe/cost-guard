@@ -13,6 +13,7 @@ from src.pricing.catalog import PricingCatalog
 
 from .models import PromptProjection, SessionPromptBlock
 from .prompt_rows import PromptRowProjector, ThresholdMultiplier, mix_known, mix_percent
+from .watch_context import card_context
 
 
 def _coherent_watch_deltas(rows: list[PromptProjection], *, epochs: ContextEpochs,
@@ -113,6 +114,7 @@ def _session_block(*, session_id: str, title: str, rows: list[PromptProjection],
                                 for entry in projector.bundle.trace_entries)
                             and not any(row.in_progress and not row.calls for row in rows),
         rate_provisional=any(row.in_progress for row in rows),
+        session_context=card_context(projector, session_id, projector.threshold_multiplier),
         billed_cost=(sum((row.billed_cost for row in rows), Decimal(0))
                      if all(row.billed_cost is not None for row in rows) else None),
     )

@@ -20,6 +20,7 @@ from development.tests.integration.web_live_observations import ProbeObservation
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--detail", action="store_true", help="Also probe complete session capture/pages/freeze.")
+    parser.add_argument("--sessions", action="store_true", help="Measure live Sessions scalar indexing and complete pinned history.")
     parser.add_argument("--reports", action="store_true", help="Also capture finite reports beside Live and cancel deep history.")
     parser.add_argument("--models", action="store_true", help="Capture only task-focused Normal/full Models snapshots beside Live.")
     parser.add_argument("--watch-cards", action="store_true", help="Wait for independently published real one-row Watch cards.")
@@ -89,6 +90,10 @@ def main():
             raise RuntimeError('probe_live_timeout')
         start = live['view']['started_at_ms']
         source_seconds = time.monotonic() - started
+        if args.sessions:
+            from development.tests.integration.session_catalog_observations import observe_sessions
+            observations.stage = 'sessions'
+            observe_sessions(get, cookie, host, owners[0])
         card_evidence = None
         if args.watch_cards or args.tool_outcomes:
             observations.stage = 'watch_cards'

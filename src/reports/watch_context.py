@@ -25,6 +25,6 @@ def card_context(projector, session_id, threshold_multiplier):
     state = session_watch_context(projector.snapshot, projector.bundle, record, projector.catalog, projector.epochs)
     warning = projector.warning(state.next_tokens, state.model_id)
     multiplier = (threshold_multiplier(state.model_id, warning.price_threshold)
-                  if warning.price_threshold else None)
+                  if warning.price_threshold and threshold_multiplier is not None else None)
     return WatchContextGuidance(record.prompt_id, state.next_tokens, warning.text, warning.price_severity,
         multiplier, state.cached_ccost, state.fresh_ccost)

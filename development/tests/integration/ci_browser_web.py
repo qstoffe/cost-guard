@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
 
 from development.tools.ci_web_beta import hosted_only, save
-from development.tests.fixtures.web_reports import finite_report
+from development.tests.fixtures.web_reports import finite_report, SyntheticSessionsRuntime
 from src.web.host import WebHost
 from src.web.jobs import ReportJobs
 from src.web.http import RequestHandler
@@ -38,6 +38,7 @@ def main():
         shutil.copyfile(ROOT / "config/default-config.jsonc", config_root / "config/default-config.jsonc")
         user_config = config_root / "config/user-config.jsonc"
         owner = WebHost(config_root, jobs=ReportJobs(target=finite_report))
+        owner.live = SyntheticSessionsRuntime(config_root)
         stream_patch.start()
         owner.start()
         owner.publish_ready()
@@ -68,8 +69,8 @@ def main():
                 assert "bootstrap" not in page.url
                 assert any(cookie["httpOnly"] for cookie in context.cookies())
                 assert page.locator("#result table").count() > 0
-                # This finite-report fixture has no live acquisition owner. An
-                # authenticated SSE socket must not claim source readiness.
+                # Synthetic Sessions acquisition publishes no Watch observation.
+                # An authenticated SSE socket must not claim source readiness.
                 expect(page.locator("#status")).to_have_text("Connection: starting. See notice below.", timeout=15000)
                 assert streams, "authenticated real SSE connection was not established"
                 expect(page.locator("#host-state")).to_contain_text("source observation pending")
@@ -91,24 +92,37 @@ def main():
                 expect(page.locator("#heading")).to_contain_text("Accounts")
                 evidence["checks"].append("rendered navigation and browser Back/Forward")
                 page.goto(origin + "/#/sessions/root")
-                expect(page.locator("#notice")).to_contain_text("Snapshot captured", timeout=30000)
+                expect(page.locator("#result tbody tr").first).to_be_visible(timeout=30000)
                 expect(page.locator("#result")).to_contain_text("<script>PRIVATE_TEXT</script>")
                 assert page.locator("#result script").count() == 0
                 assert page.locator("#result table tbody tr").count() > 0
-                evidence["checks"].append("canonical session detail table; hostile title remains literal text")
+                assert page.locator("#result th").all_text_contents() == [
+                    "Prompt", "Model", "Effort", "CCost", "Calls", "Duration", "Ictx", "Ictx CCost", "Extra CCost", "Token Mix %"]
+                assert page.locator("#result tfoot td").count() == 10
+                expect(page.locator("#result")).to_contain_text("Session ID: root")
+                assert not page.locator(".toolbar").is_visible()
+                evidence["checks"].append("live complete ten-column session history and canonical footer; hostile title remains literal text")
                 page.set_viewport_size({"width": 360, "height": 844})
                 page.locator("#skip").focus()
                 page.keyboard.press("Enter")
                 expect(page.locator("#content")).to_be_focused()
-                assert page.locator("#refresh").is_visible()
-                assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+                assert not page.locator("#refresh").is_visible()
+                evidence["narrow_layout"] = page.evaluate('''() => {
+                    const heading=document.querySelector('#result h1'), pan=document.querySelector('.sessions-table-pan');
+                    return {viewport:innerWidth,page_width:document.documentElement.scrollWidth,
+                        heading_width:heading.clientWidth,heading_scroll:heading.scrollWidth,
+                        pan_width:pan.clientWidth,table_width:pan.scrollWidth};
+                }''')
+                assert evidence["narrow_layout"]["page_width"] <= evidence["narrow_layout"]["viewport"]
+                assert evidence["narrow_layout"]["heading_scroll"] <= evidence["narrow_layout"]["heading_width"]
                 assert page.locator("th").first.evaluate("el => getComputedStyle(el).position") == "sticky"
                 page.emulate_media(color_scheme="dark", reduced_motion="reduce")
                 expect(page.locator("html")).to_have_attribute("data-theme", "classic")
                 assert page.locator("html").evaluate("el => getComputedStyle(el).getPropertyValue('--bg').trim()") == "#101112"
                 assert page.locator("#refresh").evaluate("el => getComputedStyle(el).transitionDuration") == "0s"
-                page.locator("#search").focus()
-                assert page.locator("#search").evaluate("el => getComputedStyle(el).outlineStyle") != "none"
+                help_button = page.locator("#result th button").first
+                help_button.focus()
+                assert help_button.evaluate("el => getComputedStyle(el).outlineStyle") != "none"
                 page.emulate_media(color_scheme="light", reduced_motion="no-preference")
                 assert page.locator("html").evaluate("el => getComputedStyle(el).getPropertyValue('--bg').trim()") == "#101112"
                 assert not user_config.exists(), "theme reads must not create configuration"
@@ -172,7 +186,10 @@ def main():
                 assert json.loads(user_config.read_text()) == {"webSettings": {"theme": "classic", "ccostDisplayUnit": "usd", "miniWatchPlacement": "default", "quotaDisplayMode": "default"}}
                 assert not report_requests, "Settings must not acquire reports"
                 page.go_back()
-                expect(page.locator("#result")).to_contain_text("<script>PRIVATE_TEXT</script>")
+                # Settings reload discarded process-local view state. Reopening
+                # a live lease can await the next 5s poll, just like first entry;
+                # Playwright's default 5s assertion would race that valid cadence.
+                expect(page.locator("#result")).to_contain_text("<script>PRIVATE_TEXT</script>", timeout=30000)
                 page.emulate_media(color_scheme="light")
                 evidence["checks"].append("actual Settings saves in disposable canonical config, Classic/Web round trip, adaptive Web, reload/new tab and no Settings report acquisition")
                 owner.events.publish("live", {"state": "CI synthetic Live observation"})
@@ -199,7 +216,7 @@ def main():
                 page.go_back()
                 page.go_back()
                 page.go_back()
-                expect(page.locator("#result")).to_contain_text("<script>PRIVATE_TEXT</script>")
+                expect(page.locator("#result")).to_contain_text("<script>PRIVATE_TEXT</script>", timeout=30000)
                 evidence["checks"].append("actual synthetic SSE updates source health; initial Watch stays quiet even after three virtual minutes")
                 context.set_offline(True)
                 # Browser offline emulation does not necessarily drop an already

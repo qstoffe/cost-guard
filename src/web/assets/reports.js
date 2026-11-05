@@ -6,8 +6,7 @@ const ReportRoutes = (() => {
     if (['overview', 'models/all'].includes(path)) path = 'models';
     const params = new URLSearchParams(query);
     const session = /^sessions\/([A-Za-z0-9_-]{1,200})(\/live)?$/.exec(path);
-    if (session) return {title: 'Session ' + session[1], section: 'sessions', session,
-      request: {kind: 'session', session_id: session[1]}};
+    if (session) return {title: 'Session ' + session[1], section: 'sessions', session, request: null};
     const routes = {watch: ['Watch', null], live: ['Watch', null],
       models: ['Models', 'normal'],
       accounts: ['Accounts', 'normal'], sessions: ['Sessions', 'sessions'],
@@ -17,36 +16,20 @@ const ReportRoutes = (() => {
     const [title, kind] = routes[path];
     let request = kind ? {kind} : null;
     if (path === 'sessions') {
-      const n = params.get('limit') || 'all', offset = params.get('offset') || '0', revision = params.get('revision');
-      if (n !== 'all' && !/^[1-9][0-9]{0,3}$|^10000$/.test(n)) return {title: 'Invalid session limit', section: 'sessions'};
+      const offset = params.get('offset') || '0', epoch = params.get('epoch');
       if (!/^(0|[1-9][0-9]{0,6})$/.test(offset) || Number(offset) > 1000000 ||
-          revision !== null && !/^[0-9a-f]{64}$/.test(revision) || Number(offset) && !revision)
+          Number(offset) % 50 || epoch !== null && !/^[0-9a-f]{32}$/.test(epoch) || Number(offset) && !epoch)
         return {title: 'Invalid session page', section: 'sessions'};
-      request.session_limit = n === 'all' ? null : Number(n);
-      request.session_page_size = 50;
-      request.session_offset = Number(offset);
-      if (revision) request.session_catalog_revision = revision;
+      request = null;
     }
     if (path === 'reports' && params.has('date')) request = {kind: 'date', date_text: params.get('date')};
     return {title, section: path === 'live' ? 'watch' : path.split('/')[0], request, live: path === 'live' || path === 'watch',
-      explicit: path === 'token-mix' || path === 'cost-per-hour' || path === 'reports' && !request, params};
+      catalog: path === 'sessions', explicit: path === 'token-mix' || path === 'cost-per-hour' || path === 'reports' && !request, params};
   }
-  function controls(parent, route, restartSessions) {
+  function controls(parent, route) {
     parent.replaceChildren();
     const e = ReportView.element;
     parent.className = '';
-    if (route.section === 'sessions' && !route.session) {
-      const advanced = e('details'); advanced.append(e('summary', 'Advanced session scope'));
-      const form = e('form'), label = e('label', 'Available sessions: N (1–10000) or all '), input = e('input');
-      input.value = route.params?.get('limit') || 'all'; input.required = true;
-      input.pattern = 'all|[1-9][0-9]{0,3}|10000'; label.append(input);
-      const submit = e('button', 'Apply scope'); submit.type = 'submit'; form.append(label, submit);
-      form.addEventListener('submit', event => { event.preventDefault(); if (form.reportValidity()) location.hash = '#/sessions?limit=' + encodeURIComponent(input.value); });
-      advanced.append(form); parent.append(advanced);
-      const recent = e('a', 'Latest sessions / restart browsing'); recent.href = '#/sessions'; parent.append(recent);
-      if (restartSessions) recent.addEventListener('click', restartSessions);
-      parent.append(e('p', 'Recent first (CLI order). Search, filters and column sorting apply only to the loaded page. Catalog changes require restarting browsing; totals count available roots, not missing history.'));
-    }
     if (route.section === 'reports') {
       const form = e('form'), start = e('input'), end = e('input');
       start.type = end.type = 'date'; start.required = true;

@@ -110,6 +110,9 @@ def suite_summary(scope):
             notice("failure " + row["file"], dict(exit_code=row["exit_code"], diagnostics=row["diagnostics"]))
             for test in row["failed_tests"]:
                 notice("failed test", dict(file=row["file"], test=test))
+    # Checks annotations can be capped upstream. Preserve actionable failures
+    # before the much larger platform-skip inventory, without omitting either.
+    for row in files:
         for skip in row["skips"]:
             notice("skip", dict(file=row["file"], **skip))
     return bool(complete), f"- Selected suite: {len(files)} files/case groups; {totals}. Named skips in {report.name}."

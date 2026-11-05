@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import tempfile
 from threading import Event, Thread
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -20,12 +21,16 @@ from development.tests.fixtures.pricing_catalog import threshold_catalog
 from development.tests.fixtures.accounts import account, NormalizedProvider
 from development.tests.fixtures.models_progress import ModelsWorkload
 from src.application import ReportApplication
+from src.application.session_catalog import SessionCatalog
+from src.application.session_detail import SessionDetails
 from src.cache import CacheDatabase, CacheRepository
 from src.config import load_configuration
 from src.reports import ReportKind, ReportRequest, ReportService
 from src.sources.selection import SourceSelection
 from src.web.http import LoopbackServer
 from src.web.settings import WebSettings
+from src.web.observations import WebObservations
+from src.watch.observers import observe_catalog
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -163,11 +168,29 @@ class WebViewTests(unittest.TestCase):
             settings_root = Path(tmp).resolve() / "settings"
             (settings_root / "config").mkdir(parents=True)
             shutil.copyfile(ROOT / "config/default-config.jsonc", settings_root / "config/default-config.jsonc")
-            server = LoopbackServer(jobs, settings=WebSettings(settings_root))
+            catalog = SessionCatalog()
+            details = SessionDetails(clock=lambda: now / 1000)
+            # Finite report warming above cannot initialize SessionHistory's
+            # separate observed-history analysis. Keep that cold acquisition out
+            # of this transport/DOM test's fixed 5s waits, too; cold capture,
+            # polling and large-history work have dedicated owner tests.
+            warm_detail = details.open("root-0000", "live")
+            details.tick(factory(now, lambda _: None))
+            self.assertEqual(151, details.page(warm_detail, 0, begin=True)["total"])
+            details.close(warm_detail)
+            lifecycle = SimpleNamespace(root=settings_root, live=SimpleNamespace(catalog=catalog, details=details),
+                stopping=Event(), observations=WebObservations(), nonce="sessions-fixture", public_status=lambda: {})
+            server = LoopbackServer(jobs, lifecycle, settings=WebSettings(settings_root))
             stopped = Event()
 
             def serve():
+                nonlocal now
                 while not stopped.is_set():
+                    now += 6000
+                    catalog.observe(observe_catalog(source, include_archived_revisions=True))
+                    details.tick(factory(now, lambda _: None))
+                    if catalog.needed():
+                        catalog.tick(factory(now, lambda _: None))
                     server.handle_request()
 
             thread = Thread(target=serve)
@@ -182,7 +205,7 @@ class WebViewTests(unittest.TestCase):
                         cwd=ROOT, input=json.dumps(payload), text=True, capture_output=True, timeout=60)
                 self.assertEqual(0, result.returncode, result.stdout + result.stderr)
                 self.assertIn("web views passed", result.stdout)
-                self.assertGreaterEqual(len(jobs.results), 5)
+                self.assertEqual(len(jobs.results), 4, "Sessions must not submit finite report jobs")
             finally:
                 stopped.set()
                 thread.join(3)

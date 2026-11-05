@@ -21,6 +21,7 @@ Installed OpenCode Toolkit shared repository skills own development procedures. 
 - [Sliding browser sessions](web/browser-sessions.md): per-browser seven-day inactivity, throttled cookie renewal, explicit storage-grace exception and simulated/browser/real-source evidence limits.
 - [Web UI knowledge](web/INDEX.md): snapshot/navigation parity and Settings/theme persistence, browser evidence, separate V2 probes and explicitly scoped Decision Delegate test exceptions.
 - [Web Daily and shutdown lifecycle](web/live-lifecycle.md): catalog-bracket amplification, Windows buffered-read cancellation, causal regressions and bounded probe diagnostics.
+- [Live Sessions](web/sessions-live.md): truthful global scalar sorts, cold-index exception, stable catalog epochs, complete revision-pinned history and measured synthetic/real-source limits.
 - [Historical date reports](web/historical-reports.md): serial V2 read cost, bounded date-only overlap, revision-safe progress, deadline/cancellation and retained live-source failures.
 - [Watch prompt tables and live token mix](web/watch-prompt-tables.md): canonical coverage/rounding route, native V2/SSE/browser regressions and the scoped completed-partial CLI parity exception.
 - [Watch card polish](web/watch-polish.md): Watch-only reset clock/formatting, canonical quota colors, responsive frames and headless/real-source evidence limits.

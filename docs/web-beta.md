@@ -85,7 +85,7 @@ on Models or other report pages.
 
 Each selection saves immediately to `config/user-config.jsonc` through the private
 authenticated/CSRF-protected API. Only confirmed success changes the loaded theme
-or Python-prepared CCost tokens, including retained Snapshot/Live views. There is no
+or Python-prepared CCost tokens, including retained report and live session views. There is no
 reload, report/history/pricing/account acquisition, host restart, Apply button or
 browser-local preference. All dropdowns disable briefly during a write. Failure
 restores the last confirmed choices and shows an accessible error; select again to retry.
@@ -212,7 +212,7 @@ global footer is removed; guarantees remain in relevant optional report help.
 ## Cost per Active Hour
 
 v80.115 adds Web-only `/#/cost-per-hour`: **Today**, **Month to date** and
-**Rolling 30 days**, plus a compact rate in complete session Snapshot/Live detail.
+**Rolling 30 days**. The minimal live Sessions detail does not show this rate.
 Use **Refresh snapshot** to capture period history explicitly. Opening/revisiting
 the page never scans it. Progress, Cancel, the existing 120-second/8 MiB job bounds
 and dependency-aware derived cache apply; Watch/accounts keep their own cadence.
@@ -222,8 +222,7 @@ time and complete/partial/provisional/unavailable status. Complete means complet
 *observed* evidence, not recovered deleted/pruned history. Unknown or zero duration,
 incomplete telemetry, unpriceable cost or known source gaps suppress the rate; true
 priced zero with positive known duration can show zero. Running work is provisional.
-Freeze preserves the whole-session rate, independent of the visible 50-row page;
-source loss retains the last observation and never proves completion.
+Source loss retains the last observation and never proves completion.
 
 Python computes `CCost / (active milliseconds / 3,600,000)` using unrounded Decimal
 inputs, then applies the shared credits/USD display policy: `CCost/h` or `$/h`
@@ -244,7 +243,7 @@ provider/model call, browser persistence or durable history ledger is added.
 **Settings → Web settings → CCost display** switches Python-prepared reference
 amounts in place, without report jobs or provider refresh. Native money, quotas,
 Unaccounted usage and Relative CCost stay unchanged. The saved independent
-`webSettings.ccostDisplayUnit` applies across routes, publications and Snapshot/Live,
+`webSettings.ccostDisplayUnit` applies across routes, publications and live Sessions,
 including reload/new tabs. No URL, browser storage or preference cookie is written.
 
 v80.107 keeps healthy authenticated streams open without periodic rotation. Connected
@@ -282,7 +281,7 @@ Run `python cost-guard-web.py --foreground` using already installed Python 3.11+
 
 ## Navigation and static reports
 
-The Beta shell provides Models, global Watch, Accounts, recent Sessions with older-page navigation, local date/range Reports, explicit historical Token Mix, and session details with Snapshot/Live modes. Global `/#/watch` is canonical; legacy `/#/live` links replace the same history entry. Models and Accounts reuse the same normal-report observation when retained; presentation changes do not multiply account acquisition. Explicit Refresh on other views creates a new observation for that view, not a silent cross-view update.
+The Beta shell provides Models, global Watch, Accounts, a live Sessions catalog, local date/range Reports, explicit historical Token Mix, and complete live session detail. Global `/#/watch` is canonical; legacy `/#/live` links replace the same history entry. Models and Accounts reuse the same normal-report observation when retained; presentation changes do not multiply account acquisition. Explicit Refresh on finite report views creates a new observation for that view, not a silent cross-view update.
 
 Accounts uses the shared provider/account cards with native quota windows, known-only remaining bars, configured-timezone CLI reset wording, Pace, billed USD and Normal local-month/Today CCost. Unknown, zero, unlimited, blocked, partial, rate-limited and stale observations remain distinct. Stale quota values are visibly muted and labeled as last observations, not current availability. Native-money equivalents, Copilot Unaccounted usage and attribution notes remain visible; observation/used details expand through keyboard-accessible native disclosures. Classified method failures use readable labels; arbitrary private provider reasons/warnings and credentials remain excluded. No account editing or additional acquisition is introduced.
 
@@ -291,13 +290,13 @@ Accounts uses the shared provider/account cards with native quota windows, known
 | Global Watch | `/#/watch` (legacy `/#/live` alias) | One host-owned engine; one-prompt cards, five historical sessions and independent daily/account observations |
 | Models | `/#/models` (legacy `/#/overview`, `/#/models/all` normalize here) | Independent selectable/full and latest-version filters, exact tier-aware multi-sort, four columns and full document scrolling. Blank relative cells without completed priced prompts; unknown ratios retained. No account cards or native-rate fifth column. |
 | Accounts | `/#/accounts` | Native units/windows, Remaining/Pace, independent observations and method errors, report local-month/Today CCost and Copilot Unaccounted usage; never Watch rolling substitution |
-| Sessions | `/#/sessions`, optional `/#/sessions?limit=20` | Immediate recent-first 50-root page, including available archived history; Previous/Next links carry offset/catalog revision. Optional N/all scope is collapsed under Advanced. |
-| Session report | `/#/sessions/<id>` | Complete report Snapshot/Live detail; links from session lists and global Watch |
+| Sessions | `/#/sessions` | Live six-column catalog, 50 sessions/page, globally sorted canonical keys and stable older-page membership; available archived roots included |
+| Session detail | `/#/sessions/<id>` (legacy `/live` alias) | Complete chronological live history, no user-facing pages or modes; links from session names and Watch |
 | Date / inclusive range | `/#/reports?date=2026-10-25`, `/#/reports?date=2026-10-24:2026-10-25` | Configured-local boundaries/DST; canonical range valuation and union duration; impossible/reversed dates fail explicitly |
 | Historical Token Mix | `/#/token-mix` | Explicit Capture/Refresh only, never navigation/prefetch; CLI Input / Cached input / Cache write / Output share-and-CCost cells, model/publisher Prompts/Calls/Tokens/CCost, exact-volume sorting with compact K/M/B labels and explicit partial/unknown telemetry, full-report total above the table and optional sample/price coverage |
 | Web Settings | `/#/settings` | Theme, CCost display, Mini placement and Quota display; inherited/explicit intent, authenticated narrow config read/write, no report acquisition |
 
-Outside Models and Watch, report tables retain their search/filter/page controls. Their column clicks cycle ascending, descending, then original server order. Models uses the independent filter/multi-sort contract above, with no three-click reset; Watch keeps fixed chronological cards without report controls. All controls are presentation-only: totals and source queries never change. Decimal strings compare exactly and unknowns sort last. Complete revision-paged session detail has its own controls; global search is disabled there rather than implying unloaded-row coverage.
+Finite report tables retain their search/filter/page controls. Their column clicks cycle ascending, descending, then original server order. Models uses its independent filter/multi-sort contract; Watch keeps fixed chronological cards. Sessions has no report toolbar, search, filters or snapshot controls. Its catalog headings request full-catalog server sorting, not presentation-only page sorting. Detail has no sort or pager. Decimal keys stay exact and unknowns sort last.
 
 Token Mix shows actual phase/completed/total progress and Cancel terminates only that finite scan. Reopening a retained view reuses its timestamped result; explicit recapture checks the real source/config/pricing dependencies through the existing derived-analysis cache (`src/reports/acquisition.py`, `src/analysis/cache.py`), not a browser ledger or request-name-only cache. Deleted/pruned history stays unavailable. Timeout/cancellation/empty history are distinct; Live and its account scheduler continue independently. Date prompt links open full session detail; Back restores the retained range. URL fragments contain only scope/locators, never prompt content.
 
@@ -307,39 +306,29 @@ Session-ID links open `/#/sessions/<id>`. Fragment routes support direct links, 
 
 Every result retains observation time, source status and per-root revision evidence; Models hides the verbose snapshot paragraph, not partial/error warnings. A running prompt is **running at that snapshot**, with frozen provisional values. **Refresh snapshot** reacquires other views; reload reacquires Models. Source events, elapsed time, navigation and paging cannot update a frozen report. Failed refresh preserves the last known result with **STALE** status. Missing/empty/partial/source-failure and independently unavailable accounts remain distinct from acquired zero.
 
-The session table retains Prompt, CCost, Calls, Duration, ~Ictx, ~Ictx CCost, ~Extra CCost and Token Mix %. Category names and adjacent legends come from Python's shared display tokens: **I = Input; C = Cached input; W = Cache write; O = Output**. Input is uncached, Cached input is cache read, Cache write is cache creation, and Output includes reasoning. This order also applies to compact reference-price and Watch run fields. Full-session totals and main/linked-child breakdown come from the canonical result, never from the visible page. Unknown, incomplete and estimated amounts are labeled; a published Cache write price does not imply observed tokens. Catalog `Not applicable` is an unpublished rate, not measured zero. CCost is not billing. The browser performs no valuation or token attribution.
+Session detail shows **Prompt | Model | Effort | CCost | Calls | Duration | Ictx | Ictx CCost | Extra CCost | Token Mix %**. Python's category order remains **I = Input; C = Cached input; W = Cache write; O = Output**. Input is uncached, Cached input is cache read, Cache write is cache creation, and Output includes reasoning. Full-session totals and main/linked-child breakdown come from the canonical result, never from loaded chunks. Unknown, incomplete and estimated amounts remain honest; a published Cache write price does not imply observed tokens. CCost is not billing. The browser performs no valuation or token attribution.
 
-Most finite report tables show 50 rows per page from **one complete immutable API result**. Sessions instead requests at most 50 roots per Web page: catalog membership and CLI activity-descending/id-descending order are fingerprinted (including child activity/source identity), and only that slice is hydrated/analyzed. Totals count discovered available roots, not missing history; partial-source warnings remain visible. Each page's row values are observed separately, not an atomic cross-page snapshot. Search/filter/sort apply only to the loaded slice. Changed catalogs reject older-page requests with `session_catalog_changed`; Latest sessions / restart browsing discards cached list observations and captures a fresh first page. Previous/Next use ordinary fragment links, supporting Back/Forward and direct-link reload. The existing 8 MiB/120-second job limits still apply: oversized/slow pages fail explicitly. Session detail uses its independent bounded revision-aware contract below. Up to twelve views are retained only in page memory; reload/eviction requests a new capture, while Back to a retained Snapshot does not refresh it.
+Most finite report tables show 50 rows/page from one immutable API result. Sessions instead reads the host-owned catalog without submitting finite report jobs. Its exact six columns are **Last activity | Session name | Model | CCost | Prompts | Duration**. Last activity uses local date/time and source-backed root-tree activity; names link to detail. Only names expand/ellipsize. All cells stay on one line; necessary horizontal pan never creates nested vertical scrolling. The minimal footer gives Previous, accurate range/page/total and Next.
 
-## Complete session Snapshot/Live
+Last activity descending is the default. All six server comparators use canonical values, not formatted strings; exact CCost, numeric count/millisecond duration and deterministic ID ties span the entire available catalog. Activity/name work immediately. A cold or invalidated scalar index explicitly reports **Global sort unavailable: indexed X of N sessions**, retaining activity order until all metric keys are valid; it never labels a page-only order as global. Canonically unknown/partial keys sort last. This temporary metric-sort limitation is intentional, not evidence that every historical root is already indexed.
 
-Models is the exception to finite-table paging: every matching row is present and
-the document scrolls. Background connection-status updates
-retain that frozen DOM, including scroll position, keyboard focus and text selection.
+The browser reads every five seconds. Page 1 follows observed arrivals in the applied sort order; returning there resumes current membership. Page 2+ retains internal epoch membership/order, so arrivals cannot shift boundaries; independently observed values may refresh. Changing sort returns to page 1. Back/Forward uses fragment offset/epoch links; expired/reloaded older views explicitly offer page 1 rather than silently changing membership. Source failure retains rows with compact unavailable guidance. No cross-root atomic snapshot is claimed.
 
-Normal `/#/sessions/<id>` links default to Snapshot; `/#/sessions/<id>/live` explicitly requests Live. The mode button switches without stopping the shared server. Entering Live queues an authoritative source observation, not event-only continuation of an old snapshot. Snapshot freezes the whole report, including running durations and totals; Refresh requests a new capture. Leaving Live freezes one consistent current revision. Idle, abort and prompt completion never end Live.
+## Complete live session history
 
-Session history reuses Python's detailed report projection, not Watch-only context/duration fields or browser calculations. All root-tree rows remain available, without a prompt count, Watch row cap, history TTL or durable ledger. First/Previous/Next and Jump to latest traverse 50-row pages; totals always cover the full observed report. Loading, observation time, missing/archive/outage and partial pricing remain explicit. A catalog absence is not proof of deletion: the last report remains readable. Rows omitted by source compaction/gaps retain canonical evidence, last-observed provenance and frozen lifecycle/time until observed again; source history deleted before observation cannot be reconstructed. No completion is inferred from connection loss.
+Both normal and legacy `/live` links open the same live page; the legacy URL replaces its history entry. **Show all sessions**, the real title, full selectable **Session ID**, and Watch's shared canonical **Context:** line precede one unframed table. The line uses the same session continuation estimator, triangle/octagon severity, price impact and contextual help as Watch; unknown is N/A, never a guessed warning. No redundant total-cost/rate summary or mode buttons remain.
 
-Session controls say **Follow live** / **Freeze snapshot**; Refresh captures a new observation.
-Summaries use the shared CLI CCost, money and duration tokens, never raw Decimal strings.
-Prompt clocks use the configured timezone; Next Ictx and context warnings stay beside the
-history. Whole-session child-cost breakdowns remain distinct from page totals. Technical
-source/provenance and reading guidance are optional. Date/range explanations show inclusive
-configured-local calendar dates, with links to full detail and browser Back to the frozen range.
-The [owner-facing review matrix](../development/architecture/governance/verification/remaining-web-parity.md)
-distinguishes deterministic/browser evidence and intentional CLI differences; it is scoped
-Beta evidence, not a permanent gate or native macOS acceptance.
+Every observed prompt appears oldest to newest, with no 50-row cap or user-facing pagination. Prompt alone flexes/ellipsizes; other columns keep intrinsic widths. The document scrolls vertically. Clock, actual **[RUNNING]**, number and preview share one line; running ink is yellow across all cells, reverting to theme foreground after canonical completion. Model/Effort use structured main-prompt evidence. Shared heading help covers all ten columns; prompt clock and CCost expose useful conditional detail. **Complete session** remains the aligned canonical whole-session footer, not a sum of fetched rows.
 
-Pages carry a revision and canonical row identities. A stale cursor rebases to the existing anchor, never silently combines pages into a report. The client caches only its current 50-row page and retains keyed DOM nodes on updates. Scrolling up or focusing controls disables follow; Jump to latest re-enables it. Background updates preserve row anchors/pixel offset and defer row replacement during text selection. Copy/selection covers the current page, not unloaded pages; use paging to reach other rows. Real-browser layout, resize and assistive-technology behavior still require owner validation; VM checks are not visual acceptance.
+Stable keyed rows preserve document anchors, focus and text selection. Large new suffixes are built detached and batch-appended. Source omissions retain canonical evidence and frozen lifecycle/time until observed again; deleted-before-observation history cannot be recovered. Missing, archived, partial and unavailable remain distinguishable from observed empty. Silence/connection loss never proves completion.
 
-Authenticated, CSRF-protected `/api/detail` POST actions: `open` (`session_id`, `mode: snapshot|live`) returns an opaque token; `page` takes token, nonnegative offset, optional revision/anchor and returns up to 50 rows plus full totals; `freeze` captures the live revision; `close` releases a handle. Detail polling is independent of SSE replay: every response is authoritative, so stream gaps cannot drop rows. One host-owned round-robin detail queue serves all tabs on an isolated single-worker lane, using fresh source/service integrations rather than borrowing Live's mutable service. It admits at most one due session per detail turn with five-second acquisition cadence; native account acquisition retains its single owner. Stable revisions reuse analysis; timer-only ticks do no detail acquisition/valuation. The session-local retained snapshot never enters persistent source/cache state.
+Authenticated, CSRF-protected `/api/detail` uses `open`, `begin`, revision-pinned `chunk`, and `close`. Internal rich chunks contain at most 25 rows with full-session totals; a captured revision stays coherent even while acquisition advances. Compatibility `page`/`freeze` actions remain internal APIs, not a UI experience. Five-second polling is independent of SSE. The existing isolated round-robin detail lane owns acquisition; the catalog index has a separate single-worker lane, so a slow root cannot occupy the detail worker. Neither HTTP nor browser code acquires source history.
 
-Resource admission allows 16 distinct observed session trees per host and 32 transport handles. Abandoned handles expire after five minutes, but history does not; expiration is explicit (410), not an empty report or row eviction. Busy admission is explicit (429). Repeated refresh/mode changes release their old handle. Restarting the host discards observed history. Synthetic 100/1,000/10,000-row probes test complete first/middle/latest access, totals, page bounds, source omission/reconnect and unchanged work. `test_web_session_detail.py` also exercises real HTTP authorization and shipped assets in an optional Node VM, not a browser or model runner.
+Catalog indexing admits at most four roots per slice and no further root after two seconds of measured work; a single read retains the source's timeout/cancellation bound. Fair visible/live and historical admission prevents starvation. Compact disposable summaries are checked against source identity/revision, algorithm, configuration and prices; live/running roots force fresh acquisition. Dependencies revalidate every 60 seconds while browsing, subject to in-flight source work. This is acceleration state, not a user ledger or source mutation.
 
-Layout choices: wrapping navigation, system light/dark palette, keyboard focus and skip-to-report. Other report tables keep sticky headings, search/paging and complete totals; Models alone uses document scrolling and its two filters. Shown older models have normal contrast. Refresh/status messages do not take focus. No frontend build, Node installation, CDN, analytics, account login or editing is needed.
+Admission remains 16 observed detail trees/32 handles; catalog has 32 five-minute handles and at most eight epochs each. Busy/expired handles fail explicitly. Leaving detail closes its handle; host restart discards retained history. No model calls, source writes, new dependency, frontend build or account login is introduced.
 
-`test_web_views.py` exercises the shipped JavaScript and real HTTP/facade with deterministic sources through an optional developer-only Node DOM harness. It tests navigation/hash events, reload, safe hostile/Unicode text, long/running/aborted/compacted/empty/missing/partial reports, complete totals and frozen/explicit-refresh/stale behavior. It is not visual browser, CSS layout or native macOS acceptance. Owner checks: open the Beta, try narrow/wide windows and light/dark mode, tab through navigation and page controls, select prompt text, follow a session link, use Back/Forward and reload, and Refresh a running session. No new permanent release gate is added.
+Focused catalog/detail/real-HTTP VM tests, a hidden Chromium synthetic theme/viewport/zoom probe, and `probe_web_live.py --sessions` cover complementary boundaries. Actual results, cold-index coverage and unmeasured physical/macOS/assistive behavior are recorded in the [Sessions findings](../development/journal/web/sessions-live.md), not inferred from VM assertions. Other finite reports retain frozen DOM, controls and failure semantics.
 
 ## Global Watch and reconnect
 
@@ -710,7 +699,7 @@ The historical synthetic parity and bounded integration inventory is [Beta stabi
 
 | Route | Method | Meaning |
 | --- | --- | --- |
-| `/`, `/app.js`, `/render.js`, `/watch.js`, `/reports.js`, `/live.js`, `/session.js`, `/settings.js`, `/app.css` | GET | Fixed public Beta shell/assets, no history |
+| `/`, `/app.js`, `/render.js`, `/watch.js`, `/reports.js`, `/live.js`, `/session.js`, `/sessions.js`, `/settings.js`, `/app.css` | GET | Fixed public Beta shell/assets, no history |
 | `/health` | GET | Public HTTP-shell readiness only |
 | `/api/bootstrap` | POST | One-use `{"credential":"…"}` exchange with exact Origin |
 | `/api/session` | GET | Authenticated CSRF recovery, no control credential |
@@ -722,7 +711,8 @@ The historical synthetic parity and bounded integration inventory is [Beta stabi
 | `/api/live` | GET | Authenticated coherent live/progress snapshot and instance/sequence; retained terminal state while stopping |
 | `/api/events` | GET | Authenticated multiplexed SSE, bounded replay with Last-Event-ID; no query strings |
 | `/api/reports` | POST | Enqueue/coalesce a finite report; return job ID (202) |
-| `/api/detail` | POST | Shared complete session capture, revision-aware pages, freeze and handle release |
+| `/api/sessions` | POST | Read shared catalog; validated token, offset/epoch, sort and direction; at most 50 rows, no source acquisition |
+| `/api/detail` | POST | Shared complete session capture, pinned begin/chunk history and handle release; compatibility page/freeze |
 | `/api/jobs/<id>` | GET | Authenticated status/progress/result |
 | `/api/jobs/<id>/cancel` | POST | Cancel owned queued/running work with `{}` |
 

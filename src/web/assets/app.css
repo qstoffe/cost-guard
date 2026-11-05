@@ -152,6 +152,26 @@ p.warning { border-left: 3px solid var(--warn); padding: .65rem .85rem; backgrou
 .session-detail .pager input { width: 7rem; }
 .session-detail > p:empty, .session-detail .warning:empty { display: none; }
 .session-detail .table-scroll { overflow-anchor: auto; }
+[data-section="sessions"] .toolbar, [data-section="sessions"] #notice,
+[data-section="sessions"] #scope-controls, [data-section="sessions"] .report-search { display: none; }
+[data-section="sessions"] main { padding-top: .65rem; }
+.sessions-table-pan { overflow-x: auto; max-height: none; border: 0; }
+.sessions-table { display: grid; width: 100%; min-width: max-content; table-layout: auto; }
+.session-catalog-table { grid-template-columns: max-content minmax(12rem, 1fr) repeat(4, max-content); }
+.session-history-table { grid-template-columns: minmax(14rem, 1fr) repeat(9, max-content); }
+.sessions-table thead, .sessions-table tbody, .sessions-table tfoot,
+.sessions-table tr { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; }
+.sessions-table th, .sessions-table td { min-width: 0; white-space: nowrap; text-align: left; }
+.sessions-table th button { white-space: nowrap; }
+.sessions-table .session-name, .session-preview { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.session-prompt-label { display: flex; align-items: baseline; gap: .45em; min-width: 0; }
+.session-prompt-label > :not(.session-preview) { flex-shrink: 0; }
+.session-preview { flex: 1; }
+.sessions-table .session-running, .sessions-table .session-running td { color: var(--watch-running); }
+.sessions-pager { margin-block: .8rem; justify-content: center; }
+.sessions-pager a[aria-disabled="true"] { color: var(--muted); pointer-events: none; text-decoration: none; }
+.session-detail h1 { margin-block: .75rem .25rem; overflow-wrap: anywhere; }
+.session-detail .watch-session-summary { margin-block: .75rem; border: 0; padding: 0; }
 .watch-view .account-card { box-shadow: none; font-size: .85rem; }
 .watch-view .account-card p { margin-block: var(--space-2); }
 .watch-view .quota-summary { padding-block: var(--space-2); }

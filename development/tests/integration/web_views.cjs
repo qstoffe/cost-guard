@@ -2,6 +2,11 @@
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
 const fs = require('node:fs');
+const timers = new Set();
+const vmTimeout = (callback, milliseconds) => {
+  const token = setTimeout(() => { timers.delete(token); callback(); }, milliseconds);
+  timers.add(token); return token;
+};
 
 class Node {
   constructor(tag) { this.tag = tag; this.children = []; this.attrs = {}; this.dataset = {}; this.events = {}; this.text = ''; this.disabled = false; }
@@ -11,20 +16,26 @@ class Node {
   append(...children) { for (const child of children) { if (child.parentNode) child.parentNode.children = child.parentNode.children.filter(node => node !== child); child.parentNode = this; this.children.push(child); } }
   insertBefore(child, before) { this.append(child); this.children = this.children.filter(node => node !== child); const index = this.children.indexOf(before); this.children.splice(index < 0 ? this.children.length : index, 0, child); }
   querySelector(selector) { return all(this, selector.startsWith('.') ? null : selector).find(node => selector.startsWith('.') ? (node.className || '').split(' ').includes(selector.slice(1)) : node.tag === selector) || null; }
-  replaceChildren(...children) { this.children = children; this.text = ''; }
+  replaceChildren(...children) { for (const child of this.children) child.parentNode = null; this.children = []; this.text = ''; this.append(...children); }
   setAttribute(key, value) { this.attrs[key] = value; }
   getAttribute(key) { return this.attrs[key]; }
   removeAttribute(key) { delete this.attrs[key]; }
   addEventListener(key, fn) { this.events[key] = fn; }
   click() { if (!this.disabled) return this.events.click?.(); }
   focus() { this.focused = true; }
+  contains(node) { return node === this || this.children.some(child => child.contains(node)); }
+  remove() { if (this.parentNode) this.parentNode.children = this.parentNode.children.filter(node => node !== this); this.parentNode = null; }
+  getBoundingClientRect() { return {top:100,bottom:120}; }
 }
 const all = (node, tag) => [...(!tag || node.tag === tag ? [node] : []), ...node.children.flatMap(child => all(child, tag))];
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+let diagnostics = () => ({});
 async function until(condition) {
   const caller = new Error().stack.split('\n')[2].match(/web_views\.cjs:(\d+)/)?.[1];
+  const started = Date.now();
   for (let i = 0; i < 500; i++) { if (condition()) return; await delay(10); }
-  assert.fail('bounded UI condition timed out (web_views.cjs:' + caller + ')');
+  assert.fail('bounded UI condition timed out (web_views.cjs:' + caller + '); ' +
+    JSON.stringify({elapsed_ms: Date.now() - started, ...diagnostics()}));
 }
 async function main() {
   const input = JSON.parse(fs.readFileSync(0, 'utf8'));
@@ -65,9 +76,16 @@ async function main() {
   }};
   const context = vm.createContext({LiveConnection: transport, AbortController, clearTimeout, document: {documentElement: new Node('html'), body: new Node('body'), querySelector: () => toolbar, createElement: tag => new Node(tag),
     getElementById: id => ids[id], querySelectorAll: () => nav, addEventListener() {}}, window: {addEventListener: (key, fn) => { handlers[key] = fn; }},
-    location, history, URLSearchParams, fetch: wire, setTimeout, Date, console});
+    location, history, URLSearchParams, fetch: wire, setTimeout: vmTimeout, Date, console});
+  context.document.createElementNS = (_, tag) => new Node(tag);
+  // Allowlisted synthetic state only: never cookie, CSRF or bootstrap values.
+  diagnostics = () => ({requests, ...vm.runInContext(`({route: current?.section,
+    catalog: current?.catalog && {busy:current.catalog.busy, pending:current.catalog.data?.pending_sort,
+      sort:current.catalog.data?.sort, indexed:current.catalog.data?.indexed, available:current.catalog.data?.available},
+    detail: current?.detail && {busy:current.detail.busy, total:current.detail.data?.total,
+      state:current.detail.data?.state}})`, context)});
   require('../fixtures/web_help_vm.cjs')(vm, context);
-  for (const path of ['/render.js', '/reports.js', '/settings.js', '/app.js']) {
+  for (const path of ['/render.js', '/watch.js', '/session.js', '/sessions.js', '/reports.js', '/settings.js', '/app.js']) {
     const response = await fetch(input.origin + path);
     assert.equal(response.status, 200);
     vm.runInContext(await response.text(), context);
@@ -187,57 +205,49 @@ async function main() {
   navigate('models');
   assert.equal(ids.result.textContent, frozenModels, 'confirmed credits restores existing display tokens');
   navigate('sessions');
-  await until(() => ids.notice.textContent.includes('Snapshot captured'));
-  retainedHeartbeat();
+   await until(() => ids.result.textContent.includes('1–50 of 55'));
   assert.match(ids.result.textContent, /1–50 of 55/);
   assert.equal(all(ids.result, 'tbody')[0].children.length, 50);
    const next = all(ids.result, 'a').find(node => node.textContent === 'Next');
    const olderPage = next.href;
-   assert.equal(all(ids['scope-controls'], 'details').length, 1, 'scope is optional/advanced');
+    assert.equal(all(ids['scope-controls'], 'details').length, 0, 'Sessions has no advanced report scope');
    navigate(olderPage.slice(2));
-   await until(() => ids.notice.textContent.includes('Snapshot captured'));
+    await until(() => ids.result.textContent.includes('51–55 of 55'));
   assert.match(ids.result.textContent, /51–55 of 55/);
   const sessionLink = all(ids.result, 'a').find(node => node.href === '#/sessions/root-0000');
   assert.ok(sessionLink, 'session locator links are reachable on the last page');
   navigate('sessions/root-0000');
-  await until(() => ids.notice.textContent.includes('Snapshot captured'));
-  const snapshot = ids.result.textContent;
-  assert.match(snapshot, /Running at snapshot · provisional|1–50 of 151/);
+   await until(() => all(ids.result, 'tbody')[0]?.children.length === 151);
+   const snapshot = ids.result.textContent;
+   assert.match(snapshot, /\[RUNNING\]/);
   const headers = all(ids.result, 'th').map(node => node.textContent);
-  assert.deepEqual(headers, ['Prompt', 'CCost', 'Calls', 'Duration', '~Ictx', '~Ictx CCost', '~Extra CCost', 'Token Mix %']);
+   assert.deepEqual(headers, ['Prompt', 'Model', 'Effort', 'CCost', 'Calls', 'Duration', 'Ictx', 'Ictx CCost', 'Extra CCost', 'Token Mix %']);
   const totals = all(ids.result, 'tfoot')[0].textContent;
-  for (let i = 0; i < 3; i++) all(ids.result, 'button').find(node => node.textContent === 'Next').click();
-  assert.match(ids.result.textContent, /151–151 of 151/);
+   assert.equal(all(ids.result, 'tbody')[0].children.length, 151);
   assert.equal(all(ids.result, 'tfoot')[0].textContent, totals);
-  assert.match(ids.result.textContent, /Running at snapshot · provisional/);
+   assert.match(ids.result.textContent, /\[RUNNING\]/);
   const frozen = ids.result.textContent, count = requests;
   await delay(650);
   assert.equal(ids.result.textContent, frozen);
-  assert.equal(requests, count, 'no global Watch or silent refresh');
+   assert.equal(requests, count, 'no one-second browser polling');
    navigate(olderPage.slice(2)); // Back-equivalent hash event restores the same list page.
-  assert.match(ids.result.textContent, /51–55 of 55/);
+   await until(() => ids.result.textContent.includes('51–55 of 55'));
   navigate('sessions/root-0000');
-  assert.equal(ids.result.textContent, frozen);
-  ids.refresh.click();
-  await until(() => ids.notice.textContent.includes('Snapshot captured'));
-  assert.notEqual(ids.result.textContent, snapshot, 'explicit refresh captures a new observation');
-  assert.match(ids.result.textContent, /1–50 of 152/);
+   await until(() => all(ids.result, 'tbody')[0]?.children.length === 151);
   const last = ids.result.textContent;
-  offline = true;
-  ids.refresh.click();
-  await until(() => ids.notice.textContent.includes('STALE'));
-  assert.equal(ids.result.textContent, last);
-  navigate('sessions/unavailable');
-  await until(() => ids.notice.textContent.includes('Source/report unavailable'));
+   offline = true;
+   await until(() => !vm.runInContext('current.detail.busy', context));
+   await vm.runInContext('current.detail.load()', context);
+   assert.match(vm.runInContext('current.detail.status.textContent', context), /retained/);
+   assert.equal(all(ids.result, 'tbody')[0].children.length, 151);
   assert.equal(ids.result.getAttribute('aria-busy'), 'false');
-  assert.equal(ids.refresh.disabled, false, 'initial report outage remains retryable');
   assert.equal(all(ids.result, 'progress').length, 0);
-  offline = false;
-  navigate('sessions/missing');
-  await until(() => ids.notice.textContent.includes('No matching session'));
+   offline = false;
+   navigate('sessions/missing');
+   await until(() => vm.runInContext('current.detail.status.textContent', context).includes('Session unavailable'));
   navigate('sessions/root-0001');
-  await until(() => ids.notice.textContent.includes('Snapshot captured'));
-  assert.match(ids.result.textContent, /exists but has no prompt rows/);
+   await until(() => vm.runInContext('current.detail.data?.total', context) === 0);
+   assert.equal(all(ids.result, 'tbody')[0].children.length, 0);
   navigate('live');
   assert.equal(location.hash, '#/watch', 'legacy global Live is replaced, not pushed');
   assert.equal(ids.heading.textContent, 'Watch');
@@ -283,8 +293,8 @@ async function main() {
   navigate('reports?date=2026-02-30');
   await until(() => ids.notice.textContent.includes('Invalid report scope'));
   navigate('sessions?limit=3');
-  await until(() => ids.notice.textContent.includes('Snapshot captured'));
-  assert.match(ids.result.textContent, /1–3 of 3/);
+   await until(() => ids.result.textContent.includes('1–50 of 55'));
+   assert.equal(all(ids['scope-controls'], 'form').length, 0, 'obsolete limits cannot truncate the live catalog');
   navigate('token-mix');
   const beforeDeep = requests;
   await delay(650);
@@ -304,16 +314,15 @@ async function main() {
   assert.equal(cmp('-0.010', '-0.009'), -1);
   assert.equal(cmp('1.00', '1'), 0);
   navigate('sessions');
-  await until(() => ids.notice.textContent.includes('Snapshot captured'));
+   await until(() => ids.result.textContent.includes('1–50 of 55'));
   const beforeFilter = requests;
-  ids.search.events.input({target: {value: 'root-0000'}});
-   assert.match(ids.result.textContent, /1–50 of 55.*0 matches on this page only/);
-   assert.equal(all(ids.result, 'tbody')[0].children.length, 0, 'older root is not in the loaded slice');
-  assert.equal(requests, beforeFilter, 'presentation filter does not change acquisition');
-  ids.search.events.input({target: {value: ''}});
-  const column = all(ids.result, 'button').find(node => node.textContent === 'CCost');
-  column.click();
-  assert.equal(all(ids.result, 'th')[2].attrs['aria-sort'], 'ascending');
+   assert.equal(all(ids.result, 'input').length, 0, 'catalog has no page-only presentation filter');
+   assert.equal(all(ids.result, 'tbody')[0].children.length, 50);
+   const column = all(all(ids.result, 'th')[3], 'button')[0];
+   column.click();
+   await handlers.hashchange();
+   await until(() => vm.runInContext('current.catalog.data.sort', context) === 'ccost');
+   assert.equal(all(ids.result, 'th')[3].attrs['aria-sort'], 'ascending');
   // Actual canonical DTOs exercise compaction, linked-child, running and hostile text.
   for (const [index, result] of input.examples.entries()) {
     context.example = result;
@@ -363,14 +372,14 @@ async function main() {
   // Reload with an ordinary deep link must not erase it or require the bootstrap again.
   location.hash = '#/sessions/root-0000';
   const reloaded = vm.createContext({LiveConnection: transport, AbortController, clearTimeout, document: context.document, window: context.window, location, history,
-    URLSearchParams, fetch: wire, setTimeout, Date, console});
+     URLSearchParams, fetch: wire, setTimeout: vmTimeout, Date, console});
   require('../fixtures/web_help_vm.cjs')(vm, reloaded);
-  vm.runInContext(await (await fetch(input.origin + '/render.js')).text(), reloaded);
+   for (const file of ['/render.js', '/watch.js', '/session.js', '/sessions.js']) vm.runInContext(await (await fetch(input.origin + file)).text(), reloaded);
   vm.runInContext(await (await fetch(input.origin + '/reports.js')).text(), reloaded);
   vm.runInContext(await (await fetch(input.origin + '/settings.js')).text(), reloaded);
   ids.notice.textContent = 'reload pending';
   vm.runInContext(await (await fetch(input.origin + '/app.js')).text(), reloaded);
-  await until(() => ids.notice.textContent.includes('Snapshot captured'));
+   await until(() => vm.runInContext('current?.detail?.data?.total', reloaded) === 151);
   assert.equal(location.hash, '#/sessions/root-0000');
   assert.match(ids.heading.textContent, /Session root-0000/);
   // Legacy deep-link reload canonicalizes once. Back/Forward revisit the same entry.
@@ -439,4 +448,4 @@ async function main() {
   assert.doesNotMatch(ids.result.textContent, /synthetic-network-failure/);
   console.log('web views passed: real HTTP, facade, pagination, frozen/refresh/stale, missing/empty, deep links, safe text');
 }
-main().catch(error => { console.error(error); process.exitCode = 1; });
+main().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => { for (const timer of timers) clearTimeout(timer); }).then(() => process.exit(process.exitCode || 0));

@@ -173,6 +173,43 @@ const WatchView = (() => {
     node.setAttribute('role', 'img');
     return {node, outline};
   }
+  function contextParts(target) {
+    const icon = contextWarningIcon(); target.warningIcon = icon.node; target.warningOutline = icon.outline;
+    target.contextValue = el('span', undefined, 'watch-session-context');
+    target.contextLabel = el('span', 'Context: ');
+    const line = el('div'), help = ContextHelp.value(el('span'), 'Estimated context for the next request in this session.\nPrice warnings concern its price tier, not a session spending limit.');
+    help.append(target.contextLabel, target.contextValue);
+    target.warningText = el('span'); target.warningLead = el('span');
+    target.warningImpact = el('span'); target.warningEnd = el('span');
+    target.warningText.append(target.warningLead, target.warningImpact, target.warningEnd);
+    line.append(target.warningIcon, help, target.warningText);
+    return line;
+  }
+  function drawContext(target, context) {
+    const warning = context?.warning;
+    const visible = context?.watch_next_context_tokens != null && ['approaching', 'exceeded'].includes(warning?.severity);
+    target.summary.dataset.severity = visible ? warning.severity : 'none';
+    text(target.contextValue, context ? display(context, 'watch_next_context_tokens') : 'N/A');
+    target.warningIcon.hidden = !visible;
+    target.warningOutline.setAttribute('points', warning?.severity === 'exceeded' ?
+      '7,2 17,2 22,7 22,17 17,22 7,22 2,17 2,7' : '12,2 23,22 1,22');
+    target.warningIcon.setAttribute('aria-label', visible ? warning.severity === 'exceeded' ?
+      'Stop: higher context pricing' : 'Caution: nearing higher context pricing' : '');
+    target.warningIcon.tabIndex = visible ? 0 : -1;
+    const wording = visible ? warning.text.replace(/^\[|\]$/g, '').trim() : '';
+    const impact = () => visible ? display(warning, 'warning_cost').replace(/^\(|\)$/g, '').trim() : '';
+    text(target.warningLead, () => visible ? ` (${wording}${impact() ? '; ' : ''}` : '');
+    text(target.warningImpact, impact);
+    target.warningImpact.className = warning?.multiplier != null ? 'watch-price-multiplier' : '';
+    text(target.warningEnd, visible ? ')' : '');
+  }
+  class ContextLine {
+    constructor() {
+      this.root = this.summary = el('div', undefined, 'watch-session-summary');
+      this.root.append(contextParts(this));
+    }
+    update(value) { drawContext(this, value); }
+  }
   class Card {
     constructor(historical) {
       this.root = el('article', undefined, 'watch-card');
@@ -192,20 +229,12 @@ const WatchView = (() => {
       ContextHelp.attach(this.skills.summary, 'Confirmed custom skill loads only.\nFailure counts require direct skill attribution.');
       this.activity.append(this.tools.node, this.skills.node, this.running, this.background);
       this.summary = el('div', undefined, 'watch-session-summary');
-      const icon = contextWarningIcon(); this.warningIcon = icon.node; this.warningOutline = icon.outline;
-      this.contextLabel = el('span', 'Context: ');
-      this.contextValue = el('span', undefined, 'watch-session-context');
-      const contextLine = el('div'), contextTarget = ContextHelp.value(el('span'), 'Estimated context for the next request in this session.\nPrice warnings concern its price tier, not a session spending limit.');
-      contextTarget.append(this.contextLabel, this.contextValue);
+      const contextLine = contextParts(this);
       this.costLabel = el('span'); this.costStatus = el('span');
       this.costHelp = ContextHelp.value(el('span'), () => 'Reference cost of the entire session, including earlier prompts, linked subagents and provisional work.' +
         (this.summaryValue?.cost && !this.summaryValue.cost.complete ? '\n? — Partial pricing or source data.' : ''));
       this.costHelp.append(el('span', 'Total CCost: '), this.costLabel);
       const costLine = el('div'); costLine.append(this.costHelp, this.costStatus);
-      this.warningText = el('span'); this.warningLead = el('span');
-      this.warningImpact = el('span'); this.warningEnd = el('span');
-      this.warningText.append(this.warningLead, this.warningImpact, this.warningEnd);
-      contextLine.append(this.warningIcon, contextTarget, this.warningText);
       this.summary.append(contextLine, costLine);
       this.root.append(heading, this.message, scroll, this.summary, this.activity);
     }
@@ -265,24 +294,7 @@ const WatchView = (() => {
       // an observed correction or a confirmed unavailable/partial result.
       if (pending) value = {...value, cost: value?.cost ?? this.summaryValue?.cost};
       this.summaryValue = value;
-      const context = value?.context, warning = context?.warning;
-      const visible = context?.watch_next_context_tokens != null && ['approaching', 'exceeded'].includes(warning?.severity);
-      this.summary.dataset.severity = visible ? warning.severity : 'none';
-      text(this.contextValue, context ? display(context, 'watch_next_context_tokens') : 'N/A');
-      this.warningIcon.hidden = !visible;
-      this.warningOutline.setAttribute('points', warning?.severity === 'exceeded' ?
-        '7,2 17,2 22,7 22,17 17,22 7,22 2,17 2,7' : '12,2 23,22 1,22');
-      this.warningIcon.setAttribute('aria-label', visible ? warning.severity === 'exceeded' ?
-        'Stop: higher context pricing' : 'Caution: nearing higher context pricing' : '');
-      this.warningIcon.tabIndex = visible ? 0 : -1;
-      // Canonical wording already includes severity and the boundary. Remove only
-      // its display delimiters; never derive severity or prices from formatted text.
-      const wording = visible ? warning.text.replace(/^\[|\]$/g, '').trim() : '';
-      const impact = () => visible ? display(warning, 'warning_cost').replace(/^\(|\)$/g, '').trim() : '';
-      text(this.warningLead, () => visible ? ` (${wording}${impact() ? '; ' : ''}` : '');
-      text(this.warningImpact, impact);
-      this.warningImpact.className = warning?.multiplier != null ? 'watch-price-multiplier' : '';
-      text(this.warningEnd, visible ? ')' : '');
+      drawContext(this, value?.context);
       text(this.costLabel, () => value?.cost ?
         value.cost.observed_requests && !value.cost.priced_requests ? 'N/A' : display(value.cost, 'known_ccost') :
         value?.state === 'unavailable' ? 'N/A' : '—');
@@ -398,5 +410,5 @@ const WatchView = (() => {
       }
     }
   }
-  return {View};
+  return {View, ContextLine};
 })();

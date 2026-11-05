@@ -60,7 +60,7 @@ class SessionDetails:
         return {name: entry[name] for name in ("result", "revision", "state", "observed_at_ms",
                                               "row_observations", "omitted_ids", "timezone_id", "ccost_display_unit")}
 
-    def page(self, token, offset, revision=None, anchor=None):
+    def page(self, token, offset, revision=None, anchor=None, *, begin=False, chunk=False):
         with self.lock:
             lease = self.leases.get(token)
             if lease is None:
@@ -69,7 +69,13 @@ class SessionDetails:
             entry = self.histories[lease["session_id"]]
             if lease["mode"] == "snapshot" and lease["frozen"] is None and entry["generation"] > lease["after"]:
                 lease["frozen"] = self._capture(entry)
-            capture = lease["frozen"] or self._capture(entry)
+            if begin:
+                lease["reading"] = lease["frozen"] or self._capture(entry)
+            capture = lease.get("reading") if chunk else lease["frozen"] or self._capture(entry)
+            if begin:
+                capture = lease["reading"]
+            if chunk and (capture is None or capture["revision"] != revision):
+                raise KeyError("detail_expired")
             pending = lease["frozen"] is None and entry["generation"] <= lease["after"]
         report = capture["result"]
         if pending or report is None:
@@ -82,8 +88,9 @@ class SessionDetails:
                 identity((block.session_id, row.event_id, row.is_compaction)) == anchor), offset)
         offset = (max(0, len(rows) - 50) if offset >= 2**52 else
                   max(0, min(offset, max(0, len(rows) - 1))))
-        page = replace(report, prompt_blocks=(replace(block, rows=rows[offset:offset + 50]),))
-        view = project(page, capture["timezone_id"], capture["ccost_display_unit"]).to_json()
+        size = 25 if begin or chunk else 50
+        page = replace(report, prompt_blocks=(replace(block, rows=rows[offset:offset + size]),))
+        view = project(page, capture["timezone_id"], capture["ccost_display_unit"], prompt_details=begin or chunk).to_json()
         for row in view["prompt_blocks"][0]["rows"]:
             row["id"] = identity((block.session_id, row["event_id"], row["is_compaction"]))
             row["last_observed_at_ms"] = capture["row_observations"].get(row["event_id"])

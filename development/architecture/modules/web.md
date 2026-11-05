@@ -16,7 +16,11 @@ current reference; older per-cell/native-tooltip descriptions below are historic
 
 `src/web/http.py` owns bounded loopback HTTP, fixed assets and routing; `src/web/security.py` owns one-use bootstrap/HttpOnly sessions/CSRF; `src/web/jobs.py` owns finite admission, process isolation, progress, cancellation and retention; at most 64 progress messages drain per host turn to prevent scan backpressure without starving control/Live. `src/web/composition.py` creates fresh canonical ReportApplication integrations.
 
-`src/web/assets/app.js` owns finite refresh/stale/cancel state and memory-only observations; unified Models/Accounts reuse one frozen normal report. `src/web/assets/reports.js` owns scope forms and explicit-only deep-history admission. `render.js` presents DTOs with exact Decimal/vector sorting; generic reports retain presentation search/50-row paging, while Models has independent catalog/version filters and complete document-scrolling rows. Totals never come from cells. `session.js` owns Snapshot/Live detail, canonical DOM identities, anchored paging, selection/focus protection and follow-latest. `src/application/session_detail.py` round-robins captures on the Web adapter's isolated single detail lane and returns frozen revision-aware pages/full totals. `src/reports/session_history.py` retains canonical evidence outside durable caches; omissions freeze lifecycle/time rather than falsely complete rows. Unchanged running evidence reuses attribution/valuation. Web→application→reports is unchanged; missing/archive/outage is not empty success. Scope/cache/route inventory: `docs/web-beta.md`.
+`src/web/assets/app.js` owns finite refresh/stale/cancel state and memory-only observations; unified Models/Accounts reuse one frozen normal report. `reports.js` owns scope forms and explicit-only deep-history admission. `render.js` presents DTOs with exact Decimal/vector sorting; generic reports retain presentation search/50-row paging, while Models has independent catalog/version filters and complete document-scrolling rows. Totals never come from cells. Sessions bypasses finite jobs and the report shell: `sessions.js` renders six-column live catalog pages; `session.js` renders one ten-column complete chronological history. Both use intrinsic metric tracks, elastic title/preview and document vertical scrolling. Shared Watch `ContextLine` and contextual-help components consume canonical report context, not a browser estimator.
+
+`application/session_catalog.py` owns the full observed membership, six exact server comparators, fair bounded scalar warming and stable older-page epochs. `reports/session_summary.py` caches only reconstructible source/dependency/algorithm-checked scalar summaries. Active/running roots bypass reuse. All metric keys must be validated before global metric sorting; cold/invalidation pending state explicitly falls back to activity, never page-local ordering. `watch/web_coordinator.py` shares its full catalog observation, including archived revisions, and isolates the index in a single-worker lane separate from detail, account history and four card workers. A slice admits at most four roots and stops admission after two seconds; source timeout/cancellation still bounds each read. HTTP only reads the owner; no per-tab acquisition.
+
+`application/session_detail.py` round-robins captures on the isolated detail lane. `begin` pins a capture and `chunk` reads rich 25-row slices from that same revision while acquisition may advance; full totals remain canonical. Compatibility 50-row `page`/`freeze` remain API-only. `reports/session_history.py` retains canonical evidence outside durable caches; omissions freeze lifecycle/time rather than falsely complete rows. Unchanged running evidence reuses attribution/valuation. The browser batches new DOM suffixes, retains keyed rows/selection/focus/document anchors, closes obsolete leases and has one five-second polling timer through navigation races. Web→application→reports is unchanged; missing/archive/outage is not empty success. Scope/cache/route inventory: `docs/web-beta.md`; measured evidence and the scoped cold-index exception: [Sessions findings](../../journal/web/sessions-live.md).
 
 `src/web/host.py` owns shutdown of HTTP/jobs and one `src/application/live.py` thread; GUI run/close stays on main. `source_startup.py` runs once on that Live worker after config validation, reuses healthy source selection, and optionally calls `src/opencode_service.py`'s fixed hidden wake (5s). Narrow V2 absent/transport categories qualify, never unreadable/invalid registration, permission/auth/schema or selected V1. Fresh registration/API selection with the existing short read budget proves readiness; even CLI failure/timeout can only succeed through that proof. A lock/event coalesces entry paths and holds finite jobs queued until the attempt ends, not HTTP/navigation. `starting_opencode` is a detached SSE/HTTP state mapped to visible/accessibly announced feedback, cleared before ordinary acquisition/wait/failure. Later Live factories, tabs and finite report workers cannot wake. Composition transfers the Watch service to `src/watch/acquisition.py`; tabs only read detached values. Live persists without tabs, preserving engine-start origin and independent account cadence. Finite reports never borrow/close that context. Unexpected faults reach main RuntimeErrors (managed logs outside checkout); children monitor their exact parent sentinel. OpenCode is never stopped.
 
@@ -389,13 +393,13 @@ Native entries: `windows/Beta/Cost-Guard-Web.cmd`, `src/web/windows_launch.ps1`,
 
 `development/tests/test_macos_web.py` / `development/tests/test_macos_app.py` cover typed callbacks/faults, main-thread/tracking timers, preflight/readiness/cleanup, asynchronous actions and cache/quoting/rebuild failures without AppKit/UI. Approval-only `development/tests/integration/probe_macos_web.py` was not run here. Finder/Gatekeeper/clone/ZIP/executable-bit/no-Terminal/browser/tracking/source-change/orphan/CPU-architecture checks remain pending as documented in `docs/web-beta.md`.
 
-`development/tests/test_web_session_detail.py` / `development/tests/integration/web_session.cjs` cover 100/1,000/10,000-prompt first/middle/latest access, full totals, bounded pages/DOM, strict timestamp windows, unchanged work, row identity/anchor/focus/selection, transitions, omissions/outages/reconnect and late children/partial prices. `development/tests/integration/probe_web_live.py` with --detail --reports observed V2 detail/freeze, normal/all-models/sessions/date completion and cancelled deep history, preserving one owner/two streams/run origin and joined shutdown on 2026-10-26. No browser or model was invoked. Copy/selection covers the fetched page; physical layout and screen-reader proof remain unclaimed.
+`test_web_session_catalog.py` covers full-catalog six-key order, cold readiness/invalidation, persistent scalar reuse/corruption, archived membership, live versus frozen epochs, bounded/fair warming and blocked-index/detail isolation. `test_web_session_detail.py` / `integration/web_session.cjs` retain legacy first/middle/latest API coverage and add complete client history, revision-pinned rich chunks, whole-session totals, keyed selection and navigation/lease races. `integration/probe_web_sessions.cjs` uses a fresh hidden Chromium and actual HTTP/assets over synthetic 120-root/1,001-prompt evidence; `probe_web_live.py --sessions` separately observes the real V2 source. Historical --detail/--reports results remain API evidence, not current UI acceptance. Actual timings, cold coverage and physical/macOS/assistive limits: [Sessions findings](../../journal/web/sessions-live.md).
 
 Remaining report presentation shares `display.history_tokens` for configured prompt clocks,
 Next Ictx guidance and CLI historical mix category cells. `projection.token_mix` exports the
 exact aggregate cost separately for sorting; JavaScript never totals displayed cells.
-Session summary/footer use the same frozen block tokens; Freeze/Follow forces a mode-aware
-redraw without changing canonical row IDs or page ownership. Date range prose omits raw
+Session footer uses canonical block tokens and stable row IDs; internal pinned chunks
+do not create a user-facing frozen mode. Date range prose omits raw
 epoch boundaries. `test_web_remaining.py` / `integration/web_remaining.cjs` compare the same
 CLI fixtures, including partial/unknown mix coverage. Approval-only
 `integration/serve_web_remaining.py` serves the actual app over synthetic HTTP fixtures,
@@ -404,16 +408,13 @@ records Windows built-in-browser inspection and remaining native/assistive limit
 Architecture boundaries are unchanged; journal assessment: no-update, these owner facts
 and the focused evidence are sufficient.
 
-Session-detail scroll retention uses the inner `.table-scroll` owner and captures
-the visible row after the HTTP response, immediately before DOM mutation. Internal
-scrolling away from the bottom disables follow; background retention never calls
-document scrolling. Frozen reports also retain their actual DOM during host-health
-checks unless the report, search, view or output changes. This applies to every
-finite report, not only Overview: health is not a new snapshot. Session detail's
-attach is also idempotent for its current parent, avoiding a disconnect/reinsert
-that loses native focus/scroll during health updates. The deterministic
-pending-response/geometry/heartbeat regressions and browser evidence are recorded in
-[table-scroll investigation](../governance/verification/web-table-scroll.md).
+Session detail now captures the visible document row immediately before DOM mutation,
+preserving its pixel anchor without forcing follow-latest. There is no inner vertical
+scroll owner. Frozen finite reports retain their actual DOM during host-health checks
+unless report/search/view/output changes: health is not a new snapshot. Detail attach
+is idempotent for its current parent, avoiding focus/scroll loss during health updates.
+The older [table-scroll investigation](../governance/verification/web-table-scroll.md)
+describes the superseded paged Sessions layout; its finite-report retention findings remain.
 
 ## Native launcher maintenance notes
 

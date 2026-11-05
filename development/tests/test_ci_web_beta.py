@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import shlex
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 from types import SimpleNamespace
@@ -167,6 +168,27 @@ class CiEvidenceTests(unittest.TestCase):
                             success, _ = ci_web_beta.suite_summary(scope)
                             self.assertEqual(mutation == "none", success)
 
+    def test_suite_notices_prioritize_late_failures_before_earlier_skips(self):
+        rows = [dict(file="test_skip.py", tests=30, passed=0, exit_code=0,
+                     skips=[dict(test=f"test_platform_{i}", reason="other platform") for i in range(30)]),
+                dict(file="test_late.py", tests=1, passed=None, exit_code=1, skips=[],
+                     failed_tests=["test_late (example.Tests.test_late)"],
+                     diagnostics=["AssertionError: bounded UI condition timed out"])]
+        with tempfile.TemporaryDirectory() as temporary:
+            results = Path(temporary)
+            (results / "full.json").write_text(json.dumps(dict(files=rows)))
+            with patch.object(ci_web_beta, "RESULTS", results), \
+                    patch.object(run_tests, "FULL_ONLY_PATTERNS", ()), \
+                    patch.object(run_tests, "QUICK_PATTERNS", ("test_skip.py", "test_late.py")), \
+                    patch.object(ci_web_beta, "notice") as notice:
+                success, _ = ci_web_beta.suite_summary("common")
+        self.assertFalse(success)
+        self.assertEqual(["suite", "failure test_late.py", "failed test"],
+                         [call.args[0] for call in notice.call_args_list[:3]])
+        self.assertEqual(dict(exit_code=1, diagnostics=["AssertionError: bounded UI condition timed out"]),
+                         notice.call_args_list[1].args[1])
+        self.assertEqual(30, sum(call.args[0] == "skip" for call in notice.call_args_list))
+
     def test_registered_browser_boundaries_preserve_url_and_return_failure_truthfully(self):
         from src.web import native_windows, native_macos
         url = "http://127.0.0.1:1234/#bootstrap=synthetic"
@@ -208,6 +230,30 @@ class CiEvidenceTests(unittest.TestCase):
         with patch.dict("os.environ", {}, clear=True):
             with self.assertRaisesRegex(SystemExit, "not authorized on a workstation"):
                 ci_web_beta.hosted_only()
+
+    def test_synthetic_sessions_fixture_captures_and_joins_without_watch_publication(self):
+        import shutil
+        from development.tests.fixtures.web_reports import SyntheticSessionsRuntime
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "config").mkdir()
+            shutil.copyfile(ci_web_beta.ROOT / "config/default-config.jsonc", root / "config/default-config.jsonc")
+            runtime = SyntheticSessionsRuntime(root)
+            token = runtime.details.open("root", "live")
+            runtime.start()
+            try:
+                deadline = time.monotonic() + 5
+                while time.monotonic() < deadline:
+                    captured = runtime.details.page(token, 0, begin=True)
+                    if captured["result"]:
+                        break
+                    runtime.stopping.wait(.01)
+                self.assertIsNotNone(captured["result"])
+                self.assertEqual('<script>PRIVATE_TEXT</script>', captured["result"]["view"]["prompt_blocks"][0]["title"])
+            finally:
+                runtime.close()
+            self.assertFalse(runtime.thread.is_alive())
 
     def test_provisioning_blocked_is_not_relabelled_as_test_failure(self):
         with tempfile.TemporaryDirectory() as temporary:
