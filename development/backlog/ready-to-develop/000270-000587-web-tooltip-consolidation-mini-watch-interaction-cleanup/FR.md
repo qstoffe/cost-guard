@@ -1,79 +1,116 @@
-# FR 000587 — Web tooltips: consolidate Mini Watch help, fix action dismissal, and sharpen copy
+# FR 000587 — Web tooltips: declutter Mini Watch, consolidate full Watch help, and sharpen copy
 
 ## Owner request and backlog decision
 
-**Owner-approved executable Feature Request, 2026-11-05.** Permanent identity **000587**; Ready priority **000270**, after current Ready FR000586 (000260). This is a **second, selective UX/content pass** across Cost Guard Web Beta, with **explicit Mini Watch fixes**. Publish this FR only; **do not implement product, tests, documentation, or version changes while authoring it**.
+**Owner-approved executable Feature Request, updated 2026-11-05.** Permanent identity **000587**; Ready priority **000270**, after current Ready FR000586 (000260). This is a **selective second UX/content pass** across Cost Guard Web Beta, with **mandatory Mini Watch and full Watch changes**. Publish this FR only; **do not implement source, tests, user docs, version, or release changes while authoring it**.
 
-Completed **FR000582** was a clear improvement: the shared custom tooltips feel quick, the question-mark cues are generally useful, and the full Watch **CCost (I + E)** explanation is now especially readable because it is concise and separates concepts with blank lines. **Keep that interaction model, speed, look, and valuable column-header help.** However, the application-wide rollout placed too many help cues in crowded places, introduced some duplicate explanations, and still contains overly long or diagnostic-style tooltip text. This is **not a request to remove most tooltips or rebuild the shared system**; use judgment to simplify what users actually see.
+Completed **FR000582** was a good step forward: the shared custom tooltips are fast and attractive, column-heading help is useful, and full Watch's **CCost (I + E)** explanation is an especially good model of concise text with intentional whitespace. The rollout was nevertheless too indiscriminate: too many question-mark cues, overlapping explanations, needless internal freshness details and some help that adds no value. **Keep what works; remove or consolidate low-value help and apply real UX judgment throughout the Web UI.** This is not a mandate to remove all tooltips or replace the shared component.
 
-## 1. Explicit Mini Watch behavior bugs — mandatory
+**Owner clarification superseding the original FR000587 proposal:** In **Mini Watch**, do **not** add one new table-level `?` per table. Instead, eliminate ordinary row/header-area `?` clutter and use the existing **column headers themselves** as the primary explanation surface. The only deliberate exceptions are the return-to-Watch action tooltip and **at most one optional, useful quota-detail `?` per subscription**.
 
-1. **Cost Guard · Watch:** the tooltip for the button returning to the main Watch tab must **dismiss immediately when the button is activated** (pointer click, tap, Enter/Space), including when the pointer remains over the button. Do not leave the tooltip floating after the action.
-2. **Earlier Sessions:** the button's tooltip must **dismiss immediately on expand and collapse**, including when expansion changes the table layout while the pointer remains in place. An explicit activation should not cause the help to reopen merely because the button remains hovered/focused or because a Live rerender refreshes the tooltip. A *new intentional* hover/focus interaction can show the help again.
-3. Keep both controls fully functional (return to existing tab; disclosure state/ARIA, keyboard and touch). Do not confuse this with disabling help on these buttons: **help before activation is still desirable**. Check the shared action/passive-trigger distinction so the same issue cannot recur elsewhere.
+## 1. Mini Watch: strict, minimal tooltip policy — mandatory
 
-**Current code to inspect:** `src/web/assets/mini.js` attaches help to `this.summary` and `this.earlierToggle`; `src/web/assets/help.js::ContextHelp.attach()` currently invokes `show(target)` for non-passive action clicks. Confirm actual browser behavior before deciding the smallest robust fix; retain click/touch pinning, Escape, hover/focus and pointer transfer for *passive* information cues.
+### 1.1 Keep column-header tooltips, make them genuinely useful
 
-## 2. Mini Watch header: remove the adjacent-question-mark clutter
-
-The Mini header currently places **two question-mark cues near each other in the upper-right area**:
-
-- `CCost Today` has useful explanatory help.
-- The header also adds `Update status and observation times`, largely filled with internal freshness/source diagnostics.
-
-**Remove/consolidate the redundant header-wide observation-time `?`**, preferring to keep the useful `CCost Today` cue. Do not replace it with another adjacent icon or relocate the same diagnostic wall of text. Preserve real user-facing connection problems, stale/retained warnings, authorization/host failures and meaningful `N/A`/partial-data caveats in the established visible status or an appropriately concise, nonduplicative help surface.
-
-## 3. Mini Watch prompt/history tables: fewer cues, better shared explanation
-
-The constrained Mini window currently puts separate row-level `?` controls beside the **Session** title/total, the running prompt **#** cell, and the Earlier Sessions **Ctx** cell, alongside explanatory column headings. In a small table this is noisy.
-
-- **Consolidate general table semantics into approximately one deliberate, easy-to-find table-level `?` per table**: one for running/recent prompts and one for expanded Earlier Sessions. Explain the whole table there, including the distinction between **whole-session** vs **per-prompt** CCost, prompt `#`, Duration, estimated next `Ctx`, and how to interpret unavailable/partial/retained values. The Earlier Sessions version should cover only the fields relevant to that table.
-- Make these **short, human-readable sections with intentional line breaks and occasional blank lines**, not a long continuous paragraph. Example of the intended *format*, not mandated wording:
+- **Keep hover/focus/touch help on the actual column headings** in *both* the current/running prompt table and expanded *Earlier Sessions* table. These are helpful even when space is tight, without requiring an extra visible `?`.
+- **The combined `Session` / `Total CCost` header requires a proper two-part explanation.** It displays *two distinct concepts inside one column* and must not be explained as one dense sentence. Separate the sections with **a blank line**. Example format (final English copy may be polished for correctness/compactness):
 
   ```text
-  Running prompts — current or recently ended work.
+  Session — The name of the session.
 
-  Session — Full session name and estimated total session cost.
-  # — Prompt number within the session.
-  CCost — Estimated cost for this prompt, not your bill.
-  Duration — Time spent on this prompt.
-  Ctx — Estimated context for its next request.
-
-  N/A — Unavailable, not zero.
-  ? — Some pricing data is missing.
+  Total CCost — Estimated cost of the entire session, including
+  earlier prompts and linked subagents. Not your bill.
   ```
 
-- **Remove repetitive row-status/update `?` cues** when the shared help and existing readable/accessible row status convey the same meaning. Keep column-heading hover/focus help where it adds value; don't duplicate a lengthy explanation in both a heading and the new table help.
-- **Do not lose the exact full session title** when a session name is truncated. Preserve an accessible, discoverable way to reveal the unmodified title (and, where genuinely valuable, its specific cost/state); a purposeful per-row reveal only where necessary is better than an unconditional stack of question marks. Do not convert selectable titles or table data into nonselectable help buttons.
-- Preserve real running/completed/aborted/error meaning, per-row status accessibility, two-table separation, compact widths, scrolling, sticky headings, unit/theme behavior and live updates. **No extra table column** is required for the table-wide help.
+  Apply consistently to both Mini tables and account for FR000583's planned parenthesized **`(Total CCost)`** header. **Do not confuse the session total with the running table's separate per-prompt `CCost` column.**
+- The other header help — `#`, `CCost`, `Duration`, `Ctx` — should likewise be **short, accurately scoped, and easy to scan**, with the difference between active-prompt next context and Earlier Sessions' last valid session next context kept correct. Avoid unnecessary diagnostics and paragraph-like copy. A one-line concept does not need blank lines just for decoration.
+- The column header should remain a semantic, accessible help target without an extra question-mark control, extra table column or disruptive layout change. Preserve copy/selection, sticky headers, scrolling, narrow layouts, unit changes and theme support.
 
-## 4. Remove low-value technical freshness diagnostics from ordinary help
+### 1.2 Remove the default question-mark clutter throughout Mini Watch
 
-The owner explicitly does not want developer-facing/ticking details such as **`Last prompt update`**, **`Last quota update`**, `Last daily observation`, or raw `Connection: … / Source: … / prompts: …` state dumps in ordinary Web/Mini tooltips. They add noise without helping most users interpret the data.
+**Remove all routine stand-alone Mini Watch `?` cues other than the optional per-subscription quota cue described below.** In particular:
 
-- Remove this style of **internal update/observation timestamp and status enumeration from default tooltip prose**. Inspect the full app for equivalents, not just exact literal matches. Confirm the existing Mini call sites in `View.update()`, `drawDaily()`, `drawPrompts()`, `drawHistory()`, `drawSession()` and `drawAccounts()`.
-- Keep meaningful *user* concepts where relevant: **Live vs retained/not current**, genuinely unavailable data, estimated values, partial pricing, source/authorization failures, and CCost vs provider-native quota. Express them in one short sentence or a clearly separated status line rather than an internal telemetry log.
-- **Do not remove actual user-data timestamps** such as a prompt's real start/finish date/time or a provider's quota reset time. Those answer a user question; `Last prompt update`-style polling/observation diagnostics generally do not.
-- If raw timestamps/source states are still useful for debugging, do not surface them as default help. This FR does **not** require adding a new diagnostic UI or changing underlying observations/acquisition.
+- Remove **both adjacent upper-right/header `?` cues**, including the `CCost Today` explanation `?` and the header-wide `Update status and observation times` `?`. `CCost Today` should remain self-explanatory in visible text; do not relocate these into another header question mark.
+- Remove row `?` beside **session names/session totals**, **prompt `#`/status**, and **Earlier Sessions `Ctx`**. The table headings explain the metrics; meaningful running/completed/failed states remain readable/accessible without an extra hover log beside every cell.
+- **Do not replace these with a new general table-level `?`**, multiple help icons on the table corner, or invisible duplicate help on normal table values. Keep the Mini visually quiet.
+- **Earlier Sessions toggle gets no tooltip at all**, expanded or collapsed. Its label/action is self-explanatory; deleting the tooltip also eliminates that particular stuck-tooltip bug. Preserve correct disclosure/ARIA state, click/tap/keyboard activation and its layout behavior (including FR000583).
+- A long/truncated session title should remain intact in the underlying text and accessible naming/navigation. Do not reintroduce unconditional per-row `?` solely to repeat the full title or internal source states. Use the existing selectable/accessible session presentation; do not sacrifice accessibility just to remove the icon.
+- Retain **visible, actionable** connection/authorization/host/source warnings and meaningful unknown/partial/stale indications where necessary; removal of redundant tooltip chrome is not permission to hide genuine errors or misrepresent retained information as live.
 
-## 5. Curated second-pass UX audit across the rest of Web
+### 1.3 Keep **Cost Guard · Watch** return-to-tab tooltip, fix its stuck state
 
-The explicit fixes above are mandatory; also **personally review remaining Web tooltip/help placements** in full Watch and other views before changing them:
+The top-left **Cost Guard · Watch** action is a useful exception **without a question-mark icon**. Keep a short tooltip conveying how to return to the original Watch tab, including the browser's native **Return to Tab** control if the Mini PiP remains minimized.
 
-- Spot **clusters of adjacent `?` cues**, redundant column-vs-row explanations, per-value boilerplate, repeated warnings, and help on obvious controls. Retain the cues that answer a real question; consolidate or remove those that merely restate nearby text.
-- **Sharpen language**: a simple explanation should normally fit one sentence; a multi-part one should use brief named lines, grouping/blank lines when it improves scanning. Avoid dense prose, technical implementation names, repeated "not your bill" disclaimers in the same local grouping, and needless internal status detail.
-- Treat the completed full Watch **CCost (I + E)** presentation as a positive benchmark. Especially **preserve valuable help on table headings** and the fast, consistent custom hover/focus/tap treatment. Improve other dense explanations to that standard without making every tooltip the same length.
-- Do not blindly remove essential meaning: `N/A` is not zero, `?` can mean partial pricing, CCost is reference cost rather than a bill, prompt/session/day scopes differ, next context is not accumulated tokens, and native quota is separate from reference cost. Keep advanced details only where users need them or in a deliberate optional disclosure.
-- Reuse `src/web/assets/help.js` and the existing styles/semantics rather than introducing a second competing tooltip system. Make the final cue count and wording a purposeful UX decision, not mechanical global deletion.
+**Bug fix:** when this button is activated by pointer click, touch, Enter or Space, its tooltip must **disappear immediately**, not remain onscreen as the return action occurs. No immediate reopening from stationary hover/focus, window focus changes or live rerenders; help can reappear on a *new intentional* pointer/focus interaction. Preserve real return-to-tab action, accessible button name, and browser-owned PiP behavior.
+
+**Source pointers:** `src/web/assets/mini.js::View` attaches help to `this.summary` and `this.earlierToggle`; `src/web/assets/help.js::ContextHelp.attach()` currently shows rather than dismisses help on action clicks. Remove the Earlier binding; fix action dismissal robustly for the retained return button and inspect similar action-vs-passive behavior elsewhere. Preserve existing hover/focus/Escape/touch-pin behavior for **passive** help cues.
+
+### 1.4 Subscription quota: the *only optional Mini `?`*, and it must earn its space
+
+A **single `?` beside each subscription/account row** may be worthwhile **if it exposes useful information not already visible**. It should not exist just to repeat the row or show `Last quota update`.
+
+- Prefer to show **which quota is currently represented on the compact row** (primary quota label/period and native Used/Remaining orientation), then, **when available**, the account's **secondary quotas** with their own names, periods, limits/usage/remaining and relevant reset/availability notes. This is a substantive reason to keep the cue when a subscription has multiple quotas.
+- Separate **Primary quota** and **Additional quotas** with a blank line; give each secondary quota its own compact line/group. Include a short distinction between native quota and the reference **CCost used in the period** where necessary. Show only values actually provided by the existing account view; no inferred quota capacities, made-up percentages, arbitrary new account polling or other new source acquisition.
+- Prefer useful actual data over a long disclaimer stack. Include actionable restricted/unavailable/partial/retained notes only when relevant. **Do not show internal timestamp logs, raw observation source enums or `Last quota update`.**
+- If an account exposes nothing beyond what its row already says, the implementer may omit its optional `?`; **never add several `?` to one subscription**. No new tooltips on progress bars solely to restate usage.
+
+## 2. Full Web Watch: concrete consolidation and placement fixes — mandatory
+
+### 2.1 Remove prompt-preview question marks from both prompt tables
+
+In both **Running Prompts** and **Earlier Prompts**, **remove the per-row `?` next to the prompt preview** that reveals the complete prompt text.
+
+- The owner considers full prompt text low-value in this compact live-monitoring context. An especially poor case is a short, entirely visible preview whose `?` simply repeats the same text.
+- **Prefer removing this cue altogether**, not merely conditionally hiding it when the preview fits. Preserve the existing visible preview, truncation behavior, readable/accessible prompt identification, and ordinary navigation; no surprise full-text popup.
+- Source pointer: `src/web/assets/watch.js::Card.update()` builds `watch-prompt-preview` and calls `ContextHelp.beside(label, prompt.preview ...)`. Audit Running and Earlier rows.
+
+### 2.2 Move the daily summary help to the far right and explain the *whole card*
+
+The full Watch daily overview above the subscription cards displays **CCost Today, today's prompt count, and Token Mix %**. Today its `?` is inserted beside the **prompt count, between the metrics**, and explains only the number of prompts. This placement and narrow subject are confusing.
+
+- **Remove the mid-card prompt-count `?`. Replace with one purposeful help cue at the **far right of the entire daily summary/card** (adapt responsive placement only as needed to avoid overlap). Its scope is the **whole daily summary**, not merely prompt count.
+- Use compact, clear, visually separated lines covering **CCost Today** (reference estimate, not billing), **today's prompt count** (daily scope, not just visible running rows), and **Token Mix %** (token-share breakdown, not cost). Give Token Mix a brief plain-language explanation, with **I/C/W/O** definitions only to the extent genuinely useful; avoid repeating the full dense table-header tooltip or dumping internals. Example structure, not mandated copy:
+
+  ```text
+  CCost Today — Estimated reference cost for today's prompts.
+  Prompts — Count of prompts with model activity today.
+
+  Token Mix % — How tokens are split between input,
+  reused input, cache write and output.
+  ```
+- The same cue should work on mouse, keyboard and touch, remain right-aligned in the intended layout, and not cause clipping or unstable reflow at narrow/zoomed widths. Retain accurate daily scope, categories, partial/unknown reporting and underlying data. Source pointer: `src/web/assets/watch.js::daily()`, current `ContextHelp.beside(count, ...)`.
+
+### 2.3 Look for other full Watch help that repeats itself or sits in the wrong place
+
+Perform a purposeful audit of other **Running/Earlier column heads, row icons, session summary, account/subscription cards and quota/reset cues**. Keep a cue if it explains a non-obvious metric, meaningful price warning, actual date, quota scope or otherwise valuable detail. Remove, consolidate or reposition cues that:
+
+- duplicate visible text or nearby column-header help;
+- put a help icon between unrelated values or next to the wrong subject;
+- repeatedly explain the same disclaimer or offer little more than a trivially longer copy of a visible field;
+- make a small/dense card harder to scan.
+
+The implementer should exercise independent UX judgment and record major **kept / removed / consolidated / repositioned** choices. This audit does **not** authorize removing important warnings, useful full local timestamps, native quota reset information or accurate metric caveats just to minimize the icon count.
+
+## 3. Across Web: strip internal freshness logs and rewrite remaining tooltips
+
+- Remove developer-style default help such as **`Last prompt update`**, **`Last quota update`**, **`Last daily observation`**, `Connection: … / Source: … / prompts: …` and equivalent continually ticking observation timestamps/status dumps. Inspect all applicable Web/Mini surfaces, especially `src/web/assets/mini.js::View.update(), drawDaily(), drawPrompts(), drawHistory(), drawSession(), drawAccounts()`. Don't move the same noise into a different tooltip.
+- Keep **user-meaningful** status: live versus retained/not current, partial pricing and real N/A, estimated context, unavailable/blocked quota, lost authorization, and true failure warnings. A visible error is not made optional just because its internal details are removed. **Actual user dates** (prompt start/finish, quota reset) are valuable and not equivalent to observation/polling timestamps.
+- Rewrite long remaining explanatory text into crisp plain English: lead with the user question answered; use **one sentence** for a simple idea, or **short named lines and occasional blank lines** to separate multiple concepts. Preserve the especially good **CCost (I + E)** formatting style and the quick custom help component from FR000582. Avoid generic dense paragraphs, internal jargon and redundant disclaimers; don't force extra blank lines into single-sentence help.
+- Review all tooltip-bearing Web views, not solely literal occurrences of `ContextHelp` or these named examples. Prefer consistent semantic placement and scope to mechanical deletion; keep valuable column headings. Retain the accurate distinction between prompt/session/day CCost, native quota, model/subagents, input/next context, token shares and real vs partial/unknown values.
+- Reuse the **one existing contextual-help system** and preserve accessible hover/focus/touch/keyboard semantics. No new second tooltip framework, avoid duplicate native `title` help, and don't turn selectable data into help-only controls.
 
 ## Acceptance criteria and verification
 
-1. **Action dismissal:** hover then click **Cost Guard · Watch** and **Earlier Sessions** (both open and close). Their help disappears promptly, stays dismissed despite stationary hover/focus and Live rerenders, and reappears on a new intentional interaction. Cover mouse, keyboard activation, touch, actual Document PiP and no loss of the actions.
-2. **Mini header:** the two adjacent upper-right `?` cues are no longer present together; `CCost Today` retains helpful guidance. Genuine disconnection/staleness remains discoverable without visible or tooltip debug spam.
-3. **Mini tables:** the running and Earlier table each have a clear consolidated explanation and substantially fewer unconditional per-row question marks. The full truncated session name remains obtainable and accessible. Test multiple running prompts, long session names, collapsed/expanded history, narrow/resized/zoomed PiP and both CCost units.
-4. **Copy audit:** no default Web/Mini tooltips expose `Last prompt update`, `Last quota update`, `Last daily observation` or equivalent raw internal freshness dumps. Real prompt dates, quota resets, actionable failures, retained/partial/estimated meanings and truthful `N/A` remain correct.
-5. **Quality and regressions:** sample all tooltip-bearing Web surfaces, record which cues were kept/consolidated/removed, and check succinct wording, purposeful blank lines and absence of accidental dual help. Test hover, focus, Escape, click/tap, pointer transfer, dynamic text refresh, theme/Classic/light/dark, viewport clipping, copy/selection, screen-reader naming, fast re-render behavior and no duplicate native `title` help. Add focused deterministic UI tests and browser probes (notably `development/tests/integration/web_help.cjs`, `probe_web_help.cjs`, `probe_mini_sessions.cjs`), and update `development/architecture/modules/web-help.md` and relevant Mini/Web user docs when implemented.
+1. **Mini visual policy:** no header `?` for CCost Today or observation times; no row `?` beside Session, prompt `#`, status or Earlier Ctx; no table-level substitute `?`; no tooltip on Earlier Sessions. The only optional stand-alone Mini `?` is at most **one per subscription**, where useful. Column-heading and Cost Guard · Watch action help continue to work.
+2. **Mini combined heading:** Session / (Total CCost) tooltip clearly has **two labeled explanations separated by a blank line**, in both Mini tables, with accurate whole-session versus per-prompt CCost scope. Other Mini column-head tooltips are concise, accurate and readable.
+3. **Return-to-Watch bug:** hover/focus then activate Cost Guard · Watch by mouse, touch and keyboard. The action works and its tooltip dismisses immediately; stationary pointer/focus, tab switching and Mini Live updates do not reopen it until deliberate new help interaction. Earlier Sessions expands/collapses with no help popover to stick.
+4. **Subscription value:** when secondary quotas exist in current view data, the optional account cue explains **primary versus secondary** quotas and real period/usage/reset details concisely, with readable spacing. Multiple quotas are not conflated or fabricated; when no added information exists, omitting the cue is acceptable. No raw `Last quota update`.
+5. **Full Watch prompt table:** per-row full-prompt-preview `?` is absent in both Running and Earlier rows, regardless of preview length. Visible preview, accessibility, row state, truncation/selection and navigation remain correct.
+6. **Daily card:** exactly one intentional daily-summary `?` at the **far-right**, not between prompt count and Token Mix. It explains CCost Today, prompt count and Token Mix with concise, human-readable grouping. Check layout at normal/narrow/zoomed widths.
+7. **Whole-app UX audit:** assess remaining tooltips for unnecessary/duplicative/poorly positioned `?`, adjust actual problem cases, record the rationale for the key dispositions, and make dense copy shorter with purposeful whitespace. Preserve helpful table-header guidance and FR000582's fast custom tooltip behavior.
+8. **Correctness and regressions:** remove internal `Last prompt update`, `Last quota update`, `Last daily observation`/equivalent logs from default help without losing actionable outages, exact real user timestamps, resets, partial/estimated/unknown semantics, accessible labels or accurate CCost/token/quota scope. Test both Mini tables, multiple prompts, subscriptions with zero/one/multiple quota periods, long session names, live rerenders, collapsed/expanded Earlier, actual Document PiP, mouse/touch/keyboard, Escape, focus and pointer transfer, Classic/Web light/dark, CCost units, viewport clamping, selection, sticky headers, and no native title duplication.
+9. Add focused deterministic/browser regressions (notably `development/tests/integration/web_help.cjs`, `probe_web_help.cjs`, `probe_mini_sessions.cjs` and relevant Watch tests) and update `development/architecture/modules/web-help.md` and current Web/Mini user docs when implementing. Verify in the actual browser/PiP where the interaction was observed.
 
-**Relationship to other work:** build on completed FR000582 without undoing its shared-help improvements. Coordinate with Ready **FR000583** (Mini Earlier Sessions resize/session-cost header) and **FR000586** (quiet transient full Watch status) so this work doesn't reintroduce their layout or noisy-progress problems. Review current code when selected: Ready work may land first.
+**Relationship to other work:** build on completed **FR000582** while narrowing its tooltip density. Coordinate with Ready **FR000583** (Mini resize and the parenthesized Session/Total CCost header), **FR000585** (quota presentation/period capacity), and **FR000586** (quiet transient full Watch statuses). Review current source after preceding Ready tasks land; this FR's explicit UX policy remains the owner's intended outcome.
 
-**Out of scope:** rewriting canonical metrics/CCost, native quota semantics, source acquisition or cadence, CLI behavior, browser-owned PiP chrome, global tooltip removal, building a new tooltip framework, and any implementation/version/release changes as part of this FR-only publication.
+**Out of scope:** new account/source polling, cost calculation or attribution changes, rewriting quota semantics, CLI changes, hiding real errors, custom PiP window chrome, a new global help framework, and product implementation/version/release work in this authoring session.
