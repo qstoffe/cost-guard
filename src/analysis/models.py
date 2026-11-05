@@ -127,6 +127,8 @@ class PromptRecord:
     ended_after_tool_calls: bool = False
     # Evidence-qualified retrospective timing; keep Watch's established metric intact.
     execution_duration_ms: int | None = None
+    # Positive task links, including agents without a completed/priced request.
+    linked_session_ids: tuple[str, ...] = ()
 
     @property
     def model_calls(self) -> int:

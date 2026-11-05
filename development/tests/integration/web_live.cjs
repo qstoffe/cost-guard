@@ -216,7 +216,7 @@ async function main() {
   assert.ok(!firstCard.body.textContent.includes('Running at snapshot'));
   assert.deepEqual(firstCard.root.querySelectorAll('th').map(node => node.children[0].textContent),
     ['Started', 'Duration', 'Prompt', 'Model', 'Effort', 'CCost (I + E)', 'Calls', 'Token Mix %', 'Ictx', 'Δ Ctx']);
-  assert.match(helpText(firstCard.contextLabel), /Not prompt Ictx or summed usage/);
+  assert.match(helpText(firstCard.contextLabel.parentNode), /Estimated context for the next request/);
   for (const header of firstCard.root.querySelectorAll('th')) {
     const [button] = header.children;
     assert.ok(helpText(button));

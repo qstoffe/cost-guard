@@ -179,8 +179,8 @@ p.warning { border-left: 3px solid var(--warn); padding: .65rem .85rem; backgrou
 .watch-subscription progress::-moz-progress-bar { background: currentColor; border-radius: 2px; }
 .watch-daily { display: flex; align-items: baseline; flex-wrap: wrap; gap: .25rem 1rem; font-size: .85rem; box-shadow: none; margin-bottom: 4px; }
 .watch-daily-category { white-space: nowrap; }
-.watch-daily > .watch-daily-help { margin-inline-start: auto; align-self: flex-start; flex: 0 0 auto; }
 .watch-session-summary { margin-top: .25rem; color: var(--ink); font-size: .9rem; white-space: normal; overflow-wrap: anywhere; }
+.watch-session-summary > div + div { margin-top: .15rem; }
 .watch-warning-icon { display: inline-block; width: 1em; margin-inline-end: .3em; vertical-align: -.15em; }
 .watch-warning-icon[hidden] { display: none; }
 .watch-warning-icon svg { display: block; width: 100%; height: 1em; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
@@ -296,10 +296,10 @@ footer { border-top: 1px solid var(--line); color: var(--muted); font-size: .8re
 .watch-prompt-table th:nth-child(5), .watch-prompt-table td:nth-child(5) { text-align: left; }
 .help-trigger { width: auto; border: 0; padding: 0; min-height: 0; background: transparent; color: inherit; font: inherit; cursor: help;
   text-decoration: none; }
-.help-label { display: inline-block; cursor: help; }
+.help-label { display: inline-block; cursor: pointer; }
 .help-trigger:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.help-cue { margin-inline-start: .25em; padding-inline: .2em; font-size: .8em; color: var(--accent); }
-.help-cue::before { content: '?'; }
+.help-value { cursor: help; }
+.help-value:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .context-help { position: fixed; inset: auto; margin: 0; z-index: 100; width: max-content;
   max-width: min(34rem, calc(100vw - 1rem)); max-height: calc(100dvh - 1rem); box-sizing: border-box;
   overflow: auto; overflow-wrap: anywhere; white-space: pre-line; padding: .6rem .8rem;
@@ -312,7 +312,7 @@ footer { border-top: 1px solid var(--line); color: var(--muted); font-size: .8re
 .watch-activity .watch-activity-error { color: var(--error); }
 .watch-activity .watch-running-tool { color: var(--watch-running); }
 .watch-activity details, .watch-activity p { margin-block: .2rem; }
-.watch-activity summary { max-width: 100%; }
+.watch-activity summary { width: fit-content; max-width: 100%; }
 .watch-history { padding: 0; }
 .watch-earlier { margin-top: 0; }
 .watch-earlier[open][data-has-history="true"] { border-bottom: 2px solid var(--control-line); padding-bottom: .75rem; margin-bottom: .75rem; }

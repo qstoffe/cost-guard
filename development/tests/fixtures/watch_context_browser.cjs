@@ -6,9 +6,9 @@ module.exports = async function checkContext(evaluate) {
     const card=INPUT.view.active_cards[0], item=card.rows[0], value=card.session_summary;
     const root=()=>document.querySelector('.watch-active .watch-card');
     const summary=()=>root().querySelector('.watch-session-summary');
-    const icon=()=>summary().firstChild;
+    const icon=()=>summary().querySelector('.watch-warning-icon');
     const context=()=>summary().querySelector('.watch-session-context');
-    const impact=()=>summary().lastChild.children[1];
+    const impact=()=>summary().firstChild.lastChild.children[1];
     const color=node=>getComputedStyle(node).color;
     const rgb=color=>color.match(/[\\d.]+/g).slice(0,3).map(Number);
     const luminance=color=>rgb(color).map(v=>v/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4)
@@ -17,7 +17,7 @@ module.exports = async function checkContext(evaluate) {
     const background=getComputedStyle(document.body).backgroundColor;
     try {
       const earlier=document.querySelector('.watch-history .watch-session-summary');
-      const both=[summary(),earlier].every(node=>node.textContent.startsWith('Session Context / CCost: 120k / 4583 ('));
+      const both=[summary(),earlier].every(node=>node.children[0].textContent.startsWith('Context: 120k (') && node.children[1].textContent==='Total CCost: 4583');
       const ectx=root().querySelector('tbody td:nth-child(9)').textContent;
       const undecorated=!/[~≈⚠]/.test(ectx) && !root().querySelector('.watch-context-warning');
       const transitions=[], ordinaryColor=color(summary());
@@ -26,14 +26,14 @@ module.exports = async function checkContext(evaluate) {
         value.context.warning.severity=severity;
         value.context.warning.text=severity==='approaching'?'[Approaching price threshold >100.0K]':'[Price threshold >100.0K exceeded]';
         redraw();
-        const line=summary().textContent, neutral=color(summary());
+        const line=summary().firstChild.textContent, neutral=color(summary());
         transitions.push({severity,actual:summary().dataset.severity,visible:!icon().hidden,
           stable:!protectedFocus||icon()===focused,color:neutral,iconColor:color(icon()),contextColor:color(context()),
           impactColor:color(impact()),points:icon().querySelector('polygon').getAttribute('points').split(' ').length,
-          neutral:[summary().children[1],summary().children[3],summary().children[4],summary().lastChild.firstChild]
+          neutral:[summary().firstChild.children[1].firstChild,summary().lastChild,summary().lastChild.firstChild,summary().firstChild.lastChild.firstChild]
             .every(node=>color(node)===ordinaryColor && getComputedStyle(node).fontWeight===getComputedStyle(summary()).fontWeight),
           placement:severity==='none'?!line.includes('threshold'):
-            /^Session Context \\/ CCost: 120k \\/ 4583 \\([^()]*price threshold[^()]*; 2.4x more expensive\\)$/i.test(line),
+            line.startsWith('Context: 120k (') && line.toLowerCase().includes('price threshold') && line.endsWith('; 2.4x more expensive)'),
           single:(line.match(/price threshold/gi)||[]).length===(severity==='none'?0:1) && !icon().title && !icon().hasAttribute('aria-describedby'),
           accessible:severity==='none'||(icon().tabIndex===0 && /^(Caution|Stop):/.test(icon().getAttribute('aria-label')) &&
             icon().getAttribute('role')==='img' && icon().querySelector('svg').getAttribute('aria-hidden')==='true'),
@@ -41,10 +41,10 @@ module.exports = async function checkContext(evaluate) {
           overflow:summary().scrollWidth>summary().clientWidth});
       }
       value.context.watch_next_context_tokens=null;value.context.display.watch_next_context_tokens='N/A';redraw();
-      const invalidated=summary().textContent==='Session Context / CCost: N/A / 4583' && icon().hidden && summary().dataset.severity==='none';
+      const invalidated=summary().firstChild.textContent==='Context: N/A' && summary().lastChild.textContent==='Total CCost: 4583' && icon().hidden && summary().dataset.severity==='none';
       value.context.watch_next_context_tokens=120000;value.context.display.watch_next_context_tokens='120k';
       value.context.warning.severity='none';redraw();
-      const plain=summary().textContent==='Session Context / CCost: 120k / 4583' && color(context())===ordinaryColor;
+      const plain=summary().firstChild.textContent==='Context: 120k' && summary().lastChild.textContent==='Total CCost: 4583' && color(context())===ordinaryColor;
       const originalCost=value.cost.display.known_ccost;
       ReportView.setUnit('usd',document.getElementById('result'));
       const usd=summary().textContent.includes('$');
@@ -53,10 +53,10 @@ module.exports = async function checkContext(evaluate) {
       value.context.warning.severity='exceeded'; value.context.warning.multiplier=null;
       value.context.warning.text='[Price threshold >100.0K exceeded]';
       value.context.warning.display.warning_cost='(Next Ictx CCost 0.3–3)';redraw();
-      const range=color(impact())===ordinaryColor && summary().textContent.endsWith('; Next Ictx CCost 0.3–3)');
+      const range=color(impact())===ordinaryColor && summary().firstChild.textContent.endsWith('; Next Ictx CCost 0.3–3)');
       value.context.warning.display.warning_cost='';redraw();
-      const noImpact=summary().textContent.endsWith('(Price threshold >100.0K exceeded)') && !impact().textContent;
-      summary().children[1].focus();
+      const noImpact=summary().firstChild.textContent.endsWith('(Price threshold >100.0K exceeded)') && !impact().textContent;
+      summary().firstChild.children[1].focus();
       const help=document.getElementById('context-help').textContent.includes('not a session spending limit');
       return {both,undecorated,transitions,ordinaryColor,invalidated,plain,usd,credits,range,noImpact,help};
     } finally {

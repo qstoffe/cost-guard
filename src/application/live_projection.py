@@ -5,6 +5,7 @@ from .contracts import ObjectValue, record
 from .projection import account, comparison, fields, prompt, token_mix
 from .display import with_display
 from .watch_accounts import watch_account
+from .prompt_costs import cost_detail
 from src.analysis.timezones import local_date_range, resolve_timezone
 
 
@@ -13,7 +14,8 @@ def card_row(row, now_ms):
     projected = fields(row.prompt, """at_ms prompt_number label preview ccost incoming_context_ccost extra_ccost cost_estimated unresolved_cost
         incoming_context_ccost_known extra_ccost_known
         calls token_mix_percent incoming_context_tokens in_progress is_compaction aborted abort_reason completed_successfully event_id duration_ms completed_at_ms has_additional_model""")
-    projected = ObjectValue(projected.fields + (("has_error", row.prompt.watch_error),))
+    projected = ObjectValue(projected.fields + (("has_error", row.prompt.watch_error),
+        ("linked_agent_count", row.prompt.linked_agent_count), ("cost_detail", cost_detail(row.prompt))))
     return record(prompt=projected, model=row.prompt.watch_model or "N/A",
         effort=row.prompt.watch_effort or "N/A", marker=row.marker,
         watch_duration_ms=row.prompt.duration_ms,

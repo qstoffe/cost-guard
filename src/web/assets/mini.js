@@ -189,7 +189,7 @@ const MiniWatch = (() => {
         'Active prompts: whole-session CCost in Session; per-prompt CCost, Duration and estimated next incoming context (Ctx)');
       for (const name of historical ? ['Session', 'Ctx'] : ['Session', '#', 'CCost', 'Duration', 'Ctx']) {
         const cell = this.el('th'); cell.scope = 'col';
-        const explanation = {Session: 'Session — The name of the session.\n\nTotal CCost — Estimated cost of the entire session, including earlier prompts and linked subagents. Not your bill.\nN/A means unavailable; ? means partial pricing or data.',
+        const explanation = {Session: 'The name of the session.',
           '#': 'The prompt’s number within its session.', CCost: 'Estimated cost of this prompt only, not your bill.\nN/A means unavailable, not zero; ? means partial pricing.',
           Duration: 'Time spent on this prompt; freezes when updates are unavailable.', Ctx: historical ?
             'Last valid estimate of the next request’s context in this session.\nNot historical prompt context or a sum. N/A means unavailable.' :
@@ -197,7 +197,7 @@ const MiniWatch = (() => {
         const button = ContextHelp.button(name, explanation, this.doc);
         if (name === 'Session') {
           const value = this.el('span', undefined, 'mini-session-value mini-session-heading');
-          const total = ContextHelp.button(' (Total CCost)', explanation, this.doc);
+          const total = ContextHelp.button(' (Total CCost)', 'Reference cost of the entire session, including earlier prompts and linked subagents.\n? — Partial pricing or data.', this.doc);
           total.className += ' mini-session-total';
           value.append(button, total); cell.append(value);
         } else cell.append(button);
@@ -328,7 +328,7 @@ const MiniWatch = (() => {
         if (!line) {
           line = this.el('li');
           const label = this.el('div'); label.append(this.el('span'));
-          ContextHelp.beside(label, () => line.helpText || '', 'Subscription quota and CCost details');
+          ContextHelp.value(label.children[0], () => line.helpText || '');
           line.append(label, this.el('progress')); this.lines.set(key, line);
         }
         const quota = ReportView.quotaView(primary.quota, primary);

@@ -8,7 +8,7 @@ module.exports = function loadHelp(vm, context) {
   proto.contains ||= function(node) { return this === node || this.children.some(child => child.contains(node)); };
   if (!Object.getOwnPropertyDescriptor(proto,'isConnected')) Object.defineProperty(proto,'isConnected',{get:()=>true});
   if (!proto.helpEventsInstalled) {
-    const add = proto.addEventListener;
+    const add = proto.addEventListener || function(kind, callback) { (this.events ||= {})[kind] = callback; };
     proto.addEventListener = function(kind, callback) {
       const old = this.events?.[kind];
       add.call(this, kind, typeof old === 'function' ? event => { old(event); callback(event); } : callback);

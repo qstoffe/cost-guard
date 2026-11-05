@@ -22,8 +22,8 @@ module.exports = (card, helpText, document, select) => {
   assert.equal(card.running.className, 'watch-running-tool');
   assert.equal(card.running.textContent, 'Running: execute 12s');
   assert.equal(card.running.hidden, false);
-  assert.match(helpText(card.tools.node.children[2]), /subset, not extra calls/);
-  assert.match(helpText(card.tools.node.children[2]), /missing evidence is not success/);
+  assert.match(helpText(card.tools.summary), /subset, not extra calls/);
+  assert.match(helpText(card.tools.summary), /missing evidence is not success/);
   const first = card.tools.list.children[0]; card.tools.node.open = true;
   card.drawActivity(tool);
   assert.equal(card.tools.list.children[0], first, 'unchanged activity keeps DOM');

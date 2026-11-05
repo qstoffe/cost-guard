@@ -576,6 +576,7 @@ def build_prompt_record(
             duration_ms=max(0, terminal_time - ref.prompt_time_ms) if evidence else 0,
             execution_duration_ms=prompt_duration(ref, attempt_messages, latest, (), timeline.messages,
                                                   in_progress=in_progress, now_ms=now_ms, background=snapshot.background),
+            linked_session_ids=tuple(sorted(_prompt_child_ids(attempt_messages) - {ref.session_id})),
             **background_fields,
         )
 
@@ -638,6 +639,8 @@ def build_prompt_record(
         last_root_entry=last_root_for_next, aborted=aborted, watch_error=watch_error,
         abort_time_ms=abort_time, in_progress=in_progress,
         completed_successfully=successful_final,
+        linked_session_ids=tuple(sorted((_prompt_child_ids(attempt_messages) |
+            {session for session, _, _ in visited}) - {ref.session_id})),
         **background_fields,
     )
 

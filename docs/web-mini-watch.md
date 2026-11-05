@@ -104,8 +104,11 @@ number, duration or state badge is added. Empty, loading and unavailable history
 explicit; confirmed retained/partial totals remain indicated in the row. Collapsing
 does not revalue or reacquire history.
 
-Earlier Sessions has no tooltip. Both tables use their actual headings for help,
-without a table-level `?`, row cues or daily/header help icons. The return-to-Watch
+Earlier Sessions has no tooltip. Both tables use their actual headings for help.
+Within the same first column, **Session** explains only the name and **(Total CCost)**
+only the whole-session cost, with no help in the gap. Hover opens after **600 ms**;
+the passive help cursor is immediate, as are deliberate keyboard-focus/tap requests.
+There is no table-level `?`, row cue or daily/header help icon. The return-to-Watch
 action retains concise help, dismissed immediately on activation by mouse, touch,
 Enter or Space. Hover help closes within a short exit grace when leaving its target
 or the PiP document; keyboard-focus and intentionally pinned quota/header help have
@@ -145,7 +148,7 @@ bar below it: cyan/teal below exhaustion, red only for authoritative finite 100%
 Unlimited/unknown quota has no fabricated bar. Stale/partial quota and authentication
 problems have concise visible notes. Genuine provider restrictions
 remain visible; exhausted finite quota stays red. There are no reset/secondary-window paragraphs.
-At most one optional `?` per subscription exposes its **Primary quota** and, when present,
+The visible subscription text, not a `?` or progress track, exposes its **Primary quota** and, when present,
 **Additional quotas**, separated by a blank line: actual period, native Used/Remaining
 amounts, limits, resets, same-period CCost and concise reference-capacity/attribution caveats.
 No `Last quota update` or raw source enums appear. Unavailable cost
@@ -159,7 +162,9 @@ quota refresh, restart or another stream. A Copilot quota can show **91.6% remai
 Help explains why these do not reconcile. Other valid windows extrapolate Capacity
 from observed CCost divided by the unrounded fraction Used, then subtract observed
 CCost for Remaining. These are reference proxies, not guaranteed allocation or bills.
-Capacity stays in help, not an extra visible Mini row. Full remaining
+Capacity stays in help, not an extra visible Mini row. Numeric ratio-derived Capacity
+includes **(guesstimate)**; verified comparable native limits and unknown figures do not.
+Full remaining
 bars are healthy; empty, truly exhausted bars retain a red text warning and accessible
 exhaustion description. Tiny positive capacity is not marked exhausted by rounding.
 Unlimited keeps Used with no bar, and missing capacity/usage stays unknown rather than

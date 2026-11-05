@@ -5,14 +5,14 @@ not a release lookup or newly edited source. Offline views retain their original
 
 ## Contextual help
 
-Heading labels and **?** buttons explain metrics in both Web and Mini
-Watch, without dotted or dashed underlines. Hover the actual heading text, not
-the surrounding header padding, to see its help cursor and explanation. Only the
+Heading labels and useful metric labels/values explain metrics in Web and Mini
+Watch, without standalone **?** buttons or dotted underlines. Hover the actual text, not
+the surrounding padding, to see the help cursor immediately and explanation after **600 ms**. Only the
 text highlights; empty header space does not open help or highlight the column.
 Mini's Session and Total CCost labels are separate targets with no help in the gap.
 Sorting controls still sort when clicked outside their help label.
-Hover or focus with Tab to read; press Escape to dismiss without moving
-focus. You can move the pointer into the help to keep reading. Tap a help button
+Hover or focus with Tab to read; keyboard focus and deliberate taps open promptly. Press Escape to dismiss without moving
+focus. You can move the pointer into the help to keep reading. Tap passive help text
 to keep it open; tap again or outside to close it. Only one explanation opens in
 each window. Values remain selectable; action buttons and links stay clickable.
 Hover help also closes after leaving the document/window, even if a mouse-clicked
@@ -26,10 +26,10 @@ shares, not prices. **Model** names the main model even when other linked models
 contribute to totals. **N/A** means unavailable, not zero; **?** marks partial
 pricing/data. CCost is an estimated reference cost, not your bill or native quota.
 
-Use adjacent help for exact Started/Finished or quota-reset dates. Prompt previews
+Use the clock text itself for exact Started/Finished or quota-reset dates. Prompt previews
 have no full-text popup in either Watch table. Mini uses column-heading help, not
 row/header question marks; its full session text remains selectable and accessible.
-One optional subscription cue groups primary/additional quota details. Connection warnings, settings explanations and longer report/account
+Subscription text groups primary/additional quota details. Mini's Session and (Total CCost) headings have different scoped explanations. Connection warnings, settings explanations and longer report/account
 details remain visible or expandable rather than hidden exclusively on hover.
 
 ## Open in another browser (Windows)
@@ -135,7 +135,7 @@ Remaining is a same-window reference-capacity proxy. Full Watch adds **Capacity*
 above each quota bar. A verified Copilot included AI-credit limit supplies nominal
 Capacity and native Remaining; other valid windows extrapolate `observed CCost / raw
 fraction used`. These are not guaranteed budgets or billed balances. Unknown evidence
-shows **?**, Unlimited Capacity **N/A**. Focus/tap the help cue for native amounts,
+shows **?**, Unlimited Capacity **N/A**. Focus/tap the visible label/value for native amounts,
 attribution and limitations. Credits/USD converts all three reference figures together.
 A provider-confirmed idle 0%-Used window shows a healthy **100% remaining** bar while
 its CCost Capacity/Remaining can remain unknown; **Window not started** is preserved.
@@ -365,7 +365,7 @@ prompt metrics. Credits/USD follows Web Settings. Valid metrics remain visible d
 ordinary refresh; first acquisition, partial evidence and genuine failure stay explicit.
 The ten columns are **Started, Duration, Prompt, Model, Effort, CCost (I + E), Calls,
 Token Mix %, Ictx, Δ Ctx**. Ictx is the first request's effective incoming context;
-the footer's Session Context remains the estimated next incoming context.
+the footer's Context remains the estimated next incoming context.
 Running keeps **Started** and start-ascending order. Earlier replaces only column 1 with
 **Finished**; Duration stays column 2. Both clocks show configured-timezone `HH:mm`,
 with full local date/time on hover/accessible focus; Finished includes the UTC offset
@@ -394,6 +394,12 @@ diagnostic uses normalized placeholders; raw costs and CLI behavior are unchange
 Wholly unavailable totals stay `N/A`; sparse non-billed compaction
 cells stay empty. Accepted captures/SSE update the same prompt's split without
 browser valuation, polling or extra history scans. Mini Watch remains total-only.
+The Full Watch CCost value has separate detail: main prompt and distinct causally linked
+subagents, split by actual model/recorded effort, with Input, Cached input, Cache write
+and Output reference costs, subtotals and full prompt total. These are charged token
+categories, not the header's first-request I + E decomposition. Credits/USD use canonical
+unrounded request prices; rounded lines need not visibly sum. Unknown categories are
+omitted, partial pricing qualified and long detail bounded with an honest omitted subtotal.
 Token Mix % is raw observed **Input / Cached input / Cache write / Output** token volume,
 not cost shares; reasoning is folded into Output. It uses canonical prompt-attributed
 physical requests, including child/model contributions, and CLI prompt rounding.
@@ -404,7 +410,10 @@ coverage rule: every attributed call must report all four categories and their p
 total must be positive. Missing fields make the denominator unknown, not a known-token
 subset percentage. Completed rows show `N/A`; active rows without a supported share
 show `running`. The FR 000558 completed-partial parity exception is closed by FR 000564.
-Additional model contribution is identified on the Model field. All cells/headers
+A trailing **\*** on Model means positively linked subagents participated, even with
+the same model; a model switch alone gets no star. Conditional model help names actual
+models/efforts, and Calls help gives a supported main/subagent split. Ordinary cells
+have no generic popup. All cells/headers
 stay one line: Prompt alone flexes without a width cap and ellipsizes long text/URLs;
 complete metric columns and a 14rem Prompt minimum pan horizontally when necessary.
 Tables use theme-aware body/header surfaces and edges inside each session's frame.
@@ -445,8 +454,8 @@ loading. Source changes/minute fallback update retained history and publish cost
 coherently. Routine refresh silently retains figures; only a scope without valid data
 loads. Real failures remain visible. Midnight resets, rejecting yesterday's late results;
 CCost Today keeps its label before 03:00. Web Credits/USD and CLI scopes are unchanged.
-One help cue at the far right explains the entire daily summary: CCost Today,
-today’s prompt count and Token Mix token shares. It is not inserted between metrics.
+CCost Today label/value, prompt count and Token Mix label each have scoped text help;
+there is no far-right question-mark cue or oversized summary hitbox.
 
 Retryable source-read failures retain observations quietly in Full Watch's tables,
 footers and daily area; meaningful freshness remains in the unchanged global
@@ -482,11 +491,14 @@ show Used **(0)** independently of Today. Unlimited, sub-100% precision and genu
 remain distinct. Today keeps daily scope/attribution without an estimate suffix (basis
 on hover). Accessible help retains native Used/Total and Remaining/Total, native money,
 reset and partial/estimated attribution without raw source/observation logs.
-Each quota’s Capacity cue explains usage and reference capacity together; the usage
-line has no duplicate cue. Account Today help appears only for a real attribution note.
+Each quota’s Capacity label and number share one compact help target explaining usage
+and reference capacity. Account CCost Today label and number explain daily scope and real attribution notes.
 For Copilot the observed Used cost and native Remaining need not sum to Capacity.
 For other quotas Capacity/Remaining are explicitly explained extrapolations, not
-provider-promised allocation. Missing native usage never borrows CCost. Credits/USD
+provider-promised allocation. Numeric ratio-derived Capacity shows exactly **(guesstimate)**
+after the number; verified directly comparable native allowances do not. Unknown **?**,
+missing and **N/A** never get the suffix. Provenance follows each quota across units
+and orientations, including Accounts and Mini's Capacity help. Missing native usage never borrows CCost. Credits/USD
 changes CCost, not native units. Accounts adds the reference figures only where its
 existing report has matching period cost; Mini keeps one compact primary line with
 Capacity in help. All three follow the same choice immediately, without more polling.
@@ -512,16 +524,16 @@ estimated/approximate evidence and N/A for missing first-request evidence. Help 
 on hover, focus or touch/click; only the prompt preview ellipsizes, with horizontal pan
 for narrow tables.
 
-One compact line directly below each table, before active activity, reads
-**Session Context / CCost: 123k / 4582**. Session Context is the canonical
+Two lines directly below each table, before active activity, read
+**Context: 123k** then **Total CCost: 4582**, each with a space after its colon. Context is the canonical
 estimated next incoming context for the latest valid continuation, including hidden
 compaction; its accessible help explains this distinction. Concurrent cards for one
 session share this same session state, not a focal prompt's old context.
 Approaching/exceeded context-price guidance appears once, in one pair of parentheses
-after both values; there is no separate warning row or repeated threshold label.
+after Context on the first line; there is no repeated threshold label.
 Approaching uses an amber triangle and amber context figure. Exceeded uses a distinct
 red octagonal stop/exclamation icon, red context figure and red relative-price multiplier.
-The shared label, slash, session cost, threshold boundary and remaining warning text
+The labels, session cost, threshold boundary and remaining warning text
 stay in ordinary theme foreground. An alternate next-input CCost range stays neutral.
 Accessible severity names and visible approaching/exceeded wording do not depend on color.
 Canonical threshold, relative-price multiplier or supported cached/fresh cost details

@@ -13,7 +13,7 @@ from src.domain.acquisition import AcquisitionMetrics
 
 from .models import CompactionRecord, PromptRecord, RootAnalysisBundle, TraceEntry
 
-ANALYSIS_ALGORITHM_VERSION = "v78-analysis-14-execution-duration"
+ANALYSIS_ALGORITHM_VERSION = "v78-analysis-15-linked-agent-evidence"
 _CACHE_NAMESPACE = "derived-analysis"
 
 
@@ -110,6 +110,7 @@ def _prompt_from_dict(data: Mapping[str, Any]) -> PromptRecord:
     for key in ("previous_entry", "pre_prompt_entry", "last_root_entry"):
         values[key] = _trace_from_dict(values[key]) if values.get(key) else None
     values["background_kinds"] = tuple(str(value) for value in values.get("background_kinds", ()))
+    values["linked_session_ids"] = tuple(str(value) for value in values.get("linked_session_ids", ()))
     return PromptRecord(**values)
 
 

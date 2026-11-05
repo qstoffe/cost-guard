@@ -366,7 +366,7 @@ const ReportView = (() => {
       levels.append(level);
     }
     cell.append(levels);
-    if (evidence) ContextHelp.beside(cell, display(row, 'evidence'), 'Model price sources and coverage');
+    if (evidence) ContextHelp.value(cell, display(row, 'evidence'));
     return cell;
   }
   function accountQuota(card, quota, compact = false) {
@@ -381,7 +381,7 @@ const ReportView = (() => {
     const label = element('span', () => summary() + (hasCost ? ` (${display(quota, 'ccost_' + view().mode)})` : ''), 'metric-value'); row.append(label);
     if (hasCost) {
       const capacity = element('span', () => 'Capacity: ' + display(quota, 'ccost_capacity'), 'metric-value');
-      ContextHelp.beside(capacity, () => quotaHelp(quota), 'About quota Capacity and period CCost');
+      ContextHelp.value(capacity, () => quotaHelp(quota));
       row.append(capacity);
     }
     bind(label, () => label.className = 'metric-value' + (view().mode === 'remaining' && view().exhausted ? ' quota-exhausted' : ''));
@@ -437,7 +437,11 @@ const ReportView = (() => {
       (compact ? details : card).append(element('p', [obs.provider_label, obs.plan].filter(Boolean).join(' · '), 'detail'));
       if (detailed && (!compact || obs.has_error || obs.has_warning || obs.status === 'blocked' || obs.availability !== 'available')) card.append(element('p', accountStatus(obs, compact),
         obs.has_error || obs.status === 'blocked' ? 'error account-status' : obs.has_warning || obs.availability !== 'available' ? 'warning account-status' : 'account-status'));
-      for (const scope of account.ccost_scopes) card.append(element('p', () => `CCost ${scope.name}: ${scope.cost == null ? '—' : display(scope.cost, 'account_ccost')}`, 'metric-value'));
+      for (const scope of account.ccost_scopes) {
+        const line = element('p', undefined, 'metric-value');
+        line.append(ContextHelp.value(element('span', () => `CCost ${scope.name}: ${scope.cost == null ? '—' : display(scope.cost, 'account_ccost')}`),
+          `This account’s reference cost for ${scope.name}.`)); card.append(line);
+      }
       if ((!compact && detailed && !watch) || account.billed_today != null) card.append(element('p', 'Billed today: ' + display(account, 'billed_today')));
       if ((!compact && detailed && !watch) || account.billed_month != null) card.append(element('p', 'Billed month: ' + display(account, 'billed_month')));
       for (const quota of obs.quotas) {

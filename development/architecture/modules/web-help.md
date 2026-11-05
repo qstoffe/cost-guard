@@ -1,13 +1,13 @@
 # Web contextual help: writing and interaction
 
 Owner: `src/web/assets/help.js`; shared styles: `app.css`. Applies to the main
-application and separate Mini Watch document. FR 000589 text-target follow-up: 2026-11-05.
+application and separate Mini Watch document. FR 000590 value-first follow-up: 2026-11-05.
 
 ## Writing patterns
 
 - Answer “What am I looking at?” first, in plain English. A simple field needs one
   sentence, not a standard-size card. Do not lead with internal implementation names.
-- Separate ideas with `\n`. Use occasional blank lines to group metric components;
+- Separate independent facts with concise `•` bullets or `\n`. Use blank lines to group metric components;
   let CSS wrap naturally, never insert arbitrary hard-wrapped lines.
 - Example: `Estimated prompt cost, not your bill.\nI — First request’s incoming
   context cost.\nE — Output, later requests and linked subagents.`
@@ -27,16 +27,15 @@ application and separate Mini Watch document. FR 000589 text-target follow-up: 2
 
 - `ContextHelp.button(label, textOrFunction, document)` creates a labelled,
   keyboard/touch/hover passive trigger. Labels use `cursor: help`, without dotted
-  or dashed underline/border decoration. Keep explicit `?` cues where useful.
+  or dashed underline/border decoration. Never add standalone `?` cues; genuine unknown-data question marks remain.
   Header buttons have intrinsic text width, zero padding and no hover background;
   only hovering their text changes its color. Never stretch help across a header.
-- `ContextHelp.beside(valueContainer, textOrFunction, accessibleName)` adds an
-  explicit `?` button beside a value when it adds useful information. Do not turn
-  selectable data into help-only buttons or override its selection cursor.
+- `ContextHelp.value(visibleText, textOrFunction)` makes the exact intrinsic label/value
+  a focusable passive target with immediate help cursor. Preserve text selection/copy;
+  selecting text must not pin help. No full-card, progress-track or padding target.
 - `ContextHelp.attach(action, textOrFunction)` augments actions such as sorting
   and checkboxes without replacing click behavior or their pointer cursor. Activation
-  immediately dismisses help instead of pinning it. Prefer
-  a separate cue when the explanation should be independently tappable.
+  immediately dismisses help instead of pinning it. Do not add a separate cue.
 - `ContextHelp.heading(action, text)` returns a text-sized inline label for a
   sortable header. Keep click, keyboard focus and ARIA descriptions on the original
   action; bind pointer entry/exit, movement fallback and panel positioning to the
@@ -51,18 +50,23 @@ application and separate Mini Watch document. FR 000589 text-target follow-up: 2
   preserved line breaks. The active trigger references it via `aria-describedby`;
   other description IDs survive. No duplicate native `title`/`aria-description`,
   HTML injection, storage, request or dependency.
-- Hover/keyboard focus opens; 150ms exit grace permits pointer transfer into help. Escape closes
+- Pointer hover opens after the single shared **600ms** delay; keyboard focus and
+  explicit passive taps open promptly. A separate **150ms** exit grace permits pointer transfer into help. Escape closes
   without moving focus and rendering cannot reopen it. Tap/click pins passive help;
   repeat activation or outside tap dismisses. Focus leaves normally. Removed
   triggers close help. Position/size clamp to the viewport; long exact data wraps
-  and scrolls instead of clipping outside it.
+  and scrolls instead of clipping outside it. Convert viewport coordinates and bounds
+  through effective CSS zoom for top-layer positioning; retain the readable 34rem width cap.
 - The controller owns an explicit **hover / focus / pinned** origin. Mouse-owned
   focus never prevents hover exit; deliberate keyboard focus survives unrelated
   pointer movement. Captured document `pointerout` with null related target,
   document/root leave, outside pointer movement and window blur cover missed trigger
   leaves. Pointer re-entry cancels the one bounded exit timer; outside movement cannot
   continually postpone it. No polling or recurring fallback runs while closed.
-- Visibility hide/pagehide and removed-trigger observation clean up open help/timers.
+- Pending opening cancels on exact-target leave/change, document/window exit,
+  unrelated focus/action, visibility hide/pagehide and removed-target observation.
+  Stable hovering does not restart the timer; re-entry starts fresh. Visibility
+  hide/pagehide and removed-trigger observation also clean up open help/timers.
   Escape/actions suppress immediate reopening; content refresh cannot show help.
   Action suppression survives window-focus restoration, but new hover after leave
   or new intentional keyboard focus can show it again. Touch does not open hover help.
@@ -74,15 +78,15 @@ application and separate Mini Watch document. FR 000589 text-target follow-up: 2
 
 | Surface / entry points | Disposition |
 | --- | --- |
-| Full Watch: all ten active/historical headings | Rewritten shared buttons; explicit I/C/W/O and I+E lines, model/subagent caveat, Ictx versus next context |
-| Watch: exact Started/Finished dates, prompt preview, extra-model flag | Keep useful full dates and actual additional-model information; remove full-preview popups in both tables, including short visible previews |
+| Full Watch: all ten active/historical headings | Shared buttons; explicit I/C/W/O and I+E lines, exactly two Model bullets, concise Effort without N/A tautology, Ictx versus next context |
+| Watch: Started/Finished, Model, Calls, CCost cells | Clock text reveals real dates; model trailing star proves causal linked agents even with same model. Conditional actual model/effort and call splits; canonical per-agent category-cost detail on CCost value. No preview popups or generic N/A help |
 | Watch: session Context/CCost and price warning | Concise shared context/cost help; severity and canonical threshold remain visible |
-| Watch: daily summary, account Today, primary/secondary quotas, exact reset | Reposition one whole-summary cue to the far right; no mid-count icon. Consolidate identical usage/Capacity explanations at Capacity, preserve exact reset dates and scope/basis caveats. Account Today cue only for meaningful attribution notes |
+| Watch: daily summary, account Today, primary/secondary quotas, exact reset | Four scoped daily text targets; Today/Capacity labels and numbers share intrinsic targets, reset clock owns exact date. Numeric inferred Capacity has `(guesstimate)`; verified native and unknown figures do not. Preserve native factual lower block |
 | Watch: activity and Earlier Prompts | Native disclosures retain full lists/counts; expanded activity cues explain all-call totals, red outcome subsets, missing evidence and direct skill failures without repeating lists |
-| Mini: both tables’ headings | Keep actual heading targets, no extra `?`; Session and Total CCost are two named sections separated by a blank line. Prompt CCost and active-next versus historical-last-valid-next context remain distinct |
+| Mini: both tables’ headings | Session and (Total CCost) have different help inside one column; dead space has none. Prompt cost and active-next versus historical-last-valid-next context remain distinct |
 | Mini: session title/cost and prompt/history status | Remove every row cue/duplicate value help. Keep full underlying selectable title and row accessible naming, prompt outcome/stop cause and confirmed unavailable/partial notes |
 | Mini: Today, freshness, Earlier Sessions, quota bars, return-to-tab | Remove both header cues and all Earlier Sessions help; no table-level replacement or progress-bar popup. Keep useful return action help with immediate activation dismissal. Critical host/auth/source warnings stay visible, not observation logs |
-| Mini: subscriptions | One cue groups Primary quota and Additional quotas from existing view data, native orientation/amounts/limits, real resets, observed Used CCost and concise server-owned capacity/attribution caveats. No timestamps/raw sources; no new acquisition |
+| Mini: subscriptions | Visible subscription text groups Primary/Additional quotas, native orientation/amounts/limits, real resets, observed Used CCost and server-owned capacity/provenance. No extra cue, timestamps/raw sources or acquisition |
 | Models: checkboxes and multi-sort | Short action help on focus/hover/tap, preserving action cursors and sorting/filtering |
 | Models: More information, price evidence and promotion notes | Concepts shortened into named lines; exact source evidence/terms remain optional visible data |
 | Sessions, Snapshot/Live, reports/date range, Token Mix, active-hour | Shared report-sort help; Reading this report and Sample/price coverage shortened and line-separated. Scope forms and visible context/retention/billing/active-hour details remain persistent disclosures/data |
@@ -106,3 +110,16 @@ sortable Models/Sessions labels. Compact panels can cover their source header;
 pointer hit tests use exposed padding, not coordinates underneath the popover.
 Mini probes retain selection, sticky headers, narrow/zoom/theme/unit/disclosure
 coverage. Headless evidence does not prove physical OS pointer/window transitions.
+
+## Server-owned detail boundary
+
+Analysis retains canonical linked-session evidence (including links without requests) in
+the revisioned analysis cache. `reports/prompt_costs.py` groups canonically attributed
+requests by session/model/effort and values categories at each request's actual catalog
+tier. Unknown counters never become fabricated zero. `application/prompt_costs.py`
+exports at most 24 groups, honest omitted cost/calls and preformatted Credits/USD text;
+the browser never prices, allocates aggregate cost or reacquires source data on hover.
+`test_prompt_cost_detail.py` owns causal scopes, same-model links, model-only switches,
+concurrent/nested work, partial telemetry/pricing, tiers, corrections and bounded detail.
+`probe_help_values.cjs` adds real delayed value/PiP flows and both-table cost/unit checks.
+Full Watch footer keeps Context/warning first and Total CCost second with unchanged math.

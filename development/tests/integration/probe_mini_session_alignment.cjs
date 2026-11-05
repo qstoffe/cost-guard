@@ -34,7 +34,9 @@ module.exports = async function alignment({evaluate,until,fixture,command,sessio
               if(table.querySelectorAll('th').length!==(body===v.body?5:2)) errors.push('extra column');
               if(head.children[0].textContent!=='Session'||head.children[1].textContent!==' (Total CCost)') errors.push('header text');
               header.querySelector('button').focus();
-               if(!v.doc.getElementById('context-help').textContent.includes('Session — The name of the session.\\n\\nTotal CCost —')) errors.push('header scope');
+               if(v.doc.getElementById('context-help').textContent!=='The name of the session.') errors.push('Session header scope');
+               head.children[1].focus({preventScroll:true});
+               if(!v.doc.getElementById('context-help').textContent.includes('Reference cost of the entire session')) errors.push('Total CCost header scope');
               for(const cell of cells) {
                 const value=cell.querySelector('.mini-session-value'),left=value.children[0],right=value.children[1],s=style(cell);
                 const start=rect(cell).left+(parseFloat(s.borderLeftWidth)+parseFloat(s.paddingLeft))*zoom;
