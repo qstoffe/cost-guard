@@ -115,6 +115,8 @@ QUICK_PATTERNS: tuple[str, ...] = (
     "test_watch_observation_diagnostics.py",
     "test_v2_synthetic_attribution.py",
     "test_v2_tool_continuations.py",
+    "test_subagent_attribution.py",
+    "test_child_links.py",
     "test_threshold_multiplier.py",
     "test_watch_lifecycle.py",
     "test_runtime_errors.py",

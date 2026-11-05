@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.176 — 2026-11-06
+
+- OpenCode V2 `subagent` links now share ancestry- and time-qualified interpretation with legacy `task` links across causal usage and Watch activity. Structured `sessionID`/`sessionId` metadata wins over native output fallbacks; overlapping/replayed calls and nested/background work retain physical request identity and initiating-prompt scope. Prompt cost, Calls, token mix and linked-model detail include the child without changing independent root-tree totals, actual billing or unknown-coverage semantics. Derived caches invalidate the older interpretation.
+
 ## v80.175 — 2026-11-05
 
 - Web Beta retires the Reports page, date form and navigation entry. Old Reports bookmarks replace their history entry with the live Sessions catalog, discarding date parameters without starting a hidden report or adding a date filter. CLI date/range reporting, shared report APIs and surviving Web capture/refresh/cancel controls remain supported.

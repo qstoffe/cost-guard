@@ -5,6 +5,7 @@ from collections.abc import Mapping
 from dataclasses import replace
 
 from src.analysis.causal import prompt_parent_ids
+from src.analysis.child_links import ChildLinkIndex
 from src.domain import EventKind, MessageRole, NormalizedMessage, NormalizedPart, SessionSnapshot
 
 from .models import SkillObservation, ToolObservation, ToolOutcome
@@ -104,47 +105,17 @@ def _tool_name(part) -> str:
     return str(part.data.get("tool") or part.data.get("name") or "").lower()
 
 
-def _child_session_id(part) -> str:
-    if _tool_name(part) != "task":
-        return ""
-    state = part.data.get("state")
-    metadata = state.get("metadata") if isinstance(state, Mapping) else None
-    if isinstance(metadata, Mapping):
-        value = metadata.get("sessionId", metadata.get("sessionID"))
-        if value:
-            return str(value)
-    metadata = part.data.get("metadata")
-    if isinstance(metadata, Mapping):
-        value = metadata.get("sessionId", metadata.get("sessionID"))
-        if value:
-            return str(value)
-    return ""
-
-
 def _prompt_messages(snapshot: SessionSnapshot, parents: set[str], is_compaction: bool) -> list[NormalizedMessage]:
-    """Follow only task children attributed by the existing canonical prompt scope."""
+    """Use the same proven task/subagent windows as canonical prompt accounting."""
     messages = [
         message for message in snapshot.messages
         if message.role is MessageRole.ASSISTANT
+        and message.session_id == snapshot.root.session_id
         and message.parent_message_id in parents
         and (not is_compaction or message.summary)
     ]
-    child_ids: set[str] = set()
-    pending = list(messages)
-    while pending:
-        message = pending.pop()
-        for part in message.parts:
-            child_id = _child_session_id(part)
-            if not child_id or child_id in child_ids:
-                continue
-            child_ids.add(child_id)
-            child_messages = [
-                item for item in snapshot.messages
-                if item.role is MessageRole.ASSISTANT and item.session_id == child_id
-            ]
-            messages.extend(child_messages)
-            pending.extend(child_messages)
-    return messages
+    children = ChildLinkIndex(snapshot)
+    return [*messages, *children.messages(children.scopes(messages))]
 
 
 def _physical_tools(messages: list[NormalizedMessage]) -> tuple[NormalizedPart, ...]:

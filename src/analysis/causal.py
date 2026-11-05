@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import math
-import re
 import time
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
@@ -12,10 +11,11 @@ from src.domain import (
     SessionSnapshot, TerminalOutcome,
 )
 
-from .billing import CostEstimator, ProviderScope, measure_prompt_billing, provider_matches
+from .billing import CostEstimator, ProviderScope, measure_prompt_billing
 from .models import PromptRecord, PromptReference, TraceEntry
 from .duration import prompt_duration
 from .prompt_index import PromptIndex
+from .child_links import ChildLinkIndex, OPEN_END, part_time as _part_time, scoped_entries
 
 TRACKED_PROVIDER_DEFAULT = "github-copilot"
 TOOL_CALLS_CONTINUATION_GRACE_MS = 60_000
@@ -23,7 +23,6 @@ _LOCAL_TOOL_NAMES = frozenset({
     "bash", "shell", "read", "grep", "glob", "edit", "write", "patch",
     "apply_patch", "ls", "lsp", "skill", "todoread", "todowrite",
 })
-_TASK_OUTPUT_ID = re.compile(r'<task\s+id="([^"]+)"')
 
 
 def trace_entries(
@@ -108,6 +107,7 @@ class _RootTimeline:
     compacting: NormalizedEvent | None
     messages: Mapping[str, NormalizedMessage]
     index: PromptIndex
+    children: ChildLinkIndex
 
 
 def _root_timeline(
@@ -122,6 +122,7 @@ def _root_timeline(
         compacting=active_compaction_event(snapshot),
         messages={message.message_id: message for message in snapshot.messages},
         index=PromptIndex(snapshot, entries, visible, tracked_provider),
+        children=ChildLinkIndex(snapshot),
     )
 
 
@@ -153,7 +154,7 @@ def prompt_references(
             any(item.termination or item.error_name or item.completed_at_ms is None for item in attempt_messages)
             or bool(snapshot.root.active is True and latest_visible)
         )
-        if not window & parent_ids and not has_error_or_live:
+        if not window & parent_ids and not has_error_or_live and not timeline.children.scopes(attempt_messages):
             continue
         refs.append(PromptReference(
             session_id=snapshot.root.session_id,
@@ -200,7 +201,7 @@ def _synthetic_parent_ids(snapshot: SessionSnapshot, ref: PromptReference, timel
 
 
 def _outstanding_background(
-    snapshot: SessionSnapshot, messages: Sequence[NormalizedMessage], *, superseded: bool,
+    snapshot: SessionSnapshot, child_ids: set[str], *, superseded: bool,
 ) -> tuple[BackgroundActivity, ...]:
     """Running background work the current prompt is still waiting on.
 
@@ -210,7 +211,7 @@ def _outstanding_background(
     """
     if superseded:
         return ()
-    sessions = {snapshot.root.session_id} | _prompt_child_ids(messages)
+    sessions = {snapshot.root.session_id} | child_ids
     return tuple(item for item in snapshot.background if item.running and item.session_id in sessions)
 
 
@@ -252,20 +253,12 @@ def _part_is_running(part: NormalizedPart) -> bool:
     }
 
 
-def _prompt_child_ids(messages: Sequence[NormalizedMessage]) -> set[str]:
-    return {
-        child_id
-        for message in messages
-        for part in message.parts
-        if (child_id := _task_child_session_id(part))
-    }
-
-
 def _prompt_has_active_work(
     snapshot: SessionSnapshot,
     messages: Sequence[NormalizedMessage],
     *,
     continuation_superseded: bool,
+    live_child_ids: set[str],
 ) -> bool:
     if continuation_superseded:
         return False
@@ -277,8 +270,7 @@ def _prompt_has_active_work(
         part.created_at_ms, part.updated_at_ms, _part_time(part)[0]) > terminal_at)
         for message in messages for part in message.parts):
         return True
-    child_ids = _prompt_child_ids(messages)
-    return any(session.session_id in child_ids and session.active is True for session in snapshot.sessions)
+    return any(session.session_id in live_child_ids and session.active is True for session in snapshot.sessions)
 
 
 def _prompt_activity_end(
@@ -288,15 +280,12 @@ def _prompt_activity_end(
     fallback: int,
 ) -> int:
     values = [fallback]
-    child_ids = _prompt_child_ids(messages)
     for message in messages:
         values.append(message.completed_at_ms or message.created_at_ms)
         if message.termination:
             values.append(message.termination.completed_at_ms)
         values.extend(part.updated_at_ms or part.created_at_ms for part in message.parts)
-    values.extend(
-        session.updated_at_ms for session in snapshot.sessions if session.session_id in child_ids
-    )
+        values.extend(_part_time(part)[1] for part in message.parts)
     # Background work the prompt started is part of its wall-clock lifetime.
     owners = {message.message_id for message in messages}
     values.extend(item.ended_at_ms for item in snapshot.background
@@ -321,69 +310,8 @@ def _message_approx_context_tokens(message: NormalizedMessage | None) -> int:
     return total
 
 
-def _part_time(part: NormalizedPart) -> tuple[int, int]:
-    start = int(part.created_at_ms or 0)
-    end = int(part.updated_at_ms or 0)
-    state = part.data.get("state")
-    if isinstance(state, Mapping):
-        state_time = state.get("time")
-        if isinstance(state_time, Mapping):
-            try:
-                start = int(state_time.get("start") or start)
-                end = int(state_time.get("end") or end)
-            except (TypeError, ValueError):
-                pass
-        if str(state.get("status", "")).lower() in {"pending", "streaming", "running"}:
-            end = 0
-    return start, end
-
-
 def _tool_name(part: NormalizedPart) -> str:
     return str(part.data.get("tool") or part.data.get("name") or "").lower()
-
-
-def _task_child_session_id(part: NormalizedPart) -> str:
-    if part.kind != "tool" or _tool_name(part) != "task":
-        return ""
-    state = part.data.get("state")
-    if isinstance(state, Mapping):
-        metadata = state.get("metadata")
-        if isinstance(metadata, Mapping) and metadata.get("sessionId"):
-            return str(metadata["sessionId"])
-    metadata = part.data.get("metadata")
-    if isinstance(metadata, Mapping) and metadata.get("sessionId"):
-        return str(metadata["sessionId"])
-    output = str(state.get("output", "")) if isinstance(state, Mapping) else ""
-    match = _TASK_OUTPUT_ID.search(output)
-    return match.group(1) if match else ""
-
-
-def _task_invocations(
-    messages: Sequence[NormalizedMessage], range_start: int, range_end: int, allow_open_ended: bool
-) -> list[tuple[str, int, int]]:
-    result: list[tuple[str, int, int]] = []
-    for message in messages:
-        for part in message.parts:
-            child_id = _task_child_session_id(part)
-            if not child_id:
-                continue
-            start, raw_end = _part_time(part)
-            if start <= 0 or (range_end > 0 and start >= range_end):
-                continue
-            if raw_end > start:
-                end = raw_end
-                if end <= range_start:
-                    continue
-            elif allow_open_ended:
-                end = range_end if range_end > start else 2**63 - 1
-            else:
-                continue
-            state = part.data.get("state")
-            metadata = state.get("metadata") if isinstance(state, Mapping) else None
-            if isinstance(metadata, Mapping) and bool(metadata.get("background", False)):
-                end = 2**63 - 1
-            result.append((child_id, start, end))
-    return result
 
 
 def _local_intervals(messages: Sequence[NormalizedMessage], start_ms: int, end_ms: int) -> list[tuple[int, int]]:
@@ -420,45 +348,6 @@ def _measure_interval_union(intervals: Iterable[tuple[int, int]], start_ms: int,
     return total + current_end - current_start
 
 
-def _child_work(
-    snapshot: SessionSnapshot,
-    all_entries: Sequence[TraceEntry],
-    session_id: str,
-    range_start: int,
-    range_end: int,
-    visited: set[tuple[str, int, int]],
-    allow_open_ended: bool,
-    tracked_provider: ProviderScope,
-) -> tuple[list[TraceEntry], list[tuple[int, int]]]:
-    key = (session_id, range_start, range_end)
-    if not session_id or key in visited:
-        return [], []
-    visited.add(key)
-    entries = [
-        entry for entry in all_entries
-        if entry.session_id == session_id
-        and provider_matches(entry.model.provider, tracked_provider)
-        and entry.completed_at_ms >= range_start
-        and (range_end in (0, 2**63 - 1) or entry.completed_at_ms <= range_end)
-    ]
-    messages = [
-        message for message in snapshot.messages
-        if message.session_id == session_id and message.role is MessageRole.ASSISTANT
-    ]
-    local = _local_intervals(messages, range_start, range_end)
-    for child_id, start, end in _task_invocations(messages, range_start, range_end, allow_open_ended):
-        nested_end = end
-        if range_end not in (0, 2**63 - 1):
-            nested_end = min(nested_end, range_end)
-        child_entries, child_local = _child_work(
-            snapshot, all_entries, child_id, start, nested_end, visited,
-            allow_open_ended, tracked_provider,
-        )
-        entries.extend(child_entries)
-        local.extend(child_local)
-    return entries, local
-
-
 def _is_completed_compaction_entry(messages: Mapping[str, NormalizedMessage], entry: TraceEntry | None) -> bool:
     if entry is None or not entry.message_id:
         return False
@@ -487,6 +376,9 @@ def build_prompt_record(
     timeline = timeline or _root_timeline(snapshot, subscription_providers, tracked_provider)
     parent_ids = _synthetic_parent_ids(snapshot, ref, timeline)
     attempt_messages = timeline.index.attempt_messages(parent_ids, timeline.messages)
+    scopes = timeline.children.scopes(attempt_messages)
+    child_ids = {scope.session_id for scope in scopes}
+    child_messages = timeline.children.messages(scopes)
     # A continuation may fail before producing an assistant. The newest attempt,
     # not an earlier response or session inactivity, owns the logical outcome.
     latest = _latest_attempt_message(attempt_messages)
@@ -497,9 +389,10 @@ def build_prompt_record(
     compacting = timeline.compacting
     superseded = superseded or bool(compacting and compacting.created_at_ms > ref.prompt_time_ms)
     foreground_work = _prompt_has_active_work(
-        snapshot, attempt_messages, continuation_superseded=superseded
+        snapshot, (*attempt_messages, *child_messages), continuation_superseded=superseded,
+        live_child_ids={scope.session_id for scope in scopes if scope.end_ms == OPEN_END},
     )
-    background = _outstanding_background(snapshot, attempt_messages, superseded=superseded)
+    background = _outstanding_background(snapshot, child_ids, superseded=superseded)
 
     def running(active_work: bool) -> bool:
         return (not explicitly_aborted or bool(evidence and active_work)) and not bool(
@@ -524,6 +417,7 @@ def build_prompt_record(
         (entry for parent in parent_ids for entry in timeline.index.entries.get(parent, ())),
         key=lambda entry: (entry.completed_at_ms, entry.sort_order),
     )
+    child_entries = scoped_entries(snapshot, timeline.entries, scopes, tracked_provider) if scopes else []
     prompt_message = timeline.messages.get(ref.prompt_id)
     prompt_context_approx = _message_approx_context_tokens(prompt_message) or math.ceil(len(ref.prompt_text) / 4)
     previous_before_prompt = timeline.index.before_prompt(ref.prompt_time_ms)
@@ -546,10 +440,10 @@ def build_prompt_record(
     if aborted and evidence:
         abort_time = evidence.completed_at_ms
     terminal_time = 0 if in_progress else _prompt_activity_end(
-        snapshot, attempt_messages, fallback=ref.prompt_time_ms
+        snapshot, (*attempt_messages, *child_messages), fallback=ref.prompt_time_ms
     )
 
-    if not root_entries:
+    if not root_entries and not child_entries:
         if not aborted and not in_progress and not watch_error and not evidence:
             return None
         # Before its first completed request a running prompt may already have a
@@ -576,11 +470,11 @@ def build_prompt_record(
             duration_ms=max(0, terminal_time - ref.prompt_time_ms) if evidence else 0,
             execution_duration_ms=prompt_duration(ref, attempt_messages, latest, (), timeline.messages,
                                                   in_progress=in_progress, now_ms=now_ms, background=snapshot.background),
-            linked_session_ids=tuple(sorted(_prompt_child_ids(attempt_messages) - {ref.session_id})),
+            linked_session_ids=tuple(sorted(child_ids)),
             **background_fields,
         )
 
-    first, last = root_entries[0], root_entries[-1]
+    first, last = (root_entries or child_entries)[0], (root_entries or child_entries)[-1]
     previous = timeline.index.before_entry(first)
 
     prompt_start = ref.prompt_time_ms
@@ -589,18 +483,13 @@ def build_prompt_record(
         terminal_time = abort_time or prompt_end
     causal_end = now_ms if in_progress else max(prompt_end, terminal_time)
     local_intervals = _local_intervals(attempt_messages, prompt_start, causal_end)
-    entries = list(root_entries)
-    visited: set[tuple[str, int, int]] = set()
-    for child_id, start, end in _task_invocations(attempt_messages, prompt_start, causal_end, in_progress):
-        child_entries, child_local = _child_work(
-            snapshot, timeline.entries, child_id, start, end, visited, in_progress, tracked_provider
-        )
-        entries.extend(child_entries)
-        local_intervals.extend(child_local)
+    entries = [*root_entries, *child_entries]
+    for scope in scopes:
+        local_intervals.extend(_local_intervals(timeline.children.messages((scope,)), scope.start_ms, scope.end_ms))
 
     billed = measure_prompt_billing(entries, len(root_entries), estimator)
     meaningful_first = first
-    last_root_for_next: TraceEntry | None = last
+    last_root_for_next: TraceEntry | None = root_entries[-1] if root_entries else None
     if ref.prompt_kind == "subtask":
         meaningful = sorted((entry for entry in entries if entry.request_input_approx > 0), key=lambda e: (e.completed_at_ms, e.sort_order))
         if meaningful:
@@ -608,9 +497,16 @@ def build_prompt_record(
         nonzero_root = [entry for entry in root_entries if entry.request_input_approx > 0]
         last_root_for_next = nonzero_root[-1] if nonzero_root else None
 
-    main_model = ref.model_id or meaningful_first.model.model
-    main_provider = ref.provider_id or meaningful_first.model.provider
-    duration = max(0, causal_end - prompt_start)
+    main_binding = meaningful_first.model if root_entries else (latest.model if latest else None)
+    main_model = ref.model_id or (main_binding.model if main_binding else "")
+    main_provider = ref.provider_id or (main_binding.provider if main_binding else "")
+    # Keep Watch's historical metadata-based metric separate from qualified
+    # report execution_duration_ms and causal request/terminal boundaries.
+    watch_end = causal_end if in_progress else max(
+        (session.updated_at_ms for session in snapshot.sessions if session.session_id in child_ids),
+        default=causal_end,
+    )
+    duration = max(0, max(causal_end, watch_end) - prompt_start)
     local_ms = _measure_interval_union(local_intervals, prompt_start, causal_end)
     output_total = billed.output_tokens
     total_volume = billed.input_tokens + billed.cache_read_tokens + billed.cache_write_tokens + output_total
@@ -639,8 +535,7 @@ def build_prompt_record(
         last_root_entry=last_root_for_next, aborted=aborted, watch_error=watch_error,
         abort_time_ms=abort_time, in_progress=in_progress,
         completed_successfully=successful_final,
-        linked_session_ids=tuple(sorted((_prompt_child_ids(attempt_messages) |
-            {session for session, _, _ in visited}) - {ref.session_id})),
+        linked_session_ids=tuple(sorted(child_ids)),
         **background_fields,
     )
 
