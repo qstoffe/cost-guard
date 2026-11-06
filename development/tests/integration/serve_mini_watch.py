@@ -22,7 +22,7 @@ from development.tests.fixtures.web_reports import finite_report
 from development.tests.fixtures.web_help_reports import HelpAuditJobs
 from development.tests.fixtures.token_mix_views import TokenMixJobs
 from development.tests.fixtures.models_refresh import ModelsRefreshJobs
-from development.tests.fixtures.ai_stats_views import AIStatsJobs
+from development.tests.fixtures.ai_stats_views import AIStatsJobs, evidence_views
 from development.tests.fixtures.matched_inputs import ComparisonsJobs
 from development.tests.fixtures.report_loading import LoadingJobs
 from src.application.live_projection import project_live
@@ -119,6 +119,9 @@ def main():
                     continue
                 if command == 'jobs-status' and sys.argv[2:] == ['--ai-stats']:
                     print(json.dumps(jobs.updates()), flush=True)
+                    continue
+                if command == 'stats-evidence' and sys.argv[2:] == ['--ai-stats']:
+                    print(json.dumps(evidence_views()), flush=True)
                     continue
                 if command in ('stats-hold-all', 'stats-release-all') and sys.argv[2:] == ['--ai-stats']:
                     jobs.hold_all = command == 'stats-hold-all'

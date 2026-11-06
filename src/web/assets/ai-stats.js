@@ -9,7 +9,7 @@ const AIStatsView = (() => {
     ['expensive-session', '🏆', 'Most Expensive Session', 'Root with highest selected-period reference CCost, not necessarily its lifetime cost. Requests outside the window are excluded, never split across dates. Equal values use a stable session tie-break.'],
     ['longest-session', '🔥', 'Longest Session', 'Root with longest qualified unioned execution inside the period, clipped at the boundaries. Not lifetime age, idle time or summed concurrent child-worker time.'],
     ['busiest-day', '📅', 'Busiest Day', 'Configured-local date with most overlap-safe AI execution in the selected period. Two sessions running for the same real hour count as one hour, not two. Boundary dates are clipped; equal days use the earliest date.'],
-    ['night-owl', '🦉', 'Night Owl', 'Share of unioned AI execution between 22:00 and 06:00 in the configured timezone, including daylight-saving transitions. Includes qualified tool/test/child work; not proof the human was awake. No measured time means unavailable.'],
+    ['night-owl', '🦉', 'Night Owl', 'Share of unioned AI execution between 22:00 and 06:00 in the configured timezone, including daylight-saving transitions. Includes qualified tool/test/child work; not proof the human was awake. No measured time means no applicable share.'],
     ['streak', '⚡', 'Coding Streak', 'Longest consecutive run of configured-local dates with positive qualified AI execution in this period. Cross-midnight activity may touch two dates. Not a current streak, Git commits or proof of human coding.'],
     ['parallel', '🔀', 'Peak Parallel Sessions', 'Maximum distinct root sessions executing at the same instant in this period. Child agents within one root count only once. Inactive session ages, prompts and model-call counts do not count.']
   ];
@@ -32,7 +32,7 @@ const AIStatsView = (() => {
         const button = e('button', label); button.type = 'button';
         if (id === 'month' || id === 'all') ContextHelp.heading(button, id === 'month' ?
           'From the first day of the current configured-local calendar month until the observation time.' :
-          'All available recorded sessions, including archived roots. Deleted/pruned history cannot be recovered.');
+          'All available recorded history, including archived roots, not guaranteed complete lifetime history. Deleted/pruned history cannot be recovered.', true);
         button.addEventListener('click', () => select(id));
         this.buttons.set(id, button); this.selector.append(button);
       }
@@ -44,11 +44,13 @@ const AIStatsView = (() => {
         for (const [key, icon, title, help] of items) {
           const card = e('article', undefined, 'ai-stat'), heading = e('h4');
           const symbol = e('span', icon, 'ai-stat-icon'); symbol.setAttribute('aria-hidden', 'true');
-          heading.append(symbol, ContextHelp.button(title, help));
+          const helpButton = ContextHelp.button(title, () => help + (this.cards.get(key)?.explanation ?
+            ' Current period: ' + this.cards.get(key).explanation : ''));
+          heading.append(symbol, helpButton);
           const value = e('p', '', 'ai-stat-value'), detail = e('p', '', 'ai-stat-detail');
           const trait = e('p', '', 'ai-stat-trait'), status = e('span', '', 'ai-stat-state');
           card.append(heading, value, detail, trait, status); grid.append(card);
-          this.cards.set(key, {value, detail, trait, status});
+          this.cards.set(key, {value, detail, trait, status, explanation: ''});
         }
       }
       this.root.append(this.selector, this.status, this.content);
@@ -78,7 +80,8 @@ const AIStatsView = (() => {
         const card = this.cards.get(metric.metric);
         ReportView.text(card.value, () => ReportView.display(metric, 'value'));
         ReportView.text(card.trait, metric.display.trait);
-        ReportView.text(card.status, metric.status === 'complete' ? '' : metric.status);
+        card.explanation = metric.display.explanation || '';
+        ReportView.text(card.status, metric.display.state || (metric.status === 'complete' ? '' : metric.status));
         const target = card.detail.querySelector('a');
         if (metric.session_title && /^[A-Za-z0-9_-]{1,200}$/.test(metric.session_id)) {
           const link = target || e('a'); ReportView.text(link, metric.session_title);

@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.192 — 2026-11-06
+
+- AI Stats selectors inherit readable selected-label colors and avoid low-contrast color cross-fades. Month/All time retain hover/focus/touch scope help. Canonical metric reasons distinguish complete empty periods, source gaps, unknown execution boundaries, unpriced requests, missing telemetry and pending/provisional work. Cards and dynamic title help explain missing/partial values instead of the generic vault fallback, preserving supported zeros/subtotals, conservative calculation checks and the existing finite loading lifecycle. Compact evidence now retains snapshot completeness with a revisioned cache key.
+
 ## v80.191 — 2026-11-06
 
 - AI Stats Overview and Fun Facts use content-sized detail rows instead of a fixed clipped slot. Session names, dates, long traits and the optional matched-run fact can wrap while sibling cards retain equal height within each grid row. Canonical values, session destinations, periods, formatting, keyed DOM and acquisition remain unchanged. Rendered-browser regressions check actual text/link regions, focus and pointer activation across themes, widths and enlarged text.

@@ -43,10 +43,13 @@ def main():
                     job = jobs.snapshot(key)
                     if job['status'] not in ('queued', 'running'):
                         result = job.get('result') or {}
+                        states = {row['period']: [dict(metric=metric['metric'], status=metric['status'],
+                            reasons=metric.get('reasons', []), value_present=metric['value'] is not None)
+                            for metric in row['metrics']] for row in (result.get('view') or {}).get('ai_stats', [])}
                         print(json.dumps(dict(scope=scope, attempt=attempt, status=job['status'],
                             seconds=round(time.monotonic() - started, 3), error=job['error'],
                             result_error=result.get('error'), periods=len((result.get('view') or {}).get('ai_stats', [])),
-                            progress=job.get('progress'))), flush=True)
+                            progress=job.get('progress'), metric_states=states)), flush=True)
                         break
                     time.sleep(.05)
                 else:

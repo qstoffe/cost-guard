@@ -1,5 +1,5 @@
 """Independent AI Stats accounting, calendar boundaries and incremental acquisition."""
-from dataclasses import replace
+from dataclasses import asdict, replace
 from decimal import Decimal
 from pathlib import Path
 import shutil
@@ -17,9 +17,11 @@ from src.analysis.active_hour import HOUR_MS
 from src.analysis.models import TraceEntry
 from src.application import ReportApplication
 from src.application.ai_stats import stat_tokens
+from src.application.projection import project
 from src.domain import ModelRef, TokenUsage
 from src.pricing.catalog import PricingCatalog
 from src.reports import ReportKind, ReportRequest, ReportService
+from src.sources.selection import MigrationGapDiagnostic
 from src.web.jobs import parse_report, ReportJobs
 
 
@@ -35,6 +37,85 @@ def metrics(roots, *, start=None, now=None, zone='UTC', valuation=None, complete
 
 
 class AIStatsAnalysisTests(unittest.TestCase):
+    def test_empty_period_distinguishes_true_zero_from_missing_denominators(self):
+        result = metrics(())
+
+        for key in ('total-cost', 'working-time', 'streak', 'parallel'):
+            self.assertEqual((0, 'complete', ()), (result[key].value, result[key].status, result[key].reasons))
+        for key in ('hourly-rate', 'average-cost', 'expensive-session', 'longest-session', 'busiest-day', 'night-owl'):
+            item = result[key]
+            self.assertEqual((None, 'no-data'), (item.value, item.status))
+            display = stat_tokens(asdict(item))
+            self.assertEqual('No data', display['value'])
+            self.assertIn('completely observed period', display['explanation'])
+
+    def test_evidence_reasons_are_metric_specific_and_never_loading(self):
+        at = epoch('2026-11-01T10:00:00+00:00')
+        root = StatsRoot('a', 'A', (request('a', at, 4),), ((at, HOUR_MS, False),))
+        cases = (
+            (replace(root, intervals=((at, None, False),)), {}, 'working-time', 'unknown-duration'),
+            (root, {'complete': False}, 'working-time', 'source-incomplete'),
+            (replace(root, source_complete=False), {}, 'hourly-rate', 'source-incomplete'),
+            (root, {'valuation': lambda *_: None}, 'average-cost', 'unpriced-requests'),
+            (replace(root, entries=(replace(root.entries[0], tokens=TokenUsage(input=4, known_fields=())),)),
+             {}, 'expensive-session', 'missing-token-usage'),
+            (replace(root, cost_pending=True), {}, 'hourly-rate', 'pending-usage'),
+        )
+
+        for evidence, options, key, reason in cases:
+            with self.subTest(reason=reason):
+                result = metrics((evidence,), **options)
+                item = result[key]
+                self.assertEqual((None, 'unavailable'), (item.value, item.status))
+                self.assertIn(reason, item.reasons)
+                display = stat_tokens(asdict(item))
+                self.assertEqual('Unavailable', display['state'])
+                self.assertTrue(display['explanation'])
+                self.assertNotIn('Loading', str(display))
+                self.assertNotIn('vault', str(display))
+        self.assertEqual('complete', metrics((root,), valuation=lambda *_: None)['working-time'].status)
+        self.assertEqual('complete', metrics((replace(root, intervals=((at, None, False),)),))['total-cost'].status)
+
+    def test_partial_subtotal_and_provisional_time_have_qualified_copy_in_both_units(self):
+        from src.numbers import ccost_display
+        at = epoch('2026-11-01T10:00:00+00:00')
+        root = StatsRoot('a', 'A', (request('a', at, 4),), ((at, HOUR_MS, True),), cost_pending=True)
+        result = metrics((root,))
+
+        self.assertEqual((4, 'partial', ('pending-usage',)),
+                         (result['total-cost'].value, result['total-cost'].status, result['total-cost'].reasons))
+        self.assertEqual((HOUR_MS, 'provisional', ('running-executions',)),
+                         (result['working-time'].value, result['working-time'].status, result['working-time'].reasons))
+        for unit in ('credits', 'usd'):
+            with ccost_display(unit):
+                cost = stat_tokens(asdict(result['total-cost']))
+                timing = stat_tokens(asdict(result['working-time']))
+            self.assertIn('Observed subtotal only', cost['trait'])
+            self.assertIn('not yet reported usage', cost['explanation'])
+            self.assertIn('still in progress', timing['trait'])
+
+    def test_older_unpriced_requests_only_invalidate_cost_for_the_scope_that_contains_them(self):
+        at = epoch('2026-11-01T10:00:00+00:00')
+        recent = StatsRoot('recent', 'Recent', (request('recent', at, 4),), ((at, HOUR_MS, False),))
+        old = StatsRoot('old', 'Old', (request('old', at - 40 * DAY_MS, 99),), ((at - 40 * DAY_MS, HOUR_MS, False),))
+        valuation = lambda _model, tokens: None if tokens.input == 99 else Decimal(tokens.input)
+
+        short = metrics((recent, old), start=at - DAY_MS, valuation=valuation)
+        all_time = metrics((recent, old), valuation=valuation)
+
+        self.assertEqual((4, 'complete', ()), (short['hourly-rate'].value, short['hourly-rate'].status, short['hourly-rate'].reasons))
+        self.assertEqual((4, 'partial', ('unpriced-requests',)),
+                         (all_time['total-cost'].value, all_time['total-cost'].status, all_time['total-cost'].reasons))
+        self.assertIsNone(all_time['hourly-rate'].value)
+        self.assertEqual(2 * HOUR_MS, all_time['working-time'].value)
+
+    def test_unknown_explanation_is_explicit_and_unrecognized_codes_are_not_rendered(self):
+        display = stat_tokens({'metric': 'working-time', 'value': None, 'status': 'unavailable',
+                               'reasons': ('PRIVATE_SOURCE_TEXT',)})
+
+        self.assertIn('reason for missing evidence is unknown', display['trait'])
+        self.assertNotIn('PRIVATE_SOURCE_TEXT', str(display))
+
     def test_ten_metrics_use_period_cost_root_denominator_and_overlap_union(self):
         base = epoch('2026-11-01T23:00:00+00:00')
         a = StatsRoot('a', 'Actual A', (request('a', base + HOUR_MS, 12),), ((base, 2 * HOUR_MS, False),))
@@ -128,6 +209,39 @@ class AIStatsAnalysisTests(unittest.TestCase):
 
 
 class AIStatsAcquisitionTests(unittest.TestCase):
+    def test_source_warning_or_migration_gap_exposes_only_safe_metric_reasons(self):
+        original, _source = self.original(1)
+        selections = (
+            replace(original.selection, warnings=('PRIVATE_SOURCE_DIAGNOSTIC',)),
+            replace(original.selection, migration_gap=MigrationGapDiagnostic(True, ('legacy',))),
+        )
+
+        for selection in selections:
+            original.selection = selection
+            report = self.fresh(original).build(ReportRequest(ReportKind.AI_STATS, stats_scope='all'))
+            metric = project(report).to_json()['ai_stats'][-1]['metrics'][2]
+
+            self.assertEqual((None, 'unavailable', ['source-incomplete']),
+                             (metric['value'], metric['status'], metric['reasons']))
+            self.assertIn('coverage is incomplete', metric['display']['trait'])
+            self.assertNotIn('PRIVATE_SOURCE_DIAGNOSTIC', str(metric))
+
+    def test_incomplete_snapshot_remains_incomplete_after_cached_reuse_and_dto_projection(self):
+        original, source = self.original(1)
+        sid, snapshot = next(iter(source.snapshots.items()))
+        source.snapshots[sid] = replace(snapshot, complete=False)
+
+        first = self.fresh(original).build(ReportRequest(ReportKind.AI_STATS))
+        warm = self.fresh(original).build(ReportRequest(ReportKind.AI_STATS))
+        dto = project(warm).to_json()
+
+        self.assertEqual(first, warm)
+        metric = dto['ai_stats'][-1]['metrics'][2]
+        self.assertEqual(('unavailable', None, ['source-incomplete']),
+                         (metric['status'], metric['value'], metric['reasons']))
+        self.assertIn('coverage is incomplete', metric['display']['explanation'])
+        self.assertIsNone(dto['ai_stats'][-1]['matched'])
+
     def test_actual_finite_process_returns_coherent_ai_stats(self):
         jobs = ReportJobs(target=stats_report, deadline=10)
         self.addCleanup(jobs.close)
@@ -154,6 +268,7 @@ class AIStatsAcquisitionTests(unittest.TestCase):
 
     def original(self, count=6):
         source = SyntheticMonthSource(count, 3, month_start_ms=START)
+        source.snapshots = {sid: replace(snapshot, complete=True) for sid, snapshot in source.snapshots.items()}
         original = report_service(self, source)
         original.selection = replace(original.selection, warnings=())
         return original, source
@@ -234,6 +349,7 @@ class AIStatsAcquisitionTests(unittest.TestCase):
 
     def test_active_history_is_reobserved_and_unavailable_cache_does_not_invent_empty(self):
         source = SyntheticMonthSource(1, 3, month_start_ms=START, running_roots=1)
+        source.snapshots = {sid: replace(snapshot, complete=True) for sid, snapshot in source.snapshots.items()}
         original = report_service(self, source)
         original.selection = replace(original.selection, warnings=())
         first = self.fresh(original).build(ReportRequest(ReportKind.AI_STATS))
