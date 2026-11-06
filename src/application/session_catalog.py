@@ -62,22 +62,66 @@ class SessionCatalog:
         self.turn = 0
         self.checked_at = -100
         self.index_unavailable = False
+        self.warm = False
+        self.last_page = ()
+        self.background_due = 0
+        self.observed = None
+        self.last_observation = None
+
+    def enable_warm(self, enabled=True):
+        with self.lock:
+            self.warm = enabled
+
+    def interest(self, token, visible):
+        with self.lock:
+            lease = self.leases.get(token)
+            if lease is None:
+                raise KeyError('catalog_expired')
+            lease['interest_until'] = self.clock() + 90 if visible else self.clock()
+
+    def _browsing(self, lease):
+        return (self.clock() < lease['interest_until'] if 'interest_until' in lease
+                else self.clock() - lease['touched'] <= 300)
+
+    def _targets(self):
+        browsing = [lease for lease in self.leases.values() if self._browsing(lease)]
+        if any(lease.get('sort') not in (None, 'activity', 'name') for lease in browsing):
+            return set(self.roots)
+        selected = {key for lease in browsing for key in lease.get('visible', ())}
+        if selected:
+            return selected
+        if not self.warm or self.clock() < self.background_due:
+            return set()
+        return set(self.last_page or sorted(self.roots,
+            key=lambda key: (-(self.activity.get(key) or 0), key))[:50]) & self.roots.keys()
 
     def observe(self, observation, *, unavailable=False):
         with self.lock:
             if unavailable or observation is None:
                 self.state = "source_unavailable"
                 return
+            if observation is self.last_observation:
+                return  # Publishing the same old catalog cannot renew source age.
+            self.last_observation = observation
             previous_roots = self.roots
             self.roots = OrderedDict((root.session_id, root) for root in observation.sessions
                                      if root.parent_session_id is None)
+            if any(previous_roots[key].provenance != root.provenance
+                   for key, root in self.roots.items() if key in previous_roots):
+                for lease in self.leases.values():
+                    lease['epochs'].clear()
+                self.last_page = ()
             self.activity = root_activity(observation.sessions)
             self.active = observation.live_candidates
             self.revisions = dict(observation.revisions)
             self.rows = {key: row for key, row in self.rows.items() if key in self.roots}
             self.valid = {key: value for key, value in self.valid.items()
                            if key in self.roots and value[0] == self.revisions.get(key)
-                            and previous_roots[key].provenance == self.roots[key].provenance}
+                             and previous_roots[key].provenance == self.roots[key].provenance}
+            # An authoritative unchanged revision validates stable scalar facts;
+            # navigation and failed observations never renew this proof.
+            self.valid = {key: (value[0], self.clock()) if key not in self.active and not self.rows[key].running
+                          else value for key, value in self.valid.items()}
             self.rows = {key: row for key, row in self.rows.items()
                           if previous_roots[key].provenance == self.roots[key].provenance}
             self.prompt_activity = {key: value for key, value in self.prompt_activity.items()
@@ -86,6 +130,7 @@ class SessionCatalog:
                              if key in self.roots and previous_roots[key].provenance == self.roots[key].provenance
                              and failure[0] == self.revisions.get(key)}
             self.state = "observed"
+            self.observed = self.clock()
 
     def observe_prompts(self, evidence):
         """Canonical Watch captures only: root identity, lifecycle and original age.
@@ -109,15 +154,16 @@ class SessionCatalog:
     def _current(self, key):
         value = self.valid.get(key)
         return (not self.index_unavailable and value is not None and value[0] == self.revisions.get(key)
+                and 0 <= self.clock() - value[1] <= 3600
                 and (key not in self.active and not self.rows[key].running or self.clock() - value[1] <= 15))
 
     def needed(self):
         with self.lock:
-            browsing = any(self.clock() - lease["touched"] <= 300 for lease in self.leases.values())
+            targets = self._targets()
             if self.index_unavailable:
-                return self.state == "observed" and browsing and self.clock() - self.checked_at >= 30
-            work = any(self._eligible(key) for key in self.roots)
-            return self.state == "observed" and browsing and (work or self.clock() - self.checked_at >= 60)
+                return self.state == "observed" and bool(targets) and self.clock() - self.checked_at >= 30
+            work = any(self._eligible(key) for key in targets)
+            return self.state == "observed" and bool(targets) and (work or self.clock() - self.checked_at >= 60)
 
     def index_failed(self):
         with self.lock:
@@ -133,14 +179,14 @@ class SessionCatalog:
                 and (not self._current(key) or key in self.active or self.rows[key].running))
 
     def _candidate(self):
-        # Seven current-page admissions per background admission, within the same
-        # four-root/two-second slice. Latest navigation wins; expired tabs do not.
-        candidates = [key for key in self.roots if self._eligible(key)]
+        # Only requested rows, or global scalar keys required by a requested
+        # metric sort. Activity/name navigation never hydrates pages 2..N.
+        candidates = [key for key in self._targets() if self._eligible(key)]
         if not candidates:
             return None
         self.turn += 1
         visible = dict.fromkeys(key for lease in sorted(self.leases.values(), key=lambda item: -item["touched"])
-                                if self.clock() - lease["touched"] <= 300 for key in lease.get("visible", ()))
+                                if self._browsing(lease) for key in lease.get("visible", ()))
         priority = [key for key in visible if key in candidates]
         if self.turn % 8 and priority:
             return min(priority, key=lambda key: (self._current(key), self.attempted.get(key, -100)))
@@ -159,13 +205,15 @@ class SessionCatalog:
             self.timezone_id = service.timezone_id
             self.unit = service.config.get("ccostDisplayUnit", "credits")
         start = self.clock()
+        with self.lock:
+            targets = self._targets()
         for _ in range(4):
             with self.lock:
                 if self.state != "observed":
                     return
                 key = self._candidate()
                 if key is None:
-                    return
+                    break
                 root, revision = self.roots[key], self.revisions.get(key)
                 active = key in self.active or bool(self.rows.get(key) and self.rows[key].running)
                 self.attempted[key] = self.clock()
@@ -189,7 +237,11 @@ class SessionCatalog:
             # One slow root is bounded by the source transport; no additional
             # work is admitted after the slice budget. Details have their own lane.
             if self.clock() - start >= 2:
-                return
+                break
+        with self.lock:
+            if not any(self._browsing(lease) for lease in self.leases.values()):
+                self.background_due = self.clock() + (15 if any(
+                    not self._current(key) for key in targets if key in self.roots) else 900)
 
     def _rows(self):
         rows = []
@@ -212,6 +264,9 @@ class SessionCatalog:
             if lease is None:
                 raise KeyError("catalog_expired")
             lease["touched"] = self.clock()
+            if 'interest_until' in lease:
+                lease['interest_until'] = self.clock() + 90
+            lease['sort'] = sort
             indexed = sum(self._current(key) for key in self.roots)
             pending = sort not in ("activity", "name") and indexed != len(self.roots)
             if offset == 0:
@@ -232,8 +287,13 @@ class SessionCatalog:
                 if epoch not in lease["epochs"]:
                     raise KeyError("catalog_expired")
                 rows, applied, order = lease["epochs"][epoch]
+                if offset >= len(rows):
+                    raise KeyError('catalog_expired')
+                if any(row.session_id not in self.roots for row in rows[offset:offset + 50]):
+                    raise KeyError('catalog_expired')
             selected = rows[offset:offset + 50]
             lease["visible"] = tuple(row.session_id for row in selected)
+            self.last_page = lease['visible']
             # Older pages retain membership/order; only independently observed
             # values may change. Deleted rows retain their epoch evidence.
             fresh = {row.session_id: row for row in self._rows()}
@@ -254,7 +314,9 @@ class SessionCatalog:
                     row["metric_states"]["model"] = "pending"
             return dict(token=token, epoch=epoch, offset=offset, total=len(rows), size=50,
                 sort=applied, direction=order, pending_sort=pending, indexed=indexed,
-                available=len(self.roots), state=self.state, view=result)
+                available=len(self.roots), state=self.state, view=result,
+                age_ms=None if self.observed is None else int(max(0, self.clock() - self.observed) * 1000),
+                page_ready=sum(self._current(row.session_id) for row in selected if row.session_id in self.roots))
 
     def _expire(self):
         for token, lease in tuple(self.leases.items()):

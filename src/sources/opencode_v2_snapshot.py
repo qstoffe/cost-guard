@@ -69,7 +69,9 @@ def _read_trees(source, index, pending, revisions, *, workers, progress):
             for _ in range(min(workers, len(pending))):
                 submit()
             while active:
-                finished, _ = wait(active, return_when=FIRST_COMPLETED)
+                finished, _ = wait(active, timeout=.1, return_when=FIRST_COMPLETED)
+                if not finished:
+                    progress('messages', len(snapshots), len(pending))
                 for future in finished:
                     root_id = active.pop(future)
                     snapshots[root_id] = future.result()
@@ -84,7 +86,7 @@ def _read_trees(source, index, pending, revisions, *, workers, progress):
 
 
 def load_snapshots(source: OpenCodeV2Source, root_ids: Sequence[str], *, workers: int = 1,
-                   progress=None) -> dict[str, SessionSnapshot]:
+                   progress=None, available_only: bool = False) -> dict[str, SessionSnapshot]:
     """Share brackets, not weakened proofs: every returned tree is equal before/after its messages.
 
     Unstable trees alone retry; a reused bracket does not consume either fresh
@@ -128,9 +130,9 @@ def load_snapshots(source: OpenCodeV2Source, root_ids: Sequence[str], *, workers
             attempts += 1
             source._diagnostics["snapshot_revision_rechecks"] += bool(pending)
         reuse = False  # any mismatch requires fresh before AND after brackets
-    if pending:
+    if pending and not available_only:
         source._diagnostics["last_snapshot_stage"] = "revision_changed"
         raise SourceConcurrentChangeError("OpenCode V2 session changed repeatedly while it was being read",
                                           phase="snapshot", generation="v2")
-    source._diagnostics["last_snapshot_stage"] = "complete"
+    source._diagnostics["last_snapshot_stage"] = "partial" if pending else "complete"
     return complete

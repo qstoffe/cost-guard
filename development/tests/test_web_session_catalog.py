@@ -95,6 +95,18 @@ class SessionCatalogTests(unittest.TestCase):
         self.catalog.tick(self.service)
         self.assertEqual(self.catalog.page(token=page["token"], sort="ccost")["indexed"], 120)
 
+    def test_hidden_metric_sort_drops_global_work_without_expiring_page_epoch(self):
+        page = self.catalog.page(sort='ccost')
+        self.catalog.enable_warm()
+        catalog_page(self.catalog, {'action': 'interest', 'token': page['token'], 'visible': True})
+        self.assertEqual(120, len(self.catalog._targets()))
+        catalog_page(self.catalog, {'action': 'interest', 'token': page['token'], 'visible': False})
+        self.assertEqual(50, len(self.catalog._targets()))
+        self.assertIn(page['epoch'], self.catalog.leases[page['token']]['epochs'])
+        self.catalog.interest(page['token'], True)
+        self.clock += 91
+        self.assertEqual(50, len(self.catalog._targets()), 'expired visibility cannot retain a global sort scan')
+
     def test_scalar_cache_reuse_without_history_hydration_and_active_bypass(self):
         root = next(iter(self.catalog.roots.values()))
         revision = self.catalog.revisions[root.session_id]
@@ -108,7 +120,7 @@ class SessionCatalogTests(unittest.TestCase):
             session_summary(self.service, root, revision, active=True)
         self.assertTrue(acquire.call_args.kwargs["force_fresh"])
 
-    def test_visible_page_first_navigation_fairness_and_no_unchanged_reindex(self):
+    def test_only_viewed_pages_warm_until_a_global_metric_sort_requires_more_keys(self):
         first = self.catalog.page()
         visible = {row["session_id"] for row in first["view"]["session_usage"]}
         acquired = []
@@ -123,14 +135,44 @@ class SessionCatalogTests(unittest.TestCase):
             current = {row["session_id"] for row in second["view"]["session_usage"]}
             self.catalog.tick(self.service)
             self.assertTrue(set(acquired[4:7]).issubset(current))
-            self.assertNotIn(acquired[7], current, "one of eight admissions advances background history")
+            self.assertTrue(set(acquired[4:]).issubset(current))
+            for _ in range(30):
+                self.clock += 6
+                self.catalog.tick(self.service)
+            self.assertLessEqual(len(acquired), 54, 'no speculative hydration of unvisited pages')
+            pending = self.catalog.page(token=first['token'], sort='prompts')
+            self.assertTrue(pending['pending_sort'])
             for _ in range(30):
                 self.clock += 6
                 self.catalog.tick(self.service)
         self.assertEqual(len(acquired), 120)
-        self.assertEqual(len(set(acquired)), 120, "unchanged validated scalar rows are never reacquired")
-        ready = self.catalog.page(token=first["token"], sort="prompts")
+        self.assertEqual(len(set(acquired)), 120, 'global sort acquires missing keys exactly once')
+        ready = self.catalog.page(token=first['token'], sort='prompts')
         self.assertFalse(ready["pending_sort"])
+
+    def test_repeated_catalog_publication_and_page_navigation_do_not_renew_age(self):
+        observation = self.catalog.last_observation
+        first = self.catalog.page()
+        self.clock = 3601
+        self.catalog.observe(observation)
+        old = self.catalog.page()
+        self.assertEqual(3_601_000, old['age_ms'])
+        self.observe()
+        self.assertEqual(0, self.catalog.page()['age_ms'])
+
+    def test_unvisited_warming_is_bounded_to_first_fifty_rows(self):
+        self.catalog.enable_warm()
+        acquired = []
+        def summary(service, root, revision, **kwargs):
+            acquired.append(root.session_id)
+            return SessionUsageRow(root.session_id, root.title, 'N/A', False, Decimal(0), 0), revision
+        with patch('src.application.session_catalog.session_summary', side_effect=summary):
+            for _ in range(20):
+                if self.catalog.needed():
+                    self.catalog.tick(self.service)
+                self.clock += 15
+        self.assertEqual(50, len(acquired))
+        self.assertEqual(50, len(set(acquired)))
 
     def test_failed_rows_are_unavailable_or_retained_not_endlessly_pending(self):
         first = self.catalog.page()
@@ -233,13 +275,25 @@ class SessionCatalogTests(unittest.TestCase):
 
     def test_source_identity_change_invalidates_keys_even_with_same_revision(self):
         self.index()
+        original = self.catalog.page()
+        self.catalog.page(token=original['token'], epoch=original['epoch'], offset=100)
         snapshot = self.source.snapshots["root-0000"]
         moved = replace(snapshot.root, provenance=replace(snapshot.root.provenance, source_instance="new-source"))
         self.source.snapshots[moved.session_id] = replace(snapshot, root=moved, sessions=(moved,))
         self.observe()
+        with self.assertRaisesRegex(KeyError, 'catalog_expired'):
+            self.catalog.page(token=original['token'], epoch=original['epoch'], offset=100)
         page = self.catalog.page(sort="ccost")
         self.assertTrue(page["pending_sort"])
         self.assertEqual(page["indexed"], 119)
+
+    def test_out_of_range_retained_page_requires_explicit_recovery(self):
+        original = self.catalog.page()
+        with self.assertRaisesRegex(KeyError, 'catalog_expired'):
+            self.catalog.page(token=original['token'], epoch=original['epoch'], offset=150)
+        latest = self.catalog.page(token=original['token'])
+        self.assertEqual(latest['offset'], 0)
+        self.assertEqual(len(latest['view']['session_usage']), 50)
 
     def test_blocked_catalog_worker_does_not_occupy_detail_or_http_lane(self):
         entered, released, captured = Event(), Event(), Event()

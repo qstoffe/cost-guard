@@ -58,6 +58,7 @@ QUICK_PATTERNS: tuple[str, ...] = (
     "test_windows_web_activity.py",
     "test_web_lifecycle.py",
     "test_web_runtime.py",
+    "test_web_dispatch.py",
     "test_web_views.py",
     "test_session_list_pages.py",
     "test_web_display.py",

@@ -129,6 +129,7 @@ class V2HttpClient:
         self.endpoint = endpoint
         self.timeout_seconds = timeout_seconds
         self.request_timeout = None
+        self.read_admission = None
         parsed = urlsplit(endpoint.url)
         self._host = parsed.hostname or "127.0.0.1"
         self._port = parsed.port
@@ -206,6 +207,8 @@ class V2HttpClient:
             connection.close()
 
     def _get(self, target: str, *, allow_reuse: bool = True) -> tuple[int, bytes]:
+        if self.read_admission is not None:
+            self.read_admission()
         timeout = self.request_timeout() if self.request_timeout is not None else self.timeout_seconds
         with self._lock:
             if self._cancelled:

@@ -109,11 +109,18 @@ class SessionHistory:
         self.omitted_ids = frozenset()
         self.fresh_snapshot = None
         self.lifecycle_due_ms = 2**63
+        self.dependencies = None
 
     def acquire(self, service, session_id):
         root = service.root_for_session(session_id)
         if root is None:
             return None, "session_missing"
+        dependencies = (root.provenance.source_generation, root.provenance.source_instance,
+                        service._dependencies(service._load_catalog()),
+                        service._load_comparison_catalog().analysis_signature)
+        if self.dependencies is not None and self.dependencies != dependencies:
+            self.__init__()  # Another source/config/price revision is not retained history.
+        self.dependencies = dependencies
         revision = service.source.get_session_tree_revision(root.session_id)
         if self.report is not None and revision == self.revision and not self.running and root.active is not True:
             return self.report, ("archived" if root.archived_at_ms is not None else

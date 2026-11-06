@@ -147,8 +147,10 @@ async function main() {
   catalog.configure(new URLSearchParams()); catalog.attach(parent);
   catalog.detach(); catalog.configure(new URLSearchParams('sort=ccost')); catalog.attach(parent);
   resolveCatalog(catalogData); await new Promise(setImmediate);
-  assert.equal(catalogCalls.length, 2, 'changed route reruns after stale request completes');
-  assert.equal(catalogCalls[1].sort, 'ccost');
+   const pageCalls = catalogCalls.filter(value=>value.action!=='interest');
+   assert.equal(pageCalls.length, 2, 'changed route reruns after stale request completes');
+   assert.equal(pageCalls[1].sort, 'ccost');
+   assert.ok(catalogCalls.some(value=>value.action==='interest' && value.visible===false), 'late detached lease is demoted');
   assert.equal(timers.size, 1, 'catalog route race leaves one polling timer');
    catalog.detach(); assert.equal(timers.size, 0);
    const timestamp = expression => vm.runInContext(`SessionsCatalog.localTimestamp(${expression})`, context);

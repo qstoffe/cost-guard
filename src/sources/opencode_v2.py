@@ -231,6 +231,7 @@ class OpenCodeV2Source:
                 client.cancel()
                 raise transport_failure(ConnectionAbortedError(), phase="shutdown")
             client.request_timeout = self.read_recovery.request_timeout if self.read_recovery is not None else None
+            client.read_admission = getattr(self, 'read_admission', None)
             return client
 
     @property
@@ -591,6 +592,15 @@ class OpenCodeV2Source:
     def load_session_snapshots_observed(self, session_ids: Sequence[str], progress) -> Mapping[str, SessionSnapshot]:
         """Explicit deep detail acquisition; ordinary Watch batches stay unchanged."""
         return load_snapshots(self, session_ids, workers=4, progress=progress)
+
+    @observed("snapshot")
+    def load_session_snapshots_available(self, session_ids: Sequence[str], progress) -> Mapping[str, SessionSnapshot]:
+        """Partial-history opt-in: omit unstable trees, never return unverified data.
+
+        Membership loss and transport/schema failures still fail the acquisition.
+        Callers must expose missing coverage; ordinary snapshots remain strict.
+        """
+        return load_snapshots(self, session_ids, workers=4, progress=progress, available_only=True)
 
     @staticmethod
     def _event_session_id(value: Mapping[str, Any]) -> str | None:

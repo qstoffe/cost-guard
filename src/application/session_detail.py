@@ -29,6 +29,13 @@ class SessionDetails:
             for token, lease in tuple(self.leases.items()):
                 if self.clock() - lease["touched"] > 300:
                     del self.leases[token]
+            if session_id not in self.histories:
+                leased = {lease['session_id'] for lease in self.leases.values()}
+                while len(self.histories) >= 16:
+                    victim = next((key for key in self.histories if key not in leased), None)
+                    if victim is None:
+                        break
+                    del self.histories[victim]
             if len(self.leases) >= 32 or (session_id not in self.histories and len(self.histories) >= 16):
                 raise RuntimeError("detail_busy")
             entry = self.histories.setdefault(session_id, dict(history=SessionHistory(), result=None,
@@ -37,8 +44,14 @@ class SessionDetails:
             entry["due"] = 0
             token = uuid4().hex
             self.leases[token] = dict(session_id=session_id, mode=mode, frozen=None,
-                after=entry["generation"], touched=self.clock())
+                after=entry['generation'] - 1 if entry.get('validated') is not None and
+                    0 <= self.clock() - entry['validated'] <= 3600 else entry['generation'], touched=self.clock())
             return token
+
+    def invalidate(self):
+        with self.lock:
+            self.leases.clear()
+            self.histories.clear()
 
     def freeze(self, token):
         with self.lock:
@@ -77,6 +90,8 @@ class SessionDetails:
             if chunk and (capture is None or capture["revision"] != revision):
                 raise KeyError("detail_expired")
             pending = lease["frozen"] is None and entry["generation"] <= lease["after"]
+            expired = entry.get('validated') is None or not 0 <= self.clock() - entry['validated'] <= 3600
+            pending = pending or expired
         report = capture["result"]
         if pending or report is None:
             return dict(state=capture["state"], pending=pending, result=None)
@@ -130,5 +145,6 @@ class SessionDetails:
                 entry["observed_at_ms"] = service.now_ms
                 entry["row_observations"] = entry["history"].row_observations
                 entry["omitted_ids"] = entry["history"].omitted_ids
+                entry['validated'] = self.clock()
             entry["state"] = state
             entry["generation"] += 1

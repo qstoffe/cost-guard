@@ -4,9 +4,19 @@ import time
 
 from src.reports import ReportKind, ReportRequest
 from src.reports.ai_stats import BATCH_SIZE, SLICE_ROOTS
+from .report_control import ManagedReport
 
 @dataclass(frozen=True, slots=True)
 class StatsSlice(ReportRequest):
+    observation_ms: int = 0
+    scan: str = ''
+    slice_roots: int = SLICE_ROOTS
+    batch_size: int = BATCH_SIZE
+
+
+@dataclass(frozen=True, slots=True)
+class ManagedStatsSlice(ManagedReport):
+    """A resumable stats slice also participates in host quantum arbitration."""
     observation_ms: int = 0
     scan: str = ''
     slice_roots: int = SLICE_ROOTS
@@ -28,9 +38,11 @@ def request(job, key):
     job.setdefault('observation_ms', int(time.time() * 1000))
     scope = next((scope for scope in (original.stats_scope, *job.get('goals', ()))
                   if not ready(job, scope)), original.stats_scope)
-    return StatsSlice(ReportKind.AI_STATS, stats_scope=scope,
+    cls = ManagedStatsSlice if isinstance(original, ManagedReport) else StatsSlice
+    options = dict(source_identity=original.source_identity) if isinstance(original, ManagedReport) else {}
+    return cls(ReportKind.AI_STATS, stats_scope=scope,
         observation_ms=job['observation_ms'], scan='ai-stats-scan-' + key,
-        batch_size=job.get('batch_size', BATCH_SIZE))
+        batch_size=job.get('batch_size', BATCH_SIZE), **options)
 
 
 def accept(job, result):

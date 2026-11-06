@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from collections import OrderedDict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import json
 import multiprocessing
 from multiprocessing.connection import wait
@@ -14,6 +14,8 @@ from uuid import uuid4
 
 from src.reports import ReportKind, ReportRequest
 from . import stats_jobs
+from . import history_jobs
+from .report_control import ManagedReport, Quantum
 
 MAX_RESULT_BYTES = 8 * 1024 * 1024
 MAX_JOBS = 16
@@ -86,13 +88,16 @@ def parse_report(value):
 class ProgressRelay:
     """Keep only the latest callback between bounded IPC publications; no timer/queue."""
 
-    def __init__(self, sender, *, clock=time.monotonic):
+    def __init__(self, sender, *, clock=time.monotonic, quantum=None):
         self.sender = sender
         self.clock = clock
         self.last_sent = float("-inf")
         self.pending = None
+        self.quantum = quantum
 
     def observe(self, event):
+        if self.quantum:
+            self.quantum.checkpoint()
         self.pending = event.to_json()
         if self.clock() - self.last_sent >= 0.1:
             self.flush()
@@ -108,8 +113,11 @@ def run_report(sender, request):
     """Spawn entry: own all mutable service/account/source state; no inherited hooks."""
     try:
         from .composition import application
-        relay = ProgressRelay(sender)
-        result = application(request).execute(request, progress=relay.observe).to_json()
+        quantum = Quantum(sender, request.quantum_seconds) if isinstance(request, ManagedReport) else None
+        relay = ProgressRelay(sender, quantum=quantum)
+        app = application(request, read_admission=quantum.admit_read,
+            history_checkpoint=lambda value: sender.send(('checkpoint', value))) if quantum else application(request)
+        result = app.execute(request, progress=relay.observe).to_json()
         relay.flush()
         started = time.perf_counter()
         payload = json.dumps(result, ensure_ascii=True, allow_nan=False, separators=(",", ":")).encode("ascii")
@@ -170,6 +178,7 @@ class ReportJobs:
         self._lock = RLock()
         self._jobs = OrderedDict()
         self._active = None
+        self._parked = {}
         self._closed = False
         self._failure = None
         self.analysis = "not_requested"
@@ -182,6 +191,9 @@ class ReportJobs:
             if self._closed:
                 raise RuntimeError("stopping")
             for key, job in self._jobs.items():
+                if (isinstance(job['request'], ManagedReport) != isinstance(request, ManagedReport)
+                        or getattr(job['request'], 'source_identity', '') != getattr(request, 'source_identity', '')):
+                    continue
                 if stats_jobs.is_stats(job) and request.kind is ReportKind.AI_STATS:
                     if job['status'] in {'queued', 'running'}:
                         # At most the five validated scopes; priority never erases
@@ -189,12 +201,12 @@ class ReportJobs:
                         job['goals'] = tuple(dict.fromkeys((*job['goals'], request.stats_scope)))
                         job['request'] = request
                         return key
-                    if (job['status'] == 'complete' and stats_jobs.ready(job, request.stats_scope)
+                    if (not isinstance(request, ManagedReport) and job['status'] == 'complete' and stats_jobs.ready(job, request.stats_scope)
                             and time.monotonic() - job.get('finished_at', 0) < 60):
                         return key
                 if job["request"] == request and job["status"] in {"queued", "running"}:
                     return key
-                if (request.kind in {ReportKind.TOKEN_MIX, ReportKind.COMPARISONS} and job["request"] == request
+                if (not isinstance(request, ManagedReport) and request.kind in {ReportKind.TOKEN_MIX, ReportKind.COMPARISONS} and job["request"] == request
                         and job["status"] == "complete" and time.monotonic() - job.get("finished_at", 0) < 60):
                     # Coalesce staggered tab freshness checks as well as in-flight work.
                     # Retain the actual observation timestamp; reuse is not new acquisition.
@@ -206,7 +218,7 @@ class ReportJobs:
                 del self._jobs[victim]
             key = uuid4().hex
             self._jobs[key] = dict(request=request, status="queued", result=None, error=None, progress=None,
-                                   queued_at=time.monotonic())
+                                   queued_at=time.monotonic(), priority=1, served_at=0)
             if request.kind is ReportKind.AI_STATS:
                 self._jobs[key]['goals'] = (request.stats_scope,)
             return key
@@ -238,10 +250,39 @@ class ReportJobs:
         if self._failure is not None:
             raise self._failure
 
-    def _stop(self, *, finished=False):
-        if self._active is None:
-            return
+    def prioritize(self, priorities):
+        """Host policy only. Browsers cannot set worker counts or raw priorities."""
+        with self._lock:
+            for key, job in self._jobs.items():
+                job['priority'] = priorities.get(key, 1)
+
+    def select_scope(self, key, scope):
+        """Foreground intent changes the next Stats slice, not its saved goals."""
+        if scope not in ('today', '7-days', '30-days', 'month', 'all'):
+            raise ValueError('invalid_request')
+        with self._lock:
+            job = self._jobs.get(key)
+            if job and stats_jobs.is_stats(job) and job['status'] in {'queued', 'running'}:
+                job['goals'] = tuple(dict.fromkeys((*job['goals'], scope)))
+                job['request'] = replace(job['request'], stats_scope=scope)
+
+    def _park(self):
         key, process, receiver, started = self._active
+        job = self._jobs[key]
+        elapsed = max(0, time.monotonic() - started)
+        job['worker_ms'] = job.get('worker_ms', 0) + elapsed * 1000
+        job['quantum_elapsed'] = job.get('quantum_elapsed', 0) + elapsed
+        job['served_at'] = time.monotonic()
+        job['not_before'] = time.monotonic() + (min(1, elapsed * 4) if job['priority'] >= 2 else 0)
+        job['status'] = 'queued'
+        self._parked[key] = process, receiver
+        self._active = None
+
+    def _stop(self, *, finished=False, owner=None):
+        owner = owner or self._active
+        if owner is None:
+            return
+        key, process, receiver, started = owner
         job = self._jobs[key]
         if finished:
             # Valid terminal IPC means the child can finish its own pipe/parent
@@ -261,7 +302,8 @@ class ReportJobs:
         receiver.close()
         process.close()
         job['worker_ms'] = job.get('worker_ms', 0) + max(0, time.monotonic() - started) * 1000
-        self._active = None
+        if self._active is owner:
+            self._active = None
 
     def cancel(self, key):
         with self._lock:
@@ -270,6 +312,10 @@ class ReportJobs:
             if job is None:
                 return False
             if job["status"] in {"queued", "running"}:
+                if key in self._parked:
+                    process, receiver = self._parked[key]
+                    self._stop(owner=(key, process, receiver, time.monotonic()))
+                    del self._parked[key]
                 if self._active and self._active[0] == key:
                     self._stop()
                 job["status"] = "cancelled"
@@ -291,10 +337,15 @@ class ReportJobs:
         job = self._jobs[key]
         finished = False
         try:
-            if time.monotonic() - started > self._deadline:
-                stats_jobs.timed_out(job)
+            if time.monotonic() - started + job.get('quantum_elapsed', 0) > self._deadline:
+                if history_jobs.managed(job):
+                    history_jobs.resume(job, timeout=True)
+                else:
+                    stats_jobs.timed_out(job)
             elif receiver.poll():
                 if not self._receive(job, receiver):
+                    return
+                if self._active is None:
                     return
                 finished = True
             elif process.is_alive():
@@ -313,11 +364,23 @@ class ReportJobs:
             if kind == 'progress':
                 sequence = (job['progress'] or {}).get('sequence', 0) + 1
                 job['progress'] = dict(payload, sequence=sequence)
+            elif kind == 'yield' and payload is None and isinstance(job['request'], ManagedReport):
+                self._park()
+                return True
             elif kind == 'metrics':
                 for name in ('serialization_ms', 'result_bytes'):
                     job[name] = job.get(name, 0) + payload[name]
+            elif kind == 'checkpoint':
+                history_jobs.checkpoint(job, payload)
             elif kind == 'result':
                 result = json.loads(payload)
+                if history_jobs.managed(job) and (result.get('error') or {}).get('code') == 'history_continue':
+                    history_jobs.resume(job)
+                    return True
+                expected = getattr(job['request'], 'source_identity', '')
+                if expected and result.get('source', {}).get('identity') != expected and not result.get('error'):
+                    job.update(status='failed', error='source_identity_changed', result=None)
+                    return True
                 stats_jobs.accept(job, result)
                 if job['status'] in {'failed', 'complete'}:
                     job['finished_at'] = time.monotonic()
@@ -337,13 +400,33 @@ class ReportJobs:
 
     def _start_next(self):
         for key, job in sorted(self._jobs.items(), key=lambda item: (
+                item[1].get('priority', 1), item[1].get('served_at', 0),
                 item[1]['request'].kind in {ReportKind.TOKEN_MIX, ReportKind.AI_STATS, ReportKind.COMPARISONS},
                 item[1]['queued_at'])):
-            if job['status'] != 'queued':
+            if job['status'] != 'queued' or job.get('priority', 1) >= 3 or time.monotonic() < job.get('not_before', 0):
                 continue
-            receiver, sender = self._context.Pipe(duplex=False)
+            if key in self._parked:
+                process, receiver = self._parked[key]
+                # Transfer ownership before the uncertain write. A broken pipe
+                # must not lose the only handles to a still-running child.
+                self._active = key, process, receiver, time.monotonic()
+                del self._parked[key]
+                try:
+                    receiver.send('run')
+                except (EOFError, OSError, ValueError):
+                    job.update(status='failed', error='report_unavailable')
+                    self._stop()
+                    return
+                job['status'] = 'running'
+                break
+            receiver, sender = self._context.Pipe(duplex=isinstance(job['request'], ManagedReport))
+            request = stats_jobs.request(job, key)
+            if isinstance(request, ManagedReport) and request.kind is not ReportKind.AI_STATS:
+                job.setdefault('observation_ms', int(time.time() * 1000))
+                request = replace(request, observation_ms=job['observation_ms'],
+                                  history_batch_size=job.get('history_batch_size', 64))
             process = self._context.Process(target=run_owned_report,
-                args=(self._target, sender, stats_jobs.request(job, key)), name='cost-guard-report', daemon=True)
+                args=(self._target, sender, request), name='cost-guard-report', daemon=True)
             try:
                 process.start()
             except Exception:
@@ -357,6 +440,7 @@ class ReportJobs:
             now = time.monotonic()
             job['queue_ms'] = job.get('queue_ms', 0) + max(0, now - job['queued_at']) * 1000
             job['slices'] = job.get('slices', 0) + 1
+            job['quantum_elapsed'] = 0
             self._active = key, process, receiver, now
             job['status'] = 'running'
             self.analysis = 'loading'
@@ -367,6 +451,10 @@ class ReportJobs:
             self._closed = True
             try:
                 self._stop()
+                for key in tuple(self._parked):
+                    process, receiver = self._parked[key]
+                    self._stop(owner=(key, process, receiver, time.monotonic()))
+                    del self._parked[key]
             finally:
                 for job in self._jobs.values():
                     if job["status"] in {"queued", "running"}:

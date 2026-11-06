@@ -519,6 +519,12 @@ class GitHubCopilotPricingProvider:
         with self._lock:
             return self._load_or_fetch(True, allow_cached_fallback=False)
 
+    def cached_catalog(self) -> PricingCatalog | None:
+        """Read validated disposable prices only; never fetch prices or metadata."""
+        entry = self.cache.get(CACHE_NAMESPACE, CACHE_KEY, busy_timeout_ms=50)
+        catalog = _catalog_from_payload(entry.payload) if entry else None
+        return _apply_expired_promotions(catalog, self.now_ms()) if catalog else None
+
     def _load_or_fetch(self, force: bool, *, allow_cached_fallback: bool = True) -> PricingCatalog:
         if self._catalog is not None and not force and not self._expired(self._catalog):
             return self._catalog
