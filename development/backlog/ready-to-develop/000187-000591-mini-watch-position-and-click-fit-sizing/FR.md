@@ -1,0 +1,70 @@
+# FR 000591 — Mini Watch: separate placement and size, two-prompt opening fit, Earlier click sizing
+
+**Owner-approved revised Ready Feature Request, 2026-11-06.** Permanent identity **000591**; Ready priority **000187**, after FR000602 (000185) and before FR000597 (000190). This supersedes FR000591's original 2026-11-05 hands-free Live Auto-height acceptance and explicitly reactivates the previously held FR. Do not allocate a new ID, count a completion, or change product/version files during this backlog-only publication.
+
+## Owner decision and attainable scope
+
+Mini Watch uses the browser's Document Picture-in-Picture (PiP), not a native app-owned window. The owner explicitly **withdraws automatic outer-window resizing on passive Live/SSE updates**, continual height ownership, and any requirement to prevent the user from manually resizing vertically. The acceptable feature is:
+
+1. Open at **approximately 650 device-independent pixels (DIPs) of total outer-window width** and a calculated height that fits the actual initial Mini Watch content **plus capacity for two complete running-prompt rows**, without a vertical scrollbar in the window or an internal section when within available screen/browser bounds.
+2. **Earlier Sessions** expands on an eligible click/keyboard activation and adjusts the PiP height to fit the expanded content; clicking again collapses it and **shrinks the window back to its appropriate compact baseline**. This preserves and improves the earlier user-triggered behavior, not a background Auto-height service.
+3. Maintain separate, honestly described **Mini Watch position** and **Mini Watch size** preferences to the extent the browser can honor them. Keep a manual/remembered-size alternative without inventing native positioning controls.
+
+The previous hold was caused by eight actual Chrome/Edge native resize calls without transient user activation failing with NotAllowedError. That evidence remains historically valid in the Mini Watch engineering journal, but **does not block this newly reduced scope**. There is no owner requirement to make forbidden passive resizes work. Never quietly reintroduce it as an acceptance gate or place this FR On Hold solely because Chrome/Edge still reject passive resizing.
+
+## 1. Default initial opening: 650-DIP outer width and two-prompt capacity
+
+- **Fit on open** is the shipped default size behavior. Opening the PiP requests a nominal **650-DIP outer-window width**, measured/adjusted as closely as the browser's viewport-sizing and native frame permit. Do not confuse browser viewport width, total outer-frame width, CSS pixels and physical pixels. Never silently return to the existing 560-pixel request as the default.
+- Calculate the **initial outer height from real Mini layout** at the intended width before requesting the PiP, allowing for the native title bar/frame, padding, borders, text metrics, zoom and theme. Include the Mini header/return control, CCost Today, visible status and warning text, collapsed Earlier Sessions control, running-prompts header/table, and **all visible account/subscription rows and bars**. Do not size only for prompts and hide account rows.
+- Reserve enough height for **two fully visible running-prompt rows**, including row padding/borders and normal text wrapping, even if there are zero or one running prompts when the PiP opens. This is a **height reserve**, not two fabricated prompt entries or duplicated data. If there are already more than two visible rows, use the actual larger content requirement, subject to the screen/height cap.
+- For the ordinary case where actual content plus the two-row reserve fits inside the supported available work area, **no vertical scrollbar may appear anywhere**: not on the PiP document, prompts table/list, accounts region or nested container. Remove/adapt premature CSS max-height constraints that would create inner scrollbars before the outer window is actually full. Preserve correct horizontal overflow only for genuine narrow-width content and keep table headings readable.
+- The opening height is not a fixed magic number. Re-measure as needed for language, fonts, account count, themes, browser zoom, warnings and row-height changes. Avoid a flash of an unnecessarily tiny 250px PiP followed by a resize that cannot legally run after opening has consumed activation. Inspect measured outer and content dimensions after opening; do not claim fit when the browser clamped them.
+- The initial two-row no-scroll guarantee applies to **Fit on open** on displays large enough to contain the calculated window. If screen/work-area/native maximum prevents fit, cap safely and offer accessible scrolling rather than hiding content or moving the window off-screen. Choosing **Remember last size** may intentionally reopen smaller than the two-row target, so it is exempt from the default-fit guarantee.
+
+## 2. Earlier Sessions: grow on expand, shrink on collapse
+
+- Keep **Earlier Sessions collapsed on ordinary fresh opening**. On the actual user's pointer click or keyboard activation (Enter/Space), toggle the disclosure and make one measured, browser-permitted height adjustment from within the same eligible transient user activation. Reuse/refine the existing FR000583 DisclosureSize behavior rather than adding a separate competing resize owner.
+- **Expand:** grow the outer window to include every visible newly expanded Earlier Sessions row together with the normal header, prompts, two-row running-prompt reserve where relevant, accounts and statuses. If the total is below the effective outer-height cap, the expanded content must fit without premature internal vertical scrollbars. If the content exceeds the cap, show all rows through usable scrolling, never truncate them.
+- **Collapse:** immediately shrink the PiP to the compact measured baseline, still accommodating the current normal content and the two-prompt reserve. Do not shrink to a hardcoded 250px or leave the expanded empty vertical space. In Remember last size mode, restore the eligible pre-expansion user size where defensible; a user's intervening manual resize invalidates stale restoration. In Fit on open mode, the compact target remains content-fit with the two-row minimum.
+- Preserve the **actual current window width** at each legitimate Earlier-driven resize, including a width manually changed while the PiP is open. Avoid repeated one-pixel drift at fractional scaling: prefer a vertical-only resizeBy delta when available and verify actual resulting dimensions instead of trusting method return alone. Do not programmatically move the PiP or steal focus.
+- If transient activation was not available, native sizing is rejected, or the browser clamps the height, preserve the functional disclosure and scrollable content with truthful limitations. Do not simulate user gestures, retry in a loop, reopen the window, request extra permissions or label a failed native resize PASS.
+- Rapid toggles, repeated opens, native manual resizing, browser closure and navigation must not leave the disclosure in a broken state or apply a stale delayed resize.
+
+## 3. No passive Live Auto-height
+
+**Do not call resizeTo/resizeBy from passive Live/SSE publications, timers, data observers or account/prompt refresh.** New running prompts, ended rows or account changes may exceed the two-row opening reserve later; keep the current outer window stable and allow necessary accessible scrolling. Recompute current content at the next legitimate opening or explicit Earlier interaction, not through hidden or synthetic activation.
+
+There is **no requirement** for continual height matching, automatic shrink after a prompt ends, hard vertical resize locking, or a fixed native position. Never represent those as delivered or block this owner-approved smaller feature because they are impossible in the tested browser. The browser owns manual native window movement/resizing.
+
+## 4. Settings: position and size are distinct best-effort preferences
+
+Expose two compact Web Settings fields in place of the misleading combined **Mini Watch placement** concept:
+
+| Setting | Supported user choices | Default |
+| --- | --- | --- |
+| **Mini Watch position** | Default (Remember last), Remember last, Standard position | Remember last |
+| **Mini Watch size** | Default (Fit on open), Fit on open, Remember last size | **Fit on open** |
+
+- **Position / Remember last:** ask the browser to retain its last user-chosen position within the same live opener/host, where available. **Standard position:** ask for browser initial placement on a new opening, normally toward a sensible screen corner. Do not claim scripts can choose absolute coordinates or enforce the bottom-right corner.
+- **Size / Fit on open:** request the approximate 650-DIP outer width and calculated initial content height with the two-running-row buffer on every opening; Earlier clicks resize as described. **Remember last size:** opt into the browser's remembered manual dimensions on opening, rather than enforcing the 650-DIP default or the two-row-fit guarantee; Earlier click growth/shrink still works when native activation permits, with the best available pre-expansion restoration.
+- Browser-native **preferInitialWindowPlacement couples remembered position and dimensions**. The UI preferences should remain distinct as user intentions, but do not promise all four position × size combinations are perfectly independent where the API cannot achieve them. Characterize real behavior and use predictable in-bounds fallbacks, with honest concise option help. Imperfect independent restoration is a documented platform limitation, **not a return to On Hold** for the approved scope.
+- Preserve/migrate existing user **miniWatchPlacement** intent (remember-last or standard), symbolic **Default** inheritance and explicit-versus-default choices. Introduce only the minimal new allowlisted size preference and settings endpoint if required. Preserve secure authenticated/CSRF-protected atomic JSONC writes, rejection/rollback of unsafe config, next-opening application, and the absence of stored pixel geometry/cookies/browser-local databases.
+- Coordinate with **FR000597**, which formats the Settings page independently. Neither FR should require the other to be completed before it can implement its own features; if both are present, FR597 uses the actual two new fields and descriptions, not obsolete Auto-height wording.
+
+## 5. Safe geometry and implementation boundaries
+
+- Never request total **outer height above 1,000 DIPs** or the safely known available display work area/browser clamp, whichever is lower. Account for actual native frame height; an inner-height cap of 1,000 alone is incorrect. Respect taskbars, browser limits, multi-monitor uncertainty, window DPI and OS zoom without pretending the web API controls the window manager.
+- Preserve current Mini rows, account/quota status, warning/CCost semantics, keyboard focus/scroll, responsive disclosure, themes and a single Live owner. Do not change request attribution, pricing, CLI, Web Watch table semantics, session acquisition, model inference or shared OpenCode lifecycle.
+- Likely owners: Mini controller/DisclosureSize and CSS, current Web Settings client/API/config defaults and migration, accessibility/browser probes, Web/Mini user docs and architecture. Keep sizing work narrow, deterministic and free of a persistent polling worker, resize supervisor or new dependencies.
+
+## Acceptance and required verification
+
+1. Actual Chrome and Edge Document PiP at representative normal and high-DPI/zoom viewports: initial **approximately 650 outer DIPs** and measured height containing **two complete potential running-prompt rows**, all initially visible subscription rows, headers and statuses, with **zero vertical scrollbar anywhere when content fits below the effective cap**. Test zero, one and two running prompts, varied account count/warnings, and long or wrapping content. Report actual outer/inner measurements.
+2. Initial PiP with more than two running prompts sizes for actual content when possible; capped/narrow screen shows truthful accessible overflow without hiding any rows.
+3. Real pointer and keyboard Earlier expand **grows** to measured content within cap and collapses **shrinks** to the correct compact two-row baseline (or valid remembered pre-expand size), with a stable user-chosen width. Confirm repeated toggle, manual-resize invalidation, native clamp/NotAllowedError fallbacks and absence of resize-loop/pixel drift.
+4. An actual or controlled advancing Live stream with new/ending prompts and account rows performs **zero programmatic native resizes on passive events**; scroll becomes available only when necessary. No unrequested reopen, activation spoofing, external permission prompt or focus theft.
+5. Settings migration/default/explicit choices, all four position × size intent combinations, remembered-size behavior, reload/reopen and failures round-trip safely. Browser coupling/unsupported exact placement is documented, not misrepresented as independent native positioning.
+6. Preserve DOM semantics, earlier-session content, full account rows, accessible focus/keyboard and real scroll behavior in Classic/Web light/dark, narrow/window scaling and supported Chrome/Edge PiP. Distinguish headless API measurements from physical desktop/macOS/assistive-device evidence; never mark unrun cases PASS.
+7. Run focused tests, relevant Full/package validation and real-browser verification. Update current Mini/Settings docs and architecture/journal with observed behavior and remaining platform limits. No test/requirement waiver or new release artifact is preauthorized by this FR.
+
+**Publication boundary:** this owner decision updates and moves the backlog document only. Product implementation, code changes, tests, version and maintenance completion are deferred to the normal subsequent Repo Backlog delivery. Historical 2026-11-05 On Hold facts remain in Git history and the journal, but the former hands-free resizing requirement is no longer active.

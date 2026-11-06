@@ -1,5 +1,25 @@
 # Mini Watch and finished history
 
+## FR 000591 — owner re-scoped and returned to Ready, 2026-11-06
+
+The owner explicitly approved the reduced click/open-fit approach and withdrew the
+hands-free Live/SSE window-height requirement that had caused the 2026-11-05 On Hold.
+FR000591 retains its identity and is now Ready priority 000187 (after FR000602,
+before FR000597). Default Mini Watch opens at about 650 outer DIPs wide, sized to
+fit actual visible content **plus two complete running-prompt rows** with no
+vertical scrollbar where the work area permits. Earlier Sessions pointer/keyboard
+activation grows to show expanded content and collapses/shrinks back to a compact
+two-row baseline; normal passive Live updates do not resize native PiP.
+Best-effort independent position/size preferences remain, using **Fit on open**
+instead of misleading **Auto height** language. Native permission limits,
+screen caps and manual/remembered window control are acknowledged.
+
+The older On Hold section below remains dated historical feasibility evidence,
+not the current status. FR000597 is separately clarified to use actual shipped
+Settings fields and not depend on FR000591 being completed first. This is backlog
+and journal publication only: no runtime code, product tests, version, release
+or ordinary completion progress was changed.
+
 ## FR 000591 — On Hold feasibility, 2026-11-05
 
 Fresh installed **Chrome 156.0.8078.80** and **Edge 156.0.4314.58** opened genuine
