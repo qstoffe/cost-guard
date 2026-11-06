@@ -10,7 +10,7 @@ import time
 from threading import BoundedSemaphore, Timer
 
 from src.version import DISPLAY_VERSION
-from .jobs import parse_report
+from .jobs import ReportWorkerStopError, parse_report
 from .security import BrowserSession, COOKIE_SECONDS
 from .instance_state import checkout_identity
 from .settings import SettingsError, WebSettings
@@ -190,6 +190,10 @@ class RequestHandler(BaseHTTPRequestHandler):
                 return
             self.close_connection = True
             self.route()
+        except ReportWorkerStopError as error:
+            if self.server.lifecycle:
+                self.server.lifecycle.runtime_failed(error)
+            self.reply(503, {"error": "report_worker_stop_timeout"})
         except (ValueError, TimeoutError, ConnectionError, OSError):
             return
 
@@ -324,6 +328,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                             self.reply(503, {"error": readiness["error"], "retryable": readiness["retryable"]})
                             return
                     key = self.server.jobs.submit(request)
+                except ReportWorkerStopError:
+                    raise
                 except RuntimeError:
                     self.reply(429, {"error": "busy"})
                     return

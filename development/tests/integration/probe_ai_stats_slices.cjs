@@ -5,9 +5,11 @@ module.exports = async ({command, evaluate, until, config, checks}) => {
   const root = path.join(config, 'slices'); await fs.mkdir(root);
   const server = spawn('py', ['-3', 'development/tests/integration/serve_mini_watch.py', root, '--stats-slices'],
     {windowsHide:true, stdio:['pipe','pipe','pipe']});
+  const closed = new Promise(resolve=>server.once('close',(code,signal)=>resolve({code,signal})));
   const lines = readline.createInterface({input:server.stdout})[Symbol.asyncIterator]();
   let errors = ''; server.stderr.on('data', value => { errors += value; });
   const targets = [];
+  let cleanup;
   const open = async url => {
     const {targetId} = await command('Target.createTarget', {url:'about:blank'}); targets.push(targetId);
     const tab = (await command('Target.attachToTarget', {targetId, flatten:true})).sessionId;
@@ -39,7 +41,9 @@ module.exports = async ({command, evaluate, until, config, checks}) => {
     assert.equal(narrow.work.scopes['30-days'].ready, false);
     assert.equal(narrow.focused, '7 days');
     await evaluate(`window.__stats=current; window.__job=current.active; location.hash='#/watch'`, tab);
-    await until(`current.section==='watch' && !__stats.loading`, tab);
+    // Twelve deliberately slowed spawned slices plus bounded natural teardown;
+    // this is completion/ownership proof, not a 15-second latency requirement.
+    await until(`current.section==='watch' && !__stats.loading`, tab, 45000);
     assert.equal(await evaluate(`__stats.statsResults.has('30-days') && !__stats.failed`, tab),true,
       'original broad goal must finish without another selection or interested tab');
     await evaluate(`location.hash='#/ai-stats'`, tab);
@@ -67,6 +71,16 @@ module.exports = async ({command, evaluate, until, config, checks}) => {
   } finally {
     for (const targetId of targets) await command('Target.closeTarget', {targetId}).catch(()=>{});
     server.stdin.write('{"command":"stop"}\n');
-    await new Promise(resolve=>server.once('exit',resolve));
+    const acknowledgement=(await lines.next()).value;
+    const final=(await lines.next()).value;
+    const exit=await closed;
+    assert.deepEqual(exit,{code:0,signal:null});
+    assert.deepEqual(JSON.parse(acknowledgement),{ok:true});
+    cleanup={...JSON.parse(final),exit};
+    assert.deepEqual(cleanup,{active:false,hostFailure:false,servingAlive:false,httpWorkersAlive:false,
+      eventsClosed:true,exit:{code:0,signal:null}});
+    assert.equal(errors,'');
+    checks.push('production owner cleanup: no active child/host fault/serving or HTTP threads; clean process exit');
   }
+  return cleanup;
 };

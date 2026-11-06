@@ -38,13 +38,15 @@ class WebHost:
             from .source_startup import SourceStartup
             self.source_startup = SourceStartup(root, self.events.publish, self.stopping)
             live_factory = self.source_startup.acquire
-        self.live = LiveRuntime(live_factory, self.events.publish, self._live_failed) if live_factory else None
+        self.live = LiveRuntime(live_factory, self.events.publish, self.runtime_failed) if live_factory else None
         self.server = None
         self.thread = None
 
-    def _live_failed(self, error):
+    def runtime_failed(self, error):
         self.failure = self.failure or error
         self.stop("runtime_fault")
+        with self._lock:
+            self.reason = "runtime_fault"  # Cleanup failure cannot remain a normal stop.
 
     def authorized(self, token):
         return isinstance(token, str) and token.isascii() and secrets.compare_digest(token, self.control)
@@ -130,8 +132,7 @@ class WebHost:
                     self.events.publish("progress", self.jobs.updates() if hasattr(self.jobs, "updates")
                                         else self.jobs.readiness())
         except BaseException as error:
-            self.failure = error
-            self.stop("runtime_fault")
+            self.runtime_failed(error)
         finally:
             self.stopping.set()
             try:
@@ -145,8 +146,7 @@ class WebHost:
                         self.events.close(self.reason or "runtime_fault")
                         self.server.server_close()
             except BaseException as error:
-                self.failure = self.failure or error
-                self.stop("runtime_fault")
+                self.runtime_failed(error)
             finally:
                 self.stopped.set()  # GUI must observe this even on cleanup failure.
 
@@ -163,14 +163,22 @@ class WebHost:
             self.thread.join(timeout=10)
             if self.thread.is_alive():
                 raise RuntimeError("web_shutdown_timeout")
-        else:
+        try:
+            # The serving thread's bounded attempt may have retained a child
+            # whose exit was not yet confirmed. Main remains its cleanup owner.
             self.jobs.close()
-            if self.live:
-                self.live.close()
-        if self.store:
-            self.observations.persist(self, final=True)
-            self.store.remove(self.nonce)
-            self.store.log(self.reason if self.reason in {"source_changed", "runtime_fault"} else "stopped")
+        except BaseException as error:
+            self.runtime_failed(error)
+            raise
+        finally:
+            try:
+                if not self.thread and self.live:
+                    self.live.close()
+            finally:
+                if self.store:
+                    self.observations.persist(self, final=True)
+                    self.store.remove(self.nonce)
+                    self.store.log(self.reason if self.reason in {"source_changed", "runtime_fault"} else "stopped")
 
     def run_gui(self, gui):
         """Adapter.run(owner) on main thread; poll owner.stopped, finally remove icon.

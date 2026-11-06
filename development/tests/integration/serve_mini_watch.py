@@ -256,6 +256,11 @@ def main():
         finally:
             timer.cancel()
             host.close()
+            if sys.argv[2:] == ['--stats-slices']:
+                print(json.dumps(dict(active=jobs._active is not None, hostFailure=host.failure is not None,
+                    servingAlive=host.thread.is_alive(),
+                    httpWorkersAlive=any(thread.is_alive() for thread in host.server._pool._threads),
+                    eventsClosed=host.events.closed)), flush=True)
 
 
 if __name__ == "__main__":

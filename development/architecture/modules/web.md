@@ -33,6 +33,18 @@ current reference; older per-cell/native-tooltip descriptions below are historic
 
 `src/web/http.py` owns bounded loopback HTTP, fixed assets and routing; `src/web/security.py` owns one-use bootstrap/HttpOnly sessions/CSRF; `src/web/jobs.py` owns finite admission, process isolation, progress, cancellation and retention; at most 64 progress messages drain per host turn to prevent scan backpressure without starving control/Live. `src/web/composition.py` creates fresh canonical ReportApplication integrations.
 
+Only validated terminal IPC grants up to one second for natural child teardown,
+including a completed Stats slice whose logical job requeues. Cancellation,
+watchdog, malformed/abandoned IPC and shutdown force termination promptly, retaining
+the existing one-second terminate and kill joins. Exit must be confirmed before
+closing handles or releasing the active slot. An unconfirmed exit latches
+`report_worker_stop_timeout`, blocks all result reuse/admission/polling and retains
+the exact owner for bounded cleanup retries. HTTP cancellation propagates this fault
+to the host rather than hiding it in a request future. Serving cleanup still closes
+Live/events/HTTP; main-owner close retries the retained child, without clearing the
+host failure or double-counting worker time. This is a safety repair, not proof of
+the rare Windows shutdown delay's cause; see the report-loading journal.
+
 Models' explicit `POST /api/models/refresh` accepts only authenticated/CSRF-protected
 `{}` and submits the Web-only `ModelsPriceRefresh` request marker. Existing job equality
 coalesces concurrent actions separately from normal TTL captures; all finite-process,

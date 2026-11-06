@@ -8,12 +8,14 @@ async function main() {
   const config = await fs.mkdtemp(path.join(path.dirname(output), 'ai-stats-config-'));
   const server = spawn('py', ['-3', 'development/tests/integration/serve_mini_watch.py', config, '--ai-stats'],
     {windowsHide:true, stdio:['pipe','pipe','pipe']});
+  const serverClosed = new Promise(resolve=>server.once('close',(code,signal)=>resolve({code,signal})));
   const lines = readline.createInterface({input:server.stdout})[Symbol.asyncIterator]();
   const fixture=async command=>{server.stdin.write(JSON.stringify({command})+'\n');return JSON.parse((await lines.next()).value);};
   let serverErrors = ''; server.stderr.on('data', value => { serverErrors += value.toString(); });
   const child = spawn(browser, ['--headless=new','--no-first-run','--no-default-browser-check','--disable-extensions',
     '--disable-background-networking','--remote-debugging-pipe','--user-data-dir='+profile,'about:blank'],
     {windowsHide:true,stdio:['ignore','ignore','ignore','pipe','pipe']});
+  const browserClosed = new Promise(resolve=>child.once('close',(code,signal)=>resolve({code,signal})));
   const pending = new Map(); let sequence = 0, buffer = '', errors = [];
   child.stdio[4].on('data', chunk => {
     buffer += chunk.toString(); let index;
@@ -33,8 +35,8 @@ async function main() {
     const value=await command('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true},target);
     if(value.exceptionDetails) throw new Error(JSON.stringify(value.exceptionDetails)); return value.result.value;
   };
-  const until=async (expression, target=tab)=>{
-    const end=Date.now()+15000;
+   const until=async (expression, target=tab, timeout=15000)=>{
+     const end=Date.now()+timeout;
     while(Date.now()<end) {if(await evaluate(expression,target))return;await new Promise(resolve=>setTimeout(resolve,30));}
     const state=await evaluate(`({section:typeof current==='undefined'?null:current?.section,
       loading:typeof current==='undefined'?null:current?.loading,
@@ -53,9 +55,10 @@ async function main() {
   try {
     const launch=JSON.parse((await lines.next()).value);
     if (process.argv.includes('--slices-only')) {
-      await require('./probe_ai_stats_slices.cjs')({command,evaluate,until,config,checks});
-      evidence={outcome:'PASS',checks,runtimeErrors:errors};
-      console.log(JSON.stringify(evidence)); return;
+      const productionCleanup=await require('./probe_ai_stats_slices.cjs')({command,evaluate,until,config,checks});
+      assert.deepEqual(errors,[]);
+      evidence={outcome:'PASS',checks,runtimeErrors:errors,productionCleanup};
+      return;
     }
     const {targetId}=await command('Target.createTarget',{url:'about:blank'});
     tab=(await command('Target.attachToTarget',{targetId,flatten:true})).sessionId;
@@ -190,19 +193,30 @@ async function main() {
     const two=await evaluate(`api('/api/reports',{kind:'ai-stats',stats_scope:'all'})`,peer);
     assert.equal(one.id,two.id);
     checks.push('two independent tabs exercise fixture scope-job association (production coalescing/process proof is separate)');
-    await require('./probe_ai_stats_slices.cjs')({command,evaluate,until,config,checks});
+    const productionCleanup=await require('./probe_ai_stats_slices.cjs')({command,evaluate,until,config,checks});
     assert.deepEqual(errors,[]);
     evidence={outcome:'PASS',layouts,textLayouts,contrasts,states,checks,limitations:[
       'AIStatsJobs uses immediate canonical fixture results; browser proof does not establish production spawning or coalescing.',
       'Production slice/priority/two-tab browser proof uses fixed synthetic history with valid coverage after repricing; real-source acquisition is separate.',
       'Actual screen-reader speech, native physical device/font rendering and non-Chromium engines are unverified.'
-    ],runtimeErrors:errors};
-    console.log(JSON.stringify({outcome:evidence.outcome,checks:checks.length,layouts:layouts.length}));
+    ],runtimeErrors:errors,productionCleanup};
   } finally {
-    clearTimeout(deadline); await fs.writeFile(output,JSON.stringify(evidence,null,2));
-    server.stdin.write('{"command":"stop"}\n');
-    await command('Browser.close').catch(()=>{});
-    await new Promise(resolve=>server.once('exit',resolve));
+    try {
+      server.stdin.write('{"command":"stop"}\n');
+      await command('Browser.close').catch(()=>{});
+      const [serverExit,browserExit]=await Promise.all([serverClosed,browserClosed]);
+      assert.deepEqual(serverExit,{code:0,signal:null});
+      assert.deepEqual(browserExit,{code:0,signal:null});
+      assert.equal(serverErrors,'');
+      assert.deepEqual(errors,[]);
+      evidence.cleanup={serverExit,browserExit,serverErrors,runtimeErrors:errors};
+    } catch(error) {
+      evidence.outcome='FAIL'; evidence.cleanupError=error.message; throw error;
+    } finally {
+      clearTimeout(deadline);
+      await fs.writeFile(output,JSON.stringify(evidence,null,2));
+    }
+    console.log(JSON.stringify(evidence));
   }
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

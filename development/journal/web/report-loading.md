@@ -108,6 +108,67 @@ and the actual typed source-readiness seam. One earlier Stats probe was invalida
 by an intentional product-file edit during its host lifetime; the source-change guard
 correctly stopped it. The frozen-source rerun passed. No watchdog/cap was increased.
 
+The third Full again failed `process.close()` with a still-running child, this
+time in the actual spawned Stats-slice test (`scratch:/evidence/full-accepted.json`);
+Windows discovery and the watchdog test passed. No complete Full PASS was claimed.
+Investigation established the missing confirmed-exit guard: old cleanup terminated
+even after a valid result, joined for one second, killed/joined for another second,
+then closed handles unconditionally. The exact cause of the rare Windows delay
+remains **unknown**. A bounded owned-handle timing probe did not reproduce it;
+natural-exit grace is a mitigation, not a proven OS diagnosis.
+
+**Decision Delegate** authorized a bounded safety repair within FR000615: only
+validated terminal IPC (also requeued completed Stats slices) gets up to one second
+of natural-exit grace. All other paths keep prompt forced termination and the
+existing one-second terminate/kill joins. Cleanup confirms exit before releasing
+handles/active ownership; a still-live child latches `report_worker_stop_timeout`,
+blocks polling/result reuse/replacement/eviction and retains its owner. HTTP
+cancellation forwards the fault to host shutdown with a sanitized 503 instead of
+an unobserved executor failure. Serving cleanup still closes Live/events/HTTP;
+main-owner close retries retained work boundedly, preserves the fault and accounts
+worker time once. No indefinite reaper, source-performance expansion or desktop
+permission was added. This decision does not waive any recurring cleanup failure.
+
+Deterministic process/IPC tests cover natural success/error, Stats-slice requeue,
+exhausted grace, forced watchdog/cancel/shutdown/malformed/EOF paths, retained live
+handles, blocked result reuse/admission and later confirmed-exit idempotent cleanup.
+Real host-thread and authenticated loopback-cancel tests prove fault propagation,
+independent resource closure and main-owner retries. The first new latch test used
+a foreground Normal request ahead of its intended Comparisons worker; correcting
+the test's queued neighbor to background Token Mix respects existing priority.
+The affected runtime/Stats/shutdown/lifecycle (including parent-loss)/loader tests
+then passed **94 tests**.
+
+Final product-source Full passed **154 file targets / 1,824 tests: 1,823 passed,
+one macOS zsh/PTY-unavailable skip, zero failures/errors**, in 147.0 seconds.
+Evidence: `scratch:/evidence/full-safe-stop.json` and `full-safe-stop.log`.
+The v80.195 validator passed **11 checks, zero failures**, with the same six
+advisory size warnings (Web guide, README, version history, context, reports/service,
+Watch coordinator); no caps/baselines were raised.
+
+The first post-repair frozen production-browser run **FAILED** the generic
+15-second broad-goal wait while valid progress reached 20/24 roots in ten children;
+no runtime/host/cleanup fault was reported. Exact contributions from concurrent
+Full load and child teardown timing remain unproven. **Decision Delegate** approved
+45 seconds only for this deliberately slowed 24-root/twelve-child completion wait,
+leaving other waits at 15 seconds, outer limit at 180 seconds, all assertions and
+the product's 120-second child watchdog unchanged. This is a test-harness correction,
+not a performance or cleanup waiver. The harness also now asserts runtime errors
+on its slices-only path and checks post-cleanup process exit/errors rather than
+writing PASS before teardown.
+
+The single corrected frozen-source run **passed**: 7-day coherent milestone at
+2/24 roots before broad readiness, original 30-day goal finishes after navigation,
+two-tab identity/reuse, twelve finite children and exactly 24 hydrations. Final
+owner evidence shows no active child, host failure, serving/HTTP threads or runtime
+errors; events closed and both fixture processes/browser exited normally (code 0,
+no signal, empty server errors). Evidence:
+`scratch:/evidence/ai-stats-safe-stop-final.json`. The saved failed first run remains
+`scratch:/evidence/ai-stats-safe-stop.json`; its detailed progress is recorded above.
+Earlier full UI/layout probes predate only the safety repair; no later UI changes
+invalidate their scoped evidence. Real Normal and physical/non-Chromium limitations
+remain exactly as described above, not PASS.
+
 ## Historical FR000609 verification
 
 - Full local suite: 153 bounded file targets, 1,787 tests; **1,786 passed, one
