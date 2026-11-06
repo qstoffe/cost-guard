@@ -85,9 +85,10 @@ class ReportApplication:
                     ReportKind.SESSIONS: "requested_root_list",
                     ReportKind.SESSION: "complete_root_tree",
                     ReportKind.DATE: "local_range",
-                     ReportKind.TOKEN_MIX: "all_available_history_selectable_models",
-                      ReportKind.COST_PER_HOUR: "explicit_period_execution_history",
-                      ReportKind.AI_STATS: "available_execution_history",
+                    ReportKind.TOKEN_MIX: "all_available_history_selectable_models",
+                    ReportKind.COST_PER_HOUR: "explicit_period_execution_history",
+                    ReportKind.AI_STATS: "available_execution_history",
+                    ReportKind.COMPARISONS: "all_available_root_first_inputs",
                 }[request.kind]),
                 ("local_day_start_ms", local_day_start_ms(service.timezone_id, now_ms=now)),
                 ("local_month_start_ms", local_month_start_ms(service.timezone_id, now_ms=now)),
@@ -114,7 +115,7 @@ class ReportApplication:
                              # Normal is an aggregate comparison/account report. Its
                              # month-wide causal identities are not displayed and can
                              # dwarf the report; per-root revision evidence stays above.
-                              for parts in (() if request.session_page_size or request.kind in {ReportKind.NORMAL, ReportKind.COST_PER_HOUR, ReportKind.AI_STATS}
+                              for parts in (() if request.session_page_size or request.kind in {ReportKind.NORMAL, ReportKind.COST_PER_HOUR, ReportKind.AI_STATS, ReportKind.COMPARISONS}
                                            else service.report_request_identities()))
             observe(WorkProgress("Preparing report", "finalizing", 1, 2, stage="finalizing"))
             view = project(report, service.timezone_id, service.config.get("ccostDisplayUnit", "credits"))
@@ -157,6 +158,8 @@ class ReportApplication:
         if not isinstance(request.kind, ReportKind):
             return "invalid_request"
         if request.stats_scope not in ('30-days', 'month', 'all'):
+            return 'invalid_request'
+        if type(request.comparison_offset) is not int or request.comparison_offset < 0 or request.comparison_offset % 10:
             return 'invalid_request'
         if request.kind is ReportKind.SESSION and not request.session_id:
             return "invalid_request"

@@ -11,6 +11,7 @@ from src.analysis.active_hour import active_hour
 from .contracts import ObjectValue, record
 from .display import with_display
 from .prompt_costs import cost_detail
+from .comparisons import page as comparisons_page
 
 
 def identity(parts) -> str:
@@ -183,8 +184,10 @@ def project(report, timezone_id="UTC", ccost_display_unit="credits", *, prompt_d
         prompt_blocks=tuple(block(item, source_complete=not report.source_warnings, details=prompt_details) for item in report.prompt_blocks),
         active_hours=tuple(hourly(item) for item in report.active_hours),
         ai_stats=tuple(record(period=item.period, start_ms=item.start_ms, end_ms=item.end_ms,
-            metrics=tuple(fields(metric, 'metric value status session_id session_title detail') for metric in item.metrics))
+            metrics=tuple(fields(metric, 'metric value status session_id session_title detail') for metric in item.metrics),
+            matched=fields(item.matched, 'metric value status session_id session_title detail') if item.matched else None)
             for item in report.ai_stats),
+        comparisons=comparisons_page(report.comparisons),
         accounts_quotas=accounts(report.accounts_quotas), notes=report.notes,
         range_comparison=comparison(report.range_comparison) if report.range_comparison else None,
         recent_model_notice=report.recent_model_notice,

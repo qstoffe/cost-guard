@@ -52,6 +52,14 @@ const AIStatsView = (() => {
         }
       }
       this.root.append(this.selector, this.status, this.content);
+      this.extra = e('article', undefined, 'ai-stat');
+      const title = e('h4'), symbol = e('span', '🏁', 'ai-stat-icon'); symbol.setAttribute('aria-hidden', 'true');
+      this.extraHeading = ContextHelp.button('Biggest AI Speed Gap',
+        'Optional matched first-input observation within this period. Only fully finished, reliably bounded runs qualify. Repeats of one model count too. Not a controlled benchmark or answer-quality score. Unavailable/partial match coverage omits this card.');
+      title.append(symbol, this.extraHeading);
+      this.extraValue = e('p', '', 'ai-stat-value'); this.extraDetail = e('p', '', 'ai-stat-detail'); this.extraTrait = e('p', '', 'ai-stat-trait');
+      const link = e('a', 'Comparisons'); link.href = '#/comparisons';
+      this.extra.append(title, this.extraValue, this.extraDetail, this.extraTrait, link);
     }
     update(state) {
       const e = ReportView.element;
@@ -82,6 +90,13 @@ const AIStatsView = (() => {
         } else ReportView.text(card.detail, metric.detail || '');
       }
       if (!this.content.contains(this.grid)) this.content.replaceChildren(this.grid);
+      if (row.matched) {
+        ReportView.text(this.extraHeading, row.matched.metric === 'original-thinker' ? 'Original Thinker' : 'Biggest AI Speed Gap');
+        ReportView.text(this.extraValue, () => ReportView.display(row.matched, 'value'));
+        ReportView.text(this.extraTrait, row.matched.display.trait); ReportView.text(this.extraDetail, row.matched.detail);
+        const grid = this.grid.querySelectorAll('.ai-stats-grid')[1];
+        if (!grid.contains(this.extra)) grid.append(this.extra);
+      } else this.extra.remove();
       ContextHelp.refresh(this.root);
     }
     attach(parent) { if (parent.firstChild !== this.root) parent.replaceChildren(this.root); }

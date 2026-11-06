@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v80.185, 2026-11-06), the supported distribution.
+Use **current `main`** (v80.186, 2026-11-06), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -361,7 +361,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.185 (2026-11-06):** Full Web Watch names its historical disclosure **Earlier Sessions**, matching Mini Watch, including empty/unavailable messages. Prompt labels, history membership, ordering, accounting and collapse/expand behavior remain unchanged. See [Web Watch](docs/web-beta.md).
+**v80.186 (2026-11-06):** Web **Comparisons** shows independent runs sharing an exact first user input, including repeated runs of the same model. Ten groups per page retain first-prompt metrics, uncertainty and small observed-gap facts. Revision-aware history reuse avoids repeated archive hydration; AI Stats gains a conditional matched-input fact while preserving its ten baseline cards. See [Comparisons](docs/web-beta.md#comparisons).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

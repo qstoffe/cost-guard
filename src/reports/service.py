@@ -85,6 +85,8 @@ class ReportRequest:
     session_offset: int = 0
     session_catalog_revision: str | None = None
     stats_scope: str = '30-days'
+    comparison_offset: int = 0
+    comparison_revision: str | None = None
 
 
 ProgressCallback = Callable[[str], None]
@@ -629,6 +631,9 @@ class ReportService:
     def build(self, request: ReportRequest, *, include_model_catalog: bool = False) -> ReportProjection:
         self.metrics.mode = request.kind.value
         try:
+            if request.kind is ReportKind.COMPARISONS:
+                from .matched_inputs import build_comparisons
+                return build_comparisons(self, request)
             if request.kind is ReportKind.AI_STATS:
                 from .ai_stats import build_ai_stats
                 return build_ai_stats(self, request.stats_scope)

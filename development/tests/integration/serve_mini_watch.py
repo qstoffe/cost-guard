@@ -23,6 +23,7 @@ from development.tests.fixtures.web_help_reports import HelpAuditJobs
 from development.tests.fixtures.token_mix_views import TokenMixJobs
 from development.tests.fixtures.models_refresh import ModelsRefreshJobs
 from development.tests.fixtures.ai_stats_views import AIStatsJobs
+from development.tests.fixtures.matched_inputs import ComparisonsJobs
 from src.application.live_projection import project_live
 from src.application.display import with_display
 from src.application.projection import accounts as project_accounts
@@ -47,6 +48,8 @@ def main():
             jobs = TokenMixJobs()
         if sys.argv[2:] == ['--ai-stats']:
             jobs = AIStatsJobs()
+        if sys.argv[2:] == ['--comparisons']:
+            jobs = ComparisonsJobs()
         if sys.argv[2:] == ['--models-refresh']:
             (root / 'pricing-mode.txt').write_text('unchanged')
             jobs = ModelsRefreshJobs(root)

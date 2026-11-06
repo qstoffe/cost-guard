@@ -31,7 +31,7 @@ Evidence and the scoped split-verification decision: [Models pricing](../../jour
 
 `src/web/assets/app.js` owns finite refresh/stale/cancel state and memory-only observations; Models keeps its frozen normal report. `reports.js` owns route resolution and explicit-only deep-history admission. Accounts bypasses finite jobs/report shell and consumes app-level retained Live, even without a Watch DOM. `account-cards.js` is the single Watch/Accounts subscription renderer: account-keyed membership, bound metric/reset/help updates, per-card signatures excluding the publication clock, shared physical-width cap and existing subgrid styles. Empty success clears membership; missing/failed empty publications retain usable cards with truthful warnings. Settings synchronize visible/detached roots without acquisition. `render.js` presents DTOs with exact Decimal/vector sorting; generic reports retain presentation search/50-row paging, while Models has independent catalog/version filters and complete document-scrolling rows. Totals never come from cells. Sessions bypasses finite jobs and the report shell: `sessions.js` renders six-column live catalog pages; `session.js` renders one ten-column complete chronological history. Both use intrinsic metric tracks, elastic title/preview and document vertical scrolling. Shared Watch `ContextLine` and contextual-help components consume canonical report context, not a browser estimator.
 
-Token Mix and AI Stats are the two cached historical finite views, not Live owners.
+Token Mix, AI Stats and Comparisons are cached historical finite views, not Live owners.
 `token-mix.js` owns a retained compact summary and exactly two 13-column
 tables, exact integer/Decimal/rational sort keys, prepared unit tokens and text-only
 ContextHelp. Keyed reconciliation preserves rows, focus and panning; it never values
@@ -49,6 +49,23 @@ base `42cc45f624d7b9cda560e365e53a93cec36ff7bc` plus FR 000599's diff; other
 contracts retain their original checks. [AI Stats findings](../../journal/web/ai-stats.md)
 and [Token Mix findings](../../journal/web/token-mix.md) separate proof/limits.
 
+Comparisons' semantic identity owner is `analysis/input_identity.py`: ordered exact
+normalized text/verified inline content, versioned fingerprint, fail-closed references.
+`analysis/matched_runs.py` owns individual-run grouping, qualified gaps and the optional
+period fact. `reports/matched_inputs.py` acquires all roots in bounded source batches;
+`reports/matched_runs.py` maps canonical prompt attribution/timing/historical context
+to compact metrics. Only fingerprint/scalars enter its disposable revision-keyed index;
+existing derived bundles may be read, never newly persisted with raw prompts by this
+scan. Fresh previews are ephemeral; warm scans batch at most ten displayed representatives.
+`application/comparisons.py` exports allowlisted run/group/page facts and unit tokens,
+never fingerprints. `assets/comparisons.js` keeps keyed sections/rows, all repetitions,
+ten-group paging, shared Watch table/help and coherent source-revision resets.
+Identical low-priority jobs coalesce; five-minute checks require active visible online
+route state. AI Stats reuses its own period acquisitions to add an optional eleventh
+fact, preserving its ten baseline metrics, period/cadence and independent ownership.
+Source change, incomplete pricing/timing, zero baselines and unsupported attachments
+never turn into an exact no-match/benchmark claim. [Evidence](../../journal/web/comparisons.md).
+
 The Web Reports menu, date form and date-only renderer are retired. `reports.js`
 resolves old `#/reports` hashes to a scope-free Sessions redirect; `app.js` replaces
 the history entry before constructing view state or acquiring anything. Queries are
@@ -56,7 +73,7 @@ discarded, including invalid dates and unrelated sort/page parameters. No hidden
 date job or Sessions date filter remains. CLI date/range engines, canonical DTOs,
 shared `/api/reports` validation/jobs and date-history progress labels used by
 surviving captures are unchanged. Current routes: Models, Watch, Sessions/detail,
-Accounts, Token Mix, AI Stats and Settings (`docs/web-beta.md`). The old
+Accounts, Token Mix, AI Stats, Comparisons and Settings (`docs/web-beta.md`). The old
 `#/cost-per-hour` hash aliases AI Stats; reusable rate APIs/session-detail help remain.
 Actual checks and explicit proof limits: [Reports retirement verification](../governance/verification/web-reports-retired.md).
 

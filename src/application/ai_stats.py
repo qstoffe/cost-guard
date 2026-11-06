@@ -25,6 +25,10 @@ def stat_tokens(values):
     if 'metric' not in values:
         return {}
     metric, value = values['metric'], values['value']
+    if metric in ('original-thinker', 'match-speed-gap'):
+        return {'value': 'Original Thinker' if metric == 'original-thinker' else f'{Decimal(value):.1f}×',
+                'trait': 'One of a kind. In this period, at least.' if metric == 'original-thinker' else
+                    'Same opening move. Very different lap times.'}
     known = value is not None and values['status'] != 'partial'
     line = 'The evidence is still in the vault.'
     if known:

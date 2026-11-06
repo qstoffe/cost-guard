@@ -25,6 +25,7 @@ TESTS = ROOT / "development/tests"
 QUICK_PATTERNS: tuple[str, ...] = (
     "test_active_hour.py",
     "test_ai_stats.py",
+    "test_matched_inputs.py",
     "test_ccost_display_unit.py",
     "test_ci_web_beta.py",
     "test_web_diagnostics.py",
