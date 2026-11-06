@@ -68,6 +68,9 @@ The virtual-overdue browser campaign passed all nine layouts, all 26 headings,
 units/help/navigation and coherent replacement with real nonzero horizontal pan,
 focus, scroll and row identity retained. The sanitized wall-clock outcome is
 retained in task completion evidence, not inferred from the timer being installed.
+The corrected final wall-clock campaign passed the same layout/sort/help/unit/
+navigation/retention assertions, with its actual refresh starting after 300034ms.
+Owned synthetic evidence: `scratch:/token-mix-browser-wall-clock.json`.
 Earlier acquisition races and a null-progress fixture failed; they are not browser
 PASS evidence. An initial wall-clock run reached its valid cadence but then failed
 an invalid expectation: the fixture's small raw cost change rounded to the same

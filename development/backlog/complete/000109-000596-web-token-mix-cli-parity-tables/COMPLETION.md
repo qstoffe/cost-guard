@@ -43,6 +43,9 @@ Implemented for v80.178 (2026-11-06), against main base
   campaign PASS across nine theme/width layouts, 65 rows per table, all 26 headings
   both ways, exact independent expectations, unknown-last, help/Escape, units,
   navigation reuse and slow coherent replacement retaining focus/scroll/nonzero pan.
+- Final real-wall-clock Chromium campaign: PASS, refresh after **300034ms**, with
+  the same matrix and a slow coherent replacement preserving all tested anchors.
+  Sanitized synthetic evidence: `scratch:/token-mix-browser-wall-clock.json`.
 
 ## Limits and decisions
 
