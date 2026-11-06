@@ -44,8 +44,23 @@ async function main() {
       await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]},sessionId);
       await command('Page.navigate',{url:`http://127.0.0.1:18753/case.html?theme=${theme}&scheme=${scheme}`},sessionId);
       await evaluate(`new Promise(resolve => {const check=()=>typeof state!=='undefined'&&state.watch?resolve(true):setTimeout(check,20);check();})`);
-      await evaluate('globalThis.current=state;globalThis.liveValue=INPUT');
-      const layouts = [], checks = [];
+       await evaluate('globalThis.current=state;globalThis.liveValue=INPUT');
+       const historyLabels = await evaluate(`(() => {
+         const view=state.watch,summary=view.earlier.querySelector('summary'),p=structuredClone(INPUT);
+         const heading=summary.textContent,collapsed=!view.earlier.open;
+         summary.click();const expanded=view.earlier.open;
+         const cards=[...view.history.children];view.update(INPUT);
+         const stable=cards.every((card,i)=>view.history.children[i]===card);
+         p.view.history_cards=[];p.view.history_state='observed';view.update(p);
+         const empty=view.history.textContent;
+         p.view.history_state='unavailable';view.update(p);const unavailable=view.history.textContent;
+         p.view.history_state='loading';view.update(p);const loading=view.history.textContent;
+         const stillExpanded=view.earlier.open;view.update(INPUT);summary.click();
+         return {heading,collapsed,expanded,stable,empty,unavailable,loading,stillExpanded};
+       })()`);
+       assert.deepEqual(historyLabels,{heading:'Earlier Sessions',collapsed:true,expanded:true,stable:true,
+         empty:'No earlier sessions',unavailable:'Earlier sessions unavailable',loading:'',stillExpanded:true});
+       const layouts = [], checks = [];
       await require('./probe_watch_quiet.cjs')({evaluate,layouts,checks});
       await require('./probe_watch_loading.cjs')({evaluate,layouts,checks});
       const transitions = await evaluate(`(() => {
@@ -97,7 +112,7 @@ async function main() {
       assert.deepEqual(transitions.usd,['$0.00 ($0.00 + $0.00)','$0.00 ($0.00 + $0.00)']);
       for (const key of ['selected','updated','earlier']) assert.equal(transitions[key],true,key);
       assert.equal(transitions.pageOverflow,false);
-      cases.push({theme,scheme,width,transitions,layouts,checks});
+      cases.push({theme,scheme,width,historyLabels,transitions,layouts,checks});
       await command('Target.closeTarget',{targetId});
     }
     await fs.writeFile(path.join(output,'browser.json'),JSON.stringify({outcome:'PASS',browser:version.product,cases,

@@ -184,7 +184,7 @@ async function main() {
   vm.runInContext(fs.readFileSync('src/web/assets/account-cards.js', 'utf8'), context);
   vm.runInContext(fs.readFileSync('src/web/assets/watch.js', 'utf8'), context);
   vm.runInContext("globalThis.state = {pages: {}, connection: 'Live connected.'}; ReportView.renderLive(parent, example, state)", context);
-  assert.match(context.parent.textContent, /Earlier Prompts/);
+  assert.equal(context.state.watch.earlier.children[0].textContent, 'Earlier Sessions');
   assert.ok(!/Session Total|provisional/.test(context.parent.textContent));
   assert.ok(!/Run CCost|not full session|Observation details|Unaccounted usage|Watch accounts/.test(context.parent.textContent));
   assert.ok(context.parent.textContent.includes(input.view.active_cards[0].title));
@@ -312,7 +312,12 @@ async function main() {
   vm.runInContext('ReportView.renderLive(parent, example, state)', context);
   assert.equal(watch.active.children.length, 0);
   assert.match(watch.empty.textContent, /No running prompts/);
-  assert.match(watch.history.textContent, /No earlier prompts/);
+  assert.equal(watch.history.textContent, 'No earlier sessions');
+  multiple.view.history_state = 'unavailable';
+  vm.runInContext('ReportView.renderLive(parent, example, state)', context);
+  assert.equal(watch.history.textContent, 'Earlier sessions unavailable');
+  assert.equal(watch.empty.textContent, 'No running prompts');
+  assert.equal(watch.earlier.open, true);
   console.log('web live passed');
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

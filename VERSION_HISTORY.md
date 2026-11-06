@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.185 — 2026-11-06
+
+- Full Web Watch calls its historical disclosure Earlier Sessions, matching Mini Watch, with session-based empty/unavailable messages. Prompt labels, history selection, ordering, accounting and disclosure behavior remain unchanged.
+
 ## v80.184 — 2026-11-06
 
 - Mini Watch Earlier Sessions adds a narrow Activity column before Session (Total CCost) and Ctx. Canonical server-prepared local HH:mm values expose full date and timezone offset through shared hover/focus/touch help; unknown finishes remain explicit. The running/recent table, history selection, totals, acquisition and click-fit sizing retain their existing contracts.
