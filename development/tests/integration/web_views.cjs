@@ -41,7 +41,7 @@ async function until(condition) {
 }
 async function main() {
   const input = JSON.parse(fs.readFileSync(0, 'utf8'));
-  const ids = Object.fromEntries(['product-version', 'host-state', 'host-message', 'host-details', 'status', 'result', 'notice', 'refresh', 'cancel', 'heading', 'skip', 'content', 'scope-controls', 'search'].map(id => [id, new Node('div')]));
+  const ids = Object.fromEntries(['product-version', 'host-state', 'host-message', 'host-details', 'status', 'result', 'notice', 'refresh', 'heading', 'skip', 'content', 'scope-controls', 'search'].map(id => [id, new Node('div')]));
   const toolbar = new Node('div');
   ids['host-state'].append(ids['host-message'], ids['host-details']);
   const nav = ['models', 'sessions', 'watch', 'accounts', 'token-mix', 'cost-per-hour', 'settings'].map(key => {
@@ -142,6 +142,7 @@ async function main() {
   const shell = await (await fetch(input.origin + '/', {headers: {Cookie: cookie}})).text();
   assert.doesNotMatch(shell, /href=["']#\/reports/);
   assert.doesNotMatch(shell, /Capture date report|type=["']date/);
+  assert.doesNotMatch(shell, /id=["']cancel["']|>Cancel</, 'no shared report cancellation control');
   assert.match(ids.result.textContent, /Refresh price listPrices last fetched:/);
   assert.doesNotMatch(ids.result.textContent, /More information/);
   const creditsText = ids.result.textContent, beforeToggle = requests;
@@ -461,7 +462,6 @@ async function main() {
   assert.match(ids['host-details'].textContent, /Reports stay frozen/);
   assert.match(ids.notice.textContent, /not updating/);
   assert.equal(ids.refresh.disabled, true);
-  assert.equal(ids.cancel.disabled, true);
   assert.equal(ids['scope-controls'].inert, true);
   assert.equal(ids.result.textContent, retained, 'terminal state retains the exact frozen report');
   assert.equal(ids['product-version'].textContent, ' v91.7', 'retained view keeps its original server version');

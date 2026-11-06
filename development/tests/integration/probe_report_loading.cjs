@@ -1,7 +1,7 @@
 // Shipped authenticated UI in an owned hidden Chromium; manually stepped work, no private data.
 const assert=require('node:assert/strict'),fs=require('node:fs/promises'),path=require('node:path');
 const {spawn}=require('node:child_process'),readline=require('node:readline');
-const [browser,output]=process.argv.slice(2);
+const [browser,outputPath]=process.argv.slice(2),output=path.resolve(outputPath);
 async function main(){
   await fs.mkdir(output,{recursive:true});await fs.stat(browser);
   const profile=await fs.mkdtemp(path.join(output,'loading-browser-'));
@@ -21,12 +21,19 @@ async function main(){
   const command=(method,params={},sessionId=tab)=>new Promise((resolve,reject)=>{const id=++sequence;
     const timer=setTimeout(()=>reject(new Error('CDP timeout: '+method)),20000);pending.set(id,{resolve,reject,timer});
     child.stdio[3].write(JSON.stringify({id,method,params,...(sessionId?{sessionId}:{})})+'\0');});
-  const evaluate=async expression=>{const value=await command('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});
+   const evaluate=async (expression,target=tab)=>{const value=await command('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true},target);
     assert.equal(value.exceptionDetails,undefined,JSON.stringify(value.exceptionDetails));return value.result.value;};
-  const until=async expression=>{const ready=await evaluate(`new Promise(resolve=>{const end=Date.now()+10000;const check=()=>{
-    if(${expression})resolve(true);else if(Date.now()>end)resolve(false);else setTimeout(check,30);};check();})`);
+   const until=async (expression,target=tab)=>{const ready=await evaluate(`new Promise(resolve=>{const end=Date.now()+10000;const check=()=>{
+     if(${expression})resolve(true);else if(Date.now()>end)resolve(false);else setTimeout(check,30);};check();})`,target);
     assert.equal(ready,true,expression+' '+serverErrors+' '+JSON.stringify(await evaluate(`({hidden:document.hidden,section:typeof current==='undefined'?null:current?.section,loading:typeof current==='undefined'?null:current?.loading,progress:typeof current==='undefined'?null:current?.progressSequence,message:typeof current==='undefined'?null:current?.message})`)));};
-  const facts=[],layouts=[];let outcome='FAIL';const deadline=setTimeout(()=>{child.kill();server.kill();},180000);
+  const facts=[],layouts=[];let outcome='FAIL',failure=null;
+  const deadline=setTimeout(()=>{console.error('Report-loading probe exceeded 180s');child.kill();server.kill();},180000);
+  const noCancel=async()=>{
+    assert.equal(await evaluate(`!document.querySelector('#cancel') &&
+      ![...document.querySelectorAll('button,[role="button"]')].some(node=>/^(cancel|stop loading|abort)$/i.test(node.textContent.trim()))`),true);
+    const ax=await command('Accessibility.getFullAXTree');
+    assert.equal(ax.nodes.some(n=>n.role?.value==='button' && /^(cancel|stop loading|abort)$/i.test(n.name?.value||'')),false);
+  };
   try{
     const launch=JSON.parse((await lines.next()).value);
     const target=await command('Target.createTarget',{url:'about:blank'});
@@ -39,11 +46,13 @@ async function main(){
     for(const section of ['models','token-mix','ai-stats','comparisons']){
       await fixture('hold');
       if(section!=='models')await evaluate(`location.hash='#/${section}'`);
-      await until(`current?.section==='${section}' && current.active && document.querySelector('.report-loading')`);
+       await until(`current?.section==='${section}' && current.active && document.querySelector('.report-loading')`);
+       await noCancel();
       assert.equal(await evaluate(`document.getElementById('refresh').hidden`),true,'no initial Load action');
       await evaluate(`window.__loader=document.querySelector('.report-loading');window.__bar=__loader.querySelector('progress');window.__values=[__bar.value];window.__heights=[__loader.getBoundingClientRect().height];`);
       for(let index=0;index<5;index++){
-        await fixture('step');await until(`current.progressSequence>=${index+2}`);
+         await fixture('step');
+         await until(section==='ai-stats'?`current.stage.includes('(${index+1}/10 roots)')`:`current.progressSequence>=${index+2}`);
         assert.equal(await evaluate(`__loader===document.querySelector('.report-loading') && __bar===__loader.querySelector('progress')`),true);
         await evaluate(`__values.push(__bar.value);__heights.push(__loader.getBoundingClientRect().height)`);
       }
@@ -69,31 +78,59 @@ async function main(){
       }
       const ax=await command('Accessibility.getFullAXTree');assert.ok(ax.nodes.some(n=>n.role?.value==='progressbar'&&n.value?.value===values.at(-1)));
       const image=await command('Page.captureScreenshot',{format:'png'});await fs.writeFile(path.join(output,section+'.png'),Buffer.from(image.data,'base64'));
-       await fixture('complete');await until(`current.result && !current.loading`);assert.equal(await evaluate(`current.percent`),100);
-       assert.equal(await evaluate(`__bar.value`),100,'applied completion updates the retained bar before revealing data');
+        // Existing admitted acquisition continues through route changes and real hidden-tab visibility.
+        await evaluate(`window.__state=current;window.__job=current.active;location.hash='#/watch'`);
+        await until(`current.section==='watch'`);
+        const cover=await command('Target.createTarget',{url:'about:blank'});
+        if(section==='comparisons'){
+          const peer=(await command('Target.attachToTarget',{targetId:cover.targetId,flatten:true})).sessionId;
+          await command('Runtime.enable',{},peer);await command('Page.enable',{},peer);
+          await command('Page.navigate',{url:launch.url.split('#')[0]+'#/comparisons'},peer);
+          await until(`typeof current!=='undefined' && !!current?.active`,peer);
+          assert.equal(await evaluate(`current.active`,peer),await evaluate(`__job`),'competing tab coalesces the original Comparisons job');
+        }
+        await command('Target.activateTarget',{targetId:cover.targetId});await until(`document.hidden`);
+        await fixture('complete');await until(`!__state.loading && !!__state.result`);
+        await command('Target.closeTarget',{targetId:cover.targetId});
+        await command('Target.activateTarget',{targetId:target.targetId});
+        await evaluate(`history.back()`);await until(`current.section==='${section}' && !current.loading`);
+        assert.equal(await evaluate(`current===__state && !current.failed && current.percent===100`),true);
+        await noCancel();
+        assert.equal(await evaluate(`current.percent`),100,'inactive completion is recorded without waiting for a visible animation frame');
       assert.equal(await evaluate(`document.querySelectorAll('.report-loading').length`),0);
-      facts.push(section+': automatic first entry, retained progress DOM, monotonic counts, applied completion, themes/narrow/reduced-motion/AX');
+       facts.push(section+': no DOM/AX Cancel; automatic entry, monotonic progress, hidden/inactive completion, Back restoration, themes/narrow/reduced-motion');
       await fixture('hold');
       await evaluate(`window.__content=output.firstChild;window.__focus=output.querySelector('button,a');__focus?.focus();acquire(current,true);true`);
-      await until(`current.loading && current.active`);
+       await until(`current.loading && current.active`);
+       await noCancel();
       assert.equal(await evaluate(`output.firstChild===__content && !output.querySelector('progress') && (!__focus || document.activeElement===__focus) && document.getElementById('report-updating').textContent==='Updating…'`),true);
       await fixture('step');await fixture('complete');await until(`!current.loading`);
-      facts.push(section+': quiet refresh retains data/focus without central loader');
+       facts.push(section+': quiet refresh retains data/focus without central loader');
+       await fixture('failed');await evaluate(`acquire(current,true);true`);await until(`current.failed && !current.loading`);
+       await noCancel();
+       assert.equal(await evaluate(`!document.getElementById('refresh').hidden && getComputedStyle(document.querySelector('.toolbar')).display!=='none'`),true);
+       await fixture('complete');await evaluate(`acquire(current);true`);await until(`!current.loading && !current.failed`);
+       await fixture('source');await evaluate(`acquire(current);true`);
+       await until(`current.stage==='Waiting for source…'`);await noCancel();
+       await fixture('ready');await until(`!current.loading && !current.failed`);
+       facts.push(section+': source wait and genuine failure retain Retry without Cancel');
     }
     // HTTP 429 enters bounded waiting without allocating a duplicate job.
     await fixture('hold');await fixture('busy');
     await evaluate(`acquire(current);true`);await until(`current.stage==='Waiting for report slot…' && !current.active`);
-    await until(`current.active`);await fixture('complete');await until(`!current.loading && !current.failed`);
-    facts.push('temporary 429 recovers automatically with backoff');
-    await fixture('busy');await evaluate(`acquire(current);true`);await until(`!current.active && current.loading`);
-    await evaluate(`document.getElementById('cancel').click()`);await until(`!current.loading && current.failed`);
-    assert.match(await evaluate(`current.message`),/cancelled/i);
-    facts.push('cancel during admission wait is terminal, not 100%');
+     await noCancel();
+     await evaluate(`window.__waiting=current;window.__attempt=current.attempt;location.hash='#/watch'`);
+     await until(`current.section==='watch' && !!__waiting.active`);
+     assert.equal(await evaluate(`__waiting.attempt===__attempt && !__attempt.reason`),true);
+     await fixture('complete');await until(`!__waiting.loading && !__waiting.failed`);
+     await evaluate(`history.back()`);await until(`current.section==='comparisons'`);
+     facts.push('temporary 429 pending intent survives navigation and admits once with bounded backoff');
     assert.deepEqual(errors,[]);outcome='PASS';console.log(JSON.stringify({outcome,checks:facts.length,layouts:layouts.length}));
-  }finally{
-    clearTimeout(deadline);await fs.writeFile(path.join(output,'browser.json'),JSON.stringify({outcome,facts,layouts,errors,
+   }catch(error){failure=error.stack;console.error(failure);throw error;}finally{
+     clearTimeout(deadline);await fs.writeFile(path.join(output,'browser.json'),JSON.stringify({outcome,failure,facts,layouts,errors,
       limitations:['Manually stepped fixture jobs, not production process timing.','No physical screen-reader speech or non-Chromium platform certification.']},null,2));
-    server.stdin.end('{"command":"stop"}\n');await command('Browser.close').catch(()=>{});await new Promise(resolve=>server.once('exit',resolve));
+     server.stdin.end('{"command":"stop"}\n');await command('Browser.close').catch(()=>{});
+     if(server.exitCode===null)await new Promise(resolve=>server.once('exit',resolve));
   }
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

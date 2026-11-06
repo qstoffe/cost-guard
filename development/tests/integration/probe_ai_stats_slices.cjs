@@ -31,15 +31,20 @@ module.exports = async ({command, evaluate, until, config, checks}) => {
     await command('Page.bringToFront', {}, tab);
     await evaluate(`document.querySelectorAll('.ai-stats-periods button')[1].focus(); selectStats(current,'7-days')`, tab);
     assert.equal(await evaluate(`current.period==='7-days' && current.loading`, tab), true);
-    await until(`!current.loading && current.result?.view.ai_stats.some(r=>r.period==='7-days')`, tab);
+    await until(`current.result?.view.ai_stats.some(r=>r.period==='7-days')`, tab);
     const narrow = await evaluate(`({id:current.active, work:current.result.view.ai_stats_work,
       focused:document.activeElement.textContent, period:current.period})`, tab);
     assert.ok(narrow.work.remaining > 0, 'narrow coherent result must precede wider missing work');
     assert.equal(narrow.work.scopes['7-days'].ready, true);
     assert.equal(narrow.work.scopes['30-days'].ready, false);
     assert.equal(narrow.focused, '7 days');
-    await evaluate(`selectStats(current,'today'); selectStats(current,'30-days')`, tab);
-    await until(`current.loading && !!current.active`, tab);
+    await evaluate(`window.__stats=current; window.__job=current.active; location.hash='#/watch'`, tab);
+    await until(`current.section==='watch' && !__stats.loading`, tab);
+    assert.equal(await evaluate(`__stats.statsResults.has('30-days') && !__stats.failed`, tab),true,
+      'original broad goal must finish without another selection or interested tab');
+    await evaluate(`location.hash='#/ai-stats'`, tab);
+    await until(`current.section==='ai-stats'`, tab);
+    await evaluate(`selectStats(current,'30-days')`, tab);
     await until(`!current.loading && current.result?.view.ai_stats.some(r=>r.period==='30-days')`, tab);
     assert.equal(await evaluate(`current.period`, tab), '30-days');
     await command('Page.bringToFront', {}, peer);
@@ -49,8 +54,8 @@ module.exports = async ({command, evaluate, until, config, checks}) => {
     assert.equal(status.active, false);
     assert.equal(status.loads.reduce((sum, row) => sum + row.hydrated, 0), 24,
       'return to broad coverage must reuse every stable root, not restart');
-    assert.ok(status.work.some(job => job.kind === 'ai-stats' && job.scope === '7-days' && job.status === 'complete'),
-      'latest selection must own logical completion; already coherent evidence needs no extra child');
+    assert.ok(status.work.some(job => job.kind === 'ai-stats' && job.status === 'complete'),
+      'all requested goals finish within the same host-owned logical job');
     assert.ok(status.loads.length > 2);
     assert.equal(errors, '');
     checks.push(`production slices/two tabs: 7 days coherent at ${narrow.work.completed}/24 roots; ` +

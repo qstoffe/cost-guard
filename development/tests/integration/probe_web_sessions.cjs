@@ -110,14 +110,14 @@ async function main() {
        const frozen=await evaluate('document.querySelector("#result").textContent');
        await fixture('hold-captures');
        await evaluate('document.querySelector("#refresh").click()');
-       await until('current.active && !document.querySelector("#cancel").disabled');
-       await evaluate('document.querySelector("#cancel").click()');
+       await until('current.active && !document.querySelector("#cancel")');
+       await evaluate('api("/api/jobs/"+current.active+"/cancel",{})');
        await until('!current.loading && document.querySelector("#notice").textContent.includes("cancelled")');
        assert.equal(await evaluate('document.querySelector("#result").textContent'),frozen);
        await fixture('resume-captures');
      }
      assert.equal(await evaluate('reportKinds.includes("date")'),false);
-      checks.push('token-mix-explicit-first-capture-reacquisition-cancel-retained-result; AI Stats lifecycle has its own probe');
+      checks.push('token-mix reacquisition/internal API cancellation retains result with no UI Cancel; AI Stats lifecycle has its own probe');
      await evaluate("location.hash='#/sessions'");
     await until('current?.catalog?.data?.total === 120');
     assert.deepEqual(await evaluate('[...document.querySelectorAll("#result th")].map(node=>node.textContent.replace(/ [↑↓↕]$/, ""))'),

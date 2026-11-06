@@ -42,12 +42,19 @@ class LoadingJobs:
             return None
         if self.mode == 'complete' and job['status'] == 'running':
             job['status'] = 'complete'
+        if self.mode == 'failed' and job['status'] == 'running':
+            job['status'] = 'failed'
         stages = ['sampling', 'account-analysis', 'finalizing'] if job['request'].kind is ReportKind.NORMAL else [
             'history-cache', 'history-load', 'finalizing']
         progress = dict(phase='history', stage=stages[min(2, self.step // 2)],
             completed=1 if self.step % 2 == 0 else 9, total=10, sequence=self.step + 1)
+        result = job['result'] if job['status'] == 'complete' else None
+        if job['request'].kind is ReportKind.AI_STATS and job['status'] == 'running':
+            result = dict(view=dict(ai_stats=[], ai_stats_work=dict(scopes={
+                job['request'].stats_scope: dict(completed=self.step, total=10, ready=False)})))
         return dict(id=key, status=job['status'], progress=progress,
-            result=job['result'] if job['status'] == 'complete' else None, error=None)
+            result=result,
+            error='source_permission_denied' if job['status'] == 'failed' else None)
 
     def cancel(self, key):
         if key in self.jobs:

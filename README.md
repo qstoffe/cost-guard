@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v80.194, 2026-11-06), the supported distribution.
+Use **current `main`** (v80.195, 2026-11-06), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -361,7 +361,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.194 (2026-11-06):** AI Stats resumes across bounded workers instead of abandoning a logical scan at 120 seconds. Period changes share verified evidence and prioritize missing work; earlier short-period completion is conditional on proved coverage, not old-root metadata. Compact bulk persistence removes duplicate analysis-cache writes. Other report deadlines, canonical metric reasons and source read-only safety remain. See [AI Stats](docs/web-beta.md#ai-stats).
+**v80.195 (2026-11-06):** Finite Web reports have no user Cancel control. Requested admission waits and jobs survive navigation and temporary hiding, with bounded retries and truthful failures. AI Stats prioritizes narrower periods without abandoning earlier requested scopes; the host resumes their saved work without polling interest. Internal cancellation, watchdogs, shutdown and active-visible refresh cadences remain. See [Web Beta](docs/web-beta.md).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

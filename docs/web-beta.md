@@ -232,7 +232,8 @@ claim successful completion. Stable nodes, reserved stage height, tabular numera
 and stage-only polite announcements avoid poll-by-poll jumping or announcement spam.
 
 Authenticated **Waiting for source…** and **Waiting for report slot…** stages use
-cancelable 500ms-to-4s backoff and at most eight retries. Other reports retain a
+500ms-to-4s backoff and at most eight retries, interruptible by internal
+lifecycle/safety owners. Other reports retain a
 120-second total attempt budget; AI Stats can span multiple bounded workers below.
 The host's one existing startup owner supplies detached typed admission
 proof, not merely HTTP health or the Live stream's writable flag. Transient typed
@@ -241,9 +242,14 @@ data, real report failures and exhausted waits remain actionable errors. **Retry
 is recovery-only, not an initial Load button. A Live stream reconnect alone does not
 invalidate successful finite HTTP work. No extra wake, scan, hidden-page preload,
 new queue or result-size exception is introduced. Every child still has a 120-second
-watchdog. Unadmitted waits suspend on navigation/hiding; AI Stats additionally stops
-polling on departure and its unobserved work expires after 15 seconds. Other admitted
-reports keep their bounded lifecycle. A small **Updating…** line accompanies quiet
+watchdog. There is no user-facing **Cancel**, **Stop loading** or **Abort** report
+control on any of the four finite pages. Once requested, bounded admission intent
+and admitted work continue through navigation, Back/Forward and temporary hiding;
+results/errors stay with the original memory-only view. A hidden tab returning after
+its client budget reads an already-settled server outcome before declaring timeout.
+Inactive/hidden routes never start new periodic checks. Closing/reloading the tab
+does not preserve its pre-admission intent or view memory; admitted jobs remain
+host-owned, not durable across host shutdown/restart. A small **Updating…** line accompanies quiet
 refresh without replacing usable data, sorting, selection, scroll or focus.
 Reload captures Models using normal pricing TTL caching; Back/Forward to a retained view and live host
 heartbeats do not refresh its frozen report or reset its table scroll/selection.
@@ -317,8 +323,8 @@ This month and All time have
 label-bound hover, keyboard-focus and touch help, including while selected. All five
 buttons retain the same readable selected colors without foreground/background cross-fades.
 First/broader acquisition
-shows the shared 0–100% progress control and permits cancel; healthy cards have no permanent
-Load/Refresh/Cancel toolbar. Smaller cached periods remain usable during All time.
+shows the shared 0–100% progress control without user cancellation; healthy cards
+have no permanent Load/Refresh toolbar. Smaller cached periods remain usable during All time.
 
 Python owns all arithmetic: canonical event-time deduplicated reference CCost, exact
 Decimal ratios, clipped unioned execution time and deterministic record ties.
@@ -358,10 +364,15 @@ the displayed denominator changes. No fabricated ETA or partial-scan 100% is sho
 Stable compact evidence is disposable and contains no prompts/session text. Source,
 revision, pricing and algorithm dependencies govern reuse across period changes,
 reload and host restart. Active evidence is refreshed, not reused as stable history.
-Navigating away or hiding the document stops its polling; after 15 seconds with no
-interested tab, the host terminates owned incremental work. Returning resumes from
-valid derived evidence; it never installs a background history daemon. Explicit
-Cancel/shutdown still terminates owned children. Checkpoint storage failure, repeated
+Navigating away or hiding the document does not abandon requested work. The host
+retains at most five requested period goals in the same shared logical job. A new
+selection prioritizes its next slice without erasing an earlier 30-day/All time goal;
+after a coherent narrow milestone, remaining requested work resumes from checkpoints
+even without polling interest. Cards can show that narrow result while broader work
+finishes. No new periodic history daemon is installed. Internal authenticated
+cancellation, watchdogs and host shutdown still terminate owned children. This
+supersedes only FR000614's voluntary user-cancellation/inactivity behavior, not its
+resource safety. Checkpoint storage failure, repeated
 revision churn, source/authentication failure and resource exhaustion produce honest
 errors, never silently truncated totals. Limits remain four pending jobs, one active
 child, sixteen retained results and 8 MiB/result; AI Stats additionally bounds roots
@@ -501,7 +512,7 @@ acquisition or client-side valuation. [Verification and limits](../development/j
 
 Generic finite report tables retain search/filter/page controls and ascending/descending/original-order sorting. Token Mix instead has independent ascending/descending table sorts, default Total CCost descending, without filters, a pager or nested vertical scrolling. Header text owns shared hover/focus/touch help; no question-mark prefixes or icons are used. Models uses its independent filter/multi-sort contract; Watch keeps fixed chronological cards. Accounts and Sessions have no report toolbar, search, filters or snapshot controls. Sessions' catalog headings request full-catalog server sorting, not presentation-only page sorting. Detail has no sort or pager. Decimal keys stay exact and unknowns sort last.
 
-Token Mix uses automatic visible first acquisition, shared bounded progress/cancel and its approximately **five-minute** active-visible cadence. Hidden tabs and other routes suspend new checks. Unchanged source revisions reuse disposable compact request facts and canonical category valuations; only changed/new/late-updated roots need history acquisition, while removed roots disappear. Price/config/analysis changes invalidate the relevant facts; availability changes regroup the same shown history. Source catalogs are still read to discover revisions, not trusted as usage. Global fork deduplication, publisher grouping and pricing tiers remain CLI-owned semantics. Host jobs coalesce in-flight requests and briefly reuse completed observations across tabs without relabeling observation time. No new account polling, inference, browser history ledger or unconditional periodic full scan is introduced.
+Token Mix uses automatic visible first acquisition, shared bounded progress without user cancellation and its approximately **five-minute** active-visible cadence. Hidden tabs and other routes suspend new checks, not existing acquisitions. Unchanged source revisions reuse disposable compact request facts and canonical category valuations; only changed/new/late-updated roots need history acquisition, while removed roots disappear. Price/config/analysis changes invalidate the relevant facts; availability changes regroup the same shown history. Source catalogs are still read to discover revisions, not trusted as usage. Global fork deduplication, publisher grouping and pricing tiers remain CLI-owned semantics. Host jobs coalesce in-flight requests and briefly reuse completed observations across tabs without relabeling observation time. No new account polling, inference, browser history ledger or unconditional periodic full scan is introduced.
 
 During ordinary Token Mix refresh the accepted summary and both tables remain usable. Complete results reconcile together in place, preserving independent sorts, Credits/USD, rows, focus and scroll/pan anchors. Failure retains the actual old observation with concise update-delayed feedback; it never becomes live merely because HTTP works. Fully unavailable values remain N/A; partial costs/volumes use readable **Partial**, not CLI question-mark notation. Deleted/pruned history stays unavailable. Timeout/cancellation/empty history remain distinct; Live and its account scheduler continue independently. URL fragments contain only scope/locators, never prompt content.
 

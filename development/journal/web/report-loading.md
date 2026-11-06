@@ -1,14 +1,14 @@
 # Shared finite-report loading
 
-Source revision: fbcfa8c (FR 000609 delivery base)
-Checked revision: fbcfa8c plus FR 000609's feature diff
+Source baseline: 50e7fe929b6e7ccce236eb51174206dcbe26e070
+Checked scope: FR000615 lifetime/UI delta; historical FR000609 evidence is labeled below
 Last checked: 2026-11-06
 Status: current
 
 ## Owners and invariants
 
 `src/web/assets/report-loading.js` owns the shared centered determinate view,
-observed monotonic stage bands, stale-sequence rejection and bounded cancelable
+observed monotonic stage bands, stale-sequence rejection and internally interruptible bounded
 attempt. `app.js` automatically acquires only the eligible visible Models, Token
 Mix, AI Stats or Comparisons route, validates/applies a coherent result before
 100%, and keeps usable retained content/focus during quiet refresh. The stage
@@ -29,15 +29,86 @@ failures and HTTP 429 `busy` use bounded backoff. Permission/auth/schema errors,
 terminal/offline/identity loss, real report failure and timeout are not successful
 recovery. An SSE reconnect alone is not failed finite HTTP/source readiness.
 
-The total browser attempt remains bounded by 120 seconds, with at most eight
+The browser attempt remains bounded by 120 seconds except resumable AI Stats, with at most eight
 backoff waits (500, 1,000, 2,000, then 4,000 milliseconds). Existing server job
 deadline, four pending jobs, 8 MiB result bound, session/CSRF/ownership and
 cancellation remain unchanged. Historical 5/15-minute checks and one-hour
 withholding, AI Stats scope extension, Comparisons revisions and explicit Models
 price refresh retain their owners. No new scanner, cache schema or CLI/Live
-workflow is introduced.
+workflow is introduced. FR000615 removes the global Cancel markup, event handler
+and CSS/fixture assumptions rather than hiding a live cancellation path. Empty
+toolbars collapse; Models' actual failed-report Retry can be reached while its
+healthy toolbar remains absent. Refresh price list is independent.
 
-## Observed verification
+Navigation and temporary hiding no longer abort unadmitted attempts or AI Stats
+polling. One retained attempt continues its bounded backoff, completes into its own
+view, or retains its actual terminal reason. Inactive pages never start periodic
+refreshes. A throttled tab reads a settled server outcome before applying its local
+deadline, so an already-completed job is not mislabeled timeout on return.
+
+AI Stats removes polling-interest expiry and retains up to five requested goals in
+one host-owned job; narrow priority cannot erase a previously requested broad goal.
+The next slice resumes missing goals under the same observation/scan identity and
+existing fairness/watchdogs/resource/no-progress limits. This is FR000615's narrow
+override of FR000614's user cancellation/inactivity behavior, not a general ban on
+internal cancellation. Closing/reloading loses page/pre-admission memory; no durable
+cross-host/tab-close intent or background periodic scanner is claimed.
+
+## FR000615 verification and scoped exception
+
+- Actual app/Attempt VM regressions cover all four finite routes' bounded pending
+  intent, admitted job identity, hidden/inactive completion, retained terminal
+  source-wait exhaustion and no duplicate/new inactive checks. AI Stats tests cover
+  no-poll host ownership, narrow priority, older-goal resumption, internal cancel,
+  watchdog shrink/stalls and actual spawned slices.
+- Hidden Chrome 156: shared loader **13 checks / 24 layouts**, all four routes in
+  Classic/Web light/Web dark at 360/1366px, with no DOM/AX Cancel in load, source
+  wait, quiet refresh, retained success, failure and completion. Real hidden-tab
+  visibility, navigation/Back and competing Comparisons tab coalescing pass. Actual
+  screenshot inspection agrees. Evidence: `scratch:/evidence/loading-final/`.
+- Independent hidden probes: AI Stats **14 checks / 9 layouts** plus enlarged-text,
+  color/state matrices and production two-tab/spawned slice coverage; original
+  30-day goal finishes after 7-day selection/navigation without another selection,
+  exactly 24 synthetic root hydrations. Comparisons **9 / 12**, Token Mix **4 / 9**,
+  Models price refresh **4 / 6** retain their layout/help/focus/refresh behavior.
+  Evidence: `scratch:/evidence/ai-stats-frozen.json`, `comparisons-browser.json`,
+  `token-mix-browser.json`, `models-refresh.json` under that same evidence branch.
+- Integrated browser was disconnected. Hidden fresh profiles used no personal
+  browser identity, visible desktop, shared input or clipboard. Physical speech,
+  native external-desktop and non-Chromium verification remain **unperformed**.
+- Real V2 `probe_web_live.py --reports --report-timings` verified shell/source/two
+  SSE streams and retained Live origin, then **FAILED** at Normal's typed retryable
+  `connection_timeout` (about 15 seconds in the child). Later report/cancellation
+  stages were **unperformed**. Cleanup retained zero owned threads/processes.
+  Cause and baseline relationship remain **unknown**, not established unrelated.
+- Independent real Comparisons with an isolated disposable cache completed in
+  **89.141s / 9.013s**, scanning 2,774 roots and returning 294 groups, no result error.
+  Both are usable **partial coverage (`complete:false`)**, not full-coverage PASS.
+  Evidence: `scratch:/evidence/comparisons-live.txt`. No inference/source writes or
+  shared OpenCode stop was performed.
+
+**Decision Delegate** authorized this FR-only verification exception: accept the
+independent heavy Comparisons and hidden/VM/spawn/direct-backend evidence without
+requiring successful Normal or its unreached later real-cancellation stages, physical
+desktop/speech or non-Chromium proof. Genuine source failures are explicitly allowed
+by the FR; expanding this change into source-performance repair or On Hold is not
+justified. Delivery remains conditional on final Full and validator success; no
+future failure, cleanup flaw or blanket source-performance waiver is granted.
+
+Earlier failed checks stay visible: the first Full found an invalid synthetic Models
+DTO in the new VM fixture; it now supplies the required Normal/acquired result. The
+second Full encountered Windows discovery fallback and a watchdog-fixture
+`process.close()` ValueError. The isolated discovery harness omitted its extracted
+function's `Write-LaunchActivity` dependency, only called when startup crosses 120ms;
+an explicit no-op test stub fixes that missing dependency without weakening discovery
+assertions or changing production launchers. The watchdog test passed its focused
+rerun; this does not prove the earlier cleanup failure harmless or pre-existing.
+Browser-probe repairs used absolute profile paths, correct Stats logical coverage,
+and the actual typed source-readiness seam. One earlier Stats probe was invalidated
+by an intentional product-file edit during its host lifetime; the source-change guard
+correctly stopped it. The frozen-source rerun passed. No watchdog/cap was increased.
+
+## Historical FR000609 verification
 
 - Full local suite: 153 bounded file targets, 1,787 tests; **1,786 passed, one
   existing macOS zsh/PTY skip, zero failures**. The Windows host cannot execute
@@ -77,7 +148,7 @@ Playwright overview script was updated but not run (Playwright unavailable).
 Integrated browsing returned `browser.disconnected`; fresh-profile hidden Edge
 used no personal profile, visible desktop, shared input or clipboard.
 
-## Real installation results and unresolved cause
+## Historical FR000609 real installation results and unresolved cause
 
 Read-only real V2 probes made no model inference calls and did not stop the shared
 OpenCode service. `probe_web_live.py --models` verified shell/source/SSE ownership,
@@ -106,7 +177,7 @@ job-execution race was not established. Typed source readiness now distinguishes
 ordinary startup/slot waits from terminal errors and actual expensive-job timeout.
 The owner's original precise startup incident remains untraced.
 
-## Scoped verification decision
+## Historical FR000609 scoped verification decision
 
 **Decision Delegate authorized FR 000609 delivery/merge only** without physical
 screen-reader speech/native-platform/non-Chromium certification, successful cold

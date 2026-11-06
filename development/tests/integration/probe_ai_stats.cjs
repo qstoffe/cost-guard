@@ -71,7 +71,7 @@ async function main() {
       ['Today','7 days','30 days','This month','All time']);
     assert.equal(await evaluate(`document.querySelectorAll('.ai-stats-view img').length`),0);
     assert.equal(await evaluate(`[...document.querySelectorAll('.ai-stat-detail a')].every(a=>a.textContent.includes('<img') && a.hash.startsWith('#/sessions/'))`),true);
-    assert.equal(await evaluate(`document.getElementById('refresh').hidden && document.getElementById('cancel').hidden`),true);
+    assert.equal(await evaluate(`document.getElementById('refresh').hidden && !document.getElementById('cancel')`),true);
     checks.push('automatic default, retired-route alias, ten cards, five exact periods, safe real record links, no healthy toolbar');
     await require('./probe_ai_stats_states.cjs')({command,evaluate,until,fixture,tab,contrasts,states,checks});
     await require('./probe_ai_stats_layout.cjs')({command,evaluate,until,tab,textLayouts,checks});
@@ -138,7 +138,8 @@ async function main() {
     assert.equal(await evaluate(`!!output.querySelector('.ai-stat') && current.loading`),true,'ready smaller period remains usable during broader acquisition');
     await evaluate(`location.hash='#/accounts'`); await until(`current.section==='accounts'`);
     await evaluate(`location.hash='#/ai-stats'`); await until(`current.section==='ai-stats' && current.loading`);
-    await evaluate(`selectStats(current,'all'); document.getElementById('cancel').click()`);
+    // Internal authenticated test ownership still exercises real backend cancellation.
+    await evaluate(`selectStats(current,'all'); api('/api/jobs/'+current.active+'/cancel',{})`);
     await until(`current.failed && !current.loading`);
     assert.match(await evaluate(`current.message`),/cancelled/i);
     assert.equal(await evaluate(`!!output.querySelector('.ai-stat')`),false);
@@ -146,7 +147,7 @@ async function main() {
     assert.equal(await evaluate(`!!output.querySelector('.ai-stat')`),true);
     await fixture('stats-release-all');
     await evaluate(`selectStats(current,'all')`); await until(`current.result && !current.loading`);
-    checks.push('in-flight All time survives route departure/return without duplicate; cached smaller scopes stay usable; cancel is terminal/nonzero and retry recovers');
+    checks.push('no UI Cancel; in-flight All time survives route departure/return; smaller scopes stay usable; direct internal API cancellation remains terminal and retry recovers');
     // Gate only the test transport, keeping the actual HTTP/job and accepted DOM.
     await evaluate(`window.__api=api; window.__calls=0; window.__hold=false; window.__fail=false;
       api=async function(path,value) { if(path==='/api/reports') { __calls++; if(__hold) await new Promise(resolve=>window.__release=resolve); if(__fail) throw new Error('synthetic_failure'); } return __api(path,value); };`);

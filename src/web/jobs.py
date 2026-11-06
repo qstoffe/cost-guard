@@ -178,7 +178,10 @@ class ReportJobs:
             for key, job in self._jobs.items():
                 if stats_jobs.is_stats(job) and request.kind is ReportKind.AI_STATS:
                     if job['status'] in {'queued', 'running'}:
-                        job.update(request=request, seen=time.monotonic())
+                        # At most the five validated scopes; priority never erases
+                        # an earlier logical goal or creates another job/worker.
+                        job['goals'] = tuple(dict.fromkeys((*job['goals'], request.stats_scope)))
+                        job['request'] = request
                         return key
                     if (job['status'] == 'complete' and stats_jobs.ready(job, request.stats_scope)
                             and time.monotonic() - job.get('finished_at', 0) < 60):
@@ -197,7 +200,9 @@ class ReportJobs:
                 del self._jobs[victim]
             key = uuid4().hex
             self._jobs[key] = dict(request=request, status="queued", result=None, error=None, progress=None,
-                                   queued_at=time.monotonic(), seen=time.monotonic())
+                                   queued_at=time.monotonic())
+            if request.kind is ReportKind.AI_STATS:
+                self._jobs[key]['goals'] = (request.stats_scope,)
             return key
 
     def snapshot(self, key):
@@ -205,8 +210,6 @@ class ReportJobs:
             job = self._jobs.get(key)
             if job is None:
                 return None
-            if stats_jobs.is_stats(job):
-                job['seen'] = time.monotonic()
             return dict(id=key, status=job["status"], progress=job["progress"] or {
                         "phase": job["status"], "completed": 0, "total": None},
                         result=job["result"], error=job["error"],
@@ -264,9 +267,7 @@ class ReportJobs:
         key, process, receiver, started = self._active
         job = self._jobs[key]
         try:
-            if stats_jobs.is_stats(job) and time.monotonic() - job['seen'] > stats_jobs.INTEREST_SECONDS:
-                job.update(status='cancelled', error='suspended')
-            elif time.monotonic() - started > self._deadline:
+            if time.monotonic() - started > self._deadline:
                 stats_jobs.timed_out(job)
             elif receiver.poll():
                 if not self._receive(job, receiver):
@@ -312,9 +313,6 @@ class ReportJobs:
                 item[1]['request'].kind in {ReportKind.TOKEN_MIX, ReportKind.AI_STATS, ReportKind.COMPARISONS},
                 item[1]['queued_at'])):
             if job['status'] != 'queued':
-                continue
-            if stats_jobs.is_stats(job) and time.monotonic() - job['seen'] > stats_jobs.INTEREST_SECONDS:
-                job.update(status='cancelled', error='suspended')
                 continue
             receiver, sender = self._context.Pipe(duplex=False)
             process = self._context.Process(target=run_owned_report,
