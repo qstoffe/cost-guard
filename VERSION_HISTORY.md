@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.196 — 2026-11-06
+
+- Sessions reuses fresh canonical Watch prompt evidence before scalar hydration and keeps running proof independent of pricing/index failures, with source identity, original age and terminal observations respected. Supported model/cost/count/duration values update in place; pending model acquisition is distinguished from unsupported fields, failed acquisition and retained values.
+- `Multiple models` exposes a bounded distinct provider-qualified contributor list through the shared text-target help. Running/incomplete lists are qualified as observed so far; scalar cache schema/version validation changes with the contract. Focus, selection and open help survive live updates; six columns, global sorting, older-page epochs and bounded acquisition remain.
+
 ## v80.195 — 2026-11-06
 
 - Removes the shared Web report Cancel control and direct click handler. Started finite acquisitions and bounded pending intent survive route/visibility changes, retain their own results/errors and never start new inactive refresh scans. AI Stats keeps up to five requested scopes in one host-owned logical job, prioritizing narrow work then resuming earlier goals. Hidden return reads settled outcomes before client timeout; internal cancellation, finite watchdogs, shutdown and source/security bounds remain.

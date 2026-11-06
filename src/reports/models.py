@@ -152,6 +152,9 @@ class SessionUsageRow:
     archived: bool = False
     running: bool = False
     last_activity_ms: int | None = None
+    contributor_models: tuple[str, ...] = ()
+    contributor_models_complete: bool = False
+    model_pending: bool = False
 
 
 @dataclass(frozen=True, slots=True)

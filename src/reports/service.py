@@ -279,6 +279,9 @@ class ReportService:
             models = {entry.model.model: entry.model for entry in item.bundle.trace_entries}
             primary = (max(model_spend, key=lambda model_id: (model_spend[model_id], model_id))
                        if model_spend else next(iter(sorted(models)), "N/A"))
+            if primary == "N/A":
+                primary = next((record.main_model_id for record in reversed(item.bundle.prompts)
+                                if record.main_model_id), "N/A")
             resolved = catalog.resolve(primary)
             name = primary
             if resolved and resolved.model.display_name:
@@ -286,6 +289,9 @@ class ReportService:
             elif primary in models:
                 name = models[primary].display_name or primary
             prompt_count = len(item.bundle.prompts)
+            identities = sorted({f"{entry.model.provider}/{entry.model.model}"
+                for entry in item.bundle.trace_entries if entry.model.provider and entry.model.model})
+            contributors = tuple(value for value in identities if len(value) <= 256)[:64]
             rows.append(SessionUsageRow(
                 session_id=item.session.session_id,
                 title=item.session.title or item.session.session_id,
@@ -300,6 +306,13 @@ class ReportService:
                 archived=item.session.archived_at_ms is not None,
                 running=any(record.in_progress for record in item.bundle.prompts),
                 last_activity_ms=item.session.updated_at_ms,
+                contributor_models=contributors,
+                model_pending=(name == "N/A" and not item.bundle.trace_entries
+                               and any(record.in_progress for record in item.bundle.prompts)),
+                contributor_models_complete=(item.snapshot is not None and item.snapshot.complete and not any(
+                    record.in_progress for record in item.bundle.prompts)
+                    and len(contributors) == len(identities)
+                    and all(entry.model.provider and entry.model.model for entry in item.bundle.trace_entries)),
             ))
         return tuple(rows)
 

@@ -22,6 +22,8 @@ from development.tests.fixtures.web_help_reports import HelpAuditJobs
 from src.application.live_projection import project_live
 from src.application.session_catalog import SessionCatalog
 from src.application.session_detail import SessionDetails
+from src.domain import ModelRef
+from src.reports.watch_capture import capture_rows
 from src.web.host import WebHost
 from src.web.jobs import ReportJobs
 from src.watch.observers import observe_catalog
@@ -55,6 +57,8 @@ class FixtureRuntime:
         self.details = SessionDetails()
         self.catalog = SessionCatalog()
         self.unavailable = False
+        self.scalar_hold = False
+        self.live_root = None
         self.thread = Thread(target=self.run)
 
     def start(self):
@@ -64,8 +68,12 @@ class FixtureRuntime:
         while not self.stopping.is_set():
             observation = observe_catalog(self.service.source, include_archived_revisions=True)
             self.catalog.observe(observation, unavailable=self.unavailable)
+            if self.live_root and not self.unavailable:
+                root = self.service.source.snapshots[self.live_root].root
+                capture, _ = capture_rows(self.service, root)
+                self.catalog.observe_prompts(((root, any(row.in_progress for row in capture.rows), 0),))
             self.details.tick(self.service, unavailable=self.unavailable)
-            if self.catalog.needed():
+            if not self.scalar_hold and self.catalog.needed():
                 self.catalog.tick(self.service)
             view = project_live(summary_watch(), "UTC").to_json()
             self.publish("live", dict(state="running", view=view, source_observed_at_ms=self.service.now_ms))
@@ -103,6 +111,28 @@ def main():
                 source.snapshots["root-0000"] = replace(make_root_snapshot(0, 1002, month_start_ms=1000), source_revision="ended")
             elif command in ("hold-captures", "resume-captures"):
                 jobs.hold = command == "hold-captures"
+            elif command in ("live-cold", "live-progress", "live-finish", "live-resume"):
+                count = {"live-cold": 1, "live-progress": 2, "live-finish": 2, "live-resume": 3}[command]
+                snapshot = make_root_snapshot(121, count, month_start_ms=1000)
+                snapshot = replace(snapshot, invocations=tuple(replace(item,
+                    tokens=replace(item.tokens, input=count * 1_000_000)) for item in snapshot.invocations))
+                if command != "live-finish":
+                    aid = snapshot.messages[-1].message_id
+                    snapshot = replace(snapshot, root=replace(snapshot.root, active=True),
+                        messages=tuple(replace(item, completed_at_ms=None, finish_reason=None)
+                                       if item.message_id == aid else item for item in snapshot.messages),
+                        invocations=tuple(replace(item, completed_at_ms=None, finish_reason=None)
+                                          if item.message_id == aid else item for item in snapshot.invocations))
+                if count > 1:
+                    snapshot = replace(snapshot, invocations=tuple(replace(item,
+                        model=ModelRef("other-provider", "gpt-test", "Long localized model display name"))
+                        if index else item for index, item in enumerate(snapshot.invocations)))
+                source.snapshots[snapshot.root.session_id] = replace(snapshot,
+                    sessions=(snapshot.root,), source_revision=command, complete=True)
+                host.live.live_root = snapshot.root.session_id
+                host.live.scalar_hold = command == "live-cold"
+            elif command == "live-hydrate":
+                host.live.scalar_hold = False
             elif command == "stop":
                 break
             print(json.dumps(dict(ok=True, command=command)), flush=True)

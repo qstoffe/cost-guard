@@ -1,7 +1,7 @@
 // Hidden fresh-profile Chromium: shipped app/HTTP/auth plus synthetic session truth.
 const assert = require('node:assert/strict'), fs = require('node:fs/promises'), path = require('node:path');
 const {spawn} = require('node:child_process'), readline = require('node:readline');
-const [browser, output] = process.argv.slice(2);
+const [browser, output, mode] = process.argv.slice(2);
 async function main() {
   assert.ok(path.isAbsolute(browser) && path.isAbsolute(output));
   const directory = path.dirname(output);
@@ -62,7 +62,17 @@ async function main() {
      await command('Page.addScriptToEvaluateOnNewDocument',{source:`window.reportKinds=[];
        const request=fetch;window.fetch=(url,options)=>{if(url==='/api/reports')reportKinds.push(JSON.parse(options.body).kind);return request(url,options);};`},sessionId);
      await command('Page.navigate',{url:launch.url},sessionId);
-     await until('typeof csrf !== "undefined" && csrf && hostState.kind === "connected"');
+      await until('typeof csrf !== "undefined" && csrf && hostState.kind === "connected"');
+      if (mode === '--live-only') {
+        const details = await require('../fixtures/sessions_live_browser.cjs')({evaluate, until, fixture,
+          command:(method, params) => command(method, params, sessionId)});
+        checks.push(...details.checks); layouts.push(...details.layouts);
+        assert.deepEqual(errors, []);
+        evidence = {outcome:'PASS',browser:version.product,checks,layouts,inference_calls:0,
+          personal_profile:false,desktop_effects:false};
+        console.log(JSON.stringify({outcome:evidence.outcome,checks}));
+        return;
+      }
      await until('current?.result && !current.loading');
      const retiredHashes=['#/reports','#/reports?date=2026-11-05','#/reports?date=2026-10-01:2026-11-05',
        '#/reports?date=2026-02-30','#/reports?date=%ZZ&sort=ccost&offset=50'];

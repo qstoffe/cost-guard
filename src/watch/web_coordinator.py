@@ -87,6 +87,12 @@ class WebWatchCoordinator(WatchCoordinator):
 
     def tick_catalog(self, catalog, *, unavailable=False):
         catalog.observe(self.catalog_observation, unavailable=unavailable)
+        now = self.clock_ms()
+        catalog.observe_prompts((entry.snapshot.root, any(row.in_progress for row in entry.capture.rows),
+            (now - entry.capture.observed_at_ms) / 1000) for entry in self.cards.sessions.values()
+            if entry.snapshot is not None and entry.capture is not None
+            and entry.capture.authoritative and not entry.capture.retained
+            and entry.source_status.failed_at is None)
         if self.catalog_job is not None:
             if not self.catalog_job.done():
                 return

@@ -544,6 +544,23 @@ Most finite report tables show 50 rows/page from one immutable API result. Sessi
 
 Sessions, Models and both 13-column Token Mix tables share Watch's compact surface-tone headers, full cell dividers and one thin rounded frame. Numeric values retain their readable minima; deliberate horizontal panning never creates an inner vertical scroller. Model filters/promotions/multisort and Token Mix's complete one-line names, independent column sorts and five-minute acquisition stay unchanged.
 
+Sessions can show **[RUNNING]** before scalar hydration when the shared Watch capture
+affirmatively observes execution. Candidates/timestamps alone never establish running;
+original proof expires after 15 seconds and source outages suppress the marker. A newer
+canonical terminal observation clears it independently of summary/pricing delays.
+Model, CCost, Prompts and Duration hydrate through the existing bounded index and active
+five-second browser cadence. Known values remain visible with retained/partial qualifications;
+only actual pending acquisition shows **Loading…**, not a definitive failure or unsupported
+duration/model. The last measured execution duration is not extrapolated during idle gaps.
+Keyed cells, links and help targets remain connected during metric changes; selection/focus
+can defer reordering, but do not freeze live values.
+
+Hover, keyboard-focus or tap the **Multiple models** text to see the actual distinct
+provider/model contributors, including canonically attributed child requests. Shared
+ContextHelp handles Escape/leave and refreshes an open list in place. Running, incomplete,
+retained or bounded/truncated lists say **observed so far**; missing identities are explicit.
+There is no extra column, question-mark button, native title popup or per-row browser fetch.
+
 Last activity descending is the default. All six server comparators use canonical values, not formatted strings; exact CCost, numeric count/millisecond duration and deterministic ID ties span the entire available catalog. Activity/name work immediately. A cold or invalidated scalar index explicitly reports **Global sort unavailable: indexed X of N sessions**, retaining activity order until all metric keys are valid; it never labels a page-only order as global. Canonically unknown/partial keys sort last. This temporary metric-sort limitation is intentional, not evidence that every historical root is already indexed.
 
 Pending summary cells show **Loading…**, not unknown/zero. An acquired zero stays zero and canonical unknown stays N/A. Failed acquisition shows **Unavailable** or keeps last valid values with retained-evidence help; bounded retries do not restart known values. The most recently viewed page gets seven admissions per background fairness turn, still at most four roots per slice with a two-second admission budget. Unchanged validated summaries are reused. Slow individual source reads retain their transport limits, so this is priority, not an instant-readiness guarantee.

@@ -2,6 +2,74 @@
 
 FR 000593 baseline and FR 000602 follow-up. Current owner map: `development/architecture/modules/web.md`.
 
+## FR 000616 — independent running proof and stable model help, 2026-11-06
+
+The prior summary-validity gate can suppress a positive running observation during
+revision churn/cold indexing. The sanitized regression now distinguishes a candidate
+from fresh canonical prompt proof, cold pending work, genuine acquisition failures,
+retained values, newer terminal observations, later resume, original-age expiry and
+source/provenance changes. It does not reclassify all real Unavailable states as pending.
+The exact owner's private incident has not been established by this fixture.
+
+Web's existing coordinator forwards authoritative, nonretained Watch capture lifecycle
+and original age, never candidates or a new per-row acquisition. Catalog's successful
+summary lifecycle has the same 15-second bound, independent of scalar revision churn;
+source outages suppress running. A newer terminal observation wins. Missing pre-request
+model evidence alone can remain pending; supported zero counts, incomplete prices and
+unsupported duration/model fields keep their independent meanings. No browser clock
+extrapolation or change to canonical cost/count/duration definitions was introduced.
+
+Canonical trace contributors produce a sorted distinct provider/model list, capped at
+64 identities of at most 256 characters. Missing/oversized identities are omitted rather
+than rewritten, and the set is qualified as incomplete. Child requests enter only through
+canonical attribution. Scalar summary algorithm 2 rejects old/malformed payloads. Only
+bounded identities/completeness cross the Web allowlist, not trace or prompt content.
+
+Keyed row/cell/link/help nodes update in place, including while focused or selected.
+Only protected structural reorders/removals defer; live metrics do not. Shared ContextHelp
+updates its open content from the current contributor set. Single-model display stays
+normal; missing multi-model identities are explicit and incomplete/running/retained lists
+say observed so far. No native title, new column/button, source write or browser valuation.
+
+`probe_web_sessions.cjs ... --live-only` exercises shipped HTTP/auth/assets and canonical
+summary/capture owners over an owned synthetic source: four cold Loading cells with
+affirmative running proof, normal polling hydration/progression, finish/idle/resume,
+outage/reconnect, focused-link identity, selection/scroll and open help across updates.
+Keyboard Tab, pointer hover/leave, touch pin and Escape passed in hidden fresh-profile
+Chrome. Classic/Web light/dark × 360/1366/1920 CSS pixels × 100/150% CSS zoom passed six
+columns, 50 rows, one-line metrics and document scrolling. Integrated browser discovery
+reported disconnected; no external desktop or personal browser profile was used.
+The first rendered run caught a real DOM `title` property collision and the next caught
+synthetic costs rounding to the same `<0.1` text; the collision was fixed and fixture
+usage increased, without weakening product assertions. Focused Python/VM checks passed.
+
+The same focused matrix passed in hidden fresh-profile Edge 156.0.4314.58 as well as
+Chrome 156.0.8078.80. The working-tree validator passed all 11 checks, zero failures,
+with the six existing advisory categories. No cap or baseline was raised.
+
+Read-only V2 installation proof observed 2,776 roots: index/visible coverage 0→2,
+73ms first page, 262ms maximum API reply, and a coherent two-prompt detail in 5.796s
+(16,645 bytes). Across the 40.338s observation there were 29 multi-model row samples
+with the bounded distinct contributor contract validated; no identities/titles were
+printed. No cold-running sample or natural new-session arrival was observed, so the
+exact owner incident and real arrival latency remain unestablished. Global metric
+sort correctly remained pending, not full-catalog readiness/PASS. A single index
+slice reached 6.2983s because the admission budget does not truncate an individual
+source read. Independent history-batch/advance exception counters each recorded two
+errors; they were not classified and this scope does not certify those other lanes.
+One Live owner/two verified streams continued, no inference/source writes/shared-service
+stops occurred, and all owned workers closed with zero cleanup failures.
+
+Final serial Full passed **154/154 files**, zero failures, **360.0s**, with unchanged
+240-second per-file bounds. The preceding concurrent Full failed the unchanged Windows
+shutdown fixture's two-second completion assertion; the captured stack was joining a
+terminated report child rather than a source read. Its isolated five-test rerun passed,
+as did final Full. Contention is plausible, not proved; neither assertion nor timeout was
+weakened. The failed run is not PASS. Physical desktop/browser zoom,
+macOS and assistive-technology operation are not claimed. No requirement/test exception
+has been requested or approved for this task. Earlier scoped FR 000593 decisions below
+remain historical, not new authority.
+
 ## FR 000602 — table parity and truthful acquisition, 2026-11-06
 
 This supersedes the baseline's alternating admission policy below: seven latest-visible-page

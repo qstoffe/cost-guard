@@ -6,7 +6,7 @@ import sqlite3
 from src.analysis.cache import dependency_signature
 from .models import SessionUsageRow
 
-ALGORITHM = "session-summary-1"
+ALGORITHM = "session-summary-2"
 NAMESPACE = "session-summary"
 
 
@@ -30,11 +30,17 @@ def session_summary(service, root, revision, *, active=False):
             if set(values) != {field.name for field in fields(SessionUsageRow)}:
                 raise ValueError("incomplete_summary")
             values["ccost"] = Decimal(values["ccost"])
+            values["contributor_models"] = tuple(values["contributor_models"])
             row = SessionUsageRow(**values)
             if (row.session_id == root.session_id and row.ccost.is_finite() and row.ccost >= 0
                     and isinstance(row.title, str) and isinstance(row.model, str)
-                    and all(type(getattr(row, name)) is bool for name in ("complete", "multiple_models", "archived", "running"))
+                    and all(type(getattr(row, name)) is bool for name in ("complete", "multiple_models", "archived", "running", "contributor_models_complete", "model_pending"))
+                    and len(row.contributor_models) <= 64
+                    and all(isinstance(value, str) and 0 < len(value) <= 256
+                            and all(value.partition("/")[::2]) for value in row.contributor_models)
+                    and row.contributor_models == tuple(sorted(set(row.contributor_models)))
                     and not row.running
+                    and not row.model_pending
                     and type(row.prompt_count) is int and row.prompt_count >= 0
                     and (row.duration_ms is None or type(row.duration_ms) is int and row.duration_ms >= 0)):
                 return row, revision
