@@ -53,6 +53,7 @@ class SourceStartupTests(unittest.TestCase):
         self.assertEqual([], self.waits)
 
     def test_one_wake_and_fresh_probes_recover_without_manual_refresh(self):
+        self.assertEqual({'ready': False, 'error': 'source_starting', 'retryable': True}, self.startup.report_status())
         selection = Mock(selected="v2")
         self.selector.select.side_effect = [unavailable(), unavailable(), selection]
         self.assertIs(selection, self.startup.prepare())
@@ -60,6 +61,7 @@ class SourceStartupTests(unittest.TestCase):
         self.wake.assert_called_once_with("opencode", timeout=5)
         self.assertEqual(3, self.selector.select.call_count)
         self.assertEqual([0.5, 0.5], self.waits)
+        self.assertEqual({'ready': True, 'error': None, 'retryable': False}, self.startup.report_status())
         self.assertEqual(["starting_opencode", "starting"], [c.args[1]["state"] for c in self.publish.call_args_list])
 
     def test_exit_success_is_not_readiness_and_failure_ends_starting(self):
@@ -93,6 +95,12 @@ class SourceStartupTests(unittest.TestCase):
                 with self.assertRaises(SourceUnavailableError):
                     startup.prepare()
                 self.assertTrue(startup.finished.is_set())
+                status = startup.report_status()
+                self.assertFalse(status['ready'])
+                self.assertEqual('source_permission_denied' if error.exception_type == 'PermissionError' else error.code.value,
+                    status['error'])
+                if error.exception_type == 'PermissionError':
+                    self.assertFalse(status['retryable'])
         self.wake.assert_not_called()
         self.find.assert_not_called()
         self.assertEqual([], self.waits)

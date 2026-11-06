@@ -107,16 +107,15 @@ const ComparisonsView = (() => {
       const page = state.result?.view.comparisons;
       if (!page || state.withheld) {
         this.pager.hidden = true;
-        this.status.textContent = state.failed ? state.message : state.message || 'Acquiring all available first-input history…';
-        if (state.loading && !this.content.querySelector('progress')) { const bar = e('progress'); bar.setAttribute('aria-label', 'Acquiring comparison history'); this.content.replaceChildren(bar); }
-        else if (!state.loading) this.content.replaceChildren();
+        ReportView.text(this.status, state.withheld ? 'Retained report is stale and withheld.' : '');
+        ReportLoading.show(this.content, state);
         return;
       }
-      this.status.textContent = (state.failed ? state.message + ' ' : '') +
+      ReportView.text(this.status, (state.failed ? state.message + ' ' : '') +
         (!page.complete ? 'Partial history coverage; absence of matches is not proven. ' : '') +
         (page.total ? `${page.scanned} root sessions checked. ` : page.complete ? 'No verified exact first-input matches in available history. ' : '') +
-        `${page.excluded} sessions excluded (unsupported/missing first input or attachment content).` + (state.orderReset ? ' Ordering changed; returned to page 1.' : '');
-      if (this.last !== state.result || this.content.querySelector('progress')) {
+        `${page.excluded} sessions excluded (unsupported/missing first input or attachment content).` + (state.orderReset ? ' Ordering changed; returned to page 1.' : ''));
+      if (this.last !== state.result || this.content.querySelector('.report-loading')) {
         const focused = document.activeElement;
         const old = this.groups, next = [];
         page.groups.forEach((group, index) => {
@@ -125,12 +124,13 @@ const ComparisonsView = (() => {
           if (this.content.children[index] !== view.root) this.content.insertBefore(view.root, this.content.children[index] || null);
         });
         for (const view of old) if (!next.includes(view)) view.root.remove();
-        for (const bar of this.content.querySelectorAll('progress')) bar.remove();
+        this.content.querySelector('.report-loading')?.remove();
         this.groups = next; this.last = state.result;
         if (focused?.isConnected && document.activeElement !== focused && this.root.contains(focused)) focused.focus({preventScroll: true});
       }
       this.page = page; this.pager.hidden = !page.total;
-      this.previous.disabled = state.loading || page.offset === 0; this.next.disabled = state.loading || page.offset + 10 >= page.total;
+      this.previous.disabled = page.offset === 0; this.next.disabled = page.offset + 10 >= page.total;
+      for (const button of [this.previous, this.next]) button.setAttribute('aria-disabled', String(state.loading || button.disabled));
       ReportView.text(this.label, `Page ${page.offset / 10 + 1} of ${Math.max(1, Math.ceil(page.total / 10))} · ${page.total} groups`);
       ContextHelp.refresh(this.root);
     }

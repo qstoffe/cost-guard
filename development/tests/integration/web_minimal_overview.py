@@ -55,7 +55,7 @@ def browser_page(browser, host, *, width=1280):
     page = context.new_page()
     page.add_init_script("""window.loadingSamples=[]; window.loadingRoots=new Set();
       new MutationObserver(() => {
-        const root=document.querySelector('.overview-loading'), bar=root?.querySelector('progress');
+        const root=document.querySelector('.report-loading'), bar=root?.querySelector('progress');
         if(bar) { loadingRoots.add(root); const sample={value:bar.value,text:root.textContent,
           accessible:bar.getAttribute('aria-valuetext'),height:root.getBoundingClientRect().height};
           if(JSON.stringify(sample)!==JSON.stringify(loadingSamples.at(-1))) loadingSamples.push(sample); }
@@ -70,10 +70,10 @@ def real_workflow(browser, screenshots):
     context, page = browser_page(browser, host)
     try:
         page.goto(host.browser_url())
-        expect(page.locator(".overview-loading")).to_be_visible()
-        expect(page.locator(".overview-loading p")).to_contain_text("Sampling recent sessions")
+        expect(page.locator(".report-loading")).to_be_visible()
+        expect(page.locator(".report-loading-stage")).to_contain_text("Sampling recent sessions")
         page.screenshot(path=str(screenshots / "sampling.png"))
-        expect(page.locator(".overview-loading p")).to_contain_text("Analyzing account history", timeout=15000)
+        expect(page.locator(".report-loading-stage")).to_contain_text("Analyzing account history", timeout=15000)
         page.screenshot(path=str(screenshots / "account-history.png"))
         expect(page.locator(".overview-model-table")).to_be_visible(timeout=15000)
         samples = page.evaluate("loadingSamples")
@@ -83,11 +83,11 @@ def real_workflow(browser, screenshots):
         assert values == sorted(values) and values[-1] == 100, values
         assert len(sampling) >= 3 and len(accounts) >= 5, samples
         assert max(sampling) < 50 and max(accounts) <= 88
-        assert all(sample["accessible"].startswith("Approximately") for sample in samples if sample["value"] < 100)
+        assert all(sample["accessible"] == f'{sample["value"]} percent' for sample in samples)
         heights = [sample["height"] for sample in samples if sample["value"] >= 5]
         assert max(heights) - min(heights) < 1, heights
         assert page.evaluate("loadingRoots.size") == 1, "progress DOM was replaced"
-        assert page.locator(".overview-loading").count() == 0
+        assert page.locator(".report-loading").count() == 0
         assert page.locator(".overview-model-table th").all_text_contents() == ["Publisher ↕", "Model ↕", "Relative CCost ↓", "Release date ↕"]
         key = page.evaluate("[...views.values()].find(v=>v.section==='models').result.observed_at_ms")
         page.locator('nav a[href="#/accounts"]').click()
@@ -114,15 +114,15 @@ def lifecycle(browser):
             context, page = browser_page(browser, host, width=360)
             try:
                 page.goto(host.browser_url())
-                expect(page.locator(".overview-loading")).to_be_visible()
+                expect(page.locator(".report-loading")).to_be_visible()
                 for phase, done, total, label in [("history", 2, 10, "Loading source history"),
                         ("projection", 1, 4, "Comparing models"), ("finalizing", 1, 2, "Preparing report")]:
                     jobs.phase = dict(phase=phase, completed=done, total=total)
-                    expect(page.locator(".overview-loading p")).to_contain_text(label)
+                    expect(page.locator(".report-loading-stage")).to_contain_text(label)
                 assert page.evaluate("current.percent") < 100
                 jobs.mode = mode
-                expect(page.locator(".overview-loading")).to_have_count(0)
-                assert page.evaluate("current.percent === 100") == (mode == "success")
+                expect(page.locator(".report-loading")).to_have_count(0)
+                assert page.evaluate("current.percent === 100") == (mode in ("success", "partial"))
                 if mode in ("failed", "report_timeout", "cancelled"):
                     expect(page.locator("#result [role=alert]")).to_be_visible()
                 facts.append(dict(case=mode, outcome="PASS"))
@@ -158,7 +158,7 @@ def connection_cases(browser):
                     requests = len(jobs.requests)
                     context.set_offline(True)
                 expect(page.locator("#result [role=alert]")).to_be_visible()
-                expect(page.locator(".overview-loading")).to_have_count(0)
+                expect(page.locator(".report-loading")).to_have_count(0)
                 assert page.evaluate("current.percent || 0") < 100
                 if kind == "interrupted":
                     context.set_offline(False)

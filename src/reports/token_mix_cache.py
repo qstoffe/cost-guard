@@ -104,7 +104,8 @@ def build_cached_token_mix(service, progress):
             include(facts)
         else:
             pending.append((root, key))
-        progress(WorkProgress('Checking history cache', 'history', index + 1, len(roots)), None)
+        progress(WorkProgress('Checking history cache', 'history', index + 1, len(roots), stage='history-cache'), None)
+    progress(WorkProgress('Updating changed history', 'history', 0, len(pending), stage='history-load'), None)
     for start in range(0, len(pending), BATCH_SIZE):
         chunk = pending[start:start + BATCH_SIZE]
         writes = []
@@ -122,6 +123,6 @@ def build_cached_token_mix(service, progress):
             service.cache_repository.put_many(writes, busy_timeout_ms=50)
         except (OSError, sqlite3.Error):
             pass
-        progress(WorkProgress('Updating changed history', 'history', start + len(chunk), len(pending)), None)
+        progress(WorkProgress('Updating changed history', 'history', start + len(chunk), len(pending), stage='history-load'), None)
     return history_projection(service, reference, entries, prompts, progress,
         valuation=lambda model, tokens: costs[model, tokens])

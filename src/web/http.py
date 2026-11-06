@@ -31,7 +31,8 @@ ASSETS = {"/": ("index.html", "text/html; charset=utf-8"),
              "/token-mix.js": ("token-mix.js", "text/javascript; charset=utf-8"),
              "/ai-stats.js": ("ai-stats.js", "text/javascript; charset=utf-8"),
              "/comparisons.js": ("comparisons.js", "text/javascript; charset=utf-8"),
-             "/cached-reports.js": ("cached-reports.js", "text/javascript; charset=utf-8"),
+            "/cached-reports.js": ("cached-reports.js", "text/javascript; charset=utf-8"),
+            "/report-loading.js": ("report-loading.js", "text/javascript; charset=utf-8"),
              "/settings.js": ("settings.js", "text/javascript; charset=utf-8"),
              "/mini.js": ("mini.js", "text/javascript; charset=utf-8"),
              "/mini.css": ("mini.css", "text/css; charset=utf-8"),
@@ -316,6 +317,12 @@ class RequestHandler(BaseHTTPRequestHandler):
                     self.reply(400, {"error": "invalid_request"})
                     return
                 try:
+                    startup = getattr(self.server.lifecycle, "source_startup", None)
+                    if startup is not None:
+                        readiness = startup.report_status()
+                        if not readiness["ready"]:
+                            self.reply(503, {"error": readiness["error"], "retryable": readiness["retryable"]})
+                            return
                     key = self.server.jobs.submit(request)
                 except RuntimeError:
                     self.reply(429, {"error": "busy"})
@@ -352,6 +359,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                 if self.server.lifecycle:
                     value["lifecycle"] = self.server.lifecycle.public_status()
                     value["session_detail"] = self.server.lifecycle.live is not None
+                    if getattr(self.server.lifecycle, "source_startup", None) is not None:
+                        value["report_source"] = self.server.lifecycle.source_startup.report_status()
                 self.reply(200, value)
                 return
             if self.path == "/api/session":

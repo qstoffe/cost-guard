@@ -21,6 +21,11 @@ let snapshotRender = null;
 let settingsView = null;
 let cachedReportTimer = null;
 function historical(state) { return !!CachedReports.cadences[state?.section]; }
+function firstReport(state = current) {
+  if (csrf && hostState.writable && state?.request && !state.detail && !state.result && !state.attempted && !document.hidden) {
+    state.attempted = true; acquire(state);
+  }
+}
 function scheduleCachedReport() {
   clearTimeout(cachedReportTimer);
   const state = current;
@@ -91,7 +96,7 @@ function connectionStatus(message, state = {}) {
   if (current) show(current);
   scheduleCachedReport();
 }
-async function api(path, value) {
+async function api(path, value, signal) {
   if (hostState.terminal) throw new Error(hostState.kind === 'authorization_required' ? 'authentication_required' :
     hostState.kind === 'identity_changed' ? 'host_identity_changed' : 'instance_stopping');
   const options = {credentials: 'same-origin', cache: 'no-store'};
@@ -99,6 +104,9 @@ async function api(path, value) {
     headers: {'Content-Type': 'application/json', 'X-CG-CSRF': csrf || ''}, body: JSON.stringify(value)});
   const controller = new AbortController();
   options.signal = controller.signal;
+  const aborted = () => controller.abort();
+  if (signal?.aborted) controller.abort();
+  else signal?.addEventListener('abort', aborted, {once: true});
   const timeout = setTimeout(() => controller.abort(), 5000);
   try {
     const response = await fetch(path, options);
@@ -115,75 +123,36 @@ async function api(path, value) {
         connectionStatus('AUTHENTICATION EXPIRED — NOT LIVE. Use a fresh launcher link.',
           {kind: 'authorization_required', terminal: true, writable: false});
       }
-      throw new Error(data.error || 'request_unavailable');
+      const error = new Error(data.error || 'request_unavailable');
+      error.retryable = data.retryable === true;
+      throw error;
     }
     if (hostState.terminal) throw new Error('instance_stopping');
     return data;
-  } finally { clearTimeout(timeout); }
-}
-// Canonical phases have local counts, not a global total. These bounded weights
-// are explicitly estimates, never clock-driven or new source requests. Counts
-// remain visible in their own stage; only a complete usable result means 100%.
-function overviewProgress(state, progress = {}) {
-  if (Number.isFinite(progress.sequence)) {
-    if (progress.sequence <= (state.progressSequence || 0)) return;
-    state.progressSequence = progress.sequence;
-  }
-  const stages = {authorizing: [0, 5, 'Authorizing browser session'], queued: [5, 10, 'Waiting for report'],
-    pricing: [10, 20, 'Loading reference prices'], catalog: [20, 30, 'Loading source'],
-    history: [30, 55, 'Loading source history'], projection: [55, 70, 'Comparing models'],
-    quotas: [70, 90, 'Acquiring accounts'], availability: [90, 95, 'Checking model availability'],
-    finalizing: [95, 99, 'Preparing report']};
-  // Normal's actual consuming order, not provider start/completion order. Each
-  // history pass owns separate room; background providers remain concurrent.
-  const work = {sampling: [30, 48, 'Sampling recent sessions'], availability: [48, 50, 'Checking model availability'],
-    comparison: [50, 56, 'Comparing models'], models: [56, 62, 'Preparing model catalog'],
-    quotas: [62, 64, 'Acquiring accounts'], 'account-cache': [64, 70, 'Checking account history cache'],
-    'account-load': [70, 73, 'Loading account history'], 'account-analysis': [73, 88, 'Analyzing account history'],
-    'account-projection': [88, 94, 'Preparing account periods'], finalizing: [94, 99, 'Preparing report']};
-  const owned = work[progress.stage];
-  if (state.stagedProgress && !owned) return; // Nested legacy callbacks cannot consume later bands.
-  if (owned) state.stagedProgress = true;
-  const [start, end, label] = owned || stages[progress.phase] || [5, 10, 'Acquiring report'];
-  if (start < (state.progressStart || 0)) return;
-  state.progressStart = start;
-  const measured = Number.isFinite(progress.completed) && Number.isFinite(progress.total) && progress.total > 0;
-  const completed = Number.isFinite(progress.completed) ? Math.max(0, progress.completed) : 0;
-  // Sampling may stop early: completed roots justify a bounded estimate, not a
-  // fabricated total or an extra history scan. No advancement from elapsed time.
-  const fraction = measured ? Math.max(0, Math.min(1, completed / progress.total)) :
-    progress.stage === 'sampling' ? completed / (completed + 8) : 0;
-  state.percent = Math.max(state.percent || 0, Math.min(99, Math.floor(start + (end - start) * fraction)));
-  state.stage = label + (measured ? ` (${completed}/${progress.total})` :
-    progress.stage === 'sampling' && completed ? ` (${completed} completed)` : '');
-}
-function showOverviewProgress(state) {
-  let activity = output.querySelector('.overview-loading');
-  if (!activity) {
-    activity = ReportView.element('div', undefined, 'overview-loading');
-    const bar = ReportView.element('progress'); bar.max = 100;
-    bar.setAttribute('aria-label', 'Initial report progress');
-    const line = ReportView.element('p'); line.setAttribute('role', 'status');
-    activity.append(bar, line); output.replaceChildren(activity);
-  }
-  const bar = activity.querySelector('progress');
-  bar.value = state.percent || 0;
-  bar.setAttribute('aria-valuetext', bar.value === 100 ? '100 percent — report ready' : `Approximately ${bar.value} percent`);
-  activity.querySelector('p').textContent = bar.value === 100 ? '100% · Report ready' : `≈${bar.value}% · ${state.stage || 'Authorizing browser session'}…`;
+  } finally { clearTimeout(timeout); signal?.removeEventListener('abort', aborted); }
 }
 function show(state) {
   if (state !== current) return;
   refresh.disabled = !csrf || !hostState.writable || !(state.request || state.detail) || state.loading;
-  cancel.disabled = !hostState.writable || !state.active;
+  cancel.disabled = !hostState.writable || !state.loading;
   output.setAttribute('aria-busy', state.loading ? 'true' : 'false');
   notice.textContent = hostState.writable ? state.message : 'Last known contents are retained, not updating. See connection notice above.';
+  const finite = ReportLoading.sections.includes(state.section);
+  if (finite) output.setAttribute('aria-busy', state.loading && (!state.result || state.withheld) ? 'true' : 'false');
+  state.interrupted = ReportLoading.interrupted(hostState) ?
+    'Report interrupted. Check the connection notice; use a fresh launcher link if authorization or host identity changed.' : null;
+  const updating = document.getElementById('report-updating');
+  if (updating) ReportView.text(updating, finite && state.result && !state.withheld ?
+    state.loading ? 'Updating…' : state.failed ? 'Update delayed; last completed report retained.' : '' : '');
+  if (finite && hostState.writable) notice.textContent = state.result && !state.withheld && state.section === 'models' ? state.message : '';
   if (state.section === 'token-mix') {
-    refresh.textContent = state.result ? 'Retry Token Mix' : 'Load Token Mix';
-    refresh.hidden = !!state.result && !state.withheld;
+    refresh.textContent = 'Retry Token Mix';
+    refresh.hidden = !state.failed;
     cancel.hidden = !!state.result && !state.withheld || !state.loading;
     heading.hidden = !!state.result && !state.withheld;
     output.setAttribute('aria-busy', state.loading && (!state.result || state.withheld) ? 'true' : 'false');
   } else { refresh.textContent = 'Refresh snapshot'; refresh.hidden = false; cancel.hidden = false; heading.hidden = false; }
+  if (state.section === 'models') { refresh.textContent = 'Retry Models'; refresh.hidden = !state.failed; }
   if (state.section === 'ai-stats') {
     refresh.textContent = 'Retry AI Stats'; refresh.hidden = !state.failed;
     cancel.hidden = !state.loading || !!state.result && !state.withheld;
@@ -199,6 +168,7 @@ function show(state) {
     notice.textContent = '';
     ReportView.defaultUnit();
     state.comparisons ||= new ComparisonsView.View((offset, revision) => {
+      if (state.loading) return;
       state.request = {kind: 'comparisons', comparison_offset: offset, comparison_revision: revision};
       state.orderReset = false; acquire(state);
     });
@@ -211,12 +181,9 @@ function show(state) {
     settingsView.attach(output);
     return;
   }
-  if (state.section === 'models' && !state.result) {
-    if ((!hostState.writable && hostState.kind !== 'starting') || state.failed) {
-      output.setAttribute('aria-busy', 'false');
-      const error = ReportView.element('p', state.failed ? state.message : 'Report interrupted. Check the connection warning; reload to retry, or use a fresh OS launcher link.', 'error');
-      error.setAttribute('role', 'alert'); output.replaceChildren(error);
-    } else { output.setAttribute('aria-busy', 'true'); showOverviewProgress(state); }
+  if (finite && (!state.result || state.withheld)) {
+    output.setAttribute('aria-busy', state.failed || state.interrupted ? 'false' : 'true');
+    ReportLoading.show(output, state);
     return;
   }
   if (state.detail) {
@@ -244,13 +211,6 @@ function show(state) {
     ReportView.defaultUnit();
     state.tokenMix ||= new TokenMixView.View();
     state.tokenMix.update(state.result); state.tokenMix.attach(output);
-  } else if (state.withheld) {
-    const message = state.failed ? state.message : 'Retained report is over one hour old. Acquiring current history…';
-    const observed = new Date(CachedReports.observation(state.result)).toLocaleString();
-    const text = ReportView.element('p', `${message} Last successful observation: ${observed}.`);
-    text.setAttribute('role', state.failed ? 'alert' : 'status');
-    const bar = ReportView.element('progress'); bar.setAttribute('aria-label', 'Acquiring current report');
-    output.replaceChildren(...(state.loading ? [bar, text] : [text]));
   } else if (state.result) {
     // Connection/source status is not a new frozen report. Replacing its DOM
     // discards scroll, focus and selection during ordinary health checks.
@@ -285,44 +245,71 @@ function failure(code) {
     report_timeout: 'Report reached its 120-second limit; no empty result was substituted. Live continues. The CLI can scan without the Web job deadline.', cancelled: 'Report cancelled.',
     invalid_request: 'Invalid report scope or limits; no alternate scope was substituted.',
     session_catalog_changed: 'Session catalog changed. Use Latest sessions / restart browsing to avoid skipped or duplicate rows.',
-     pricing_unavailable: 'Reference pricing unavailable.', busy: 'Report service busy. Retry Refresh.'};
+     pricing_unavailable: 'Reference pricing unavailable.', busy: 'Report service busy. Retry when a slot is available.',
+     source_wait_timeout: 'Source startup did not recover within the bounded retry window. Check OpenCode, then Retry.',
+     report_slot_timeout: 'Report slots remained busy through the bounded retry window. Wait for another report to finish, then Retry.',
+     source_permission_denied: 'Permission denied reading the source. Correct source access before Retry.',
+     http_auth_failure: 'Source authentication failed. Restore OpenCode source authorization before Retry.',
+     registration_invalid: 'OpenCode source registration is invalid. Repair it before Retry.',
+     registration_unreadable: 'OpenCode source registration is unreadable. Check permissions before Retry.',
+     unsupported_version: 'This OpenCode source version is unsupported. Use a supported source version.',
+     unsupported_schema: 'This OpenCode source schema is unsupported. Use a supported source version.',
+     offline: 'Host is offline. Check the local host and reload.',
+     authorization_required: 'Browser authorization expired. Use a fresh OS launcher link.',
+     identity_changed: 'Host identity changed. Use a fresh OS launcher link.'};
   return errors[code] || 'Source/report unavailable. Check the local source and retry Refresh.';
 }
 async function acquire(state, background = false, prices = false) {
   if (state.loading || !hostState.writable) return;
   const request = state.request;
   state.loading = true;
+  const attempt = state.attempt = new ReportLoading.Attempt();
   state.priceRefreshing = prices; state.priceMessage = '';
   state.failed = false;
-  Object.assign(state, {percent: 0, progressSequence: 0, progressStart: 0, stagedProgress: false});
+  ReportLoading.reset(state);
   state.lastWork = null;
-  overviewProgress(state, {phase: 'queued'});
+  ReportLoading.observe(state, {phase: 'queued'});
   state.message = background ? '' : state.result ? 'Refreshing; last known snapshot retained until success.' : 'Loading snapshot…';
   show(state);
+  async function admit() {
+    while (true) {
+      attempt.check(hostState);
+      try {
+        state.active = (await api(prices ? '/api/models/refresh' : '/api/reports', prices ? {} : request,
+          attempt.controller.signal)).id;
+        state.progressSequence = 0;
+        return;
+      } catch (error) {
+        if (!ReportLoading.retryable(error)) throw error;
+        ReportLoading.waiting(state, error.message); show(state);
+        await attempt.backoff(error);
+      }
+    }
+  }
   try {
-    state.active = (await api(prices ? '/api/models/refresh' : '/api/reports', prices ? {} : request)).id;
+    await admit();
     show(state);
     while (true) {
-      const job = await api('/api/jobs/' + state.active);
+      attempt.check(hostState);
+      const job = await api('/api/jobs/' + state.active, undefined, attempt.controller.signal);
+      attempt.check(hostState);
       if (job.progress?.stage?.startsWith('date-')) state.lastWork = reportWork(job.progress);
       if (!['queued', 'running'].includes(job.status)) {
-        if (job.status !== 'complete' || !job.result || job.result.error) {
-          throw new Error(job.result?.error?.code || job.error || job.status);
+         if (job.status !== 'complete' || !job.result || job.result.error) {
+          const error = new Error(job.result?.error?.code || job.error || job.status);
+          error.retryable = job.result?.error?.retryable === true;
+          if (!ReportLoading.retryable(error)) throw error;
+          state.active = null; ReportLoading.waiting(state, error.message); show(state);
+          await attempt.backoff(error); await admit(); continue;
         }
         if (hostState.terminal) break;
          if (state.section === 'token-mix' && !TokenMixView.valid(job.result)) throw new Error('report_unavailable');
          if (state.section === 'ai-stats' && !AIStatsView.valid(job.result)) throw new Error('report_unavailable');
          if (state.section === 'comparisons' && !ComparisonsView.valid(job.result)) throw new Error('report_unavailable');
          if (state.section === 'comparisons') state.orderRetried = false;
-        // Partial data is usable but never a successful 100% acquisition. Paint
-        // completion only after the whole successful result has arrived.
-        if (state.section === 'models' && !state.result && job.result.source.status === 'acquired') {
-          state.percent = 100;
-          if (state === current) {
-            showOverviewProgress(state);
-            if (typeof requestAnimationFrame === 'function') await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-          }
-        }
+         const initial = !state.result || state.withheld;
+         if (state.section === 'models' && (!job.result.view || job.result.view.kind !== 'normal' ||
+             !['acquired', 'partial'].includes(job.result.source?.status))) throw new Error('report_unavailable');
         if (state.section === 'ai-stats') {
           state.statsResults ||= new Map();
           for (const row of job.result.view.ai_stats) {
@@ -331,24 +318,26 @@ async function acquire(state, background = false, prices = false) {
               state.statsResults.set(row.period, job.result);
           }
           state.result = state.statsResults.get(state.period) || null;
-        } else state.result = job.result;
+         } else state.result = job.result;
+         // A usable partial response finishes this attempt, not source coverage.
+          if (state.result) {
+            state.percent = 100; state.stage = state.stageLabel = 'Report ready';
+            if (initial && state === current && state.loader?.root.isConnected)
+              await ReportLoading.paintCompletion(state, attempt.controller.signal);
+          }
         state.withheld = historical(state) && state.result && CachedReports.entry(state.result, state.section) === 'withhold';
         state.pages = {};
         state.message = historical(state) ? '' : 'Snapshot captured. Navigation and source activity do not update it.';
         break;
       }
-       if (!background) state.message = `${job.status}: ${reportWork(job.progress)}. ${state.result ? 'Last known snapshot retained.' : ''}`;
-        overviewProgress(state, job.progress);
+         ReportLoading.observe(state, job.progress);
         if (state.section === 'ai-stats' && (!state.result || state.withheld)) state.lastWork = reportWork(job.progress);
       // Do not redraw a retained report while polling: keep selection and scroll useful.
-       if (state === current && !background) {
-        notice.textContent = state.message;
-         if (state.section === 'models' && !state.result) show(state);
-         if (['ai-stats', 'comparisons'].includes(state.section)) show(state);
-      }
-      await new Promise(resolve => setTimeout(resolve, 500));
+        if (state === current && !background) show(state);
+       await attempt.pause(500);
     }
   } catch (error) {
+    if (attempt.reason) error = new Error(attempt.reason);
     if (state.section === 'comparisons' && error.message === 'session_catalog_changed' && !state.orderRetried) {
       state.request = {kind: 'comparisons'}; state.orderReset = true; state.retryOrder = true;
       state.orderRetried = true;
@@ -357,19 +346,20 @@ async function acquire(state, background = false, prices = false) {
       `${state.result ? 'STALE — last known snapshot retained. ' : ''}${failure(error.message)}`;
     if (error.message === 'report_timeout' && state.lastWork) state.message += ` Last observed work: ${state.lastWork}.`;
     if (prices) state.priceMessage = state.message;
-    if (state.section === 'models' && !prices) {
-      state.message = state.message.replaceAll('retry Refresh', 'reload to retry').replaceAll('Retry Refresh', 'Reload to retry');
-      if (!/reload/i.test(state.message)) state.message += ' Reload to retry.';
+    state.failed = error.message !== 'suspended';
+    if (!state.failed) { state.attempted = false; state.message = ''; }
+    if (error.message === 'report_timeout' && state.active) {
+      try { await api('/api/jobs/' + state.active + '/cancel', {}); } catch (_) { /* Host owns its hard deadline too. */ }
     }
-    state.failed = true;
   } finally {
-    state.loading = false; state.priceRefreshing = false; state.active = null; state.checkedAt = Date.now();
+    state.loading = false; state.priceRefreshing = false; state.active = null; state.attempt = null; state.checkedAt = Date.now();
     show(state); scheduleCachedReport();
     if (state.retryOrder && state === current && !document.hidden && hostState.writable) {
       state.retryOrder = false; acquire(state);
     }
     if (state === current && state.section === 'ai-stats' && !state.result && !state.failed && !document.hidden &&
-        JSON.stringify(request) !== JSON.stringify(state.request)) acquire(state);
+         JSON.stringify(request) !== JSON.stringify(state.request)) acquire(state);
+    if (attempt.reason === 'suspended' && state === current) firstReport(state);
   }
 }
 function navigate() {
@@ -406,13 +396,14 @@ function navigate() {
     // Reuse only matching finite observations. Live Accounts never owns a job.
     const cached = request && [...views.values()].find(value => value.result && JSON.stringify(value.request) === JSON.stringify(request));
     views.set(key, {request, live: route.live, section: route.section, result: cached?.result || null,
-      pages: {}, loading: false, active: null, explicit: route.explicit,
+      pages: {}, loading: false, active: null,
       message: route.live ? 'Live acquisition starting; one runtime shared across tabs.' : cached ? 'Snapshot captured. Reused frozen observation.' : request ? 'Capture/Refresh to acquire this report.' : 'Choose a report scope.'});
   }
   const previous = current;
   if (current?.detail) current.detail.detach();
   if (current?.catalog) current.catalog.detach();
   current = views.get(key);
+  if (previous !== current && previous?.attempt && !previous.active) previous.attempt.cancel('suspended');
   if (current.section === 'ai-stats') {
     current.period ||= '30-days'; current.statsResults ||= new Map();
     current.request = {kind: 'ai-stats', stats_scope: ['all', 'month'].includes(current.period) ? current.period : '30-days'};
@@ -435,11 +426,7 @@ function navigate() {
   scheduleCachedReport();
   if (redirected) document.getElementById('content').focus();
   if (route.section === 'settings' && csrf && !hostState.terminal) settingsView.read();
-  if (csrf && hostState.writable && current.request && !current.explicit && !current.detail && !current.result && !current.attempted &&
-       (!['ai-stats', 'comparisons'].includes(current.section) || !document.hidden)) {
-    current.attempted = true;
-    if (!['ai-stats', 'comparisons'].includes(current.section) || !document.hidden) acquire(current);
-  }
+  firstReport();
 }
 async function connect() {
   try {
@@ -459,17 +446,15 @@ async function connect() {
         miniWatch?.update(liveValue);
         if (current?.live) { current.message = 'Live observation; source/account freshness shown below.'; show(current); }
         for (const job of progress?.jobs || []) {
-           if (current?.active === job.id && !(historical(current) && current.result && !current.withheld) && current.section !== 'ai-stats') {
-             notice.textContent = `${job.status}: ${job.progress?.phase || job.status} · ${job.progress?.completed ?? 0}${job.progress?.total == null ? '' : '/' + job.progress.total}`;
-              if (current.section === 'models' && !current.result && ['queued', 'running'].includes(job.status)) {
-               overviewProgress(current, job.progress || {}); show(current);
-             }
-           }
+            if (current?.active === job.id && !ReportLoading.sections.includes(current.section)) {
+              notice.textContent = `${job.status}: ${job.progress?.phase || job.status} · ${job.progress?.completed ?? 0}${job.progress?.total == null ? '' : '/' + job.progress.total}`;
+            }
+            if (current?.active === job.id && ReportLoading.sections.includes(current.section) &&
+                (!current.result || current.withheld) && ['queued', 'running'].includes(job.status)) {
+              ReportLoading.observe(current, job.progress || {}); show(current);
+            }
         }
-        if (hostState.writable && current?.request && !current.explicit && !current.result && !current.attempted &&
-             (!['ai-stats', 'comparisons'].includes(current.section) || !document.hidden)) {
-          current.attempted = true; acquire(current);
-        }
+         firstReport();
       }, connectionStatus);
     }
     navigate();
@@ -487,6 +472,7 @@ refresh.addEventListener('click', () => {
 });
 cancel.addEventListener('click', async () => {
   const state = current;
+  state?.attempt?.cancel();
   if (state?.active) {
     try { await api('/api/jobs/' + state.active + '/cancel', {}); }
     catch (_) { if (state === current) notice.textContent = 'Cancellation unavailable.'; }
@@ -508,12 +494,11 @@ window.addEventListener('pageshow', () => liveConnection?.resync());
 window.addEventListener('offline', () => connectionStatus('OFFLINE — last observation retained, not live. Check the connection and reload to retry.', {kind: 'offline', writable: false}));
 window.addEventListener('online', () => liveConnection?.resync());
 document.addEventListener('visibilitychange', () => {
+  if (document.hidden && current?.attempt && !current.active) current.attempt.cancel('suspended');
   if (!document.hidden) liveConnection?.resync();
   if (!document.hidden) {
     enterCachedReport(current);
-    if (['ai-stats', 'comparisons'].includes(current?.section) && !current.result && !current.attempted) {
-      current.attempted = true; acquire(current);
-    }
+    firstReport();
   }
   scheduleCachedReport();
 });

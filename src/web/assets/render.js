@@ -238,7 +238,8 @@ const ReportView = (() => {
     const fetched = element('span', 'Prices last fetched: ' + (view.pricing_retrieved_at_ms > 0 ? display(view, 'pricing_retrieved_at_ms') : 'Unavailable'));
     const progress = element('span'); progress.setAttribute('role', 'status');
     state.priceControls = writable => {
-      refresh.disabled = !writable || !!state.loading;
+      refresh.disabled = !writable || !!state.priceRefreshing;
+      refresh.setAttribute('aria-disabled', String(!writable || !!state.loading));
       text(progress, state.priceRefreshing ? 'Refreshing…' : state.priceMessage || '');
     };
     refresh.addEventListener('click', () => state.refreshPrices?.());

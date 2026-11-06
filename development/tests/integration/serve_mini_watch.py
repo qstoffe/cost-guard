@@ -24,6 +24,7 @@ from development.tests.fixtures.token_mix_views import TokenMixJobs
 from development.tests.fixtures.models_refresh import ModelsRefreshJobs
 from development.tests.fixtures.ai_stats_views import AIStatsJobs
 from development.tests.fixtures.matched_inputs import ComparisonsJobs
+from development.tests.fixtures.report_loading import LoadingJobs
 from src.application.live_projection import project_live
 from src.application.display import with_display
 from src.application.projection import accounts as project_accounts
@@ -50,6 +51,8 @@ def main():
             jobs = AIStatsJobs()
         if sys.argv[2:] == ['--comparisons']:
             jobs = ComparisonsJobs()
+        if sys.argv[2:] == ['--report-loading']:
+            jobs = LoadingJobs()
         if sys.argv[2:] == ['--models-refresh']:
             (root / 'pricing-mode.txt').write_text('unchanged')
             jobs = ModelsRefreshJobs(root)
@@ -99,6 +102,21 @@ def main():
                     host.stop()
                     print('{"ok":true}', flush=True)
                     break
+                if command.startswith('loading-') and sys.argv[2:] == ['--report-loading']:
+                    action = command.removeprefix('loading-')
+                    if action == 'hold':
+                        jobs.mode = 'hold'
+                        jobs.step = 0
+                    elif action == 'complete':
+                        jobs.mode = 'complete'
+                    elif action == 'step':
+                        jobs.step += 1
+                    elif action == 'busy':
+                        jobs.busy = 2
+                    else:
+                        raise ValueError('unknown_loading_fixture_action')
+                    print('{"ok":true}', flush=True)
+                    continue
                 if command == 'jobs-status' and sys.argv[2:] == ['--ai-stats']:
                     print(json.dumps(jobs.updates()), flush=True)
                     continue

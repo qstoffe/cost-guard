@@ -44,6 +44,10 @@ Arrows show calls/consumption, not a single linear execution pipeline. `src/web/
 Finite Web Token Mix and AI Stats reuse disposable revision-keyed compact request
 facts/category valuations (`reports/token_mix_cache.py`); `reports/ai_stats.py` adds
 qualified root timing, while `analysis/ai_stats.py` owns the ten canonical metrics.
+The four finite report pages share `assets/report-loading.js` for observed
+determinate progress and bounded cancelable source/slot waiting. HTTP consumes
+the existing source-startup owner's detached readiness proof, not Live writability;
+no acquisition, wake, source/valuation or CLI/Live boundary is added.
 Token Mix retains CLI grouping semantics. Shared `assets/cached-reports.js` governs
 5/15-minute visible-page checks and one-hour re-entry withholding outside Live.
 Browser sorting/coherent replacement never acquire or revalue usage. This scoped

@@ -220,13 +220,29 @@ secondary column; boundaries/operators/markers never rank prices. Dates compare
 chronologically, text uses case-insensitive locale order, missing values are last
 in either direction, and ties retain original order. Filters preserve chosen sorting.
 
-First acquisition shows only branding/navigation and a centered progress bar with
-one short stage line. Its **≈ percentage is a bounded stage-weighted estimate**, not
-a measured global total; actual stage counts appear when supplied. It never moves
-backwards or reaches 100 before a complete, usable source result. Failed/partial
-acquisition stops activity and gives actionable feedback; missing data is not zero.
-Completed units advance separate sample/account-history/preparation bands. Unknown
-sampling totals stay estimated; blocked I/O can pause. No extra scan or timed advance.
+Models, Token Mix, AI Stats and Comparisons automatically start their existing finite
+report on the first visible eligible entry. They share one centered determinate
+**0–100%** bar, integer percentage and short work description below it. Percentages
+use bounded stage weights, not a measured global denominator; actual local counts
+appear when supplied. They never advance from elapsed time or move backwards within
+an attempt. Opaque I/O can hold the bar while its work remains identified. Only an
+applied usable result finishes at 100%; usable partial results still show their
+separate partial/unavailable coverage warnings. Failure/cancellation/timeout never
+claim successful completion. Stable nodes, reserved stage height, tabular numerals
+and stage-only polite announcements avoid poll-by-poll jumping or announcement spam.
+
+Authenticated **Waiting for source…** and **Waiting for report slot…** stages use
+cancelable 500ms-to-4s backoff, at most eight retries and a 120-second total attempt
+budget. The host's one existing startup owner supplies detached typed admission
+proof, not merely HTTP health or the Live stream's writable flag. Transient typed
+source failures can retry; permission/authentication, unsupported source, invalid
+data, real report failures and exhausted waits remain actionable errors. **Retry**
+is recovery-only, not an initial Load button. A Live stream reconnect alone does not
+invalidate successful finite HTTP work. No extra wake, scan, hidden-page preload,
+new queue, result-size exception or extension of the server's 120-second job deadline
+is introduced. Unadmitted waits suspend on navigation/hiding; already admitted work
+keeps its original bounded lifecycle. A small **Updating…** line accompanies quiet
+refresh without replacing usable data, sorting, selection, scroll or focus.
 Reload captures Models using normal pricing TTL caching; Back/Forward to a retained view and live host
 heartbeats do not refresh its frozen report or reset its table scroll/selection.
 
@@ -431,12 +447,12 @@ acquisition or client-side valuation. [Verification and limits](../development/j
 | Session detail | `/#/sessions/<id>` (legacy `/live` alias) | Complete chronological live history, no user-facing pages or modes; links from session names and Watch |
 | AI Stats | `/#/ai-stats` (legacy `/#/cost-per-hour` alias) | Ten baseline cards plus a conditional matched-input fact, five periods, automatic 30-day first load, lazy broader history, quiet ~15-minute visible-page checks and shared one-hour re-entry policy |
 | Comparisons | `/#/comparisons` | All available root history, exact first-input matching, ten groups/page with every individual repetition, first-prompt metrics and qualified local gaps; quiet ~five-minute visible-page checks |
-| Historical Token Mix | `/#/token-mix` | Explicit **Load Token Mix**, then quiet ~five-minute visible-page checks. One total/token-volume summary and two 13-column model/publisher tables split Input / Cached input / Cache write / Output percentages and category CCost, with Prompts/Calls/Tokens/Total CCost. Every column sorts locally by exact source values; all rows and full names remain readable through horizontal panning. Partial/unavailable coverage stays explicit. |
+| Historical Token Mix | `/#/token-mix` | Automatic visible first load, then quiet ~five-minute visible-page checks. One total/token-volume summary and two 13-column model/publisher tables split Input / Cached input / Cache write / Output percentages and category CCost, with Prompts/Calls/Tokens/Total CCost. Every column sorts locally by exact source values; all rows and full names remain readable through horizontal panning. Partial/unavailable coverage stays explicit. |
 | Web Settings | `/#/settings` | Theme, CCost display, Mini position/size and Quota display; inherited/explicit intent, authenticated narrow config read/write, no report acquisition |
 
 Generic finite report tables retain search/filter/page controls and ascending/descending/original-order sorting. Token Mix instead has independent ascending/descending table sorts, default Total CCost descending, without filters, a pager or nested vertical scrolling. Header text owns shared hover/focus/touch help; no question-mark prefixes or icons are used. Models uses its independent filter/multi-sort contract; Watch keeps fixed chronological cards. Accounts and Sessions have no report toolbar, search, filters or snapshot controls. Sessions' catalog headings request full-catalog server sorting, not presentation-only page sorting. Detail has no sort or pager. Decimal keys stay exact and unknowns sort last.
 
-Token Mix retains deliberate **Load Token Mix** first acquisition, bounded progress/cancel and its approximately **five-minute** active-visible cadence. Hidden tabs and other routes suspend new checks. Unchanged source revisions reuse disposable compact request facts and canonical category valuations; only changed/new/late-updated roots need history acquisition, while removed roots disappear. Price/config/analysis changes invalidate the relevant facts; availability changes regroup the same shown history. Source catalogs are still read to discover revisions, not trusted as usage. Global fork deduplication, publisher grouping and pricing tiers remain CLI-owned semantics. Host jobs coalesce in-flight requests and briefly reuse completed observations across tabs without relabeling observation time. No new account polling, inference, browser history ledger or unconditional periodic full scan is introduced.
+Token Mix uses automatic visible first acquisition, shared bounded progress/cancel and its approximately **five-minute** active-visible cadence. Hidden tabs and other routes suspend new checks. Unchanged source revisions reuse disposable compact request facts and canonical category valuations; only changed/new/late-updated roots need history acquisition, while removed roots disappear. Price/config/analysis changes invalidate the relevant facts; availability changes regroup the same shown history. Source catalogs are still read to discover revisions, not trusted as usage. Global fork deduplication, publisher grouping and pricing tiers remain CLI-owned semantics. Host jobs coalesce in-flight requests and briefly reuse completed observations across tabs without relabeling observation time. No new account polling, inference, browser history ledger or unconditional periodic full scan is introduced.
 
 During ordinary Token Mix refresh the accepted summary and both tables remain usable. Complete results reconcile together in place, preserving independent sorts, Credits/USD, rows, focus and scroll/pan anchors. Failure retains the actual old observation with concise update-delayed feedback; it never becomes live merely because HTTP works. Fully unavailable values remain N/A; partial costs/volumes use readable **Partial**, not CLI question-mark notation. Deleted/pruned history stays unavailable. Timeout/cancellation/empty history remain distinct; Live and its account scheduler continue independently. URL fragments contain only scope/locators, never prompt content.
 

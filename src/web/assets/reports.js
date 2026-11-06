@@ -26,7 +26,7 @@ const ReportRoutes = (() => {
       request = null;
     }
     return {title, section: path === 'live' ? 'watch' : path.split('/')[0], request, live: ['live', 'watch', 'accounts'].includes(path),
-      catalog: path === 'sessions', explicit: path === 'token-mix', params};
+      catalog: path === 'sessions', params};
   }
   function controls(parent, route) {
     parent.replaceChildren();

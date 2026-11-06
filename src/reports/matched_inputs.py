@@ -58,7 +58,8 @@ def build_comparisons(service, request):
         service.metrics.add('comparison_cache_hits' if hit else 'comparison_cache_misses')
         if not hit:
             pending.append(root)
-        service.progress(WorkProgress('Checking match index', 'history', index + 1, len(roots)))
+        service.progress(WorkProgress('Checking match index', 'history', index + 1, len(roots), stage='history-cache'))
+    service.progress(WorkProgress('Updating changed first inputs', 'history', 0, len(pending), stage='history-load'))
     for start in range(0, len(pending), BATCH_SIZE):
         chunk = pending[start:start + BATCH_SIZE]
         snapshots = _snapshots(service, chunk)
@@ -81,7 +82,8 @@ def build_comparisons(service, request):
             service.cache_repository.put_many(writes, busy_timeout_ms=50)
         except (OSError, sqlite3.Error):
             pass
-        service.progress(WorkProgress('Updating changed first inputs', 'history', start + len(chunk), len(pending)))
+        service.progress(WorkProgress('Updating changed first inputs', 'history', start + len(chunk), len(pending), stage='history-load'))
+    service.progress(WorkProgress('Preparing matched groups', 'projection', stage='history-projection'))
     groups = grouped(runs)
     revision = dependency_signature((ALGORITHM, session_catalog_revision(service.selection.selected, sessions),
                                     sorted(revisions.items()), reference.analysis_signature))
