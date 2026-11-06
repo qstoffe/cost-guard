@@ -88,7 +88,8 @@ def build_ai_stats(service, scope):
             service._acquisition.revisions[root.session_id] = revisions[root.session_id]
         else:
             pending.append(root)
-        service.progress(WorkProgress('Checking history cache', 'history', index + 1, len(roots)))
+        service.progress(WorkProgress('Checking history cache', 'history', index + 1, len(roots), stage='history-cache'))
+    service.progress(WorkProgress('Updating changed roots', 'history', 0, len(pending), stage='history-load'))
     for start in range(0, len(pending), BATCH_SIZE):
         chunk = pending[start:start + BATCH_SIZE]
         service.prepare_roots(chunk, detail=True, progress_scope='date')
@@ -107,10 +108,10 @@ def build_ai_stats(service, scope):
             service.cache_repository.put_many(writes, busy_timeout_ms=50)
         except (OSError, sqlite3.Error):
             pass
-        service.progress(WorkProgress('Updating changed roots', 'history', start + len(chunk), len(pending)))
+        service.progress(WorkProgress('Updating changed roots', 'history', start + len(chunk), len(pending), stage='history-load'))
     gaps = migration_gap_notes(service.selection.migration_gap, start_ms=cutoff)
     complete = not service.selection.warnings and not gaps
-    service.progress(WorkProgress('Preparing AI Stats', 'projection'))
+    service.progress(WorkProgress('Preparing AI Stats', 'projection', stage='history-projection'))
     stats = tuple(replace(period_stats(evidence, lambda model, tokens: costs[model, tokens], period=name,
         start=left, now=service.now_ms, zone=service.timezone_id, source_complete=complete),
         matched=period_fact([run for run in matched if run], left, service.now_ms,

@@ -18,6 +18,7 @@ from development.tests.fixtures.opencode_v2_service import FakeV2Service, fixtur
 from development.tests.fixtures.session_snapshots import make_snapshot
 from development.tests.fixtures.watch_runtime import MutableSource, make_service
 from development.tests.fixtures.web_reports import finite_report
+from development.tests.fixtures.ai_stats_views import stats_report
 from src.sources.opencode_v2 import OpenCodeV2Source
 from src.sources.selection import SourceSelector
 from src.watch.acquisition import LiveAcquisition
@@ -44,7 +45,7 @@ def main():
             entered.set()
             if not release.wait(15):
                 raise RuntimeError("fixture_wake_gate_timeout")
-            if sys.argv[1:] == ["failure"]:
+            if sys.argv[1] == "failure":
                 return  # CLI success without readiness must not connect.
             registration.write_text(json.dumps({"url": service.url, "pid": 4242,
                 "password": "secret"}), encoding="utf-8")
@@ -65,7 +66,7 @@ def main():
         stack.enter_context(patch("src.web.source_startup.wake_cli_service", side_effect=wake))
         stack.enter_context(patch("src.web.composition.live_acquisition", side_effect=acquire))
         host = WebHost(ROOT)
-        host.jobs = ReportJobs(target=finite_report)
+        host.jobs = ReportJobs(target=stats_report if '--ai-stats' in sys.argv else finite_report)
         stack.callback(host.close)
         host.start()
         host.publish_ready()

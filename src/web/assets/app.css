@@ -366,9 +366,18 @@ footer { border-top: 1px solid var(--line); color: var(--muted); font-size: .8re
 [data-section="models"] .toolbar,
 [data-section="models"] #notice, [data-section="models"] #scope-controls,
 [data-section="models"] .report-search { display: none; }
-.overview-loading { display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 45vh; text-align: center; }
-.overview-loading progress { width: min(26rem, 90%); height: 1.1rem; }
-.overview-loading p { font-size: .9rem; margin-top: .5rem; }
+.report-loading { display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 45vh; text-align: center; }
+.report-loading progress { width: min(26rem, 90%); height: 1.1rem; }
+.report-loading-percent { font-variant-numeric: tabular-nums; margin: .5rem 0 0; }
+.report-loading-stage { font-size: .9rem; margin: .4rem 0 0; width: min(30rem, 95%); height: 3.6em; line-height: 1.2; overflow-wrap: anywhere; }
+.report-loading progress, .report-loading progress::-webkit-progress-value { transition: none; animation: none; }
+.comparison-groups + .pager { min-height: 2.5rem; }
+.comparisons-view .pager[hidden] { visibility: hidden; pointer-events: none; }
+[data-section="comparisons"] #notice:empty, [data-section="comparisons"] .report-search { display: none; }
+.comparisons-view > p { min-height: 3.6em; }
+.report-updating { display: none; color: var(--muted); font-size: .85rem; min-height: 1.5em; margin: 0; }
+[data-section="models"] .report-updating, [data-section="token-mix"] .report-updating,
+[data-section="ai-stats"] .report-updating, [data-section="comparisons"] .report-updating { display: block; }
 .overview-models { overflow-x: auto; background: var(--panel); scrollbar-color: var(--control-line) var(--surface); }
 .overview-model-table { display: grid; grid-template-columns: max-content max-content max-content minmax(max-content, 1fr); min-width: 100%; width: max-content; }
 .overview-model-table thead, .overview-model-table tbody, .overview-model-table tr { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; }

@@ -9,6 +9,7 @@ import json
 from pathlib import Path
 import socket
 from threading import Event, Thread
+from types import SimpleNamespace
 import time
 import unittest
 from unittest.mock import patch
@@ -128,7 +129,8 @@ class WebRuntimeTests(unittest.TestCase):
         self.assertIn(b'progress max="100" value="0"', body)
         self.assertIn(b'href="#/watch">Watch</a>', body)
         self.assertNotIn(b'href="#/live">Live</a>', body)
-        self.assertIn(b'aria-valuetext="Approximately 0 percent"', body)
+        self.assertIn(b'aria-valuetext="0 percent"', body)
+        self.assertNotIn('≈'.encode(), body)
         self.assertIn(b'/reports.js', body)
         self.assertIn("default-src 'none'", headers["Content-Security-Policy"])
         self.assertIn("worker-src 'none'", headers["Content-Security-Policy"])
@@ -138,6 +140,28 @@ class WebRuntimeTests(unittest.TestCase):
         self.assertEqual({"http": "ready"}, json.loads(self.request("/health")[2]))
         self.assertEqual(401, self.request("/api/status")[0])
         self.assertEqual(401, self.request("/api/reports", {"kind": "sessions"})[0])
+
+    def test_source_readiness_admission_is_typed_protected_and_does_not_allocate_jobs(self):
+        self.login()
+        startup = Mock()
+        owner = SimpleNamespace(source_startup=startup, stopping=Event(), nonce='test-instance', observations=Mock())
+        self.server.lifecycle = owner
+        for code, retryable in [('source_starting', True), ('connection_refused', True),
+                ('source_permission_denied', False), ('http_auth_failure', False), ('unsupported_schema', False)]:
+            with self.subTest(code=code):
+                startup.report_status.return_value = dict(ready=False, error=code, retryable=retryable)
+                status, _, body = self.request('/api/reports', {'kind': 'ai-stats'})
+                self.assertEqual(503, status)
+                self.assertEqual(dict(error=code, retryable=retryable), json.loads(body))
+                self.assertEqual([], self.jobs.updates()['jobs'])
+        status, _, _ = self.request('/api/reports', {'kind': 'ai-stats'}, authenticated=False)
+        self.assertEqual(401, status)
+        status, _, _ = self.request('/api/reports', {'kind': 'ai-stats'}, headers={'X-CG-CSRF': 'wrong'})
+        self.assertEqual(403, status)
+        startup.report_status.return_value = dict(ready=True, error=None, retryable=False)
+        status, _, body = self.request('/api/reports', {'kind': 'ai-stats'})
+        self.assertEqual(202, status)
+        self.assertTrue(json.loads(body)['id'])
 
     def test_price_refresh_uses_protected_empty_body_action_and_bounded_jobs(self):
         from src.web.jobs import ModelsPriceRefresh

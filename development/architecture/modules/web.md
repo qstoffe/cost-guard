@@ -7,6 +7,19 @@ Status: current
 
 ## Responsibility and ownership
 
+`assets/report-loading.js` owns the four finite pages' shared
+determinate loader, monotonic stage bands and bounded cancelable admission attempt.
+`app.js` starts only eligible visible routes, preserves quiet-refresh DOM and applies
+validated results atomically. Historical cache/load/projection observations are
+allowlisted by `application/service.py`; batch counts cannot consume global bands.
+The existing `source_startup.py` owner supplies detached typed `report_status()`
+proof to HTTP admission and status without a second selection or wake path. Real
+transient failures/429 use bounded backoff; terminal failures do not. Live stream
+reconnect is not source failure. Hidden documents cannot strand completion on a
+suspended animation frame. Existing process, result, priority, source, valuation,
+freshness and CLI/Live ownership boundaries remain unchanged. Current evidence and
+limits: [finite report loading](../../journal/web/report-loading.md).
+
 `assets/help.js` owns one text-only contextual-help controller per document,
 including Mini PiP. Shared passive buttons/adjacent cues preserve selection and
 action cursors; manual Popover, pointer transfer, focus/tap, Escape/light-dismiss and
@@ -29,7 +42,7 @@ failure retains the prior DOM/date. Mini help selects exactly primary-window Cap
 and `watch_reset` tokens; richer Full Watch/Accounts help and visible warnings remain.
 Evidence and the scoped split-verification decision: [Models pricing](../../journal/web/models-pricing.md).
 
-`src/web/assets/app.js` owns finite refresh/stale/cancel state and memory-only observations; Models keeps its frozen normal report. `reports.js` owns route resolution and explicit-only deep-history admission. Accounts bypasses finite jobs/report shell and consumes app-level retained Live, even without a Watch DOM. `account-cards.js` is the single Watch/Accounts subscription renderer: account-keyed membership, bound metric/reset/help updates, per-card signatures excluding the publication clock, shared physical-width cap and existing subgrid styles. Empty success clears membership; missing/failed empty publications retain usable cards with truthful warnings. Settings synchronize visible/detached roots without acquisition. `render.js` presents DTOs with exact Decimal/vector sorting; generic reports retain presentation search/50-row paging, while Models has independent catalog/version filters and complete document-scrolling rows. Totals never come from cells. Sessions bypasses finite jobs and the report shell: `sessions.js` renders six-column live catalog pages; `session.js` renders one ten-column complete chronological history. Both use intrinsic metric tracks, elastic title/preview and document vertical scrolling. Shared Watch `ContextLine` and contextual-help components consume canonical report context, not a browser estimator.
+`src/web/assets/app.js` owns finite refresh/stale/cancel state and memory-only observations; Models keeps its frozen normal report. `reports.js` owns route resolution; eligible visible finite pages acquire automatically through `app.js`, without hidden-page preloading. Accounts bypasses finite jobs/report shell and consumes app-level retained Live, even without a Watch DOM. `account-cards.js` is the single Watch/Accounts subscription renderer: account-keyed membership, bound metric/reset/help updates, per-card signatures excluding the publication clock, shared physical-width cap and existing subgrid styles. Empty success clears membership; missing/failed empty publications retain usable cards with truthful warnings. Settings synchronize visible/detached roots without acquisition. `render.js` presents DTOs with exact Decimal/vector sorting; generic reports retain presentation search/50-row paging, while Models has independent catalog/version filters and complete document-scrolling rows. Totals never come from cells. Sessions bypasses finite jobs and the report shell: `sessions.js` renders six-column live catalog pages; `session.js` renders one ten-column complete chronological history. Both use intrinsic metric tracks, elastic title/preview and document vertical scrolling. Shared Watch `ContextLine` and contextual-help components consume canonical report context, not a browser estimator.
 
 Token Mix, AI Stats and Comparisons are cached historical finite views, not Live owners.
 `token-mix.js` owns a retained compact summary and exactly two 13-column
@@ -354,7 +367,7 @@ FR 000537 unifies the former Overview and Models at `#/models`; `#/overview` and
 
 One opt-in `ModelCatalogProjection` freezes full catalog, selectable publisher/name membership, notices and candidate-local supersession from the same acquired sample, without new availability/history/account calls. Every filter combination uses the same full-catalog cheapest-positive base; CLI ranking/denominator remain unchanged. Defaults: all-priced off, latest-only on, exact Relative CCost descending. Candidate scope precedes conservative supersession and stable exact tier-vector sorting; missing ratios/dates stay last. Shift mouse/keyboard supports ordered multi-sort with primary-only aria-sort; ordinary click/touch replaces keys, with no persistent additive mode or extra sort control. Unknown prices remain rows; unverified fail-open and verified-empty remain distinct, never subscription entitlement proof. Prepared tokens align tiers without browser valuation.
 
-`app.js` retains approximate honest initial progress and heartbeat-stable frozen DOM. `test_web_models.py`, `test_web_overview.py`, `integration/web_models.cjs` and `integration/web_views.cjs` cover filters, uncapped rows, exact tiers, warnings, route/focus and shared acquisition. `integration/serve_web_models.py` is a bounded loopback fixture for the integrated browser; explicit-browser `integration/probe_web_models.py` requires independent approval. Historical [Overview](../governance/verification/web-minimal-overview.md) and [Models](../governance/verification/models-display-parity.md) results are not current UI acceptance; [current evidence](../../journal/web-overview.md) distinguishes actual checks from physical/native limits. No security/lifecycle/CLI valuation boundary changes.
+`report-loading.js` retains bounded observed initial progress without an approximation glyph; `app.js` keeps heartbeat-stable frozen DOM. `test_web_models.py`, `test_web_overview.py`, `test_web_loading.py`, `integration/web_models.cjs` and `integration/web_views.cjs` cover filters, uncapped rows, exact tiers, warnings, route/focus and shared acquisition. `integration/serve_web_models.py` is a bounded loopback fixture for the integrated browser; hidden `integration/probe_report_loading.cjs` checks the four finite loaders. Historical [Overview](../governance/verification/web-minimal-overview.md) and [Models](../governance/verification/models-display-parity.md) results are not current UI acceptance; [current evidence](../../journal/web/report-loading.md) distinguishes actual checks from physical/native limits. No security/lifecycle/CLI valuation boundary changes.
 
 ## Allowed dependencies
 
@@ -367,8 +380,9 @@ latest observation per 100ms plus final flush; host-assigned per-job sequences r
 stale polling/SSE labels. Each consuming stage owns its own estimated band, without
 serializing the existing availability/account prefetch. Blocked source batches,
 provider waits and projection calls without internal observations can pause honestly.
-Only receipt of a full acquired result paints 100%; partial/error/lifecycle semantics
-and frozen-navigation acquisition remain unchanged. Focused tests and headless real
+Only an applied usable result paints 100%; a usable partial result finishes the
+attempt without claiming full coverage. Errors/lifecycle interruptions do not reach
+100%, and frozen-navigation acquisition remains unchanged. Focused tests and headless real
 Normal-workflow browser fixture: `integration/web_minimal_overview.py`.
 
 The former Normal-only Accounts report is no longer a route consumer of `overviewAccounts`; report DTO/helper compatibility remains separately tested by `test_web_accounts.py`, `fixtures/account_views.py` and `integration/web_accounts.cjs`. Current shared live coverage is `integration/web_watch_summary.cjs`, `web_views.cjs`, hidden `probe_accounts_live.cjs` and read-only `probe_web_live.py --accounts --watch-cards`. [Current evidence](../../journal/web/accounts-live.md) supersedes historical [frozen Accounts parity](../governance/verification/accounts-display-parity.md). No acquisition, formula, source/privacy or application/presentation boundary changes.

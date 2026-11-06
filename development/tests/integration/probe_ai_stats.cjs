@@ -140,7 +140,6 @@ async function main() {
     for(const section of ['ai-stats','token-mix']) {
       await evaluate(`location.hash='#/${section}'`);
       await until(`current?.section==='${section}'`);
-      if(section==='token-mix') await evaluate(`acquire(current)`);
       await until(`current.result && !current.loading`);
       await evaluate(`window.__accepted=current.result; window.__dom=output.firstChild;
         current.result.observed_at_ms=Date.now()-3600001;

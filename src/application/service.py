@@ -25,7 +25,8 @@ ProgressSink = Callable[[ProgressEvent], None]
 _PHASES = frozenset({"pricing", "catalog", "history", "projection", "quotas", "availability", "finalizing"})
 _STAGES = frozenset({"sampling", "availability", "comparison", "models", "quotas", "account-cache",
                      "account-load", "account-analysis", "account-projection", "finalizing",
-                     "date-cache", "date-load", "date-catalog-before", "date-messages", "date-catalog-after", "date-analysis"})
+                     "date-cache", "date-load", "date-catalog-before", "date-messages", "date-catalog-after", "date-analysis",
+                     "history-cache", "history-load", "history-projection"})
 
 
 class ReportApplication:
@@ -124,10 +125,12 @@ class ReportApplication:
             recovered("application-report")
             return ReportResult(self._instance_id, sequence, now, scope, source, view)
         except SourceError as exc:
+            permission = exc.exception_type == 'PermissionError'
             return ReportResult(self._instance_id, sequence, now, scope,
                                 record(status="error", observed_at_ms=now, revisions=(),
                                        atomicity="per_root_snapshot"),
-                                error=ReportError(exc.code.value, exc.readiness_retryable))
+                                error=ReportError('source_permission_denied' if permission else exc.code.value,
+                                                  exc.readiness_retryable and not permission))
         except PricingUnavailableError:
             return ReportResult(self._instance_id, sequence, now, scope, unknown,
                                 error=ReportError("pricing_unavailable", True))

@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.189 — 2026-11-06
+
+- Models, Token Mix, AI Stats and Comparisons automatically load on visible first entry with one stable centered determinate percentage/stage component. Observed stage counts advance monotonically without timers or approximation glyphs; usable partial results finish the attempt without claiming full coverage. Typed source readiness and busy slots use bounded cancelable backoff, while permanent errors remain actionable. Quiet refresh retains data, focus and paging with a small updating indicator; finite job/security/deadline and historical freshness limits are unchanged.
+
 ## v80.188 — 2026-11-06
 
 - Mini Watch uses name-only Session and a single CCost (Total) cell showing prompt cost followed by the full-session cost in parentheses in both four-column tables. Running prompt numbers move to Session help; Earlier cost help exposes that latest prompt’s model, effort, duration, calls and relevant attribution/outcome caveats. Existing canonical scopes, Activity/Ctx, shared scrolling and header-based opening fit are unchanged.

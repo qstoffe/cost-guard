@@ -51,9 +51,7 @@ async function main() {
     await until(`typeof csrf!=='undefined' && csrf && hostState.writable`);
     await evaluate(`location.hash='#/token-mix'`);
     await until(`current?.section==='token-mix'`);
-    assert.equal(await evaluate(`!!current.result`), false, 'navigation alone does not load deep history');
-    await until(`!document.getElementById('refresh').disabled`);
-    await evaluate(`document.getElementById('refresh').click()`);
+    assert.equal(await evaluate(`document.getElementById('refresh').hidden`),true,'no manual first-load action');
     await until(`current?.result?.view?.kind==='token-mix' && !current.loading`);
     const loadedAt=await evaluate(`current.checkedAt`);
     const rows=await evaluate(`current.result.view.model_token_mix`);

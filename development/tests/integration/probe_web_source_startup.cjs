@@ -25,8 +25,8 @@ async function main() {
   const deadline = setTimeout(() => child.kill(), 60000);
   const cases = [];
   try {
-    for (const mode of ['success','failure']) {
-      const server = spawn(python || 'py', [...(python ? [] : ['-3']),'development/tests/integration/serve_web_source_startup.py',mode],
+    for (const mode of ['success','failure','ai-stats']) {
+      const server = spawn(python || 'py', [...(python ? [] : ['-3']),'development/tests/integration/serve_web_source_startup.py',mode==='ai-stats'?'success':mode,...(mode==='ai-stats'?['--ai-stats']:[])],
         {windowsHide:true,stdio:['pipe','pipe','pipe']});
       const lines = readline.createInterface({input:server.stdout})[Symbol.asyncIterator]();
       let errors = ''; server.stderr.on('data', chunk => errors += chunk.toString());
@@ -38,29 +38,38 @@ async function main() {
         for (let index=0;index<2;index++) {
           const {targetId} = await command('Target.createTarget',{url:'about:blank'});
           const {sessionId} = await command('Target.attachToTarget',{targetId,flatten:true});
+          await command('Target.activateTarget',{targetId});
           const evaluate = async expression => {
             const value = await command('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true},sessionId);
             assert.equal(value.exceptionDetails,undefined,JSON.stringify(value.exceptionDetails));
             return value.result.value;
           };
           await command('Page.navigate',{url:index ? url.split('/#')[0]+'/#/watch' : url},sessionId);
+          if (!index && mode==='ai-stats') await evaluate(`new Promise(resolve=>{const end=Date.now()+5000;const check=()=>{
+            if(typeof csrf!=='undefined'&&csrf){location.hash='#/ai-stats';resolve(true);}else if(Date.now()>end)resolve(false);else setTimeout(check,20);};check();})`);
           await evaluate(`new Promise(resolve=>{const end=Date.now()+8000;const check=()=>{
             if(document.getElementById('host-warning')?.textContent==='Starting OpenCode server…')resolve(true);
-            else if(Date.now()>end)resolve(false);else setTimeout(check,20);};check();})`).then(value=>assert.equal(value,true));
+            else if(Date.now()>end)resolve(false);else setTimeout(check,20);};check();})`).then(async value=>assert.equal(value,true,
+              JSON.stringify({mode,index,errors,state:await evaluate(`({warning:document.getElementById('host-warning')?.textContent,status:document.getElementById('status')?.textContent,section:typeof current==='undefined'?null:current?.section})`)})));
           tabs.push({targetId,sessionId,evaluate});
         }
         assert.equal(await tabs[0].evaluate(`document.getElementById('host-state').hidden`),false);
         assert.equal(await tabs[0].evaluate(`document.getElementById('status').getAttribute('role')`),'status');
         // Refresh/route changes remain responsive and cannot become launch authority.
+        await command('Target.activateTarget',{targetId:tabs[0].targetId});
+        assert.equal(await tabs[0].evaluate(`new Promise(resolve=>{const end=Date.now()+3000;const check=()=>{
+          if(current.stage==='Waiting for source…')resolve(true);else if(Date.now()>end)resolve(false);else setTimeout(check,20);};check();})`),true);
+        const waitingCode = await tabs[0].evaluate(`api('/api/status').then(value=>value.report_source.error)`);
+        assert.equal(waitingCode,'source_starting');
         await tabs[0].evaluate(`location.hash='#/settings';true`);
         await tabs[0].evaluate(`new Promise(resolve=>setTimeout(()=>resolve(document.body.dataset.section),50))`).then(value=>assert.equal(value,'settings'));
-        await tabs[0].evaluate(`location.hash='#/models';true`);
+        await tabs[0].evaluate(`location.hash='#/${mode==='ai-stats'?'ai-stats':'models'}';true`);
         server.stdin.write('counts\n');
         assert.deepEqual(JSON.parse((await lines.next()).value),{wake:1,acquire:0});
         server.stdin.write('release\n');
         const waitFor = expression => tabs[0].evaluate(`new Promise(resolve=>{const end=Date.now()+10000;const check=()=>{
           if(${expression})resolve(true);else if(Date.now()>end)resolve(false);else setTimeout(check,30);};check();})`);
-        if (mode==='success') {
+        if (mode!=='failure') {
           const complete = await waitFor(`current?.result && !current.loading`);
           assert.equal(complete,true,await tabs[0].evaluate(`JSON.stringify({notice:document.getElementById('notice').textContent,result:document.getElementById('result').textContent,status:document.getElementById('status').textContent})`)+errors);
           assert.equal(await waitFor(`document.getElementById('host-state').hidden && document.getElementById('status').textContent==='Live connected.'`),true);
@@ -71,10 +80,10 @@ async function main() {
         await command('Page.reload',{},tabs[1].sessionId);
         await tabs[1].evaluate(`new Promise(resolve=>setTimeout(()=>resolve(true),200))`);
         server.stdin.write('counts\n'); const counts = JSON.parse((await lines.next()).value);
-        assert.equal(counts.wake,1); assert.equal(counts.acquire,mode==='success'?1:0);
+        assert.equal(counts.wake,1); assert.equal(counts.acquire,mode!=='failure'?1:0);
         for (const tab of tabs) await command('Target.closeTarget',{targetId:tab.targetId});
         cases.push({mode,startingVisible:true,accessibleStatus:true,navigationResponsive:true,
-          automaticReadiness:mode==='success',truthfulFallback:mode==='failure',wakeCount:counts.wake});
+          automaticReadiness:mode!=='failure',truthfulFallback:mode==='failure',wakeCount:counts.wake,waitingCode});
       } finally {
         server.stdin.end('stop\n');
         await new Promise(resolve=>server.once('exit',resolve));

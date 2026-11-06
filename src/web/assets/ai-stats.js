@@ -67,12 +67,9 @@ const AIStatsView = (() => {
       const row = state.result?.view.ai_stats.find(item => item.period === state.period);
       if (!row || state.withheld) {
         if (this.content.contains(this.grid)) this.grid.remove();
-        this.status.textContent = state.failed ? state.message + (state.result ?
-          ` Last successful observation: ${new Date(CachedReports.observation(state.result)).toLocaleString()}. Retained data are stale and withheld.` : '') :
-          state.loading ? (state.lastWork || 'Acquiring available AI history…') : 'Waiting to acquire AI history…';
-        if (state.loading && !this.content.querySelector('progress')) {
-          const bar = e('progress'); bar.setAttribute('aria-label', 'Acquiring AI Stats'); this.content.replaceChildren(bar);
-        } else if (!state.loading) this.content.replaceChildren();
+        ReportView.text(this.status, state.withheld ?
+          `Retained data are stale and withheld. Last successful observation: ${new Date(CachedReports.observation(state.result)).toLocaleString()}.` : '');
+        ReportLoading.show(this.content, state);
         return;
       }
       this.status.textContent = state.failed ? state.message : '';

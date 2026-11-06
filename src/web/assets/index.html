@@ -3,7 +3,7 @@
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Cost Guard Web Beta</title><link rel="stylesheet" href="/app.css">
 <link rel="icon" href="/favicon-cg1.ico" type="image/x-icon" sizes="16x16 20x20 24x24 32x32 48x48">
-<script src="/help.js" defer></script><script src="/render.js" defer></script><script src="/token-mix.js" defer></script><script src="/cached-reports.js" defer></script><script src="/ai-stats.js" defer></script><script src="/comparisons.js" defer></script><script src="/account-cards.js" defer></script><script src="/watch.js" defer></script><script src="/reports.js" defer></script><script src="/live.js" defer></script><script src="/session.js" defer></script><script src="/sessions.js" defer></script><script src="/settings.js" defer></script><script src="/mini.js" defer></script><script src="/app.js" defer></script></head>
+<script src="/help.js" defer></script><script src="/render.js" defer></script><script src="/report-loading.js" defer></script><script src="/token-mix.js" defer></script><script src="/cached-reports.js" defer></script><script src="/ai-stats.js" defer></script><script src="/comparisons.js" defer></script><script src="/account-cards.js" defer></script><script src="/watch.js" defer></script><script src="/reports.js" defer></script><script src="/live.js" defer></script><script src="/session.js" defer></script><script src="/sessions.js" defer></script><script src="/settings.js" defer></script><script src="/mini.js" defer></script><script src="/app.js" defer></script></head>
 <body data-section="models">
 <button class="skip" id="skip">Skip to report</button>
 <header><div class="brand"><span class="brand-mark" aria-hidden="true">CG</span><h1>Cost Guard <small>Web Beta<span id="product-version"></span></small></h1></div>
@@ -18,9 +18,10 @@
 <div class="toolbar"><h2 id="heading">Models</h2>
 <button id="refresh" class="primary" disabled>Refresh snapshot</button><button id="cancel" disabled>Cancel</button></div>
 <p id="notice" role="status">Cost Guard is starting. Establishing your private browser session before requesting data…</p>
+<p id="report-updating" class="report-updating" role="status"></p>
 <div id="scope-controls"></div>
 <div id="mini-watch-controls"><button id="mini-watch-toggle" type="button" aria-pressed="false" aria-describedby="mini-watch-feedback">Mini Watch: Off</button><span id="mini-watch-feedback" role="status"></span></div>
 <label class="report-search">Search displayed report tables <input id="search" type="search" placeholder="Presentation filter only"></label>
-<div id="result" aria-busy="true"><div class="overview-loading"><progress max="100" value="0" aria-label="Initial report progress" aria-valuetext="Approximately 0 percent"></progress><p role="status">≈0% · Authorizing browser session…</p></div></div>
+<div id="result" aria-busy="true"><div class="report-loading"><progress max="100" value="0" aria-label="Report loading progress" aria-valuetext="0 percent"></progress><p class="report-loading-percent" aria-hidden="true">0%</p><p class="report-loading-stage">Authorizing browser session</p><p class="sr-only" role="status">Authorizing browser session</p></div></div>
 </main>
 </body></html>

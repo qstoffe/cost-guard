@@ -41,6 +41,9 @@ Status: current
 - [Models loading progress](models-progress.md): real Normal stage ownership,
   before/after synthetic observations, bounded process/browser updates and separate
   V2 probe timings/availability limits.
+- [Unified finite report loading](report-loading.md): shared determinate progress,
+  typed source/slot admission, stable retained content, controlled startup recovery,
+  browser matrix and real-source deadline/proof limits.
 - [Models pricing refresh and compact Mini help](models-pricing.md): strict upstream
   provenance, coherent isolated repricing, two primary-window Mini facts, canonical
   browser tests, real V2/API proof and the scoped split-verification decision.
