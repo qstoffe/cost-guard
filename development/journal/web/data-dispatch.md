@@ -1,6 +1,6 @@
-# FR 000617 — dispatcher measurements and remaining verification
+# FR 000617 — dispatcher measurements and verification limits
 
-2026-11-07, local Windows workstation, uncommitted implementation. **Not delivered.**
+2026-11-07, local Windows workstation, v80.197. GitHub PR/default own merge status.
 No model inference, external desktop interaction or shared OpenCode stop was used.
 
 ## Causal findings
@@ -21,7 +21,8 @@ No model inference, external desktop interaction or shared OpenCode stop was use
   explicitly omit unverifiable roots, retaining strict ordinary snapshot APIs.
   Later-changed facts are removed before publication; missing coverage is a
   structured count and partial status, never acquired zero or complete history.
-  Source membership/provenance changes remain protected. Fresh real proof is pending.
+  Source membership/provenance changes remain protected. Fresh partial-history real
+  proof is recorded below; the earlier failed runs remain failures.
 - First healthy Live publication now gates finite admission; an existing driver
   alone is not Watch readiness. Explicit browser Retry is consumed once, so an
   automatic retry loop cannot repeatedly clear host backoff.
@@ -72,7 +73,7 @@ were gated on healthy Live publication, and nonmanaged price-constructor argumen
 were restored. Both focused reruns passed. The next Full passed 154/155 files in
 105.6 seconds: only the legacy generic partial-warning text had changed. Restoring
 that text preserved the historical views' new explicit omission warnings; the exact
-HTTP/DOM test passed in 11.68 seconds. A final Full is still required.
+HTTP/DOM test passed in 11.68 seconds. Final Full subsequently passed below.
 Hidden Edge passed seven scenarios, now including explicit three-root omission
 warnings in AI Stats, Comparisons and Token Mix, one-shot Retry after transient
 admission failure and host invalidation. Same-ID foreign-provenance and out-of-range
@@ -80,9 +81,10 @@ Sessions epochs now require explicit recovery; deterministic catalog tests passe
 Historical-report scale tests exceed the focused runner's default Quick 25 seconds:
 the full-tier focused run passed in 28.2 seconds under its existing 240-second cap;
 no timeout/assertion was weakened. Latest validator passed eleven checks, zero
-failures, six existing advisories. Product metadata remains 80.196; not delivered.
+failures, six existing advisories at v80.196. The delivery version is v80.197,
+2026-11-07; the final verification record follows below.
 
-## Required unfinished evidence
+## Earlier failed evidence retained for causality
 
 The earlier real-source prototype exhausted 600 seconds: Token Mix timed out,
 AI Stats remained unfinished and Comparisons had not started. A later pre-partial
@@ -95,9 +97,9 @@ The probe's original route lease expired after ninety seconds; the harness now
 renews it like a browser and can explicitly switch behind an unfinished background
 scan. These refinements require new real measurements, not reinterpretation of
 the earlier output.
-Real foreground/control comparison, Watch publication latency, warmed idle CPU/IO,
-source churn and final safety outcomes must be reported before delivery. No FR
-requirement or test exception has been approved.
+Fresh foreground/control, Watch latency, idle CPU/IO and safety evidence follow
+below. The earlier failures are not reclassified as PASS. No FR requirement or
+test exception was approved.
 
 ## Fresh control, 2026-11-07
 
@@ -119,6 +121,62 @@ a cold-cache experiment. Source catalog: 2,880 sessions / 2,784 roots.
 - No host failure, Live running; own serving/Live threads closed and zero parked
   children after cleanup. No model inference or OpenCode mutation.
 
-The under-load warm/control comparison is running separately, without concurrent
-Full/browser workloads. Source/cache evolution prevents treating sequential real
-runs as a tightly controlled universal speedup benchmark.
+## Fresh under-load warm run, 2026-11-07
+
+`probe_data_dispatch.py --switch-under-load --budget-seconds 900 --idle-seconds 30`
+ran separately without concurrent Full/browser workloads. All four products became
+usable: Models at 13.621 s, Token Mix at 68.628 s, AI Stats at 83.161 s and
+Comparisons at 242.420 s. Each historical result explicitly omitted one changing
+root; none claimed complete history. No host failure, Live running, own cleanup
+closed serving/Live threads and left zero parked children.
+
+At 49.804 s, navigation promoted Token Mix while an AI Stats background job had
+real progress. Foreground progress appeared after 0.714 s; Token Mix completed
+before AI Stats. Returning promoted the same AI Stats logical job, retaining its
+11/22 batch progress rather than restarting. Child observations distinguish
+catalog/message waits and canonical analysis; background catalog wall times include
+cooperative admission waits, not solely network latency.
+
+| Comparable observation | Foreground-only control | Host warming |
+| --- | ---: | ---: |
+| Models first usable, seconds | 23.375 | 13.621 |
+| Foreground progress after navigation, seconds | 0.611 | 0.714 |
+| Maximum Live publication gap, seconds | 3.105 | 3.470 |
+| Idle window, seconds | 30.095 | 30.075 |
+| Idle host CPU, seconds | 14.172 | 14.609 |
+| New finite jobs during idle | 0 | 0 |
+| Host peak working set, bytes | 267,587,584 | 299,343,872 |
+| Sampled aggregate working set, bytes | 539,766,784 | 732,549,120 |
+| Maximum owned finite children, including parked | 1 | 2 |
+
+The warm run used 126.641 host CPU seconds over 272.494 seconds, with 605 Live
+publications. Sampled total IO was 554,044,051 read / 3,230,655 write / 8,315,693
+other bytes, over a longer run doing additional work. These totals are not directly
+comparable idle rates. Host idle CPU was near the measured Live control, not zero;
+the extra retained child consumed bounded additional RAM. Source/cache evolution
+prevents treating sequential runs as a tightly controlled speedup or universal
+Watch-latency guarantee. Actual OS minimization/sleep, multi-hour wall-clock idle,
+assistive technology and non-Windows proof were not performed. Virtual clocks,
+hidden interests and parked-parent crash tests cover their stated bounded contracts,
+not physical OS behavior. No paid inference, source mutation or test waiver.
+
+Work was preserved as WIP commit `efc18dc` on `fr-000617`; no PR/merge at that point.
+
+## Final startup checks
+
+After the pinned-config baseline correction, separate real `--startup-only` runs
+confirmed Watch's first Live publication at 1.010 s and AI Stats' at 1.079 s, both
+with zero finite jobs before Live. Direct AI Stats became usable at 14.623 s, with
+no omitted roots in that run; other default warming began only after readiness.
+Both own hosts closed serving/Live threads and left zero parked children. The Watch
+startup run intentionally ended after its first publication, not after warming all
+reports. These runs do not repeat or replace the longer control/under-load evidence.
+
+Focused dispatcher (8.43 s, including parked-parent crash and four-product
+sleep/stagger tests) and lifecycle (3.06 s) passed. Validator for v80.197 passed
+eleven checks with zero failures and six existing design/prose advisories. No cap
+or exception baseline was raised. Final Full passed all 155 files, four isolated
+workers, in 108.1 seconds, including the final source and version metadata. The
+ordinary base was reconciled through backlog-only changes without altering tested
+product code. No product ZIP, tag or GitHub Release was generated. CI/merge results
+belong to the delivery PR rather than a post-merge reporting commit.

@@ -2,8 +2,11 @@
 
 Source revision: 50d88a4bcfba6c1f853607ce0ee84a5c9663c0a3
 Checked revision: 50d88a4bcfba6c1f853607ce0ee84a5c9663c0a3
-Last checked: 2026-11-06
+Last checked: 2026-11-07
 Status: current
+
+Scoped v80.197 update: dispatcher/evidence/partial-history and Sessions restoration
+owners and tests. Baseline revisions above retain the other module checks.
 
 Navigation, not another architecture authority: [OVERVIEW.md](../OVERVIEW.md) owns the source contracts; installed OpenCode Toolkit skills own the workflow. This map routes implementation and tests without importing the application or loading historical releases.
 

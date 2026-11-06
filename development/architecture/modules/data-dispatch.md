@@ -1,7 +1,8 @@
 # Host-owned Web data demand
 
-FR 000617 working-tree implementation. Final verification/delivery are unfinished;
-see the [measurement journal](../../journal/web/data-dispatch.md).
+FR 000617, v80.197 implementation and verified ownership boundaries. See the
+[measurement journal](../../journal/web/data-dispatch.md) for checks and limitations;
+the delivery PR/default branch own merge status.
 
 ## Ownership and admission
 
@@ -79,7 +80,8 @@ failure preserves valid results; success invalidates warm finite projections.
 every thirty seconds. Confirmed price changes invalidate projections; a temporarily
 unreadable disposable cache is not proof of a change. Runtime configuration changes
 require a fresh host because Live pins its configuration; hot Web preferences remain
-independent. Source changes never merge results. Managed finite pricing defers
+independent. The first check compares Live's pinned configuration too, so a change
+during startup cannot become a new silent baseline. Source changes never merge results. Managed finite pricing defers
 release-metadata network refresh; the explicit price action retains its strict path.
 
 ## Sessions and detail

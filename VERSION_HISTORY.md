@@ -1,5 +1,11 @@
 # Cost Guard version history
 
+## v80.197 — 2026-11-07
+
+- Web finite demand moves to one host-owned priority/warm-result registry. Visible routes preempt cooperative background slices; default reports warm after initial readiness, with staggered refresh, qualified Models sample cadence and a source-observed one-hour display gate. Watch/Accounts retain their Live owners.
+- Compatible compact evidence is shared without raw-history persistence or interchangeable totals. Managed historical scans explicitly omit unverifiable changing roots; all-unverifiable history fails. Finite child deadlines, parent-loss cleanup, bounded continuation, source/config/price invalidation and authenticated APIs remain.
+- Sessions main navigation restores its last viewed page/sort/epoch without prefetching every page or detail. Expired, foreign-source and out-of-range positions require explicit recovery. Quiet report lookups retain content, focus and selection.
+
 ## v80.196 — 2026-11-06
 
 - Sessions reuses fresh canonical Watch prompt evidence before scalar hydration and keeps running proof independent of pricing/index failures, with source identity, original age and terminal observations respected. Supported model/cost/count/duration values update in place; pending model acquisition is distinguished from unsupported fields, failed acquisition and retained values.

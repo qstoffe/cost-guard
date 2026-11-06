@@ -2,8 +2,12 @@
 
 Source revision: 50d88a4bcfba6c1f853607ce0ee84a5c9663c0a3
 Checked revision: 50d88a4bcfba6c1f853607ce0ee84a5c9663c0a3
-Last checked: 2026-11-06
+Last checked: 2026-11-07
 Status: current
+
+FR 000617 adds a scoped v80.197 dispatcher delta to the baseline revisions above,
+not a new audit of every historical section. Its deterministic, hidden-browser and
+read-only real-source evidence and limits are in the dispatcher journal.
 
 ## Responsibility and ownership
 

@@ -32,6 +32,7 @@ def main():
     parser.add_argument('--idle-seconds', type=int, default=20)
     parser.add_argument('--initial', choices=('models', 'watch', 'ai-stats'), default='models')
     parser.add_argument('--switch-under-load', action='store_true')
+    parser.add_argument('--startup-only', action='store_true')
     args = parser.parse_args()
     if not 30 <= args.budget_seconds <= 1200:
         parser.error('budget must be 30..1200 seconds')
@@ -52,6 +53,9 @@ def main():
 
     def measured_publish(kind, value):
         if kind == 'live':
+            if not publications:
+                facts.append(dict(event='first_live', seconds=round(time.monotonic() - started, 3),
+                                  finite_jobs_before_live=len(jobs._jobs)))
             publications.append(time.monotonic())
         return publish(kind, value)
 
@@ -83,6 +87,9 @@ def main():
                     if state['ready'] and name not in ready_at:
                         ready_at.add(name)
                         facts.append(dict(event='ready', kind=name, seconds=round(time.monotonic() - started, 3)))
+                if args.startup_only and publications and (args.initial == 'watch' or models['result']):
+                    facts.append(dict(event='startup_complete', section=args.initial))
+                    break
                 background = [key for key, job in jobs._jobs.items() if job['request'].kind is ReportKind.AI_STATS
                               and job['status'] in {'queued', 'running'} and job['progress']
                               and job['progress'].get('completed', 0) > 0]

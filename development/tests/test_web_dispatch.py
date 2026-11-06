@@ -127,6 +127,27 @@ class DispatcherTests(unittest.TestCase):
         self.dispatch.tick()
         self.assertLessEqual(len(self.jobs.values) - before, 1)
 
+    def test_sleep_missed_cycles_coalesce_then_each_default_product_staggers(self):
+        self.dispatch.interest('one', 'watch', False)
+        self.now += 7200
+        seen = []
+        for number in range(4):
+            self.dispatch.tick()
+            pending = [(key, value) for key, value in self.jobs.values.items() if value['status'] == 'queued']
+            self.assertEqual(1, len(pending))
+            key, job = pending[0]
+            seen.append(job['request'].kind)
+            publication = result(int(self.now * 1000))
+            publication['view']['ai_stats'] = [dict(period='30-days')]
+            job.update(status='complete', result=publication)
+            self.now += 14
+            self.dispatch.tick()
+            self.assertEqual(number + 1, len(self.jobs.values), 'no simultaneous due-product stampede')
+            self.now += 1
+        self.assertEqual({ReportKind.NORMAL, ReportKind.AI_STATS, ReportKind.TOKEN_MIX, ReportKind.COMPARISONS}, set(seen))
+        self.dispatch.tick()
+        self.assertEqual(4, len(self.jobs.values), 'missed periods are not replayed')
+
     def test_source_terminal_error_preserves_valid_result_but_never_launches_new_work(self):
         self.dispatch.interest('one', 'models', True, self.models)
         key = self.dispatch.lookup(self.models)['id']
@@ -259,6 +280,13 @@ class DispatcherTests(unittest.TestCase):
         with patch.object(observer, 'prices', side_effect=OSError('disposable cache unavailable')):
             self.assertTrue(observer.check(self.dispatch))
         self.assertEqual(key, self.dispatch.entries[self.models]['job'])
+
+    def test_first_dependency_check_compares_live_pinned_configuration_not_a_new_baseline(self):
+        from src.web.dispatch_dependencies import DispatchDependencies
+        observer = DispatchDependencies(lambda: {'timezone': 'Europe/Stockholm'}, lambda: None)
+        self.assertFalse(observer.check(self.dispatch, baseline={'timezone': 'UTC'}))
+        observer = DispatchDependencies(lambda: {'timezone': 'UTC', 'webSettings': {'theme': 'dark'}}, lambda: None)
+        self.assertTrue(observer.check(self.dispatch, baseline={'timezone': 'UTC', 'webSettings': {'theme': 'light'}}))
 
 
 class QuantumProcessTests(unittest.TestCase):

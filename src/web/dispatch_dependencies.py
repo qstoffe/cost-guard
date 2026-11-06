@@ -13,7 +13,7 @@ class DispatchDependencies:
         self.config_signature = None
         self.price_signature = None
 
-    def check(self, dispatcher):
+    def check(self, dispatcher, *, baseline=None):
         """False means changed/invalid runtime configuration needs a fresh host.
 
         Web preferences remain hot-applicable. Other runtime owners pin their
@@ -23,6 +23,8 @@ class DispatchDependencies:
         if self.clock() < self.next_check:
             return True
         self.next_check = self.clock() + 30
+        if self.config_signature is None and baseline is not None:
+            self.config_signature = dependency_signature({key: value for key, value in baseline.items() if key != 'webSettings'})
         try:
             config = self.configuration()
             signature = dependency_signature({key: value for key, value in config.items() if key != 'webSettings'})

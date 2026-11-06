@@ -133,9 +133,10 @@ class WebHost:
                 elif status == "source_check_unavailable" and previous != status and self.store:
                     self.store.log(status)
                 self.observations.persist(self)
-                if (self.dependencies and self.live and self.live.observed.is_set()
-                        and not self.dependencies.check(self.dispatcher)):
-                    self.stop('source_changed')
+                if self.dependencies and self.live and self.live.observed.is_set():
+                    baseline = self.live.driver.coordinator.report_service.config
+                    if not self.dependencies.check(self.dispatcher, baseline=baseline):
+                        self.stop('source_changed')
                 if not self.stopping.is_set():
                     if self.source_startup is None or self.source_startup.finished.is_set():
                         if self.dispatcher:
