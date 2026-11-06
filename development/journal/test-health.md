@@ -1,31 +1,33 @@
 # Test system health
 
-Source revision: 15bc39ea61eef6af1605216b113f6519758b4576
-Checked revision: 15bc39ea61eef6af1605216b113f6519758b4576
-Last checked: 2026-11-05
+Source revision: 43a745a62149b5000701b3b63b261620f366e141
+Checked revision: 43a745a62149b5000701b3b63b261620f366e141
+Last checked: 2026-11-06
 Status: current
 
 ## Summary
 
-Milestone 45 replaces Daily's timing-dependent batch check with a controlled-age, real-HTTP catalog-count check. The 120s modeled budget, freshness/retry protection, product deadlines and gate fanout stay unchanged. [Assessment](../architecture/governance/verification/test-health-45-20261105.md). Metadata identifies the observed base; candidate CI belongs in its PR. Older reports are historical, not progress counters or desktop acceptance.
+Milestone 60 moves the shared Watch frame out of the rendering test into its fixture owner: 36 unchanged test methods, equivalent data, one fewer test-import edge. [Assessment](../architecture/governance/verification/test-health-60-20261106.md). Metadata identifies the observed base; candidate CI belongs in its PR. Historical results are not current PASS or desktop acceptance.
 
 ## Evidence
 
-### Daily batch-sharing harness — milestone 45 (2026-11-05)
+### Watch frame fixture ownership — milestone 60 (2026-11-06)
 
-Fresh [42117653741 attempt 1](https://github.com/qstoffe/cost-guard/actions/runs/42117653741/attempts/1) and main [42121612211](https://github.com/qstoffe/cost-guard/actions/runs/42121612211) fail only Daily's one-second wait; validator/browser/native pass. The former reran successfully on unchanged HEAD, not a fix. A controlled 1.1s legitimate catalog response fails that wait despite one fetch/four intact requests/prompts; a three-second-old cache legitimately needs two brackets and triggers the fixture's artificial hold. Exact remote causes remain unknown.
+`fixtures/watch_rendering.py` now owns unchanged `tall_projection`/status data. Rendering and tool-activity tests import it directly; the latter no longer loads a sibling test and its unrelated report/warning setup. Seven → six static import edges; no wrapper, new assertion, dispatch/setup change or claimed speedup. All 36 test methods and the moved function have equal ASTs; old/new fixture values match. An isolated tool-activity import leaves the rendering test unloaded. Both fixtures detect missing tail erase and terminal live-status leakage: four intentional assertion failures, no errors.
 
-The four-root test now fixes only V2 catalog-age time and counts actual HTTP fetches synchronously. It removes a test-owned thread, two Events and unrelated wait/hold/join thresholds, not product timeouts. Two Daily and eight source-history tests pass; the unchanged 64-root model retains <=120s/34 fetches/all requests. Per-root hydration and lost-root mutations each fail both Daily tests with assertions/no harness errors; a 1.1s valid response passes the replacement. Source-history still tests expiry and revision retries. No requirement/test exception or new gate.
+Before/after rendering 13 and tool-activity 23 pass. Final bounded sample adds 17 exact-input, 8 Mini, 1 loader, 2 Daily and 15 CI-accounting tests: 79 pass, zero skips/errors. Quick/Full remain 147/153 groups. Recent eight main runs contain seven successes and one failure: [42251085890](https://github.com/qstoffe/cost-guard/actions/runs/42251085890) has macOS ARM cancelled because no hosted runner was acquired, not an assertion failure. [42253836493](https://github.com/qstoffe/cost-guard/actions/runs/42253836493) passes all four jobs on `302784d`; Linux has 1,768 passed/21 skips, validator/browser PASS. Different revisions, not a controlled rerun or candidate proof. No capacity/deadline/platform waiver.
 
-Inventory: 864 text/config records, 247 exclusions; 144 top-level files/1,710 methods, Quick/Full 139/145 groups. The standalone developer benchmark regression is outside product Full; it passes directly. Seven fixture-import edges remain. Local Full/validator/live/desktop work is not selected for this development-only change; PR test-path CI remains normal. No controlled project-wide speed or effort claim.
+### Daily batch-sharing harness — milestone 45 (historical)
+
+[Assessment](../architecture/governance/verification/test-health-45-20261105.md): two observed CI failures hit the old one-second wait; unchanged-head rerun success was not a fix. Controlled 1.1s valid latency and three-second cache age independently reproduced false positives; precise remote causes remain unknown. Fix only catalog-age time, count real HTTP synchronously; remove the test thread/two Events/hold/wait/join, not source timeouts. Two Daily/eight source-history tests pass; per-root/lost-root negatives fail. The 64-root <=120s/34-fetch budget and expiry/revision retry checks remain. Current Daily sample also passes; no long-run flake-rate claim.
 
 ### Watch lifecycle fixture ownership — milestone 30 (2026-11-04)
 
-`fixtures/watch_runtime.py` owns unchanged global/scoped `watch_for` and render/status/finish `Recorder`. Runtime faults/lifecycle no longer import other tests for setup. Sibling import statements: 11 → 7; distinct edges: 10 → 7. All 47 method ASTs match excluding imports; moved definitions match excluding new docstrings. Scoped/global/recorder characterization and import-only smoke for 56 direct consumers pass. No wrapper/framework/runtime change.
+`fixtures/watch_runtime.py` owns unchanged global/scoped `watch_for` and render/status/finish `Recorder`. Runtime faults/lifecycle import fixtures directly. Statements/edges fell 11/10 → 7/7; 47 method ASTs and moved definitions stayed equal excluding imports/new docstrings. Characterization and 56-consumer import smoke pass; no runtime change.
 
-Before/final: 30 runtime + 8 lifecycle + 9 recovery pass, no skips; privacy/fatal/clean-stop/pump/source protections stay intact. Dropping pump stop or returning zero on fatal errors yields four assertion failures, no harness errors. Two Daily tests pass locally. Focused results are not Full/validator/live proof or timing savings.
+Before/final: 30 runtime + 8 lifecycle + 9 recovery pass, no skips. Missing pump stop or zero fatal exit yields four assertion failures, no errors. Privacy/fatal/clean-stop/source protections remain; focused proof is not Full/live proof or timing savings.
 
-Historical [milestone-30 assessment](../architecture/governance/verification/test-health-30-20261104.md) retains inventory, local/CI counts and limits. Development-only work selects no local product gates/version update; candidate CI belongs in its PR.
+Historical [milestone-30 assessment](../architecture/governance/verification/test-health-30-20261104.md) retains inventory, counts and limits.
 
 Earlier [41918986747](https://github.com/qstoffe/cost-guard/actions/runs/41918986747) failed Daily's `finished.wait(1)` on `020e500`; validator/browser/native passed. Comparison removal did not fix it. Milestone 45 supersedes that harness, retaining the separate modeled 120s budget and uncertainty about individual remote failures.
 
@@ -76,7 +78,7 @@ FR 000370: product IPC backpressure, retain 64-message drain canary. FR 000380: 
 
 ## Next investigations
 
-Inspect per-file durations/skips before changing Quick deadlines, especially Node/HTTP/spawn/PowerShell. Daily's demonstrated timing/expiry conflation is repaired; exact historical CI causes and long-run failure rate remain unknown, not proven by a green rerun. The VM child permits 60 seconds while Quick bounds its whole file at 25 seconds: a known tighter outer limit, not authority to loosen it. Seven test-import edges remain localized debt. Hosted API success does not close desktop/Finder/Gatekeeper/accessibility/suspend/soak acceptance.
+Inspect per-file durations/skips before changing Quick deadlines, especially Node/HTTP/spawn/PowerShell. Daily's timing/expiry conflation is repaired; exact historical causes and long-run failure rate remain unknown. The VM child's 60s bound exceeds Quick's 25s file bound, not authority to loosen either. Six test-import edges remain localized debt. Hosted capacity failures do not justify deleting macOS coverage. Hosted success does not close desktop/Finder/Gatekeeper/accessibility/suspend/soak acceptance.
 
 Architecture: no-update; runtime/validation ownership and triggers are unchanged.
 
