@@ -1,197 +1,118 @@
 # Cost Guard v80 architecture
 
-Source revision: 904c9aea9a5f0e682437b74d7f66d3d5a6d813ff
-Checked revision: 904c9aea9a5f0e682437b74d7f66d3d5a6d813ff
+Source revision: 302784d150a8bd7b7ac203dfc6cfba88a6ea54cd
+Checked revision: 20ab74d5927e6d5dbe1f81701cd8448cbb79f1aa
 Last checked: 2026-11-06
 Status: current
 
-## Development data and authority
+## Scope and authority
 
-Development contains product tests/fixtures, architecture/navigation, diagnostic tooling, engineering knowledge and backlog specifications; it defines no local process authority or verification gate. The actively loaded compatible OpenCode Toolkit shared repository skills govern layout, FR authoring, backlog work and maintenance. Historical files/FRs are evidence, not competing instructions. This overview replaces the legacy development-root README/router; the installed manifest reserves that root for adapter and applied-revision facts.
+Milestone-60 source map, not an exhaustive correctness audit. Checked revision adds backlog authoring only. `development/journal/architecture.md` records both assessment levels, alternatives and limits. Unchanged module pages retain their own scoped checks.
 
-Repository facts (`../repository.json`) retain opaque compatibility data; Cost Guard alone owns product versions and release checks. Applied-contract.json (`../applied-contract.json`) records the installed development contract; migration verification also checks actual topology. Ready (`../backlog/ready-to-develop/`), On Hold (`../backlog/on-hold/`), completed (`../backlog/complete/`), reserved human-review suggestions (`../backlog/suggestions/`) and rejected suggestions (`../backlog/rejected-suggestions/`) retain one backlog. Journal INDEX routes retained knowledge.
+Toolkit owns workflow/mirrored `development/README.md`; `development/repository.json` holds release facts; `development/applied-contract.json` records identity (revision 6). History is evidence, not instructions. Development-only work activates no product checks/budgets/version work. Shipped source retains functional release rules. Main is supported; packaged Releases remain paused.
 
-Repository-relative owners: deterministic `development/tests/`, synthetic `development/tests/fixtures/`, reserved `development/tests/integration/live/`, scripts `development/tools/`, and human `development/user-tools/diagnostics/windows/` / `macos/` launchers. Development-only work has no local package gate, regression-suite mandate, structure/file budget or product version bump. Shipped product changes retain relevant tests, runtime/package/security safeguards and release facts; source changes must never be misclassified as development-only.
-
-## Navigation
+## System map
 
 ```mermaid
 flowchart TD
-    entry["CLI / WebHost: config, source, isolated report jobs"] --> reports["ReportService: scopes, acquisition, projections"]
-    entry --> application["Application: finite jobs / one shared Live publisher"]
-    application -->|"isolated finite reports / retained detail"| reports
-    entry --> watch["WatchCoordinator: cadence, retained rows / totals"]
-    application -->|"one LiveAcquisition driver; no per-tab service"| watch
-    watch --> reports
-    reports --> sources["Sources: V1 read-only SQLite / V2 loopback HTTP"]
-    reports --> providers["Accounts / pricing: bounded acquisition, normalized capacity / prices"]
-    sources --> domain["Domain: canonical snapshots / identities"]
-    providers --> domain
-    reports --> analysis["Analysis: causal usage, valuation, context"]
-    reports --> comparison["Comparison: one global sample / exact catalog tiers"]
-    comparison --> domain
-    analysis --> domain
+    cli["CLI: validated config / bootstrap"] --> reports["Reports: scope, acquisition, projections"]
+    cli --> live["Watch / Live: cadence, observations, recovery"]
+    web["Web host: HTTP, jobs, lifecycle / security"] --> finite["Finite jobs: fresh process / application"]
+    web -->|one publisher, not per tab| live
+    finite --> reports
+    live --> reports
+    reports --> sources["Sources: V1 SQLite / V2 loopback HTTP"]
+    reports --> providers["Accounts / pricing: acquisition and normalized facts"]
+    reports --> analysis["Analysis: attribution, valuation, context"]
     reports --> cache["Cache: disposable revision-keyed acceleration"]
-    entry --> presentation["Presentation: job-local units / immutable DTOs / terminal"]
-    watch --> presentation
-    watch -->|"outage: retain frame; same-source retry / terminal schema stop"| sources
-    entry -->|"unexpected fault: sanitized stop / close owned work"| faults["RuntimeErrors: sanitized fatal / isolated recoverable evidence"]
-    diagnostics["Development Diagnostics: independent observations"] --> sources
+    sources --> domain["Domain: canonical snapshots / value contracts"]
+    providers --> domain
+    analysis --> domain
+    reports --> terminal["Terminal: report / buffered Watch presentation"]
+    live --> terminal
+    finite -->|immutable result or typed failure| browser["Browser: routes, tables, one SSE connection / tab"]
+    web -->|shared Live export / replay| browser
+    live -->|outage: retain frame; same-source retry or terminal stop| sources
+    cli -->|invalid configuration / sanitized fault| terminal
 ```
 
-Arrows show calls/consumption, not a single linear execution pipeline. `src/web/host.py` owns HTTP/jobs and one `src/application/live.py` publisher thread. `src/web/jobs.py` isolates finite report processes with parent-loss cleanup. Live ticks the shared Watch coordinator; its Web adapter owns four isolated session-capture workers plus separate single-worker account-history and Sessions-detail lanes. Blocking captures never borrow Live's mutable service. `src/application/session_detail.py` retains revision-aware pages and `src/reports/session_history.py` retains observed evidence outside cache. HTTP leases/pages never acquire source data. Source-change stops, never reloads; CLI/Diagnostics remain independent. `src/web/` owns loopback HTTP/security/assets, bounded SSE/replay, finite report processes, private instance/restart locks and best-effort source-change stop. Windows and experimental macOS menus share this host; macOS native proof is pending. Web reuses Watch's renderer-independent acquisition seam, not a CLI process or per-tab coordinator. Bootstrap dispatches CLI reports/Watch directly. Source normalization establishes evidence, not cost; analysis consumes provider-neutral pricing contracts. The cache never replaces source authority. Recovery belongs to acquisition, not rendering. `src/numbers.py` scopes CCost display units with exception-safe ContextVar reset; canonical valuation and native quotas are unchanged.
+Arrows group calls and consumption, not literal Python imports or one linear pipeline. `cost-guard.py` installs `src/runtime_errors.py` before importing the composition root. CLI parse/config validation precedes source, provider and runtime-cache work. `src/bootstrap.py` composes reports or blocking CLI Watch; it does not route CLI through HTTP. Unexpected faults sanitize evidence and close owned work; Diagnostics observes independently rather than owning product recovery.
 
-Finite Web Token Mix and AI Stats reuse disposable revision-keyed compact request
-facts/category valuations (`reports/token_mix_cache.py`); `reports/ai_stats.py` adds
-qualified root timing, while `analysis/ai_stats.py` owns the ten canonical metrics.
-The four finite report pages share `assets/report-loading.js` for observed
-determinate progress and bounded cancelable source/slot waiting. HTTP consumes
-the existing source-startup owner's detached readiness proof, not Live writability;
-no acquisition, wake, source/valuation or CLI/Live boundary is added.
-Token Mix retains CLI grouping semantics. Shared `assets/cached-reports.js` governs
-5/15-minute visible-page checks and one-hour re-entry withholding outside Live.
-Browser sorting/coherent replacement never acquire or revalue usage. This scoped
-ownership update describes base `42cc45f624d7b9cda560e365e53a93cec36ff7bc` plus
-FR 000599's source diff, not a whole-document revalidation.
+### State, lifetime and recovery owners
 
-Web Comparisons adds source-neutral exact first-input identity and compact per-root
-run metrics over canonical prompt analysis, not a second valuation/timing engine.
-All-history source batches and revision-aware fingerprints remain in reports; the
-application exports only derived page/run values and ephemeral safe previews. The
-browser pages ten groups, retains all repetitions and shares Watch table/help plus
-five-minute visible-route cached-report lifecycle. AI Stats reuses its existing
-period acquisition for a conditional extra fact. [Owners and limits](modules/web.md).
-
-Sessions additionally shares the full observed catalog with `application/session_catalog.py`.
-The Web coordinator owns a separate single-worker scalar-index lane; HTTP never acquires
-history. Validated source/dependency-keyed summaries enable exact global sort, with
-explicit pending coverage instead of page-only sorting. Detail pins internal 25-row
-chunks and renders one complete document-scrolling table, reusing Watch context/help.
-Existing detail/history/card ownership and immutable source revision checks remain.
-
-`modules/CODE_MAP.md` and the module contracts route owners/tests, history, providers, launchers and failure/privacy facts; `development/journal/INDEX.md` routes historical evidence, not current coverage. Toolkit owns development procedure. Account-period CCost and its indexed regressions remain inside analysis/report/Watch.
-
-## Goals
-
-Retain v78 Python/v77 behavior contracts; integrations add, not rewrite.
-
-Core product principles:
-
-- standard supported OpenCode installations should work without Cost Guard configuration;
-- OpenCode persistence is authoritative and read-only;
-- Cost Guard cache is disposable acceleration state, never durable user history;
-- one analysis core serves reports and Watch;
-- provider/source-specific formats stop at their adapter boundary;
-- concurrent global Watch, session Watch and one-shot reports must be safe;
-- recurring external process starts are avoided, especially in Watch.
-
-## Runtime layers
-
-```text
-cost-guard.py
-    -> src.runtime_errors (minimal process guard, before application import)
-       -> src.bootstrap (composition root)
-       -> CLI/config/source/provider selection
-       -> Session Source(s) -> normalized domain
-       -> Account Provider(s) -> normalized quota/account domain
-       -> Pricing Provider(s) -> normalized pricing domain
-       -> analysis core
-       -> cache repositories
-       -> report projections / Watch coordinator
-       -> presentation
-```
-
-## Configuration
-
-`src/config.py` owns JSONC, v77-compatible recursive merging, legacy normalization and startup validation. Omitted properties inherit defaults; explicit null overrides. Reads never create optional `config/user-config.jsonc`. `src/web/settings.py` owns five allowlisted mutations: `webSettings.theme`, `ccostDisplayUnit`, `miniWatchPlacement` (position), `miniWatchSize` and `quotaDisplayMode`, with canonical validation, preserving edits and atomic replacement. Their symbolic user `default` resolves before regular consumption; the API separately exposes choices, shipped defaults and effective values. Explicit choices equal to defaults remain explicit. User legacy `webTheme` is normalized before merging unless a nested choice (including `default`) overrides it. Web CCost independently defaults to Credits; CLI keys/flags are unchanged. Mini measures initial fit in an inert shadow layout before opening, then resizes only on eligible disclosure activation; native geometry is nonpersistent and browser-owned. Position/size intentions acknowledge native coupling. Web native quota orientation defaults to Used; pure application display variants support Remaining without changing canonical data, CCost or acquisition. Other settings remain shared until separately promoted. No report/source/account or CLI-color setting changes.
-
-Configuration must be validated before any OpenCode/provider/network/runtime-cache work. Errors use terminal-default presentation and must not echo arbitrary configured paths/secrets. `openCode.source` is normalized to `auto|v1|v2`; concrete source selection remains outside the config layer.
-
-## Module contracts
-
-Web quota reference Capacity/Remaining now lives in `application/quota_ccost.py`,
-separate from provider-native orientation and observed Used CCost. It consumes only
-identity-bound existing period projections and emits Credits/USD display variants;
-browser code never extrapolates or acquires history. Full Watch adds per-window
-Capacity, Accounts shares those live cards, and Mini stays compact.
-Provider-confirmed idle zero retains native 100% Remaining independently of unknown
-reference capacity. See the [Web module contract](modules/web.md).
-
-| Owner | Contracts |
+| Boundary | Authority and transitions |
 | --- | --- |
-| Session Sources | [sources.md](modules/sources.md) |
-| Account and Pricing Providers | [providers.md](modules/providers.md) |
-| Canonical domain / Analysis / Cache | [analysis.md](modules/analysis.md) |
-| Reports / optional application boundary | [reports.md](modules/reports.md) |
-| Optional Web / lifecycle | [web.md](modules/web.md) |
+| Web host / finite reports | `src/web/host.py` owns HTTP/jobs and one `src/application/live.py` publisher. `src/web/jobs.py` owns fresh processes, deadlines, parent-loss cleanup/cancellation. `src/application/service.py` validates, allowlists progress and exports immutable values. Foreign/Live rejection must not close it; finite jobs never borrow its mutable service. |
+| Shared Live / Watch | `src/watch/acquisition.py` drives the coordinator's initialize/poll/enrich seam; CLI retains its blocking wait adapter. Hints trigger authoritative reads, never usage or completion. Source outage retains the last frame; retry stays in the selected generation, discards partial initialization and ends on terminal/unsupported evidence. Source-change stops rather than reloads. |
+| Independent background lanes | `src/watch/web_coordinator.py` owns four card workers, separate single-worker account-history, detail and scalar Sessions-index lanes, plus session-cost reconciliation. Fresh resources isolate blocking work and cancellation; late daily results are checked against the current day. HTTP/pages never tick acquisition. |
+| Source consistency | `src/sources/selection.py` chooses one healthy generation; histories never merge. V1 pins a read-only transaction; V2 brackets complete tree hydration with catalog revisions and bounded fresh attempts. Wire/schema adaptation stays below canonical snapshots. Loopback GET, SSE and cancellation have distinct resource lifetimes. |
+| Accounts / prices | Attempt/account identity and deadlines reject late quota observations while retaining occupied lanes. Account refresh is independent of source cadence. Normal price-cache fallback differs from explicit strict upstream refresh; optional release metadata has separate freshness. Quotas/capacity, reference CCost and billed cost are not interchangeable. |
+| Derived history / cache | Reports own acquisition populations and canonical projections. Cache is reconstructible acceleration, never OpenCode authority or observed history. `src/reports/session_history.py` retains observations; `src/application/session_detail.py` owns revision-pinned rich chunks. `session_catalog.py` owns complete membership, scalar-key coverage and exact global sorts, not page-only guesses. |
+| Browser / native launchers | `src/web/security.py` / `http.py` enforce loopback/Host/Origin/method/body/session/CSRF. `lifecycle.py` owns instance arbitration/exact-process restart proof. Browser sequence/gap recovery consumes immutable publications. Native pumps, one-use handoff and host close have separate owners. Windows inspection is not macOS/Finder/Gatekeeper proof. |
+
+## Semantic and dependency contracts
+
+- OpenCode persistence is authoritative and read-only; one analysis core serves finite reports and Watch. Provider/source formats stop at their adapters. Analysis owns causal child/termination attribution, pricing/CCost and historical versus current context; renderers do not revalue or acquire.
+- Global comparison samples, Token Mix, period AI Stats, first-input matches and Sessions keys differ in population/validity. AI Stats reuses compact facts/matched-run projection, not a second valuation engine. Match persistence contains digests/scalars; ephemeral previews are never identity.
+- Sources/accounts/pricing/cache depend on domain and narrow lower contracts, not reports/presentation. Analysis never imports reports/presentation. Reports depend on source/account/pricing contracts plus analysis/cache, not concrete integrations, Watch or renderers. Application owns detached exports and injected drivers, not bootstrap/Web/Watch imports. Web composition alone wires concrete services/Watch. Domain uses the standard library only. The product validator checks actual layer imports; diagrams are not that proof.
+- `src/config.py` owns JSONC merge/normalization/validation: omission inherits; null overrides; reads never create user config. `src/web/settings.py` atomically edits only theme, CCost unit, Mini placement/size and quota orientation. Browser owns native geometry. `src/numbers.py` resets display-unit scope safely; canonical values/quotas are unchanged.
+
+## Module and test navigation
+
+Start with [CODE_MAP.md](modules/CODE_MAP.md) for exact entrypoints, platform wrappers, focused tests and bounded legacy debt. Static test-import paths are navigation, not executed coverage.
+
+| Group | Ownership / public contracts |
+| --- | --- |
+| Sources | [sources.md](modules/sources.md) |
+| Accounts / pricing | [providers.md](modules/providers.md) |
+| Domain / analysis / cache | [analysis.md](modules/analysis.md) |
+| Reports / application | [reports.md](modules/reports.md) |
 | Watch | [watch.md](modules/watch.md) |
-| Presentation and CLI / Software-failure boundaries / Diagnostics boundary | [presentation-diagnostics.md](modules/presentation-diagnostics.md) |
-| Windows console | [windows-launchers.md](modules/windows-launchers.md) |
-
-Test routes are not executed coverage; historical performance evidence keeps its original limits.
-
-## Dependency direction
-
-```text
-bootstrap
-  -> config / sources / accounts / pricing / analysis / reports / cache / watch / presentation
-sources/accounts/pricing/cache
-  -> domain (and narrowly defined lower-level shared contracts), never reports/presentation
-analysis
-  -> domain + provider-neutral pricing contracts, never reports/presentation
-reports
-  -> domain + abstract source/account/pricing + analysis/cache, never concrete integrations/presentation/watch
-web
-  -> application and composition-only concrete integration wiring; never browser-side acquisition/valuation
-application
-  -> reports/domain/analysis, never bootstrap/presentation/watch or web
-presentation
-  -> report projection/domain display types, never concrete integrations
-domain
-  -> Python standard library only
-```
-
-The product validator resolves absolute/relative/nested layer imports, rejects runtime→development edges and V2 process/SQLite use. `code_inventory.py` owns AST navigation/metrics, not measured coverage. `modules/CODE_MAP.md` routes responsibilities and focused tests. Installed Toolkit governs development-only changes; product release/security checks remain independent.
+| Web / native lifecycle | [web.md](modules/web.md) |
+| CLI / presentation / faults / Diagnostics | [presentation-diagnostics.md](modules/presentation-diagnostics.md) |
 
 ## Validation, review and delivery flow
 
-Procedure checked against installed contract r5 and the active worker workflow on 2026-11-04. This is a descriptive route, not a new gate or local scheduling policy. Installed Toolkit selects one due maintenance occurrence before first Ready and owns remote lifecycle; repository scripts own product checks. No ownership registry, repository scheduler, live-model runner or automatic PR self-review is introduced. Contract Sync is a separate development-only PR before fresh selection when required.
+Descriptive route: installed contract revision 6, selected worker workflow, `development/repository.json` and CI owners below. No new gate, scheduler, registry, paid inference or self-review. Native safety remains separate from product checks. Failed checks mean unfinished work; uncertain merge needs reconciliation, not replay.
 
 ```mermaid
 flowchart TD
-    request["Authorized request"] --> author{"FR-only authoring?"}
-    author -->|yes| publish["Guarded FR-only main publication; no product checks"]
-    author -->|no| select["Backlog: fetched default; due maintenance else first Ready; fixed task"]
+    request["Authorized request"] --> safety["Scoped authority, native permissions, privacy / Git safety"]
+    safety --> author{"FR-only authoring?"}
+    author -->|yes| publish["Guarded FR-only publication; no product checks"]
+    author -->|no| select["Backlog: identity / sync when needed; one fixed task"]
     select --> scope{"Only development changes?"}
-    scope -->|yes| skip["Skip product tests, validator, version / release work"]
-    scope -->|no| product["Repository product verification and release facts"]
-    product --> live{"Live-model test explicitly authorized?"}
-    live -->|no| denied["No model calls; live tests default-denied"]
+    scope -->|yes| skip["Skip product checks and version / release work"]
+    scope -->|no| product["Repository tests, validation, relevant read-only installation proof / release facts"]
+    product --> live{"Model inference explicitly authorized?"}
+    live -->|no| denied["No model calls; default-denied"]
     live -->|yes| bounded["Only established bounded authorized test"]
-    denied --> outcome{"Required checks successful?"}
+    denied --> outcome{"Applicable checks successful?"}
     bounded --> outcome
-    outcome -->|no| repair["Repair cause; retain selected work"]
-    repair --> product
-    outcome -->|yes| safe["Permissions, privacy and ordinary Git verification"]
-    skip --> safe
-    safe --> pr["PR against actual default; inspect checks / blockers"]
-    pr --> truth{"Confirmed merge and default read-back?"}
+    outcome -->|no| repair["Repair cause; preserve selected work"]
+    repair --> scope
+    outcome -->|yes| pr["PR to actual default; inspect blockers"]
+    skip --> pr
+    pr --> ci{"Configured CI triggered?"}
+    ci -->|yes| checks["Hosted Web Beta jobs; report actual failures / skips"]
+    ci -->|no| merge["Normal protected merge"]
+    checks --> permitted{"Checks / protections permit merge?"}
+    permitted -->|no| repair
+    permitted -->|yes| merge
+    merge --> truth{"Merge and default read-back confirmed?"}
     truth -->|no or uncertain| preserve["Preserve pending work; reconcile actual Git truth"]
-    preserve --> pr
-    truth -->|yes| delivery["Report actual delivery; native bulk cleanup attempt, any outcome"]
-    delivery --> finish["Native finish; after-response fresh worker"]
+    preserve --> merge
+    truth -->|yes| finish["Report delivery; native finish / bounded cleanup; fresh worker after response"]
 ```
 
 ### What runs and why
 
 | Stage | Scope / activation | Disposition | Exact source owner | Failure handling |
 | --- | --- | --- | --- | --- |
-| FR publication | Approved FR-only authoring | Required safety; product checks skipped | Installed `shared-repo/references/fr-authoring.md` | Preserve unrelated work; reconcile fresh default |
-| Contract Sync / selection | Fresh Backlog invocation | Required installed identity check; sync-only when older, otherwise one due maintenance method or first Ready | Installed `/repo-backlog`, `shared-repo/references/contract-sync.md`, `development/applied-contract.json` | No downgrade; no due method and empty Ready ends no-work; keep selected task |
-| Development-only | All changed paths under development | Product checks/version disabled | Installed `shared-repo/references/contract.md`; this tree's `development/README.md` | Do not activate product gates for documentation/state |
-| Product verification | Shipped-source changes | Repository-owned applicable tests/security checks | `development/tools/run_tests.py`, `development/tools/validate_package.py`, `src/version.py`, `VERSION_HISTORY.md`, `README.md` | Investigate/repair required failures; never weaken assertions |
-| Real installation / live tests | Relevant product proof; model inference separately authorized | Read-only probes conditional; live-model default-denied | `development/tools/collect_diagnostics.py`; `development/tests/integration/live/` is reserved, not an implemented runner | Do not stop shared OpenCode; disclose unavailable proof; no invented freeze/dispatch owner |
-| PR / merge | Authorized delivery | Required Git safety; self-review not a gate | Installed `/repo-backlog` and actual GitHub default/protection/check state | No force/protection bypass; uncertain merge requires read-back, not replay |
-| Delivery / handoff | Confirmed merge and default read-back | Truthful finish and native bulk cleanup attempt required; deletion success not required; no delivery receipt | Installed native `repo_backlog` finish | Cleanup failure/skip does not block handoff; no second task here; fresh worker starts after response |
-
-Milestone-30 source assessment: `development/journal/architecture.md` (historical base `020e50071671ee863ceffcd37b6871af789bbe0f` plus that maintenance diff). Global coordination is retained; two unreachable comparison modules are removed and evidence moves to the existing analysis records owner. [Module-level comparison map](modules/analysis.md#comparison-ownership-checked-2026-11-04). Native desktop proof remains separate.
+| FR publication / selection | FR-only authoring or fresh Backlog | Scoped authority; fixed task; sync when outdated | Installed `shared-repo/references/fr-authoring.md`, `shared-repo/references/backlog-worker.md`, `shared-repo/references/contract-sync.md`; `development/applied-contract.json` | Preserve unrelated work; no reselect; no due work/Ready ends no-work |
+| Development-only | Changes confined to development | Product tests, validator, budgets and version work disabled | `development/README.md`; installed `shared-repo/references/maintenance.md` | Check changed facts/routes; do not invent product PASS |
+| Product verification | Shipped-source changes | Applicable tests/security/release checks | `development/tools/run_tests.py`, `development/tools/validate_package.py`; `development/repository.json`, `src/version.py`, `VERSION_HISTORY.md`, `README.md` | Repair required failures; no weakened assertion/baseline |
+| Real installation / inference | Relevant local proof; inference separately authorized | Conditional read-only probes; inference default-denied | `development/tools/collect_diagnostics.py`; exact probes in CODE_MAP; `development/tests/integration/live/` reserved, not a runner | Never stop shared OpenCode; disclose unavailable proof; no invented model dispatch/freeze owner |
+| Hosted CI | Cumulative product/test/tool/workflow paths on main PR/push, or manual dispatch; public repo only | Linux plus native Windows/macOS jobs; docs/state-only diff does not trigger | `.github/workflows/web-beta.yml`; `development/tools/ci_web_beta.py` dispatch / `hosted_only`; `development/tests/integration/ci_browser_web.py`, `development/tests/integration/ci_native_web.py` | Bounded phases, explicit missing/failed/skipped evidence; no private paid fallback or workstation spoofing |
+| PR / merge | Authorized delivery | Actual checks/protections required; quarantined PR review not automatic | Installed `/repo-backlog`; actual GitHub default / protection state | No force/bypass; uncertain effect needs read-back, not duplicate mutation |
+| Delivery / handoff | Confirmed merge and default read-back | Truthful report; native bounded cleanup attempt, deletion success not required | Installed native `repo_backlog` finish | Partial/skipped cleanup does not block; no cleanup retry or second task here |
