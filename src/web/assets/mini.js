@@ -107,10 +107,18 @@ const MiniWatch = (() => {
   function heightCap(win) {
     return Math.min(1000, win.screen?.availHeight > 0 ? win.screen.availHeight : 1000);
   }
-  function geometry(win) {
+  function headerWidth(view) {
+    // Measure only the real header, not the tables' intrinsic column minima.
+    const copy = view.root.firstElementChild.cloneNode(true);
+    copy.classList.add('mini-header-measuring'); copy.inert = true;
+    copy.setAttribute('aria-hidden', 'true'); view.root.append(copy);
+    try { return copy.getBoundingClientRect().width; }
+    finally { copy.remove(); }
+  }
+  function geometry(win, frameWidth = 0) {
     // CSS document pixels and screen DIPs differ with browser zoom. The opener's
     // outer/inner ratio is an estimate before the first PiP exists, not OS proof.
-    const scale = win.outerWidth > 0 && win.innerWidth > 0 ? win.outerWidth / win.innerWidth : 1;
+    const scale = win.outerWidth > frameWidth && win.innerWidth > 0 ? (win.outerWidth - frameWidth) / win.innerWidth : 1;
     return {scale, frame: Math.max(0, win.outerHeight - win.innerHeight * scale)};
   }
   function targetHeight(view) {
@@ -483,9 +491,16 @@ const MiniWatch = (() => {
         for (const name of ['app.css', 'mini.css']) {
           const link = doc.createElement('link'); link.rel = 'stylesheet';
           link.href = new URL('/' + name, this.owner.location.href).href;
-          styles.push(new Promise(resolve => link.addEventListener('load', resolve, {once:true})));
+          styles.push(new Promise((resolve, reject) => {
+            link.addEventListener('load', resolve, {once:true});
+            link.addEventListener('error', reject, {once:true});
+          }));
           doc.head.append(link);
         }
+        // Avoid an unstyled first layout creating a vertical scrollbar which then
+        // steals the measured header width and keeps itself alive through wrapping.
+        await Promise.all(styles);
+        if (request.cancelled || this.ended || win.closed || this.window !== win) { this.release(win); win.close(); return; }
         this.view = new View(doc, () => {
           this.returnToWatch();
           try { this.owner.focus(); }
@@ -494,13 +509,14 @@ const MiniWatch = (() => {
         // A visible PiP document owns this freshness timer, not a hidden main rAF.
         this.timer = win.setInterval(() => { this.sync(); this.render(); }, 5000);
         this.render(); this.feedback.textContent = '';
-        Promise.all(styles).then(() => win.requestAnimationFrame(() => {
+        win.requestAnimationFrame(() => {
           if (this.window !== win || win.closed) return;
           this.openingBounds = {outerWidth:win.outerWidth, outerHeight:win.outerHeight,
             innerWidth:win.innerWidth, innerHeight:win.innerHeight, requested:dimensions};
-          if (size === 'fit-on-open' && this.view.fitHeight() > win.outerHeight + 2)
+          if (size === 'fit-on-open' && (this.view.fitHeight() > win.outerHeight + 2 ||
+              headerWidth(this.view) > this.view.root.getBoundingClientRect().width + 1))
             this.feedback.textContent = 'Browser size limits prevented the full opening fit. Scroll Mini Watch to reach all content.';
-        }));
+        });
       } catch (_) {
         if (win) { this.release(win); win.close(); }
         this.feedback.textContent = 'Mini Watch could not open. Check browser support, policy and user-activation restrictions; click to retry.';
@@ -569,14 +585,21 @@ const MiniWatch = (() => {
       view.update(controller.publication, controller.healthState, now - controller.receivedAt > 15000, controller.observations, now);
       // First-open native frame estimate is intentionally conservative; the API has
       // no pre-open frame/zoom query. Screen clamps remain browser-owned and scrollable.
-      const scale = geometry(owner).scale;
-      const width = Math.min(650, owner.screen?.availWidth || 650);
       const frameWidth = 16, frameHeight = 48;
+      // Do not misinterpret the opener's native side frame as page zoom.
+      const scale = geometry(owner, controller.size === 'remember-last' ? 0 : frameWidth).scale;
       const style = owner.getComputedStyle(this.body);
       const padding = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
-      const contentWidth = (width - frameWidth) / scale - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+      const horizontal = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
+      // Two CSS pixels cover fractional font/native rounding, not a fixed window
+      // target. Remember mode keeps its existing first-open request; the browser
+      // may reuse manual bounds instead. No new minimum is imposed on that mode.
+      const requested = controller.size === 'remember-last' ? 650 - frameWidth :
+        Math.ceil((headerWidth(view) + horizontal + 2) * scale);
+      const width = Math.max(1, Math.min(requested, owner.screen?.availWidth > 0 ? owner.screen.availWidth - frameWidth : requested));
+      const contentWidth = width / scale - horizontal;
       const height = Math.ceil((contentHeight(view, contentWidth) + padding + 6) * scale);
-      return {width: Math.max(1, width - frameWidth), height: Math.max(1, Math.min(heightCap(owner) - frameHeight, height))};
+      return {width, height: Math.max(1, Math.min(heightCap(owner) - frameHeight, height))};
     }
     close() { this.host.remove(); }
   }

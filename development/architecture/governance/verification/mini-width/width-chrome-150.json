@@ -1,0 +1,5425 @@
+{
+  "outcome": "PASS",
+  "scale": "1.5",
+  "zoom": "1",
+  "layouts": [
+    {
+      "case": "intrinsic-width",
+      "theme": "classic",
+      "font": "system-ui",
+      "unit": "credits",
+      "state": "observed",
+      "outer": [
+        430,
+        434
+      ],
+      "position": [
+        1469,
+        745
+      ],
+      "inner": [
+        414,
+        392
+      ],
+      "screen": [
+        1920,
+        1200
+      ],
+      "dpr": 1.5,
+      "request": {
+        "width": 413,
+        "height": 391,
+        "preferInitialWindowPlacement": true
+      },
+      "desired": 431,
+      "rows": 2,
+      "accounts": 6,
+      "expanded": false,
+      "scroll": [],
+      "header": {
+        "fits": true,
+        "width": 399,
+        "parts": [
+          {
+            "text": "Cost Guard · Watch",
+            "lines": [
+              {
+                "left": 11.916666984558105,
+                "right": 116.29167461395264,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "Earlier Sessions",
+            "lines": [
+              {
+                "left": 139.4166717529297,
+                "right": 217.23959350585938,
+                "top": 12.114583969116211,
+                "bottom": 26.78125
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "CCost Today 6 152 · 106 prompts",
+            "lines": [
+              {
+                "left": 232.2291717529297,
+                "right": 406.5,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          }
+        ],
+        "documentOverflow": false
+      },
+      "bodyHeight": 384.3333435058594,
+      "rootHeight": 369.3333435058594,
+      "promptRows": [
+        25.416667938232422,
+        24.75
+      ],
+      "measurement": {
+        "width": 395.9270935058594,
+        "parts": [
+          {
+            "width": 113.20833587646484,
+            "font": "600 12px / 18.6px system-ui"
+          },
+          {
+            "width": 93.44792175292969,
+            "font": "600 11.25px / 17.4375px system-ui"
+          },
+          {
+            "width": 174.27084350585938,
+            "font": "12px / 18.6px system-ui"
+          }
+        ],
+        "actual": [
+          {
+            "width": 113.20833587646484,
+            "font": "600 12px / 18.6px system-ui"
+          },
+          {
+            "width": 93.44792175292969,
+            "font": "600 11.25px / 17.4375px system-ui"
+          },
+          {
+            "width": 174.27084350585938,
+            "font": "12px / 18.6px system-ui"
+          }
+        ]
+      },
+      "narrower": {
+        "fits": false,
+        "width": 393,
+        "parts": [
+          {
+            "text": "Cost Guard · Watch",
+            "lines": [
+              {
+                "left": 11.916666984558105,
+                "right": 116.29167461395264,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "Earlier Sessions",
+            "lines": [
+              {
+                "left": 318.26043701171875,
+                "right": 396.0833435058594,
+                "top": 12.114583969116211,
+                "bottom": 26.78125
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "CCost Today 6 152 · 106 prompts",
+            "lines": [
+              {
+                "left": 226.2291717529297,
+                "right": 400.5,
+                "top": 35.16666793823242,
+                "bottom": 51.16666793823242
+              }
+            ],
+            "overflow": false
+          }
+        ],
+        "documentOverflow": false
+      }
+    },
+    {
+      "case": "intrinsic-width",
+      "theme": "classic",
+      "font": "system-ui",
+      "unit": "usd",
+      "state": "observed",
+      "outer": [
+        494,
+        434
+      ],
+      "position": [
+        1406,
+        746
+      ],
+      "inner": [
+        478,
+        392
+      ],
+      "screen": [
+        1920,
+        1200
+      ],
+      "dpr": 1.5,
+      "request": {
+        "width": 477,
+        "height": 391,
+        "preferInitialWindowPlacement": true
+      },
+      "desired": 431,
+      "rows": 2,
+      "accounts": 6,
+      "expanded": false,
+      "scroll": [],
+      "header": {
+        "fits": true,
+        "width": 463,
+        "parts": [
+          {
+            "text": "Cost Guard · Watch",
+            "lines": [
+              {
+                "left": 11.916666984558105,
+                "right": 116.29167461395264,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "Earlier Sessions",
+            "lines": [
+              {
+                "left": 139.4166717529297,
+                "right": 217.23959350585938,
+                "top": 12.114583969116211,
+                "bottom": 26.78125
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "CCost Today $123456.78 · 99999999 prompts",
+            "lines": [
+              {
+                "left": 232.2291717529297,
+                "right": 470.5,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          }
+        ],
+        "documentOverflow": false
+      },
+      "bodyHeight": 384.3333435058594,
+      "rootHeight": 369.3333435058594,
+      "promptRows": [
+        25.416667938232422,
+        24.75
+      ],
+      "measurement": {
+        "width": 459.9270935058594,
+        "parts": [
+          {
+            "width": 113.20833587646484,
+            "font": "600 12px / 18.6px system-ui"
+          },
+          {
+            "width": 93.44792175292969,
+            "font": "600 11.25px / 17.4375px system-ui"
+          },
+          {
+            "width": 238.27084350585938,
+            "font": "12px / 18.6px system-ui"
+          }
+        ],
+        "actual": [
+          {
+            "width": 113.20833587646484,
+            "font": "600 12px / 18.6px system-ui"
+          },
+          {
+            "width": 93.44792175292969,
+            "font": "600 11.25px / 17.4375px system-ui"
+          },
+          {
+            "width": 238.27084350585938,
+            "font": "12px / 18.6px system-ui"
+          }
+        ]
+      },
+      "narrower": {
+        "fits": false,
+        "width": 457,
+        "parts": [
+          {
+            "text": "Cost Guard · Watch",
+            "lines": [
+              {
+                "left": 11.916666984558105,
+                "right": 116.29167461395264,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "Earlier Sessions",
+            "lines": [
+              {
+                "left": 382.26043701171875,
+                "right": 460.0833435058594,
+                "top": 12.114583969116211,
+                "bottom": 26.78125
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "CCost Today $123456.78 · 99999999 prompts",
+            "lines": [
+              {
+                "left": 226.2291717529297,
+                "right": 464.5,
+                "top": 35.16666793823242,
+                "bottom": 51.16666793823242
+              }
+            ],
+            "overflow": false
+          }
+        ],
+        "documentOverflow": false
+      }
+    },
+    {
+      "case": "intrinsic-width",
+      "theme": "classic",
+      "font": "system-ui",
+      "unit": "credits",
+      "state": "loading",
+      "outer": [
+        382,
+        434
+      ],
+      "position": [
+        1516,
+        744
+      ],
+      "inner": [
+        366,
+        392
+      ],
+      "screen": [
+        1920,
+        1200
+      ],
+      "dpr": 1.5,
+      "request": {
+        "width": 365,
+        "height": 391,
+        "preferInitialWindowPlacement": true
+      },
+      "desired": 431,
+      "rows": 2,
+      "accounts": 6,
+      "expanded": false,
+      "scroll": [],
+      "header": {
+        "fits": true,
+        "width": 351,
+        "parts": [
+          {
+            "text": "Cost Guard · Watch",
+            "lines": [
+              {
+                "left": 11.916666984558105,
+                "right": 116.29167461395264,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "Earlier Sessions",
+            "lines": [
+              {
+                "left": 139.4166717529297,
+                "right": 217.23959350585938,
+                "top": 12.114583969116211,
+                "bottom": 26.78125
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "CCost Today · Loading…",
+            "lines": [
+              {
+                "left": 232.77084350585938,
+                "right": 358.5,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          }
+        ],
+        "documentOverflow": false
+      },
+      "bodyHeight": 384.3333435058594,
+      "rootHeight": 369.3333435058594,
+      "promptRows": [
+        25.416667938232422,
+        24.75
+      ],
+      "measurement": {
+        "width": 347.38543701171875,
+        "parts": [
+          {
+            "width": 113.20833587646484,
+            "font": "600 12px / 18.6px system-ui"
+          },
+          {
+            "width": 93.44792175292969,
+            "font": "600 11.25px / 17.4375px system-ui"
+          },
+          {
+            "width": 125.72917175292969,
+            "font": "12px / 18.6px system-ui"
+          }
+        ],
+        "actual": [
+          {
+            "width": 113.20833587646484,
+            "font": "600 12px / 18.6px system-ui"
+          },
+          {
+            "width": 93.44792175292969,
+            "font": "600 11.25px / 17.4375px system-ui"
+          },
+          {
+            "width": 125.72917175292969,
+            "font": "12px / 18.6px system-ui"
+          }
+        ]
+      },
+      "narrower": {
+        "fits": false,
+        "width": 345,
+        "parts": [
+          {
+            "text": "Cost Guard · Watch",
+            "lines": [
+              {
+                "left": 11.916666984558105,
+                "right": 116.29167461395264,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "Earlier Sessions",
+            "lines": [
+              {
+                "left": 270.26043701171875,
+                "right": 348.0833435058594,
+                "top": 12.114583969116211,
+                "bottom": 26.78125
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "CCost Today · Loading…",
+            "lines": [
+              {
+                "left": 226.77084350585938,
+                "right": 352.5,
+                "top": 35.16666793823242,
+                "bottom": 51.16666793823242
+              }
+            ],
+            "overflow": false
+          }
+        ],
+        "documentOverflow": false
+      }
+    },
+    {
+      "case": "intrinsic-width",
+      "theme": "classic",
+      "font": "system-ui",
+      "unit": "credits",
+      "state": "unavailable",
+      "outer": [
+        392,
+        434
+      ],
+      "position": [
+        1507,
+        745
+      ],
+      "inner": [
+        376,
+        392
+      ],
+      "screen": [
+        1920,
+        1200
+      ],
+      "dpr": 1.5,
+      "request": {
+        "width": 375,
+        "height": 391,
+        "preferInitialWindowPlacement": true
+      },
+      "desired": 431,
+      "rows": 2,
+      "accounts": 6,
+      "expanded": false,
+      "scroll": [],
+      "header": {
+        "fits": true,
+        "width": 361,
+        "parts": [
+          {
+            "text": "Cost Guard · Watch",
+            "lines": [
+              {
+                "left": 11.916666984558105,
+                "right": 116.29167461395264,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "Earlier Sessions",
+            "lines": [
+              {
+                "left": 139.4166717529297,
+                "right": 217.23959350585938,
+                "top": 12.114583969116211,
+                "bottom": 26.78125
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "CCost Today · Unavailable",
+            "lines": [
+              {
+                "left": 233.03125,
+                "right": 368.5,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          }
+        ],
+        "documentOverflow": false
+      },
+      "bodyHeight": 384.3333435058594,
+      "rootHeight": 369.3333435058594,
+      "promptRows": [
+        25.416667938232422,
+        24.75
+      ],
+      "measurement": {
+        "width": 357.125,
+        "parts": [
+          {
+            "width": 113.20833587646484,
+            "font": "600 12px / 18.6px system-ui"
+          },
+          {
+            "width": 93.44792175292969,
+            "font": "600 11.25px / 17.4375px system-ui"
+          },
+          {
+            "width": 135.46875,
+            "font": "12px / 18.6px system-ui"
+          }
+        ],
+        "actual": [
+          {
+            "width": 113.20833587646484,
+            "font": "600 12px / 18.6px system-ui"
+          },
+          {
+            "width": 93.44792175292969,
+            "font": "600 11.25px / 17.4375px system-ui"
+          },
+          {
+            "width": 135.46875,
+            "font": "12px / 18.6px system-ui"
+          }
+        ]
+      },
+      "narrower": {
+        "fits": false,
+        "width": 355,
+        "parts": [
+          {
+            "text": "Cost Guard · Watch",
+            "lines": [
+              {
+                "left": 11.916666984558105,
+                "right": 116.29167461395264,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "Earlier Sessions",
+            "lines": [
+              {
+                "left": 280.26043701171875,
+                "right": 358.0833435058594,
+                "top": 12.114583969116211,
+                "bottom": 26.78125
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "CCost Today · Unavailable",
+            "lines": [
+              {
+                "left": 227.03125,
+                "right": 362.5,
+                "top": 35.16666793823242,
+                "bottom": 51.16666793823242
+              }
+            ],
+            "overflow": false
+          }
+        ],
+        "documentOverflow": false
+      }
+    },
+    {
+      "case": "intrinsic-width",
+      "theme": "classic",
+      "font": "serif",
+      "unit": "credits",
+      "state": "observed",
+      "outer": [
+        416,
+        434
+      ],
+      "position": [
+        1483,
+        745
+      ],
+      "inner": [
+        400,
+        392
+      ],
+      "screen": [
+        1920,
+        1200
+      ],
+      "dpr": 1.5,
+      "request": {
+        "width": 399,
+        "height": 391,
+        "preferInitialWindowPlacement": true
+      },
+      "desired": 431,
+      "rows": 2,
+      "accounts": 6,
+      "expanded": false,
+      "scroll": [],
+      "header": {
+        "fits": true,
+        "width": 385,
+        "parts": [
+          {
+            "text": "Cost Guard · Watch",
+            "lines": [
+              {
+                "left": 11.916666984558105,
+                "right": 115.38542461395264,
+                "top": 12.197916984558105,
+                "bottom": 25.53125
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "Earlier Sessions",
+            "lines": [
+              {
+                "left": 138.28125,
+                "right": 214.625,
+                "top": 12.78125,
+                "bottom": 25.447917938232422
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "CCost Today 6 152 · 106 prompts",
+            "lines": [
+              {
+                "left": 229.55209350585938,
+                "right": 392.5,
+                "top": 12.197916984558105,
+                "bottom": 25.53125
+              }
+            ],
+            "overflow": false
+          }
+        ],
+        "documentOverflow": false
+      },
+      "bodyHeight": 384.3333435058594,
+      "rootHeight": 369.3333435058594,
+      "promptRows": [
+        25.416667938232422,
+        24.75
+      ],
+      "measurement": {
+        "width": 381.9895935058594,
+        "parts": [
+          {
+            "width": 112.30208587646484,
+            "font": "600 12px / 18.6px serif"
+          },
+          {
+            "width": 91.73958587646484,
+            "font": "600 11.25px / 17.4375px serif"
+          },
+          {
+            "width": 162.9479217529297,
+            "font": "12px / 18.6px serif"
+          }
+        ],
+        "actual": [
+          {
+            "width": 112.30208587646484,
+            "font": "600 12px / 18.6px serif"
+          },
+          {
+            "width": 91.73958587646484,
+            "font": "600 11.25px / 17.4375px serif"
+          },
+          {
+            "width": 162.9479217529297,
+            "font": "12px / 18.6px serif"
+          }
+        ]
+      },
+      "narrower": {
+        "fits": false,
+        "width": 379,
+        "parts": [
+          {
+            "text": "Cost Guard · Watch",
+            "lines": [
+              {
+                "left": 11.916666984558105,
+                "right": 115.38542461395264,
+                "top": 12.197916984558105,
+                "bottom": 25.53125
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "Earlier Sessions",
+            "lines": [
+              {
+                "left": 305.7395935058594,
+                "right": 382.0833435058594,
+                "top": 12.78125,
+                "bottom": 25.447917938232422
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "CCost Today 6 152 · 106 prompts",
+            "lines": [
+              {
+                "left": 223.55209350585938,
+                "right": 386.5,
+                "top": 36.5,
+                "bottom": 49.833335876464844
+              }
+            ],
+            "overflow": false
+          }
+        ],
+        "documentOverflow": false
+      }
+    },
+    {
+      "case": "intrinsic-width",
+      "theme": "classic",
+      "font": "serif",
+      "unit": "usd",
+      "state": "observed",
+      "outer": [
+        476,
+        434
+      ],
+      "position": [
+        1423,
+        745
+      ],
+      "inner": [
+        460,
+        392
+      ],
+      "screen": [
+        1920,
+        1200
+      ],
+      "dpr": 1.5,
+      "request": {
+        "width": 459,
+        "height": 391,
+        "preferInitialWindowPlacement": true
+      },
+      "desired": 431,
+      "rows": 2,
+      "accounts": 6,
+      "expanded": false,
+      "scroll": [],
+      "header": {
+        "fits": true,
+        "width": 445,
+        "parts": [
+          {
+            "text": "Cost Guard · Watch",
+            "lines": [
+              {
+                "left": 11.916666984558105,
+                "right": 115.38542461395264,
+                "top": 12.197916984558105,
+                "bottom": 25.53125
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "Earlier Sessions",
+            "lines": [
+              {
+                "left": 138.28125,
+                "right": 214.625,
+                "top": 12.78125,
+                "bottom": 25.447917938232422
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "CCost Today $123456.78 · 99999999 prompts",
+            "lines": [
+              {
+                "left": 229.55209350585938,
+                "right": 452.5,
+                "top": 12.197916984558105,
+                "bottom": 25.53125
+              }
+            ],
+            "overflow": false
+          }
+        ],
+        "documentOverflow": false
+      },
+      "bodyHeight": 384.3333435058594,
+      "rootHeight": 369.3333435058594,
+      "promptRows": [
+        25.416667938232422,
+        24.75
+      ],
+      "measurement": {
+        "width": 441.9895935058594,
+        "parts": [
+          {
+            "width": 112.30208587646484,
+            "font": "600 12px / 18.6px serif"
+          },
+          {
+            "width": 91.73958587646484,
+            "font": "600 11.25px / 17.4375px serif"
+          },
+          {
+            "width": 222.9479217529297,
+            "font": "12px / 18.6px serif"
+          }
+        ],
+        "actual": [
+          {
+            "width": 112.30208587646484,
+            "font": "600 12px / 18.6px serif"
+          },
+          {
+            "width": 91.73958587646484,
+            "font": "600 11.25px / 17.4375px serif"
+          },
+          {
+            "width": 222.9479217529297,
+            "font": "12px / 18.6px serif"
+          }
+        ]
+      },
+      "narrower": {
+        "fits": false,
+        "width": 439,
+        "parts": [
+          {
+            "text": "Cost Guard · Watch",
+            "lines": [
+              {
+                "left": 11.916666984558105,
+                "right": 115.38542461395264,
+                "top": 12.197916984558105,
+                "bottom": 25.53125
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "Earlier Sessions",
+            "lines": [
+              {
+                "left": 365.7395935058594,
+                "right": 442.0833435058594,
+                "top": 12.78125,
+                "bottom": 25.447917938232422
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "CCost Today $123456.78 · 99999999 prompts",
+            "lines": [
+              {
+                "left": 223.55209350585938,
+                "right": 446.5,
+                "top": 36.5,
+                "bottom": 49.833335876464844
+              }
+            ],
+            "overflow": false
+          }
+        ],
+        "documentOverflow": false
+      }
+    },
+    {
+      "case": "intrinsic-width",
+      "theme": "classic",
+      "font": "serif",
+      "unit": "credits",
+      "state": "loading",
+      "outer": [
+        378,
+        434
+      ],
+      "position": [
+        1520,
+        744
+      ],
+      "inner": [
+        362,
+        392
+      ],
+      "screen": [
+        1920,
+        1200
+      ],
+      "dpr": 1.5,
+      "request": {
+        "width": 361,
+        "height": 391,
+        "preferInitialWindowPlacement": true
+      },
+      "desired": 431,
+      "rows": 2,
+      "accounts": 6,
+      "expanded": false,
+      "scroll": [],
+      "header": {
+        "fits": true,
+        "width": 347,
+        "parts": [
+          {
+            "text": "Cost Guard · Watch",
+            "lines": [
+              {
+                "left": 11.916666984558105,
+                "right": 115.38542461395264,
+                "top": 12.197916984558105,
+                "bottom": 25.53125
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "Earlier Sessions",
+            "lines": [
+              {
+                "left": 138.28125,
+                "right": 214.625,
+                "top": 12.78125,
+                "bottom": 25.447917938232422
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "CCost Today · Loading…",
+            "lines": [
+              {
+                "left": 229.89584350585938,
+                "right": 354.5,
+                "top": 12.197916984558105,
+                "bottom": 25.53125
+              }
+            ],
+            "overflow": false
+          }
+        ],
+        "documentOverflow": false
+      },
+      "bodyHeight": 384.3333435058594,
+      "rootHeight": 369.3333435058594,
+      "promptRows": [
+        25.416667938232422,
+        24.75
+      ],
+      "measurement": {
+        "width": 343.6458435058594,
+        "parts": [
+          {
+            "width": 112.30208587646484,
+            "font": "600 12px / 18.6px serif"
+          },
+          {
+            "width": 91.73958587646484,
+            "font": "600 11.25px / 17.4375px serif"
+          },
+          {
+            "width": 124.60417175292969,
+            "font": "12px / 18.6px serif"
+          }
+        ],
+        "actual": [
+          {
+            "width": 112.30208587646484,
+            "font": "600 12px / 18.6px serif"
+          },
+          {
+            "width": 91.73958587646484,
+            "font": "600 11.25px / 17.4375px serif"
+          },
+          {
+            "width": 124.60417175292969,
+            "font": "12px / 18.6px serif"
+          }
+        ]
+      },
+      "narrower": {
+        "fits": false,
+        "width": 341,
+        "parts": [
+          {
+            "text": "Cost Guard · Watch",
+            "lines": [
+              {
+                "left": 11.916666984558105,
+                "right": 115.38542461395264,
+                "top": 12.197916984558105,
+                "bottom": 25.53125
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "Earlier Sessions",
+            "lines": [
+              {
+                "left": 267.7395935058594,
+                "right": 344.0833435058594,
+                "top": 12.78125,
+                "bottom": 25.447917938232422
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "CCost Today · Loading…",
+            "lines": [
+              {
+                "left": 223.89584350585938,
+                "right": 348.5,
+                "top": 36.5,
+                "bottom": 49.833335876464844
+              }
+            ],
+            "overflow": false
+          }
+        ],
+        "documentOverflow": false
+      }
+    },
+    {
+      "case": "intrinsic-width",
+      "theme": "classic",
+      "font": "serif",
+      "unit": "credits",
+      "state": "unavailable",
+      "outer": [
+        384,
+        434
+      ],
+      "position": [
+        1514,
+        744
+      ],
+      "inner": [
+        368,
+        392
+      ],
+      "screen": [
+        1920,
+        1200
+      ],
+      "dpr": 1.5,
+      "request": {
+        "width": 367,
+        "height": 391,
+        "preferInitialWindowPlacement": true
+      },
+      "desired": 431,
+      "rows": 2,
+      "accounts": 6,
+      "expanded": false,
+      "scroll": [],
+      "header": {
+        "fits": true,
+        "width": 353,
+        "parts": [
+          {
+            "text": "Cost Guard · Watch",
+            "lines": [
+              {
+                "left": 11.916666984558105,
+                "right": 115.38542461395264,
+                "top": 12.197916984558105,
+                "bottom": 25.53125
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "Earlier Sessions",
+            "lines": [
+              {
+                "left": 138.28125,
+                "right": 214.625,
+                "top": 12.78125,
+                "bottom": 25.447917938232422
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "CCost Today · Unavailable",
+            "lines": [
+              {
+                "left": 229.9166717529297,
+                "right": 360.5,
+                "top": 12.197916984558105,
+                "bottom": 25.53125
+              }
+            ],
+            "overflow": false
+          }
+        ],
+        "documentOverflow": false
+      },
+      "bodyHeight": 384.3333435058594,
+      "rootHeight": 369.3333435058594,
+      "promptRows": [
+        25.416667938232422,
+        24.75
+      ],
+      "measurement": {
+        "width": 349.625,
+        "parts": [
+          {
+            "width": 112.30208587646484,
+            "font": "600 12px / 18.6px serif"
+          },
+          {
+            "width": 91.73958587646484,
+            "font": "600 11.25px / 17.4375px serif"
+          },
+          {
+            "width": 130.58334350585938,
+            "font": "12px / 18.6px serif"
+          }
+        ],
+        "actual": [
+          {
+            "width": 112.30208587646484,
+            "font": "600 12px / 18.6px serif"
+          },
+          {
+            "width": 91.73958587646484,
+            "font": "600 11.25px / 17.4375px serif"
+          },
+          {
+            "width": 130.58334350585938,
+            "font": "12px / 18.6px serif"
+          }
+        ]
+      },
+      "narrower": {
+        "fits": false,
+        "width": 347,
+        "parts": [
+          {
+            "text": "Cost Guard · Watch",
+            "lines": [
+              {
+                "left": 11.916666984558105,
+                "right": 115.38542461395264,
+                "top": 12.197916984558105,
+                "bottom": 25.53125
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "Earlier Sessions",
+            "lines": [
+              {
+                "left": 273.7395935058594,
+                "right": 350.0833435058594,
+                "top": 12.78125,
+                "bottom": 25.447917938232422
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "CCost Today · Unavailable",
+            "lines": [
+              {
+                "left": 223.9166717529297,
+                "right": 354.5,
+                "top": 36.5,
+                "bottom": 49.833335876464844
+              }
+            ],
+            "overflow": false
+          }
+        ],
+        "documentOverflow": false
+      }
+    },
+    {
+      "case": "intrinsic-width",
+      "theme": "web",
+      "font": "system-ui",
+      "unit": "credits",
+      "state": "observed",
+      "outer": [
+        430,
+        434
+      ],
+      "position": [
+        1469,
+        745
+      ],
+      "inner": [
+        414,
+        392
+      ],
+      "screen": [
+        1920,
+        1200
+      ],
+      "dpr": 1.5,
+      "request": {
+        "width": 413,
+        "height": 391,
+        "preferInitialWindowPlacement": true
+      },
+      "desired": 431,
+      "rows": 2,
+      "accounts": 6,
+      "expanded": false,
+      "scroll": [],
+      "header": {
+        "fits": true,
+        "width": 399,
+        "parts": [
+          {
+            "text": "Cost Guard · Watch",
+            "lines": [
+              {
+                "left": 11.916666984558105,
+                "right": 116.29167461395264,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "Earlier Sessions",
+            "lines": [
+              {
+                "left": 139.4166717529297,
+                "right": 217.23959350585938,
+                "top": 12.114583969116211,
+                "bottom": 26.78125
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "CCost Today 6 152 · 106 prompts",
+            "lines": [
+              {
+                "left": 232.2291717529297,
+                "right": 406.5,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          }
+        ],
+        "documentOverflow": false
+      },
+      "bodyHeight": 384.3333435058594,
+      "rootHeight": 369.3333435058594,
+      "promptRows": [
+        25.416667938232422,
+        24.75
+      ],
+      "measurement": {
+        "width": 395.9270935058594,
+        "parts": [
+          {
+            "width": 113.20833587646484,
+            "font": "600 12px / 18.6px system-ui"
+          },
+          {
+            "width": 93.44792175292969,
+            "font": "600 11.25px / 17.4375px system-ui"
+          },
+          {
+            "width": 174.27084350585938,
+            "font": "12px / 18.6px system-ui"
+          }
+        ],
+        "actual": [
+          {
+            "width": 113.20833587646484,
+            "font": "600 12px / 18.6px system-ui"
+          },
+          {
+            "width": 93.44792175292969,
+            "font": "600 11.25px / 17.4375px system-ui"
+          },
+          {
+            "width": 174.27084350585938,
+            "font": "12px / 18.6px system-ui"
+          }
+        ]
+      },
+      "narrower": {
+        "fits": false,
+        "width": 393,
+        "parts": [
+          {
+            "text": "Cost Guard · Watch",
+            "lines": [
+              {
+                "left": 11.916666984558105,
+                "right": 116.29167461395264,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "Earlier Sessions",
+            "lines": [
+              {
+                "left": 318.26043701171875,
+                "right": 396.0833435058594,
+                "top": 12.114583969116211,
+                "bottom": 26.78125
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "CCost Today 6 152 · 106 prompts",
+            "lines": [
+              {
+                "left": 226.2291717529297,
+                "right": 400.5,
+                "top": 35.16666793823242,
+                "bottom": 51.16666793823242
+              }
+            ],
+            "overflow": false
+          }
+        ],
+        "documentOverflow": false
+      }
+    },
+    {
+      "case": "intrinsic-width",
+      "theme": "web",
+      "font": "system-ui",
+      "unit": "usd",
+      "state": "observed",
+      "outer": [
+        494,
+        434
+      ],
+      "position": [
+        1406,
+        746
+      ],
+      "inner": [
+        478,
+        392
+      ],
+      "screen": [
+        1920,
+        1200
+      ],
+      "dpr": 1.5,
+      "request": {
+        "width": 477,
+        "height": 391,
+        "preferInitialWindowPlacement": true
+      },
+      "desired": 431,
+      "rows": 2,
+      "accounts": 6,
+      "expanded": false,
+      "scroll": [],
+      "header": {
+        "fits": true,
+        "width": 463,
+        "parts": [
+          {
+            "text": "Cost Guard · Watch",
+            "lines": [
+              {
+                "left": 11.916666984558105,
+                "right": 116.29167461395264,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "Earlier Sessions",
+            "lines": [
+              {
+                "left": 139.4166717529297,
+                "right": 217.23959350585938,
+                "top": 12.114583969116211,
+                "bottom": 26.78125
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "CCost Today $123456.78 · 99999999 prompts",
+            "lines": [
+              {
+                "left": 232.2291717529297,
+                "right": 470.5,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          }
+        ],
+        "documentOverflow": false
+      },
+      "bodyHeight": 384.3333435058594,
+      "rootHeight": 369.3333435058594,
+      "promptRows": [
+        25.416667938232422,
+        24.75
+      ],
+      "measurement": {
+        "width": 459.9270935058594,
+        "parts": [
+          {
+            "width": 113.20833587646484,
+            "font": "600 12px / 18.6px system-ui"
+          },
+          {
+            "width": 93.44792175292969,
+            "font": "600 11.25px / 17.4375px system-ui"
+          },
+          {
+            "width": 238.27084350585938,
+            "font": "12px / 18.6px system-ui"
+          }
+        ],
+        "actual": [
+          {
+            "width": 113.20833587646484,
+            "font": "600 12px / 18.6px system-ui"
+          },
+          {
+            "width": 93.44792175292969,
+            "font": "600 11.25px / 17.4375px system-ui"
+          },
+          {
+            "width": 238.27084350585938,
+            "font": "12px / 18.6px system-ui"
+          }
+        ]
+      },
+      "narrower": {
+        "fits": false,
+        "width": 457,
+        "parts": [
+          {
+            "text": "Cost Guard · Watch",
+            "lines": [
+              {
+                "left": 11.916666984558105,
+                "right": 116.29167461395264,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "Earlier Sessions",
+            "lines": [
+              {
+                "left": 382.26043701171875,
+                "right": 460.0833435058594,
+                "top": 12.114583969116211,
+                "bottom": 26.78125
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "CCost Today $123456.78 · 99999999 prompts",
+            "lines": [
+              {
+                "left": 226.2291717529297,
+                "right": 464.5,
+                "top": 35.16666793823242,
+                "bottom": 51.16666793823242
+              }
+            ],
+            "overflow": false
+          }
+        ],
+        "documentOverflow": false
+      }
+    },
+    {
+      "case": "intrinsic-width",
+      "theme": "web",
+      "font": "system-ui",
+      "unit": "credits",
+      "state": "loading",
+      "outer": [
+        382,
+        434
+      ],
+      "position": [
+        1516,
+        744
+      ],
+      "inner": [
+        366,
+        392
+      ],
+      "screen": [
+        1920,
+        1200
+      ],
+      "dpr": 1.5,
+      "request": {
+        "width": 365,
+        "height": 391,
+        "preferInitialWindowPlacement": true
+      },
+      "desired": 431,
+      "rows": 2,
+      "accounts": 6,
+      "expanded": false,
+      "scroll": [],
+      "header": {
+        "fits": true,
+        "width": 351,
+        "parts": [
+          {
+            "text": "Cost Guard · Watch",
+            "lines": [
+              {
+                "left": 11.916666984558105,
+                "right": 116.29167461395264,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "Earlier Sessions",
+            "lines": [
+              {
+                "left": 139.4166717529297,
+                "right": 217.23959350585938,
+                "top": 12.114583969116211,
+                "bottom": 26.78125
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "CCost Today · Loading…",
+            "lines": [
+              {
+                "left": 232.77084350585938,
+                "right": 358.5,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          }
+        ],
+        "documentOverflow": false
+      },
+      "bodyHeight": 384.3333435058594,
+      "rootHeight": 369.3333435058594,
+      "promptRows": [
+        25.416667938232422,
+        24.75
+      ],
+      "measurement": {
+        "width": 347.38543701171875,
+        "parts": [
+          {
+            "width": 113.20833587646484,
+            "font": "600 12px / 18.6px system-ui"
+          },
+          {
+            "width": 93.44792175292969,
+            "font": "600 11.25px / 17.4375px system-ui"
+          },
+          {
+            "width": 125.72917175292969,
+            "font": "12px / 18.6px system-ui"
+          }
+        ],
+        "actual": [
+          {
+            "width": 113.20833587646484,
+            "font": "600 12px / 18.6px system-ui"
+          },
+          {
+            "width": 93.44792175292969,
+            "font": "600 11.25px / 17.4375px system-ui"
+          },
+          {
+            "width": 125.72917175292969,
+            "font": "12px / 18.6px system-ui"
+          }
+        ]
+      },
+      "narrower": {
+        "fits": false,
+        "width": 345,
+        "parts": [
+          {
+            "text": "Cost Guard · Watch",
+            "lines": [
+              {
+                "left": 11.916666984558105,
+                "right": 116.29167461395264,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "Earlier Sessions",
+            "lines": [
+              {
+                "left": 270.26043701171875,
+                "right": 348.0833435058594,
+                "top": 12.114583969116211,
+                "bottom": 26.78125
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "CCost Today · Loading…",
+            "lines": [
+              {
+                "left": 226.77084350585938,
+                "right": 352.5,
+                "top": 35.16666793823242,
+                "bottom": 51.16666793823242
+              }
+            ],
+            "overflow": false
+          }
+        ],
+        "documentOverflow": false
+      }
+    },
+    {
+      "case": "intrinsic-width",
+      "theme": "web",
+      "font": "system-ui",
+      "unit": "credits",
+      "state": "unavailable",
+      "outer": [
+        392,
+        434
+      ],
+      "position": [
+        1507,
+        745
+      ],
+      "inner": [
+        376,
+        392
+      ],
+      "screen": [
+        1920,
+        1200
+      ],
+      "dpr": 1.5,
+      "request": {
+        "width": 375,
+        "height": 391,
+        "preferInitialWindowPlacement": true
+      },
+      "desired": 431,
+      "rows": 2,
+      "accounts": 6,
+      "expanded": false,
+      "scroll": [],
+      "header": {
+        "fits": true,
+        "width": 361,
+        "parts": [
+          {
+            "text": "Cost Guard · Watch",
+            "lines": [
+              {
+                "left": 11.916666984558105,
+                "right": 116.29167461395264,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "Earlier Sessions",
+            "lines": [
+              {
+                "left": 139.4166717529297,
+                "right": 217.23959350585938,
+                "top": 12.114583969116211,
+                "bottom": 26.78125
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "CCost Today · Unavailable",
+            "lines": [
+              {
+                "left": 233.03125,
+                "right": 368.5,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          }
+        ],
+        "documentOverflow": false
+      },
+      "bodyHeight": 384.3333435058594,
+      "rootHeight": 369.3333435058594,
+      "promptRows": [
+        25.416667938232422,
+        24.75
+      ],
+      "measurement": {
+        "width": 357.125,
+        "parts": [
+          {
+            "width": 113.20833587646484,
+            "font": "600 12px / 18.6px system-ui"
+          },
+          {
+            "width": 93.44792175292969,
+            "font": "600 11.25px / 17.4375px system-ui"
+          },
+          {
+            "width": 135.46875,
+            "font": "12px / 18.6px system-ui"
+          }
+        ],
+        "actual": [
+          {
+            "width": 113.20833587646484,
+            "font": "600 12px / 18.6px system-ui"
+          },
+          {
+            "width": 93.44792175292969,
+            "font": "600 11.25px / 17.4375px system-ui"
+          },
+          {
+            "width": 135.46875,
+            "font": "12px / 18.6px system-ui"
+          }
+        ]
+      },
+      "narrower": {
+        "fits": false,
+        "width": 355,
+        "parts": [
+          {
+            "text": "Cost Guard · Watch",
+            "lines": [
+              {
+                "left": 11.916666984558105,
+                "right": 116.29167461395264,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "Earlier Sessions",
+            "lines": [
+              {
+                "left": 280.26043701171875,
+                "right": 358.0833435058594,
+                "top": 12.114583969116211,
+                "bottom": 26.78125
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "CCost Today · Unavailable",
+            "lines": [
+              {
+                "left": 227.03125,
+                "right": 362.5,
+                "top": 35.16666793823242,
+                "bottom": 51.16666793823242
+              }
+            ],
+            "overflow": false
+          }
+        ],
+        "documentOverflow": false
+      }
+    },
+    {
+      "case": "intrinsic-width",
+      "theme": "web",
+      "font": "serif",
+      "unit": "credits",
+      "state": "observed",
+      "outer": [
+        416,
+        434
+      ],
+      "position": [
+        1483,
+        745
+      ],
+      "inner": [
+        400,
+        392
+      ],
+      "screen": [
+        1920,
+        1200
+      ],
+      "dpr": 1.5,
+      "request": {
+        "width": 399,
+        "height": 391,
+        "preferInitialWindowPlacement": true
+      },
+      "desired": 431,
+      "rows": 2,
+      "accounts": 6,
+      "expanded": false,
+      "scroll": [],
+      "header": {
+        "fits": true,
+        "width": 385,
+        "parts": [
+          {
+            "text": "Cost Guard · Watch",
+            "lines": [
+              {
+                "left": 11.916666984558105,
+                "right": 115.38542461395264,
+                "top": 12.197916984558105,
+                "bottom": 25.53125
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "Earlier Sessions",
+            "lines": [
+              {
+                "left": 138.28125,
+                "right": 214.625,
+                "top": 12.78125,
+                "bottom": 25.447917938232422
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "CCost Today 6 152 · 106 prompts",
+            "lines": [
+              {
+                "left": 229.55209350585938,
+                "right": 392.5,
+                "top": 12.197916984558105,
+                "bottom": 25.53125
+              }
+            ],
+            "overflow": false
+          }
+        ],
+        "documentOverflow": false
+      },
+      "bodyHeight": 384.3333435058594,
+      "rootHeight": 369.3333435058594,
+      "promptRows": [
+        25.416667938232422,
+        24.75
+      ],
+      "measurement": {
+        "width": 381.9895935058594,
+        "parts": [
+          {
+            "width": 112.30208587646484,
+            "font": "600 12px / 18.6px serif"
+          },
+          {
+            "width": 91.73958587646484,
+            "font": "600 11.25px / 17.4375px serif"
+          },
+          {
+            "width": 162.9479217529297,
+            "font": "12px / 18.6px serif"
+          }
+        ],
+        "actual": [
+          {
+            "width": 112.30208587646484,
+            "font": "600 12px / 18.6px serif"
+          },
+          {
+            "width": 91.73958587646484,
+            "font": "600 11.25px / 17.4375px serif"
+          },
+          {
+            "width": 162.9479217529297,
+            "font": "12px / 18.6px serif"
+          }
+        ]
+      },
+      "narrower": {
+        "fits": false,
+        "width": 379,
+        "parts": [
+          {
+            "text": "Cost Guard · Watch",
+            "lines": [
+              {
+                "left": 11.916666984558105,
+                "right": 115.38542461395264,
+                "top": 12.197916984558105,
+                "bottom": 25.53125
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "Earlier Sessions",
+            "lines": [
+              {
+                "left": 305.7395935058594,
+                "right": 382.0833435058594,
+                "top": 12.78125,
+                "bottom": 25.447917938232422
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "CCost Today 6 152 · 106 prompts",
+            "lines": [
+              {
+                "left": 223.55209350585938,
+                "right": 386.5,
+                "top": 36.5,
+                "bottom": 49.833335876464844
+              }
+            ],
+            "overflow": false
+          }
+        ],
+        "documentOverflow": false
+      }
+    },
+    {
+      "case": "intrinsic-width",
+      "theme": "web",
+      "font": "serif",
+      "unit": "usd",
+      "state": "observed",
+      "outer": [
+        476,
+        434
+      ],
+      "position": [
+        1423,
+        745
+      ],
+      "inner": [
+        460,
+        392
+      ],
+      "screen": [
+        1920,
+        1200
+      ],
+      "dpr": 1.5,
+      "request": {
+        "width": 459,
+        "height": 391,
+        "preferInitialWindowPlacement": true
+      },
+      "desired": 431,
+      "rows": 2,
+      "accounts": 6,
+      "expanded": false,
+      "scroll": [],
+      "header": {
+        "fits": true,
+        "width": 445,
+        "parts": [
+          {
+            "text": "Cost Guard · Watch",
+            "lines": [
+              {
+                "left": 11.916666984558105,
+                "right": 115.38542461395264,
+                "top": 12.197916984558105,
+                "bottom": 25.53125
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "Earlier Sessions",
+            "lines": [
+              {
+                "left": 138.28125,
+                "right": 214.625,
+                "top": 12.78125,
+                "bottom": 25.447917938232422
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "CCost Today $123456.78 · 99999999 prompts",
+            "lines": [
+              {
+                "left": 229.55209350585938,
+                "right": 452.5,
+                "top": 12.197916984558105,
+                "bottom": 25.53125
+              }
+            ],
+            "overflow": false
+          }
+        ],
+        "documentOverflow": false
+      },
+      "bodyHeight": 384.3333435058594,
+      "rootHeight": 369.3333435058594,
+      "promptRows": [
+        25.416667938232422,
+        24.75
+      ],
+      "measurement": {
+        "width": 441.9895935058594,
+        "parts": [
+          {
+            "width": 112.30208587646484,
+            "font": "600 12px / 18.6px serif"
+          },
+          {
+            "width": 91.73958587646484,
+            "font": "600 11.25px / 17.4375px serif"
+          },
+          {
+            "width": 222.9479217529297,
+            "font": "12px / 18.6px serif"
+          }
+        ],
+        "actual": [
+          {
+            "width": 112.30208587646484,
+            "font": "600 12px / 18.6px serif"
+          },
+          {
+            "width": 91.73958587646484,
+            "font": "600 11.25px / 17.4375px serif"
+          },
+          {
+            "width": 222.9479217529297,
+            "font": "12px / 18.6px serif"
+          }
+        ]
+      },
+      "narrower": {
+        "fits": false,
+        "width": 439,
+        "parts": [
+          {
+            "text": "Cost Guard · Watch",
+            "lines": [
+              {
+                "left": 11.916666984558105,
+                "right": 115.38542461395264,
+                "top": 12.197916984558105,
+                "bottom": 25.53125
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "Earlier Sessions",
+            "lines": [
+              {
+                "left": 365.7395935058594,
+                "right": 442.0833435058594,
+                "top": 12.78125,
+                "bottom": 25.447917938232422
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "CCost Today $123456.78 · 99999999 prompts",
+            "lines": [
+              {
+                "left": 223.55209350585938,
+                "right": 446.5,
+                "top": 36.5,
+                "bottom": 49.833335876464844
+              }
+            ],
+            "overflow": false
+          }
+        ],
+        "documentOverflow": false
+      }
+    },
+    {
+      "case": "intrinsic-width",
+      "theme": "web",
+      "font": "serif",
+      "unit": "credits",
+      "state": "loading",
+      "outer": [
+        378,
+        434
+      ],
+      "position": [
+        1520,
+        744
+      ],
+      "inner": [
+        362,
+        392
+      ],
+      "screen": [
+        1920,
+        1200
+      ],
+      "dpr": 1.5,
+      "request": {
+        "width": 361,
+        "height": 391,
+        "preferInitialWindowPlacement": true
+      },
+      "desired": 431,
+      "rows": 2,
+      "accounts": 6,
+      "expanded": false,
+      "scroll": [],
+      "header": {
+        "fits": true,
+        "width": 347,
+        "parts": [
+          {
+            "text": "Cost Guard · Watch",
+            "lines": [
+              {
+                "left": 11.916666984558105,
+                "right": 115.38542461395264,
+                "top": 12.197916984558105,
+                "bottom": 25.53125
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "Earlier Sessions",
+            "lines": [
+              {
+                "left": 138.28125,
+                "right": 214.625,
+                "top": 12.78125,
+                "bottom": 25.447917938232422
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "CCost Today · Loading…",
+            "lines": [
+              {
+                "left": 229.89584350585938,
+                "right": 354.5,
+                "top": 12.197916984558105,
+                "bottom": 25.53125
+              }
+            ],
+            "overflow": false
+          }
+        ],
+        "documentOverflow": false
+      },
+      "bodyHeight": 384.3333435058594,
+      "rootHeight": 369.3333435058594,
+      "promptRows": [
+        25.416667938232422,
+        24.75
+      ],
+      "measurement": {
+        "width": 343.6458435058594,
+        "parts": [
+          {
+            "width": 112.30208587646484,
+            "font": "600 12px / 18.6px serif"
+          },
+          {
+            "width": 91.73958587646484,
+            "font": "600 11.25px / 17.4375px serif"
+          },
+          {
+            "width": 124.60417175292969,
+            "font": "12px / 18.6px serif"
+          }
+        ],
+        "actual": [
+          {
+            "width": 112.30208587646484,
+            "font": "600 12px / 18.6px serif"
+          },
+          {
+            "width": 91.73958587646484,
+            "font": "600 11.25px / 17.4375px serif"
+          },
+          {
+            "width": 124.60417175292969,
+            "font": "12px / 18.6px serif"
+          }
+        ]
+      },
+      "narrower": {
+        "fits": false,
+        "width": 341,
+        "parts": [
+          {
+            "text": "Cost Guard · Watch",
+            "lines": [
+              {
+                "left": 11.916666984558105,
+                "right": 115.38542461395264,
+                "top": 12.197916984558105,
+                "bottom": 25.53125
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "Earlier Sessions",
+            "lines": [
+              {
+                "left": 267.7395935058594,
+                "right": 344.0833435058594,
+                "top": 12.78125,
+                "bottom": 25.447917938232422
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "CCost Today · Loading…",
+            "lines": [
+              {
+                "left": 223.89584350585938,
+                "right": 348.5,
+                "top": 36.5,
+                "bottom": 49.833335876464844
+              }
+            ],
+            "overflow": false
+          }
+        ],
+        "documentOverflow": false
+      }
+    },
+    {
+      "case": "intrinsic-width",
+      "theme": "web",
+      "font": "serif",
+      "unit": "credits",
+      "state": "unavailable",
+      "outer": [
+        384,
+        434
+      ],
+      "position": [
+        1514,
+        744
+      ],
+      "inner": [
+        368,
+        392
+      ],
+      "screen": [
+        1920,
+        1200
+      ],
+      "dpr": 1.5,
+      "request": {
+        "width": 367,
+        "height": 391,
+        "preferInitialWindowPlacement": true
+      },
+      "desired": 431,
+      "rows": 2,
+      "accounts": 6,
+      "expanded": false,
+      "scroll": [],
+      "header": {
+        "fits": true,
+        "width": 353,
+        "parts": [
+          {
+            "text": "Cost Guard · Watch",
+            "lines": [
+              {
+                "left": 11.916666984558105,
+                "right": 115.38542461395264,
+                "top": 12.197916984558105,
+                "bottom": 25.53125
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "Earlier Sessions",
+            "lines": [
+              {
+                "left": 138.28125,
+                "right": 214.625,
+                "top": 12.78125,
+                "bottom": 25.447917938232422
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "CCost Today · Unavailable",
+            "lines": [
+              {
+                "left": 229.9166717529297,
+                "right": 360.5,
+                "top": 12.197916984558105,
+                "bottom": 25.53125
+              }
+            ],
+            "overflow": false
+          }
+        ],
+        "documentOverflow": false
+      },
+      "bodyHeight": 384.3333435058594,
+      "rootHeight": 369.3333435058594,
+      "promptRows": [
+        25.416667938232422,
+        24.75
+      ],
+      "measurement": {
+        "width": 349.625,
+        "parts": [
+          {
+            "width": 112.30208587646484,
+            "font": "600 12px / 18.6px serif"
+          },
+          {
+            "width": 91.73958587646484,
+            "font": "600 11.25px / 17.4375px serif"
+          },
+          {
+            "width": 130.58334350585938,
+            "font": "12px / 18.6px serif"
+          }
+        ],
+        "actual": [
+          {
+            "width": 112.30208587646484,
+            "font": "600 12px / 18.6px serif"
+          },
+          {
+            "width": 91.73958587646484,
+            "font": "600 11.25px / 17.4375px serif"
+          },
+          {
+            "width": 130.58334350585938,
+            "font": "12px / 18.6px serif"
+          }
+        ]
+      },
+      "narrower": {
+        "fits": false,
+        "width": 347,
+        "parts": [
+          {
+            "text": "Cost Guard · Watch",
+            "lines": [
+              {
+                "left": 11.916666984558105,
+                "right": 115.38542461395264,
+                "top": 12.197916984558105,
+                "bottom": 25.53125
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "Earlier Sessions",
+            "lines": [
+              {
+                "left": 273.7395935058594,
+                "right": 350.0833435058594,
+                "top": 12.78125,
+                "bottom": 25.447917938232422
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "CCost Today · Unavailable",
+            "lines": [
+              {
+                "left": 223.9166717529297,
+                "right": 354.5,
+                "top": 36.5,
+                "bottom": 49.833335876464844
+              }
+            ],
+            "overflow": false
+          }
+        ],
+        "documentOverflow": false
+      }
+    },
+    {
+      "case": "open-0-0",
+      "outer": [
+        408,
+        222
+      ],
+      "position": [
+        1489,
+        955
+      ],
+      "inner": [
+        392,
+        180
+      ],
+      "screen": [
+        1920,
+        1200
+      ],
+      "dpr": 1.5,
+      "request": {
+        "width": 391,
+        "height": 179,
+        "preferInitialWindowPlacement": true
+      },
+      "desired": 219,
+      "rows": 0,
+      "accounts": 0,
+      "expanded": false,
+      "scroll": [],
+      "header": {
+        "fits": true,
+        "width": 377,
+        "parts": [
+          {
+            "text": "Cost Guard · Watch",
+            "lines": [
+              {
+                "left": 11.916666984558105,
+                "right": 116.29167461395264,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "Earlier Sessions",
+            "lines": [
+              {
+                "left": 139.4166717529297,
+                "right": 217.23959350585938,
+                "top": 12.114583969116211,
+                "bottom": 26.78125
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "CCost Today 34 · 37 prompts",
+            "lines": [
+              {
+                "left": 232.92709350585938,
+                "right": 384.5,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          }
+        ],
+        "documentOverflow": false
+      },
+      "bodyHeight": 147.58334350585938,
+      "rootHeight": 132.58334350585938,
+      "promptRows": [
+        24.75
+      ]
+    },
+    {
+      "case": "open-1-1",
+      "outer": [
+        408,
+        222
+      ],
+      "position": [
+        1489,
+        954
+      ],
+      "inner": [
+        392,
+        180
+      ],
+      "screen": [
+        1920,
+        1200
+      ],
+      "dpr": 1.5,
+      "request": {
+        "width": 391,
+        "height": 180,
+        "preferInitialWindowPlacement": true
+      },
+      "desired": 220,
+      "rows": 1,
+      "accounts": 1,
+      "expanded": false,
+      "scroll": [],
+      "header": {
+        "fits": true,
+        "width": 377,
+        "parts": [
+          {
+            "text": "Cost Guard · Watch",
+            "lines": [
+              {
+                "left": 11.916666984558105,
+                "right": 116.29167461395264,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "Earlier Sessions",
+            "lines": [
+              {
+                "left": 139.4166717529297,
+                "right": 217.23959350585938,
+                "top": 12.114583969116211,
+                "bottom": 26.78125
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "CCost Today 34 · 37 prompts",
+            "lines": [
+              {
+                "left": 232.92709350585938,
+                "right": 384.5,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          }
+        ],
+        "documentOverflow": false
+      },
+      "bodyHeight": 147.58334350585938,
+      "rootHeight": 132.58334350585938,
+      "promptRows": [
+        24.75
+      ]
+    },
+    {
+      "case": "open-2-3",
+      "outer": [
+        408,
+        302
+      ],
+      "position": [
+        1489,
+        875
+      ],
+      "inner": [
+        392,
+        260
+      ],
+      "screen": [
+        1920,
+        1200
+      ],
+      "dpr": 1.5,
+      "request": {
+        "width": 391,
+        "height": 259,
+        "preferInitialWindowPlacement": true
+      },
+      "desired": 299,
+      "rows": 2,
+      "accounts": 3,
+      "expanded": false,
+      "scroll": [],
+      "header": {
+        "fits": true,
+        "width": 377,
+        "parts": [
+          {
+            "text": "Cost Guard · Watch",
+            "lines": [
+              {
+                "left": 11.916666984558105,
+                "right": 116.29167461395264,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "Earlier Sessions",
+            "lines": [
+              {
+                "left": 139.4166717529297,
+                "right": 217.23959350585938,
+                "top": 12.114583969116211,
+                "bottom": 26.78125
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "CCost Today 34 · 37 prompts",
+            "lines": [
+              {
+                "left": 232.92709350585938,
+                "right": 384.5,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          }
+        ],
+        "documentOverflow": false
+      },
+      "bodyHeight": 252.5,
+      "rootHeight": 237.5,
+      "promptRows": [
+        25.416667938232422,
+        24.75
+      ]
+    },
+    {
+      "case": "open-4-6-long",
+      "outer": [
+        408,
+        472
+      ],
+      "position": [
+        1491,
+        707
+      ],
+      "inner": [
+        392,
+        430
+      ],
+      "screen": [
+        1920,
+        1200
+      ],
+      "dpr": 1.5,
+      "request": {
+        "width": 391,
+        "height": 429,
+        "preferInitialWindowPlacement": true
+      },
+      "desired": 469,
+      "rows": 4,
+      "accounts": 6,
+      "expanded": false,
+      "scroll": [],
+      "header": {
+        "fits": true,
+        "width": 377,
+        "parts": [
+          {
+            "text": "Cost Guard · Watch",
+            "lines": [
+              {
+                "left": 11.916666984558105,
+                "right": 116.29167461395264,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "Earlier Sessions",
+            "lines": [
+              {
+                "left": 139.4166717529297,
+                "right": 217.23959350585938,
+                "top": 12.114583969116211,
+                "bottom": 26.78125
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "CCost Today 34 · 37 prompts",
+            "lines": [
+              {
+                "left": 232.92709350585938,
+                "right": 384.5,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          }
+        ],
+        "documentOverflow": false
+      },
+      "bodyHeight": 422.5833435058594,
+      "rootHeight": 407.5833435058594,
+      "promptRows": [
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        24.75
+      ]
+    },
+    {
+      "case": "open-2-6-long-warning",
+      "outer": [
+        408,
+        583
+      ],
+      "position": [
+        1492,
+        597
+      ],
+      "inner": [
+        392,
+        541
+      ],
+      "screen": [
+        1920,
+        1200
+      ],
+      "dpr": 1.5,
+      "request": {
+        "width": 391,
+        "height": 540,
+        "preferInitialWindowPlacement": true
+      },
+      "desired": 580,
+      "rows": 2,
+      "accounts": 6,
+      "expanded": false,
+      "scroll": [],
+      "header": {
+        "fits": true,
+        "width": 377,
+        "parts": [
+          {
+            "text": "Cost Guard · Watch",
+            "lines": [
+              {
+                "left": 11.916666984558105,
+                "right": 116.29167461395264,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "Earlier Sessions",
+            "lines": [
+              {
+                "left": 139.4166717529297,
+                "right": 217.23959350585938,
+                "top": 17.541667938232422,
+                "bottom": 32.208335876464844
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "CCost Today 34 · 37 prompts",
+            "lines": [
+              {
+                "left": 232.92709350585938,
+                "right": 384.5,
+                "top": 8.166666984558105,
+                "bottom": 24.166666984558105
+              }
+            ],
+            "overflow": false
+          }
+        ],
+        "documentOverflow": false
+      },
+      "bodyHeight": 533.3646240234375,
+      "rootHeight": 518.3646240234375,
+      "promptRows": [
+        25.416667938232422,
+        24.75
+      ]
+    },
+    {
+      "case": "initial-native-disclosure-clamp",
+      "before": {
+        "outer": [
+          408,
+          315
+        ],
+        "position": [
+          1490,
+          863
+        ],
+        "inner": [
+          392,
+          273
+        ],
+        "screen": [
+          1920,
+          1200
+        ],
+        "dpr": 1.5,
+        "request": {
+          "width": 391,
+          "height": 272,
+          "preferInitialWindowPlacement": true
+        },
+        "desired": 312,
+        "rows": 1,
+        "accounts": 3,
+        "expanded": false,
+        "scroll": [],
+        "header": {
+          "fits": true,
+          "width": 377,
+          "parts": [
+            {
+              "text": "Cost Guard · Watch",
+              "lines": [
+                {
+                  "left": 11.916666984558105,
+                  "right": 116.29167461395264,
+                  "top": 10.864583969116211,
+                  "bottom": 26.86458396911621
+                }
+              ],
+              "overflow": false
+            },
+            {
+              "text": "Earlier Sessions",
+              "lines": [
+                {
+                  "left": 139.4166717529297,
+                  "right": 217.23959350585938,
+                  "top": 12.114583969116211,
+                  "bottom": 26.78125
+                }
+              ],
+              "overflow": false
+            },
+            {
+              "text": "CCost Today 34 · 37 prompts",
+              "lines": [
+                {
+                  "left": 232.92709350585938,
+                  "right": 384.5,
+                  "top": 10.864583969116211,
+                  "bottom": 26.86458396911621
+                }
+              ],
+              "overflow": false
+            }
+          ],
+          "documentOverflow": false
+        },
+        "bodyHeight": 239.6666717529297,
+        "rootHeight": 224.6666717529297,
+        "promptRows": [
+          24.75
+        ]
+      },
+      "expanded": {
+        "outer": [
+          408,
+          448
+        ],
+        "position": [
+          1490,
+          753
+        ],
+        "inner": [
+          392,
+          406
+        ],
+        "screen": [
+          1920,
+          1200
+        ],
+        "dpr": 1.5,
+        "request": {
+          "width": 391,
+          "height": 272,
+          "preferInitialWindowPlacement": true
+        },
+        "desired": 418,
+        "rows": 1,
+        "accounts": 3,
+        "expanded": true,
+        "scroll": [],
+        "header": {
+          "fits": true,
+          "width": 377,
+          "parts": [
+            {
+              "text": "Cost Guard · Watch",
+              "lines": [
+                {
+                  "left": 11.916666984558105,
+                  "right": 116.29167461395264,
+                  "top": 10.864583969116211,
+                  "bottom": 26.86458396911621
+                }
+              ],
+              "overflow": false
+            },
+            {
+              "text": "Earlier Sessions",
+              "lines": [
+                {
+                  "left": 142.3854217529297,
+                  "right": 220.20834350585938,
+                  "top": 12.114583969116211,
+                  "bottom": 26.78125
+                }
+              ],
+              "overflow": false
+            },
+            {
+              "text": "CCost Today 34 · 37 prompts",
+              "lines": [
+                {
+                  "left": 232.92709350585938,
+                  "right": 384.5,
+                  "top": 10.864583969116211,
+                  "bottom": 26.86458396911621
+                }
+              ],
+              "overflow": false
+            }
+          ],
+          "documentOverflow": false
+        },
+        "bodyHeight": 347.3333435058594,
+        "rootHeight": 332.3333435058594,
+        "promptRows": [
+          24.75
+        ]
+      },
+      "compact": {
+        "outer": [
+          408,
+          308
+        ],
+        "position": [
+          1490,
+          753
+        ],
+        "inner": [
+          392,
+          266
+        ],
+        "screen": [
+          1920,
+          1200
+        ],
+        "dpr": 1.5,
+        "request": {
+          "width": 391,
+          "height": 272,
+          "preferInitialWindowPlacement": true
+        },
+        "desired": 313,
+        "rows": 1,
+        "accounts": 3,
+        "expanded": false,
+        "scroll": [],
+        "header": {
+          "fits": true,
+          "width": 377,
+          "parts": [
+            {
+              "text": "Cost Guard · Watch",
+              "lines": [
+                {
+                  "left": 11.916666984558105,
+                  "right": 116.29167461395264,
+                  "top": 10.864583969116211,
+                  "bottom": 26.86458396911621
+                }
+              ],
+              "overflow": false
+            },
+            {
+              "text": "Earlier Sessions",
+              "lines": [
+                {
+                  "left": 139.4166717529297,
+                  "right": 217.23959350585938,
+                  "top": 12.114583969116211,
+                  "bottom": 26.78125
+                }
+              ],
+              "overflow": false
+            },
+            {
+              "text": "CCost Today 34 · 37 prompts",
+              "lines": [
+                {
+                  "left": 232.92709350585938,
+                  "right": 384.5,
+                  "top": 10.864583969116211,
+                  "bottom": 26.86458396911621
+                }
+              ],
+              "overflow": false
+            }
+          ],
+          "documentOverflow": false
+        },
+        "bodyHeight": 239.6666717529297,
+        "rootHeight": 224.6666717529297,
+        "promptRows": [
+          24.75
+        ]
+      }
+    },
+    {
+      "case": "pointer",
+      "before": {
+        "outer": [
+          600,
+          301
+        ],
+        "position": [
+          1320,
+          753
+        ],
+        "inner": [
+          584,
+          259
+        ],
+        "screen": [
+          1920,
+          1200
+        ],
+        "dpr": 1.5,
+        "request": {
+          "width": 391,
+          "height": 272,
+          "preferInitialWindowPlacement": true
+        },
+        "desired": 313,
+        "rows": 1,
+        "accounts": 3,
+        "expanded": false,
+        "scroll": [],
+        "header": {
+          "fits": true,
+          "width": 569,
+          "parts": [
+            {
+              "text": "Cost Guard · Watch",
+              "lines": [
+                {
+                  "left": 11.916666984558105,
+                  "right": 116.29167461395264,
+                  "top": 10.864583969116211,
+                  "bottom": 26.86458396911621
+                }
+              ],
+              "overflow": false
+            },
+            {
+              "text": "Earlier Sessions",
+              "lines": [
+                {
+                  "left": 139.4166717529297,
+                  "right": 217.23959350585938,
+                  "top": 12.114583969116211,
+                  "bottom": 26.78125
+                }
+              ],
+              "overflow": false
+            },
+            {
+              "text": "CCost Today 34 · 37 prompts",
+              "lines": [
+                {
+                  "left": 424.9270935058594,
+                  "right": 576.5,
+                  "top": 10.864583969116211,
+                  "bottom": 26.86458396911621
+                }
+              ],
+              "overflow": false
+            }
+          ],
+          "documentOverflow": false
+        },
+        "bodyHeight": 239.6666717529297,
+        "rootHeight": 224.6666717529297,
+        "promptRows": [
+          24.75
+        ]
+      },
+      "expanded": {
+        "outer": [
+          600,
+          424
+        ],
+        "position": [
+          1320,
+          753
+        ],
+        "inner": [
+          584,
+          382
+        ],
+        "screen": [
+          1920,
+          1200
+        ],
+        "dpr": 1.5,
+        "request": {
+          "width": 391,
+          "height": 272,
+          "preferInitialWindowPlacement": true
+        },
+        "desired": 419,
+        "rows": 1,
+        "accounts": 3,
+        "expanded": true,
+        "scroll": [],
+        "header": {
+          "fits": true,
+          "width": 569,
+          "parts": [
+            {
+              "text": "Cost Guard · Watch",
+              "lines": [
+                {
+                  "left": 11.916666984558105,
+                  "right": 116.29167461395264,
+                  "top": 10.864583969116211,
+                  "bottom": 26.86458396911621
+                }
+              ],
+              "overflow": false
+            },
+            {
+              "text": "Earlier Sessions",
+              "lines": [
+                {
+                  "left": 142.3854217529297,
+                  "right": 220.20834350585938,
+                  "top": 12.114583969116211,
+                  "bottom": 26.78125
+                }
+              ],
+              "overflow": false
+            },
+            {
+              "text": "CCost Today 34 · 37 prompts",
+              "lines": [
+                {
+                  "left": 424.9270935058594,
+                  "right": 576.5,
+                  "top": 10.864583969116211,
+                  "bottom": 26.86458396911621
+                }
+              ],
+              "overflow": false
+            }
+          ],
+          "documentOverflow": false
+        },
+        "bodyHeight": 347.3333435058594,
+        "rootHeight": 332.3333435058594,
+        "promptRows": [
+          24.75
+        ]
+      },
+      "compact": {
+        "outer": [
+          600,
+          310
+        ],
+        "position": [
+          1320,
+          753
+        ],
+        "inner": [
+          584,
+          268
+        ],
+        "screen": [
+          1920,
+          1200
+        ],
+        "dpr": 1.5,
+        "request": {
+          "width": 391,
+          "height": 272,
+          "preferInitialWindowPlacement": true
+        },
+        "desired": 313,
+        "rows": 1,
+        "accounts": 3,
+        "expanded": false,
+        "scroll": [],
+        "header": {
+          "fits": true,
+          "width": 569,
+          "parts": [
+            {
+              "text": "Cost Guard · Watch",
+              "lines": [
+                {
+                  "left": 11.916666984558105,
+                  "right": 116.29167461395264,
+                  "top": 10.864583969116211,
+                  "bottom": 26.86458396911621
+                }
+              ],
+              "overflow": false
+            },
+            {
+              "text": "Earlier Sessions",
+              "lines": [
+                {
+                  "left": 139.4166717529297,
+                  "right": 217.23959350585938,
+                  "top": 12.114583969116211,
+                  "bottom": 26.78125
+                }
+              ],
+              "overflow": false
+            },
+            {
+              "text": "CCost Today 34 · 37 prompts",
+              "lines": [
+                {
+                  "left": 424.9270935058594,
+                  "right": 576.5,
+                  "top": 10.864583969116211,
+                  "bottom": 26.86458396911621
+                }
+              ],
+              "overflow": false
+            }
+          ],
+          "documentOverflow": false
+        },
+        "bodyHeight": 239.6666717529297,
+        "rootHeight": 224.6666717529297,
+        "promptRows": [
+          24.75
+        ]
+      }
+    },
+    {
+      "case": "keyboard-Enter",
+      "before": {
+        "outer": [
+          600,
+          310
+        ],
+        "position": [
+          1320,
+          753
+        ],
+        "inner": [
+          584,
+          268
+        ],
+        "screen": [
+          1920,
+          1200
+        ],
+        "dpr": 1.5,
+        "request": {
+          "width": 391,
+          "height": 272,
+          "preferInitialWindowPlacement": true
+        },
+        "desired": 313,
+        "rows": 1,
+        "accounts": 3,
+        "expanded": false,
+        "scroll": [],
+        "header": {
+          "fits": true,
+          "width": 569,
+          "parts": [
+            {
+              "text": "Cost Guard · Watch",
+              "lines": [
+                {
+                  "left": 11.916666984558105,
+                  "right": 116.29167461395264,
+                  "top": 10.864583969116211,
+                  "bottom": 26.86458396911621
+                }
+              ],
+              "overflow": false
+            },
+            {
+              "text": "Earlier Sessions",
+              "lines": [
+                {
+                  "left": 139.4166717529297,
+                  "right": 217.23959350585938,
+                  "top": 12.114583969116211,
+                  "bottom": 26.78125
+                }
+              ],
+              "overflow": false
+            },
+            {
+              "text": "CCost Today 34 · 37 prompts",
+              "lines": [
+                {
+                  "left": 424.9270935058594,
+                  "right": 576.5,
+                  "top": 10.864583969116211,
+                  "bottom": 26.86458396911621
+                }
+              ],
+              "overflow": false
+            }
+          ],
+          "documentOverflow": false
+        },
+        "bodyHeight": 239.6666717529297,
+        "rootHeight": 224.6666717529297,
+        "promptRows": [
+          24.75
+        ]
+      },
+      "expanded": {
+        "outer": [
+          600,
+          423
+        ],
+        "position": [
+          1320,
+          753
+        ],
+        "inner": [
+          584,
+          381
+        ],
+        "screen": [
+          1920,
+          1200
+        ],
+        "dpr": 1.5,
+        "request": {
+          "width": 391,
+          "height": 272,
+          "preferInitialWindowPlacement": true
+        },
+        "desired": 419,
+        "rows": 1,
+        "accounts": 3,
+        "expanded": true,
+        "scroll": [],
+        "header": {
+          "fits": true,
+          "width": 569,
+          "parts": [
+            {
+              "text": "Cost Guard · Watch",
+              "lines": [
+                {
+                  "left": 11.916666984558105,
+                  "right": 116.29167461395264,
+                  "top": 10.864583969116211,
+                  "bottom": 26.86458396911621
+                }
+              ],
+              "overflow": false
+            },
+            {
+              "text": "Earlier Sessions",
+              "lines": [
+                {
+                  "left": 142.3854217529297,
+                  "right": 220.20834350585938,
+                  "top": 12.114583969116211,
+                  "bottom": 26.78125
+                }
+              ],
+              "overflow": false
+            },
+            {
+              "text": "CCost Today 34 · 37 prompts",
+              "lines": [
+                {
+                  "left": 424.9270935058594,
+                  "right": 576.5,
+                  "top": 10.864583969116211,
+                  "bottom": 26.86458396911621
+                }
+              ],
+              "overflow": false
+            }
+          ],
+          "documentOverflow": false
+        },
+        "bodyHeight": 347.3333435058594,
+        "rootHeight": 332.3333435058594,
+        "promptRows": [
+          24.75
+        ]
+      },
+      "compact": {
+        "outer": [
+          600,
+          310
+        ],
+        "position": [
+          1320,
+          753
+        ],
+        "inner": [
+          584,
+          268
+        ],
+        "screen": [
+          1920,
+          1200
+        ],
+        "dpr": 1.5,
+        "request": {
+          "width": 391,
+          "height": 272,
+          "preferInitialWindowPlacement": true
+        },
+        "desired": 313,
+        "rows": 1,
+        "accounts": 3,
+        "expanded": false,
+        "scroll": [],
+        "header": {
+          "fits": true,
+          "width": 569,
+          "parts": [
+            {
+              "text": "Cost Guard · Watch",
+              "lines": [
+                {
+                  "left": 11.916666984558105,
+                  "right": 116.29167461395264,
+                  "top": 10.864583969116211,
+                  "bottom": 26.86458396911621
+                }
+              ],
+              "overflow": false
+            },
+            {
+              "text": "Earlier Sessions",
+              "lines": [
+                {
+                  "left": 139.4166717529297,
+                  "right": 217.23959350585938,
+                  "top": 12.114583969116211,
+                  "bottom": 26.78125
+                }
+              ],
+              "overflow": false
+            },
+            {
+              "text": "CCost Today 34 · 37 prompts",
+              "lines": [
+                {
+                  "left": 424.9270935058594,
+                  "right": 576.5,
+                  "top": 10.864583969116211,
+                  "bottom": 26.86458396911621
+                }
+              ],
+              "overflow": false
+            }
+          ],
+          "documentOverflow": false
+        },
+        "bodyHeight": 239.6666717529297,
+        "rootHeight": 224.6666717529297,
+        "promptRows": [
+          24.75
+        ]
+      }
+    },
+    {
+      "case": "keyboard- ",
+      "before": {
+        "outer": [
+          600,
+          310
+        ],
+        "position": [
+          1320,
+          753
+        ],
+        "inner": [
+          584,
+          268
+        ],
+        "screen": [
+          1920,
+          1200
+        ],
+        "dpr": 1.5,
+        "request": {
+          "width": 391,
+          "height": 272,
+          "preferInitialWindowPlacement": true
+        },
+        "desired": 313,
+        "rows": 1,
+        "accounts": 3,
+        "expanded": false,
+        "scroll": [],
+        "header": {
+          "fits": true,
+          "width": 569,
+          "parts": [
+            {
+              "text": "Cost Guard · Watch",
+              "lines": [
+                {
+                  "left": 11.916666984558105,
+                  "right": 116.29167461395264,
+                  "top": 10.864583969116211,
+                  "bottom": 26.86458396911621
+                }
+              ],
+              "overflow": false
+            },
+            {
+              "text": "Earlier Sessions",
+              "lines": [
+                {
+                  "left": 139.4166717529297,
+                  "right": 217.23959350585938,
+                  "top": 12.114583969116211,
+                  "bottom": 26.78125
+                }
+              ],
+              "overflow": false
+            },
+            {
+              "text": "CCost Today 34 · 37 prompts",
+              "lines": [
+                {
+                  "left": 424.9270935058594,
+                  "right": 576.5,
+                  "top": 10.864583969116211,
+                  "bottom": 26.86458396911621
+                }
+              ],
+              "overflow": false
+            }
+          ],
+          "documentOverflow": false
+        },
+        "bodyHeight": 239.6666717529297,
+        "rootHeight": 224.6666717529297,
+        "promptRows": [
+          24.75
+        ]
+      },
+      "expanded": {
+        "outer": [
+          600,
+          423
+        ],
+        "position": [
+          1320,
+          753
+        ],
+        "inner": [
+          584,
+          381
+        ],
+        "screen": [
+          1920,
+          1200
+        ],
+        "dpr": 1.5,
+        "request": {
+          "width": 391,
+          "height": 272,
+          "preferInitialWindowPlacement": true
+        },
+        "desired": 419,
+        "rows": 1,
+        "accounts": 3,
+        "expanded": true,
+        "scroll": [],
+        "header": {
+          "fits": true,
+          "width": 569,
+          "parts": [
+            {
+              "text": "Cost Guard · Watch",
+              "lines": [
+                {
+                  "left": 11.916666984558105,
+                  "right": 116.29167461395264,
+                  "top": 10.864583969116211,
+                  "bottom": 26.86458396911621
+                }
+              ],
+              "overflow": false
+            },
+            {
+              "text": "Earlier Sessions",
+              "lines": [
+                {
+                  "left": 142.3854217529297,
+                  "right": 220.20834350585938,
+                  "top": 12.114583969116211,
+                  "bottom": 26.78125
+                }
+              ],
+              "overflow": false
+            },
+            {
+              "text": "CCost Today 34 · 37 prompts",
+              "lines": [
+                {
+                  "left": 424.9270935058594,
+                  "right": 576.5,
+                  "top": 10.864583969116211,
+                  "bottom": 26.86458396911621
+                }
+              ],
+              "overflow": false
+            }
+          ],
+          "documentOverflow": false
+        },
+        "bodyHeight": 347.3333435058594,
+        "rootHeight": 332.3333435058594,
+        "promptRows": [
+          24.75
+        ]
+      },
+      "compact": {
+        "outer": [
+          600,
+          310
+        ],
+        "position": [
+          1320,
+          753
+        ],
+        "inner": [
+          584,
+          268
+        ],
+        "screen": [
+          1920,
+          1200
+        ],
+        "dpr": 1.5,
+        "request": {
+          "width": 391,
+          "height": 272,
+          "preferInitialWindowPlacement": true
+        },
+        "desired": 313,
+        "rows": 1,
+        "accounts": 3,
+        "expanded": false,
+        "scroll": [],
+        "header": {
+          "fits": true,
+          "width": 569,
+          "parts": [
+            {
+              "text": "Cost Guard · Watch",
+              "lines": [
+                {
+                  "left": 11.916666984558105,
+                  "right": 116.29167461395264,
+                  "top": 10.864583969116211,
+                  "bottom": 26.86458396911621
+                }
+              ],
+              "overflow": false
+            },
+            {
+              "text": "Earlier Sessions",
+              "lines": [
+                {
+                  "left": 139.4166717529297,
+                  "right": 217.23959350585938,
+                  "top": 12.114583969116211,
+                  "bottom": 26.78125
+                }
+              ],
+              "overflow": false
+            },
+            {
+              "text": "CCost Today 34 · 37 prompts",
+              "lines": [
+                {
+                  "left": 424.9270935058594,
+                  "right": 576.5,
+                  "top": 10.864583969116211,
+                  "bottom": 26.86458396911621
+                }
+              ],
+              "overflow": false
+            }
+          ],
+          "documentOverflow": false
+        },
+        "bodyHeight": 239.6666717529297,
+        "rootHeight": 224.6666717529297,
+        "promptRows": [
+          24.75
+        ]
+      }
+    },
+    {
+      "case": "fit-manual-width",
+      "outer": [
+        600,
+        311
+      ],
+      "position": [
+        1320,
+        753
+      ],
+      "inner": [
+        584,
+        269
+      ],
+      "screen": [
+        1920,
+        1200
+      ],
+      "dpr": 1.5,
+      "request": {
+        "width": 391,
+        "height": 272,
+        "preferInitialWindowPlacement": true
+      },
+      "desired": 313,
+      "rows": 1,
+      "accounts": 3,
+      "expanded": false,
+      "scroll": [],
+      "header": {
+        "fits": true,
+        "width": 569,
+        "parts": [
+          {
+            "text": "Cost Guard · Watch",
+            "lines": [
+              {
+                "left": 11.916666984558105,
+                "right": 116.29167461395264,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "Earlier Sessions",
+            "lines": [
+              {
+                "left": 139.4166717529297,
+                "right": 217.23959350585938,
+                "top": 12.114583969116211,
+                "bottom": 26.78125
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "CCost Today 34 · 37 prompts",
+            "lines": [
+              {
+                "left": 424.9270935058594,
+                "right": 576.5,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          }
+        ],
+        "documentOverflow": false
+      },
+      "bodyHeight": 239.6666717529297,
+      "rootHeight": 224.6666717529297,
+      "promptRows": [
+        24.75
+      ]
+    },
+    {
+      "case": "passive-overflow",
+      "outer": [
+        600,
+        311
+      ],
+      "position": [
+        1320,
+        753
+      ],
+      "inner": [
+        584,
+        269
+      ],
+      "screen": [
+        1920,
+        1200
+      ],
+      "dpr": 1.5,
+      "request": {
+        "width": 391,
+        "height": 272,
+        "preferInitialWindowPlacement": true
+      },
+      "desired": 892,
+      "rows": 20,
+      "accounts": 6,
+      "expanded": false,
+      "scroll": [
+        {
+          "tag": "HTML",
+          "class": "",
+          "client": 269,
+          "scroll": 829
+        }
+      ],
+      "header": {
+        "fits": true,
+        "width": 553.6666870117188,
+        "parts": [
+          {
+            "text": "Cost Guard · Watch",
+            "lines": [
+              {
+                "left": 11.916666984558105,
+                "right": 116.29167461395264,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "Earlier Sessions",
+            "lines": [
+              {
+                "left": 139.4166717529297,
+                "right": 217.23959350585938,
+                "top": 12.114583969116211,
+                "bottom": 26.78125
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "CCost Today 34 · 37 prompts",
+            "lines": [
+              {
+                "left": 409.59375,
+                "right": 561.1666870117188,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          }
+        ],
+        "documentOverflow": false
+      },
+      "bodyHeight": 829.25,
+      "rootHeight": 814.25,
+      "promptRows": [
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        24.75
+      ]
+    },
+    {
+      "case": "remember-last-fit-on-open",
+      "outer": [
+        408,
+        434
+      ],
+      "position": [
+        1491,
+        745
+      ],
+      "inner": [
+        392,
+        392
+      ],
+      "screen": [
+        1920,
+        1200
+      ],
+      "dpr": 1.5,
+      "request": {
+        "width": 391,
+        "height": 391,
+        "preferInitialWindowPlacement": true
+      },
+      "desired": 431,
+      "rows": 2,
+      "accounts": 6,
+      "expanded": false,
+      "scroll": [],
+      "header": {
+        "fits": true,
+        "width": 377,
+        "parts": [
+          {
+            "text": "Cost Guard · Watch",
+            "lines": [
+              {
+                "left": 11.916666984558105,
+                "right": 116.29167461395264,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "Earlier Sessions",
+            "lines": [
+              {
+                "left": 139.4166717529297,
+                "right": 217.23959350585938,
+                "top": 12.114583969116211,
+                "bottom": 26.78125
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "CCost Today 34 · 37 prompts",
+            "lines": [
+              {
+                "left": 232.92709350585938,
+                "right": 384.5,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          }
+        ],
+        "documentOverflow": false
+      },
+      "bodyHeight": 384.3333435058594,
+      "rootHeight": 369.3333435058594,
+      "promptRows": [
+        25.416667938232422,
+        24.75
+      ]
+    },
+    {
+      "case": "remember-last-remember-last",
+      "outer": [
+        520,
+        420
+      ],
+      "position": [
+        1250,
+        756
+      ],
+      "inner": [
+        504,
+        378
+      ],
+      "screen": [
+        1920,
+        1200
+      ],
+      "dpr": 1.5,
+      "request": {
+        "width": 634,
+        "height": 382,
+        "preferInitialWindowPlacement": false
+      },
+      "desired": 432,
+      "rows": 2,
+      "accounts": 6,
+      "expanded": false,
+      "scroll": [
+        {
+          "tag": "HTML",
+          "class": "",
+          "client": 378,
+          "scroll": 385
+        }
+      ],
+      "header": {
+        "fits": true,
+        "width": 473.66668701171875,
+        "parts": [
+          {
+            "text": "Cost Guard · Watch",
+            "lines": [
+              {
+                "left": 11.916666984558105,
+                "right": 116.29167461395264,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "Earlier Sessions",
+            "lines": [
+              {
+                "left": 139.4166717529297,
+                "right": 217.23959350585938,
+                "top": 12.114583969116211,
+                "bottom": 26.78125
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "CCost Today 34 · 37 prompts",
+            "lines": [
+              {
+                "left": 329.59375,
+                "right": 481.16668701171875,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          }
+        ],
+        "documentOverflow": false
+      },
+      "bodyHeight": 384.3333435058594,
+      "rootHeight": 369.3333435058594,
+      "promptRows": [
+        25.416667938232422,
+        24.75
+      ]
+    },
+    {
+      "case": "standard-fit-on-open",
+      "outer": [
+        408,
+        434
+      ],
+      "position": [
+        1491,
+        745
+      ],
+      "inner": [
+        392,
+        392
+      ],
+      "screen": [
+        1920,
+        1200
+      ],
+      "dpr": 1.5,
+      "request": {
+        "width": 391,
+        "height": 391,
+        "preferInitialWindowPlacement": true
+      },
+      "desired": 431,
+      "rows": 2,
+      "accounts": 6,
+      "expanded": false,
+      "scroll": [],
+      "header": {
+        "fits": true,
+        "width": 377,
+        "parts": [
+          {
+            "text": "Cost Guard · Watch",
+            "lines": [
+              {
+                "left": 11.916666984558105,
+                "right": 116.29167461395264,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "Earlier Sessions",
+            "lines": [
+              {
+                "left": 139.4166717529297,
+                "right": 217.23959350585938,
+                "top": 12.114583969116211,
+                "bottom": 26.78125
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "CCost Today 34 · 37 prompts",
+            "lines": [
+              {
+                "left": 232.92709350585938,
+                "right": 384.5,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          }
+        ],
+        "documentOverflow": false
+      },
+      "bodyHeight": 384.3333435058594,
+      "rootHeight": 369.3333435058594,
+      "promptRows": [
+        25.416667938232422,
+        24.75
+      ]
+    },
+    {
+      "case": "standard-remember-last",
+      "outer": [
+        650,
+        424
+      ],
+      "position": [
+        1250,
+        756
+      ],
+      "inner": [
+        634,
+        382
+      ],
+      "screen": [
+        1920,
+        1200
+      ],
+      "dpr": 1.5,
+      "request": {
+        "width": 634,
+        "height": 382,
+        "preferInitialWindowPlacement": true
+      },
+      "desired": 418,
+      "rows": 2,
+      "accounts": 6,
+      "expanded": false,
+      "scroll": [],
+      "header": {
+        "fits": true,
+        "width": 619,
+        "parts": [
+          {
+            "text": "Cost Guard · Watch",
+            "lines": [
+              {
+                "left": 11.916666984558105,
+                "right": 116.29167461395264,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "Earlier Sessions",
+            "lines": [
+              {
+                "left": 139.4166717529297,
+                "right": 217.23959350585938,
+                "top": 12.114583969116211,
+                "bottom": 26.78125
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "CCost Today 34 · 37 prompts",
+            "lines": [
+              {
+                "left": 474.9270935058594,
+                "right": 626.5,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          }
+        ],
+        "documentOverflow": false
+      },
+      "bodyHeight": 371.75,
+      "rootHeight": 356.75,
+      "promptRows": [
+        25.416667938232422,
+        24.75
+      ]
+    },
+    {
+      "case": "remembered-disclosure-manual-invalidation",
+      "before": {
+        "outer": [
+          520,
+          250
+        ],
+        "position": [
+          1248,
+          950
+        ],
+        "inner": [
+          504,
+          208
+        ],
+        "screen": [
+          1920,
+          1200
+        ],
+        "dpr": 1.5,
+        "request": {
+          "width": 634,
+          "height": 182,
+          "preferInitialWindowPlacement": false
+        },
+        "desired": 220,
+        "rows": 1,
+        "accounts": 1,
+        "expanded": false,
+        "scroll": [],
+        "header": {
+          "fits": true,
+          "width": 489,
+          "parts": [
+            {
+              "text": "Cost Guard · Watch",
+              "lines": [
+                {
+                  "left": 11.916666984558105,
+                  "right": 116.29167461395264,
+                  "top": 10.864583969116211,
+                  "bottom": 26.86458396911621
+                }
+              ],
+              "overflow": false
+            },
+            {
+              "text": "Earlier Sessions",
+              "lines": [
+                {
+                  "left": 139.4166717529297,
+                  "right": 217.23959350585938,
+                  "top": 12.114583969116211,
+                  "bottom": 26.78125
+                }
+              ],
+              "overflow": false
+            },
+            {
+              "text": "CCost Today 34 · 37 prompts",
+              "lines": [
+                {
+                  "left": 344.9270935058594,
+                  "right": 496.5,
+                  "top": 10.864583969116211,
+                  "bottom": 26.86458396911621
+                }
+              ],
+              "overflow": false
+            }
+          ],
+          "documentOverflow": false
+        },
+        "bodyHeight": 147.58334350585938,
+        "rootHeight": 132.58334350585938,
+        "promptRows": [
+          24.75
+        ]
+      },
+      "grown": {
+        "outer": [
+          520,
+          330
+        ],
+        "position": [
+          1248,
+          870
+        ],
+        "inner": [
+          504,
+          288
+        ],
+        "screen": [
+          1920,
+          1200
+        ],
+        "dpr": 1.5,
+        "request": {
+          "width": 634,
+          "height": 182,
+          "preferInitialWindowPlacement": false
+        },
+        "desired": 327,
+        "rows": 1,
+        "accounts": 1,
+        "expanded": true,
+        "scroll": [],
+        "header": {
+          "fits": true,
+          "width": 489,
+          "parts": [
+            {
+              "text": "Cost Guard · Watch",
+              "lines": [
+                {
+                  "left": 11.916666984558105,
+                  "right": 116.29167461395264,
+                  "top": 10.864583969116211,
+                  "bottom": 26.86458396911621
+                }
+              ],
+              "overflow": false
+            },
+            {
+              "text": "Earlier Sessions",
+              "lines": [
+                {
+                  "left": 142.3854217529297,
+                  "right": 220.20834350585938,
+                  "top": 12.114583969116211,
+                  "bottom": 26.78125
+                }
+              ],
+              "overflow": false
+            },
+            {
+              "text": "CCost Today 34 · 37 prompts",
+              "lines": [
+                {
+                  "left": 344.9270935058594,
+                  "right": 496.5,
+                  "top": 10.864583969116211,
+                  "bottom": 26.86458396911621
+                }
+              ],
+              "overflow": false
+            }
+          ],
+          "documentOverflow": false
+        },
+        "bodyHeight": 255.25,
+        "rootHeight": 240.25,
+        "promptRows": [
+          24.75
+        ]
+      },
+      "manual": {
+        "outer": [
+          520,
+          350
+        ],
+        "position": [
+          1248,
+          850
+        ],
+        "inner": [
+          504,
+          308
+        ],
+        "screen": [
+          1920,
+          1200
+        ],
+        "dpr": 1.5,
+        "request": {
+          "width": 634,
+          "height": 182,
+          "preferInitialWindowPlacement": false
+        },
+        "desired": 327,
+        "rows": 1,
+        "accounts": 1,
+        "expanded": true,
+        "scroll": [],
+        "header": {
+          "fits": true,
+          "width": 489,
+          "parts": [
+            {
+              "text": "Cost Guard · Watch",
+              "lines": [
+                {
+                  "left": 11.916666984558105,
+                  "right": 116.29167461395264,
+                  "top": 10.864583969116211,
+                  "bottom": 26.86458396911621
+                }
+              ],
+              "overflow": false
+            },
+            {
+              "text": "Earlier Sessions",
+              "lines": [
+                {
+                  "left": 142.3854217529297,
+                  "right": 220.20834350585938,
+                  "top": 12.114583969116211,
+                  "bottom": 26.78125
+                }
+              ],
+              "overflow": false
+            },
+            {
+              "text": "CCost Today 34 · 37 prompts",
+              "lines": [
+                {
+                  "left": 344.9270935058594,
+                  "right": 496.5,
+                  "top": 10.864583969116211,
+                  "bottom": 26.86458396911621
+                }
+              ],
+              "overflow": false
+            }
+          ],
+          "documentOverflow": false
+        },
+        "bodyHeight": 255.25,
+        "rootHeight": 240.25,
+        "promptRows": [
+          24.75
+        ]
+      }
+    },
+    {
+      "case": "classic-light",
+      "owner": "#101112",
+      "mini": "rgb(16, 17, 18)",
+      "outer": [
+        520,
+        350
+      ],
+      "position": [
+        1248,
+        850
+      ],
+      "inner": [
+        504,
+        308
+      ],
+      "screen": [
+        1920,
+        1200
+      ],
+      "dpr": 1.5,
+      "request": {
+        "width": 634,
+        "height": 182,
+        "preferInitialWindowPlacement": false
+      },
+      "desired": 216,
+      "rows": 1,
+      "accounts": 1,
+      "expanded": false,
+      "scroll": [],
+      "header": {
+        "fits": true,
+        "width": 489,
+        "parts": [
+          {
+            "text": "Cost Guard · Watch",
+            "lines": [
+              {
+                "left": 11.916666984558105,
+                "right": 116.29167461395264,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "Earlier Sessions",
+            "lines": [
+              {
+                "left": 139.4166717529297,
+                "right": 217.23959350585938,
+                "top": 12.114583969116211,
+                "bottom": 26.78125
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "CCost Today 34 · 37 prompts",
+            "lines": [
+              {
+                "left": 344.9270935058594,
+                "right": 496.5,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          }
+        ],
+        "documentOverflow": false
+      },
+      "bodyHeight": 147.58334350585938,
+      "rootHeight": 132.58334350585938,
+      "promptRows": [
+        24.75
+      ]
+    },
+    {
+      "case": "classic-dark",
+      "owner": "#101112",
+      "mini": "rgb(16, 17, 18)",
+      "outer": [
+        520,
+        350
+      ],
+      "position": [
+        1248,
+        850
+      ],
+      "inner": [
+        504,
+        308
+      ],
+      "screen": [
+        1920,
+        1200
+      ],
+      "dpr": 1.5,
+      "request": {
+        "width": 634,
+        "height": 182,
+        "preferInitialWindowPlacement": false
+      },
+      "desired": 216,
+      "rows": 1,
+      "accounts": 1,
+      "expanded": false,
+      "scroll": [],
+      "header": {
+        "fits": true,
+        "width": 489,
+        "parts": [
+          {
+            "text": "Cost Guard · Watch",
+            "lines": [
+              {
+                "left": 11.916666984558105,
+                "right": 116.29167461395264,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "Earlier Sessions",
+            "lines": [
+              {
+                "left": 139.4166717529297,
+                "right": 217.23959350585938,
+                "top": 12.114583969116211,
+                "bottom": 26.78125
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "CCost Today 34 · 37 prompts",
+            "lines": [
+              {
+                "left": 344.9270935058594,
+                "right": 496.5,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          }
+        ],
+        "documentOverflow": false
+      },
+      "bodyHeight": 147.58334350585938,
+      "rootHeight": 132.58334350585938,
+      "promptRows": [
+        24.75
+      ]
+    },
+    {
+      "case": "web-light",
+      "owner": "#eef2f8",
+      "mini": "rgb(238, 242, 248)",
+      "outer": [
+        520,
+        350
+      ],
+      "position": [
+        1248,
+        850
+      ],
+      "inner": [
+        504,
+        308
+      ],
+      "screen": [
+        1920,
+        1200
+      ],
+      "dpr": 1.5,
+      "request": {
+        "width": 634,
+        "height": 182,
+        "preferInitialWindowPlacement": false
+      },
+      "desired": 216,
+      "rows": 1,
+      "accounts": 1,
+      "expanded": false,
+      "scroll": [],
+      "header": {
+        "fits": true,
+        "width": 489,
+        "parts": [
+          {
+            "text": "Cost Guard · Watch",
+            "lines": [
+              {
+                "left": 11.916666984558105,
+                "right": 116.29167461395264,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "Earlier Sessions",
+            "lines": [
+              {
+                "left": 139.4166717529297,
+                "right": 217.23959350585938,
+                "top": 12.114583969116211,
+                "bottom": 26.78125
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "CCost Today 34 · 37 prompts",
+            "lines": [
+              {
+                "left": 344.9270935058594,
+                "right": 496.5,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          }
+        ],
+        "documentOverflow": false
+      },
+      "bodyHeight": 147.58334350585938,
+      "rootHeight": 132.58334350585938,
+      "promptRows": [
+        24.75
+      ]
+    },
+    {
+      "case": "web-dark",
+      "owner": "#0c1422",
+      "mini": "rgb(12, 20, 34)",
+      "outer": [
+        520,
+        350
+      ],
+      "position": [
+        1248,
+        850
+      ],
+      "inner": [
+        504,
+        308
+      ],
+      "screen": [
+        1920,
+        1200
+      ],
+      "dpr": 1.5,
+      "request": {
+        "width": 634,
+        "height": 182,
+        "preferInitialWindowPlacement": false
+      },
+      "desired": 216,
+      "rows": 1,
+      "accounts": 1,
+      "expanded": false,
+      "scroll": [],
+      "header": {
+        "fits": true,
+        "width": 489,
+        "parts": [
+          {
+            "text": "Cost Guard · Watch",
+            "lines": [
+              {
+                "left": 11.916666984558105,
+                "right": 116.29167461395264,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "Earlier Sessions",
+            "lines": [
+              {
+                "left": 139.4166717529297,
+                "right": 217.23959350585938,
+                "top": 12.114583969116211,
+                "bottom": 26.78125
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "CCost Today 34 · 37 prompts",
+            "lines": [
+              {
+                "left": 344.9270935058594,
+                "right": 496.5,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          }
+        ],
+        "documentOverflow": false
+      },
+      "bodyHeight": 147.58334350585938,
+      "rootHeight": 132.58334350585938,
+      "promptRows": [
+        24.75
+      ]
+    },
+    {
+      "case": "activity-classic-light-650-credits",
+      "outer": 551,
+      "inner": 535,
+      "zoom": 1.5,
+      "documentOverflow": false,
+      "horizontal": false,
+      "vertical": false,
+      "activityWidth": 57.57291793823242,
+      "sessionWidth": 426.04168701171875,
+      "nowrap": true,
+      "alignment": true,
+      "totals": true,
+      "context": true
+    },
+    {
+      "case": "activity-classic-light-650-usd",
+      "outer": 551,
+      "inner": 535,
+      "zoom": 1.5,
+      "documentOverflow": false,
+      "horizontal": false,
+      "vertical": false,
+      "activityWidth": 57.57291793823242,
+      "sessionWidth": 426.04168701171875,
+      "nowrap": true,
+      "alignment": true,
+      "totals": true,
+      "context": true
+    },
+    {
+      "case": "activity-classic-light-520-credits",
+      "outer": 492,
+      "inner": 476,
+      "zoom": 1.5,
+      "documentOverflow": false,
+      "horizontal": false,
+      "vertical": false,
+      "activityWidth": 57.57291793823242,
+      "sessionWidth": 366.7083435058594,
+      "nowrap": true,
+      "alignment": true,
+      "totals": true,
+      "context": true
+    },
+    {
+      "case": "activity-classic-light-520-usd",
+      "outer": 492,
+      "inner": 476,
+      "zoom": 1.5,
+      "documentOverflow": false,
+      "horizontal": false,
+      "vertical": false,
+      "activityWidth": 57.57291793823242,
+      "sessionWidth": 366.7083435058594,
+      "nowrap": true,
+      "alignment": true,
+      "totals": true,
+      "context": true
+    },
+    {
+      "case": "activity-classic-light-280-credits",
+      "outer": 281,
+      "inner": 265,
+      "zoom": 1.5,
+      "documentOverflow": false,
+      "horizontal": true,
+      "vertical": false,
+      "activityWidth": 57.57291793823242,
+      "sessionWidth": 156.0416717529297,
+      "nowrap": true,
+      "alignment": true,
+      "totals": true,
+      "context": true
+    },
+    {
+      "case": "activity-classic-light-280-usd",
+      "outer": 281,
+      "inner": 265,
+      "zoom": 1.5,
+      "documentOverflow": false,
+      "horizontal": true,
+      "vertical": false,
+      "activityWidth": 57.57291793823242,
+      "sessionWidth": 156.0416717529297,
+      "nowrap": true,
+      "alignment": true,
+      "totals": true,
+      "context": true
+    },
+    {
+      "case": "activity-classic-dark-650-credits",
+      "outer": 551,
+      "inner": 535,
+      "zoom": 1.5,
+      "documentOverflow": false,
+      "horizontal": false,
+      "vertical": false,
+      "activityWidth": 57.57291793823242,
+      "sessionWidth": 426.04168701171875,
+      "nowrap": true,
+      "alignment": true,
+      "totals": true,
+      "context": true
+    },
+    {
+      "case": "activity-classic-dark-650-usd",
+      "outer": 551,
+      "inner": 535,
+      "zoom": 1.5,
+      "documentOverflow": false,
+      "horizontal": false,
+      "vertical": false,
+      "activityWidth": 57.57291793823242,
+      "sessionWidth": 426.04168701171875,
+      "nowrap": true,
+      "alignment": true,
+      "totals": true,
+      "context": true
+    },
+    {
+      "case": "activity-classic-dark-520-credits",
+      "outer": 492,
+      "inner": 476,
+      "zoom": 1.5,
+      "documentOverflow": false,
+      "horizontal": false,
+      "vertical": false,
+      "activityWidth": 57.57291793823242,
+      "sessionWidth": 366.7083435058594,
+      "nowrap": true,
+      "alignment": true,
+      "totals": true,
+      "context": true
+    },
+    {
+      "case": "activity-classic-dark-520-usd",
+      "outer": 492,
+      "inner": 476,
+      "zoom": 1.5,
+      "documentOverflow": false,
+      "horizontal": false,
+      "vertical": false,
+      "activityWidth": 57.57291793823242,
+      "sessionWidth": 366.7083435058594,
+      "nowrap": true,
+      "alignment": true,
+      "totals": true,
+      "context": true
+    },
+    {
+      "case": "activity-classic-dark-280-credits",
+      "outer": 281,
+      "inner": 265,
+      "zoom": 1.5,
+      "documentOverflow": false,
+      "horizontal": true,
+      "vertical": false,
+      "activityWidth": 57.57291793823242,
+      "sessionWidth": 156.0416717529297,
+      "nowrap": true,
+      "alignment": true,
+      "totals": true,
+      "context": true
+    },
+    {
+      "case": "activity-classic-dark-280-usd",
+      "outer": 281,
+      "inner": 265,
+      "zoom": 1.5,
+      "documentOverflow": false,
+      "horizontal": true,
+      "vertical": false,
+      "activityWidth": 57.57291793823242,
+      "sessionWidth": 156.0416717529297,
+      "nowrap": true,
+      "alignment": true,
+      "totals": true,
+      "context": true
+    },
+    {
+      "case": "activity-web-light-650-credits",
+      "outer": 551,
+      "inner": 535,
+      "zoom": 1.5,
+      "documentOverflow": false,
+      "horizontal": false,
+      "vertical": false,
+      "activityWidth": 57.57291793823242,
+      "sessionWidth": 426.04168701171875,
+      "nowrap": true,
+      "alignment": true,
+      "totals": true,
+      "context": true
+    },
+    {
+      "case": "activity-web-light-650-usd",
+      "outer": 551,
+      "inner": 535,
+      "zoom": 1.5,
+      "documentOverflow": false,
+      "horizontal": false,
+      "vertical": false,
+      "activityWidth": 57.57291793823242,
+      "sessionWidth": 426.04168701171875,
+      "nowrap": true,
+      "alignment": true,
+      "totals": true,
+      "context": true
+    },
+    {
+      "case": "activity-web-light-520-credits",
+      "outer": 492,
+      "inner": 476,
+      "zoom": 1.5,
+      "documentOverflow": false,
+      "horizontal": false,
+      "vertical": false,
+      "activityWidth": 57.57291793823242,
+      "sessionWidth": 366.7083435058594,
+      "nowrap": true,
+      "alignment": true,
+      "totals": true,
+      "context": true
+    },
+    {
+      "case": "activity-web-light-520-usd",
+      "outer": 492,
+      "inner": 476,
+      "zoom": 1.5,
+      "documentOverflow": false,
+      "horizontal": false,
+      "vertical": false,
+      "activityWidth": 57.57291793823242,
+      "sessionWidth": 366.7083435058594,
+      "nowrap": true,
+      "alignment": true,
+      "totals": true,
+      "context": true
+    },
+    {
+      "case": "activity-web-light-280-credits",
+      "outer": 281,
+      "inner": 265,
+      "zoom": 1.5,
+      "documentOverflow": false,
+      "horizontal": true,
+      "vertical": false,
+      "activityWidth": 57.57291793823242,
+      "sessionWidth": 156.0416717529297,
+      "nowrap": true,
+      "alignment": true,
+      "totals": true,
+      "context": true
+    },
+    {
+      "case": "activity-web-light-280-usd",
+      "outer": 281,
+      "inner": 265,
+      "zoom": 1.5,
+      "documentOverflow": false,
+      "horizontal": true,
+      "vertical": false,
+      "activityWidth": 57.57291793823242,
+      "sessionWidth": 156.0416717529297,
+      "nowrap": true,
+      "alignment": true,
+      "totals": true,
+      "context": true
+    },
+    {
+      "case": "activity-web-dark-650-credits",
+      "outer": 551,
+      "inner": 535,
+      "zoom": 1.5,
+      "documentOverflow": false,
+      "horizontal": false,
+      "vertical": false,
+      "activityWidth": 57.57291793823242,
+      "sessionWidth": 426.04168701171875,
+      "nowrap": true,
+      "alignment": true,
+      "totals": true,
+      "context": true
+    },
+    {
+      "case": "activity-web-dark-650-usd",
+      "outer": 551,
+      "inner": 535,
+      "zoom": 1.5,
+      "documentOverflow": false,
+      "horizontal": false,
+      "vertical": false,
+      "activityWidth": 57.57291793823242,
+      "sessionWidth": 426.04168701171875,
+      "nowrap": true,
+      "alignment": true,
+      "totals": true,
+      "context": true
+    },
+    {
+      "case": "activity-web-dark-520-credits",
+      "outer": 492,
+      "inner": 476,
+      "zoom": 1.5,
+      "documentOverflow": false,
+      "horizontal": false,
+      "vertical": false,
+      "activityWidth": 57.57291793823242,
+      "sessionWidth": 366.7083435058594,
+      "nowrap": true,
+      "alignment": true,
+      "totals": true,
+      "context": true
+    },
+    {
+      "case": "activity-web-dark-520-usd",
+      "outer": 492,
+      "inner": 476,
+      "zoom": 1.5,
+      "documentOverflow": false,
+      "horizontal": false,
+      "vertical": false,
+      "activityWidth": 57.57291793823242,
+      "sessionWidth": 366.7083435058594,
+      "nowrap": true,
+      "alignment": true,
+      "totals": true,
+      "context": true
+    },
+    {
+      "case": "activity-web-dark-280-credits",
+      "outer": 281,
+      "inner": 265,
+      "zoom": 1.5,
+      "documentOverflow": false,
+      "horizontal": true,
+      "vertical": false,
+      "activityWidth": 57.57291793823242,
+      "sessionWidth": 156.0416717529297,
+      "nowrap": true,
+      "alignment": true,
+      "totals": true,
+      "context": true
+    },
+    {
+      "case": "activity-web-dark-280-usd",
+      "outer": 281,
+      "inner": 265,
+      "zoom": 1.5,
+      "documentOverflow": false,
+      "horizontal": true,
+      "vertical": false,
+      "activityWidth": 57.57291793823242,
+      "sessionWidth": 156.0416717529297,
+      "nowrap": true,
+      "alignment": true,
+      "totals": true,
+      "context": true
+    },
+    {
+      "case": "capped-accessible-scroll",
+      "outer": [
+        278,
+        640
+      ],
+      "position": [
+        1620,
+        538
+      ],
+      "inner": [
+        262,
+        598
+      ],
+      "screen": [
+        1920,
+        1200
+      ],
+      "dpr": 1.5,
+      "request": {
+        "width": 391,
+        "height": 952,
+        "preferInitialWindowPlacement": true
+      },
+      "desired": 1000,
+      "rows": 40,
+      "accounts": 6,
+      "expanded": false,
+      "scroll": [
+        {
+          "tag": "HTML",
+          "class": "",
+          "client": 598,
+          "scroll": 1375
+        }
+      ],
+      "header": {
+        "fits": false,
+        "width": 231.6666717529297,
+        "parts": [
+          {
+            "text": "Cost Guard · Watch",
+            "lines": [
+              {
+                "left": 11.916666984558105,
+                "right": 116.29167461395264,
+                "top": 10.864583969116211,
+                "bottom": 26.86458396911621
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "Earlier Sessions",
+            "lines": [
+              {
+                "left": 156.92709350585938,
+                "right": 234.75,
+                "top": 12.114583969116211,
+                "bottom": 26.78125
+              }
+            ],
+            "overflow": false
+          },
+          {
+            "text": "CCost Today 34 · 37 prompts",
+            "lines": [
+              {
+                "left": 87.59375,
+                "right": 239.1666717529297,
+                "top": 35.16666793823242,
+                "bottom": 51.16666793823242
+              }
+            ],
+            "overflow": false
+          }
+        ],
+        "documentOverflow": false
+      },
+      "bodyHeight": 1374.510498046875,
+      "rootHeight": 1359.510498046875,
+      "promptRows": [
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        25.416667938232422,
+        24.75
+      ]
+    },
+    {
+      "case": "narrow-horizontal-panning",
+      "horizontal": true,
+      "documentOverflow": false,
+      "rows": 40,
+      "accounts": 6
+    }
+  ],
+  "checks": [
+    "16 header snapshots: themes/fonts, Credits/USD, long counts, loading/unavailable; unclamped achieved one-line layout breaks when reduced by 6 CSS pixels; native clamps separately assert truthful limitation/accessibility",
+    "Opening real layout and two-row reserve; actual native clamps recorded separately from uncapped no-scroll cases",
+    "Native pointer, Enter and Space expand/shrink; current manual width retained; advancing SSE never resizes",
+    "Activity-only three-column history; server midnight/DST/unknown tokens; stable live focus/help, delayed hover and real touch; four themes, Credits/USD and nominal/narrow PiP geometry",
+    "Absent activation keeps disclosure functional; four position/size intentions and symbolic defaults round-trip; browser coupling/remembered width measured; one SSE/no geometry storage"
+  ],
+  "browser": {
+    "protocolVersion": "1.3",
+    "product": "Chrome/156.0.8078.80",
+    "revision": "@fb096c0011f9d50f0a264a9376420cdea9c421e3",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
+    "jsVersion": "15.6.75.27"
+  },
+  "browserZoom": 1,
+  "owner": {
+    "outer": [
+      1600,
+      1000
+    ],
+    "inner": [
+      1584,
+      905
+    ]
+  }
+}

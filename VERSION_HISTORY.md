@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.187 — 2026-11-06
+
+- Mini Watch Fit on open measures the narrowest styled header width for Cost Guard · Watch, Earlier Sessions and complete CCost Today, then fits content/two running-row height at that width. Initial content waits for styles to avoid premature scrollbar wrapping. Native clamps remain scrollable and disclosed; Remember last size, disclosure-only height resizing and passive Live behavior are unchanged. Settings help now describes content fitting rather than a fixed 650-DIP target.
+
 ## v80.186 — 2026-11-06
 
 - Web Comparisons shows exact first-input matches as individual root-session runs, including same-model repetitions, in ten unframed groups per page. Canonical first-prompt cost, timing, historical context, token mix and requests retain explicit uncertainty; inline gaps exclude unsupported runs. Read-only finite all-history acquisition uses a compact revision-aware fingerprint/metric index, visible-route five-minute freshness and existing cancellation/security. AI Stats preserves its ten baseline cards and adds a conditional period-scoped matched-input fact without a separate deep scan.

@@ -32,6 +32,8 @@ Status: current
 - [Shared/native CI scope](ci-scope.md): measured Linux shared regression and
   focused three-architecture native startup, scoped handoff permission and proof limits.
 - [Mini Watch and finished history](mini-watch.md): finish-based representatives,
+  intrinsic opening-header width and width-aware two-row height, achieved-layout
+  probes and FR 000607's scoped physical-verification exception;
   native Chrome CG-icon adoption at Windows 150%, repeated-hour offsets, keyed
   tables/thin native bars, Chrome/Edge PiP/hidden-page and V2 evidence. Actual shell
   icon surfaces remain unverified under FR 000570's scoped exception; older

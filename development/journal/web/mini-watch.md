@@ -1,5 +1,69 @@
 # Mini Watch and finished history
 
+## FR 000607 — v80.187 intrinsic opening width, 2026-11-06
+
+Base `146c3af` (implementation started at `211c793`; unrelated Ready authoring
+fast-forwarded normally). `OpeningMeasure` measures a max-content clone of only
+the current styled header before native activation is consumed. Body padding and
+two CSS pixels cover rounding; the opener's estimated side frame is excluded from
+the Fit zoom ratio. Width is not prescribed, inferred from a table, or passively
+corrected. Existing natural-content/two-running-row height fitting uses the resulting
+width; Remember mode retains its old first-request geometry and browser-managed
+manual bounds. Disclosure remains the sole gesture-bound native resize owner.
+
+The first Edge probe exposed a real unstyled-first-paint scrollbar feedback loop:
+the scrollbar stole enough width to wrap an otherwise fitted header and keep itself
+alive. PiP now mounts content only after both styles load; load failure and closing
+during that wait are deterministic VM regressions. No clipping, CSS min-width lock,
+passive resize, acquisition, accounting, setting persistence or layer owner was added.
+Current help/user guide and the Web module contract describe intrinsic fitting.
+
+### Verification and limits
+
+- Local Full: **152 bounded units, zero failures, 94.7s**; focused Mini/Settings:
+  **20 tests passed**. Validator: **11 passes, zero failures**, six pre-existing
+  advisory size warnings. No ZIP, tag or GitHub Release.
+- Five serial strictly headless native PiP runs: [Chrome 1×](../../architecture/governance/verification/mini-width/width-chrome.json),
+  [Chrome 1.5×](../../architecture/governance/verification/mini-width/width-chrome-150.json),
+  [Chrome 1.5×/125% zoom](../../architecture/governance/verification/mini-width/width-chrome-150-zoom.json),
+  [Edge 1×](../../architecture/governance/verification/mini-width/width-edge.json),
+  [Edge 1.5×/125% zoom](../../architecture/governance/verification/mini-width/width-edge-150-zoom.json).
+  **62 layouts each / 310 total**, including 16 header cases per run across
+  Classic/Web, system-ui/serif, populated Credits/USD, long prompt counts and
+  loading/unavailable. Browser zoom is actual `settingsPrivate` zoom; 1.5× is
+  emulated device scale, **not physical Windows display scaling**.
+- Unclamped header cases fit completely on one row without overlap, clipping or
+  document horizontal overflow; reducing content width by **6 CSS pixels** breaks
+  fit. At 100% zoom, observed outer widths span **378–497 DIPs** rather than the
+  former nominal 650 target. Example populated Chrome `6 152 · 106 prompts`:
+  **431 outer / 415 inner**, not an outer width inferred from a successful request.
+  The [opening screenshot](../../architecture/governance/verification/mini-width/width-chrome-opening.png)
+  was inspected: all three header items, two real prompt rows and six subscriptions
+  are visible without an initial vertical scrollbar.
+- Each 125%-zoom run has **four header cases and two dense cases limited by native
+  clamps**. These are limited-fit/accessibility results, **not exact-fit PASS**.
+  The probe checks truthful limitation text, no hidden header text and accessible
+  responsive wrapping/scrolling. Existing zero/one/two/>two prompt reserve, warnings,
+  native pointer/Enter/Space disclosure, current manual width, Remember intentions,
+  Activity and passive-SSE/no-resize assertions also passed.
+- [Fresh real-installation probe](../../architecture/governance/verification/mini-width/live-proof.txt):
+  V2, one Live owner/two advancing coherent streams, three accounts, one active and
+  three historical cards. Daily **1,786 requests / 54 prompts**, complete cost/count
+  and reconciling category costs. **18.56s** including owned shutdown, zero surviving
+  workers/errors; no inference or shared OpenCode stop. This is separate source
+  evidence, not a real-user desktop/browser layout claim.
+
+**Scoped exception — Decision Delegate:** after the integrated browser returned
+`browser.disconnected`, the delegate authorized omitting headed opening inspection,
+actual Windows 150%-OS-scale/native-frame proof, and physical manual-drag/remembered
+bounds verification **for this FR only**, despite installed physical browsers.
+Achieved native bounds/rendered-layout tests plus fresh real-source evidence are
+adequate for this bounded change; disruptive desktop verification is not indispensable,
+so On Hold was rejected. This grants no visible-desktop/shared-input permission.
+Physical scaling, native frame/work-area differences, monitor transitions and physical
+drag/restoration remain **unverified**, not PASS; the pre-open frame/zoom estimate
+retains uncertainty. No other requirement or future FR is waived.
+
 ## FR 000603 — v80.184 historical Activity, 2026-11-06
 
 Base `1c2550a5aa2f7071e268f21bdf19c2e54907571c`. Earlier Sessions alone now has

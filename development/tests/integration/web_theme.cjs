@@ -72,6 +72,9 @@ async function main() {
       [['default','Default (Used)'],['used','Used'],['remaining','Remaining']]);
   assert.match(help.get(theme)(), /Follow the shipped default, currently Classic; do not pin/);
   assert.match(view.root.querySelector('#mini-size-fit-on-open-help').textContent, /two running prompts.*Live updates never resize/);
+  assert.match(view.root.querySelector('#mini-size-fit-on-open-help').textContent, /narrowest width.*Cost Guard · Watch, Earlier Sessions and CCost Today on one row/);
+  assert.doesNotMatch(view.root.querySelector('#mini-size-fit-on-open-help').textContent, /650/);
+  assert.match(view.root.querySelector('#mini-size-remember-last-help').textContent, /without forcing the minimal Fit opening width/);
   theme.focus(); theme.value = 'web'; const pending = save(theme);
   assert.equal(theme.disabled, true); assert.equal(ccost.disabled, true);
   assert.equal(html.dataset.theme, 'classic', 'never optimistically claim saved theme');

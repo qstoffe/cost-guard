@@ -145,13 +145,14 @@ CCost is read before report/Live presentation. Reopening Settings recognizes val
 external edits, without polling or automatic cross-tab broadcast. Existing tabs
 retain confirmed values until their next settings read or successful change.
 
-Mini defaults to **Fit on open**: approximately 650 total outer DIPs wide, with
-measured content height and capacity for two running rows, all accounts and warnings.
+Mini defaults to **Fit on open**: the narrowest measured opening width fitting
+Cost Guard · Watch, Earlier Sessions and complete CCost Today on one row, with
+width-aware content height and capacity for two running rows, all accounts and warnings.
 Earlier Sessions pointer/keyboard activation grows/shrinks to measured content;
 passive Live updates never resize. Outer height is capped at 1,000 DIPs or known
 available work area, and native clamps retain accessible document scrolling.
 Remember last size permits browser-native manual bounds in the **same live opener
-and host**. Native placement couples position and dimensions: Fit prioritizes sizing
+and host**, without forcing the minimal Fit width. Native placement couples position and dimensions: Fit prioritizes sizing
 and may reset position; Standard position may reset remembered size. Reload/host
 restart starts fresh. No exact coordinates are promised or pixel geometry persisted.
 See [Mini Watch](web-mini-watch.md) for browser limits and measured evidence.

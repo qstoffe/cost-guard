@@ -55,7 +55,7 @@ async function main() {
     await until(`typeof miniWatch!=='undefined' && miniWatch.measure?.ready && liveValue?.view?.active_cards?.length===2`);
     await evaluate(`location.hash='#/watch'`);
     evidence.owner=await evaluate('({outer:[outerWidth,outerHeight],inner:[innerWidth,innerHeight]})');
-    await evaluate(`window.probeRequests=[];const nativeRequest=documentPictureInPicture.requestWindow.bind(documentPictureInPicture);documentPictureInPicture.requestWindow=options=>{probeRequests.push(options);return nativeRequest(options);}`);
+    await evaluate(`window.probeRequests=[];const nativeRequest=documentPictureInPicture.requestWindow.bind(documentPictureInPicture);documentPictureInPicture.requestWindow=options=>{probeRequests.push(options);return nativeRequest(options).then(w=>{if(window.probeFont)w.document.body.style.fontFamily=probeFont;return w;});}`);
     const open=async()=>{await evaluate('miniWatch.toggle()',true);await until('!!miniWatch.view');await until('miniWatch.window.document.styleSheets.length===2');
       await evaluate('new Promise(resolve=>miniWatch.window.requestAnimationFrame(()=>miniWatch.window.requestAnimationFrame(resolve)))');};
     const close=()=>evaluate('miniWatch.close()');
@@ -63,17 +63,33 @@ async function main() {
       outer:[w.outerWidth,w.outerHeight],position:[w.screenX,w.screenY],inner:[w.innerWidth,w.innerHeight],screen:[w.screen.availWidth,w.screen.availHeight],dpr:w.devicePixelRatio,
       request:probeRequests.at(-1),desired:v.fitHeight(),rows:v.promptRows.size,accounts:v.lines.size,expanded:!v.earlier.hidden,
       scroll:[d.documentElement,...v.root.querySelectorAll('*')].filter(n=>n.scrollHeight>n.clientHeight+1 && ['auto','scroll'].includes(w.getComputedStyle(n).overflowY)).map(n=>({tag:n.tagName,class:n.className,client:n.clientHeight,scroll:n.scrollHeight})),
+      header:(${require('./probe_mini_width.cjs').inspect.toString()})(v),
       bodyHeight:d.body.getBoundingClientRect().height,rootHeight:v.root.getBoundingClientRect().height,
       promptRows:[...v.body.children].map(n=>n.getBoundingClientRect().height)};})()`);
     const layouts=evidence.layouts;
+    const captureOpening=async()=>{
+      for(const target of (await command('Target.getTargets')).targetInfos.filter(t=>t.targetId!==targetId && t.type==='page')) {
+        const attached=await command('Target.attachToTarget',{targetId:target.targetId,flatten:true});
+        if(!await evaluate('!!document.querySelector(".mini-watch")',false,attached.sessionId))continue;
+        const image=await command('Page.captureScreenshot',{format:'png'},attached.sessionId);
+        await fs.writeFile(output.replace(/\.json$/,'-opening.png'),Buffer.from(image.data,'base64'));return;
+      }
+      throw new Error('No native PiP screenshot target');
+    };
+    await require('./probe_mini_width.cjs')({evaluate,open,close,read,capture:captureOpening,layouts,checks:evidence.checks});
     for(const [prompts,accounts,flags] of [[0,0,''],[1,1,''],[2,3,''],[4,6,'-long'],[2,6,'-long-warning']]) {
       await fixture(`density-${prompts}-${accounts}${flags.replace('-warning','')}`);
       await until(`liveValue.view.active_cards.length===${prompts} && liveValue.view.accounts.accounts.length===${accounts}`);
       if(flags.includes('warning'))await evaluate(`(()=>{const p=structuredClone(liveValue);p.view.now_ms++;p.view.daily_usage.total.complete=false;
         for(const item of p.view.accounts.accounts){item.observation.has_warning=true;item.observation.label+=' long account warning '.repeat(4);}miniWatch.update(p);})()`);
       await open(); const value=await read();
-      assert.ok(Math.abs(value.request.width+16-650)<=1,JSON.stringify(value));
-      assert.ok(value.outer[0]<=675 && value.outer[0]>0,JSON.stringify(value));
+      assert.ok(value.request.width<634 && value.outer[0]>0,JSON.stringify(value));
+      if(!value.header.fits) {
+        assert.ok(value.outer[0]+2<value.request.width+16,JSON.stringify(value));
+        assert.match(await evaluate('miniWatch.feedback.textContent'),/Browser size limits/);
+        value.widthLimitedByBrowser=true;
+      }
+      assert.equal(value.header.documentOverflow,false,JSON.stringify(value));
       assert.ok(value.outer[1]<=Math.min(1000,value.screen[1])+1,JSON.stringify(value));
       if(value.outer[1]+2>=value.desired)assert.deepEqual(value.scroll,[],JSON.stringify(value));
       else value.limitedByBrowser=true;
@@ -148,7 +164,7 @@ async function main() {
     }
     await settings('miniWatchSize','mini-size','default');await settings('miniWatchPlacement','mini-placement','default');
     const saved=JSON.parse(await fs.readFile(path.join(config,'config/user-config.jsonc'),'utf8'));
-    assert.deepEqual(saved,{webSettings:{miniWatchPlacement:'default',miniWatchSize:'default'}});
+    assert.deepEqual(saved,{webSettings:{theme:'default',miniWatchPlacement:'default',miniWatchSize:'default'}});
     assert.equal(await evaluate('probeStreams'),1);
     assert.deepEqual(await evaluate('({local:localStorage.length,session:sessionStorage.length})'),{local:0,session:0});
     await fixture('history-3-1-1');await until('liveValue.view.accounts.accounts.length===1');
