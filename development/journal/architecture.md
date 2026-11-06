@@ -1,73 +1,84 @@
-# Architecture assessment — milestone 30
+# Architecture assessment — milestone 60
 
-Source revision: 020e50071671ee863ceffcd37b6871af789bbe0f
-Checked revision: 020e50071671ee863ceffcd37b6871af789bbe0f
-Last checked: 2026-11-04
+Source revision: 302784d150a8bd7b7ac203dfc6cfba88a6ea54cd
+Checked revision: 20ab74d5927e6d5dbe1f81701cd8448cbb79f1aa
+Last checked: 2026-11-06
 Status: current
 
-## Outcome and evidence scope
+## Summary
 
-**Completed two-level assessment with local simplification; global coordination retained.** The revision above is the fetched baseline; the maintenance diff removes two unreachable comparison modules and moves the remaining evidence value into the existing analysis records owner. Product v80.160 has no intended observable policy change. No FR was selected/moved and no ordinary-delivery increment is claimed: only Architecture milestone 30 advances.
+**Completed two-level static assessment: independently justified global NO_CHANGE and local runtime NO_CHANGE.** No material orchestration defect or local refactor with demonstrated net benefit was established. This is not a blanket health/correctness/security/performance claim. The overview consolidates runtime owners and delivery/CI activation. Runtime modules, state machines and dependencies are unchanged; no measured gain or parity test is claimed.
 
-Fresh whole-repository inventory: 793 text/config records (272 source-or-config, 285 documentation, 236 test), 225 binary/over-1-MiB exclusions, zero exact-byte duplicate groups. Scope is Git tracked plus nonignored untracked, excluding Git/runtime artifacts. The full metadata lives in `scratch:/architecture-inventory.json` during this worker; this durable source/count summary survives cleanup. Reproduce using installed `shared-repo/scripts/maintenance_evidence.py inventory --repo-root .`.
+Only Architecture 30 → 60 advances on merge. Ordinary count 60, last ordinary identity, other methods and Session Learning deferral stay unchanged. Checked revision adds backlog authoring only. No FR implementation/move, version change or automatic proposal.
 
-`development/tools/code_inventory.py --json` establishes 196 runtime Python modules / 30,185 lines before, 194 / 29,971 after: **two fewer modules and 214 fewer runtime lines**, not a runtime-performance claim. Development tools remain 15 / 2,938; test-tree modules remain 208, falling from 40,649 to 40,590 lines; nested fixture subset remains 30 / 2,311. AST roots do not include JavaScript, PowerShell, shell launchers or binary assets; their representative owners are covered separately below. All runtime purpose records were reviewed for routing, then substantial areas and identified risks were source-sampled; the product validator independently checks import boundaries. This is not an exhaustive line-by-line correctness/security audit. No private prompt/account/credential data is published.
+## Evidence
 
-## Level 1 — normal, failure and recovery paths
+### Inventory and reproducibility
 
-| Source trace inspected | Authority, transitions and simpler alternative assessed |
+At the source revision: **953 text/config records** (324 source-or-config, 359 documentation, 270 test), **265 binary/over-1-MiB exclusions**, **zero exact-byte duplicate groups**. Scope: Git tracked plus nonignored untracked text/config excluding runtime artifacts. Largest text hotspots are historical development verification JSON, not proof of product complexity. Reproduce with installed `shared-repo/scripts/maintenance_evidence.py inventory --repo-root .`.
+
+`py -3 development/tools/code_inventory.py --json` AST-parses without imports: **212 runtime modules / 32,002 lines**, tools 15 / 2,961, test tree 238 / 44,663, nested fixtures 38 / 2,911 (not additive). All runtime purpose/import records were reviewed, then substantial areas source-sampled; JavaScript/platform/tooling was read separately. Seven legacy test-to-test edges remain bounded debt. Only two package markers lack static test paths. Imports are **not executed coverage**; size is not a quality score.
+
+Temporary metadata: `scratch:/architecture-60-inventory.json`, `scratch:/architecture-60-ast.json`; this summary survives cleanup. No prompts/accounts/auth/runtime history read or exported. Counts describe the original baseline, not later backlog additions or performance.
+
+### Level 1 — end-to-end authority, normal/failure/recovery
+
+| Source trace inspected | Ownership / simpler target compared |
 | --- | --- |
-| `src/bootstrap.py:main/_select_or_wait`, `src/config.py:load_configuration/validated_values` | Parse and validate before source/cache/providers. CLI builds/renders directly and finally closes accounts/progress. Watch retains its own cadence. Routing CLI through Web would add a host/HTTP lifetime rather than remove decisions. Invalid config/source errors remain distinct from unexpected faults. |
-| `src/web/host.py:_serve/close`, `src/web/jobs.py:tick/close`, `src/application/service.py:execute` | Host owns stop and joins; finite jobs own bounded fresh services/processes, cancellation and parent-sentinel cleanup. Busy/foreign-service rejection must not close Live. One mutable shared service would entangle finite deep scans/cancellation with Live; retain isolation. |
-| `src/application/live.py:_run/close`, `src/watch/acquisition.py:tick`, `src/watch/coordinator.py:initialize/acquire_cycle/_discard_initialization` | One Live publisher consumes authoritative acquisition, not per-tab work. Retry retains frame/observation origin and selected source; unsupported failures end the driver. Startup retry discards partial state. Browser HTTP/SSE health is not source or prompt completion. No evidenced duplicate valuation/state authority warrants a universal scheduler. |
-| `src/watch/web_coordinator.py`, `card_workers.py`/`session_costs.py` import and ownership records | Web's card, history, detail and session-total lanes isolate mutable services and bounded blocking reads; daily late results are day-checked. Cancellation retires only owned sources before pool joins. Combining lanes would reintroduce head-of-line work; no change justified by static module counts. |
-| `src/reports/acquisition.py:analyze/prepare`, `src/sources/opencode_v1.py:load_session_snapshot`, `opencode_v2_snapshot.py:load_snapshots` | Cached revision proof gates acquisition. V1 pins a SQLite read transaction; V2 brackets complete tree reads and retries changed trees within two fresh attempts. Hints are not usage. A common raw-source implementation would hide different consistency proofs. |
-| `src/accounts/acquisition.py:poll/finish/close`, `refresh_loop.py:tick/poll`, `src/pricing/github_copilot.py:get_catalog/_load_or_fetch` | Attempt/deadline identity rejects late quota responses; timeout retains occupied lane; discovery precedes mailbox publication. Price cache fallback and release-metadata health have different validity. Universal retry/expiry would erase those distinctions. |
-| `src/web/lifecycle.py:launch/stop_existing`, `security.py`, `native_windows.py`, `assets/live.js` | Launcher owns pre-host arbitration and exact-process restart proof; host owns its work, native pump readiness stays main-thread, and browser enforces instance/sequence/gap/auth/terminal state. Keep these lifetimes separate. Source inspection and mocks are not physical desktop proof. |
+| `src/bootstrap.py`, `cli.py`, `config.py:load_configuration/validated_values`, `runtime_errors.py:run` | Parse/validate precedes source/cache/provider work; direct CLI reports close owned accounts/progress. Watch owns waiting/retry. Routing CLI through Web would add host/HTTP/browser lifetime rather than remove decisions. Sanitized unexpected faults remain distinct from invalid config/source failure. |
+| `src/web/host.py`, `jobs.py`, `src/application/service.py` | Host owns HTTP/jobs/Live. Fresh finite processes: 4 pending/16 records, 120s deadline, 8MiB result, bounded progress, parent sentinel and owned cancellation. Foreign/Live rejection must not close another service. Sharing one service couples deep scans/cancellation to Live. |
+| `src/application/live.py`, `src/watch/acquisition.py`, `coordinator.py`, `web_coordinator.py` | One driver calls initialize/poll/enrich. Outage retains frame, discards partial startup, retries same generation and stops on unsupported/persistent unreadability. Hints/HTTP health never establish completion. CLI wait/Web ticks adapt shared acquisition; a universal scheduler couples different lifetimes. |
+| Web coordinator, `src/watch/session_costs.py`, Web `composition.py` | Four card workers plus separate account-history/detail/scalar-index lanes use isolated resources; late daily results are day-checked; owned transports cancel before joins. Session-cost reconciliation uses existing snapshots and source-free cache/catalog resources. Combining lanes risks head-of-line blocking/shared cancellation; no evidenced net simplification. |
+| `src/reports/acquisition.py`, `src/sources/selection.py`, `opencode_v1.py:load_session_snapshot`, `opencode_v2_snapshot.py`, V2 transport | One selected generation, never merged histories. V1 pins a read transaction; V2 brackets full trees and allows at most two fresh consistency attempts. Hints/cached metadata are not usage. Loopback/proxy-free GET, one stale-idle retry, SSE and socket cancellation have distinct contracts; a common raw adapter hides their proofs. |
+| `src/accounts/acquisition.py`, `refresh_loop.py`, `simple_http_mapping.py`, pricing `github_copilot.py` | Attempt/deadline/account identity rejects late observations; timeout retains occupied lane. Independent account mailbox/cadence is not source retry. Fail-soft catalog cache versus strict explicit refresh and optional metadata freshness are intentionally different. Universal retry/expiry would erase valid distinctions. |
+| Web `http.py`, `security.py`, `lifecycle.py`, native adapters; browser `app.js`, `live.js`, `report-loading.js`, `cached-reports.js`, `session.js`, `sessions.js`, Mini sample | Loopback/Host/Origin/session/CSRF, pre-host process proof, host close and native handoff have separate owners. Browser sequence/gap resync and finite attempts consume detached values; routes never acquire. Mini owns layout, not source. A global browser/native machine conflates authority; no desktop proof inferred. |
 
-No material global orchestration defect was established. This is an independently justified **global NO_CHANGE**, not a blanket health claim or an excuse to leave the local dead path below.
+**Global decision:** preserve the modular monolith/lifetime boundaries. Navigation costs isolate real state/cancellation/consistency differences, not duplicate decisions. Map repair is not runtime redesign.
 
-## Level 2 — coverage and local decisions
+### Level 2 — all substantial areas
 
-| Substantial area (baseline module count) | Representative source/test ownership and decision |
+Counts are baseline runtime modules; test routes not explicitly read below are navigation only.
+
+| Area | Representative implementation / local decision |
 | --- | --- |
-| Root/config/display/faults (8 individual modules plus package marker) | Bootstrap/config, `numbers.py` import records, `runtime_errors.py:run/_coordinate`, launcher feedback; `test_foundation_quick.py`, config/fault/display suites. Keep early validation, exception-safe numeric scope and minimal fault boundary. |
-| Domain (9) | `models.py` complete-snapshot/price/quota records, topology import records; domain/tree tests. Canonical evidence is not current-login identity, cost or source acquisition. No generic state owner added. |
-| Sources (24) | Selection, V1 normalization/read transaction, V2 batch consistency and wire/transport ownership records; selection/V1/V2/connectivity suites. Keep native parsing beneath normalized snapshots and source-specific consistency proof. |
-| Accounts (20) | Acquisition/refresh loop and `simple_http_mapping.py:_component/normalize_simple_account`; late-result/close assertions in `test_account_acquisition.py`. Units, invalid/partial capacity and independent billing remain explicit; shared engine versus maintained adapter definitions is cohesive. |
-| Pricing (10) | Catalog category valuation/global mix and Copilot fallback/metadata refresh; tier/identity/release-recovery tests. Reference CCost, actual billing, availability and metadata freshness remain distinct; no provider-neutral layer imports concrete pricing. |
-| Analysis (23) | Core, causal terminal/child attribution, context/compaction chronology, token/valuation and old workload source; analysis/context/sampling/workload tests. Remove superseded weighted-profile engine; retain separate historical/current context and shared causal valuation. |
-| Cache (6) | `database.py:connect` and repository/notice ownership records; cache/fault-recovery suites. Commit/rollback/close and narrow optional-notice failures differ from source authority; no cache schema migration or ledger needed. |
-| Reports (17) | Service acquisition/sampling/threshold, RootAcquisition, old comparison history and model records; sampling/workload/application/history tests. Remove unreachable comparison cache coordinator; retain canonical global sample and explicit historical model/publisher aggregation. |
-| Watch (24) | Coordinator/Live adapter/Web coordinator, tracker/retention/Today/tools purpose/import records; Watch/cards/daily/terminal/source-recovery suites. Visible rows, run usage, retained daily observations and whole-session totals are distinct scopes, not mergeable dictionaries. |
-| Application (10) | Finite execute, Live loop, allowlisted export/evidence and detail/display records; application immutability/privacy/ownership tests. Move only the evidence type's import; retain DTO fields and independent job resources. |
-| Presentation (19) | Report formatting, `watch_screen.py:publish` and Watch/accounts purpose/import records; report/Watch/screen/display tests. Buffered geometry is not acquisition; no new generic renderer or state framework. |
-| Web (25 Python modules plus assets/native launchers) | Host/jobs/security/lifecycle, immutable client connection, Windows adapter and current Mini/render purpose routes; runtime/lifecycle/browser-link/Models/Mini tests. Preserve session/CSRF/one-use handoff and fixed routes. No asset/native behavior changed; macOS ABI/desktop acceptance not inferred on Windows. |
-| Development tools/tests, Windows/macOS shell wrappers | Runner bounded per-file ownership, diagnostic allowlists (`diagnostic_web.py`), Windows PowerShell exit/child-console path, tracked shell/CI routes; Diagnostics/foundation/launcher suites. Keep independent diagnostic observations and platform-specific adapters. No new gate, dependency, model call, ZIP or release publication. |
+| Root/entry (10) | Bootstrap/CLI/config/fault root and Windows launcher; early validation, unit scope and minimal fault boundary remain cohesive. No generic lifecycle wrapper. |
+| Domain (9) | `src/domain/models.py` snapshot/price/quota contracts plus complete purpose/import records. Evidence, native termination, unknown values, valuation and quota identity stay distinct; no transport imports. |
+| Sources (24) | Selection, V1 normalization/snapshot, V2 consistency/transport/wire. Native formats stop at snapshots; no generation branch above adapters. |
+| Accounts (20) | Acquisition/refresh/mapping; partial/null/units/capacity/billing and publication identity stay explicit. Shared mapping engine does not merge provider semantics. |
+| Pricing (10) | Copilot catalog/fallback/metadata and catalog/identity purpose routes. Reference valuation, billed cost, model availability and metadata freshness are different facts. |
+| Analysis (26) | Full `core.py`, `valuation.py`, `input_identity.py`, `matched_runs.py`; causal prompt/context routines. Single child/terminal/context owners; size alone does not justify splits. Ordered first-input identity rejects external references; preview is never identity. |
+| Cache (6) | Full `database.py` and other purpose/dependency records. Short connections commit/rollback/close; reconstructible acceleration is not durable source/observed-history state. No schema/ledger added. |
+| Reports (22) | Full service/acquisition, matched-inputs/matched-runs, AI Stats/Token Mix cache. Populations/privacy/retention differ; AI Stats reuses facts/projection, not a second identity scan/valuation. No evidenced common-cache benefit. |
+| Watch (24) | Coordinators/acquisition and session-cost lane, tracker/retention/tool purpose routes. Visible rows, retained observations, run/Today totals and session baselines have different scopes. Combining their dictionaries would lose contracts, not remove duplicate truth. |
+| Application (15) | Finite/Live, full session catalog/detail. Exact sorting waits for complete scalar coverage; fair bounded admissions/backoff/epochs differ from revision-pinned rich history. HTTP lease is admission, not history ownership. |
+| Presentation (19) | Full `watch_screen.py`, report prompt renderer and bootstrap consumption. Buffered geometry/style consumes projections, not acquisition. Small compatibility entrypoints were noticed, not assumed dead from size. |
+| Web (27 plus assets/native) | Host/jobs/security/lifecycle and browser routes above; Settings atomic allowlist and Mini sample. Independent route/attempt/connection/layout lifetimes do not establish value in a generic client framework. CSS/native layout not exhaustively audited. |
+| Development / platform | Inventory tool, bounded test runner, Diagnostics collector, Windows/macOS shell wrappers and CI dispatch/workflow. Per-file test isolation, privacy-allowlisted diagnostics, hosted-only native CI and real desktop probes have separate triggers. No dependency, gate, model call, archive or launcher change. |
 
-### Concrete simplification and protected parity
+**Local decision:** no unsupported deletion, helper split or forced fixture migration. Seven test-import edges/large routines remain follow-ups when responsibilities change, not accepted growth or fabricated gain.
 
-Repository-wide Python reference search found **no caller/import of `reports/comparison_history.py:comparison_samples`**. Its model/publisher aggregate cache namespaces had no other owner. `PromptMix`, `prompt_mix` and `WorkloadSamples` were reached only by that dead coordinator and five obsolete weighting tests plus one canonical usage test. Current runtime consumers imported only `MixEvidence` from the same module.
+### Tests read and verification actually performed
 
-Before: dormant reports coordinator → workload engine → catalog/publisher/token helpers and two comparison cache namespaces, alongside the live global sampler. After: delete both modules; `analysis/models.py` owns the unchanged frozen `MixEvidence`; comparisons/report models import it directly. No wrapper, forwarding module, replacement cache, runtime cleanup or schema change. Existing obsolete cache entries are inert disposable data; this worker does not delete user caches.
+Read full `development/tests/test_application_reports.py`, `test_matched_inputs.py`, `test_watch_source_recovery.py`, `test_web_shutdown.py`, `test_web_session_catalog.py`: numeric/export/privacy contracts; exact input/cache/revision cases; retained frame/no subprocess; owned-socket cancellation/independent streams; global sorts/fairness/epochs/detail isolation. **None executed.** Other test routes are navigation only.
 
-The five removed tests exercised only the retired 100-model/200-publisher/prior engine. Their policy was already superseded by the global comparison. Canonical clone deduplication, unknown/unpriced filtering and reasoning remain tested through the actual `priced_usage(unique_usage(...))` seam. Existing sampling tests retain running/aborted distinctions, both cutoffs, ties and empty/unpriceable backfill. Strengthened application assertions independently pin every exported comparison-evidence field and actual global counts, rather than deriving expectations from the moved record.
+Only `development/` docs/progress change. Product tests, validator, Diagnostics/live probes, browser/native runs and benchmarks: **not run / not applicable**, not waived or PASS. No assertion/timeout/gate/budget weakened. Development checks cover scope, revisions, diagram bounds, links/paths, progress delta and whitespace; results belong in the PR.
 
-Protected numerical cases remain explicit: 90 cache / 10 output produces .59/.38/.37/.49 USD/M and a 1.59/.59 tier ratio; identical-price/untried models compare equally; 0/1/99/100/121 prompt histories preserve counts and bounded acquisition; older target-model history does not alter the global sample. Historical publisher/model/overall tokens and CCost reconcile and availability filters retain their own scope. Application failures return no view/raw error; busy/foreign ownership is rejected without closing another owner. No major state machine was replaced, so no new replacement failure mechanism is claimed.
+### Retained historical evidence, not current results
 
-## Executed verification and limits
+Milestone 30 (2026-11-04, source `020e50071671ee863ceffcd37b6871af789bbe0f` plus its diff) removed unreachable comparison-cache/weighted-profile code: two modules / 214 runtime lines; unchanged `MixEvidence` moved to analysis records. Five retired tests covered superseded policy; canonical deduplication/unknown filtering and independent export assertions remained. Caller tracing, not passing tests alone, justified removal.
 
-- Before removal: focused `run_tests.py --pattern test_workload_mix.py` passed (12 test methods in the baseline). After removal/strengthening: same file passed (7 tests); the lower count is five obsolete engine tests, not lost current behavior.
-- `py -3 development/tools/run_tests.py --suite full --json-report <owned-scratch>`: **140 files, 1,659 tests, 1,658 passed, one existing macOS zsh/PTY skip, zero failures/errors**, 91.8s. Snapshot: `scratch:/architecture-full.json` while this worker exists. Windows execution does not establish macOS native acceptance.
-- `py -3 development/tools/validate_package.py --working-tree`: **11 passes, zero failures, six advisory warnings**. Existing prose/design warnings cover README, Web guide, version history, context, ReportService and Watch coordinator. No cap or baseline was changed to silence them.
-- After reconciling intervening backlog-only default commits, validation passed again. An extra focused foundation run accidentally used the Quick default's 25s bound and timed out; rerunning `run_tests.py --suite full --pattern test_foundation.py` under its normal 240s Full bound passed in 38.27s. No assertion, code, timeout policy or test requirement was weakened; the first attempt is not PASS.
-- Hidden paired `pythonw` ran existing `development/tests/integration/probe_web_live.py --models` against real V2: one Live owner, two verified streams, three detected accounts; Normal completed in 69.317s, All Models in 2.203s. Normal had 29 catalog / 25 selectable / 14 latest selectable rows and accounts; All Models had 29 / 29 / 16 and no accounts; availability verified. Source view appeared in 1.750s. HTTP/Live owner and run origin survived finite reports; all owned threads/processes closed, no cleanup failures, shared OpenCode untouched. These observations are not a comparative speedup or native-provider freshness guarantee.
-- No visible browser/tray/clipboard/OS input, macOS/Finder/Gatekeeper, sustained soak, paid inference, or exhaustive platform/provider verification. No test/requirement exception was requested or approved. The existing platform skip remains disclosed, not PASS.
+Historical results: 140 files / 1,659 tests (1,658 passed, one macOS skip), validator 11 passes / 6 warnings, bounded real V2 report/Live probe. A mistaken Quick-bound foundation timeout was rerun under Full; the timeout was not PASS. None validates milestone 60. Older counts/weighted rationale are superseded; Git retains originals. No historical approval/platform proof is promoted.
 
-## Reusable findings / unresolved risks
+## Next investigations
 
-Successful tests of a superseded internal algorithm can conceal an unreachable alternative policy. Trace runtime callers before treating retained helpers as architectural requirements. Preserve the published evidence shape independently of the engine that originally produced it.
+- Suspend/reconnect, retained bytes, fanout/backpressure and provider combinations need runtime evidence; static tracing cannot measure them.
+- Physical Windows/browser and macOS Finder/Gatekeeper acceptance remains unverified.
+- Revisit large routines/seven test-import edges when responsibilities overlap/change; preserve critical evidence, not count-driven splits.
+- Existing journal INDEX exceeds eight-route guidance. Only its architecture description changes; no router migration/unrelated revalidation.
 
-Retained source/service isolation has a real navigation cost but avoids shared cancellation and thread-confined cache/provider state. Current read-only probe observes slow Normal/card/history work, not a causal performance regression from this removal. Sustained event overflow, retained-history bytes, repeated suspend/reconnect, all provider combinations and native desktop acceptance remain unmeasured here. No speculative FR or unrelated Ready work was created/executed.
+## Rejected hypotheses
 
-Historical milestone-40 review at `a27d5fede5d07a7a2e992691b34790b6017cd780` (2026-10-28) was a development-only runtime-no-change assessment with no executed product tests. Its 537-file/178-runtime-module counts and weighted-profile rationale described that older source, not current policy. The current assessment supersedes those navigation facts; historical performance measurements keep their own limits in `PERFORMANCE.md`.
+- **One service/scheduler/cache for every report and Live lane:** similar loops do not imply shared lifetime, consistency, population or privacy. The inspected alternatives increase cancellation/ownership coupling.
+- **Growth/zero exact duplicates proves quality:** inventory is triage, not a design score.
+- **Map cleanup is runtime simplification:** owners/modules/lines unchanged; no speedup, token saving or executed parity.
+- **Tests once passed, therefore keep every internal algorithm:** milestone 30 showed the opposite. Current NO_CHANGE rests on current caller/contract and alternative analysis, not historical PASS.
