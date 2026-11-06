@@ -195,9 +195,15 @@ previous day without calculating any usage. Loading is not zero. The left title 
 to Watch. Mini-only header alignment never changes full Watch tables. `OpeningMeasure`
 loads the shipped styles inside an inert, invisible shadow layout, then renders current
 presentation synchronously before the opening gesture calls native PiP. Natural layout
-includes all accounts/statuses and a height-only two-running-row reserve. The ~650 outer
-DIP target uses a conservative 16×48-DIP frame estimate and opener outer/inner zoom
-ratio; actual native dimensions are inspected after stylesheet load, never repaired
+includes all accounts/statuses and a height-only two-running-row reserve. Fit width
+comes from a max-content, unwrapped clone of only the current styled header plus body
+padding and two CSS pixels of rounding allowance, not table minima or a fixed target.
+The conservative 16×48-DIP frame estimate separates the opener's side frame from its
+outer/inner zoom estimate; height is measured at the resulting content width. Remember
+mode retains its prior first-open size intention, not the minimal Fit width. PiP content
+mounts after stylesheet load to prevent an unstyled scrollbar/wrapping feedback loop;
+close/cancellation/style-failure races retain ownership checks. Actual native dimensions
+and header fit are inspected after stylesheet load, never repaired
 without a new gesture. Outer height is capped at min(1000, known screen available height).
 Browser clamps remain authoritative and preserve document scrolling. No iframe/CSP
 relaxation, acquisition, dependency, persisted geometry or polling owner is introduced.

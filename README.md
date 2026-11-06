@@ -361,7 +361,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.186 (2026-11-06):** Web **Comparisons** shows independent runs sharing an exact first user input, including repeated runs of the same model. Ten groups per page retain first-prompt metrics, uncertainty and small observed-gap facts. Revision-aware history reuse avoids repeated archive hydration; AI Stats gains a conditional matched-input fact while preserving its ten baseline cards. See [Comparisons](docs/web-beta.md#comparisons).
+**v80.187 (2026-11-06):** Mini Watch **Fit on open** uses the narrowest measured width fitting its three header components on one row, with width-aware content/two-running-row height. Remember last size stays browser-managed; native clamps retain accessible content. See [Mini Watch](docs/web-mini-watch.md).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

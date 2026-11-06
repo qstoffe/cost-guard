@@ -21,17 +21,25 @@ last size). Defaults resolve to **Remember last** and **Fit on open**. Existing
 Symbolic Default follows shipped defaults; explicit choices stay pinned. Missing
 preferences inherit without creating a user file.
 
-Fit on open measures the real themed layout before requesting PiP: approximately
-**650 outer screen DIPs** wide, with current content, every account and warning,
-and height capacity for **two complete running-prompt rows**. This is empty height
+Fit on open measures the real themed header before requesting PiP: the **narrowest
+opening width fitting Cost Guard · Watch, Earlier Sessions and the complete CCost
+Today cost/prompt count on one row**, plus a small native/zoom rounding allowance.
+Each opening uses the current figures, fonts, gaps and padding, not a fixed pixel
+width or the expanded history table's minimum. Height is measured at that width,
+with current content, every account and warning, and capacity for **two complete
+running-prompt rows**. This is empty height
 capacity, not fabricated prompt entries. More than two rows use their actual height.
 The initial request uses a conservative native-frame estimate because no pre-open
 frame query exists. Actual native bounds are inspected, not inferred from API success.
-The browser may clamp; then scrolling keeps all content reachable. The total outer
+Content is mounted only after styles load, avoiding a premature scrollbar that
+would steal header width. The browser may clamp; then responsive header wrapping
+and scrolling keep all content reachable, with a limitation notice in the owning tab.
+Later longer Live text stays accessible without passive resizing. The total outer
 height request never exceeds **1,000 DIPs** or the known available work area.
 
 Remember last size permits the browser's manually chosen dimensions within the same
-live opener/host; it is intentionally exempt from the initial two-row fit guarantee.
+live opener/host; it does **not force the minimal Fit opening width** and is
+intentionally exempt from the initial two-row fit guarantee.
 The native placement option couples position and dimensions: **Fit on open wins
 over remembered position**, and **Standard position can reset remembered size**.
 These are best-effort intentions, not four independent native geometry controls.

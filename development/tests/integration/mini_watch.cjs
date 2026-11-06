@@ -26,6 +26,12 @@ function doc() { const value = {createElement: tag => Object.assign(new Node(tag
 function win() {
   const node = new Node('window'); node.document = doc(); node.closed = false; node.timers = new Set();
   node.document.defaultView = node; node.clearTimeout = clearTimeout; node.setTimeout = setTimeout;
+  node.requestAnimationFrame = () => {}; // Native layout is exercised by the browser probe.
+  const append = node.document.head.append.bind(node.document.head);
+  node.document.head.append = (...nodes) => {
+    append(...nodes);
+    for (const item of nodes) if (item.rel === 'stylesheet' && !node.deferStyles) Promise.resolve().then(() => item.fire('load'));
+  };
   node.setInterval = callback => {node.timers.add(callback); return callback;};
   node.clearInterval = callback => node.timers.delete(callback);
   node.close = () => {node.closed = true;}; // Deliberately defer pagehide to reproduce stale callbacks.
@@ -320,6 +326,17 @@ function setup() {
   await controller.toggle(); assert.equal(test.calls(), 6, 'ended owner cannot reopen');
   const pendingClose = setup(); const promise = pendingClose.controller.toggle(); pendingClose.owner.fire('pagehide');
   const late = win(); pendingClose.opened(late); await promise; assert.equal(late.closed, true);
+  for (const outcome of ['load','error','close']) {
+    const waiting=setup(), child=win();child.deferStyles=true;
+    const opening=waiting.controller.toggle();waiting.opened(child);await Promise.resolve();
+    assert.equal(waiting.controller.view,null,'never render unstyled content into the narrow viewport');
+    if(outcome==='close')waiting.controller.close();
+    child.document.head.children.filter(n=>n.rel==='stylesheet').forEach(n=>n.fire(outcome==='error'?'error':'load'));
+    await opening;
+    if(outcome==='load')assert.ok(waiting.controller.view);
+    else {assert.equal(child.closed,true);assert.equal(waiting.controller.view,null);}
+    waiting.controller.close();
+  }
   const boundary = setup(); boundary.controller.settings({miniWatchPlacement:'remember-last'},'host-1');
   for (const [identity,initial] of [['host-1',true],['host-1',false],['host-2',true],['host-2',false]]) {
      boundary.controller.settings({miniWatchPlacement:'remember-last',miniWatchSize:'remember-last'},identity);
