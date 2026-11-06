@@ -1,0 +1,1138 @@
+{
+  "fr": "000613",
+  "version": "80.193",
+  "date": "2026-11-06",
+  "base": "a7947ab8197a3db28405e31df5f88bb15def5be7",
+  "full": {
+    "units": 153,
+    "passed": 1796,
+    "skips": [
+      {
+        "test": "test_command_activity_and_exit_codes_without_native_or_browser_work (development.tests.test_macos_web.MacWebTests.test_command_activity_and_exit_codes_without_native_or_browser_work)",
+        "reason": "'zsh/PTY unavailable; native macOS CI owns shell execution'"
+      }
+    ],
+    "failures": 0,
+    "errors": 0
+  },
+  "browser_runs": [
+    {
+      "run": "chrome",
+      "outcome": "PASS",
+      "browser": "Chrome/156.0.8078.80",
+      "scale": "1",
+      "actual_browser_zoom": 1,
+      "explicit_pip_light_dark": false,
+      "layouts": 204,
+      "header_cases": 56,
+      "disclosure_states": 48,
+      "opening_insufficient_clamps": 0,
+      "disclosure_insufficient_clamps": 0,
+      "measured_tolerance_css_px": [
+        8.059,
+        8.901
+      ],
+      "examples": [
+        {
+          "case": "intrinsic-width",
+          "outer": [
+            470,
+            439
+          ],
+          "inner": [
+            448,
+            394
+          ],
+          "request": {
+            "width": 448,
+            "height": 394,
+            "preferInitialWindowPlacement": true
+          },
+          "header": {
+            "fits": true,
+            "width": 418,
+            "parts": [
+              {
+                "text": "Cost Guard \u00b7 Watch",
+                "box": {
+                  "left": 12.25,
+                  "right": 116.625,
+                  "top": 11.203125,
+                  "bottom": 27.203125
+                },
+                "lines": [
+                  {
+                    "left": 12.25,
+                    "right": 116.625,
+                    "top": 11.203125,
+                    "bottom": 27.203125
+                  }
+                ],
+                "overflow": false
+              },
+              {
+                "text": "Earlier Sessions",
+                "box": {
+                  "left": 128.875,
+                  "right": 227.46875,
+                  "top": 7.5,
+                  "bottom": 31.5
+                },
+                "lines": [
+                  {
+                    "left": 144.875,
+                    "right": 222.71875,
+                    "top": 11.78125,
+                    "bottom": 26.78125
+                  }
+                ],
+                "overflow": false
+              },
+              {
+                "text": "CCost Today 90 000 \u00b7 999 prompts",
+                "box": {
+                  "left": 244.765625,
+                  "right": 425.5,
+                  "top": 11.203125,
+                  "bottom": 27.203125
+                },
+                "lines": [
+                  {
+                    "left": 244.765625,
+                    "right": 425.5,
+                    "top": 11.203125,
+                    "bottom": 27.203125
+                  }
+                ],
+                "overflow": false
+              }
+            ],
+            "marker": {
+              "content": "\"\u203a\"",
+              "width": "11.25px"
+            },
+            "button": {
+              "border": "1px",
+              "outline": "3px",
+              "focused": false
+            },
+            "documentOverflow": false
+          }
+        }
+      ],
+      "checks": [
+        "56 header snapshots: light/dark themes, fonts, exact reference/lower/larger/locale Credits/USD/loading/unavailable; bounded 8px slack excluding measured gutter; achieved text-range fit, pointer active/hover and repeated Enter/Space disclosure; native clamps separately recorded",
+        "Opening real layout and two-row reserve; actual native clamps recorded separately from uncapped no-scroll cases",
+        "Native pointer, Enter and Space expand/shrink; current manual width retained; advancing SSE never resizes",
+        "Four-column history retains Activity midnight/DST/unknown tokens; stable live focus/help, delayed hover and real touch; four themes, Credits/USD and nominal/narrow PiP geometry",
+        "Four-column name-only Session and prompt (whole-session) costs; concurrent scopes, independent zero/N/A/partial/pending, historical model/effort/duration/calls, mixed/subagents, live focus/corrections/Escape, delayed hover/keyboard/touch; 3 widths, enlarged font/CSS zoom, themes and units; table costs do not widen opening fit",
+        "Absent activation keeps disclosure functional; four position/size intentions and symbolic defaults round-trip; browser coupling/remembered width measured; one SSE/no geometry storage"
+      ]
+    },
+    {
+      "run": "chrome-150",
+      "outcome": "PASS",
+      "browser": "Chrome/156.0.8078.80",
+      "scale": "1.5",
+      "actual_browser_zoom": 1,
+      "explicit_pip_light_dark": false,
+      "layouts": 204,
+      "header_cases": 56,
+      "disclosure_states": 48,
+      "opening_insufficient_clamps": 0,
+      "disclosure_insufficient_clamps": 0,
+      "measured_tolerance_css_px": [
+        7.929,
+        8.683
+      ],
+      "examples": [
+        {
+          "case": "intrinsic-width",
+          "outer": [
+            470,
+            440
+          ],
+          "inner": [
+            447,
+            394
+          ],
+          "request": {
+            "width": 447,
+            "height": 393,
+            "preferInitialWindowPlacement": true
+          },
+          "header": {
+            "fits": true,
+            "width": 417,
+            "parts": [
+              {
+                "text": "Cost Guard \u00b7 Watch",
+                "box": {
+                  "left": 11.916666984558105,
+                  "right": 116.2916669845581,
+                  "top": 10.864583969116211,
+                  "bottom": 26.86458396911621
+                },
+                "lines": [
+                  {
+                    "left": 11.916666984558105,
+                    "right": 116.29167461395264,
+                    "top": 10.864583969116211,
+                    "bottom": 26.86458396911621
+                  }
+                ],
+                "overflow": false
+              },
+              {
+                "text": "Earlier Sessions",
+                "box": {
+                  "left": 128.20834350585938,
+                  "right": 226.11459350585938,
+                  "top": 7.5,
+                  "bottom": 31.5
+                },
+                "lines": [
+                  {
+                    "left": 143.875,
+                    "right": 221.6979217529297,
+                    "top": 12.114583969116211,
+                    "bottom": 26.78125
+                  }
+                ],
+                "overflow": false
+              },
+              {
+                "text": "CCost Today 90 000 \u00b7 999 prompts",
+                "box": {
+                  "left": 243.7604217529297,
+                  "right": 424.50001525878906,
+                  "top": 10.864583969116211,
+                  "bottom": 26.86458396911621
+                },
+                "lines": [
+                  {
+                    "left": 243.7604217529297,
+                    "right": 424.5,
+                    "top": 10.864583969116211,
+                    "bottom": 26.86458396911621
+                  }
+                ],
+                "overflow": false
+              }
+            ],
+            "marker": {
+              "content": "\"\u203a\"",
+              "width": "11.25px"
+            },
+            "button": {
+              "border": "0.666667px",
+              "outline": "2.66667px",
+              "focused": false
+            },
+            "documentOverflow": false
+          }
+        }
+      ],
+      "checks": [
+        "56 header snapshots: light/dark themes, fonts, exact reference/lower/larger/locale Credits/USD/loading/unavailable; bounded 8px slack excluding measured gutter; achieved text-range fit, pointer active/hover and repeated Enter/Space disclosure; native clamps separately recorded",
+        "Opening real layout and two-row reserve; actual native clamps recorded separately from uncapped no-scroll cases",
+        "Native pointer, Enter and Space expand/shrink; current manual width retained; advancing SSE never resizes",
+        "Four-column history retains Activity midnight/DST/unknown tokens; stable live focus/help, delayed hover and real touch; four themes, Credits/USD and nominal/narrow PiP geometry",
+        "Four-column name-only Session and prompt (whole-session) costs; concurrent scopes, independent zero/N/A/partial/pending, historical model/effort/duration/calls, mixed/subagents, live focus/corrections/Escape, delayed hover/keyboard/touch; 3 widths, enlarged font/CSS zoom, themes and units; table costs do not widen opening fit",
+        "Absent activation keeps disclosure functional; four position/size intentions and symbolic defaults round-trip; browser coupling/remembered width measured; one SSE/no geometry storage"
+      ]
+    },
+    {
+      "run": "chrome-zoom",
+      "outcome": "PASS",
+      "browser": "Chrome/156.0.8078.80",
+      "scale": "1.5",
+      "actual_browser_zoom": 1.25,
+      "explicit_pip_light_dark": false,
+      "layouts": 180,
+      "header_cases": 56,
+      "disclosure_states": 24,
+      "opening_insufficient_clamps": 40,
+      "disclosure_insufficient_clamps": 24,
+      "measured_tolerance_css_px": [
+        7.578,
+        9.083
+      ],
+      "examples": [
+        {
+          "case": "intrinsic-width-native-clamp",
+          "outer": [
+            560,
+            520
+          ],
+          "inner": [
+            430,
+            380
+          ],
+          "request": {
+            "width": 554,
+            "height": 490,
+            "preferInitialWindowPlacement": true
+          },
+          "header": {
+            "fits": false,
+            "width": 403.13336181640625,
+            "parts": [
+              {
+                "text": "Cost Guard \u00b7 Watch",
+                "box": {
+                  "left": 11.783333778381348,
+                  "right": 116.15834140777588,
+                  "top": 11.266667366027832,
+                  "bottom": 27.266667366027832
+                },
+                "lines": [
+                  {
+                    "left": 11.783333778381348,
+                    "right": 116.15834140777588,
+                    "top": 11.266667366027832,
+                    "bottom": 27.266667366027832
+                  }
+                ],
+                "overflow": false
+              },
+              {
+                "text": "Earlier Sessions",
+                "box": {
+                  "left": 312.98333740234375,
+                  "right": 410.63333892822266,
+                  "top": 7.500000476837158,
+                  "bottom": 31.50000238418579
+                },
+                "lines": [
+                  {
+                    "left": 328.5166931152344,
+                    "right": 406.3500061035156,
+                    "top": 11.850000381469727,
+                    "bottom": 26.783334732055664
+                  }
+                ],
+                "overflow": false
+              },
+              {
+                "text": "CCost Today 90 000 \u00b7 999 prompts",
+                "box": {
+                  "left": 229.90000915527344,
+                  "right": 410.6333465576172,
+                  "top": 35.56666946411133,
+                  "bottom": 51.56666946411133
+                },
+                "lines": [
+                  {
+                    "left": 229.90000915527344,
+                    "right": 410.63336181640625,
+                    "top": 35.56666946411133,
+                    "bottom": 51.56666946411133
+                  }
+                ],
+                "overflow": false
+              }
+            ],
+            "marker": {
+              "content": "\"\u203a\"",
+              "width": "11.25px"
+            },
+            "button": {
+              "border": "0.533333px",
+              "outline": "2.66667px",
+              "focused": false
+            },
+            "documentOverflow": false
+          }
+        },
+        {
+          "case": "reference-disclosure",
+          "outer": [
+            484,
+            530
+          ],
+          "inner": [
+            369,
+            387
+          ],
+          "request": {
+            "width": 537,
+            "height": 490,
+            "preferInitialWindowPlacement": true
+          },
+          "header": {
+            "fits": false,
+            "width": 341.8000183105469,
+            "parts": [
+              {
+                "text": "Cost Guard \u00b7 Watch",
+                "box": {
+                  "left": 11.783333778381348,
+                  "right": 115.25000858306885,
+                  "top": 12.333333969116211,
+                  "bottom": 25.666667938232422
+                },
+                "lines": [
+                  {
+                    "left": 11.783333778381348,
+                    "right": 115.25000858306885,
+                    "top": 12.333333969116211,
+                    "bottom": 25.666667938232422
+                  }
+                ],
+                "overflow": false
+              },
+              {
+                "text": "Earlier Sessions",
+                "box": {
+                  "left": 253.1333465576172,
+                  "right": 349.3000183105469,
+                  "top": 7.500000476837158,
+                  "bottom": 31.50000238418579
+                },
+                "lines": [
+                  {
+                    "left": 268.66668701171875,
+                    "right": 345.0166931152344,
+                    "top": 12.916666984558105,
+                    "bottom": 25.71666717529297
+                  }
+                ],
+                "overflow": false
+              },
+              {
+                "text": "CCost Today 90 000 \u00b7 999 prompts",
+                "box": {
+                  "left": 180.35000610351562,
+                  "right": 349.3000183105469,
+                  "top": 36.63333511352539,
+                  "bottom": 49.9666690826416
+                },
+                "lines": [
+                  {
+                    "left": 180.35000610351562,
+                    "right": 349.3000183105469,
+                    "top": 36.63333511352539,
+                    "bottom": 49.966670989990234
+                  }
+                ],
+                "overflow": false
+              }
+            ],
+            "marker": {
+              "content": "\"\u2304\"",
+              "width": "11.25px"
+            },
+            "button": {
+              "border": "0.533333px",
+              "outline": "2.66667px",
+              "focused": true
+            },
+            "documentOverflow": false
+          }
+        }
+      ],
+      "checks": [
+        "56 header snapshots: light/dark themes, fonts, exact reference/lower/larger/locale Credits/USD/loading/unavailable; bounded 8px slack excluding measured gutter; achieved text-range fit, pointer active/hover and repeated Enter/Space disclosure; native clamps separately recorded",
+        "Opening real layout and two-row reserve; actual native clamps recorded separately from uncapped no-scroll cases",
+        "Native pointer, Enter and Space expand/shrink; current manual width retained; advancing SSE never resizes",
+        "Four-column history retains Activity midnight/DST/unknown tokens; stable live focus/help, delayed hover and real touch; four themes, Credits/USD and nominal/narrow PiP geometry",
+        "Four-column name-only Session and prompt (whole-session) costs; concurrent scopes, independent zero/N/A/partial/pending, historical model/effort/duration/calls, mixed/subagents, live focus/corrections/Escape, delayed hover/keyboard/touch; 3 widths, enlarged font/CSS zoom, themes and units; table costs do not widen opening fit",
+        "Absent activation keeps disclosure functional; four position/size intentions and symbolic defaults round-trip; browser coupling/remembered width measured; one SSE/no geometry storage"
+      ]
+    },
+    {
+      "run": "chrome-colors",
+      "outcome": "PASS",
+      "browser": "Chrome/156.0.8078.80",
+      "scale": "1",
+      "actual_browser_zoom": 1,
+      "explicit_pip_light_dark": true,
+      "layouts": 104,
+      "header_cases": 56,
+      "disclosure_states": 48,
+      "opening_insufficient_clamps": 0,
+      "disclosure_insufficient_clamps": 0,
+      "measured_tolerance_css_px": [
+        8.059,
+        8.901
+      ],
+      "examples": [
+        {
+          "case": "intrinsic-width",
+          "outer": [
+            470,
+            439
+          ],
+          "inner": [
+            448,
+            394
+          ],
+          "request": {
+            "width": 448,
+            "height": 394,
+            "preferInitialWindowPlacement": true
+          },
+          "header": {
+            "fits": true,
+            "width": 418,
+            "parts": [
+              {
+                "text": "Cost Guard \u00b7 Watch",
+                "box": {
+                  "left": 12.25,
+                  "right": 116.625,
+                  "top": 11.203125,
+                  "bottom": 27.203125
+                },
+                "lines": [
+                  {
+                    "left": 12.25,
+                    "right": 116.625,
+                    "top": 11.203125,
+                    "bottom": 27.203125
+                  }
+                ],
+                "overflow": false
+              },
+              {
+                "text": "Earlier Sessions",
+                "box": {
+                  "left": 128.875,
+                  "right": 227.46875,
+                  "top": 7.5,
+                  "bottom": 31.5
+                },
+                "lines": [
+                  {
+                    "left": 144.875,
+                    "right": 222.71875,
+                    "top": 11.78125,
+                    "bottom": 26.78125
+                  }
+                ],
+                "overflow": false
+              },
+              {
+                "text": "CCost Today 90 000 \u00b7 999 prompts",
+                "box": {
+                  "left": 244.765625,
+                  "right": 425.5,
+                  "top": 11.203125,
+                  "bottom": 27.203125
+                },
+                "lines": [
+                  {
+                    "left": 244.765625,
+                    "right": 425.5,
+                    "top": 11.203125,
+                    "bottom": 27.203125
+                  }
+                ],
+                "overflow": false
+              }
+            ],
+            "marker": {
+              "content": "\"\u203a\"",
+              "width": "11.25px"
+            },
+            "button": {
+              "border": "1px",
+              "outline": "3px",
+              "focused": false
+            },
+            "documentOverflow": false
+          }
+        }
+      ],
+      "checks": [
+        "56 header snapshots: light/dark themes, fonts, exact reference/lower/larger/locale Credits/USD/loading/unavailable; bounded 8px slack excluding measured gutter; achieved text-range fit, pointer active/hover and repeated Enter/Space disclosure; native clamps separately recorded"
+      ]
+    },
+    {
+      "run": "chrome-150-colors",
+      "outcome": "PASS",
+      "browser": "Chrome/156.0.8078.80",
+      "scale": "1.5",
+      "actual_browser_zoom": 1,
+      "explicit_pip_light_dark": true,
+      "layouts": 104,
+      "header_cases": 56,
+      "disclosure_states": 48,
+      "opening_insufficient_clamps": 0,
+      "disclosure_insufficient_clamps": 0,
+      "measured_tolerance_css_px": [
+        8.099,
+        8.919
+      ],
+      "examples": [
+        {
+          "case": "intrinsic-width",
+          "outer": [
+            470,
+            438
+          ],
+          "inner": [
+            448,
+            393
+          ],
+          "request": {
+            "width": 447,
+            "height": 393,
+            "preferInitialWindowPlacement": true
+          },
+          "header": {
+            "fits": true,
+            "width": 417.66668701171875,
+            "parts": [
+              {
+                "text": "Cost Guard \u00b7 Watch",
+                "box": {
+                  "left": 11.916666984558105,
+                  "right": 116.2916669845581,
+                  "top": 10.864583969116211,
+                  "bottom": 26.86458396911621
+                },
+                "lines": [
+                  {
+                    "left": 11.916666984558105,
+                    "right": 116.29167461395264,
+                    "top": 10.864583969116211,
+                    "bottom": 26.86458396911621
+                  }
+                ],
+                "overflow": false
+              },
+              {
+                "text": "Earlier Sessions",
+                "box": {
+                  "left": 128.20834350585938,
+                  "right": 226.11459350585938,
+                  "top": 7.5,
+                  "bottom": 31.5
+                },
+                "lines": [
+                  {
+                    "left": 143.875,
+                    "right": 221.6979217529297,
+                    "top": 12.114583969116211,
+                    "bottom": 26.78125
+                  }
+                ],
+                "overflow": false
+              },
+              {
+                "text": "CCost Today 90 000 \u00b7 999 prompts",
+                "box": {
+                  "left": 244.42709350585938,
+                  "right": 425.16668701171875,
+                  "top": 10.864583969116211,
+                  "bottom": 26.86458396911621
+                },
+                "lines": [
+                  {
+                    "left": 244.42709350585938,
+                    "right": 425.16668701171875,
+                    "top": 10.864583969116211,
+                    "bottom": 26.86458396911621
+                  }
+                ],
+                "overflow": false
+              }
+            ],
+            "marker": {
+              "content": "\"\u203a\"",
+              "width": "11.25px"
+            },
+            "button": {
+              "border": "0.666667px",
+              "outline": "2.66667px",
+              "focused": false
+            },
+            "documentOverflow": false
+          }
+        }
+      ],
+      "checks": [
+        "56 header snapshots: light/dark themes, fonts, exact reference/lower/larger/locale Credits/USD/loading/unavailable; bounded 8px slack excluding measured gutter; achieved text-range fit, pointer active/hover and repeated Enter/Space disclosure; native clamps separately recorded"
+      ]
+    },
+    {
+      "run": "chrome-zoom-colors",
+      "outcome": "PASS",
+      "browser": "Chrome/156.0.8078.80",
+      "scale": "1.5",
+      "actual_browser_zoom": 1.25,
+      "explicit_pip_light_dark": true,
+      "layouts": 80,
+      "header_cases": 56,
+      "disclosure_states": 24,
+      "opening_insufficient_clamps": 40,
+      "disclosure_insufficient_clamps": 24,
+      "measured_tolerance_css_px": [
+        7.578,
+        9.083
+      ],
+      "examples": [
+        {
+          "case": "intrinsic-width-native-clamp",
+          "outer": [
+            560,
+            522
+          ],
+          "inner": [
+            430,
+            381
+          ],
+          "request": {
+            "width": 554,
+            "height": 490,
+            "preferInitialWindowPlacement": true
+          },
+          "header": {
+            "fits": false,
+            "width": 402.6000061035156,
+            "parts": [
+              {
+                "text": "Cost Guard \u00b7 Watch",
+                "box": {
+                  "left": 11.783333778381348,
+                  "right": 116.15834140777588,
+                  "top": 11.266667366027832,
+                  "bottom": 27.266667366027832
+                },
+                "lines": [
+                  {
+                    "left": 11.783333778381348,
+                    "right": 116.15834140777588,
+                    "top": 11.266667366027832,
+                    "bottom": 27.266667366027832
+                  }
+                ],
+                "overflow": false
+              },
+              {
+                "text": "Earlier Sessions",
+                "box": {
+                  "left": 312.45001220703125,
+                  "right": 410.10001373291016,
+                  "top": 7.500000476837158,
+                  "bottom": 31.50000238418579
+                },
+                "lines": [
+                  {
+                    "left": 327.98333740234375,
+                    "right": 405.8166809082031,
+                    "top": 11.850000381469727,
+                    "bottom": 26.783334732055664
+                  }
+                ],
+                "overflow": false
+              },
+              {
+                "text": "CCost Today 90 000 \u00b7 999 prompts",
+                "box": {
+                  "left": 229.36668395996094,
+                  "right": 410.1000213623047,
+                  "top": 35.56666946411133,
+                  "bottom": 51.56666946411133
+                },
+                "lines": [
+                  {
+                    "left": 229.36668395996094,
+                    "right": 410.10003662109375,
+                    "top": 35.56666946411133,
+                    "bottom": 51.56666946411133
+                  }
+                ],
+                "overflow": false
+              }
+            ],
+            "marker": {
+              "content": "\"\u203a\"",
+              "width": "11.25px"
+            },
+            "button": {
+              "border": "0.533333px",
+              "outline": "2.66667px",
+              "focused": false
+            },
+            "documentOverflow": false
+          }
+        },
+        {
+          "case": "reference-disclosure",
+          "outer": [
+            484,
+            530
+          ],
+          "inner": [
+            369,
+            387
+          ],
+          "request": {
+            "width": 537,
+            "height": 490,
+            "preferInitialWindowPlacement": true
+          },
+          "header": {
+            "fits": false,
+            "width": 341.8000183105469,
+            "parts": [
+              {
+                "text": "Cost Guard \u00b7 Watch",
+                "box": {
+                  "left": 11.783333778381348,
+                  "right": 115.25000858306885,
+                  "top": 12.333333969116211,
+                  "bottom": 25.666667938232422
+                },
+                "lines": [
+                  {
+                    "left": 11.783333778381348,
+                    "right": 115.25000858306885,
+                    "top": 12.333333969116211,
+                    "bottom": 25.666667938232422
+                  }
+                ],
+                "overflow": false
+              },
+              {
+                "text": "Earlier Sessions",
+                "box": {
+                  "left": 253.1333465576172,
+                  "right": 349.3000183105469,
+                  "top": 7.500000476837158,
+                  "bottom": 31.50000238418579
+                },
+                "lines": [
+                  {
+                    "left": 268.66668701171875,
+                    "right": 345.0166931152344,
+                    "top": 12.916666984558105,
+                    "bottom": 25.71666717529297
+                  }
+                ],
+                "overflow": false
+              },
+              {
+                "text": "CCost Today 90 000 \u00b7 999 prompts",
+                "box": {
+                  "left": 180.35000610351562,
+                  "right": 349.3000183105469,
+                  "top": 36.63333511352539,
+                  "bottom": 49.9666690826416
+                },
+                "lines": [
+                  {
+                    "left": 180.35000610351562,
+                    "right": 349.3000183105469,
+                    "top": 36.63333511352539,
+                    "bottom": 49.966670989990234
+                  }
+                ],
+                "overflow": false
+              }
+            ],
+            "marker": {
+              "content": "\"\u2304\"",
+              "width": "11.25px"
+            },
+            "button": {
+              "border": "0.533333px",
+              "outline": "2.66667px",
+              "focused": true
+            },
+            "documentOverflow": false
+          },
+          "height_only_requests": [
+            {
+              "name": "resizeBy",
+              "args": [
+                0,
+                77
+              ],
+              "before": [
+                552,
+                528
+              ]
+            }
+          ]
+        }
+      ],
+      "checks": [
+        "56 header snapshots: light/dark themes, fonts, exact reference/lower/larger/locale Credits/USD/loading/unavailable; bounded 8px slack excluding measured gutter; achieved text-range fit, pointer active/hover and repeated Enter/Space disclosure; native clamps separately recorded"
+      ]
+    },
+    {
+      "run": "edge",
+      "outcome": "PASS",
+      "browser": "Edg/156.0.4314.58",
+      "scale": "1",
+      "actual_browser_zoom": 1,
+      "explicit_pip_light_dark": true,
+      "layouts": 204,
+      "header_cases": 56,
+      "disclosure_states": 48,
+      "opening_insufficient_clamps": 0,
+      "disclosure_insufficient_clamps": 0,
+      "measured_tolerance_css_px": [
+        8.1,
+        8.909
+      ],
+      "examples": [
+        {
+          "case": "intrinsic-width",
+          "outer": [
+            473,
+            441
+          ],
+          "inner": [
+            451,
+            396
+          ],
+          "request": {
+            "width": 451,
+            "height": 396,
+            "preferInitialWindowPlacement": true
+          },
+          "header": {
+            "fits": true,
+            "width": 421,
+            "parts": [
+              {
+                "text": "Cost Guard \u00b7 Watch",
+                "box": {
+                  "left": 12.25,
+                  "right": 116.625,
+                  "top": 11.203125,
+                  "bottom": 27.203125
+                },
+                "lines": [
+                  {
+                    "left": 12.25,
+                    "right": 116.625,
+                    "top": 11.203125,
+                    "bottom": 27.203125
+                  }
+                ],
+                "overflow": false
+              },
+              {
+                "text": "Earlier Sessions",
+                "box": {
+                  "left": 128.875,
+                  "right": 227.46875,
+                  "top": 7.5,
+                  "bottom": 31.5
+                },
+                "lines": [
+                  {
+                    "left": 144.875,
+                    "right": 222.71875,
+                    "top": 11.78125,
+                    "bottom": 26.78125
+                  }
+                ],
+                "overflow": false
+              },
+              {
+                "text": "CCost Today 90 000 \u00b7 999 prompts",
+                "box": {
+                  "left": 247.765625,
+                  "right": 428.5,
+                  "top": 11.203125,
+                  "bottom": 27.203125
+                },
+                "lines": [
+                  {
+                    "left": 247.765625,
+                    "right": 428.5,
+                    "top": 11.203125,
+                    "bottom": 27.203125
+                  }
+                ],
+                "overflow": false
+              }
+            ],
+            "marker": {
+              "content": "\"\u203a\"",
+              "width": "11.25px"
+            },
+            "button": {
+              "border": "1px",
+              "outline": "3px",
+              "focused": false
+            },
+            "documentOverflow": false
+          }
+        }
+      ],
+      "checks": [
+        "56 header snapshots: light/dark themes, fonts, exact reference/lower/larger/locale Credits/USD/loading/unavailable; bounded 8px slack excluding measured gutter; achieved text-range fit, pointer active/hover and repeated Enter/Space disclosure; native clamps separately recorded",
+        "Opening real layout and two-row reserve; actual native clamps recorded separately from uncapped no-scroll cases",
+        "Native pointer, Enter and Space expand/shrink; current manual width retained; advancing SSE never resizes",
+        "Four-column history retains Activity midnight/DST/unknown tokens; stable live focus/help, delayed hover and real touch; four themes, Credits/USD and nominal/narrow PiP geometry",
+        "Four-column name-only Session and prompt (whole-session) costs; concurrent scopes, independent zero/N/A/partial/pending, historical model/effort/duration/calls, mixed/subagents, live focus/corrections/Escape, delayed hover/keyboard/touch; 3 widths, enlarged font/CSS zoom, themes and units; table costs do not widen opening fit",
+        "Absent activation keeps disclosure functional; four position/size intentions and symbolic defaults round-trip; browser coupling/remembered width measured; one SSE/no geometry storage"
+      ]
+    },
+    {
+      "run": "edge-zoom",
+      "outcome": "PASS",
+      "browser": "Edg/156.0.4314.58",
+      "scale": "1.5",
+      "actual_browser_zoom": 1.25,
+      "explicit_pip_light_dark": true,
+      "layouts": 156,
+      "header_cases": 56,
+      "disclosure_states": 0,
+      "opening_insufficient_clamps": 48,
+      "disclosure_insufficient_clamps": 0,
+      "measured_tolerance_css_px": [
+        7.778,
+        9.087
+      ],
+      "examples": [
+        {
+          "case": "intrinsic-width-native-clamp",
+          "outer": [
+            562,
+            520
+          ],
+          "inner": [
+            431,
+            380
+          ],
+          "request": {
+            "width": 557,
+            "height": 492,
+            "preferInitialWindowPlacement": true
+          },
+          "header": {
+            "fits": false,
+            "width": 404.20001220703125,
+            "parts": [
+              {
+                "text": "Cost Guard \u00b7 Watch",
+                "box": {
+                  "left": 11.783333778381348,
+                  "right": 116.15834140777588,
+                  "top": 11.266667366027832,
+                  "bottom": 27.266667366027832
+                },
+                "lines": [
+                  {
+                    "left": 11.783333778381348,
+                    "right": 116.15834140777588,
+                    "top": 11.266667366027832,
+                    "bottom": 27.266667366027832
+                  }
+                ],
+                "overflow": false
+              },
+              {
+                "text": "Earlier Sessions",
+                "box": {
+                  "left": 314.0500183105469,
+                  "right": 411.7000198364258,
+                  "top": 7.500000476837158,
+                  "bottom": 31.50000238418579
+                },
+                "lines": [
+                  {
+                    "left": 329.5833435058594,
+                    "right": 407.41668701171875,
+                    "top": 11.850000381469727,
+                    "bottom": 26.783334732055664
+                  }
+                ],
+                "overflow": false
+              },
+              {
+                "text": "CCost Today 90 000 \u00b7 999 prompts",
+                "box": {
+                  "left": 230.9666748046875,
+                  "right": 411.70001220703125,
+                  "top": 35.56666946411133,
+                  "bottom": 51.56666946411133
+                },
+                "lines": [
+                  {
+                    "left": 230.9666748046875,
+                    "right": 411.70001220703125,
+                    "top": 35.56666946411133,
+                    "bottom": 51.56666946411133
+                  }
+                ],
+                "overflow": false
+              }
+            ],
+            "marker": {
+              "content": "\"\u203a\"",
+              "width": "11.25px"
+            },
+            "button": {
+              "border": "0.533333px",
+              "outline": "2.66667px",
+              "focused": false
+            },
+            "documentOverflow": false
+          }
+        }
+      ],
+      "checks": [
+        "56 header snapshots: light/dark themes, fonts, exact reference/lower/larger/locale Credits/USD/loading/unavailable; bounded 8px slack excluding measured gutter; achieved text-range fit, pointer active/hover and repeated Enter/Space disclosure; native clamps separately recorded",
+        "Opening real layout and two-row reserve; actual native clamps recorded separately from uncapped no-scroll cases",
+        "Native pointer, Enter and Space expand/shrink; current manual width retained; advancing SSE never resizes",
+        "Four-column history retains Activity midnight/DST/unknown tokens; stable live focus/help, delayed hover and real touch; four themes, Credits/USD and nominal/narrow PiP geometry",
+        "Four-column name-only Session and prompt (whole-session) costs; concurrent scopes, independent zero/N/A/partial/pending, historical model/effort/duration/calls, mixed/subagents, live focus/corrections/Escape, delayed hover/keyboard/touch; 3 widths, enlarged font/CSS zoom, themes and units; table costs do not widen opening fit",
+        "Absent activation keeps disclosure functional; four position/size intentions and symbolic defaults round-trip; browser coupling/remembered width measured; one SSE/no geometry storage"
+      ]
+    }
+  ],
+  "live": {
+    "source": "V2",
+    "owners": 1,
+    "streams": 2,
+    "active": 1,
+    "history": 3,
+    "known_finishes": 3,
+    "accounts": 3,
+    "daily_requests": 2455,
+    "daily_prompts": 68,
+    "daily_count_complete": true,
+    "daily_cost_complete": true,
+    "category_costs_reconcile": true,
+    "elapsed_seconds": 32.2872,
+    "owned_shutdown_seconds": 0.1286,
+    "surviving_owned_workers": 0,
+    "schedule_history_phase_errors": 1,
+    "shared_opencode_untouched": true,
+    "inference_started": false
+  },
+  "repairs": [
+    "SSE paired-cost fixture waits for a new publication, not merely matching row counts",
+    "Native-clamp probe follows achieved target positions; adequate achieved fit needs no false limitation notice",
+    "Settings copy retains explicit Live updates never resize wording required by existing regression"
+  ],
+  "exception": {
+    "decider": "Decision Delegate",
+    "scope": "FR 000613 delivery only",
+    "rationale": "Integrated browser disconnected; adequate hidden geometry/interaction and source evidence avoids disruption",
+    "unperformed": [
+      "physical Windows 150% scaling",
+      "physical native frame/work-area and monitor transitions",
+      "manual OS drag/restoration",
+      "screen-reader speech"
+    ],
+    "visible_desktop_authorized": false,
+    "product_failure_waived": false
+  },
+  "limits": [
+    "Native insufficient-width clamps are responsive reachability results, not one-line fit PASS",
+    "Emulated device scale is not physical Windows DPI proof",
+    "Higher browser zoom not exercised; native clamps already present at actual 125% zoom",
+    "Live probe reports one shutdown scheduling phase error, not an all-history/no-error result"
+  ]
+}

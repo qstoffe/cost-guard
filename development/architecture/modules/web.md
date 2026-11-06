@@ -214,8 +214,11 @@ to Watch. Mini-only header alignment never changes full Watch tables. `OpeningMe
 loads the shipped styles inside an inert, invisible shadow layout, then renders current
 presentation synchronously before the opening gesture calls native PiP. Natural layout
 includes all accounts/statuses and a height-only two-running-row reserve. Fit width
-comes from a max-content, unwrapped clone of only the current styled header plus body
-padding and two CSS pixels of rounding allowance, not table minima or a fixed target.
+comes from the maximum max-content header clone across both disclosure states and
+real/reference `CCost Today 90 000 · 999 prompts` text, plus body padding, eight CSS
+pixels of focus/rounding tolerance and an actual measured scrollbar gutter. The
+Fit-only stable document gutter and equal-width marker prevent disclosure layout
+shifts; no authentic totals/disclosure are mutated, table minima or fixed width used.
 The conservative 16×48-DIP frame estimate separates the opener's side frame from its
 outer/inner zoom estimate; height is measured at the resulting content width. Remember
 mode retains its prior first-open size intention, not the minimal Fit width. PiP content

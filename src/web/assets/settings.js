@@ -29,7 +29,7 @@ const WebSettings = (() => {
     {key: 'miniWatchSize', id: 'mini-size', label: 'Mini Watch size', endpoint: 'mini-size',
       choices: [['fit-on-open', 'Fit on open'], ['remember-last', 'Remember last size']],
       explanation: 'Size requested on the next Mini Watch opening. Earlier Sessions clicks can resize it; passive Live updates never do. No pixel geometry is saved.',
-      help: {'fit-on-open': 'Open at the narrowest width fitting Cost Guard · Watch, Earlier Sessions and CCost Today on one row, with content height and room for two running prompts. Earlier Sessions clicks can grow or shrink height; Live updates never resize. Screen limits may require scrolling.',
+      help: {'fit-on-open': 'Fit the header in both Earlier Sessions states, reserving at least CCost Today 90 000 · 999 prompts or wider real text, with a small rounding allowance and scrollbar space. Real totals are unchanged. Fit content height and two running prompts. Earlier Sessions clicks resize only height; Live updates never resize. Screen limits may require wrapping/scrolling.',
         'remember-last': 'Let the browser reuse manual size in this live tab, without forcing the minimal Fit opening width. Standard position can reset it. Reload or host restart starts fresh; Earlier Sessions clicks can still resize height.'}},
     {key: 'quotaDisplayMode', id: 'quota-display', label: 'Quota display', endpoint: 'quota-display',
       choices: [['used', 'Used'], ['remaining', 'Remaining']],

@@ -8,8 +8,14 @@ module.exports = async function alignment({evaluate,until,fixture,command,sessio
     for(const type of ['keyDown','keyUp']) await input('Input.dispatchKeyEvent',{type,key,code:key,windowsVirtualKeyCode:key==='Tab'?9:27});
   };
   const help = `miniWatch.view.doc.getElementById('context-help')`;
+  const previousPublication=await evaluate('liveValue.view.now_ms');
   await fixture('history-3-2-1');
-  await until(`miniWatch.view.promptRows.size===2 && miniWatch.view.historyRows.size===3`);
+  await until(`liveValue.view.now_ms!==${previousPublication} && miniWatch.view.promptRows.size===2 && miniWatch.view.historyRows.size===3`);
+  // The real transport replays its latest snapshot every ten seconds. These local
+  // synthetic corrections must not be replaced by that unchanged fixture replay.
+  // New source publications and all explicit synthetic updates still reach the SUT.
+  await evaluate(`window.costUpdate=miniWatch.update;window.costEpoch=liveValue.view.now_ms;
+    miniWatch.update=function(p){if(p===liveValue && p?.view?.now_ms===costEpoch)return;return costUpdate.call(this,p);}`);
   await evaluate(`(() => {const p=structuredClone(liveValue);p.view.now_ms++;
     for(const card of [...p.view.active_cards,...p.view.history_cards]) {
       card.title='Full untruncated session name '.repeat(15);
@@ -123,6 +129,7 @@ module.exports = async function alignment({evaluate,until,fixture,command,sessio
   await command('Runtime.evaluate',{expression:`document.documentElement.style.fontSize='';document.documentElement.style.zoom=''`},pipSession);
   await evaluate(`document.documentElement.dataset.theme='${original.theme}';ReportView.setUnit('credits');miniWatch.settings();
     miniWatch.window.resizeTo(${original.width},${original.height})`,true);
+  await evaluate('miniWatch.update=costUpdate;delete window.costUpdate;delete window.costEpoch');
   await fixture('running');await until(`miniWatch.view.body.rows.length===2`);
   await evaluate(`miniWatch.view.earlier.hidden=${original.earlierHidden};
     miniWatch.view.earlierToggle.setAttribute('aria-expanded','${!original.earlierHidden}');miniWatch.view.prompts.scrollTop=0`);

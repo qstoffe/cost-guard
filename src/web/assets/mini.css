@@ -1,5 +1,6 @@
 /* Shared semantic colors; PiP chrome is browser-owned, not another inner card. */
 html, body { min-height: 100%; overflow: auto; }
+html[data-mini-size="fit-on-open"] { scrollbar-gutter: stable; }
 body { padding: .5rem; max-width: none; }
 .mini-watch { padding: 0; min-width: 0; display: flex; flex-direction: column; gap: .4rem; }
 .mini-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .2rem .5rem;
@@ -8,8 +9,8 @@ body { padding: .5rem; max-width: none; }
   color: var(--accent); font-size: .8rem; transition: none; }
 .mini-earlier-toggle { min-height: 1.6rem; padding: .1rem .25rem; font-size: .75rem; background: none;
   color: var(--ink); border-color: transparent; transition: none; }
-.mini-earlier-toggle::before { content: '› '; }
-.mini-earlier-toggle[aria-expanded="true"]::before { content: '⌄ '; }
+.mini-earlier-toggle::before { content: '›'; display: inline-block; width: 1em; }
+.mini-earlier-toggle[aria-expanded="true"]::before { content: '⌄'; }
 .mini-prompts section[hidden] { display: none; }
 .mini-prompts section { margin: 0 0 .4rem; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
 .mini-daily { margin: 0 0 0 auto; min-width: 0; max-width: 100%; text-align: right; font-size: .8rem; overflow-wrap: anywhere; color: var(--ink); }
@@ -58,6 +59,7 @@ body { padding: .5rem; max-width: none; }
 .mini-measuring { position: fixed; left: 0; top: 0; visibility: hidden; height: auto; }
 .mini-header-measuring { position: fixed; visibility: hidden; width: max-content; flex-wrap: nowrap; }
 .mini-header-measuring > * { flex: none; max-width: none; white-space: nowrap; overflow-wrap: normal; }
+.mini-scrollbar-measuring { position: fixed; visibility: hidden; width: 100px; height: 100px; overflow-y: scroll; }
 .mini-measure-host { position: fixed; left: 0; top: 0; visibility: hidden; pointer-events: none; }
 /* Web uses the opener's resolved roles; never restyle Classic or native PiP chrome. */
 html[data-theme="web"], [data-theme="web"] body { background: var(--bg); color: var(--ink); }

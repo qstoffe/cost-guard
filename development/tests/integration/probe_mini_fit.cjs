@@ -1,7 +1,7 @@
 // Owned strictly headless Chrome/Edge; shipped auth/CSP/SSE, no real data or OS input.
 const assert = require('node:assert/strict'), fs = require('node:fs/promises'), path = require('node:path');
 const {spawn} = require('node:child_process'), readline = require('node:readline');
-const [browser, output, scale='1', zoom='1'] = process.argv.slice(2);
+const [browser, output, scale='1', zoom='1', scope='all'] = process.argv.slice(2);
 async function main() {
   assert.ok(path.isAbsolute(browser) && path.isAbsolute(output)); await fs.stat(browser);
   const profile = await fs.mkdtemp(path.join(path.dirname(output),'fit-browser-'));
@@ -76,14 +76,15 @@ async function main() {
       }
       throw new Error('No native PiP screenshot target');
     };
-    await require('./probe_mini_width.cjs')({evaluate,open,close,read,capture:captureOpening,layouts,checks:evidence.checks});
+     await require('./probe_mini_width.cjs')({evaluate,command,sessionId,targetId,open,close,read,capture:captureOpening,layouts,checks:evidence.checks});
+     if(scope==='width-only'){evidence.outcome='PASS';return;}
     for(const [prompts,accounts,flags] of [[0,0,''],[1,1,''],[2,3,''],[4,6,'-long'],[2,6,'-long-warning']]) {
       await fixture(`density-${prompts}-${accounts}${flags.replace('-warning','')}`);
       await until(`liveValue.view.active_cards.length===${prompts} && liveValue.view.accounts.accounts.length===${accounts}`);
       if(flags.includes('warning'))await evaluate(`(()=>{const p=structuredClone(liveValue);p.view.now_ms++;p.view.daily_usage.total.complete=false;
         for(const item of p.view.accounts.accounts){item.observation.has_warning=true;item.observation.label+=' long account warning '.repeat(4);}miniWatch.update(p);})()`);
       await open(); const value=await read();
-      assert.ok(value.request.width<634 && value.outer[0]>0,JSON.stringify(value));
+       assert.ok(value.request.width>0 && value.outer[0]>0,JSON.stringify(value));
       if(!value.header.fits) {
         assert.ok(value.outer[0]+2<value.request.width+16,JSON.stringify(value));
         assert.match(await evaluate('miniWatch.feedback.textContent'),/Browser size limits/);

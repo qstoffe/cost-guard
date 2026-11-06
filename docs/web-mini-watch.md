@@ -21,11 +21,16 @@ last size). Defaults resolve to **Remember last** and **Fit on open**. Existing
 Symbolic Default follows shipped defaults; explicit choices stay pinned. Missing
 preferences inherit without creating a user file.
 
-Fit on open measures the real themed header before requesting PiP: the **narrowest
-opening width fitting Cost Guard · Watch, Earlier Sessions and the complete CCost
-Today cost/prompt count on one row**, plus a small native/zoom rounding allowance.
-Each opening uses the current figures, fonts, gaps and padding, not a fixed pixel
-width or the expanded history table's minimum. Height is measured at that width,
+Fit on open measures the themed header before requesting PiP: **Cost Guard · Watch,
+Earlier Sessions and the complete CCost Today cost/prompt count fit on one row in
+both disclosure states**, where browser/native limits permit. It reserves at least
+the formatted reference **CCost Today 90 000 · 999 prompts**, or wider real opening
+text, plus **8 CSS pixels** for focus/rounding and a measured stable scrollbar gutter.
+The reference exists only in inert measurement clones: real displayed totals are
+never changed. The equal-width disclosure markers and stable gutter prevent a
+toggle or capped-height scrollbar from stealing header space. Each opening uses
+actual fonts, gaps and padding, not a fixed pixel width or table minimum.
+Height is measured at the resulting available content width,
 with current content, every account and warning, and capacity for **two complete
 running-prompt rows**. This is empty height
 capacity, not fabricated prompt entries. More than two rows use their actual height.

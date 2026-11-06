@@ -107,12 +107,30 @@ const MiniWatch = (() => {
   function heightCap(win) {
     return Math.min(1000, win.screen?.availHeight > 0 ? win.screen.availHeight : 1000);
   }
-  function headerWidth(view) {
-    // Measure only the real header, not the tables' intrinsic column minima.
+  function headerWidth(view, reserve = false) {
+    // Only inert header clones: never change real totals/disclosure or size to tables.
     const copy = view.root.firstElementChild.cloneNode(true);
     copy.classList.add('mini-header-measuring'); copy.inert = true;
     copy.setAttribute('aria-hidden', 'true'); view.root.append(copy);
-    try { return copy.getBoundingClientRect().width; }
+    try {
+      const toggle = copy.querySelector('.mini-earlier-toggle');
+      const daily = copy.querySelector('.mini-daily > span');
+      let width = 0;
+      for (const text of reserve ? [daily.textContent, 'CCost Today 90 000 · 999 prompts'] : [daily.textContent]) {
+        daily.textContent = text;
+        for (const expanded of ['false', 'true']) {
+          toggle.setAttribute('aria-expanded', expanded);
+          width = Math.max(width, copy.getBoundingClientRect().width);
+        }
+      }
+      return width;
+    }
+    finally { copy.remove(); }
+  }
+  function scrollbarWidth(view) {
+    const copy = view.doc.createElement('div'); copy.className = 'mini-scrollbar-measuring';
+    copy.inert = true; copy.setAttribute('aria-hidden', 'true'); view.root.append(copy);
+    try { return copy.offsetWidth - copy.clientWidth; }
     finally { copy.remove(); }
   }
   function geometry(win, frameWidth = 0) {
@@ -506,6 +524,7 @@ const MiniWatch = (() => {
         this.window = win;
         win.addEventListener('pagehide', () => { this.release(win); this.sync(); }, {once: true});
         const doc = win.document; doc.title = 'Mini Watch · Cost Guard'; doc.documentElement.lang = 'en';
+        doc.documentElement.dataset.miniSize = size;
         this.syncTheme();
         this.appearance.addEventListener('change', this.themeChanged);
         const icon = doc.createElement('link'); icon.rel = 'icon'; icon.type = 'image/x-icon';
@@ -537,7 +556,7 @@ const MiniWatch = (() => {
           this.openingBounds = {outerWidth:win.outerWidth, outerHeight:win.outerHeight,
             innerWidth:win.innerWidth, innerHeight:win.innerHeight, requested:dimensions};
           if (size === 'fit-on-open' && (this.view.fitHeight() > win.outerHeight + 2 ||
-              headerWidth(this.view) > this.view.root.getBoundingClientRect().width + 1))
+              headerWidth(this.view, true) > this.view.root.getBoundingClientRect().width + 1))
             this.feedback.textContent = 'Browser size limits prevented the full opening fit. Scroll Mini Watch to reach all content.';
         });
       } catch (_) {
@@ -614,13 +633,14 @@ const MiniWatch = (() => {
       const style = owner.getComputedStyle(this.body);
       const padding = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
       const horizontal = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
-      // Two CSS pixels cover fractional font/native rounding, not a fixed window
-      // target. Remember mode keeps its existing first-open request; the browser
-      // may reuse manual bounds instead. No new minimum is imposed on that mode.
+      // A stable, measured scrollbar gutter prevents capped disclosure from stealing
+      // header space. Eight CSS pixels cover focus/rounding, not a fixed window target.
+      // Remember keeps its first request and browser-owned bounds, without this reserve.
+      const gutter = controller.size === 'remember-last' ? 0 : scrollbarWidth(view);
       const requested = controller.size === 'remember-last' ? 650 - frameWidth :
-        Math.ceil((headerWidth(view) + horizontal + 2) * scale);
+        Math.ceil((headerWidth(view, true) + horizontal + gutter + 8) * scale);
       const width = Math.max(1, Math.min(requested, owner.screen?.availWidth > 0 ? owner.screen.availWidth - frameWidth : requested));
-      const contentWidth = width / scale - horizontal;
+      const contentWidth = width / scale - horizontal - gutter;
       const height = Math.ceil((contentHeight(view, contentWidth) + padding + 6) * scale);
       return {width, height: Math.max(1, Math.min(heightCap(owner) - frameHeight, height))};
     }

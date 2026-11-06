@@ -1,5 +1,87 @@
 # Mini Watch and finished history
 
+## FR 000613 — v80.193 reference header reserve, 2026-11-06
+
+Base `a7947ab8197a3db28405e31df5f88bb15def5be7`. Fit/Default now measures
+the widest inert max-content header across both disclosure states and both real
+opening text and `CCost Today 90 000 · 999 prompts`. Larger real figures win; no
+daily value, prompt count or real disclosure is changed. Eight CSS pixels provide
+focus/rounding tolerance. The disclosure marker occupies the same one-em width in
+both states. Fit alone reserves an actual measured stable scrollbar gutter, so
+capped-height scrolling cannot consume the header's content width. This structural
+gutter is separate from the eight-pixel tolerance, not a guessed large buffer.
+
+Height is recomputed at the resulting content width with real warnings/accounts and
+the existing two-running-row reserve. Remember's first request/native ownership,
+manual narrow resizing, placement coupling, one-DIP compensation and height-only
+gesture sizing are unchanged. No passive size supervisor, acquisition, cost/account
+logic, persisted geometry or architecture boundary was added. Current guide,
+Settings help, Web module contract and test map were updated.
+
+### Verification interpretation
+
+- [Compact evidence](../../architecture/governance/verification/mini-header-613.json):
+  final Full **153 bounded units / 1,796 passed tests**, one existing macOS zsh/PTY
+  skip, **zero failures/errors, 96.1s**. Validator **11 passes**, zero failures,
+  six existing advisory warnings. Initial Full failures were superseded Settings-help
+  copy expectations; the corrected contract passes the focused test and final Full.
+- Chrome **156.0.8078.80** and Edge **156.0.4314.58**: five native configurations
+  (Chrome 1×, 1.5×, 1.5×/125%; Edge 1×, 1.5×/125%). Five explicit PiP/opener media
+  matrices cover **280 header cases / 168 reference disclosure states**, supplementing
+  complete opening/reserve/disclosure/Activity/table/help/preferences probes. Actual
+  browser zoom is queried, not CSS zoom. At Chrome 1× the reference requests **448×394**,
+  achieves **470×439 outer / 448×394 inner**, and fits intact in the **418-CSS-pixel**
+  header. Observed request slack is roughly **7.6–9.1 CSS pixels**, excluding the actual
+  structural gutter and frame/zoom conversion. The exact-reference screenshot was inspected.
+- At native 125%-zoom clamps, reference fit is not always physically possible: e.g.
+  Chrome's requested 554-DIP inner width achieves **560 outer / 430 CSS inner**, leaving
+  **402.6 CSS pixels** for a **406.3-pixel** header. Those results assert reachable text,
+  responsive wrapping and truthful limitation text, **not exact fit**. Real disclosure
+  clamps are also retained with height-only request arguments and achieved geometry.
+  Higher browser zoom was not exercised; native clamps already occur at 125%.
+- No ZIP, tag, GitHub Release, inference or shared OpenCode stop was performed.
+
+The reference probe checks text ranges, complete button bounds, order/overlap,
+real-value preservation, maximum/slack, stable marker geometry, pointer hover/active
+and repeated Enter/Space toggles. It separately emulates media in the **PiP target**,
+not just the opener: Classic deliberately stays fixed dark under both preferences,
+while Web inherits the opener's light/dark roles.
+`fixtures/mini_opening.cjs` deterministically checks all four measurement candidates,
+larger-real precedence and cleanup after a layout exception.
+
+The first 125%-zoom probe exposed a test assumption: a native first-disclosure
+width clamp can move the next pointer target. Click coordinates now follow achieved
+layout; insufficient-width native clamps are reachable/wrapped results, never
+one-line-fit PASS. Resize arguments and achieved geometry prove height-only requests
+apart from the existing bounded one-DIP compensation. One-line fit is still required
+whenever achieved content width permits. A reduced request does not itself require
+a limitation notice if the achieved header reserve and actual content height fit.
+Edge also exposed an existing paired-cost/help fixture race: matching row counts
+could admit the previous SSE publication, and the transport's ten-second HTTP replay
+could overwrite local synthetic corrections during delayed hover tests. The probe
+now waits for a new publication and isolates only unchanged fixture replays during
+its local synthetic section. New publications and explicit updates still reach the
+SUT; the original transport/update binding is restored afterward. No product
+assertion was weakened. Settings-help regression expectations now pin the reference
+reserve/gutter and unchanged real values rather than the superseded real-only minimum.
+
+The fresh read-only installation probe observed V2, one owner/two advancing coherent
+streams, one active/three historical cards with known finishes and three accounts.
+Daily published 2,455 requests / 68 prompts, complete cost/count and reconciling
+category prices. Elapsed 32.287s, owned shutdown 0.129s, no surviving owned workers
+or cleanup failures. One schedule-history phase error was recorded during shutdown;
+this is not an all-history/no-error claim. Shared OpenCode was untouched, no inference.
+
+**Scoped exception — Decision Delegate:** the integrated browser was attempted
+first and returned `browser.disconnected`. The delegate approved omitting physical
+Windows 150%-display scaling, native frame/work-area and monitor transitions,
+manual OS drag/restoration and screen-reader speech for **this FR's delivery only**.
+Owned hidden PiP geometry, interaction/zoom tests and fresh source evidence suffice
+without desktop disruption; On Hold and an owner prompt were rejected. These physical
+and speech checks remain **unperformed/unverified**, not PASS. Emulated scale is not
+physical Windows scaling. No external visible desktop action or functional-failure
+waiver was granted; native frame/zoom estimates and platform/accessibility uncertainty remain.
+
 ## FR 000608 — v80.188 paired prompt/session costs, 2026-11-06
 
 Base `7843b3563e2906e80395f6b548652b951be7763f`. Mini alone now shows
