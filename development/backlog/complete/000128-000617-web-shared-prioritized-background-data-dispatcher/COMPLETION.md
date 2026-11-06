@@ -32,8 +32,8 @@ from the earlier successful local baseline below and in the measurement journal.
 
 ## Verification and measurements
 
-- **Full: 155/155 files passed**, four isolated workers, 106.9 s after CI repair
-  (earlier baseline: 108.1 s). Includes partial
+- **Full: 155/155 files passed**, four isolated workers, 102.8 s after fixture-clock
+  repair (earlier production repair: 106.9 s; baseline: 108.1 s). Includes partial
   and strict source behavior, view parity, config/pricing, fresh/stale boundaries,
   finite queue/size/watchdog/security/lifecycle tests, actual parked-child parent
   crash, 30→7→30 Stats continuation and sleep/missed-period stagger contracts.
@@ -70,6 +70,13 @@ from the earlier successful local baseline below and in the measurement journal.
   Stats usable at 20.105 s, no omitted roots/host failure; own threads/children closed.
   This concurrent smoke is not an isolated performance comparison. Final CI/merge
   truth remains on the PR; the original failed run remains failed.
+- **Browser fixture clock:** second CI passed Linux Full/validator and all native
+  jobs, but real-browser freshness correctly withheld the fixture's 1970 observation.
+  CI-only current-clock acquisition now preserves the production freshness gate;
+  fixed-clock unit fixtures retain their defaults. Report/detail clock regressions
+  and 86 focused CI/runtime/dispatcher tests passed; hosted guard/coverage unchanged.
+  A separate hidden Edge probe confirmed current Models and three fresh detail rows;
+  Full 155/155 and validator eleven/zero/six passed again after the fixture repair.
 
 ## Limits and decisions
 

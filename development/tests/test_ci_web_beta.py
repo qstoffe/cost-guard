@@ -239,7 +239,7 @@ class CiEvidenceTests(unittest.TestCase):
             root = Path(temporary)
             (root / "config").mkdir()
             shutil.copyfile(ci_web_beta.ROOT / "config/default-config.jsonc", root / "config/default-config.jsonc")
-            runtime = SyntheticSessionsRuntime(root)
+            runtime = SyntheticSessionsRuntime(root, clock_ms=lambda: 123_456_789)
             token = runtime.details.open("root", "live")
             runtime.start()
             try:
@@ -250,10 +250,28 @@ class CiEvidenceTests(unittest.TestCase):
                         break
                     runtime.stopping.wait(.01)
                 self.assertIsNotNone(captured["result"])
+                self.assertEqual(123_456_789, captured['result']['observed_at_ms'])
                 self.assertEqual('<script>PRIVATE_TEXT</script>', captured["result"]["view"]["prompt_blocks"][0]["title"])
             finally:
                 runtime.close()
             self.assertFalse(runtime.thread.is_alive())
+
+    def test_browser_report_fixture_uses_acquisition_clock_without_changing_fixed_clock_default(self):
+        from unittest.mock import Mock
+        from development.tests.fixtures.web_reports import current_report, finite_report
+        from src.reports import ReportRequest
+
+        fixed, current = Mock(), Mock()
+        finite_report(fixed, ReportRequest())
+        with patch('development.tests.fixtures.web_reports.time.time', return_value=8_000_000):
+            current_report(current, ReportRequest())
+
+        fixed_result = json.loads(fixed.send.call_args.args[0][1])
+        current_result = json.loads(current.send.call_args.args[0][1])
+        self.assertIsNone(current_result['error'])
+        self.assertEqual(4000, fixed_result['source']['observed_at_ms'])
+        self.assertEqual(8_000_000_000, current_result['source']['observed_at_ms'])
+        self.assertEqual(8_000_000_000, current_result['observed_at_ms'])
 
     def test_provisioning_blocked_is_not_relabelled_as_test_failure(self):
         with tempfile.TemporaryDirectory() as temporary:

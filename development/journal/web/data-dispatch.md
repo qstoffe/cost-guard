@@ -215,3 +215,32 @@ roots, no host failure and Live running. Own serving/Live threads closed and zer
 parked children remained. This smoke overlapped local checks, so its timings are
 not a new isolated performance comparison. CI result/merge still belong to the PR;
 the failed first run is not reclassified as success.
+
+## Browser fixture clock correction
+
+The [second CI run](https://github.com/qstoffe/cost-guard/actions/runs/42313482437)
+passed Linux Full/validator (1,874 tests, zero failures/errors, 21 platform skips)
+and all three native jobs. Browser still failed at its first Models assertion.
+The canonical synthetic worker returned an observation of 4,000 ms after epoch:
+correct for fixed-clock unit tests, but correctly withheld by a real browser's
+one-hour freshness gate. A separate hidden Edge probe reproduced completed Models
+with `withheld=true`, observation 4000 and no rendered Models surface. This is a
+fixture-clock mismatch, not permission to weaken the product freshness rule.
+
+CI now uses a spawn-safe `current_report` fixture that runs the canonical synthetic
+acquisition with the actual wall-clock observation. The original fixed-clock
+worker remains unchanged by default. Its synthetic Sessions runtime also accepts
+an acquisition clock, refreshed on each real fixture tick; it still publishes no
+Watch observation. Deterministic tests verify both report clocks and the detail
+observation. Focused CI/runtime/dispatcher verification passed 86 tests in 19.462 s.
+The hosted-only guard and every subsequent browser assertion remain intact.
+The separate hidden Edge probe then showed current Models with `withheld=false`
+and a rendered surface, followed by all three synthetic detail rows with current
+observation age. Its own host/browser closed. A scratch-only stdin-control stall
+initially prevented that probe from reaching acquisition; a bounded Event control
+wait allowed it to run. The underlying Windows/stdio cause remains unproven. Those
+initial attempts were not successful browser evidence or a product-code repair.
+After the fixture correction, Full again passed **155/155 files**, four workers,
+102.8 seconds; validator passed eleven checks with zero failures and the same six
+advisories. This follow-up changes only fixtures/tests and causal documentation;
+the prior repaired-production real-source smoke remains applicable.
