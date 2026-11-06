@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.182 — 2026-11-06
+
+- Mini Watch subscription help contains only primary-window Capacity and Next reset; visible usage/warnings stay intact. Models replaces its explanation cards with semantic header help and adds an explicit price-list refresh plus the true upstream fetch time. Strict retrieval cannot claim a cached fallback as success; one isolated, coalesced report rebuilds prices/ratios coherently without account refresh or mid-publication Watch repricing. Failed refresh retains the old table/date and permits retry; filters, multi-sort and display units survive.
+
 ## v80.181 — 2026-11-06
 
 - Web Settings replaces nested headings, a framed panel and persistent explanation paragraphs with compact aligned Setting / Value rows. Shared label/value help distinguishes inherited defaults from explicit choices. Feature-detected customizable native pickers show hovered/keyboard-focused option explanations beside the list, with readable touch/narrow previews and a native-select Choice help fallback. Authenticated immediate commitment, confirmed-only application, file preservation and failed-save rollback are unchanged; no new preferences or acquisition are added.

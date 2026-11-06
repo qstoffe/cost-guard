@@ -1,5 +1,10 @@
 # Web contextual help: writing and interaction
 
+Source revision: 50d88a4bcfba6c1f853607ce0ee84a5c9663c0a3
+Checked revision: 50d88a4bcfba6c1f853607ce0ee84a5c9663c0a3
+Last checked: 2026-11-06
+Status: current
+
 Owner: `src/web/assets/help.js`; shared styles: `app.css`. Applies to the main
 application and separate Mini Watch document. FR 000601 grouped-detail follow-up: 2026-11-06.
 
@@ -90,9 +95,9 @@ application and separate Mini Watch document. FR 000601 grouped-detail follow-up
 | Mini: both tables’ headings | Session and (Total CCost) have different help inside one column; dead space has none. Prompt cost and active-next versus historical-last-valid-next context remain distinct |
 | Mini: session title/cost and prompt/history status | Remove every row cue/duplicate value help. Keep full underlying selectable title and row accessible naming, prompt outcome/stop cause and confirmed unavailable/partial notes |
 | Mini: Today, freshness, Earlier Sessions, quota bars, return-to-tab | Remove both header cues and all Earlier Sessions help; no table-level replacement or progress-bar popup. Keep useful return action help with immediate activation dismissal. Critical host/auth/source warnings stay visible, not observation logs |
-| Mini: subscriptions | Visible subscription text groups Primary/Additional quotas, native orientation/amounts/limits, real resets, observed Used CCost and server-owned capacity/provenance. No extra cue, timestamps/raw sources or acquisition |
-| Models: checkboxes and multi-sort | Short action help on focus/hover/tap, preserving action cursors and sorting/filtering |
-| Models: More information, price evidence and promotion notes | Concepts shortened into named lines; exact source evidence/terms remain optional visible data |
+| Mini: subscriptions | Exactly two primary-window facts on the visible text: Capacity, then Next reset. Select canonical unit/provenance and reset tokens; no secondary or CCost prose. Warnings remain visible; Full Watch/Accounts retain richer help |
+| Models: checkboxes and multi-sort | Four semantic label-only definitions preserve full sorting click/keyboard/Shift actions and accessible action names; Relative CCost groups ratio, actual global completed sample, token categories, hidden fallback and source thresholds |
+| Models: price refresh and promotion notes | No More information/cards. Explicit price action and genuine fetch time precede the table; promotion/availability facts stay visible. Unitless ratios distinguish the Copilot-credit basis from Credits/reference USD and billing/native quotas |
 | Sessions/detail, Token Mix, active-hour | Shared sort help; Reading this report and Sample/price coverage are line-separated. Session context/retention and finite-capture guidance remain visible; the retired Reports date form has no help surface |
 | Accounts | Observation details stays a keyboard/touch-native disclosure with exact source/native-money/pace/billing facts; no native title explanations existed |
 | Settings | Intrinsic label and current-choice help replace visible paragraphs; native customizable option previews share their text with an accessible fallback disclosure. Retain native focus/selection, save feedback and changing default labels |

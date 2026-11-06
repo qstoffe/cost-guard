@@ -23,6 +23,7 @@ def main():
     parser.add_argument("--sessions", action="store_true", help="Measure live Sessions scalar indexing and complete pinned history.")
     parser.add_argument("--reports", action="store_true", help="Also capture finite reports beside Live and cancel deep history.")
     parser.add_argument("--models", action="store_true", help="Capture only task-focused Normal/full Models snapshots beside Live.")
+    parser.add_argument("--refresh-prices", action="store_true", help="Force one upstream pricing fetch/rebuild beside pinned Live; no account refresh.")
     parser.add_argument("--watch-cards", action="store_true", help="Wait for independently published real one-row Watch cards.")
     parser.add_argument("--accounts", action="store_true", help="Observe shared account publications without finite reports or new owners.")
     parser.add_argument("--tool-outcomes", action="store_true", help="Check evidenced tool outcome subsets in the published cards.")
@@ -261,6 +262,10 @@ def main():
             'stream_ids_verified': True,
             'shell_seconds': round(shell_seconds, 3), 'source_view_seconds': round(source_seconds, 3),
             'watch_cards': card_evidence}))
+        if args.refresh_prices:
+            from development.tests.integration.models_price_observations import observe_price_refresh
+            observations.stage = 'price_refresh'
+            observe_price_refresh(get, cookie, owners[0])
         if args.detail:
             observations.stage = 'detail'
             sessions = [row['session_id'] for row in view['rows']] + [card['session_id'] for card in

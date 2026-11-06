@@ -9,6 +9,8 @@ from src.pricing.github_copilot import GitHubCopilotPricingProvider
 from src.reports import ReportKind, ReportService
 from src.sources.selection import SourceSelector
 
+from .jobs import ModelsPriceRefresh
+
 
 def application(request):
     # Reuse existing account/model wiring, not CLI source wake or dispatch.
@@ -22,14 +24,21 @@ def application(request):
         database = CacheDatabase(root)
         database.initialize()
         cache = CacheRepository(database)
-        accounts = _account_providers(config, selection.selected) if request.kind is ReportKind.NORMAL else ()
-        return ReportService(selection=selection,
-            pricing_provider=GitHubCopilotPricingProvider(cache=cache,
-                max_age_hours=float(config.get("pricingMaxAgeHours", 1))),
+        refresh_prices = isinstance(request, ModelsPriceRefresh)
+        provider = GitHubCopilotPricingProvider(cache=cache,
+            max_age_hours=float(config.get("pricingMaxAgeHours", 1)))
+        # Strict fetch precedes acquisition. A failed request cannot publish a new
+        # report/date, and this isolated job never refreshes Live's subscriptions.
+        catalog = provider.refresh_catalog() if refresh_prices else None
+        accounts = _account_providers(config, selection.selected) if request.kind is ReportKind.NORMAL and not refresh_prices else ()
+        service = ReportService(selection=selection,
+            pricing_provider=provider,
             account_provider=accounts[0] if accounts else None, account_providers=accounts,
             model_availability_source=_model_availability_source(selection),
             cache_repository=cache, config=config, now_ms=now, progress=progress,
             cache_token_mix_history=True)
+        service.catalog = catalog  # Pin one coherent valuation/catalog for this job.
+        return service
 
     return ReportApplication(factory)
 

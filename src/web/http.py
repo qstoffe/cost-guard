@@ -300,9 +300,15 @@ class RequestHandler(BaseHTTPRequestHandler):
                 else:
                     self.reply(200, {"csrf": session[1]}, cookie=session[0])
                 return
-            if self.path == "/api/reports":
+            if self.path in {"/api/reports", "/api/models/refresh"}:
                 try:
-                    request = parse_report(value)
+                    if self.path == "/api/models/refresh":
+                        from .jobs import ModelsPriceRefresh
+                        if value:
+                            raise ValueError("invalid_request")
+                        request = ModelsPriceRefresh()
+                    else:
+                        request = parse_report(value)
                 except (ValueError, TypeError):
                     self.reply(400, {"error": "invalid_request"})
                     return

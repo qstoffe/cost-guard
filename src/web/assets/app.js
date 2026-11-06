@@ -210,9 +210,14 @@ function show(state) {
       snapshotRender.result === state.result && snapshotRender.search === state.search &&
       snapshotRender.first === output.firstChild;
     if (!retained) {
+      const scroll = output.querySelector('.overview-models')?.scrollLeft;
+      const focused = document.activeElement?.getAttribute('data-model-control');
       ReportView.render(output, state.result, state);
+      if (scroll != null && state.section === 'models') output.querySelector('.overview-models').scrollLeft = scroll;
+      if (focused && state.section === 'models') output.querySelector(`[data-model-control="${focused}"]`)?.focus();
       snapshotRender = {state, result: state.result, search: state.search, first: output.firstChild};
     }
+    state.priceControls?.(!!csrf && hostState.writable);
   }
   else if (state.loading) {
     const activity = ReportView.element('progress');
@@ -235,9 +240,10 @@ function failure(code) {
      pricing_unavailable: 'Reference pricing unavailable.', busy: 'Report service busy. Retry Refresh.'};
   return errors[code] || 'Source/report unavailable. Check the local source and retry Refresh.';
 }
-async function acquire(state, background = false) {
+async function acquire(state, background = false, prices = false) {
   if (state.loading || !hostState.writable) return;
   state.loading = true;
+  state.priceRefreshing = prices; state.priceMessage = '';
   state.failed = false;
   Object.assign(state, {percent: 0, progressSequence: 0, progressStart: 0, stagedProgress: false});
   state.lastWork = null;
@@ -245,7 +251,7 @@ async function acquire(state, background = false) {
   state.message = background ? '' : state.result ? 'Refreshing; last known snapshot retained until success.' : 'Loading snapshot…';
   show(state);
   try {
-    state.active = (await api('/api/reports', state.request)).id;
+    state.active = (await api(prices ? '/api/models/refresh' : '/api/reports', prices ? {} : state.request)).id;
     show(state);
     while (true) {
       const job = await api('/api/jobs/' + state.active);
@@ -258,7 +264,7 @@ async function acquire(state, background = false) {
         if (state.section === 'token-mix' && !TokenMixView.valid(job.result)) throw new Error('report_unavailable');
         // Partial data is usable but never a successful 100% acquisition. Paint
         // completion only after the whole successful result has arrived.
-        if (state.section === 'models' && job.result.source.status === 'acquired') {
+        if (state.section === 'models' && !state.result && job.result.source.status === 'acquired') {
           state.percent = 100;
           if (state === current) {
             showOverviewProgress(state);
@@ -280,16 +286,17 @@ async function acquire(state, background = false) {
       await new Promise(resolve => setTimeout(resolve, 500));
     }
   } catch (error) {
-    state.message = background ? 'Update delayed; last completed Token Mix retained.' :
+    state.message = prices ? 'Price list refresh failed; previous prices retained' : background ? 'Update delayed; last completed Token Mix retained.' :
       `${state.result ? 'STALE — last known snapshot retained. ' : ''}${failure(error.message)}`;
     if (error.message === 'report_timeout' && state.lastWork) state.message += ` Last observed work: ${state.lastWork}.`;
-    if (state.section === 'models') {
+    if (prices) state.priceMessage = state.message;
+    if (state.section === 'models' && !prices) {
       state.message = state.message.replaceAll('retry Refresh', 'reload to retry').replaceAll('Retry Refresh', 'Reload to retry');
       if (!/reload/i.test(state.message)) state.message += ' Reload to retry.';
     }
     state.failed = true;
   } finally {
-    state.loading = false; state.active = null; state.checkedAt = Date.now();
+    state.loading = false; state.priceRefreshing = false; state.active = null; state.checkedAt = Date.now();
     show(state); scheduleTokenMix();
   }
 }
@@ -333,6 +340,7 @@ function navigate() {
   if (current?.detail) current.detail.detach();
   if (current?.catalog) current.catalog.detach();
   current = views.get(key);
+  if (route.section === 'models') current.refreshPrices = () => acquire(current, false, true);
   document.getElementById('search').value = current.search || '';
   if (match && csrf && !hostState.terminal && sessionDetailAvailable && !current.detail) {
     current.detail = new SessionDetail.View(api, match[1]);

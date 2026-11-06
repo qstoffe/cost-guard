@@ -1,7 +1,7 @@
 # Optional Web runtime
 
-Source revision: 904c9aea9a5f0e682437b74d7f66d3d5a6d813ff
-Checked revision: 904c9aea9a5f0e682437b74d7f66d3d5a6d813ff
+Source revision: 50d88a4bcfba6c1f853607ce0ee84a5c9663c0a3
+Checked revision: 50d88a4bcfba6c1f853607ce0ee84a5c9663c0a3
 Last checked: 2026-11-06
 Status: current
 
@@ -15,6 +15,19 @@ boundary changes. [Writing conventions and surface inventory](web-help.md) are t
 current reference; older per-cell/native-tooltip descriptions below are historical.
 
 `src/web/http.py` owns bounded loopback HTTP, fixed assets and routing; `src/web/security.py` owns one-use bootstrap/HttpOnly sessions/CSRF; `src/web/jobs.py` owns finite admission, process isolation, progress, cancellation and retention; at most 64 progress messages drain per host turn to prevent scan backpressure without starving control/Live. `src/web/composition.py` creates fresh canonical ReportApplication integrations.
+
+Models' explicit `POST /api/models/refresh` accepts only authenticated/CSRF-protected
+`{}` and submits the Web-only `ModelsPriceRefresh` request marker. Existing job equality
+coalesces concurrent actions separately from normal TTL captures; all finite-process,
+result, deadline and parent-loss bounds remain. Composition calls the concrete provider's
+strict `refresh_catalog()` and pins that validated catalog on a fresh ReportService
+before canonical acquisition/projection. Unlike legacy fail-soft `get_catalog(force=True)`,
+strict refresh raises on upstream failure, never labeling cached prices/date as fresh.
+No account providers are constructed and Live's pinned catalog remains unchanged.
+Browser replacement consumes one coherent report, retaining filters/sorts/unit/focus/pan;
+failure retains the prior DOM/date. Mini help selects exactly primary-window Capacity
+and `watch_reset` tokens; richer Full Watch/Accounts help and visible warnings remain.
+Evidence and the scoped split-verification decision: [Models pricing](../../journal/web/models-pricing.md).
 
 `src/web/assets/app.js` owns finite refresh/stale/cancel state and memory-only observations; Models keeps its frozen normal report. `reports.js` owns route resolution and explicit-only deep-history admission. Accounts bypasses finite jobs/report shell and consumes app-level retained Live, even without a Watch DOM. `account-cards.js` is the single Watch/Accounts subscription renderer: account-keyed membership, bound metric/reset/help updates, per-card signatures excluding the publication clock, shared physical-width cap and existing subgrid styles. Empty success clears membership; missing/failed empty publications retain usable cards with truthful warnings. Settings synchronize visible/detached roots without acquisition. `render.js` presents DTOs with exact Decimal/vector sorting; generic reports retain presentation search/50-row paging, while Models has independent catalog/version filters and complete document-scrolling rows. Totals never come from cells. Sessions bypasses finite jobs and the report shell: `sessions.js` renders six-column live catalog pages; `session.js` renders one ten-column complete chronological history. Both use intrinsic metric tracks, elastic title/preview and document vertical scrolling. Shared Watch `ContextLine` and contextual-help components consume canonical report context, not a browser estimator.
 
@@ -302,7 +315,7 @@ Architecture boundaries are unchanged; journal assessment: no-update. Evidence a
 browser/platform limits: [historical selector verification](../governance/verification/web-ccost-toggle.md)
 and [current Settings verification](../governance/verification/web-settings.md).
 
-FR 000537 unifies the former Overview and Models at `#/models`; `#/overview` and `#/models/all` replace legacy history entries, preserving bootstrap erasure and Models keyboard focus. Exactly Publisher/Model/Relative CCost/Release date fill main-content width with intrinsic subgrid tracks. All matching rows scroll with the document; narrow screens alone use horizontal overflow. Models has no account cards, search, pager, catalog links, native-rate column or superseded fading. New Models and two accessible checkboxes precede the table; collapsed More information and matching Price Promotion follow. CCost selection now belongs only to Settings. Accounts retains full shared acquisition/data. Other routes retain their controls and scroll contracts.
+FR 000537 unifies the former Overview and Models at `#/models`; `#/overview` and `#/models/all` replace legacy history entries, preserving bootstrap erasure and Models keyboard focus. Exactly Publisher/Model/Relative CCost/Release date fill main-content width with intrinsic subgrid tracks. All matching rows scroll with the document; narrow screens alone use horizontal overflow. Models has no account cards, search, pager, catalog links, native-rate column or superseded fading. The explicit price action/time, New Models and two accessible checkboxes precede the table; matching Price Promotion follows. FR 000598 replaces More information/cards with semantic header help. CCost selection belongs only to Settings. Accounts retains full shared acquisition/data. Other routes retain their controls and scroll contracts.
 
 One opt-in `ModelCatalogProjection` freezes full catalog, selectable publisher/name membership, notices and candidate-local supersession from the same acquired sample, without new availability/history/account calls. Every filter combination uses the same full-catalog cheapest-positive base; CLI ranking/denominator remain unchanged. Defaults: all-priced off, latest-only on, exact Relative CCost descending. Candidate scope precedes conservative supersession and stable exact tier-vector sorting; missing ratios/dates stay last. Shift mouse/keyboard supports ordered multi-sort with primary-only aria-sort; ordinary click/touch replaces keys, with no persistent additive mode or extra sort control. Unknown prices remain rows; unverified fail-open and verified-empty remain distinct, never subscription entitlement proof. Prepared tokens align tiers without browser valuation.
 
@@ -386,7 +399,7 @@ tints only its subscription header; stale/restriction warnings remain independen
 Application display prepares Watch-only reset tokens using shared `duration_text`
 and canonical deadline/local-clock timestamps. Live's existing publication time
 advances these tokens without provider polling or browser timers. The nested generic
-reset token remains unchanged for CLI and Mini Watch; Accounts shares Watch's tokens. Focused formatting,
+reset token remains unchanged for CLI; Accounts and Mini's Next reset share Watch's tokens. Focused formatting,
 DOM and rendered responsive evidence: [Watch polish](../../journal/web/watch-polish.md).
 `live_projection.card` exports the canonical session continuation and entire root-tree
 cost as `session_summary`, shared across concurrent/earlier cards, independently of row

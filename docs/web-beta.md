@@ -226,14 +226,30 @@ backwards or reaches 100 before a complete, usable source result. Failed/partial
 acquisition stops activity and gives actionable feedback; missing data is not zero.
 Completed units advance separate sample/account-history/preparation bands. Unknown
 sampling totals stay estimated; blocked I/O can pause. No extra scan or timed advance.
-Reload requests fresh Models; Back/Forward to a retained view and live host
+Reload captures Models using normal pricing TTL caching; Back/Forward to a retained view and live host
 heartbeats do not refresh its frozen report or reset its table scroll/selection.
 
-Below the table, **More information** starts collapsed and contains CCost, Token Mix,
-and the shared global latest-100-completed-priceable-prompt Relative CCost explanation,
-followed by genuine **Price Promotion**
-notices for shown markers. Genuine **New Models** notices sit above the table at the
-left, with the two filters grouped at the right (wrapping on mobile). Partial and
+Above the table, **Refresh price list** precedes **Prices last fetched: YYYY-MM-DD HH:mm**
+in the configured timezone (or **Unavailable**). This is the last successful upstream
+GitHub pricing observation, not page load or release-metadata enrichment. Explicit
+refresh bypasses even a fresh cache, then rebuilds one coherent Models report on the
+existing finite-job lane. Duplicate in-flight requests coalesce; account acquisition
+and Watch's pinned valuation stay unchanged. **Refreshing…** disables duplicate clicks.
+Offline/invalid retrieval retains the old table/date with **Price list refresh failed;
+previous prices retained**, allowing retry. Unchanged successful prices can advance
+the observation date without claiming a rate change. Filters, Shift multi-sort,
+Credits/USD, focus and horizontal panning are preserved where possible.
+
+There is no **More information** disclosure or concept-card block. Header text alone
+reveals Publisher/Model/Release-date definitions and a grouped Relative CCost/Token
+Mix explanation: actual up-to-100 qualifying completed prompt count, one identical
+token mix across models/tiers, unitless full-catalog ratios, and source tier thresholds.
+Without a qualifying sample, the hidden 2/96/1/1 ranking fallback is explained and
+observed ratios remain blank. Credits and reference USD (`100 credits = $1.00`) are
+display units on a Copilot AI-credit-equivalent reference basis, not native quota or billing.
+Sorting arrows, click/keyboard/Shift actions and accessible names remain separate.
+Genuine **Price Promotion** notices follow the table; **New Models** notices sit above
+it, with the two filters grouped at the right (wrapping on mobile). Partial and
 unverified-source warnings remain explicit. **Accounts** retains full supported quota,
 billing, subscription and attribution details and its canonical acquisition behavior.
 
@@ -287,7 +303,7 @@ v80.106 fixes real-installation Normal results that exceeded the unchanged 8 MiB
 limit because they carried unused month-wide causal request identities. Normal now
 retains per-root revision evidence without that detail-only payload; no model rows,
 account periods or totals are capped. Models renders every matching reference-model
-row with document scrolling. Token Mix phase costs are available in More information;
+row with document scrolling. Token Mix phase costs remain in the separate Token Mix report;
 current account provenance is available through the shared live cards' help.
 
 Classic defaults to dark; Web follows system light/dark. Both use local fonts, visible
@@ -356,7 +372,7 @@ The old overview and both tables remain usable while refresh runs. Complete resu
 
 Session-ID links open `/#/sessions/<id>`. Fragment routes support direct links, reload and browser Back/Forward without expanding the HTTP path allowlist. The one-use bootstrap fragment is removed before requests; ordinary session routes are preserved on reload. Names/prompts are text, never links or tooltips containing source paths. Navigation and paging never put prompt/history payloads in browser storage or history state.
 
-Every finite result retains observation time, source status and per-root revision evidence; Models and Token Mix hide verbose snapshot prose, not partial/error truth. A running prompt is **running at that snapshot**, with provisional values. **Refresh snapshot** reacquires generic finite views; reload reacquires Models. Token Mix alone performs the bounded low-frequency refresh described above; other frozen reports do not update from navigation or source events. Accounts, Watch and Sessions remain live consumers. Failed refresh preserves the last known result. Missing/empty/partial/source-failure and independently unavailable accounts remain distinct from acquired zero.
+Every finite result retains observation time, source status and per-root revision evidence; Models and Token Mix hide verbose snapshot prose, not partial/error truth. A running prompt is **running at that snapshot**, with provisional values. **Refresh snapshot** reacquires generic finite views; Models has explicit **Refresh price list** beside its true fetch time, while reload retains normal pricing TTL caching. Token Mix alone performs the bounded low-frequency refresh described above; other frozen reports do not update from navigation or source events. Accounts, Watch and Sessions remain live consumers. Failed refresh preserves the last known result. Missing/empty/partial/source-failure and independently unavailable accounts remain distinct from acquired zero.
 
 Session detail shows **Prompt | Model | Effort | CCost | Calls | Duration | Ictx | Ictx CCost | Extra CCost | Token Mix %**. Python's category order remains **I = Input; C = Cached input; W = Cache write; O = Output**. Input is uncached, Cached input is cache read, Cache write is cache creation, and Output includes reasoning. Full-session totals and main/linked-child breakdown come from the canonical result, never from loaded chunks. Unknown, incomplete and estimated amounts remain honest; a published Cache write price does not imply observed tokens. CCost is not billing. The browser performs no valuation or token attribution.
 
@@ -548,7 +564,11 @@ missing and **N/A** never get the suffix. Provenance follows each quota across u
 and orientations, including Accounts and Mini's Capacity help. Missing native usage never borrows CCost. Credits/USD
 changes CCost, not native units. Accounts shares Full Watch's identity-matched
 period costs and reference figures; Mini keeps one compact primary line with
-Capacity in help. All three follow the same choice immediately, without more polling.
+exactly **Capacity: value** then **Next reset: value** in its subscription-text help.
+Both facts belong only to the visible primary window, with canonical local reset/countdown,
+**Window not started** or honest unknowns. No secondary-quota or CCost explanation prose
+is repeated there; warnings remain visible on the Mini line. Full Watch/Accounts retain
+their richer help. All three follow the same choice immediately, without more polling.
 
 Watch's slim .83rem quota bars have subtle 2px corners and stay teal throughout the non-exhausted range,
 including **<100%**. Canonical numeric exhaustion alone makes that quota's entire
@@ -562,7 +582,7 @@ rows: **Reset in 1h28m, 20:09**, or **Reset in 1d3h, 14:30**. The local clock co
 from the actual deadline; its full date/time is available on hover/focus. Seven days
 or more keeps the calendar date. Expired, unknown and not-started windows remain
 explicit. Existing Live publications update countdowns without browser clocks or
-additional provider polls; Accounts shares this wording, while CLI and Mini retain theirs.
+additional provider polls; Accounts and Mini's Next reset share this wording, while CLI is unchanged.
 
 Both prompt tables end **Token Mix %, Ictx, Δ Ctx** (ten columns in total).
 **Ictx** is the effective incoming context at that prompt's first request, not its
@@ -778,6 +798,7 @@ The historical synthetic parity and bounded integration inventory is [Beta stabi
 | `/api/live` | GET | Authenticated coherent live/progress snapshot and instance/sequence; retained terminal state while stopping |
 | `/api/events` | GET | Authenticated multiplexed SSE, bounded replay with Last-Event-ID; no query strings |
 | `/api/reports` | POST | Enqueue/coalesce a finite report; return job ID (202) |
+| `/api/models/refresh` | POST | CSRF-protected `{}`; strict upstream pricing fetch then isolated coherent Models rebuild, coalesced in flight; no account refresh |
 | `/api/sessions` | POST | Read shared catalog; validated token, offset/epoch, sort and direction; at most 50 rows, no source acquisition |
 | `/api/detail` | POST | Shared complete session capture, pinned begin/chunk history and handle release; compatibility page/freeze |
 | `/api/jobs/<id>` | GET | Authenticated status/progress/result |

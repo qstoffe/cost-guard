@@ -17,7 +17,7 @@ const output = new Node('main'), controls = new Node('div');
 const state = {pages: {}, section: 'models'};
 const context = vm.createContext({document: {createElement: tag => new Node(tag)}, output, controls,
   state, result: {view, observed_at_ms: 1, source: {status: 'acquired'}}, URLSearchParams});
-require('../fixtures/web_help_vm.cjs')(vm, context);
+const helpText = require('../fixtures/web_help_vm.cjs')(vm, context);
 vm.runInContext(fs.readFileSync('src/web/assets/render.js', 'utf8'), context);
 vm.runInContext(fs.readFileSync('src/web/assets/reports.js', 'utf8'), context);
 const draw = () => vm.runInContext('ReportView.render(output, result, state)', context);
@@ -29,7 +29,25 @@ const check = (index, value) => { const input = all(output, 'input')[index]; inp
 draw();
 assert.equal(all(output, 'th').length, 4);
 assert.equal(all(output, 'input').length, 2);
-assert.equal(all(output, 'button').length, 4);
+assert.equal(all(output, 'button').length, 5);
+assert.equal(button('Refresh price list').attrs['data-model-control'], 'refresh');
+assert.ok(output.textContent.includes('Prices last fetched:'));
+assert.ok(!output.textContent.includes('More information'));
+assert.equal(all(output, 'details').length, 0);
+const explanations = all(output, 'th').map(th => helpText(th.children[0]));
+assert.equal(new Set(explanations).size, 4);
+assert.match(explanations[0], /developer\/manufacturer.*not your subscription/);
+assert.match(explanations[1], /published catalog/);
+assert.match(explanations[3], /published\/verified.*N\/A/);
+assert.match(explanations[2], /identical token workload[\s\S]*1.0x[\s\S]*not capability or speed/);
+assert.match(explanations[2], /proportions of tokens, not CCost[\s\S]*Arrows[\s\S]*unitless/);
+let refreshes = 0; state.refreshPrices = () => refreshes++;
+state.priceControls(true); click('Refresh price list'); assert.equal(refreshes, 1);
+state.loading = state.priceRefreshing = true; state.priceControls(true);
+assert.equal(button('Refresh price list').disabled, true);
+assert.ok(output.textContent.includes('Refreshing…'));
+state.loading = state.priceRefreshing = false; state.priceControls(false);
+assert.equal(button('Refresh price list').disabled, true);
 assert.ok(!Object.hasOwn(state.models, 'additive'));
 assert.ok(!output.textContent.includes('Add sort keys'));
 assert.equal(all(output, 'input')[0].checked, false);
@@ -44,10 +62,19 @@ assert.ok(!old.className.includes('superseded'));
 assert.equal(old.children[2].textContent, fallback ? '*1 ' : '*1 8.0x → 16.0x (>200K) → 32.0x (≥1M)');
 assert.ok(output.textContent.includes('*1 Fixture promotional terms'));
 assert.ok(!output.textContent.includes('8.040000'));
-if (fallback) assert.ok(output.textContent.includes('fixed I/C/W/O mix of 2/96/1/1'));
+if (fallback) assert.match(explanations[2], /hidden fixed 2\/96\/1\/1[\s\S]*ratios remain blank/);
+else assert.ok(explanations[2].includes(`latest ${view.model_comparison_sample_size} qualifying completed`));
 
 // Four filter states use table-local conservative flags exported by Python.
 const base = view.model_comparison[0];
+const sampleSize = view.model_comparison_sample_size;
+for (const count of [0, 1, 57]) {
+  view.model_comparison_sample_size = count; draw();
+  const help = helpText(all(output, 'th')[2].children[0]);
+  assert.ok(count ? help.includes(`latest ${count} qualifying completed`) : help.includes('hidden fixed 2/96/1/1'));
+  assert.ok(!help.includes('latest 100 qualifying completed'), 'never invent the maximum sample size');
+}
+view.model_comparison_sample_size = sampleSize;
 const row = (model, selectable, superseded, superseded_selectable, ratios = ['1'], date = '2026-10-01') => ({...base,
   model, publisher: 'OpenAI', selectable, superseded, superseded_selectable, release_date: date,
   relative_cost: ratios[0], relative_levels: ratios.map(relative_cost => ({relative_cost})), display_roles: [], recent: false});

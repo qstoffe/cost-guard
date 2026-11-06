@@ -216,31 +216,16 @@ const ReportView = (() => {
     }
     draw();
   }
-  function overviewConcepts(parent, view) {
-    const help = element('details', undefined, 'overview-explanations');
-    help.append(element('summary', 'More information'));
-    const concepts = element('div', undefined, 'report-concepts');
-    function concept(label, value, explanation) {
-      const card = element('div');
-      card.append(element('h3', label), element('p', value, 'metric-value'));
-      card.append(element('p', explanation, 'help-copy')); concepts.append(card);
-      return card;
-    }
-    const costCard = concept('CCost', '1 CCost = 1 Copilot AI credit',
-      'Estimated reference cost, not your bill.\nFlat-rate plans use Copilot’s published token prices. Unlabelled costs are CCost.\nUnknown prices are not zero.');
-    const mix = view.token_mix;
-    const mixCard = concept('Token Mix %', () => mix ? mixText(mix) : 'N/A',
-      'Percentages of tokens, not cost: ' + mixLegend(view) + '\nInput — New input. Cached input — Reused input. Cache write — Input saved for reuse.\nThis report’s sample is separate from account quota periods.');
-    if (mix) mixCard.append(element('p',
-      () => `${mix.sample_size} priced prompts · ${display(mix, 'totals')} tokens · CCost ${display(mix, 'costs')}`,
-      mix.cost_complete ? 'detail' : 'detail partial'));
-    mixCard.append(element('p', mix?.request_count ? `Your mix uses the latest ${mix.sample_size} priced prompts, totaling ${display(mix, 'total_tokens')} tokens.` : 'No priced prompts are available yet.', 'detail'));
-    concept('Relative CCost', view.model_comparison_sample_size ? `${view.model_comparison_sample_size} completed ${view.model_comparison_sample_size === 1 ? 'prompt' : 'prompts'}` : 'No completed priced prompts',
-      view.model_comparison_sample_size ? 'Price comparison using the same token mix for every model and price tier. The mix comes from up to 100 recent completed, priceable prompts across sessions.\n1.0x — The cheapest comparable positive price in the full catalog. Filters do not change it.\nArrows — Prices at larger input sizes; > or ≥ marks the boundary.\nNot a model-quality test, bill or forecast. Token Mix % uses a separate sample.' :
-        'No comparable prompt sample yet, so Relative CCost is blank.\nA fixed I/C/W/O mix of 2/96/1/1 orders prices only; it does not produce displayed multipliers.');
-    help.append(concepts, element('p', 'Local, read-only. This report is frozen at capture; navigation and live heartbeats never refresh it. Reload to acquire again. Closing this tab does not stop Cost Guard.', 'detail'));
-    if (view.model_catalog) help.append(element('p', 'Available models come from OpenCode’s global list, not a check of your subscription’s entitlements.\nUnknown comparison prices are not zero.', 'detail help-copy'));
-    parent.append(help);
+  function modelHeadingHelp(view) {
+    const count = view.model_comparison_sample_size;
+    return ['The model’s developer/manufacturer, not your subscription or account.',
+      'The model name/identity in the published catalog. OpenCode availability is not verified subscription entitlement.',
+      'Relative reference-price ratio for one identical token workload across every model and price tier, including models you have not used.\n1.0x is the cheapest comparable positive rate in the complete catalog; higher ratios mean proportionally more reference cost, not capability or speed.\n\n' +
+      'Token Mix % = Input (new) / Cached input (reused) / Cache write (stored) / Output (generated, including reasoning). These are proportions of tokens, not CCost.\n' +
+      (count ? `The same shared mix comes from the latest ${count} qualifying completed, priceable ${count === 1 ? 'prompt' : 'prompts'} globally (up to 100).` :
+        'No qualifying completed priceable prompts: the hidden fixed 2/96/1/1 mix ranks prices only; observed comparison ratios remain blank.') +
+      '\n\nArrows mean larger-input-context price tiers; > / ≥ are the published token thresholds.\nRatios are unitless and unchanged between Credits and reference USD (100 credits = $1.00). The basis is Copilot AI-credit-equivalent pricing, not your subscription bill or native quota use.',
+      'The actual published/verified model release date when known. N/A means unavailable; no date is inferred.'];
   }
   function overviewModels(parent, view, state) {
     const catalog = view.model_catalog;
@@ -248,16 +233,27 @@ const ReportView = (() => {
     state.models ||= {all: false, latest: true, sorts: [{index: 2, direction: -1}]};
     const choice = state.models;
     const tools = element('div', undefined, 'model-tools'), notices = element('div', undefined, 'model-notices');
+    const prices = element('div', undefined, 'model-prices'), refresh = element('button', 'Refresh price list');
+    refresh.setAttribute('data-model-control', 'refresh');
+    const fetched = element('span', 'Prices last fetched: ' + (view.pricing_retrieved_at_ms > 0 ? display(view, 'pricing_retrieved_at_ms') : 'Unavailable'));
+    const progress = element('span'); progress.setAttribute('role', 'status');
+    state.priceControls = writable => {
+      refresh.disabled = !writable || !!state.loading;
+      text(progress, state.priceRefreshing ? 'Refreshing…' : state.priceMessage || '');
+    };
+    refresh.addEventListener('click', () => state.refreshPrices?.());
+    prices.append(refresh, fetched, progress);
     const filters = element('div', undefined, 'model-filters');
     function checkbox(label, key, help) {
       const wrap = element('label'), input = element('input');
       input.type = 'checkbox'; input.checked = choice[key]; ContextHelp.attach(input, help);
+      input.setAttribute('data-model-control', key);
       input.addEventListener('change', () => { choice[key] = input.checked; draw(); });
       wrap.append(input, element('span', label)); filters.append(wrap);
     }
     checkbox('Show all Copilot-priced models', 'all', 'Off — Show models in OpenCode’s available list, not verified subscription entitlements.\nIf availability cannot be checked, show the catalog with a warning.');
     checkbox('Latest versions only', 'latest', 'Hide recognized older stable versions among the models selected by the other filter.');
-    tools.append(notices, filters); parent.append(tools);
+    tools.append(prices, filters); parent.append(tools, notices);
     const scroll = element('div', undefined, 'overview-models');
     scroll.tabIndex = 0;
     scroll.setAttribute('role', 'region');
@@ -276,6 +272,7 @@ const ReportView = (() => {
     head.setAttribute('role', 'rowgroup'); body.setAttribute('role', 'rowgroup');
     header.setAttribute('role', 'row');
     const names = ['Publisher', 'Model', 'Relative CCost', 'Release date'], headers = [];
+    const help = modelHeadingHelp(view);
     names.forEach((name, index) => {
       const cell = element('th'), button = element('button', name); cell.scope = 'col';
       function activate(event) {
@@ -291,7 +288,8 @@ const ReportView = (() => {
       button.addEventListener('keydown', event => {
         if (event.shiftKey && ['Enter', ' '].includes(event.key)) { event.preventDefault(); activate(event); }
       });
-      const label = ContextHelp.heading(button, 'Activate to sort or reverse direction.\nHold Shift to keep earlier sort columns (click, Enter or Space).\nUnknown values stay last.');
+      button.setAttribute('data-model-control', 'column-' + index);
+      const label = ContextHelp.heading(button, help[index]);
       cell.setAttribute('role', 'columnheader'); cell.append(button); header.append(cell); headers.push([cell, button, label]);
     });
     head.append(header);
@@ -349,7 +347,6 @@ const ReportView = (() => {
       text(empty, shown.length ? '' : 'No matching reference models. Availability warnings, if any, are shown below.');
     }
     grid.append(head, body); scroll.append(grid); parent.append(scroll);
-    overviewConcepts(parent, view);
     parent.append(promotion, empty); draw();
   }
   function modelRelative(row, sampled, evidence = true) {
@@ -546,7 +543,6 @@ const ReportView = (() => {
       return;
     }
     parent.append(element('p', 'Token category order: ' + mixLegend(view), 'detail'));
-    if (overview) overviewConcepts(parent, view);
     if (view.session_usage.length || view.kind === 'sessions') {
       if (!view.session_usage.length) parent.append(element('p', result.source.status === 'partial' ? 'Partial source: no sessions returned; unavailable history is not empty success.' : 'Source acquired: no available sessions.'));
       table(parent, 'Sessions', ['Session / name', 'Model / effort', 'CCost', 'Prompts', 'Duration'], view.session_usage,
