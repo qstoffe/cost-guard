@@ -49,6 +49,7 @@ class SessionCatalog:
         self.revisions = {}
         self.valid = {}
         self.attempted = {}
+        self.failures = {}
         self.activity = {}
         self.active = frozenset()
         self.leases = OrderedDict()
@@ -58,6 +59,7 @@ class SessionCatalog:
         self.unit = "credits"
         self.turn = 0
         self.checked_at = -100
+        self.index_unavailable = False
 
     def observe(self, observation, *, unavailable=False):
         with self.lock:
@@ -73,41 +75,63 @@ class SessionCatalog:
             self.rows = {key: row for key, row in self.rows.items() if key in self.roots}
             self.valid = {key: value for key, value in self.valid.items()
                            if key in self.roots and value[0] == self.revisions.get(key)
-                           and previous_roots[key].provenance == self.roots[key].provenance}
+                            and previous_roots[key].provenance == self.roots[key].provenance}
+            self.rows = {key: row for key, row in self.rows.items()
+                         if previous_roots[key].provenance == self.roots[key].provenance}
+            self.failures = {key: failure for key, failure in self.failures.items()
+                             if key in self.roots and previous_roots[key].provenance == self.roots[key].provenance
+                             and failure[0] == self.revisions.get(key)}
             self.state = "observed"
 
     def _current(self, key):
         value = self.valid.get(key)
-        return (value is not None and value[0] == self.revisions.get(key)
+        return (not self.index_unavailable and value is not None and value[0] == self.revisions.get(key)
                 and (key not in self.active and not self.rows[key].running or self.clock() - value[1] <= 15))
 
     def needed(self):
         with self.lock:
             browsing = any(self.clock() - lease["touched"] <= 300 for lease in self.leases.values())
-            work = any((not self._current(key) or key in self.active or self.rows[key].running)
-                       and self.clock() - self.attempted.get(key, -100) >= 5 for key in self.roots)
+            if self.index_unavailable:
+                return self.state == "observed" and browsing and self.clock() - self.checked_at >= 30
+            work = any(self._eligible(key) for key in self.roots)
             return self.state == "observed" and browsing and (work or self.clock() - self.checked_at >= 60)
 
+    def index_failed(self):
+        with self.lock:
+            self.index_unavailable = True
+            self.checked_at = self.clock()
+
+    def _eligible(self, key):
+        failure = self.failures.get(key)
+        if failure and failure[1]:
+            return False  # Unsupported/auth failures require changed source evidence.
+        delay = 30 if failure else 5
+        return (self.clock() - self.attempted.get(key, -100) >= delay
+                and (not self._current(key) or key in self.active or self.rows[key].running))
+
     def _candidate(self):
-        # Alternate priority admission and oldest-attempt admission. Busy/new
-        # roots cannot permanently starve cold historical keys (or vice versa).
-        candidates = [key for key in self.roots if self.clock() - self.attempted.get(key, -100) >= 5
-                      and (not self._current(key) or key in self.active or self.rows[key].running)]
+        # Seven current-page admissions per background admission, within the same
+        # four-root/two-second slice. Latest navigation wins; expired tabs do not.
+        candidates = [key for key in self.roots if self._eligible(key)]
         if not candidates:
             return None
         self.turn += 1
-        visible = {key for lease in self.leases.values() for key in lease.get("visible", ())}
-        priority = [key for key in candidates if key in visible or key in self.active]
-        pool = priority if self.turn % 2 and priority else candidates
-        return min(pool, key=lambda key: (self.attempted.get(key, -100), key))
+        visible = dict.fromkeys(key for lease in sorted(self.leases.values(), key=lambda item: -item["touched"])
+                                if self.clock() - lease["touched"] <= 300 for key in lease.get("visible", ()))
+        priority = [key for key in visible if key in candidates]
+        if self.turn % 8 and priority:
+            return min(priority, key=lambda key: (self._current(key), self.attempted.get(key, -100)))
+        return min(candidates, key=lambda key: (self.attempted.get(key, -100), key))
 
     def tick(self, service):
         dependencies = dependency_signature((service._dependencies(service._load_catalog()),
                                               service._load_comparison_catalog().analysis_signature))
         with self.lock:
             self.checked_at = self.clock()
+            self.index_unavailable = False
             if dependencies != self.dependencies:
                 self.valid.clear()
+                self.failures.clear()
                 self.dependencies = dependencies
             self.timezone_id = service.timezone_id
             self.unit = service.config.get("ccostDisplayUnit", "credits")
@@ -124,13 +148,20 @@ class SessionCatalog:
                 self.attempted[key] = self.clock()
             try:
                 row, actual = session_summary(service, root, revision, active=active)
-            except (SourceError, PricingUnavailableError):
-                continue
-            with self.lock:
-                if (key in self.roots and root.provenance == self.roots[key].provenance
-                        and revision == self.revisions.get(key) and actual == revision):
-                    self.rows[key] = row
-                    self.valid[key] = actual, self.clock()
+            except (SourceError, PricingUnavailableError) as error:
+                with self.lock:
+                    if key in self.roots and revision == self.revisions.get(key):
+                        self.failures[key] = revision, isinstance(error, SourceError) and error.terminal
+            else:
+                with self.lock:
+                    if (key in self.roots and root.provenance == self.roots[key].provenance
+                            and revision == self.revisions.get(key)):
+                        if actual == revision:
+                            self.rows[key] = row
+                            self.valid[key] = actual, self.clock()
+                            self.failures.pop(key, None)
+                        else:
+                            self.failures[key] = revision, False
             # One slow root is bounded by the source transport; no additional
             # work is admitted after the slice budget. Details have their own lane.
             if self.clock() - start >= 2:
@@ -186,7 +217,14 @@ class SessionCatalog:
             report = ReportProjection(ReportKind.SESSIONS, "Sessions", "OpenCode", (), session_usage=selected)
             result = project(report, self.timezone_id, self.unit).to_json()
             for row in result["session_usage"]:
-                row["indexed"] = self._current(row["session_id"]) if row["session_id"] in self.roots else False
+                key = row["session_id"]
+                current = key in self.roots and self._current(key)
+                row["indexed"] = current
+                row["has_summary"] = key in self.rows or row["prompt_count"] is not None
+                unavailable = self.index_unavailable or self.state == "source_unavailable" or key in self.failures or key not in self.roots
+                row["metric_state"] = ("retained" if row["has_summary"] else "unavailable") if unavailable else (
+                    "ready" if current else "retained" if row["has_summary"] else "pending")
+                row["running"] = bool(row["running"] and current and not unavailable)
             return dict(token=token, epoch=epoch, offset=offset, total=len(rows), size=50,
                 sort=applied, direction=order, pending_sort=pending, indexed=indexed,
                 available=len(self.roots), state=self.state, view=result)

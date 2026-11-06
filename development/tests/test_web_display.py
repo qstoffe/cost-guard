@@ -26,6 +26,13 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class WebDisplayTests(unittest.TestCase):
+    def test_first_request_context_token_is_independent_of_rich_transition(self):
+        dto = with_display(record(incoming_context_tokens=17_000,
+            delta_context_tokens=2_000, next_context_tokens=19_000)).to_json()
+        self.assertEqual(dto["incoming_context_tokens"], 17_000)
+        self.assertEqual(dto["display"]["first_incoming_context_tokens"], "17k")
+        self.assertEqual(dto["display"]["incoming_context_tokens"], "+2k → 19k")
+
     def test_both_prepared_units_match_independent_cli_exports_for_every_scope(self):
         service = report_service(self)
         self.addCleanup(service.close_accounts)

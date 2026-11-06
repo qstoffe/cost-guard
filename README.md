@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v80.178, 2026-11-06), the supported distribution.
+Use **current `main`** (v80.179, 2026-11-06), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -361,7 +361,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.178 (2026-11-06):** Web Token Mix has one total and two clean 13-column tables, with independently sortable category percentages and costs, exact large-number ordering and explicit partial coverage. After **Load Token Mix**, quiet five-minute visible-page checks reuse unchanged history and preserve the previous result until a coherent update is ready. CLI semantics remain unchanged. See [Web Beta](docs/web-beta.md).
+**v80.179 (2026-11-06):** Sessions, Models and both Token Mix tables share Watch's compact rounded grid. Sessions adds local 24-hour dates, truthful loading/retained states, visible-page indexing priority, running-row markers and button navigation. Detail keeps full history with an adaptive preview, honest loading progress and first-request-only Ictx. CLI/accounting semantics remain unchanged. See [Web Beta](docs/web-beta.md).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

@@ -17,9 +17,8 @@ sys.path.insert(0, str(ROOT))
 
 from development.tests.fixtures.compact_reports import report_service
 from development.tests.fixtures.synthetic_month import SyntheticMonthSource, make_root_snapshot
-from development.tests.fixtures.warning_projections import warning_prompt, warning_watch_projection
+from development.tests.fixtures.watch_summary import summary_watch
 from development.tests.fixtures.web_help_reports import HelpAuditJobs
-from src.analysis.context import PriceWarningSeverity
 from src.application.live_projection import project_live
 from src.application.session_catalog import SessionCatalog
 from src.application.session_detail import SessionDetails
@@ -68,7 +67,7 @@ class FixtureRuntime:
             self.details.tick(self.service, unavailable=self.unavailable)
             if self.catalog.needed():
                 self.catalog.tick(self.service)
-            view = project_live(warning_watch_projection(warning_prompt(PriceWarningSeverity.EXCEEDED)), "UTC").to_json()
+            view = project_live(summary_watch(), "UTC").to_json()
             self.publish("live", dict(state="running", view=view, source_observed_at_ms=self.service.now_ms))
             self.stopping.wait(.25)
 

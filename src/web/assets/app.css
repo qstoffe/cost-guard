@@ -174,18 +174,29 @@ p.warning { border-left: 3px solid var(--warn); padding: .65rem .85rem; backgrou
 .sessions-table-pan { overflow-x: auto; max-height: none; border: 0; }
 .sessions-table { display: grid; width: 100%; min-width: max-content; table-layout: auto; }
 .session-catalog-table { grid-template-columns: max-content minmax(12rem, 1fr) repeat(4, max-content); }
-.session-history-table { grid-template-columns: minmax(14rem, 1fr) repeat(9, max-content); }
+.session-history-table { grid-template-columns: minmax(32ch, 1fr) repeat(9, max-content);
+  width: max-content; min-width: 0; max-width: 100%; }
+.session-detail > .sessions-table-pan { width: fit-content; max-width: 100%; }
 .sessions-table thead, .sessions-table tbody, .sessions-table tfoot,
 .sessions-table tr { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; }
 .sessions-table th, .sessions-table td { min-width: 0; white-space: nowrap; text-align: left; }
 .sessions-table th button { white-space: nowrap; }
 .sessions-table .session-name, .session-preview { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.session-prompt-label { display: flex; align-items: baseline; gap: .45em; min-width: 0; }
+.session-prompt-label { display: flex; align-items: baseline; gap: .45em; min-width: 0; max-width: 60ch; }
 .session-prompt-label > :not(.session-preview) { flex-shrink: 0; }
 .session-preview { flex: 1; }
-.sessions-table .session-running, .sessions-table .session-running td { color: var(--watch-running); }
-.sessions-pager { margin-block: .8rem; justify-content: center; }
-.sessions-pager a[aria-disabled="true"] { color: var(--muted); pointer-events: none; text-decoration: none; }
+.sessions-table .session-running, .sessions-table .session-running :is(td, a, span, button) { color: var(--watch-running); }
+.session-metric-pending { color: var(--muted); }
+.sessions-pager { display: grid; grid-template-columns: 1fr auto 1fr; margin-block: .8rem; gap: .5rem; }
+.sessions-pager > span { text-align: center; min-width: 0; }
+.sessions-pager > button:first-child { justify-self: start; }
+.sessions-pager > button:last-child { justify-self: end; }
+@media (max-width: 45rem) {
+  .sessions-pager { grid-template-columns: 1fr 1fr; }
+  .sessions-pager > span { grid-column: 1 / -1; grid-row: 1; }
+}
+.session-detail > .warning { min-height: 1.5rem; }
+.session-detail progress { width: 9rem; height: .65rem; vertical-align: middle; }
 .session-detail h1 { margin-block: .75rem .25rem; overflow-wrap: anywhere; }
 .session-detail .watch-session-summary { margin-block: .75rem; border: 0; padding: 0; }
 .live-account-cards .account-card { box-shadow: none; font-size: .85rem; }
@@ -320,7 +331,24 @@ footer { border-top: 1px solid var(--line); color: var(--muted); font-size: .8re
 .watch-card h3 a.watch-running-title { color: var(--watch-running); }
 .watch-card h3 a.watch-success-title { color: var(--watch-success); }
 .watch-card > p:empty, .watch-view > p:empty { display: none; }
-.watch-table-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: .4rem; background: var(--panel); }
+/* One Watch-derived visual contract for semantic Web data tables. The shell
+   clips corners and owns horizontal panning; document scrolling stays vertical. */
+.watch-table-scroll, .sessions-table-pan, .overview-models, .token-mix-pan {
+  overflow-x: auto; max-height: none; border: 1px solid var(--line); border-radius: .4rem;
+  background: var(--panel); scrollbar-color: var(--control-line) var(--surface);
+}
+:is(.watch-prompt-table, .sessions-table, .overview-model-table, .token-mix-table) :is(th, td) {
+  position: static; padding: .35rem .6rem; min-width: 0; max-width: none;
+  background: transparent; white-space: nowrap; overflow-wrap: normal;
+}
+:is(.watch-prompt-table, .sessions-table, .overview-model-table, .token-mix-table) th { background: var(--surface); }
+:is(.watch-prompt-table, .sessions-table, .overview-model-table, .token-mix-table) :is(th, td):not(:last-child) { border-right: 1px solid var(--line); }
+:is(.sessions-table, .overview-model-table, .token-mix-table) th button {
+  width: auto; min-height: 0; padding: 0; border: 0; border-radius: 0; font: inherit; color: inherit;
+}
+.sessions-table th button::after { content: none; }
+.sessions-table tfoot td { border-top: 1px solid var(--line); background: var(--surface); }
+.overview-model-table :is(th, td):nth-child(2) { max-width: 45ch; white-space: normal; overflow-wrap: anywhere; }
 .watch-prompt-table { display: grid; width: 100%; grid-template-columns: repeat(2, max-content) minmax(14rem, 1fr) repeat(7, max-content); }
 .watch-prompt-table :is(thead, tbody, tr) { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; }
 .watch-prompt-table th, .watch-prompt-table td { position: static; background: transparent; padding: .35rem .6rem; min-width: 0; max-width: none; white-space: nowrap; overflow-wrap: normal; }

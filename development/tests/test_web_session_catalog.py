@@ -13,6 +13,7 @@ from development.tests.fixtures.watch_runtime import make_service
 from src.application.session_catalog import SessionCatalog, SORTS
 from src.reports.models import SessionUsageRow
 from src.reports.session_summary import ALGORITHM, NAMESPACE, session_summary, summary_key
+from src.sources.errors import SourceUnavailableError, SourceSchemaError
 from src.watch.observers import observe_catalog
 from src.web.session_catalog import catalog_page
 from src.watch.web_coordinator import WebWatchCoordinator
@@ -104,6 +105,84 @@ class SessionCatalogTests(unittest.TestCase):
         with patch.object(self.service, "_analyze", wraps=self.service._analyze) as acquire:
             session_summary(self.service, root, revision, active=True)
         self.assertTrue(acquire.call_args.kwargs["force_fresh"])
+
+    def test_visible_page_first_navigation_fairness_and_no_unchanged_reindex(self):
+        first = self.catalog.page()
+        visible = {row["session_id"] for row in first["view"]["session_usage"]}
+        acquired = []
+        def summary(service, root, revision, **kwargs):
+            acquired.append(root.session_id)
+            return SessionUsageRow(root.session_id, root.title, "N/A", False, Decimal(0), 0), revision
+        with patch("src.application.session_catalog.session_summary", side_effect=summary):
+            self.catalog.tick(self.service)
+            self.assertTrue(set(acquired).issubset(visible))
+            self.clock += 6
+            second = self.catalog.page(token=first["token"], offset=50, epoch=first["epoch"])
+            current = {row["session_id"] for row in second["view"]["session_usage"]}
+            self.catalog.tick(self.service)
+            self.assertTrue(set(acquired[4:7]).issubset(current))
+            self.assertNotIn(acquired[7], current, "one of eight admissions advances background history")
+            for _ in range(30):
+                self.clock += 6
+                self.catalog.tick(self.service)
+        self.assertEqual(len(acquired), 120)
+        self.assertEqual(len(set(acquired)), 120, "unchanged validated scalar rows are never reacquired")
+        ready = self.catalog.page(token=first["token"], sort="prompts")
+        self.assertFalse(ready["pending_sort"])
+
+    def test_failed_rows_are_unavailable_or_retained_not_endlessly_pending(self):
+        first = self.catalog.page()
+        self.assertTrue(all(row["metric_state"] == "pending" for row in first["view"]["session_usage"]))
+        with patch("src.application.session_catalog.session_summary", side_effect=SourceUnavailableError("safe")):
+            self.catalog.tick(self.service)
+        failed = self.catalog.page(token=first["token"])["view"]["session_usage"][:4]
+        self.assertTrue(all(row["metric_state"] == "unavailable" for row in failed))
+        self.index()
+        key = "root-0119"
+        self.catalog.rows[key] = replace(self.catalog.rows[key], running=True, prompt_count=0)
+        self.catalog.failures[key] = self.catalog.revisions[key], False
+        row = self.catalog.page(token=first["token"])["view"]["session_usage"][0]
+        self.assertEqual(row["metric_state"], "retained")
+        self.assertEqual(row["prompt_count"], 0)
+        self.assertFalse(row["running"], "failed evidence cannot confirm currently running work")
+        self.catalog.failures.clear()
+        self.assertTrue(self.catalog.page(token=first["token"])["view"]["session_usage"][0]["running"])
+        self.clock += 16
+        self.assertFalse(self.catalog.page(token=first["token"])["view"]["session_usage"][0]["running"])
+        self.catalog.observe(None, unavailable=True)
+        self.assertEqual(self.catalog.page(token=first["token"])["view"]["session_usage"][0]["metric_state"], "retained")
+
+    def test_slow_failed_root_respects_slice_budget_and_terminal_revision_boundary(self):
+        self.catalog.page()
+        def fail(service, root, revision, **kwargs):
+            self.clock += 3
+            raise SourceSchemaError("safe")
+        with patch("src.application.session_catalog.session_summary", side_effect=fail) as acquire:
+            self.catalog.tick(self.service)
+        self.assertEqual(acquire.call_count, 1)
+        key = acquire.call_args.args[1].session_id
+        self.clock += 60
+        self.assertFalse(self.catalog._eligible(key))
+        snapshot = self.source.snapshots[key]
+        self.source.snapshots[key] = replace(snapshot, source_revision="recovered")
+        self.observe()
+        self.assertTrue(self.catalog._eligible(key))
+
+    def test_index_lane_failure_keeps_values_truthful_and_backs_off_without_rehydration(self):
+        page = self.catalog.page()
+        self.catalog.index_failed()
+        unavailable = self.catalog.page(token=page["token"])
+        self.assertTrue(all(row["metric_state"] == "unavailable" for row in unavailable["view"]["session_usage"]))
+        self.assertFalse(self.catalog.needed())
+        self.clock += 31
+        self.assertTrue(self.catalog.needed())
+        self.catalog.tick(self.service)
+        self.assertFalse(self.catalog.index_unavailable)
+        self.index()
+        self.catalog.index_failed()
+        retained = self.catalog.page(token=page["token"], sort="prompts")
+        self.assertTrue(retained["pending_sort"])
+        self.assertEqual(retained["view"]["session_usage"][0]["metric_state"], "retained")
 
     def test_partial_unknown_metrics_are_indexed_but_sort_last_both_directions(self):
         self.index()

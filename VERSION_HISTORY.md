@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.179 — 2026-11-06
+
+- Web Sessions, Models and both Token Mix tables share Watch's compact header, cell dividers and rounded shell without changing their data/sort contracts. Sessions uses browser-local YYYY-MM-DD HH:mm, truthful pending/unavailable/retained metrics, seven visible-page admissions per fair background turn, confirmed running-row markers and disabled pager buttons. Complete detail retains revision-pinned history, adaptive previews and indeterminate initial progress; Ictx shows only the canonical first-request input. CLI/Watch context transitions, pricing and Token Mix acquisition remain unchanged.
+
 ## v80.178 — 2026-11-06
 
 - Web Token Mix replaces the frozen report shell with a compact total and two 13-column tables. Category shares and costs sort independently using exact source values; full names, all rows, partial coverage and shared text help remain accessible. An explicit first load enables quiet five-minute visible-page checks: revision-keyed request facts and canonical category costs reuse unchanged roots, with bounded changed-root batches, shared host jobs and coherent in-place replacement. CLI history/valuation and other pages retain their semantics.

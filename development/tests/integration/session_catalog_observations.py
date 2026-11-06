@@ -5,7 +5,7 @@ import time
 
 def observe_sessions(get, cookie, host, driver):
     started = time.monotonic()
-    timings, coverage = [], []
+    timings, coverage, visible_coverage = [], [], []
 
     def request(path, value):
         before = time.monotonic()
@@ -26,6 +26,7 @@ def observe_sessions(get, cookie, host, driver):
         if current['pending_sort']:
             assert current['sort'] == 'activity'
         latest = request('/api/sessions', dict(token=token))
+        visible_coverage.append(sum(row['indexed'] for row in latest['view']['session_usage']))
         if original and any(row['session_id'] not in original for row in latest['view']['session_usage']):
             arrival = 'changed_first_page_observed; no session created by probe'
         time.sleep(1)
@@ -62,6 +63,9 @@ def observe_sessions(get, cookie, host, driver):
         assert 'session_context' in block and 'watch_model' in rows[0]
         print(json.dumps(dict(sessions='ok', available=current['available'],
             indexed_before=coverage[0], indexed_after=coverage[-1],
+            visible_indexed_before=visible_coverage[0], visible_indexed_after=visible_coverage[-1],
+            visible_metric_states={state: sum(row.get('metric_state') == state for row in latest['view']['session_usage'])
+                                   for state in ('ready', 'pending', 'retained', 'unavailable')},
             metric_sort='pending' if current['pending_sort'] else 'global',
             first_page_seconds=round(first_seconds, 3), observation_seconds=round(time.monotonic() - started, 3),
             natural_arrival=arrival or 'unobserved; source-to-browser arrival latency not measured',

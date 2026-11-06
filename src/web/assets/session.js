@@ -29,7 +29,7 @@ const SessionDetail = (() => {
       () => ReportView.display(value, 'cost_detail_help') + (value.retained ? '\nRetained source evidence.' : ''));
     return [label, value.watch_model || 'N/A', value.watch_effort || 'N/A', cost,
       value.display?.calls ?? String(value.calls ?? 'N/A'), ReportView.display(value, 'duration_ms'),
-      ReportView.display(value, 'incoming_context_tokens'), ReportView.display(value, 'incoming_context_ccost'),
+      firstContext(value), ReportView.display(value, 'incoming_context_ccost'),
       ReportView.display(value, 'extra_ccost'), ReportView.display(value, 'token_mix_percent')];
   }
   class View {
@@ -39,6 +39,7 @@ const SessionDetail = (() => {
       const back = el('a', 'Show all sessions'); back.href = '#/sessions';
       this.heading = el('h1');
       this.status = el('p', 'Loading session…', 'warning'); this.status.setAttribute('role', 'status');
+      this.loading();
       this.context = new WatchView.ContextLine();
       const scroll = el('div', undefined, 'sessions-table-pan');
       scroll.tabIndex = 0; scroll.setAttribute('role', 'region'); scroll.setAttribute('aria-label', 'Session prompt history');
@@ -80,14 +81,12 @@ const SessionDetail = (() => {
         if (!this.attached || generation !== this.generation) return;
         if (!data.result) {
           this.sourceStatus(data);
-          if (data.state === 'loading' || data.pending && data.state === 'observed') {
-            this.status.textContent = 'Waiting for session source observation…'; this.status.hidden = false;
-          }
           return;
         }
         this.sourceStatus(data);
         if (this.data?.revision === data.revision) { if (this.pendingRender) this.update(this.data); return; }
         const rows = [...data.result.view.prompt_blocks[0].rows];
+        if (!this.data && data.state === 'observed') this.loading();
         while (rows.length < data.total) {
           const chunk = await this.api('/api/detail', {action: 'chunk', token: this.token,
             offset: rows.length, revision: data.revision});
@@ -100,6 +99,7 @@ const SessionDetail = (() => {
         }
         data.result.view.prompt_blocks[0].rows = rows;
         this.update(data);
+        this.sourceStatus(data);
       } catch (error) {
         if (!this.attached || generation !== this.generation) return;
         this.status.textContent = `Session unavailable (${error.message}); last observed rows retained.`;
@@ -109,10 +109,20 @@ const SessionDetail = (() => {
       } finally { this.busy = false; }
     }
     sourceStatus(data) {
+      if (data.state === 'loading' || data.pending && data.state === 'observed') {
+        if (!this.data) this.loading();
+        else { this.status.textContent = ''; this.status.hidden = true; }
+        return;
+      }
       this.status.textContent = data.state === 'observed' ? '' :
         ({history_retained: 'Partial history: retained observations included.', source_unavailable: 'Source unavailable; retained observations are not current.',
           session_missing: 'Session unavailable; retained observations shown.', archived: 'Archived session; last observed history.'}[data.state] || 'Session data unavailable.');
       this.status.hidden = !this.status.textContent;
+    }
+    loading() {
+      const progress = el('progress'); progress.setAttribute('aria-label', 'Loading session');
+      this.status.replaceChildren(el('span', 'Loading session… '), progress);
+      this.status.hidden = false;
     }
     update(data) {
       ReportView.defaultUnit();
@@ -157,9 +167,13 @@ const SessionDetail = (() => {
     }
   }
   // Unit bindings must not manufacture new tooltip DOM for unchanged text cells.
+  function firstContext(row) {
+    return row.display?.first_incoming_context_tokens ?? ReportView.display(row, 'incoming_context_tokens');
+  }
   function cellsText(row, index) {
     return [null, row.watch_model || 'N/A', row.watch_effort || 'N/A', null,
-      row.display?.calls ?? String(row.calls ?? 'N/A'), ...['duration_ms', 'incoming_context_tokens', 'incoming_context_ccost', 'extra_ccost', 'token_mix_percent'].map(key => ReportView.display(row, key))][index];
+      row.display?.calls ?? String(row.calls ?? 'N/A'), ReportView.display(row, 'duration_ms'), firstContext(row),
+      ...['incoming_context_ccost', 'extra_ccost', 'token_mix_percent'].map(key => ReportView.display(row, key))][index];
   }
   return {View};
 })();
