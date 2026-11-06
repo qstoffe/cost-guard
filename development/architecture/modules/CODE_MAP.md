@@ -1,8 +1,8 @@
 # Cost Guard code map
 
-Source revision: 61088f210250f41e2f28f2a5d1da74794995915c
-Checked revision: 61088f210250f41e2f28f2a5d1da74794995915c
-Last checked: 2026-10-30
+Source revision: 50d88a4bcfba6c1f853607ce0ee84a5c9663c0a3
+Checked revision: 50d88a4bcfba6c1f853607ce0ee84a5c9663c0a3
+Last checked: 2026-11-06
 Status: current
 
 Navigation, not another architecture authority: [OVERVIEW.md](../OVERVIEW.md) owns the source contracts; installed OpenCode Toolkit skills own the workflow. This map routes implementation and tests without importing the application or loading historical releases.
@@ -47,6 +47,7 @@ All paths in this table are relative to the repository root. Test names live und
 | Optional transport-neutral report application | `src/application/service.py`, `contracts.py`, `projection.py`; [ownership and mode parity inventory](reports.md#transport-neutral-application-boundary-and-parity-inventory) | `test_application_reports.py`; existing report/Watch tests retain semantic ownership |
 | CLI/Web numeric display contract | `src/display.py`, `src/numbers.py`, `src/application/display.py`, `src/web/assets/render.js`; [per-view baseline](../governance/verification/web-display-parity.md) | `test_web_display.py`, `test_ccost_display_unit.py`, `development/tests/integration/web_display.cjs`; exact raw values remain numeric sort inputs |
 | Unified Models / frozen Normal presentation | `src/web/assets/render.js`, `app.js`, `reports.js`, `app.css`; `src/reports/model_comparison.py` freezes supplemental catalog, `src/application/projection.py` exports candidate-local supersession | `test_web_models.py`, `test_web_overview.py`, `integration/web_models.cjs`, `integration/web_overview.cjs`, `integration/web_views.cjs`; four-column uncapped document scrolling, independent filters, exact tier multi-sort, unknowns/notices, legacy routes, focus and heartbeat-stable DOM; integrated fixture `integration/serve_web_models.py`, explicit-browser `integration/probe_web_models.py` |
+| Explicit Models price refresh / true upstream observation | `src/pricing/github_copilot.py::refresh_catalog`, `src/web/jobs.py::ModelsPriceRefresh`, `composition.py`, `http.py`, `assets/app.js` / `render.js`; no account refresh or Watch catalog replacement | `test_web_price_refresh.py`, `test_web_runtime.py`; `integration/probe_models_refresh.cjs` uses canonical in-memory reports for UI, separate `probe_web_live.py --refresh-prices` proves real HTTP/spawn/provider flow; [proof limits](../../journal/web/models-pricing.md) |
 | Shared live Accounts / Watch subscription cards | `src/web/assets/account-cards.js`, `app.js`, `watch.js`, `reports.js`, `app.css`; existing `live_projection.py` / `watch_accounts.py` DTOs | `test_watch_daily.py` / `integration/web_watch_summary.cjs`, `test_web_views.py` / `integration/web_views.cjs`; hidden `integration/probe_accounts_live.cjs` checks route/DOM/geometry/settings/freshness, read-only `probe_web_live.py --accounts --watch-cards` checks the real shared owner. `test_web_accounts.py` retains legacy report DTO/helper parity, not the current route. |
 | Web quota reference Capacity / Used / Remaining and idle zero | `src/application/quota_ccost.py`, `quota_display.py`, `projection.py`, `watch_accounts.py`; `src/reports/accounts.py` binds existing period cost by quota identity | `test_web_quota_ccost.py`, `test_web_watch_quota.py`, `integration/web_watch_summary.cjs`, `integration/probe_quota_display.cjs` via the hidden Mini probe; no new scan or native accounting change |
 | Shared Web live engine / immutable Watch export / SSE | `src/application/live.py`, `live_projection.py`, `src/watch/acquisition.py`, `source_status.py`, `src/web/events.py`, `src/web/assets/live.js`; [live ownership](web.md) | `test_web_live.py`, `test_web_connection.py`, `development/tests/integration/web_live.cjs`; read-only real-source `development/tests/integration/probe_web_live.py` |

@@ -157,18 +157,34 @@ function setup() {
   vm.runInContext('ReportView.setQuotaMode("remaining")', context); controller.settings();
   assert.match(retained.textContent, /91.6% remaining \(22912\)/);
   assert.equal(retainedBar.value, '0.91648'); assert.match(retainedBar.attributes['aria-label'], /remaining/);
-  assert.match(retained.helpText, /22912\/25000 AI credits[\s\S]*Used \+ Remaining need not equal Capacity/);
-  assert.match(retained.helpText, /Primary quota\nMonthly[\s\S]*Native Used: 2088\/25000 AI credits/);
-  assert.match(view.accounts.children[1].helpText,/Primary quota\n5-hour[\s\S]*\n\nAdditional quotas\nWeekly/);
+  for (const [index, line] of [...view.accounts.children].entries()) {
+    const primary = input.view.accounts.accounts[index].primary;
+    assert.equal(line.helpText, `Capacity: ${primary.quota.display.ccost_capacity}\nNext reset: ${primary.display.watch_reset}`);
+    assert.equal(line.helpText.split('\n').length, 2);
+  }
   assert.equal(retained.querySelectorAll('button').length,0,'subscription text owns help without a cue');
   assert.equal(retained.children[0].children[0].tabIndex,0);
-  assert.match(helpText(retained.children[0].children[0]), /Primary quota/);
+  assert.equal(helpText(retained.children[0].children[0]), retained.helpText);
   assert.doesNotMatch(retained.helpText,/Last quota update|Source:|Availability:/);
   assert.doesNotMatch(retained.helpText, /Period CCost unavailable/);
   assert.equal(view.accounts.children[0], retained); assert.equal(retained.children[1], retainedBar);
   vm.runInContext('ReportView.setQuotaMode("used")', context); controller.settings();
   assert.match(retained.textContent, /8.4% used \(1814\)/);
   assert.equal(JSON.stringify(input), beforeSwitch, 'presentation never changes canonical source fields');
+  const scopedPrimary = input.view.accounts.accounts[0].primary, scopedQuota = scopedPrimary.quota;
+  const scopedDisplay = scopedPrimary.display;
+  for (const [capacity, usd, reset] of [['100', '$1.00', 'Reset in 1h, 12:00'],
+      ['100 (guesstimate)', '$1.00 (guesstimate)', 'Window not started'], ['N/A', 'N/A', 'unknown']]) {
+    scopedPrimary.quota = {...scopedQuota, display:{...scopedQuota.display,ccost_capacity:capacity},
+      display_units:{credits:{ccost_capacity:capacity},usd:{ccost_capacity:usd}}};
+    scopedPrimary.display = {...scopedDisplay,watch_reset:reset};
+    for (const unit of ['credits','usd']) {
+      vm.runInContext(`ReportView.setUnit('${unit}')`, context); controller.settings();
+      assert.equal(helpText(retained.children[0].children[0]), `Capacity: ${unit === 'usd' ? usd : capacity}\nNext reset: ${reset}`);
+    }
+  }
+  scopedPrimary.quota = scopedQuota; scopedPrimary.display = scopedDisplay;
+  vm.runInContext('ReportView.setUnit("credits")', context); controller.settings();
   const firstRow = view.body.children[0], firstCell = firstRow.children[0], originals = input.view.active_cards;
   const prompt = originals[1].rows[0].prompt;
   input.view.active_cards = [originals[1], originals[0], originals[0], {session_id:'pending',focal_id:'',rows:[]}];
@@ -200,7 +216,7 @@ function setup() {
   primary.estimated = true; primary.cost = {...savedCost,complete:false,display:{known_ccost:'?1814'},display_units:{credits:{known_ccost:'?1814'}}};
   primary.quota = {...savedQuota,display_units:{},display:{...savedQuota.display,ccost_brief:'Used CCost has partial attribution / pricing.\nUsed CCost has estimated attribution.'}};
   controller.update(input); assert.match(retained.textContent,/8.4% used \(1814\)/);
-  assert.match(retained.helpText,/partial attribution \/ pricing[\s\S]*estimated attribution/);
+  assert.equal(retained.helpText.split('\n').length, 2, 'attribution prose is not repeated in Mini help');
   assert.ok(!retained.textContent.includes('~'));
   assert.equal(retained.children[1].value, primary.used_fraction);
   const quota = {...primary.quota}, saved = {...primary};

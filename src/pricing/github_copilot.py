@@ -514,7 +514,12 @@ class GitHubCopilotPricingProvider:
                 catalog = self.refresh_release_metadata(reason=reason) or catalog
         return catalog
 
-    def _load_or_fetch(self, force: bool) -> PricingCatalog:
+    def refresh_catalog(self) -> PricingCatalog:
+        """Require a validated upstream observation, never a cached fallback."""
+        with self._lock:
+            return self._load_or_fetch(True, allow_cached_fallback=False)
+
+    def _load_or_fetch(self, force: bool, *, allow_cached_fallback: bool = True) -> PricingCatalog:
         if self._catalog is not None and not force and not self._expired(self._catalog):
             return self._catalog
         cached_entry = self.cache.get(CACHE_NAMESPACE, CACHE_KEY)
@@ -526,7 +531,7 @@ class GitHubCopilotPricingProvider:
         try:
             catalog = self._fetch_catalog(cached)
         except PricingUnavailableError:
-            if cached is not None:
+            if cached is not None and allow_cached_fallback:
                 safe_cached = _apply_expired_promotions(cached, self.now_ms())
                 self._catalog = safe_cached
                 return safe_cached

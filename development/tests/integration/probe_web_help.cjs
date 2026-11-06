@@ -154,7 +154,7 @@ async function main() {
     await evaluate(owner,`document.documentElement.style.zoom=''`);
     await command('Emulation.setDeviceMetricsOverride',{width:1280,height:900,deviceScaleFactor:1,mobile:false},owner);
      const quota=await focus(mini,'.mini-accounts li:nth-child(2) .help-value');
-    assert.match(quota,/Primary quota\n5-hour[\s\S]*\n\nAdditional quotas\nWeekly[\s\S]*Native Used:[\s\S]*CCost Used:/);
+     assert.match(quota,/^Capacity: [^\n]+\nNext reset: [^\n]+$/);
     assert.doesNotMatch(quota,/Last quota update|Source:|Availability:/);
     await key(mini,'Escape');
     await evaluate(owner,`(() => {const p=structuredClone(liveValue);p.view.now_ms++;for(const card of p.view.active_cards){card.title='<script>Exact title</script> '+ 'long title '.repeat(30);card.session_summary.cost.display.known_ccost='?12';card.session_summary.cost.display_units.credits.known_ccost='?12';card.session_summary.cost.complete=false;card.state='observed';}miniWatch.update(p);p.view.now_ms++;for(const card of p.view.active_cards){card.state='retrying';card.session_summary.state='unavailable';}miniWatch.update(p);})()`);

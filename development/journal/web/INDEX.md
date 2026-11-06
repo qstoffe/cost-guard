@@ -39,6 +39,9 @@ Status: current
 - [Models loading progress](models-progress.md): real Normal stage ownership,
   before/after synthetic observations, bounded process/browser updates and separate
   V2 probe timings/availability limits.
+- [Models pricing refresh and compact Mini help](models-pricing.md): strict upstream
+  provenance, coherent isolated repricing, two primary-window Mini facts, canonical
+  browser tests, real V2/API proof and the scoped split-verification decision.
 - [Shared contextual help](contextual-help.md): whole-app content inventory,
   singleton Web/PiP interaction owner, Chrome/Edge and broader Mini evidence,
   current-state regression and explicit synthetic-report/platform limits.

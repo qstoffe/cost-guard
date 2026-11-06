@@ -20,6 +20,7 @@ from development.tests.fixtures.watch_summary import summary_watch, many_cost_gr
 from development.tests.fixtures.web_reports import finite_report
 from development.tests.fixtures.web_help_reports import HelpAuditJobs
 from development.tests.fixtures.token_mix_views import TokenMixJobs
+from development.tests.fixtures.models_refresh import ModelsRefreshJobs
 from src.application.live_projection import project_live
 from src.application.display import with_display
 from src.application.projection import accounts as project_accounts
@@ -42,6 +43,9 @@ def main():
         jobs = HelpAuditJobs() if sys.argv[2:] == ["--help-audit"] else ReportJobs(target=finite_report)
         if sys.argv[2:] == ['--token-mix']:
             jobs = TokenMixJobs()
+        if sys.argv[2:] == ['--models-refresh']:
+            (root / 'pricing-mode.txt').write_text('unchanged')
+            jobs = ModelsRefreshJobs(root)
         host = WebHost(root, jobs=jobs)
         timer = Timer(420 if sys.argv[2:] == ['--token-mix'] else 300, host.stop)
         frame = summary_watch()
@@ -93,6 +97,14 @@ def main():
                         prompt=replace(cards[1].rows[0].prompt, in_progress=False, completed_successfully=True)),))
                     current = (cards[0], ended)
                     publish(value=replace(frame, active_cards=current, running=running_prompts(current, "observed")))
+                elif command.startswith('models-'):
+                    mode = command.removeprefix('models-')
+                    assert mode in {'unchanged', 'changed', 'offline', 'invalid', 'status'}
+                    if mode == 'status':
+                        fetches = root / 'fetches.txt'
+                        print(json.dumps({'fetches': len(fetches.read_text().splitlines()) if fetches.exists() else 0}), flush=True)
+                        continue
+                    (root / 'pricing-mode.txt').write_text(mode)
                 elif command == "empty":
                     publish(value=replace(frame, active_cards=(), running=running_prompts((), "observed")))
                 elif command == "recovering":

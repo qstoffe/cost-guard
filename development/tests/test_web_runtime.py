@@ -139,6 +139,21 @@ class WebRuntimeTests(unittest.TestCase):
         self.assertEqual(401, self.request("/api/status")[0])
         self.assertEqual(401, self.request("/api/reports", {"kind": "sessions"})[0])
 
+    def test_price_refresh_uses_protected_empty_body_action_and_bounded_jobs(self):
+        from src.web.jobs import ModelsPriceRefresh
+        self.assertEqual(401, self.request('/api/models/refresh', {})[0])
+        self.login()
+        self.assertEqual(403, self.request('/api/models/refresh', {}, headers={'X-CG-CSRF': 'wrong'})[0])
+        self.assertEqual(403, self.request('/api/models/refresh', {}, headers={'Origin': 'https://elsewhere.test'})[0])
+        self.assertEqual(400, self.request('/api/models/refresh', {'kind': 'normal'})[0])
+        with patch.object(self.jobs, 'submit', return_value='bounded-job') as submit:
+            status, _, body = self.request('/api/models/refresh', {})
+        self.assertEqual(202, status)
+        self.assertEqual({'id': 'bounded-job'}, json.loads(body))
+        submit.assert_called_once_with(ModelsPriceRefresh())
+        with patch.object(self.jobs, 'submit', side_effect=RuntimeError('busy')):
+            self.assertEqual(429, self.request('/api/models/refresh', {})[0])
+
     def test_progress_bursts_are_coalesced_without_starving_host_turns(self):
         from collections import deque
         from unittest.mock import Mock

@@ -138,12 +138,12 @@ async function main() {
   const shell = await (await fetch(input.origin + '/', {headers: {Cookie: cookie}})).text();
   assert.doesNotMatch(shell, /href=["']#\/reports/);
   assert.doesNotMatch(shell, /Capture date report|type=["']date/);
-  assert.match(ids.result.textContent, /Estimated reference cost, not your bill/);
+  assert.match(ids.result.textContent, /Refresh price listPrices last fetched:/);
+  assert.doesNotMatch(ids.result.textContent, /More information/);
   const creditsText = ids.result.textContent, beforeToggle = requests;
   const retainedChildren = [...ids.result.children];
   vm.runInContext('applySettings({webSettings: {theme: "classic", ccostDisplayUnit: "usd", miniWatchPlacement: "remember-last", miniWatchSize: "fit-on-open", quotaDisplayMode: "used"}, webSettingsChoices: {theme: "classic", ccostDisplayUnit: "usd", miniWatchPlacement: "default", miniWatchSize: "default", quotaDisplayMode: "default"}, webSettingsDefaults: {theme: "classic", ccostDisplayUnit: "credits", miniWatchPlacement: "remember-last", miniWatchSize: "fit-on-open", quotaDisplayMode: "used"}})', context);
-  assert.notEqual(ids.result.textContent, creditsText);
-  assert.match(ids.result.textContent, /\$\d+\.\d{2}/);
+  assert.equal(ids.result.textContent, creditsText, 'unitless Models ratios do not change with Credits/USD');
   assert.deepEqual(ids.result.children, retainedChildren, 'unit change retains DOM');
   vm.runInContext('applySettings({webSettings: {theme: "classic", ccostDisplayUnit: "credits", miniWatchPlacement: "remember-last", miniWatchSize: "fit-on-open", quotaDisplayMode: "used"}, webSettingsChoices: {theme: "default", ccostDisplayUnit: "default", miniWatchPlacement: "default", miniWatchSize: "default", quotaDisplayMode: "default"}, webSettingsDefaults: {theme: "classic", ccostDisplayUnit: "credits", miniWatchPlacement: "remember-last", miniWatchSize: "fit-on-open", quotaDisplayMode: "used"}})', context);
   assert.equal(ids.result.textContent, creditsText, 'exact reversible display');
@@ -205,8 +205,8 @@ async function main() {
   assert.equal(vm.runInContext('retainedDetail.textContent', context), context.retainedBlock.display_units.usd.total_ccost,
     'a confirmed save immediately updates detached retained detail DOM');
   navigate('models');
-  assert.notEqual(ids.result.textContent, frozenModels, 'saved unit applies to frozen models');
-  assert.match(ids.result.textContent, /\$\d+\.\d{2}/);
+  assert.equal(ids.result.textContent, frozenModels, 'saved unit leaves frozen unitless ratios unchanged');
+  assert.doesNotMatch(ids.result.textContent, /\$\d+\.\d{2}/, 'Models has no monetary concept cards');
   assert.equal(all(ids.result, 'select').length, 0, 'no old interactive CCost control');
   assert.equal(requests, settingsRequests + 1, 'settings does not reacquire models');
   navigate('settings');

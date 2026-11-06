@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from collections import OrderedDict
+from dataclasses import dataclass
 import json
 import multiprocessing
 from multiprocessing.connection import wait
@@ -16,6 +17,11 @@ from src.reports import ReportKind, ReportRequest
 MAX_RESULT_BYTES = 8 * 1024 * 1024
 MAX_JOBS = 16
 MAX_PENDING = 4
+
+
+@dataclass(frozen=True, slots=True)
+class ModelsPriceRefresh(ReportRequest):
+    """Web-only explicit pricing action, distinct from a cached Normal capture."""
 
 
 def parse_report(value):
@@ -246,6 +252,7 @@ class ReportJobs:
                             job["finished_at"] = time.monotonic()
                             self.source = result["source"]["status"]
                             self.accounts = ("not_requested" if job["request"].kind is not ReportKind.NORMAL
+                                             or isinstance(job["request"], ModelsPriceRefresh)
                                              else "reported" if not result["error"] else "unavailable")
                         else:
                             job.update(status="failed", error=payload)

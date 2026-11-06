@@ -376,16 +376,12 @@ const MiniWatch = (() => {
         const stale = !['available', 'partial'].includes(obs.availability) || view.quota_stale;
         const warning = primary.restricted ? ' · provider restriction' : '';
         const period = ` (${amount})`;
-        line.helpText = 'Primary quota\n' + ReportView.quotaHelp(primary.quota, true);
-        if (item.secondary?.length) line.helpText += '\n\nAdditional quotas\n' +
-          item.secondary.map(value => ReportView.quotaHelp(value.quota, true)).join('\n\n');
-        line.helpText += '\n\nCCost Used is the reference cost observed in that period, not native quota or billing.';
+        line.helpText = `Capacity: ${display(primary.quota, 'ccost_capacity')}\nNext reset: ${display(primary, 'watch_reset')}`;
         const notes = [stale && 'Retained quota · not current', obs.availability === 'partial' && 'Partial quota data',
           obs.has_warning && 'Provider warning',
           ['auth_failure', 'unsupported_auth_method'].includes(obs.error_code) && 'Quota authentication unavailable'];
         const note = notes.filter(Boolean).join(' · ');
         text(line.children[0].children[0], `${obs.label} · ${used}${period}${warning}${note ? ' · ' + note : ''}`);
-        if (note) line.helpText += '\n' + note;
         ContextHelp.refresh(line);
         line.className = quota.exhausted && quota.mode === 'remaining' ? 'mini-exhausted' : primary.restricted ? 'mini-warning' : '';
         const bar = line.children[1]; bar.hidden = primary.quota.unlimited || primary.used_fraction == null;

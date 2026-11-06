@@ -356,16 +356,15 @@ footer { border-top: 1px solid var(--line); color: var(--muted); font-size: .8re
 .overview-model-table th button { text-align: left; }
 .overview-model-table th[aria-sort] button::after { content: none; }
 .model-tools { display: flex; align-items: start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: .6rem; }
+.model-prices { display: flex; align-items: center; flex-wrap: wrap; gap: .4rem .75rem; }
+.model-prices > span { color: var(--muted); font-size: .85rem; }
 .model-notices:empty { display: none; }
 .model-notices { flex: 1 1 18rem; }
 .model-notices p { margin-block: .25rem; font-size: .85rem; }
 .model-filters { margin-left: auto; display: flex; align-items: center; justify-content: end; gap: .4rem 1rem; flex-wrap: wrap; font-size: .8rem; }
 .model-filters label { display: inline-flex; gap: .4rem; align-items: center; }
 .model-filters input { min-height: auto; margin: 0; }
-.overview-models + .overview-explanations { margin-top: .65rem; }
 .warning:empty { display: none; }
-.overview-explanations { margin-block: .65rem; }
-.overview-explanations .report-concepts { margin-block: .65rem; }
 .compact-accounts { grid-auto-rows: 1fr; gap: .75rem; margin-top: .75rem; }
 .compact-accounts:has(details[open]) { grid-auto-rows: auto; align-items: start; }
 .compact-accounts .account-card { padding: .75rem; box-shadow: none; font-size: .85rem; }

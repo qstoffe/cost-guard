@@ -17,25 +17,25 @@ const output = new Node('main');
 const context = vm.createContext({document: {createElement: tag => new Node(tag)}, output,
   state: {pages: {}, section: 'overview'}, result: {observed_at_ms: 1,
     source: {status: 'acquired', atomicity: 'per_root_snapshot'}, view}, Date});
-require('../fixtures/web_help_vm.cjs')(vm, context);
+const helpText = require('../fixtures/web_help_vm.cjs')(vm, context);
 vm.runInContext(fs.readFileSync('src/web/assets/render.js', 'utf8'), context);
 const draw = () => vm.runInContext('ReportView.render(output, result, state)', context);
 const names = () => all(output, 'tbody')[0].children.map(row => row.children[1].textContent);
 const click = title => all(output, 'button').find(n => n.textContent.startsWith(title)).events.click({});
 draw();
-assert.ok(output.textContent.includes('I = Input; C = Cached input; W = Cache write; O = Output'));
+const relativeHelp = helpText(all(output, 'th')[2].children[0]);
+assert.ok(relativeHelp.includes('Input (new) / Cached input (reused) / Cache write (stored) / Output (generated, including reasoning)'));
 assert.ok(!/\b(?:Cache|Write):/.test(output.textContent));
 assert.deepEqual(names(), order, 'default exact descending tier ranking');
 assert.deepEqual(all(output, 'th').map(n => n.textContent), ['Publisher ↕', 'Model ↕', 'Relative CCost ↓', 'Release date ↕']);
-assert.deepEqual(all(output, 'h3').map(n => n.textContent), ['CCost', 'Token Mix %', 'Relative CCost']);
+assert.equal(all(output, 'h3').length, 0, 'definitions belong to heading help, not cards');
 assert.equal(output.children[0].className, 'model-tools', 'notices/filters precede table');
-assert.equal(output.children[1].className, 'overview-models');
-assert.equal(output.children[2].children[0].textContent, 'More information');
-assert.ok(!output.children[2].open, 'explanations start collapsed');
+assert.equal(output.children[2].className, 'overview-models');
+assert.equal(all(output, 'details').length, 0, 'no Models explanations disclosure');
 for (const text of ['Pricing/cache metadata', 'Snapshot:', 'Shared global comparison sample', 'full-report rows']) assert.ok(!output.textContent.includes(text));
 assert.equal(all(output, 'input').length, 2);
-assert.equal(all(output, 'button').length, 4);
-for (const [first, second] of [['Release date', 'More information'], ['More information', 'Promotion terms'],
+assert.equal(all(output, 'button').length, 5);
+for (const [first, second] of [['Release date', 'Promotion terms'],
   ['Promotion terms', 'Final note']]) {
   assert.ok(output.textContent.indexOf(first) < output.textContent.indexOf(second));
 }
@@ -47,11 +47,10 @@ assert.ok(!warnings.includes('Attribution incomplete'));
 const relatives = all(output, 'tbody')[0].children.map(row => row.children[2].textContent);
 if (fallback) {
   assert.deepEqual(relatives, ['', '', '', '*1 ', '']);
-  assert.ok(output.textContent.includes('fixed I/C/W/O mix of 2/96/1/1'));
+  assert.ok(relativeHelp.includes('hidden fixed 2/96/1/1'));
 } else {
   assert.deepEqual(relatives, ['8.0x', '8.0x', '8.0x → 20.0x (>1M)', '*1 8.0x → 16.0x (>200K)', '1.0x']);
-  assert.ok(output.textContent.includes('Input: 20% (2) · Cached input: 60% (6) · Cache write: 10% (1) · Output: 10% (1)'));
-  assert.ok(output.textContent.includes('20/60/10/10 tokens · CCost 2/6/1/1'));
+  assert.ok(relativeHelp.includes(`latest ${view.model_comparison_sample_size} qualifying completed`));
 }
 // Both names resolve to one presentation; header clicks toggle without a third state.
 context.state.section = 'models'; draw(); click('Model');
