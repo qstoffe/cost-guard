@@ -116,7 +116,7 @@ const SessionsCatalog = (() => {
         row.className = running ? 'session-running' : '';
         if (row.runningMarker) ReportView.text(row.runningMarker, running ? '[RUNNING] ' : '');
       }
-      if (!protectedNode(this.body)) this.rows(values);
+      this.rows(values);
       const pages = Math.max(1, Math.ceil(data.total / data.size));
       this.label.textContent = data.total ? `Showing ${data.offset + 1}–${Math.min(data.offset + 50, data.total)} of ${data.total} sessions · Page ${Math.floor(data.offset / 50) + 1} of ${pages}` :
         data.state === 'observed' ? 'No sessions · Page 1 of 1' : 'Session count unavailable';
@@ -133,34 +133,54 @@ const SessionsCatalog = (() => {
     rows(values) {
       const old = new Map([...this.body.children].map(row => [row.dataset.id, row]));
       const wanted = new Set(values.map(row => row.session_id));
-      for (const row of [...this.body.children]) if (!wanted.has(row.dataset.id)) row.remove();
+      const keepOrder = protectedNode(this.body);
+      for (const row of [...this.body.children]) if (!wanted.has(row.dataset.id) && !protectedNode(row)) row.remove();
       values.forEach((value, index) => {
         const row = old.get(value.session_id) || el('tr'); row.dataset.id = value.session_id;
-        const signature = JSON.stringify(value);
-        if (row.signature !== signature) {
-          row.className = value.running ? 'session-running' : '';
-          const name = el('a', undefined, 'session-name');
-          row.runningMarker = el('span', value.running ? '[RUNNING] ' : '');
-          name.append(row.runningMarker, el('span', value.title));
-          if (/^[A-Za-z0-9_-]{1,200}$/.test(value.session_id)) name.href = '#/sessions/' + value.session_id;
-          ContextHelp.value(name, value.title);
-          const metric = text => {
-            const state = value.metric_state || (value.indexed ? 'ready' : 'pending');
-            const missing = !value.has_summary && !value.indexed && state !== 'retained';
-            const node = el('span', missing ? state === 'pending' ? 'Loading…' : 'Unavailable' : text,
-              missing ? 'session-metric-pending' : '');
-            if (missing && state === 'pending') node.setAttribute('aria-busy', 'true');
-            if (state !== 'ready') ContextHelp.value(node, state === 'pending' ? 'Session summary acquisition is pending.' :
-              state === 'retained' ? 'Last observed summary retained; awaiting a valid current source observation.' : 'Session summary unavailable after source acquisition trouble.');
+        row.value = value;
+        if (!row.name) {
+          row.activity = el('span'); row.name = el('a', undefined, 'session-name');
+          row.runningMarker = el('span'); row.titleNode = el('span');
+          row.name.append(row.runningMarker, row.titleNode);
+          if (/^[A-Za-z0-9_-]{1,200}$/.test(value.session_id)) row.name.href = '#/sessions/' + value.session_id;
+          ContextHelp.value(row.name, () => row.value.title);
+          row.metrics = ['model', 'ccost', 'prompts', 'duration'].map(key => {
+            const node = el('span');
+            ContextHelp.value(node, () => {
+              const current = row.value, state = current.metric_states?.[key] || current.metric_state || 'ready';
+              const freshness = state === 'pending' ? 'Session summary acquisition is pending.' :
+                state === 'retained' ? 'Last observed summary retained; awaiting a valid current source observation.' :
+                state === 'unavailable' ? 'Session summary unavailable after source acquisition trouble.' : '';
+              if (key !== 'model' || !current.multiple_models) return freshness || 'Current observed session ' + key + '.';
+              const models = current.contributor_models || [];
+              return ['Models used in this session' + (current.contributor_models_complete && state === 'ready' ? '' : ' (observed so far)'),
+                models.length ? models.join('\n') : 'Contributing model identities are not available.', freshness].filter(Boolean).join('\n');
+            });
             return node;
-          };
-          const cells = [localTimestamp(value.last_activity_ms), name,
-            metric(value.multiple_models ? 'Multiple models' : value.model || 'N/A'), metric(() => ReportView.display(value, 'ccost')),
-            metric(value.prompt_count == null ? 'N/A' : String(value.prompt_count)), metric(() => ReportView.display(value, 'duration_ms'))];
+          });
+          const cells = [row.activity, row.name, ...row.metrics];
           row.replaceChildren(...cells.map(content => { const td = el('td'); td.append(typeof content === 'object' ? content : el('span', content)); return td; }));
-          row.signature = signature;
         }
-        if (this.body.children[index] !== row) this.body.insertBefore(row, this.body.children[index] || null);
+        row.className = value.running ? 'session-running' : '';
+        ReportView.text(row.activity, localTimestamp(value.last_activity_ms));
+        ReportView.text(row.titleNode, value.title);
+        ReportView.text(row.runningMarker, value.running ? '[RUNNING] ' : '');
+        const texts = [value.multiple_models ? 'Multiple models' : value.model || 'N/A',
+          () => ReportView.display(value, 'ccost'), value.prompt_count == null ? 'N/A' : String(value.prompt_count),
+          () => ReportView.display(value, 'duration_ms')];
+        row.metrics.forEach((node, index) => {
+          const key = ['model', 'ccost', 'prompts', 'duration'][index];
+          const state = value.metric_states?.[key] || value.metric_state || (value.indexed ? 'ready' : 'pending');
+          const missing = (!value.has_summary && !value.indexed && state !== 'retained') ||
+            (key === 'model' && state === 'pending' && (!value.model || value.model === 'N/A'));
+          ReportView.text(node, missing ? state === 'pending' ? 'Loading…' : 'Unavailable' : texts[index]);
+          node.className = 'help-value' + (missing ? ' session-metric-pending' : '');
+          if (missing && state === 'pending') node.setAttribute('aria-busy', 'true');
+          else node.removeAttribute('aria-busy');
+        });
+        ContextHelp.refresh(row);
+        if (!keepOrder && this.body.children[index] !== row) this.body.insertBefore(row, this.body.children[index] || null);
+        else if (!row.parentNode) this.body.append(row);
       });
     }
   }

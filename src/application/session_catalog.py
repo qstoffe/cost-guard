@@ -52,6 +52,8 @@ class SessionCatalog:
         self.failures = {}
         self.activity = {}
         self.active = frozenset()
+        self.prompt_activity = {}
+        self.watch_activity = {}
         self.leases = OrderedDict()
         self.state = "loading"
         self.dependencies = None
@@ -77,11 +79,32 @@ class SessionCatalog:
                            if key in self.roots and value[0] == self.revisions.get(key)
                             and previous_roots[key].provenance == self.roots[key].provenance}
             self.rows = {key: row for key, row in self.rows.items()
-                         if previous_roots[key].provenance == self.roots[key].provenance}
+                          if previous_roots[key].provenance == self.roots[key].provenance}
+            self.prompt_activity = {key: value for key, value in self.prompt_activity.items()
+                if key in self.roots and previous_roots[key].provenance == self.roots[key].provenance}
             self.failures = {key: failure for key, failure in self.failures.items()
                              if key in self.roots and previous_roots[key].provenance == self.roots[key].provenance
                              and failure[0] == self.revisions.get(key)}
             self.state = "observed"
+
+    def observe_prompts(self, evidence):
+        """Canonical Watch captures only: root identity, lifecycle and original age.
+
+        Repeated publication never renews a capture. Candidates are admission hints,
+        not proof; scalar/pricing acquisition cannot invalidate independent proof.
+        """
+        with self.lock:
+            self.watch_activity = {root.session_id: (self.clock() - age, running)
+                for root, running, age in evidence if 0 <= age <= 15
+                and root.session_id in self.roots
+                and root.provenance == self.roots[root.session_id].provenance}
+
+    def _running(self, key, fallback):
+        if self.state != "observed" or key not in self.roots:
+            return False
+        signals = [value for value in (self.prompt_activity.get(key), self.watch_activity.get(key))
+                   if value is not None and 0 <= self.clock() - value[0] <= 15]
+        return max(signals, key=lambda value: (value[0], not value[1]))[1] if signals else fallback
 
     def _current(self, key):
         value = self.valid.get(key)
@@ -159,6 +182,7 @@ class SessionCatalog:
                         if actual == revision:
                             self.rows[key] = row
                             self.valid[key] = actual, self.clock()
+                            self.prompt_activity[key] = self.attempted[key], row.running
                             self.failures.pop(key, None)
                         else:
                             self.failures[key] = revision, False
@@ -224,7 +248,10 @@ class SessionCatalog:
                 unavailable = self.index_unavailable or self.state == "source_unavailable" or key in self.failures or key not in self.roots
                 row["metric_state"] = ("retained" if row["has_summary"] else "unavailable") if unavailable else (
                     "ready" if current else "retained" if row["has_summary"] else "pending")
-                row["running"] = bool(row["running"] and current and not unavailable)
+                row["running"] = self._running(key, bool(row["running"] and current and not unavailable))
+                row["metric_states"] = {name: row["metric_state"] for name in ("model", "ccost", "prompts", "duration")}
+                if row["running"] and not unavailable and self.rows.get(key) and self.rows[key].model_pending:
+                    row["metric_states"]["model"] = "pending"
             return dict(token=token, epoch=epoch, offset=offset, total=len(rows), size=50,
                 sort=applied, direction=order, pending_sort=pending, indexed=indexed,
                 available=len(self.roots), state=self.state, view=result)

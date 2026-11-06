@@ -11,8 +11,10 @@ from development.tests.fixtures.compact_reports import report_service
 from development.tests.fixtures.synthetic_month import SyntheticMonthSource
 from development.tests.fixtures.watch_runtime import make_service
 from src.application.session_catalog import SessionCatalog, SORTS
+from src.domain import ModelRef
 from src.reports.models import SessionUsageRow
 from src.reports.session_summary import ALGORITHM, NAMESPACE, session_summary, summary_key
+from src.reports.watch_capture import capture_rows
 from src.sources.errors import SourceUnavailableError, SourceSchemaError
 from src.watch.observers import observe_catalog
 from src.web.session_catalog import catalog_page
@@ -282,6 +284,171 @@ class SessionCatalogTests(unittest.TestCase):
         for request in ({"offset": True}, {"offset": 1}, {"direction": True}, {"sort": "raw"}, {"action": "scan"}):
             with self.subTest(request=request), self.assertRaises(ValueError):
                 catalog_page(self.catalog, request)
+
+    def test_cold_running_proof_survives_scalar_churn_but_not_age_outage_or_newer_finish(self):
+        root = self.catalog.roots["root-0119"]
+        self.catalog.active = frozenset((root.session_id,))
+        first = self.catalog.page()
+        self.assertFalse(first["view"]["session_usage"][0]["running"], "a candidate alone is not proof")
+        self.catalog.observe_prompts(((root, True, 0),))
+        cold = self.catalog.page(token=first["token"])["view"]["session_usage"][0]
+        self.assertTrue(cold["running"])
+        self.assertEqual(cold["title"], root.title)
+        self.assertEqual(cold["metric_state"], "pending")
+        self.assertFalse(cold["has_summary"])
+        self.index()
+        snapshot = self.source.snapshots[root.session_id]
+        self.source.snapshots[root.session_id] = replace(snapshot, source_revision="streaming")
+        self.clock = 5
+        self.observe()
+        self.catalog.observe_prompts(((root, True, 5),))
+        retained = self.catalog.page(token=first["token"])["view"]["session_usage"][0]
+        self.assertTrue(retained["running"])
+        self.assertEqual(retained["metric_state"], "retained")
+        self.catalog.index_failed()
+        self.assertTrue(self.catalog.page(token=first["token"])["view"]["session_usage"][0]["running"],
+                        "pricing/index failure cannot erase independent prompt proof")
+        self.catalog.observe(None, unavailable=True)
+        self.assertFalse(self.catalog.page(token=first["token"])["view"]["session_usage"][0]["running"])
+        self.observe()
+        self.clock = 16
+        self.catalog.observe_prompts(((root, True, 16),))
+        self.assertFalse(self.catalog.page(token=first["token"])["view"]["session_usage"][0]["running"],
+                         "repeated publication must not renew stale proof")
+        self.catalog.prompt_activity[root.session_id] = (15, True)
+        self.catalog.observe_prompts(((root, False, 0),))
+        self.assertFalse(self.catalog.page(token=first["token"])["view"]["session_usage"][0]["running"])
+        self.clock = 17
+        self.catalog.observe_prompts(((root, True, 0),))
+        self.assertTrue(self.catalog.page(token=first["token"])["view"]["session_usage"][0]["running"])
+        foreign = replace(root, provenance=replace(root.provenance, source_instance="foreign"))
+        self.catalog.prompt_activity.clear()
+        self.catalog.observe_prompts(((foreign, True, 0),))
+        self.assertFalse(self.catalog.page(token=first["token"])["view"]["session_usage"][0]["running"])
+
+    def test_live_summary_fields_advance_independently_and_unknowns_are_not_zero(self):
+        source = SyntheticMonthSource(1, 1, month_start_ms=1000, running_roots=1)
+        service = report_service(self, source, now_ms=100_000)
+        catalog = SessionCatalog(clock=lambda: self.clock)
+        catalog.observe(observe_catalog(source, include_archived_revisions=True))
+        page = catalog.page()
+        catalog.tick(service)
+        initial = catalog.page(token=page["token"])["view"]["session_usage"][0]
+        self.assertTrue(initial["running"])
+        self.assertEqual(initial["prompt_count"], 1)
+        self.assertNotEqual(initial["model"], "N/A")
+        for count in (2, 3):
+            newer = SyntheticMonthSource(1, count, month_start_ms=1000, running_roots=1)
+            snapshot = newer.snapshots["root-0000"]
+            source.snapshots["root-0000"] = replace(snapshot, source_revision=f"usage-{count}")
+            self.clock += 6
+            catalog.observe(observe_catalog(source, include_archived_revisions=True))
+            catalog.tick(service)
+            current = catalog.page(token=page["token"])["view"]["session_usage"][0]
+            self.assertEqual(current["prompt_count"], count)
+            self.assertGreater(Decimal(current["ccost"]), Decimal(initial["ccost"]))
+        row = catalog.rows["root-0000"]
+        catalog.rows["root-0000"] = replace(row, model="N/A", ccost=Decimal("1.25"), complete=False,
+                                           prompt_count=0, duration_ms=None, model_pending=True)
+        unknown = catalog.page(token=page["token"])["view"]["session_usage"][0]
+        self.assertEqual(unknown["metric_states"]["model"], "pending")
+        self.assertEqual(unknown["metric_states"]["duration"], "ready")
+        self.assertEqual(unknown["prompt_count"], 0)
+        self.assertIsNone(unknown["duration_ms"])
+        self.assertIn("?", unknown["display"]["ccost"])
+        source.snapshots["root-0000"] = replace(SyntheticMonthSource(1, 3, month_start_ms=1000)
+            .snapshots["root-0000"], source_revision="finished")
+        self.clock += 6
+        catalog.observe(observe_catalog(source, include_archived_revisions=True))
+        catalog.tick(service)
+        ended = catalog.page(token=page["token"])["view"]["session_usage"][0]
+        self.assertFalse(ended["running"])
+        self.clock += 60
+        idle = catalog.page(token=page["token"])["view"]["session_usage"][0]
+        self.assertEqual((idle["ccost"], idle["duration_ms"]), (ended["ccost"], ended["duration_ms"]))
+
+    def test_contributors_are_distinct_provider_qualified_bounded_and_allowlisted(self):
+        root = self.catalog.roots["root-0000"]
+        item = self.service._analyze(root, detail=True)
+        entry = item.bundle.trace_entries[0]
+        entries = (entry, entry, replace(entry, session_id="attributed-child", model=ModelRef("other", "gpt-test")))
+        item = replace(item, bundle=replace(item.bundle, trace_entries=entries),
+                       snapshot=replace(item.snapshot, complete=True))
+        row = self.service._session_rows((item,))[0]
+        self.assertTrue(row.multiple_models)
+        self.assertEqual(row.contributor_models, ("github-copilot/gpt-test", "other/gpt-test"))
+        self.assertTrue(row.contributor_models_complete)
+        self.catalog.rows[root.session_id] = row
+        self.catalog.valid[root.session_id] = self.catalog.revisions[root.session_id], self.clock
+        exported = next(value for value in self.catalog.page(sort="name", direction=1)["view"]["session_usage"]
+                        if value["session_id"] == root.session_id)
+        self.assertEqual(exported["contributor_models"], list(row.contributor_models))
+        self.assertNotIn("trace_entries", exported)
+        many = tuple(replace(entry, model=ModelRef("provider", f"model-{index:03}")) for index in range(70))
+        bounded = self.service._session_rows((replace(item, bundle=replace(item.bundle, trace_entries=many)),))[0]
+        self.assertEqual(len(bounded.contributor_models), 64)
+        self.assertFalse(bounded.contributor_models_complete)
+
+    def test_old_and_malformed_contributor_cache_payloads_are_not_authoritative(self):
+        root = self.catalog.roots["root-0000"]
+        revision = self.catalog.revisions[root.session_id]
+        session_summary(self.service, root, revision)
+        key = summary_key(self.service, root)
+        cached = self.service.cache_repository.get(NAMESPACE, key)
+        for models in (["not-qualified"], ["z/model", "a/model"], ["a/model"] * 65):
+            payload = dict(cached.payload, contributor_models=models)
+            self.service.cache_repository.put(NAMESPACE, key, payload, source_revision=revision, algorithm_version=ALGORITHM)
+            with patch.object(self.service, "_analyze", wraps=self.service._analyze) as acquire:
+                session_summary(self.service, root, revision)
+            self.assertEqual(acquire.call_count, 1)
+        self.service.cache_repository.put(NAMESPACE, key, cached.payload, source_revision=revision,
+                                           algorithm_version="session-summary-1")
+        with patch.object(self.service, "_analyze", wraps=self.service._analyze) as acquire:
+            session_summary(self.service, root, revision)
+        self.assertEqual(acquire.call_count, 1)
+
+    def test_web_adapter_shares_fresh_canonical_watch_proof_without_new_acquisition(self):
+        source = SyntheticMonthSource(1, 1, month_start_ms=1000, running_roots=1)
+        source.snapshots["root-0000"] = replace(source.snapshots["root-0000"], complete=True)
+        service = report_service(self, source, now_ms=5000)
+        root = source.snapshots["root-0000"].root
+        capture, item = capture_rows(service, root)
+        self.assertTrue(any(row.in_progress for row in capture.rows))
+        entry = SimpleNamespace(capture=capture, snapshot=item.snapshot, source_status=SimpleNamespace(failed_at=None))
+        owner = SimpleNamespace(catalog_observation=observe_catalog(source, include_archived_revisions=True),
+            cards=SimpleNamespace(sessions={root.session_id: entry}), clock_ms=lambda: 6000,
+            catalog_job=None, _closed=True)
+        catalog = SessionCatalog(clock=lambda: self.clock)
+        loads = source.load_count
+        WebWatchCoordinator.tick_catalog(owner, catalog)
+        cold = catalog.page()["view"]["session_usage"][0]
+        self.assertTrue(cold["running"])
+        self.assertFalse(cold["has_summary"])
+        self.assertEqual(source.load_count, loads)
+        entry.source_status.failed_at = 0
+        WebWatchCoordinator.tick_catalog(owner, catalog)
+        self.assertFalse(catalog.page()["view"]["session_usage"][0]["running"])
+        entry.source_status.failed_at = None
+        entry.capture = replace(capture, retained=True)
+        WebWatchCoordinator.tick_catalog(owner, catalog)
+        self.assertFalse(catalog.page()["view"]["session_usage"][0]["running"])
+
+    def test_pending_model_requires_pre_request_execution_not_an_unknown_physical_model(self):
+        root = self.catalog.roots["root-0000"]
+        item = self.service._analyze(root, detail=True)
+        prompt = replace(item.bundle.prompts[0], main_model_id="", in_progress=True)
+        waiting = replace(item, bundle=replace(item.bundle, trace_entries=(), prompts=(prompt,)))
+        row = self.service._session_rows((waiting,))[0]
+        self.assertTrue(row.model_pending)
+        self.assertEqual(row.prompt_count, 1)
+        self.assertFalse(row.contributor_models_complete)
+        selected = replace(prompt, main_model_id="source-selected-model")
+        row = self.service._session_rows((replace(waiting, bundle=replace(waiting.bundle, prompts=(selected,))),))[0]
+        self.assertEqual(row.model, "source-selected-model")
+        self.assertFalse(row.model_pending)
+        entry = replace(item.bundle.trace_entries[0], model=ModelRef("unknown", "N/A"))
+        unknown = replace(item, bundle=replace(item.bundle, trace_entries=(entry,), prompts=(prompt,)))
+        self.assertFalse(self.service._session_rows((unknown,))[0].model_pending)
 
 
 if __name__ == "__main__":

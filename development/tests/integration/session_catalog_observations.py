@@ -18,6 +18,8 @@ def observe_sessions(get, cookie, host, driver):
     first_seconds = time.monotonic() - started
     original = {row['session_id'] for row in page['view']['session_usage']}
     arrival = None
+    cold_running = 0
+    multiple_model_rows = 0
     for _ in range(30):
         current = request('/api/sessions', dict(token=token, sort='ccost'))
         coverage.append(current['indexed'])
@@ -26,6 +28,12 @@ def observe_sessions(get, cookie, host, driver):
         if current['pending_sort']:
             assert current['sort'] == 'activity'
         latest = request('/api/sessions', dict(token=token))
+        for row in latest['view']['session_usage']:
+            models = row['contributor_models']
+            assert len(models) <= 64 and all(isinstance(value, str) and 0 < len(value) <= 256 for value in models)
+            assert models == sorted(set(models))
+            cold_running += bool(row['running'] and not row['has_summary'])
+            multiple_model_rows += bool(row['multiple_models'] and len(models) > 1)
         visible_coverage.append(sum(row['indexed'] for row in latest['view']['session_usage']))
         if original and any(row['session_id'] not in original for row in latest['view']['session_usage']):
             arrival = 'changed_first_page_observed; no session created by probe'
@@ -67,6 +75,9 @@ def observe_sessions(get, cookie, host, driver):
             visible_metric_states={state: sum(row.get('metric_state') == state for row in latest['view']['session_usage'])
                                    for state in ('ready', 'pending', 'retained', 'unavailable')},
             metric_sort='pending' if current['pending_sort'] else 'global',
+            cold_running_observations=cold_running, multi_model_observations=multiple_model_rows,
+            contributor_contract='validated bounded distinct identities; no identities exported by probe',
+            exact_owner_incident='not established by this read-only observation',
             first_page_seconds=round(first_seconds, 3), observation_seconds=round(time.monotonic() - started, 3),
             natural_arrival=arrival or 'unobserved; source-to-browser arrival latency not measured',
             detail_rows=len(rows), detail_chunks=len(sizes), detail_max_bytes=max(sizes),

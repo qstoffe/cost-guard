@@ -121,6 +121,18 @@ Actual checks and explicit proof limits: [Reports retirement verification](../go
 
 `application/session_catalog.py` owns full observed membership, six exact server comparators and stable older-page epochs. Seven latest-visible-page admissions alternate with one oldest-attempt background turn, within four-root/two-second admission slices; unchanged validated scalars are reused. Per-root failures expose unavailable/retained states with bounded backoff, terminal failures wait for changed evidence, and lane-wide failure never masquerades as pending. Running requires current successful evidence. `reports/session_summary.py` caches source/dependency/algorithm-checked scalars; active/running roots bypass reuse. Every metric key must validate before global sorting, otherwise activity order is explicit. `watch/web_coordinator.py` shares catalog observations and isolates this lane from detail, account history and four card workers. HTTP never acquires history; transport/cancellation still bounds individual reads.
 
+FR 000616 separates scalar validity from fresh canonical prompt lifecycle proof.
+`tick_catalog` hands off only authoritative, nonretained, healthy Watch captures with
+their original ages and snapshot root provenance; catalog also retains successful scalar
+lifecycle observations for at most 15 seconds across revision churn. Newer terminal proof
+wins; source outage/identity mismatch/age cannot assert running. This adds no acquisition.
+The report row carries up to 64 distinct sorted provider/model identities (256 characters
+each), contributor-set completeness and an internal pre-request model-pending flag.
+Only identities/completeness cross the Web allowlist; summary algorithm 2 validates the
+new scalar schema. `sessions.js` keeps row/cell/link/text-help identity, updates metrics
+even under focus/selection, and defers only protected structural changes. Help uses the
+shared controller and current observed list, never raw prompt data or browser valuation.
+
 `assets/app.css` shares the Watch-derived compact header/cell/divider/rounded-shell contract across semantic Sessions, Models and both Token Mix tables, preserving their individual tracks/sorts. Sessions uses browser-local numeric date fields (not locale-string parsing), accessible pending cells and URL-backed pager buttons. Detail's adaptive preview keeps intrinsic numeric columns; a separate prepared first-request context token preserves raw values and richer CLI/Watch transitions. Indeterminate progress belongs only to initial/pinned acquisition, not complete-history background checks. No new acquisition owner, timer, source or pricing boundary is introduced.
 
 `application/session_detail.py` round-robins captures on the isolated detail lane. `begin` pins a capture and `chunk` reads rich 25-row slices from that same revision while acquisition may advance; full totals remain canonical. Compatibility 50-row `page`/`freeze` remain API-only. `reports/session_history.py` retains canonical evidence outside durable caches; omissions freeze lifecycle/time rather than falsely complete rows. Unchanged running evidence reuses attribution/valuation. The browser batches new DOM suffixes, retains keyed rows/selection/focus/document anchors, closes obsolete leases and has one five-second polling timer through navigation races. Web→application→reports is unchanged; missing/archive/outage is not empty success. Scope/cache/route inventory: `docs/web-beta.md`; measured evidence and the scoped cold-index exception: [Sessions findings](../../journal/web/sessions-live.md).
