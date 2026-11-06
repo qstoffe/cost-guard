@@ -8,6 +8,7 @@ Status: current
 Installed OpenCode Toolkit shared repository skills own development procedures. Source remains authoritative; historical measurements are not current PASS claims. External reference: https://github.com/qstoffe/opencode-toolkit/tree/main/skills/shared-repo-contract .
 
 - [Performance investigations](PERFORMANCE.md): 2026-11-05 milestone-40 NO_GAIN assessment separates current bounded Normal/Watch and deep Token Mix baselines, repairs the benchmark's unsampled-running expectation and retains superseded measurements with their original limits.
+- [Session Learning](session-learning.md): milestone-50 INCONCLUSIVE assessment, Decision-Delegate-authorized deferral and origin-local proposal for candidate-preserving bounded evidence; no historical-task PASS or completed learning claim.
 - History acquisition and startup: `development/architecture/modules/history-loading.md` retains scopes, measurements and unresolved terminal/live proof.
 - [OpenAI identity, TLS and quota evidence](openai-identity.md): canonical aliases, method/resource boundaries, Windows expired-intermediate repair, live intended-account Watch refresh and explicit verification limits.
 - Architecture and owners: `development/architecture/OVERVIEW.md` routes module contracts and source/tests.
