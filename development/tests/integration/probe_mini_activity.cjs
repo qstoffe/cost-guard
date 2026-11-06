@@ -14,11 +14,11 @@ module.exports = async function activity({evaluate,until,fixture,command,pip,own
   await evaluate('window.activityRow=miniWatch.view.historyBody.rows[0];window.activityTime=activityRow.cells[0].firstChild');
   assert.deepEqual((await values()).map(row=>[row.time,row.help]),[
     ['23:47','2026-11-05 23:47 +0100'],['00:08','2026-11-06 00:08 +0100'],['—','Unknown finish time']]);
-  assert.ok((await values()).every(row=>row.columns===3 && row.focus===0 && !row.native));
+  assert.ok((await values()).every(row=>row.columns===4 && row.focus===0 && !row.native));
   assert.deepEqual(await evaluate(`[...miniWatch.view.historyBody.parentNode.querySelectorAll('th')].map(n=>n.textContent)`),
-    ['Activity','Session (Total CCost)','Ctx']);
+    ['Activity','Session','CCost (Total)','Ctx']);
   assert.deepEqual(await evaluate(`[...miniWatch.view.body.parentNode.querySelectorAll('th')].map(n=>n.textContent)`),
-    ['Session (Total CCost)','#','CCost','Duration','Ctx']);
+    ['Session','CCost (Total)','Duration','Ctx']);
   await evaluate('miniWatch.window.resizeTo(650,550)',true); await settle();
   await key('Tab'); await evaluate('activityTime.focus({preventScroll:true})');
   const help = `miniWatch.view.doc.getElementById('context-help')`;
@@ -58,16 +58,18 @@ module.exports = async function activity({evaluate,until,fixture,command,pip,own
             activityWidth:rect(rows[0].cells[0]).width,sessionWidth:rect(rows[0].cells[1]).width,
             nowrap:rows.every(row=>w.getComputedStyle(row.cells[0]).whiteSpace==='nowrap'),
             alignment:rows.every(row=>Math.abs(rect(row.cells[0]).right-rect(v.historyBody.parentNode.rows[0].cells[0]).right)<1),
-            totals:rows.every(row=>{const n=row.querySelector('.mini-session-total'),c=row.cells[1];return n.scrollWidth<=n.clientWidth+1 && rect(n).right<=rect(c).right+1;}),
-            context:rows.every(row=>row.cells[2].textContent!=='')};})()`);
+            totals:rows.every(row=>{const n=row.querySelector('.mini-cost-value'),c=row.cells[2];return n.scrollWidth<=n.clientWidth+1 && rect(n).right<=rect(c).right+1;}),
+            context:rows.every(row=>row.cells[3].textContent!=='')};})()`);
         assert.equal(layout.documentOverflow,false); assert.equal(layout.totals,true); assert.equal(layout.context,true);
         assert.equal(layout.nowrap,true); assert.equal(layout.alignment,true);
         if(layout.inner>=600) {assert.equal(layout.horizontal,false);assert.equal(layout.vertical,false);assert.ok(layout.activityWidth<layout.sessionWidth);}
-        if(width===280) assert.equal(layout.horizontal,true,'genuinely narrow windows retain accessible horizontal panning');
+        // Name-only Session has a smaller minimum than the former split heading;
+        // these small values may fit at 280. Oversized paired-cost cases separately
+        // require horizontal panning rather than clipping either amount.
         layouts.push({case:`activity-${theme}-${color}-${width}-${unit}`,...layout});
       }
     }
   }
   await evaluate(`ReportView.setUnit('credits');miniWatch.settings();miniWatch.window.resizeTo(650,550)`,true); await settle();
-  checks.push('Activity-only three-column history; server midnight/DST/unknown tokens; stable live focus/help, delayed hover and real touch; four themes, Credits/USD and nominal/narrow PiP geometry');
+  checks.push('Four-column history retains Activity midnight/DST/unknown tokens; stable live focus/help, delayed hover and real touch; four themes, Credits/USD and nominal/narrow PiP geometry');
 };

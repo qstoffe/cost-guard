@@ -113,7 +113,7 @@ or lifecycle owner changes. Additive report-owned `incoming_context_ccost_known`
 I/C/W/O coverage. Only cards export those flags to the immutable display adapter, which
 withholds unsupported component tokens without altering raw/CLI/other-report values.
 Unknown components stay independent, partial totals retain
-coverage, and Mini Watch still renders only the prompt total. Header help and intrinsic
+coverage. Mini Watch pairs that prompt total with its independent whole-session total, without the I/E split. Header help and intrinsic
 metric widths remain shared. `test_watch_prompt_cost.py`, `integration/web_watch_prompt_cost.cjs`
 and `fixtures/watch_cost_browser.cjs` pin parity, units, unknowns and actual hidden layout.
 
@@ -164,10 +164,15 @@ never restyle the owner, Classic or browser-native chrome. No layer boundary cha
 
 Mini renders canonical active/focal card identities, not the running aggregate: one
 keyed row per prompt with prompt-local cost/duration/context and shared terminal grace.
-The first cell left-anchors an independently ellipsized title and right-anchors
-`(session_summary.cost)` at its natural width, without a header-sized reservation.
-The same internal grid splits `Session` / `(Total CCost)` in one heading, retaining
-both labels' intrinsic minima. Its header's neutral
+Both tables have four columns: active `Session | CCost (Total) | Duration | Ctx`,
+historical `Activity | Session | CCost (Total) | Ctx`. Session contains only the flexible,
+ellipsized title; the cost cell pairs `prompt.ccost (session_summary.cost)` at its
+intrinsic nonwrapping width, using independent shared display/state handling.
+Active Session help preserves the canonical prompt ordinal and full title;
+historical cost help reads the canonical singleton representative's model/effort,
+duration, known calls and relevant linked/mixed/partial/outcome evidence, not another
+prompt or browser aggregation. Stable value nodes use shared ContextHelp without
+native titles, row-wide help or dedicated cues. Its header's neutral
 Earlier Sessions disclosure starts collapsed per new PiP document and survives publications.
 It takes the last three of the shared eligible, oldest-to-newest `history_cards`, excludes
 active/grace session IDs, and uses `session_summary.context`, never historical prompt Ctx.

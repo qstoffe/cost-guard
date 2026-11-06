@@ -77,6 +77,24 @@ class MiniWatchTests(unittest.TestCase):
         result = running_prompts((self.cards[0], terminal), "observed")
         self.assertEqual((1, D("1.25"), 600_000), (result.count, result.ccost, result.duration_ms))
 
+    def test_historical_cost_and_help_export_the_same_representative_prompt(self):
+        latest = replace(self.second, in_progress=False, watch_model="Historical model",
+            watch_effort="high", calls=17, linked_agent_count=2, has_additional_model=True,
+            unresolved_cost=True, aborted=True, abort_reason="quota_limit")
+        history = replace(self.cards[0], focal_id="", rows=(WatchRow("same-session", "Concurrent", latest),))
+
+        wire = project_live(replace(self.frame, history_cards=(history,))).to_json()
+        card = wire["history_cards"][0]
+        item = card["rows"][0]
+
+        self.assertEqual("2.75", item["prompt"]["ccost"])
+        self.assertEqual(24, item["prompt"]["prompt_number"])
+        self.assertEqual(("Historical model", "high", 1_200_000),
+            (item["model"], item["effort"], item["watch_duration_ms"]))
+        self.assertEqual((17, 2, True, "quota_limit"), (item["prompt"]["calls"],
+            item["prompt"]["linked_agent_count"], item["prompt"]["has_additional_model"], item["prompt"]["abort_reason"]))
+        self.assertEqual("4582.125", card["session_summary"]["cost"]["known_ccost"])
+
     def test_pending_unknown_partial_estimate_and_genuine_empty_are_distinct(self):
         for state in ("loading", "partial", "unavailable"):
             pending = running_prompts((), state)

@@ -25,17 +25,15 @@ body { padding: .5rem; max-width: none; }
 .mini-prompt-table th { position: sticky; top: 0; z-index: 1; background: var(--surface); text-align: center; }
 .mini-prompt-table th:first-child, .mini-prompt-table td:first-child { border-left: 1px solid var(--line); }
 .mini-prompt-table th { border-top: 1px solid var(--line); }
-/* Metrics and the nonshrinking total set intrinsic minima. Only the title flexes. */
+/* Both cost scopes and the other metrics set intrinsic minima. Only the title flexes. */
 .mini-prompt-table th:not(.mini-session-cell) { width: 1%; }
-.mini-session-value { display: grid; grid-template-columns: minmax(0, 1fr) max-content; }
+.mini-session-value { display: grid; grid-template-columns: minmax(0, 1fr); }
 .mini-source-note { grid-column: 1 / -1; white-space: normal; font-size: .7rem; color: var(--warn); }
 .mini-source-note:empty { display: none; }
 .mini-daily-note { display: block; font-size: .7rem; color: var(--warn); }
-.mini-session-heading { grid-template-columns: minmax(max-content, 1fr) max-content; text-align: left; }
-.mini-session-heading > .help-trigger { justify-self: start; }
 .mini-session, .mini-empty { display: block; width: 0; min-width: 100%; }
 .mini-session { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mini-session-total { white-space: pre; }
+.mini-cost-value { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .mini-prompt-table th .help-trigger { white-space: pre; }
 .mini-empty { white-space: normal; overflow-wrap: anywhere; }
 .mini-prompt-table td { font-variant-numeric: tabular-nums; text-align: right; }

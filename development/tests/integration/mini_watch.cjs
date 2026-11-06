@@ -84,14 +84,13 @@ function setup() {
   let view = controller.view;
   assert.equal(view.doc.documentElement.dataset.theme, 'classic');
   assert.equal(view.body.children.length, 2);
-  assert.equal(view.body.children[0].children[1].textContent, '#23');
-  assert.equal(view.body.children[0].children[2].textContent, '2');
-  assert.equal(view.body.children[1].children[2].textContent, '3');
-  assert.equal(view.body.children[1].children[3].textContent, '20m');
+   assert.equal(view.body.children[0].children[1].textContent, '2 (4583)');
+   assert.equal(view.body.children[1].children[1].textContent, '3 (4583)');
+   assert.equal(view.body.children[1].children[2].textContent, '20m');
   assert.equal(view.health.textContent, ''); assert.equal(view.health.hidden, true);
   const table = view.body.parentNode, headers = table.querySelectorAll('th');
-  assert.equal(headers[4].textContent, 'Ctx');
-  assert.match(helpText(headers[4].children[0]), /Estimated context for this prompt’s next request[\s\S]*N\/A means unavailable, not zero/);
+   assert.equal(headers[3].textContent, 'Ctx');
+   assert.match(helpText(headers[3].children[0]), /Estimated context for this prompt’s next request[\s\S]*N\/A means unavailable, not zero/);
   assert.match(table.attributes['aria-label'], /estimated next incoming context \(Ctx\)/);
   assert.equal(view.body.querySelectorAll('button').length,0,'ordinary values have no duplicate help controls');
   assert.equal(view.earlierToggle.events.focus,undefined,'disclosure has no tooltip');
@@ -101,10 +100,10 @@ function setup() {
   for (const formatted of ['123 456', '234 567', '0', 'N/A', '~source-format']) {
     contextItem.live_context = {display:{watch_next_context_tokens:formatted}};
     controller.update(input);
-    assert.equal(view.body.children[0].children[4].textContent, formatted, 'Ctx uses the source format without adding or stripping characters');
+     assert.equal(view.body.children[0].children[3].textContent, formatted, 'Ctx uses the source format without adding or stripping characters');
   }
   contextItem.live_context = null; controller.update(input);
-  assert.equal(view.body.children[0].children[4].textContent, 'N/A');
+   assert.equal(view.body.children[0].children[3].textContent, 'N/A');
   contextItem.live_context = originalContext; controller.update(input);
   assert.equal(view.daily.textContent, 'CCost Today 34 · 37 prompts', 'prior activity is not the two prompt rows or account-period costs');
   assert.equal(view.dailyNote.textContent,'');
@@ -198,7 +197,7 @@ function setup() {
   assert.equal(view.body.children.length, 2, 'deduplicated by source session and event, not aggregate count');
   assert.equal(view.body.children[0], firstRow, 'canonical ascending start order and keyed row');
   assert.equal(firstRow.children[0], firstCell, 'focusable title cell survives updates');
-  assert.match(view.body.children[1].children[1].attributes['aria-label'], /Running/);
+   assert.match(view.body.children[1].attributes['aria-label'], /Prompt 24 · Running/);
   for (const [outcome, className, label] of [
     [{in_progress:false,completed_successfully:true},'mini-success','Completed'],
     [{in_progress:false,completed_successfully:false,aborted:true,abort_reason:'quota_limit'},'mini-error','Aborted · quota limit'],
@@ -208,7 +207,7 @@ function setup() {
     const terminal = view.body.children[1];
     assert.equal(terminal.className,className); assert.ok(terminal.attributes['aria-label'].includes(label));
     assert.equal(terminal.querySelectorAll('button').length,0,'status has no popover');
-    assert.equal(terminal.children[3].textContent,'20m'); Object.assign(prompt,saved);
+     assert.equal(terminal.children[2].textContent,'20m'); Object.assign(prompt,saved);
   }
   input.view.active_cards = []; controller.update(input);
   assert.match(view.body.textContent,/No running or recently ended prompts/);
@@ -241,7 +240,7 @@ function setup() {
   controller.update(input); assert.match(retained.textContent,/8.4% used \(\?\)/,'known percentage survives unknown pricing');
   primary.estimated = false; primary.cost = savedCost; primary.quota = savedQuota; controller.update(input);
   vm.runInContext('ReportView.setUnit("usd")', context); owner.document.documentElement.dataset.theme = 'web'; controller.settings();
-  assert.equal(view.body.children[0].children[2].textContent, '$0.01'); assert.match(retained.textContent, /\(\$18.14\)/);
+   assert.equal(view.body.children[0].children[1].textContent, '$0.01 ($45.82)'); assert.match(retained.textContent, /\(\$18.14\)/);
   assert.equal(child.document.documentElement.dataset.theme, 'web');
   const themeStyle = child.document.documentElement.style;
   assert.equal(themeStyle.getPropertyValue('--bg'),'#eef2f8','PiP uses owner-resolved Web tokens');
@@ -261,7 +260,7 @@ function setup() {
     controller.health({kind});
     assert.equal(view.health.hidden, ['reconnecting','offline','source_unavailable'].includes(kind));
     if (!view.health.hidden) assert.match(view.health.textContent,/return to|reopen|restart/);
-    assert.equal(view.body.children[1].children[3].textContent, '20m');
+     assert.equal(view.body.children[1].children[2].textContent, '20m');
     assert.equal(view.daily.textContent,'CCost Today $0.34 · 37 prompts');
   }
   controller.health({kind: 'connected'}); now += 16000;

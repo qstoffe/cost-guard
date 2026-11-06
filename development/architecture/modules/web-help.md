@@ -46,8 +46,8 @@ application and separate Mini Watch document. FR 000601 grouped-detail follow-up
   action; bind pointer entry/exit, movement fallback and panel positioning to the
   label. Update that returned label, not the action's entire content. Empty action
   space still sorts but neither opens help nor highlights the header/label.
-  Mini's Session and Total CCost are separate intrinsic buttons in the existing
-  edge-anchored grid; its empty middle track is not a help target.
+  Mini's Session and CCost (Total) are separate column headings. Each cost heading
+  explains prompt cost followed by the entire session's cost in parentheses.
 - Functions read current display tokens. `ContextHelp.refresh(container)` updates
   open help without reopening it; `ReportView.syncUnits` refreshes once after text
   updates. Never price or total data inside a help function.
@@ -92,8 +92,8 @@ application and separate Mini Watch document. FR 000601 grouped-detail follow-up
 | Watch: session Context/CCost and price warning | Concise shared context/cost help; severity and canonical threshold remain visible |
 | Watch: daily summary, account Today, primary/secondary quotas, exact reset | Four scoped daily text targets; Today/Capacity labels and numbers share intrinsic targets, reset clock owns exact date. Numeric inferred Capacity has `(guesstimate)`; verified native and unknown figures do not. Preserve native factual lower block |
 | Watch: activity and Earlier Sessions | Native disclosures retain full lists/counts; expanded activity cues explain all-call totals, red outcome subsets, missing evidence and direct skill failures without repeating lists |
-| Mini: both tables’ headings | Session and (Total CCost) have different help inside one column; dead space has none. Prompt cost and active-next versus historical-last-valid-next context remain distinct |
-| Mini: session title/cost and prompt/history status | Remove every row cue/duplicate value help. Keep full underlying selectable title and row accessible naming, prompt outcome/stop cause and confirmed unavailable/partial notes |
+| Mini: both tables’ headings | Session names only; CCost (Total) explains prompt versus whole-session reference cost, not billing. Active-next versus historical-last-valid-next context remains distinct |
+| Mini: session title/cost and prompt/history status | FR 000608's targeted exceptions: running Session reveals its full title and canonical Prompt #; historical paired-cost value reveals that latest prompt's model/effort/duration/known calls and relevant mixed/subagent/partial/outcome facts. No row-wide popup, native title, dedicated cue or raw prompt text. Preserve selectable title, row accessible naming and confirmed unavailable/partial notes |
 | Mini: Today, freshness, Earlier Sessions, quota bars, return-to-tab | Remove both header cues and all Earlier Sessions help; no table-level replacement or progress-bar popup. Keep useful return action help with immediate activation dismissal. Critical host/auth/source warnings stay visible, not observation logs |
 | Mini: subscriptions | Exactly two primary-window facts on the visible text: Capacity, then Next reset. Select canonical unit/provenance and reset tokens; no secondary or CCost prose. Warnings remain visible; Full Watch/Accounts retain richer help |
 | Models: checkboxes and multi-sort | Four semantic label-only definitions preserve full sorting click/keyboard/Shift actions and accessible action names; Relative CCost groups ratio, actual global completed sample, token categories, hidden fallback and source thresholds |

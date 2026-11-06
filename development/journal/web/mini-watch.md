@@ -1,5 +1,63 @@
 # Mini Watch and finished history
 
+## FR 000608 — v80.188 paired prompt/session costs, 2026-11-06
+
+Base `7843b3563e2906e80395f6b548652b951be7763f`. Mini alone now shows
+**Session | CCost (Total) | Duration | Ctx** for running/recent prompts and
+**Activity | Session | CCost (Total) | Ctx** for Earlier Sessions. Session is only
+the full underlying/visually ellipsized title. Both cost cells render the existing
+canonical prompt `ccost` followed by independent `session_summary.cost` in parentheses;
+no browser aggregation, pricing, data/schema or lifecycle owner changed.
+
+Active title help preserves the removed visible ordinal. The historical paired-cost
+value exposes only its canonical representative's model/provider identity, supported
+effort, finished duration and known calls, with relevant mixed/subagent/partial/failure
+caveats. Shared ContextHelp and stable spans preserve focus/open-help corrections and
+Escape suppression, without native titles, row-wide popups or new help icons.
+Four-column placeholders/empty colspan and intrinsic CSS keep both amounts readable;
+table growth cannot widen the existing header-only Fit request. Source-state notes,
+history membership/order, Activity/Ctx and disclosure-only sizing remain unchanged.
+User guide, Web module/help contract and code map updated; no architecture boundary moved.
+
+### Verification and limits
+
+- [Compact evidence](../../architecture/governance/verification/mini-costs-608.json):
+  focused Mini **8 tests**; Full **152 bounded units / 1,784 passed tests**, one existing
+  macOS zsh/PTY skip, **zero failures/errors, 95.4s**. Validator **11 passes**, zero
+  failures and six existing advisory warnings. No ZIP, tag or GitHub Release.
+- Strictly headless Chrome **156.0.8078.80**, scale 1 / actual zoom 100%, and Edge
+  **156.0.4314.58**, emulated device scale 1.5 / actual browser zoom 125%, each passed
+  **116 rendered layouts**, including **54 paired-cost cases** (108 total). These use
+  shipped HTTP/auth/CSP/SSE and owned disposable profiles, not personal browsers.
+  Oversized paired costs stay intact at three widths across font/CSS zoom, themes
+  and units; narrow layouts pan only inside the shared region. Real CDP keyboard,
+  delayed hover and touch expose prompt numbers/details; corrections keep focused
+  nodes and open help coherent, while Escape stays dismissed. Concurrent `49 (562)`
+  and `173 (562)` rows prove distinct cost scopes; N/A/zero/partial/pending components
+  are independently exercised. Header-based opening fit, two-row reserve, Activity
+  midnight/DST/unknown finishes and no passive native resizing also passed.
+- Edge's **six native-limited opening cases** are explicitly limitation/accessibility
+  results, not exact-fit PASS. Example requested 650 outer yields 427 inner CSS pixels
+  under scale/zoom clamps versus Chrome's 634. API resizing is not physical dragging.
+- Fresh read-only real installation: **V2 / 39 coherent publications / one running
+  prompt / three accounts / five history cards with known finishes**, one acquisition
+  owner, **23.999s**, owned shutdown **0.1s**. Shared OpenCode untouched; no inference.
+- The first browser run exposed an obsolete probe expectation: small Activity/cost
+  figures must overflow at 280. Name-only Session now has a smaller intrinsic minimum,
+  so those figures may fit. The corrected probe checks intact values; separate oversized
+  paired-cost cases still require horizontal panning. No product failure was waived.
+
+**Scoped exception — Decision Delegate:** after the integrated browser returned
+`browser.disconnected`, the delegate expressly approved omitting physical Windows
+native-frame/work-area, actual OS display scaling, manual dragging, monitor-transition
+and screen-reader speech verification for this FR only, despite installed physical
+browsers. Direct hidden layout/help/geometry and fresh source evidence are adequate
+for this bounded change; physical-only reassurance is not indispensable, so On Hold
+and an owner question were rejected. These checks remain **unperformed/unverified,
+not PASS**; emulated device scale and DOM accessibility are not physical OS or speech
+proof. No visible-desktop permission, functional-failure waiver or future exception
+was granted.
+
 ## FR 000607 — v80.187 intrinsic opening width, 2026-11-06
 
 Base `146c3af` (implementation started at `211c793`; unrelated Ready authoring

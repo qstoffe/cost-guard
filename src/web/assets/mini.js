@@ -95,8 +95,8 @@ const MiniWatch = (() => {
       const body = copy.querySelector('.mini-prompts > table > tbody');
       const rows = [...body.children].filter(row => !row.querySelector('.mini-empty'));
       const emptyHeight = rows.length ? 0 : body.getBoundingClientRect().height;
-      const sample = view.sessionRow(5);
-      ['Session', '#1', 'N/A', '0s', 'N/A'].forEach((text, index) => { sample.children[index].textContent = text; });
+      const sample = view.sessionRow();
+      ['Session', 'N/A (N/A)', '0s', 'N/A'].forEach((text, index) => { sample.children[index].textContent = text; });
       body.append(sample);
       const rowHeight = Math.max(sample.getBoundingClientRect().height,
         ...rows.map(row => row.getBoundingClientRect().height));
@@ -223,7 +223,7 @@ const MiniWatch = (() => {
       this.earlier.setAttribute('role', 'region'); this.earlier.setAttribute('aria-labelledby', this.earlierToggle.id);
       this.historyBody = this.table(this.earlier, true); this.historyRows = new Map();
       this.body = this.table(this.prompts, false); this.prompts.insertBefore(this.earlier, this.prompts.children[0]);
-      this.promptRows = new Map(); this.emptyPrompts = this.emptyRow(5); this.emptyHistory = this.emptyRow(3);
+      this.promptRows = new Map(); this.emptyPrompts = this.emptyRow(4); this.emptyHistory = this.emptyRow(4);
       this.accounts = el('ul', undefined, 'mini-accounts'); this.lines = new Map();
       this.accounts.tabIndex = 0; this.accounts.setAttribute('aria-label', 'Primary subscription usage and same-period observed CCost');
       this.disclosureSize = mount === doc.body ? new DisclosureSize(this, mode) : null;
@@ -231,23 +231,18 @@ const MiniWatch = (() => {
     }
     table(parent, historical) {
       const table = this.el('table', undefined, 'mini-prompt-table'), head = this.el('thead'), header = this.el('tr');
-      table.setAttribute('aria-label', historical ? 'Earlier sessions: latest supported finish, whole-session CCost and latest valid session context (Ctx)' :
-        'Active prompts: whole-session CCost in Session; per-prompt CCost, Duration and estimated next incoming context (Ctx)');
-      for (const name of historical ? ['Activity', 'Session', 'Ctx'] : ['Session', '#', 'CCost', 'Duration', 'Ctx']) {
+      table.setAttribute('aria-label', historical ? 'Earlier sessions: latest supported finish, latest-prompt CCost (whole-session CCost) and latest valid session context (Ctx)' :
+        'Active prompts: prompt CCost (whole-session CCost), Duration and estimated next incoming context (Ctx)');
+      for (const name of historical ? ['Activity', 'Session', 'CCost (Total)', 'Ctx'] : ['Session', 'CCost (Total)', 'Duration', 'Ctx']) {
         const cell = this.el('th'); cell.scope = 'col';
         const explanation = {Activity: 'The session’s latest supported finish, in configured local time.\nFocus or hover the time for the full local date and offset.', Session: 'The name of the session.',
-          '#': 'The prompt’s number within its session.', CCost: 'Estimated cost of this prompt only, not your bill.\nN/A means unavailable, not zero; ? means partial pricing.',
+          'CCost (Total)': `First: ${historical ? 'the latest prompt’s' : 'this prompt’s'} reference CCost.\nIn parentheses: the entire session’s reference CCost, including linked subagents.\nNot provider billing. N/A means unavailable, not zero; ? means partial pricing.`,
           Duration: 'Time spent on this prompt; freezes when updates are unavailable.', Ctx: historical ?
             'Last valid estimate of the next request’s context in this session.\nNot historical prompt context or a sum. N/A means unavailable.' :
             'Estimated context for this prompt’s next request.\nN/A means unavailable, not zero.'}[name];
         const button = ContextHelp.button(name, explanation, this.doc);
-        if (name === 'Session') {
-          cell.className = 'mini-session-cell';
-          const value = this.el('span', undefined, 'mini-session-value mini-session-heading');
-          const total = ContextHelp.button(' (Total CCost)', 'Reference cost of the entire session, including earlier prompts and linked subagents.\n? — Partial pricing or data.', this.doc);
-          total.className += ' mini-session-total';
-          value.append(button, total); cell.append(value);
-        } else cell.append(button);
+        if (name === 'Session') cell.className = 'mini-session-cell';
+        cell.append(button);
         header.append(cell);
       }
       head.append(header); const body = this.el('tbody'); table.append(head, body); parent.append(table); return body;
@@ -257,25 +252,53 @@ const MiniWatch = (() => {
       const row = this.el('tr'), cell = this.el('td'); cell.colSpan = columns;
       cell.append(this.el('span', '', 'mini-empty')); row.append(cell); return row;
     }
-    sessionRow(columns, sessionIndex = 0) {
+    sessionRow(historical = false) {
       const row = this.el('tr');
-      for (let index = 0; index < columns; index++) row.append(this.el('td'));
-      const cell = row.children[sessionIndex], value = this.el('span', undefined, 'mini-session-value');
+      for (let index = 0; index < 4; index++) row.append(this.el('td'));
+      const cell = row.children[historical ? 1 : 0], value = this.el('span', undefined, 'mini-session-value');
       cell.className = 'mini-session-cell';
-      value.append(this.el('span', '', 'mini-session'), this.el('span', '', 'mini-session-total'));
+      const title = this.el('span', '', 'mini-session');
+      if (!historical) ContextHelp.value(title, () => row.promptHelp);
+      value.append(title);
       value.append(this.el('span', '', 'mini-source-note'));
-      cell.append(value); return row;
+      cell.append(value);
+      const cost = this.el('span', '', 'mini-cost-value');
+      if (historical) ContextHelp.value(cost, () => row.promptHelp);
+      row.children[historical ? 2 : 1].append(cost); return row;
     }
     drawSession(cell, card) {
-      const summary = card.session_summary, cost = summary?.cost;
-      const amount = cost ? cost.observed_requests && !cost.priced_requests ? 'N/A' : ReportView.display(cost, 'known_ccost') :
-        summary?.state === 'unavailable' ? 'N/A' : 'Loading…';
       const title = card.title || card.session_id;
       ReportView.text(cell.children[0].children[0], title);
-      ReportView.text(cell.children[0].children[1], ' (' + amount + ')');
-      const retained = ['unavailable', 'partial'].includes(summary?.state) || ['unavailable', 'partial'].includes(card.state);
-      ReportView.text(cell.children[0].children[2], retained ? 'Retained / partial data · not current' : '');
+      const retained = ['unavailable', 'partial'].includes(card.session_summary?.state) || ['unavailable', 'partial'].includes(card.state);
+      ReportView.text(cell.children[0].children[1], retained ? 'Retained / partial data · not current' : '');
       return title;
+    }
+    drawCost(cell, card, prompt) {
+      const summary = card.session_summary, cost = summary?.cost;
+      const total = cost ? cost.observed_requests && !cost.priced_requests ? 'N/A' : ReportView.display(cost, 'known_ccost') :
+        summary?.state === 'unavailable' ? 'N/A' : 'Loading…';
+      const amount = ReportView.display(prompt, 'ccost');
+      ReportView.text(cell.children[0], `${amount} (${total})`);
+      cell.children[0].setAttribute('aria-label', `Prompt reference CCost: ${amount}; whole-session reference CCost: ${total}`);
+    }
+    promptDetails(item) {
+      const prompt = item?.prompt, detail = prompt?.cost_detail;
+      if (!prompt) return 'Latest prompt details unavailable';
+      const main = [...new Set((detail?.parts || []).filter(part => part.role === 'main' && part.provider_id && part.model_id)
+        .map(part => part.provider_id + '/' + part.model_id))];
+      const model = item.model && item.model !== 'N/A' ? item.model : 'N/A';
+      const lines = [prompt.prompt_number == null ? 'Prompt number unavailable' : `Prompt #${prompt.prompt_number}`,
+        `Main model: ${model}${main.length === 1 && !model.includes(main[0]) ? ' [' + main[0] + ']' : ''}`,
+        `Effort: ${item.effort || 'N/A'}`, `Duration: ${ReportView.display(item, 'watch_duration_ms')}`];
+      if (prompt.calls != null) lines.push(`Calls: ${prompt.calls}`);
+      if (prompt.linked_agent_count) lines.push(`Linked subagents: ${prompt.linked_agent_count} (included in prompt cost)`);
+      if (prompt.has_additional_model || detail?.model_count > 1) lines.push('Multiple models contributed to prompt cost');
+      if (prompt.unresolved_cost) lines.push('Partial pricing / attribution');
+      if (prompt.cost_estimated) lines.push('Estimated attribution');
+      if (detail?.agents_without_usage || prompt.calls && !detail?.calls_complete) lines.push('Detailed request attribution incomplete');
+      if (prompt.aborted || prompt.has_error) lines.push((prompt.aborted ? 'Aborted' : 'Failed') +
+        (prompt.abort_reason ? ' · ' + prompt.abort_reason.replaceAll('_', ' ') : ''));
+      return lines.join('\n');
     }
     update(publication, health, overdue, observations, now) {
       const view = observations.snapshot(now);
@@ -322,22 +345,20 @@ const MiniWatch = (() => {
         seen.add(key);
         let row = this.promptRows.get(key);
         if (!row) {
-          row = this.sessionRow(5); row.dataset.id = key;
+          row = this.sessionRow(); row.dataset.id = key;
           this.promptRows.set(key, row);
         }
         const outcome = prompt.in_progress ? 'Running' : prompt.aborted ? 'Aborted' : prompt.has_error ? 'Error' : prompt.completed_successfully ? 'Completed' : 'Ended';
         const reason = !prompt.in_progress && prompt.abort_reason ? ' · ' + prompt.abort_reason.replaceAll('_', ' ') : '';
         const state = ['partial', 'retrying', 'unavailable'].includes(card.state) ? ' · ' + card.state + ' source evidence' : '';
         const session = this.drawSession(row.children[0], card);
+        row.promptHelp = `${session}\n${prompt.prompt_number == null ? 'Prompt number unavailable' : 'Prompt #' + prompt.prompt_number + ' in this session'}`;
         row.setAttribute('aria-label', `${session} · Prompt ${prompt.prompt_number} · ${outcome}${reason}${state}`);
         row.className = prompt.in_progress ? 'mini-running' : prompt.aborted || prompt.has_error ? 'mini-error' : prompt.completed_successfully ? 'mini-success' : '';
         const context = display(item.live_context, 'watch_next_context_tokens');
-        const cells = ['#' + prompt.prompt_number, display(prompt, 'ccost'), display(item, 'watch_duration_ms'), context];
-        cells.forEach((value, index) => {
-          const cell = row.children[index + 1];
-          text(cell, value);
-          if (index === 0) cell.setAttribute('aria-label', `Prompt ${prompt.prompt_number} · ${outcome}${reason}`);
-        }); wanted.push(row);
+        this.drawCost(row.children[1], card, prompt);
+        text(row.children[2], display(item, 'watch_duration_ms'));
+        text(row.children[3], context); wanted.push(row);
       }
       text(this.emptyPrompts.children[0].children[0], view?.cards_state === 'observed' ? 'No running or recently ended prompts' : 'Loading…');
       reconcile(this.body, wanted.length ? wanted : [this.emptyPrompts]);
@@ -354,19 +375,21 @@ const MiniWatch = (() => {
       const wanted = cards.map(card => {
         let row = this.historyRows.get(card.session_id);
         if (!row) {
-          row = this.sessionRow(3, 1); row.dataset.id = card.session_id;
+          row = this.sessionRow(true); row.dataset.id = card.session_id;
           const time = this.el('span', '', 'mini-activity');
           ContextHelp.value(time, () => row.finishHelp || 'Unknown finish time'); row.children[0].append(time);
           this.historyRows.set(card.session_id, row);
         }
         // History exports one canonical representative; never rank or reformat it here.
-        const prompt = card.rows?.[0]?.prompt;
+        const item = card.rows?.[0], prompt = item?.prompt;
+        row.promptHelp = this.promptDetails(item);
         const known = prompt?.completed_at_ms != null && prompt.display?.finished_clock && prompt.display?.finished_date_time;
         row.finishHelp = known ? prompt.display.finished_date_time : 'Unknown finish time';
         ReportView.text(row.children[0].children[0], known ? prompt.display.finished_clock : '—');
         const session = this.drawSession(row.children[1], card);
         const context = ReportView.display(card.session_summary?.context, 'watch_next_context_tokens');
-        const cell = row.children[2];
+        this.drawCost(row.children[2], card, prompt);
+        const cell = row.children[3];
         ReportView.text(cell, context);
         row.setAttribute('aria-label', `Earlier session · ${session}`); return row;
       });

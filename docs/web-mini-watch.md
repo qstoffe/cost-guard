@@ -61,25 +61,23 @@ Exact measurements and verification limits are in the [Mini journal](../developm
    Only the left title navigates; the daily summary is non-clickable. Loading and unknown
    pricing remain explicit; meaningful partial/unavailable notes stay visible, without polling timestamps. Genuine
   observed zero is zero; the next canonical day/correction replaces the prior value.
-- **Session (Total CCost):** within one column, Session/title stays at the left edge
-  and `(Total CCost)` / `(<whole-session cost>)` stays at the right edge. Only the title's
-  end ellipsizes; the parentheses and complete cost remain visible. Short amounts use only
-   their natural width, not a header-sized reserved block. The full underlying title
-   (or canonical session ID) remains selectable and in the row’s accessible name, with no row popup.
-   The column heading explains Session and Total CCost in two separated sections. This server-owned total covers the
-  entire available root/session tree: pre-Watch history, compactions, causal children
-  and provisional running usage, not just visible prompts, this Watch run or Today.
-  Concurrent prompts share the same session total. Credits/USD, zero, missing/partial
-  pricing and retained/corrected totals use the same canonical cache as full Watch;
-   an initially unknown total shows **Loading…**, never prompt cost or fabricated zero.
-   Complete unchanged totals remain quiet through Earlier re-entry and normal checks;
-   new/corrected root-tree usage reuses the existing incremental request cache. Full
-   Watch uses this same source/valuation-qualified total and failure/partial state.
-- **#:** canonical session-local prompt ordinal, not a Mini list index. Concurrent
-  prompts within one session remain separate rows, ordered by actual start.
-- **CCost:** accumulated reference-price cost of that one prompt, not session/Today
-  cost or billed spending. Missing/partial pricing retains N/A or `?` conventions;
-   the column heading explains these conventions without per-row help controls.
+- **Session:** the name only (canonical session ID if unnamed). Only the title
+  ellipsizes; its full text remains selectable and in the row’s accessible name.
+  Running/recent Session hover, keyboard focus or touch exposes the full name and
+  canonical **Prompt #** in that session, without a separate visible ordinal column.
+  Concurrent prompts remain separate rows ordered by actual start.
+- **CCost (Total):** one nonwrapping, right-aligned cell, **prompt cost (whole-session
+  cost)**, e.g. **49 (562)**. The first amount belongs to the row’s focal running/recent
+  prompt; the parenthesized amount covers the entire available root/session tree:
+  pre-Watch history, compactions, causal children and provisional running usage.
+  It is not a visible-row sum, this Watch run or Today. Concurrent rows in one session
+  share the same full total, not necessarily the same prompt cost. Both amounts use
+  canonical Credits/USD formatting, independently retaining zero, **N/A** and partial
+  **?** conventions. An unknown session total shows **Loading…**, never prompt cost
+  or fabricated zero. Both cost headings explain the scopes and that these are
+  reference costs, not provider billing. Complete unchanged totals remain quiet
+  through Earlier re-entry and normal checks; corrections reuse the existing shared
+  incremental valuation cache, also used by full Watch.
 - **Duration:** that prompt's canonical elapsed execution time, frozen when ended.
 - **Ctx:** estimated next incoming context for the prompt, shown as a formatted number
   without an added `~`. The header tooltip explains the estimate; N/A means unavailable.
@@ -99,15 +97,15 @@ grace policy. No browser timer invents cost, completion or growing elapsed time.
 
 ### Earlier Sessions
 
-The neutral **Earlier Sessions** header button expands a separate three-column table
-**above** the running prompts: **Activity | Session (Total CCost) | Ctx**.
+The neutral **Earlier Sessions** header button expands a separate four-column table
+**above** the running prompts: **Activity | Session | CCost (Total) | Ctx**.
 Activity shows only the canonical representative prompt's supported finish in configured
 local **HH:mm** (24-hour, no seconds). Focus, hover or tap the time for the server-prepared
 full **YYYY-MM-DD HH:mm +offset**; DST repeated hours remain distinguishable.
 Unknown finish times show **—** with **Unknown finish time** help, never a source-update
 or current-time substitute. Activity is narrow and nonwrapping; Session keeps the remaining
-elastic width and the same left-title/right-total alignment. The running/recent table
-remains exactly **Session (Total CCost), #, CCost, Duration, Ctx**. Earlier starts collapsed
+elastic title width. The running/recent table is exactly
+**Session | CCost (Total) | Duration | Ctx**. Earlier starts collapsed
 every time a fresh Mini window opens; keyboard/click/touch works, and ordinary Live
 updates preserve the choice. The newest **up to three distinct eligible finished
 sessions** come from full Watch's canonical Earlier Sessions selection, displayed
@@ -115,16 +113,23 @@ oldest-to-newest within that subset, including its unknown-finish fallback order
 Running/recently ended sessions never appear in both tables. After the shared terminal
 grace a session may enter history; resuming moves it back out coherently.
 
-Earlier rows show the **whole-session** total and the **latest valid session/current-next
-Ctx**, not the last prompt's cost/context, nor a sum of contexts. Ctx remains an estimate
-with N/A for missing evidence and accessible help, without an added `~`. No prompt
-number, duration or state badge is added. Empty, loading and unavailable history are
+Earlier cost cells show the **latest actual canonical prompt’s cost (whole-session
+cost)**. Hover, focus or tap that value for the same prompt’s **Prompt #, main Model**
+(provider-qualified where available), **Effort, finished Duration and known Calls**.
+Linked subagents, multiple contributing models, partial pricing/attribution and
+failed/aborted work are noted when relevant; unknown facts remain N/A or unavailable,
+never borrowed from another prompt. No raw prompt text is exposed.
+The **latest valid session/current-next Ctx** remains distinct from historical prompt
+context or a sum of contexts. Ctx keeps N/A and accessible heading help, without an
+added `~`. No ordinal, model, effort, duration or calls column is added.
+Empty, loading and unavailable history are
 explicit; confirmed retained/partial totals remain indicated in the row. Collapsing
 does not revalue or reacquire history.
 
-Earlier Sessions has no tooltip. Both tables use their actual headings for help.
-Within the same Session column, **Session** explains only the name and **(Total CCost)**
-only the whole-session cost, with no help in the gap. Hover opens after **600 ms**;
+Earlier Sessions has no tooltip. Both tables use their actual headings for help;
+Session explains the name, and CCost (Total) explains prompt versus whole-session cost.
+Running Session and historical cost values supply only the targeted details above,
+not a second row-wide tooltip or native browser title. Hover opens after **600 ms**;
 the passive help cursor is immediate, as are deliberate keyboard-focus/tap requests.
 There is no table-level `?`, row cue or daily/header help icon. The return-to-Watch
 action retains concise help, dismissed immediately on activation by mouse, touch,
@@ -220,11 +225,10 @@ Opening requests use **screen DIPs**, not physical pixels or zoomed CSS document
 pixels. Measured layout is converted to those units before opening; native chrome
 and browser clamps can change actual outer/inner dimensions. Earlier fixed-height
 Windows measurements are historical, not the new fit target or a physical-height cap.
-Metric headings are centered; the split Session heading/title is left-anchored and
-its parenthesized total suffix right-anchored. Numeric metric values remain right-aligned.
-The four prompt-metric columns fit their full heading or longest displayed value, without
-wrapping, clipping or ellipses. Session takes all remaining width; its inner layout
-ellipsizes only the title while the full-session cost suffix never shrinks or ellipsizes.
+Metric headings are centered; Session titles are left-aligned. Numeric metric values
+remain right-aligned with tabular numerals. Metric columns fit their full heading or
+longest displayed value, without wrapping, clipping or ellipses. Session takes all
+remaining width and ellipsizes only the title; neither cost amount shrinks or ellipsizes.
 The complete Session-column heading stays readable. Widths adapt to live values/units;
 an empty message does not expand metric columns. If a manually narrowed window cannot
 fit every heading/metric, the prompt region scrolls horizontally instead of clipping.
