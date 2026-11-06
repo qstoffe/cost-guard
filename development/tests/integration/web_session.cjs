@@ -97,12 +97,15 @@ async function main() {
   const pendingView = context.pendingView;
   pendingView.attach(new Node('main')); await new Promise(setImmediate);
   assert.equal(pendingView.body.children.length, 0);
-  assert.match(pendingView.status.textContent, /Waiting for session source observation/);
+   assert.match(pendingView.status.textContent, /Loading session/);
+   assert.equal(pendingView.status.children[1].tag, 'progress');
+   assert.equal(pendingView.status.children[1].attributes.value, undefined, 'initial progress is indeterminate');
   assert.equal(pendingView.status.hidden, false);
   assert.equal(delays.at(-1), 5000, 'pending capture retains the configured five-second polling cadence');
   assert.equal(timers.size, 1);
   pendingState = 'source_unavailable'; await pendingView.load();
-  assert.match(pendingView.status.textContent, /Source unavailable/);
+   assert.match(pendingView.status.textContent, /Source unavailable/);
+   assert.ok(!pendingView.status.children.some(node => node.tag === 'progress'));
   assert.ok(!pendingView.status.textContent.includes('Waiting'), 'a pending lease cannot hide explicit source failure');
   pending = false;
   const [pendingTimer, resume] = timers.entries().next().value;
@@ -147,7 +150,51 @@ async function main() {
   assert.equal(catalogCalls.length, 2, 'changed route reruns after stale request completes');
   assert.equal(catalogCalls[1].sort, 'ccost');
   assert.equal(timers.size, 1, 'catalog route race leaves one polling timer');
-  catalog.detach(); assert.equal(timers.size, 0);
+   catalog.detach(); assert.equal(timers.size, 0);
+   const timestamp = expression => vm.runInContext(`SessionsCatalog.localTimestamp(${expression})`, context);
+   const originalTZ = process.env.TZ;
+   const originalLocaleString = Date.prototype.toLocaleString;
+   try {
+     for (const locale of ['sv-SE', 'en-US']) for (const [zone, expected] of [
+       ['Europe/Stockholm', ['2026-03-29 01:30', '2026-03-29 03:30', '2026-10-25 02:30', '2026-10-25 02:30']],
+       ['America/New_York', ['2026-03-28 20:30', '2026-03-28 21:30', '2026-10-24 20:30', '2026-10-24 21:30']]]) {
+       process.env.TZ = zone;
+       // Formatting must not invoke browser-locale defaults, including 12-hour locales.
+       Date.prototype.toLocaleString = () => { throw new Error('locale-dependent timestamp: ' + locale); };
+       ['2026-03-29T00:30Z', '2026-03-29T01:30Z', '2026-10-25T00:30Z', '2026-10-25T01:30Z'].forEach((instant, index) => {
+         assert.equal(timestamp(Date.parse(instant)), expected[index]);
+       });
+     }
+   } finally { if (originalTZ === undefined) delete process.env.TZ; else process.env.TZ = originalTZ; Date.prototype.toLocaleString = originalLocaleString; }
+   assert.equal(timestamp(null), 'N/A');
+   const cold = Array.from({length:50}, (_, index) => ({session_id:'cold-'+index, title:'Pending '+index,
+     last_activity_ms:1000, indexed:false, has_summary:false, metric_state:'pending', display:{ccost:'N/A',duration_ms:'N/A'}}));
+   catalog.update({...catalogData,total:51,view:{session_usage:cold}});
+   assert.equal(catalog.body.children.length, 50);
+   assert.ok(catalog.body.children.every(row => row.children.slice(2).every(cell => cell.textContent === 'Loading…')));
+   assert.equal(catalog.previous.tag, 'button'); assert.equal(catalog.previous.disabled,true); assert.equal(catalog.next.disabled,false);
+   catalog.next.events.click(); assert.match(context.location.hash, /offset=50/);
+   const known = {...cold[0],indexed:true,has_summary:true,metric_state:'ready',running:true,prompt_count:0,model:'N/A',display:{ccost:'0.00',duration_ms:'0s'}};
+   catalog.update({...catalogData,offset:50,total:51,view:{session_usage:[known]}});
+   assert.equal(catalog.previous.disabled,false); assert.equal(catalog.next.disabled,true);
+   assert.equal(catalog.body.children[0].className,'session-running');
+   assert.match(catalog.body.children[0].children[1].textContent,/^\[RUNNING\] Pending/);
+   assert.deepEqual(catalog.body.children[0].children.slice(2).map(cell=>cell.textContent),['N/A','0.00','0','0s']);
+   selected=catalog.body.children[0].children[1];
+   catalog.update({...catalogData,total:1,view:{session_usage:[{...known,running:false}]}});
+   assert.equal(catalog.body.children[0].className,'');
+   assert.ok(!catalog.body.children[0].children[1].textContent.includes('[RUNNING]'));
+   assert.equal(catalog.body.children[0].children[1],selected,'status changes preserve selected title DOM');
+   selected=null;
+   catalog.update({...catalogData,total:1,view:{session_usage:[{...cold[0],metric_state:'unavailable'}]}});
+   assert.ok(catalog.body.children[0].children.slice(2).every(cell=>cell.textContent==='Unavailable'));
+   assert.equal(catalog.body.children[0].className,'');
+   const ictxPage = JSON.parse(JSON.stringify(input.first)); ictxPage.revision='first-context';
+   ictxPage.result.view.prompt_blocks[0].rows[0].display.incoming_context_tokens='2K → 19K';
+   ictxPage.result.view.prompt_blocks[0].rows[0].display.first_incoming_context_tokens='17K';
+   page=ictxPage; view.attached=true; await view.load();
+   assert.equal(view.body.children[0].children[6].textContent,'17K');
+   view.detach();
   console.log('PASS complete history, keyed selection, running/end, retained errors, lease release and navigation races');
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

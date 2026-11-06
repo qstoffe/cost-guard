@@ -131,7 +131,7 @@ async function main() {
     assert.equal(await evaluate('current.catalog.data.total'),120);
     checks.push('cold-to-global-metric-sort-ready');
     await evaluate("location.hash='#/sessions'"); await until('current.catalog.data.sort === "activity"');
-    const older=await evaluate('document.querySelector(".sessions-pager a:last-child").getAttribute("href")');
+     const older=await evaluate('document.querySelector(".sessions-pager button:last-child").destination');
     await evaluate(`location.hash=${JSON.stringify(older)}`);
     await until('current.catalog.data.offset === 50');
     const membership=await evaluate('[...document.querySelectorAll("#result tbody tr")].map(row=>row.dataset.id)');
@@ -142,7 +142,7 @@ async function main() {
     const latency=Date.now()-before; assert.ok(latency<=30000);
     assert.equal(await evaluate('document.querySelector("#result tbody tr").dataset.id'),'root-0120');
     checks.push('stable-older-page-and-live-first-page');
-    for(const theme of ['classic','light','dark']) for(const width of [1920,900,360]) for(const zoom of [1,1.5]) {
+     for(const theme of ['classic','light','dark']) for(const width of [1920,1366,800,360]) for(const zoom of [1,1.5]) {
       await command('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false},sessionId);
       await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:theme==='dark'?'dark':'light'}]},sessionId);
       await evaluate(`document.documentElement.dataset.theme=${JSON.stringify(theme==='classic'?'classic':'web')}; document.body.style.zoom=${zoom}`);
@@ -164,7 +164,7 @@ async function main() {
     assert.equal(await evaluate('document.querySelectorAll("#result tfoot td").length'),10);
     assert.match(await evaluate('document.querySelector("#result h1").textContent'),/Synthetic 0000/);
     assert.match(await evaluate('document.querySelector("#result").textContent'),/Session ID: root-0000/);
-    for(const theme of ['classic','light','dark']) for(const width of [1920,360]) {
+     for(const theme of ['classic','light','dark']) for(const width of [1920,1366,800,360]) {
       await command('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false},sessionId);
       await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:theme==='dark'?'dark':'light'}]},sessionId);
       await evaluate(`document.documentElement.dataset.theme=${JSON.stringify(theme==='classic'?'classic':'web')}`);
@@ -188,8 +188,73 @@ async function main() {
     await until('current.detail.status.textContent.includes("Source unavailable")');
     assert.equal(await evaluate('document.querySelectorAll("tbody tr").length'),1002);
     await fixture('recover'); await until('current.detail.status.hidden');
-    checks.push('selection-scroll-end-outage-recovery');
-    assert.deepEqual(errors,[]);
+     checks.push('selection-scroll-end-outage-recovery');
+     for (const locale of ['sv-SE','en-US']) for (const [timezoneId,expected] of [
+       ['Europe/Stockholm',['2026-03-29 01:30','2026-03-29 03:30','2026-10-25 02:30','2026-10-25 02:30']],
+       ['America/New_York',['2026-03-28 20:30','2026-03-28 21:30','2026-10-24 20:30','2026-10-24 21:30']]]) {
+       await command('Emulation.setLocaleOverride',{locale},sessionId);
+       await command('Emulation.setTimezoneOverride',{timezoneId},sessionId);
+       assert.deepEqual(await evaluate(`['2026-03-29T00:30Z','2026-03-29T01:30Z','2026-10-25T00:30Z','2026-10-25T01:30Z'].map(value=>SessionsCatalog.localTimestamp(Date.parse(value)))`),expected);
+     }
+     await command('Emulation.setLocaleOverride',{},sessionId);await command('Emulation.setTimezoneOverride',{timezoneId:''},sessionId);
+     checks.push('browser-local-24-hour-format-two-locales-two-timezones-spring-and-autumn-DST');
+     // Compare the actual post-596 tables to the Watch reference, not a CSS-text proxy.
+     for (const route of ['watch','models','token-mix','sessions','sessions/root-0000']) {
+       await evaluate(`document.body.style.zoom=1;location.hash=${JSON.stringify('#/'+route)}`);
+       if (route==='models') await until('current.result && !current.loading');
+       if (route==='watch') await until('document.querySelector(".watch-prompt-table tbody tr")');
+       if (route==='token-mix') {
+         await until('current.section === "token-mix"');
+         if (!await evaluate('Boolean(current.result)')) await evaluate('document.querySelector("#refresh").click()');
+         await until('document.querySelectorAll(".token-mix-table").length===2');
+         assert.deepEqual(await evaluate('[...document.querySelectorAll(".token-mix-table")].map(t=>t.querySelectorAll("th").length)'),[13,13]);
+       }
+       if (route==='sessions') await until('current.catalog?.data?.total===121');
+       if (route==='sessions/root-0000') {
+         await until('current.detail?.data?.total===1002');
+         await evaluate(`document.querySelector('.session-preview').textContent='A deliberately lengthy prompt preview that should grow on spacious displays but yield to real numeric columns on smaller screens'`);
+       }
+       for(const theme of ['classic','light','dark']) for(const width of [1920,1366,800,360]) for(const zoom of [1,1.5]) {
+         await command('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false},sessionId);
+         await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:theme==='dark'?'dark':'light'}]},sessionId);
+         await evaluate(`document.documentElement.dataset.theme=${JSON.stringify(theme==='classic'?'classic':'web')};document.body.style.zoom=${zoom}`);
+         const facts=await evaluate(`(() => {const tables=[...document.querySelectorAll('.watch-prompt-table,.sessions-table,.overview-model-table,.token-mix-table')];return {
+           pageWidth:document.documentElement.scrollWidth,viewport:innerWidth,tables:tables.map(table=>{
+             const pan=table.parentNode,th=table.querySelector('th'),cell=table.querySelector('td'),head=getComputedStyle(th),shell=getComputedStyle(pan),button=th.querySelector('button');
+             return {columns:table.querySelectorAll('th').length,padding:[head.paddingTop,head.paddingRight],headerHeight:th.getBoundingClientRect().height/Number(getComputedStyle(document.body).zoom),
+               headerBackground:head.backgroundColor,position:head.position,border:shell.borderTopWidth,radius:shell.borderTopLeftRadius,
+               divider:getComputedStyle(cell).borderRightWidth,innerVertical:pan.scrollHeight>pan.clientHeight,maxHeight:shell.maxHeight,
+               buttonHeight:button.getBoundingClientRect().height/Number(getComputedStyle(document.body).zoom),
+               numericFit:[...table.querySelector('tbody tr').cells].every((c,i)=>(table.matches('.watch-prompt-table')?i===2:table.matches('.session-catalog-table')?i===1:i===0)||getComputedStyle(c).whiteSpace!=='nowrap'||c.scrollWidth<=c.clientWidth+1),
+               previewWidth:table.querySelector('.session-preview')?.clientWidth};})};})()`);
+         assert.ok(facts.tables.length>0); assert.ok(facts.pageWidth<=width+1);
+         for (const table of facts.tables) {
+           assert.deepEqual(table.padding,['5.25px','9px']); assert.equal(table.radius,'6px');
+           assert.ok(Math.abs(parseFloat(table.border)*zoom-1)<.01); assert.ok(Math.abs(parseFloat(table.divider)*zoom-1)<.01);
+           assert.equal(table.innerVertical,false); assert.equal(table.maxHeight,'none'); assert.equal(table.numericFit,true);
+           assert.equal(table.position,['watch','models'].includes(route)?'static':'sticky');
+           assert.ok(table.buttonHeight<25, 'compact visible-text header targets');
+         }
+         layouts.push({route,theme,width,zoom,...facts});
+         if (theme==='classic' && width===1366 && zoom===1) {
+           const image=await command('Page.captureScreenshot',{format:'png'},sessionId);
+           await fs.writeFile(path.join(directory,'table-'+route.replaceAll('/','-')+'.png'),Buffer.from(image.data,'base64'));
+         }
+         if (route==='sessions') {
+           const pager=await evaluate(`(() => {
+             const original=current.catalog.data,rows=original.view.session_usage;
+             const value=structuredClone(original);value.total=1234567;value.view.session_usage[0].running=true;
+             current.catalog.update(value);
+             const bar=document.querySelector('.sessions-pager'),label=bar.querySelector('span').getBoundingClientRect(),buttons=[...bar.querySelectorAll('button')].map(b=>b.getBoundingClientRect()),bounds=bar.getBoundingClientRect();
+             const row=document.querySelector('.session-catalog-table tbody tr'),colors=[...row.querySelectorAll('td,a,span,button')].map(n=>getComputedStyle(n).color);
+             const result={center:Math.abs((label.left+label.right)/2-(bounds.left+bounds.right)/2),overlap:buttons.some(b=>b.left<label.right&&b.right>label.left&&b.top<label.bottom&&b.bottom>label.top),colors:[...new Set(colors)],marker:row.cells[1].textContent.startsWith('[RUNNING] ')};
+             current.catalog.update(original);return result;})()`);
+           assert.ok(pager.center<2);assert.equal(pager.overlap,false);assert.equal(pager.colors.length,1);assert.equal(pager.marker,true);
+         }
+       }
+     }
+     checks.push('watch-sessions-detail-models-two-13-column-token-mix-parity-three-themes-four-widths-two-zooms');
+     assert.deepEqual(errors,[]);
     evidence={outcome:'PASS',browser:version.product,checks,layouts,discovery_ms:latency,
       inference_calls:0,personal_profile:false,desktop_effects:false};
   } finally {

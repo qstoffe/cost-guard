@@ -102,7 +102,7 @@ class WebWatchCoordinator(WatchCoordinator):
             with self.reads.using(service.source):
                 catalog.tick(service)
         except (SourceError, PricingUnavailableError):
-            pass  # Retained scalar evidence is not promoted to current coverage.
+            catalog.index_failed()  # Failed acquisition is unavailable, not endless pending.
         finally:
             if service is not None:
                 service.close_accounts()

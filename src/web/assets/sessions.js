@@ -20,6 +20,12 @@ const SessionsCatalog = (() => {
     if (offset) { params.set('offset', String(offset)); params.set('epoch', epoch); }
     return '#/sessions?' + params;
   }
+  function localTimestamp(milliseconds) {
+    if (milliseconds == null) return 'N/A';
+    const date = new Date(milliseconds), pad = value => String(value).padStart(2, '0');
+    if (!Number.isFinite(date.getTime())) return 'N/A';
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  }
   class View {
     constructor(api) {
       Object.assign(this, {api, token: null, data: null, attached: false, busy: false, generation: 0});
@@ -40,7 +46,11 @@ const SessionsCatalog = (() => {
       }
       head.append(header); this.body = el('tbody'); table.append(head, this.body); pan.append(table);
       const pager = el('div', undefined, 'pager sessions-pager');
-      this.previous = el('a', 'Previous'); this.next = el('a', 'Next'); this.label = el('span');
+      this.previous = el('button', 'Previous'); this.next = el('button', 'Next'); this.label = el('span');
+      for (const button of [this.previous, this.next]) {
+        button.type = 'button'; button.disabled = true;
+        button.addEventListener('click', () => { if (!button.disabled && button.destination) location.hash = button.destination; });
+      }
       this.label.setAttribute('aria-live', 'polite'); pager.append(this.previous, this.label, this.next);
       this.root.append(this.status, pan, pager);
     }
@@ -66,6 +76,7 @@ const SessionsCatalog = (() => {
     async load() {
       if (this.busy) return;
       this.busy = true; this.rerun = false;
+      this.pagerBusy();
       const generation = this.generation;
       try {
         const data = await this.api('/api/sessions', {token: this.token, offset: this.offset,
@@ -83,6 +94,7 @@ const SessionsCatalog = (() => {
         if (['instance_stopping', 'authentication_required', 'host_identity_changed'].includes(error.message)) this.detach();
       } finally {
         this.busy = false;
+        this.pagerBusy();
       }
     }
     update(data) {
@@ -96,17 +108,27 @@ const SessionsCatalog = (() => {
         th.setAttribute('aria-sort', active ? data.direction === 1 ? 'ascending' : 'descending' : 'none');
         ReportView.text(label, name + (active ? data.direction === 1 ? ' ↑' : ' ↓' : ' ↕'));
       }
-      if (!protectedNode(this.body)) this.rows(data.view.session_usage);
+      const values = data.view.session_usage;
+      // Lifecycle status must not remain falsely running while a title is selected.
+      const observed = new Map(values.map(value => [value.session_id, value]));
+      for (const row of this.body.children) {
+        const running = Boolean(observed.get(row.dataset.id)?.running);
+        row.className = running ? 'session-running' : '';
+        if (row.runningMarker) ReportView.text(row.runningMarker, running ? '[RUNNING] ' : '');
+      }
+      if (!protectedNode(this.body)) this.rows(values);
       const pages = Math.max(1, Math.ceil(data.total / data.size));
       this.label.textContent = data.total ? `Showing ${data.offset + 1}–${Math.min(data.offset + 50, data.total)} of ${data.total} sessions · Page ${Math.floor(data.offset / 50) + 1} of ${pages}` :
         data.state === 'observed' ? 'No sessions · Page 1 of 1' : 'Session count unavailable';
       const link = (node, offset, enabled) => {
-        node.setAttribute('aria-disabled', String(!enabled));
-        if (enabled) node.href = destination(offset, data.epoch, this.sort, this.direction);
-        else node.removeAttribute('href');
+        node.destination = enabled ? destination(offset, data.epoch, this.sort, this.direction) : null;
       };
       link(this.previous, Math.max(0, data.offset - 50), data.offset > 0);
       link(this.next, data.offset + 50, data.offset + 50 < data.total);
+      this.pagerBusy();
+    }
+    pagerBusy() {
+      for (const button of [this.previous, this.next]) button.disabled = this.busy || !button.destination;
     }
     rows(values) {
       const old = new Map([...this.body.children].map(row => [row.dataset.id, row]));
@@ -116,14 +138,25 @@ const SessionsCatalog = (() => {
         const row = old.get(value.session_id) || el('tr'); row.dataset.id = value.session_id;
         const signature = JSON.stringify(value);
         if (row.signature !== signature) {
-          const name = el('a', value.title, 'session-name');
+          row.className = value.running ? 'session-running' : '';
+          const name = el('a', undefined, 'session-name');
+          row.runningMarker = el('span', value.running ? '[RUNNING] ' : '');
+          name.append(row.runningMarker, el('span', value.title));
           if (/^[A-Za-z0-9_-]{1,200}$/.test(value.session_id)) name.href = '#/sessions/' + value.session_id;
           ContextHelp.value(name, value.title);
-          const activity = value.last_activity_ms == null ? 'N/A' : new Date(value.last_activity_ms).toLocaleString();
-          const cost = el('span', () => ReportView.display(value, 'ccost'));
-          if (!value.indexed) ContextHelp.value(cost, 'Session metrics are not yet indexed or await a new source observation. Retained values are not current.');
-          const cells = [activity, name, value.multiple_models ? 'Multiple models' : value.model || 'N/A', cost,
-            value.prompt_count == null ? 'N/A' : String(value.prompt_count), el('span', () => ReportView.display(value, 'duration_ms'))];
+          const metric = text => {
+            const state = value.metric_state || (value.indexed ? 'ready' : 'pending');
+            const missing = !value.has_summary && !value.indexed && state !== 'retained';
+            const node = el('span', missing ? state === 'pending' ? 'Loading…' : 'Unavailable' : text,
+              missing ? 'session-metric-pending' : '');
+            if (missing && state === 'pending') node.setAttribute('aria-busy', 'true');
+            if (state !== 'ready') ContextHelp.value(node, state === 'pending' ? 'Session summary acquisition is pending.' :
+              state === 'retained' ? 'Last observed summary retained; awaiting a valid current source observation.' : 'Session summary unavailable after source acquisition trouble.');
+            return node;
+          };
+          const cells = [localTimestamp(value.last_activity_ms), name,
+            metric(value.multiple_models ? 'Multiple models' : value.model || 'N/A'), metric(() => ReportView.display(value, 'ccost')),
+            metric(value.prompt_count == null ? 'N/A' : String(value.prompt_count)), metric(() => ReportView.display(value, 'duration_ms'))];
           row.replaceChildren(...cells.map(content => { const td = el('td'); td.append(typeof content === 'object' ? content : el('span', content)); return td; }));
           row.signature = signature;
         }
@@ -131,5 +164,5 @@ const SessionsCatalog = (() => {
       });
     }
   }
-  return {View};
+  return {View, localTimestamp};
 })();

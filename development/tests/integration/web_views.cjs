@@ -219,8 +219,9 @@ async function main() {
    await until(() => ids.result.textContent.includes('1–50 of 55'));
   assert.match(ids.result.textContent, /1–50 of 55/);
   assert.equal(all(ids.result, 'tbody')[0].children.length, 50);
-   const next = all(ids.result, 'a').find(node => node.textContent === 'Next');
-   const olderPage = next.href;
+    const next = all(ids.result, 'button').find(node => node.textContent === 'Next');
+    assert.equal(next.disabled, false);
+    const olderPage = next.destination;
     assert.equal(all(ids['scope-controls'], 'details').length, 0, 'Sessions has no advanced report scope');
    navigate(olderPage.slice(2));
     await until(() => ids.result.textContent.includes('51–55 of 55'));

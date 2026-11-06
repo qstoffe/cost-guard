@@ -147,6 +147,7 @@ def metric_tokens(values, timezone_id, now_ms=None):
     if "price_summary" in values:
         tokens["price_summary"] = price_summary(values["price_summary"])
     if "incoming_context_tokens" in values and values.get("next_context_tokens") is not None and values.get("delta_context_tokens") is not None:
+        tokens["first_incoming_context_tokens"] = context_tokens(values["incoming_context_tokens"])
         tokens["incoming_context_tokens"] = context_delta(values["delta_context_tokens"]) + " → " + context_tokens(values["next_context_tokens"])
     if values.get("in_progress") and values.get("token_mix_percent") is None:
         tokens["token_mix_percent"] = "running - consider ABORT" if values.get("running_cost_warning") else "running"
