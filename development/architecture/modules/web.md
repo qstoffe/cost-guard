@@ -134,10 +134,10 @@ both labels' intrinsic minima. Its header's neutral
 Earlier Sessions disclosure starts collapsed per new PiP document and survives publications.
 It takes the last three of the shared eligible, oldest-to-newest `history_cards`, excludes
 active/grace session IDs, and uses `session_summary.context`, never historical prompt Ctx.
-Both keyed tables share one bounded scroll region; sticky headers stay table-scoped.
+Both keyed tables retain intrinsic heading/metric widths and horizontal panning.
 Session totals/context retain their canonical source/cache states and display tokens;
 there is no added acquisition, valuation, SSE or history scan. The session and subscription
-regions scroll independently, including shorter lists at compact height;
+regions use natural height without premature vertical caps; the document scrolls when needed;
 primary Used bars stay thin and cyan until authoritative exhaustion. Estimated costs
 have accessible provenance without a visible approximation glyph. Native close and
 the filled Watch toggle own closing; the title still returns to the existing tab.
@@ -155,20 +155,27 @@ the full Watch display tokens and daily pricing/source state. Observation times 
 retained/partial provenance are accessible, not prominent warning suffixes. Additive
 `daily_usage.day_end_ms` uses configured timezone/DST so disconnected Mini clears the
 previous day without calculating any usage. Loading is not zero. The left title alone returns
-to Watch. Mini-only header alignment never changes full Watch tables. Chromium's
-560×250 opening request uses screen DIPs, not physical or zoomed document pixels.
-The controller requests initial placement on the opener's first opening or changed
-host nonce, then permits browser-native cached position/size for Remember last;
-Standard always requests initial placement. Settings changes never reposition open
-PiP. Reload/new openers start standard. Only mode, nonce and an opened flag live in
-memory; disclosure-only before/achieved bounds are also ephemeral, never persisted.
-`mini.js`'s `DisclosureSize` measures vertical overflow directly inside the disclosure
-click (including native keyboard activation). Only new overflow gets one height-only
-resize; expanded CSS removes the compact cap while flex/overflow retain usable scroll
-fallbacks. Achieved bounds, native resize events and a bounded two-frame confirmation
-permit collapse restoration without reinterpreting manual bounds or repeating attempts.
-`resizeBy(0, delta)` avoids fractional-DIP width drift; `resizeTo` is fallback.
-No rendering/data event invokes sizing. Full Watch's card/source presentation waits
+to Watch. Mini-only header alignment never changes full Watch tables. `OpeningMeasure`
+loads the shipped styles inside an inert, invisible shadow layout, then renders current
+presentation synchronously before the opening gesture calls native PiP. Natural layout
+includes all accounts/statuses and a height-only two-running-row reserve. The ~650 outer
+DIP target uses a conservative 16×48-DIP frame estimate and opener outer/inner zoom
+ratio; actual native dimensions are inspected after stylesheet load, never repaired
+without a new gesture. Outer height is capped at min(1000, known screen available height).
+Browser clamps remain authoritative and preserve document scrolling. No iframe/CSP
+relaxation, acquisition, dependency, persisted geometry or polling owner is introduced.
+Fit on open requests initial sizing on every opening, which can reset remembered position;
+Standard position can reset remembered size. Only both Remember choices permit browser
+cached bounds after the first opening within the same opener/host nonce. Preferences
+never reposition an open PiP; reload/new openers start fresh.
+`DisclosureSize` alone measures expansion and compact two-row targets within pointer or
+native keyboard activation. Fit collapse shrinks to current content; remembered mode
+restores achieved pre-expansion bounds unless manually resized. One native call preserves
+current width where unclamped. Vertical-only `resizeBy` is preferred, with `resizeTo`
+fallback; an observed one-DIP zoom-rounding bias is compensated on subsequent eligible
+clicks, never by an extra/passive call. Native events/two-frame confirmation record achieved
+bounds and cancel stale work. Missing activation/refusal/clamps retain disclosure/scroll.
+No rendering/data event invokes native sizing. Full Watch's card/source presentation waits
 30 continuous seconds before component/retry/refresh delay guidance, keeps retained prompt,
 session, daily and account metric DOM quiet and exposes provenance in cost help.
 Neither app startup without a frame nor independent history/accounts/daily loading
@@ -229,7 +236,8 @@ port, dependency, source or accounting owner changes.
 ## Public contract
 
 `src/web/settings.py` is the sole write exception: `webSettings.theme` (`classic|web`),
-`ccostDisplayUnit` (`credits|usd`), `miniWatchPlacement` (`remember-last|standard`)
+`ccostDisplayUnit` (`credits|usd`), `miniWatchPlacement` (`remember-last|standard`),
+`miniWatchSize` (`fit-on-open|remember-last`)
 and `quotaDisplayMode` (`used|remaining`)
 in this checkout's `config/user-config.jsonc`, each also accepting symbolic `default`.
 Shipped defaults must be actual enum values. `config.validated_values`
@@ -241,11 +249,11 @@ serialization and last-moment file identity/byte comparison precede atomic repla
 This is ordinary editor-conflict detection, not a hostile same-user race guarantee.
 
 `GET /api/settings` and fixed `POST /api/settings/theme`, `/api/settings/ccost`,
-`/api/settings/mini-placement` and `/api/settings/quota-display` expose effective `webSettings`, symbolic/explicit
+`/api/settings/mini-placement`, `/api/settings/mini-size` and `/api/settings/quota-display` expose effective `webSettings`, symbolic/explicit
 `webSettingsChoices`, current `webSettingsDefaults` and allowlisted error codes,
 behind existing Host/Origin/session/CSRF/body/stopping guards. Early HTML selects
 the effective theme before CSS paint. `assets/settings.js` owns the sole native
-four dropdowns (Default first with a canonical-default-derived label) under Web
+five dropdowns (Default first with a canonical-default-derived label) under Web
 settings and confirmed-only CSS/display-token switching, rollback and
 keyboard focus recovery. `#/settings` reads on entry, never submits report jobs,
 restarts the host or polls. Other tabs converge on their next read, not a broadcast.

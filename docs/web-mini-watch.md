@@ -12,37 +12,38 @@ window depends on the browser/OS. If that request cannot restore it, use the nat
 return-to-tab control, which may close PiP. Closing/reloading the owning document ends
 Mini; a fresh page starts Off. Browser PiP replacement may also close it.
 
-## Placement preference
+## Position and size preferences
 
-**Settings → Web settings → Mini Watch placement** has **Default (Remember last)**,
-**Remember last** and **Standard placement**, saved immediately in the user config.
-Default follows the current application's shipped default; explicit Remember last
-stays pinned even if a later version changes it. Theme and CCost display use the same
-Default-versus-explicit convention. Missing preferences inherit without creating a file.
+**Settings → Web settings** separates **Mini Watch position** (Default / Remember
+last / Standard position) and **Mini Watch size** (Default / Fit on open / Remember
+last size). Defaults resolve to **Remember last** and **Fit on open**. Existing
+`miniWatchPlacement` intent is retained; `miniWatchSize` is the only new enum.
+Symbolic Default follows shipped defaults; explicit choices stay pinned. Missing
+preferences inherit without creating a user file.
 
-- **Remember last:** the first opening in an opener/server instance requests the
-  standard **560×250 screen DIPs** and browser-initial placement. After moving/resizing
-  and closing, subsequent openings in that same live opener reuse the browser's last
-  size **and position**, as the browser permits.
-- **Standard placement:** every opening requests the standard size and initial
-  placement, regardless of prior move/resize. On the target Chrome setup this is
-  normally near bottom-right; browser/OS work areas may clamp or choose differently.
-- Switching modes only affects the **next opening**. It does not move/resize/close
-  the current window, disable manual controls or auto-open Mini.
-- The mode is persistent; **geometry is not**. Host restart starts standard again.
-  Reload/navigation/new tabs also start standard: this is per live opener, not a
-  server-wide remembered position shared between tabs. Later reopens can remember again.
-  No geometry is written to JSONC, SQLite, browser storage, cookies or URLs. Only the
-   browser owns cached bounds; the application keeps an in-memory first-open flag/host identity
-   and temporary bounds only while an Earlier Sessions disclosure is being auto-enlarged.
+Fit on open measures the real themed layout before requesting PiP: approximately
+**650 outer screen DIPs** wide, with current content, every account and warning,
+and height capacity for **two complete running-prompt rows**. This is empty height
+capacity, not fabricated prompt entries. More than two rows use their actual height.
+The initial request uses a conservative native-frame estimate because no pre-open
+frame query exists. Actual native bounds are inspected, not inferred from API success.
+The browser may clamp; then scrolling keeps all content reachable. The total outer
+height request never exceeds **1,000 DIPs** or the known available work area.
 
-Fresh headless Chrome 156 / Edge 156 tests verify the actual Document PiP API, both
-bounds dimensions and position, mode switching, close/reopen, reload and a Python
-server-process restart in the same disposable browser profile. They use CDP bounds
-changes and `Window.close()`/pagehide, not physical manual dragging or native-X clicks.
-Physical Windows-150% frames/edges, manual/native-X interaction and monitor/work-area
-transitions remain **UNVERIFIED**, under an FR-only Decision Delegate exception.
-Browser-imposed limitations and exact evidence are in the [Mini journal](../development/journal/web/mini-watch.md).
+Remember last size permits the browser's manually chosen dimensions within the same
+live opener/host; it is intentionally exempt from the initial two-row fit guarantee.
+The native placement option couples position and dimensions: **Fit on open wins
+over remembered position**, and **Standard position can reset remembered size**.
+These are best-effort intentions, not four independent native geometry controls.
+Reload, a new opener or a changed host starts fresh. Standard asks for initial
+browser placement, not absolute coordinates or a guaranteed bottom-right corner.
+Changing a preference affects only the next opening. Manual window controls remain
+browser-owned. No geometry is saved in config, SQLite, browser storage, cookies or URLs.
+
+Fresh headless Chrome/Edge tests exercise real PiP, pointer/keyboard activation,
+native clamps, browser zoom and emulated device scales. These are not physical
+Windows-frame, manual-drag, monitor-transition, macOS or screen-reader proof.
+Exact measurements and verification limits are in the [Mini journal](../development/journal/web/mini-watch.md).
 
 ## What the figures mean
 
@@ -117,21 +118,18 @@ Enter or Space. Hover help closes within a short exit grace when leaving its tar
 or the PiP document; keyboard-focus and intentionally pinned quota/header help have
 separate ownership. Stationary focus and Live rerenders cannot reopen dismissed help.
 
-If explicit pointer/keyboard activation introduces a **new vertical session scrollbar**,
-Mini attempts one height-only enlargement of the existing PiP window, directly within
-that gesture. Expanded sessions can use the added space instead of the compact height cap.
-Already-fitting content, a pre-existing vertical scrollbar and horizontal panning alone
-never trigger growth. Live publications, new rows, day changes and settings never auto-fit.
-Collapse attempts to restore the measured pre-expansion size only after actual enlargement;
-a later manual resize cancels that restoration. Reopening still follows the selected
-placement mode, with Earlier Sessions collapsed. No geometry or new setting is persisted.
+Pointer, Enter or Space activation measures expanded content and makes at most one
+native height adjustment within that activation. Collapse in Fit mode shrinks to the
+current compact two-row baseline, not a fixed height. Remembered-size mode restores
+eligible pre-expansion bounds only after achieved growth; manual resizing invalidates
+stale restoration. Actual current width is retained where native clamps permit.
+Vertical-only `resizeBy` is preferred; observed one-DIP zoom rounding is compensated
+on the next eligible click, never with an extra call or background repair.
 
-Chrome and Edge can refuse or clamp native resizing. Disclosure still works silently,
-with usable session scrolling and independent subscription scrolling; Mini never retries,
-reopens or deliberately moves the window. Hidden-browser tests measure actual outer/inner
-bounds, pointer/keyboard activation, missing activation, refused/unsupported methods and
-simulated short-work-area clamps. Physical dragging, monitor transitions and native frame
-pixels are not established by these tests; final placement/rounding remains browser-owned.
+No passive Live/SSE update, timer, prompt/account change or settings read resizes the
+window. Later content exceeding its opening reserve scrolls normally. Missing activation,
+refusal and clamps preserve disclosure and accessible document scrolling. There is no
+activation spoofing, retry loop, automatic reopen, programmatic move or vertical lock.
 
 After **10 continuous minutes** without a usable new observation, one muted, separate
 “Updates unavailable · showing last values” notice appears. Prompt, daily and native
@@ -204,12 +202,10 @@ Changes in Settings and the owner's system appearance update an already-open Min
 without reopening, report refresh, server restart, another live stream or browser storage.
 This styles application content only; browser-native frame/security/return/close controls
 remain browser-owned. Healthy Live text and transient operational warnings are omitted.
-Mini requests 560×250 **screen DIPs**, not physical screen pixels or zoomed document
-CSS pixels. Historical standard-placement measurements on Windows 150% showed a
-complete visible native frame **428–429 physical pixels** high, below 470, including native chrome.
-The previous 450-DIP request measured 729 physical pixels. Chrome page zoom changes
-document dimensions, not that request's screen units. Other scales/platforms can
-produce different outer geometry; a universal 470-physical-pixel cap is not verified.
+Opening requests use **screen DIPs**, not physical pixels or zoomed CSS document
+pixels. Measured layout is converted to those units before opening; native chrome
+and browser clamps can change actual outer/inner dimensions. Earlier fixed-height
+Windows measurements are historical, not the new fit target or a physical-height cap.
 Metric headings are centered; the split Session heading/title is left-anchored and
 its parenthesized total suffix right-anchored. Numeric metric values remain right-aligned.
 The four prompt-metric columns fit their full heading or longest displayed value, without
@@ -218,13 +214,11 @@ ellipsizes only the title while the full-session cost suffix never shrinks or el
 The complete first-column heading stays readable. Widths adapt to live values/units;
 an empty message does not expand metric columns. If a manually narrowed window cannot
 fit every heading/metric, the prompt region scrolls horizontally instead of clipping.
-Earlier and running tables share **one vertical session viewport/scrollbar**, with no
-Mini-specific running-row limit. Each table's sticky headers stay within its own table.
-The subscription region still scrolls independently. Explicit history expansion may
-enlarge PiP once under the rule above; larger/clamped lists remain scrollable. Resize with
-the browser's controls; narrow widths wrap the header instead of overlapping it. Remember last
-reopens at the browser's last bounds; Standard placement requests the compact initial
-geometry again. While open, later manual resizing is never forcibly undone.
+There are no premature vertical max-height caps on prompts, accounts or warnings.
+Content uses its natural height and the document scrolls only when the current native
+window is insufficient. Horizontal table panning remains available at narrow widths;
+all rows and headings remain readable, without a Mini-specific running-row limit.
+Resize with browser controls; narrow widths wrap the header instead of overlapping it.
 The browser
 owns outer chrome, origin/security indication, positioning, native return controls
 and final geometry; this is not a frameless, arbitrarily positioned tooltip.

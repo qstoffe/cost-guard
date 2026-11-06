@@ -1,5 +1,81 @@
 # Mini Watch and finished history
 
+## FR 000591 — v80.180 open/click fit, 2026-11-06
+
+Implemented the owner's revised scope from base `6a3f1e735698c96c7e6947a15c44efedf2597789`.
+`OpeningMeasure` loads the existing styles in an inert invisible shadow tree and
+measures current presentation synchronously before `requestWindow` consumes activation.
+The natural layout includes warnings/all accounts and two running-row height capacity;
+measurement clones never fabricate published prompt entries. Default width targets
+650 outer DIPs with a conservative 16-DIP frame-width allowance. The 48-DIP frame-height
+allowance caps the initial inner request below min(1000, known available outer height).
+Actual outer/inner dimensions are inspected after styles load, not inferred from API return.
+No passive Live/SSE/timer path calls native resize. Document scrolling replaces premature
+vertical region caps; narrow table panning remains local.
+
+`DisclosureSize` remains the sole native resize owner, within eligible pointer/Enter/Space
+activation. Fit collapse recomputes the compact two-row target; remembered mode restores
+only achieved pre-expansion bounds absent manual resizing. Real browser zoom revealed
+one-DIP width growth even with `resizeBy(0, delta)`; the observed rounding bias now informs
+only the next eligible click, with one call per activation and no passive correction.
+Native clamps are not treated as rounding and receive no width-repair attempt.
+
+Five Settings fields retain the secure JSONC write owner. Position keeps the existing
+`miniWatchPlacement` key/intent; `miniWatchSize` alone adds `fit-on-open|remember-last`.
+Fit prioritizes measured size and may reset position; Standard can reset remembered size.
+Only both Remember intentions permit native cached dimensions after the first opening.
+Pixel geometry remains ephemeral and browser-owned. Current user/architecture docs and
+the code map are updated; no acquisition/accounting/layer boundary changed.
+
+### Verification and actual limits
+
+- Full: **149 bounded units, zero failures, 93.0s**; subsequent focused Mini/config/
+  settings/views **34 tests passed**, including deterministic rounding/clamp/activation
+  fallback/race tests. Validator: **11 passes, zero failures**, six existing advisory
+  prose/Python design warnings. No product deadline, dependency or cap changed.
+- [Chrome scale 1](../../architecture/governance/verification/mini-fit/chrome-fit.json),
+  [Chrome scale 1.5](../../architecture/governance/verification/mini-fit/chrome-fit-150.json),
+  [Chrome scale 1.5 / real 125% zoom](../../architecture/governance/verification/mini-fit/chrome-fit-150-zoom.json),
+  [Edge scale 1](../../architecture/governance/verification/mini-fit/edge-fit.json),
+  [Edge scale 1.5 / real 125% zoom](../../architecture/governance/verification/mini-fit/edge-fit-150-zoom.json):
+  **22 layouts each / 110 total**, strictly headless owned profiles, shipped HTTP/auth/CSP/SSE,
+  Chrome **156.0.8078.80**, Edge **156.0.4314.58**. Browser-owned `settingsPrivate`
+  confirms default page zoom 1.25; this is not CSS zoom or pinch emulation.
+- Chrome scale 1: zero prompts/accounts opens **650×223 outer / 634×181 inner**;
+  two prompts/three accounts **650×305 / 634×263**; four prompts/six accounts
+  **650×478 / 634×436**. All ordinary uncapped cases have no vertical scrollbar;
+  consuming the zero/one-row opening reserve leaves dimensions unchanged and fits two rows.
+- Pointer example: **600×300 → 600×426 → 600×310**; all expanded/compact content fits.
+  At real 125% zoom: **601×301 → 602×400 → 602×262**, with no further cumulative
+  width growth across repeated pointer/Enter/Space cycles. Remembered mode restores
+  eligible bounds; later manual API resizing cancels stale restoration. Passive advancing
+  SSE, new/ended/empty prompts and account changes make zero native resize calls.
+- **Clamps are not full-fit PASS:** at scale 1.5 a four-prompt/six-account opening
+  requests 634×434 inner but achieves **628×460 outer / 612×418 inner**, below the
+  measured full-fit target. At real zoom, larger content clamps further. Native first
+  disclosure can also reduce width despite a zero width delta. Tests record those
+  actual dimensions separately; disclosure/document scrolling remain usable. A 40-row
+  request caps inner height at **952**, with achieved outer heights **960** (scale 1)
+  or **640** (scale 1.5 / 125% zoom); all 40 prompts and six accounts remain scrollable.
+- Four position/size intentions, symbolic defaults, next-opening behavior, browser
+  remembered dimensions, Classic/Web light/dark, manual invalidation, absent activation,
+  narrow panning, one EventSource and empty browser storage are verified. The
+  [headless screenshot](../../architecture/governance/verification/mini-fit/chrome-fit-150-zoom-fit.png)
+  was inspected; it is app-content proof, not a Windows-native frame capture.
+- Read-only installed V2: **17 coherent publications**, one running prompt, three
+  accounts/one primary-period cost, four known-finish cards, four quota projections,
+  one numeric capacity/idle window, **9.475s**, owned close **0.051s**. No inference,
+  shared OpenCode stop or real-user settings mutation. This is bounded source evidence,
+  not exhaustive history/Daily or physical browser acceptance.
+
+The integrated Electron browser was tried first and has no Document PiP API. No
+visible external desktop work was needed. **No requirement/test exception was requested
+or granted.** Physical Windows frames/manual dragging, monitor transitions, macOS and
+screen-reader speech remain unverified, not PASS. First-open frame/zoom is necessarily
+estimated before PiP exists; browser-imposed geometry and independent-restoration limits
+are explicit approved-scope limitations, not revival of the withdrawn Auto-height gate.
+Historical On Hold evidence below remains dated context. No release ZIP/tag/Release.
+
 ## FR 000591 — owner re-scoped and returned to Ready, 2026-11-06
 
 The owner explicitly approved the reduced click/open-fit approach and withdrew the

@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.180 — 2026-11-06
+
+- Mini Watch separates position and size preferences. Default Fit on open measures actual layout before requesting approximately 650 outer DIPs with two running-row capacity and all accounts; Earlier Sessions activation grows/collapses to measured content. Remember last size retains browser-native dimensions where placement permits. Native screen clamps retain document scrolling; passive Live updates never resize. No stored pixel geometry, extra acquisition owner or release archive is added.
+
 ## v80.179 — 2026-11-06
 
 - Web Sessions, Models and both Token Mix tables share Watch's compact header, cell dividers and rounded shell without changing their data/sort contracts. Sessions uses browser-local YYYY-MM-DD HH:mm, truthful pending/unavailable/retained metrics, seven visible-page admissions per fair background turn, confirmed running-row markers and disabled pager buttons. Complete detail retains revision-pinned history, adaptive previews and indeterminate initial progress; Ictx shows only the canonical first-request input. CLI/Watch context transitions, pricing and Token Mix acquisition remain unchanged.

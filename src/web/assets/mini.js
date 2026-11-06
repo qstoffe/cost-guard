@@ -84,55 +84,93 @@ const MiniWatch = (() => {
       return keys.some(key => now - (this.clocks.get(key)?.at ?? this.started) >= 600000);
     }
   }
+  // Natural layout, including all accounts/warnings and a height-only two-row reserve.
+  // Clones are invisible, inert measurement artifacts, never published prompt data.
+  function contentHeight(view, width) {
+    const {doc, root} = view, win = doc.defaultView;
+    const copy = root.cloneNode(true); copy.classList.add('mini-measuring');
+    copy.inert = true; copy.setAttribute('aria-hidden', 'true'); copy.style.width = width + 'px';
+    root.parentNode.append(copy);
+    try {
+      const body = copy.querySelector('.mini-prompts > table > tbody');
+      const rows = [...body.children].filter(row => !row.querySelector('.mini-empty'));
+      const emptyHeight = rows.length ? 0 : body.getBoundingClientRect().height;
+      const sample = view.sessionRow(5);
+      ['Session', '#1', 'N/A', '0s', 'N/A'].forEach((text, index) => { sample.children[index].textContent = text; });
+      body.append(sample);
+      const rowHeight = Math.max(sample.getBoundingClientRect().height,
+        ...rows.map(row => row.getBoundingClientRect().height));
+      sample.remove();
+      return Math.ceil(copy.getBoundingClientRect().height + Math.max(0, (2 - rows.length) * rowHeight - emptyHeight));
+    } finally { copy.remove(); }
+  }
+  function heightCap(win) {
+    return Math.min(1000, win.screen?.availHeight > 0 ? win.screen.availHeight : 1000);
+  }
+  function geometry(win) {
+    // CSS document pixels and screen DIPs differ with browser zoom. The opener's
+    // outer/inner ratio is an estimate before the first PiP exists, not OS proof.
+    const scale = win.outerWidth > 0 && win.innerWidth > 0 ? win.outerWidth / win.innerWidth : 1;
+    return {scale, frame: Math.max(0, win.outerHeight - win.innerHeight * scale)};
+  }
+  function targetHeight(view) {
+    const win = view.doc.defaultView, {scale, frame} = geometry(win);
+    const style = win.getComputedStyle(view.doc.body);
+    const padding = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
+    return Math.min(heightCap(win), Math.ceil((contentHeight(view, view.root.getBoundingClientRect().width) + padding + 4) * scale + frame));
+  }
   // One bounded native adjustment per user disclosure, never per publication.
   class DisclosureSize {
-    constructor(win, prompts, accounts) {
-      this.win = win; this.prompts = prompts; this.accounts = accounts;
-      this.restore = null; this.pending = null;
-      win.addEventListener('resize', () => {
+    constructor(view, mode) {
+      this.view = view; this.win = view.doc.defaultView; this.mode = mode;
+      this.restore = null; this.pending = null; this.widthCorrection = 0;
+      this.win.addEventListener('resize', () => {
         if (this.pending) this.confirm(this.pending);
-        else if (this.restore && !this.same(this.bounds(), this.restore.after)) this.restore = null;
+        else if (this.restore && !this.same(this.bounds(), this.restore.after)) {
+          this.restore = null; this.widthCorrection = 0;
+        }
       });
     }
     bounds() { return {width: this.win.outerWidth, height: this.win.outerHeight}; }
     same(a, b) { return Math.abs(a.width - b.width) <= 1 && Math.abs(a.height - b.height) <= 1; }
     resize(width, height) {
-      // A zero width delta avoids fractional-DIP resizeTo rounding drift.
-      if (typeof this.win.resizeBy === 'function') this.win.resizeBy(0, height - this.win.outerHeight);
-      else this.win.resizeTo(width, height);
+      // Start vertical-only. Some real page-zoom/native-DPI combinations still
+      // round width upward; compensate that observed single DIP on the NEXT
+      // eligible click, never by a second call, loop or passive correction.
+      if (typeof this.win.resizeBy === 'function') this.win.resizeBy(this.widthCorrection, height - this.win.outerHeight);
+      else this.win.resizeTo(width + this.widthCorrection, height);
     }
     confirm(request) {
       const after = this.bounds();
-      if (request.after && !this.same(after, request.after)) { this.restore = null; return; }
-      if (Math.abs(after.width - request.before.width) <= 1 && after.height > request.before.height) {
-        request.after = after; this.restore = {before: request.before, after};
+      if (request.after && !this.same(after, request.after)) { this.restore = null; this.widthCorrection = 0; return; }
+      if (!request.after) {
+        if (Math.abs(after.width - request.before.width) <= 1)
+          this.widthCorrection = Math.max(-1, Math.min(1, this.widthCorrection + request.before.width - after.width));
+        else this.widthCorrection = 0; // Native clamp, not rounding; no width repair.
+        request.after = after;
+      }
+      if (request.expanded && Math.abs(after.width - request.before.width) <= 1 && after.height > request.before.height) {
+        this.restore = {before: request.before, after};
       }
     }
     toggle(earlier) {
-      const {win, prompts, accounts} = this;
-      const scrolled = prompts.scrollHeight > prompts.clientHeight + 1;
+      const {win, view} = this;
       const before = this.bounds();
       earlier.hidden = !earlier.hidden;
-      prompts.dataset.expanded = String(!earlier.hidden);
-      if (earlier.hidden) {
-        if (this.pending) this.confirm(this.pending);
-        this.pending = null;
-        const restore = this.restore; this.restore = null;
-        if (restore && this.same(before, restore.after)) {
-          try { this.resize(restore.before.width, restore.before.height); } catch (_) {}
-        }
-        return;
-      }
-      this.restore = null;
-      if (scrolled || !(typeof win.resizeBy === 'function' || typeof win.resizeTo === 'function') || !win.innerWidth) return;
-      const overflow = prompts.scrollHeight - prompts.clientHeight;
-      if (overflow <= 1) return; // Horizontal panning alone is not a height request.
-      // Flex shrink may also have reduced the independent accounts viewport.
-      const limit = parseFloat(win.getComputedStyle(accounts).maxHeight);
-      const accountHeight = Math.min(accounts.scrollHeight, Number.isFinite(limit) ? limit : accounts.scrollHeight);
-      const scale = before.width / win.innerWidth;
-      const height = before.height + Math.ceil((overflow + Math.max(0, accountHeight - accounts.clientHeight) + 2) * scale);
-      const request = {before}; this.pending = request;
+      view.prompts.dataset.expanded = String(!earlier.hidden);
+      if (this.pending) this.confirm(this.pending);
+      this.pending = null;
+      const restore = this.restore; this.restore = null;
+      // Remembered mode must not restore stale bounds after an intervening resize.
+      if (earlier.hidden && this.mode === 'remember-last' &&
+          (!restore || !this.same(before, restore.after))) return;
+      if (win.navigator?.userActivation && !win.navigator.userActivation.isActive) return;
+      if (!(typeof win.resizeBy === 'function' || typeof win.resizeTo === 'function') || !win.innerWidth) return;
+      const compact = view.fitHeight();
+      const height = earlier.hidden ? this.mode === 'remember-last' ?
+        Math.min(heightCap(win), restore.before.height) : compact : Math.max(before.height, compact);
+      if (Math.abs(height - before.height) <= 1) return;
+      const request = {before, expanded:!earlier.hidden}; this.pending = request;
       try { this.resize(before.width, height); }
       catch (_) { this.pending = null; return; }
       // Observe achieved bounds, not API return success. No later resize/retry.
@@ -143,7 +181,7 @@ const MiniWatch = (() => {
     }
   }
   class View {
-    constructor(doc, returnToWatch) {
+    constructor(doc, returnToWatch, mount = doc.body, mode = 'fit-on-open') {
       this.doc = doc;
       const el = (tag, text, name) => {
         const node = doc.createElement(tag);
@@ -180,8 +218,8 @@ const MiniWatch = (() => {
       this.promptRows = new Map(); this.emptyPrompts = this.emptyRow(5); this.emptyHistory = this.emptyRow(2);
       this.accounts = el('ul', undefined, 'mini-accounts'); this.lines = new Map();
       this.accounts.tabIndex = 0; this.accounts.setAttribute('aria-label', 'Primary subscription usage and same-period observed CCost');
-      this.disclosureSize = new DisclosureSize(doc.defaultView, this.prompts, this.accounts);
-      this.root.append(top, this.health, this.prompts, this.accounts); doc.body.replaceChildren(this.root);
+      this.disclosureSize = mount === doc.body ? new DisclosureSize(this, mode) : null;
+      this.root.append(top, this.health, this.prompts, this.accounts); mount.replaceChildren(this.root);
     }
     table(parent, historical) {
       const table = this.el('table', undefined, 'mini-prompt-table'), head = this.el('thead'), header = this.el('tr');
@@ -205,6 +243,7 @@ const MiniWatch = (() => {
       }
       head.append(header); const body = this.el('tbody'); table.append(head, body); parent.append(table); return body;
     }
+    fitHeight() { return targetHeight(this); }
     emptyRow(columns) {
       const row = this.el('tr'), cell = this.el('td'); cell.colSpan = columns;
       cell.append(this.el('span', '', 'mini-empty')); row.append(cell); return row;
@@ -364,7 +403,7 @@ const MiniWatch = (() => {
     }
   }
   class Controller {
-    constructor(owner, button, feedback, returnToWatch) {
+    constructor(owner, button, feedback, returnToWatch, measureFactory = () => new OpeningMeasure(owner)) {
       this.owner = owner; this.button = button; this.feedback = feedback; this.returnToWatch = returnToWatch;
       this.window = null; this.view = null; this.pending = null; this.ended = false;
       this.publication = null; this.healthState = {kind: 'starting'}; this.receivedAt = 0;
@@ -373,8 +412,10 @@ const MiniWatch = (() => {
       this.appearance = owner.matchMedia('(prefers-color-scheme: dark)');
       this.themeChanged = () => this.syncTheme(); this.themeProperties = [];
       this.reason = unavailable(owner);
+      this.measure = this.reason ? null : measureFactory();
+      this.measure?.loaded?.then(() => this.sync());
       button.addEventListener('click', () => this.toggle());
-      owner.addEventListener('pagehide', () => { this.ended = true; this.close(); });
+      owner.addEventListener('pagehide', () => { this.ended = true; this.close(); this.measure?.close(); });
       this.sync();
     }
     sync() {
@@ -382,9 +423,10 @@ const MiniWatch = (() => {
       if (win && (win.closed || this.owner.documentPictureInPicture.window !== win)) this.release(win);
       this.button.textContent = `Mini Watch: ${this.window ? 'On' : 'Off'}`;
       this.button.setAttribute('aria-pressed', this.window ? 'true' : 'false');
-      this.button.disabled = Boolean(this.reason) || !this.placement;
+      this.button.disabled = Boolean(this.reason) || !this.placement || !this.measure?.ready;
       if (this.reason) this.feedback.textContent = this.reason;
-      else if (!this.placement) this.feedback.textContent = 'Mini Watch placement unavailable. Open Settings to retry.';
+      else if (!this.placement) this.feedback.textContent = 'Mini Watch settings unavailable. Open Settings to retry.';
+      else if (!this.measure?.ready) this.feedback.textContent = 'Preparing Mini Watch layout…';
     }
     release(win) {
       if (this.window !== win) return;
@@ -401,7 +443,7 @@ const MiniWatch = (() => {
     }
     async toggle() {
       this.sync();
-      if (this.reason || this.ended || !this.placement) return;
+      if (this.reason || this.ended || !this.placement || !this.measure?.ready) return;
       if (this.window) { this.close(); return; }
       if (this.pending) {
         this.pending.cancelled = true; this.feedback.textContent = 'Opening cancelled.'; return;
@@ -410,14 +452,14 @@ const MiniWatch = (() => {
       this.feedback.textContent = 'Opening Mini Watch…';
       let win = null;
       try {
-        // Called synchronously inside the explicit click's user activation.
-        // Chromium requests screen DIPs, independent of page zoom. Measured on
-        // Windows at 150%: 450 DIPs produced a 729-physical-pixel visible frame.
-        // 250 leaves room for native chrome below the 470px target on that setup.
-        // Do not resize after opening: Chrome requires a NEW PiP user activation.
+        // Synchronous real-layout measurement BEFORE requestWindow consumes activation.
+        // Native placement couples size/position. Fit wins over remembered position;
+        // Standard wins over remembered size. Never emulate native coordinates.
         const instance = this.instance;
-        win = await this.owner.documentPictureInPicture.requestWindow({width: 560, height: 250,
-          preferInitialWindowPlacement: !this.opened || this.placement === 'standard'});
+        const size = this.size;
+        const dimensions = this.measure.read(this);
+        win = await this.owner.documentPictureInPicture.requestWindow({...dimensions,
+          preferInitialWindowPlacement: !this.opened || this.placement === 'standard' || size === 'fit-on-open'});
         if (instance === this.instance) this.opened = true;
         if (request.cancelled || this.ended || win.closed || this.owner.documentPictureInPicture.window !== win) {
           win.close(); return;
@@ -429,18 +471,28 @@ const MiniWatch = (() => {
         this.appearance.addEventListener('change', this.themeChanged);
         const icon = doc.createElement('link'); icon.rel = 'icon'; icon.type = 'image/x-icon';
         icon.href = new URL('/favicon-cg1.ico', this.owner.location.href).href; doc.head.append(icon);
+        const styles = [];
         for (const name of ['app.css', 'mini.css']) {
           const link = doc.createElement('link'); link.rel = 'stylesheet';
-          link.href = new URL('/' + name, this.owner.location.href).href; doc.head.append(link);
+          link.href = new URL('/' + name, this.owner.location.href).href;
+          styles.push(new Promise(resolve => link.addEventListener('load', resolve, {once:true})));
+          doc.head.append(link);
         }
         this.view = new View(doc, () => {
           this.returnToWatch();
           try { this.owner.focus(); }
           catch (_) { this.view.health.textContent = 'Use the browser’s native return-to-tab control.'; }
-        });
+        }, doc.body, size);
         // A visible PiP document owns this freshness timer, not a hidden main rAF.
         this.timer = win.setInterval(() => { this.sync(); this.render(); }, 5000);
         this.render(); this.feedback.textContent = '';
+        Promise.all(styles).then(() => win.requestAnimationFrame(() => {
+          if (this.window !== win || win.closed) return;
+          this.openingBounds = {outerWidth:win.outerWidth, outerHeight:win.outerHeight,
+            innerWidth:win.innerWidth, innerHeight:win.innerHeight, requested:dimensions};
+          if (size === 'fit-on-open' && this.view.fitHeight() > win.outerHeight + 2)
+            this.feedback.textContent = 'Browser size limits prevented the full opening fit. Scroll Mini Watch to reach all content.';
+        }));
       } catch (_) {
         if (win) { this.release(win); win.close(); }
         this.feedback.textContent = 'Mini Watch could not open. Check browser support, policy and user-activation restrictions; click to retry.';
@@ -459,6 +511,7 @@ const MiniWatch = (() => {
       if (instance && instance !== this.instance) { this.instance = instance; this.opened = false; }
       if (values) {
         this.placement = values.miniWatchPlacement;
+        this.size = values.miniWatchSize || 'fit-on-open';
         this.feedback.textContent = '';
       }
       this.syncTheme(); this.sync(); this.render();
@@ -482,6 +535,42 @@ const MiniWatch = (() => {
       const now = Date.now();
       this.view.update(this.publication, this.healthState, now - this.receivedAt > 15000, this.observations, now);
     }
+  }
+  // Styles are loaded before enabling the opener button; no await or forbidden
+  // post-open resize is needed in the activation handler. Shadow isolation leaves
+  // the main document/CSP intact. It contains no acquisition, timer or live owner.
+  class OpeningMeasure {
+    constructor(owner) {
+      this.owner = owner;
+      const doc = owner.document;
+      this.host = doc.createElement('div'); this.host.inert = true;
+      this.host.setAttribute('aria-hidden', 'true');
+      this.host.style.cssText = 'position:fixed;left:0;top:0;visibility:hidden;pointer-events:none';
+      const shadow = this.host.attachShadow({mode:'closed'});
+      this.body = doc.createElement('body'); shadow.append(this.body); doc.body.append(this.host);
+      this.view = new View(doc, () => {}, this.body);
+      this.loaded = Promise.all(['app.css', 'mini.css'].map(name => new Promise(resolve => {
+        const link = doc.createElement('link'); link.rel = 'stylesheet';
+        link.href = new URL('/' + name, owner.location.href).href;
+        link.addEventListener('load', () => resolve(true), {once:true});
+        link.addEventListener('error', () => resolve(false), {once:true}); shadow.append(link);
+      }))).then(values => { this.ready = values.every(Boolean); });
+    }
+    read(controller) {
+      const owner = this.owner, view = this.view, now = Date.now();
+      view.update(controller.publication, controller.healthState, now - controller.receivedAt > 15000, controller.observations, now);
+      // First-open native frame estimate is intentionally conservative; the API has
+      // no pre-open frame/zoom query. Screen clamps remain browser-owned and scrollable.
+      const scale = geometry(owner).scale;
+      const width = Math.min(650, owner.screen?.availWidth || 650);
+      const frameWidth = 16, frameHeight = 48;
+      const style = owner.getComputedStyle(this.body);
+      const padding = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
+      const contentWidth = (width - frameWidth) / scale - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+      const height = Math.ceil((contentHeight(view, contentWidth) + padding + 6) * scale);
+      return {width: Math.max(1, width - frameWidth), height: Math.max(1, Math.min(heightCap(owner) - frameHeight, height))};
+    }
+    close() { this.host.remove(); }
   }
   return {Controller};
 })();

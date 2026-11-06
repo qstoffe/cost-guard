@@ -18,6 +18,7 @@
     // User overrides may select "default" for any Web preference to inherit.
     // Placement mode persists; browser-native window bounds never do.
     "miniWatchPlacement": "remember-last",
+    "miniWatchSize": "fit-on-open",
     // Finite native quotas only; Unlimited keeps Used. CLI remains Used.
     "quotaDisplayMode": "used"
   },

@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v80.179, 2026-11-06), the supported distribution.
+Use **current `main`** (v80.180, 2026-11-06), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -324,7 +324,7 @@ Useful settings include:
 - `pricingMaxAgeHours`: pricing/model metadata cache age.
 - `thresholds`: running-cost, context, percentile and quota warning thresholds.
 - `colorScheme`, `colorSchemes`, `colors`: terminal palette selection and per-role overrides.
-- `webSettings`: Web-only `theme`, `ccostDisplayUnit`, `miniWatchPlacement` and `quotaDisplayMode` (`used` default / `remaining`). Each supports symbolic `default` inheritance or an explicit pinned choice. Legacy `webTheme` is fallback; other keys stay shared.
+- `webSettings`: Web-only `theme`, `ccostDisplayUnit`, `miniWatchPlacement` (position), `miniWatchSize` (`fit-on-open` default / `remember-last`) and `quotaDisplayMode` (`used` default / `remaining`). Each supports symbolic `default` inheritance or an explicit pinned choice. Legacy `webTheme` is fallback; other keys stay shared.
 
 `modelComparisonNew` colors new names/dates; `modelComparisonPromotion` colors active rates/Relative CCost. Superseded colors fade; plain output is unchanged.
 
@@ -361,7 +361,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.179 (2026-11-06):** Sessions, Models and both Token Mix tables share Watch's compact rounded grid. Sessions adds local 24-hour dates, truthful loading/retained states, visible-page indexing priority, running-row markers and button navigation. Detail keeps full history with an adaptive preview, honest loading progress and first-request-only Ictx. CLI/accounting semantics remain unchanged. See [Web Beta](docs/web-beta.md).
+**v80.180 (2026-11-06):** Mini Watch defaults to measured Fit on open near 650 outer DIPs, with two running-row capacity and all subscription rows. Earlier Sessions clicks grow/shrink; passive Live updates never resize. Separate position/size preferences honestly describe native browser coupling and scroll fallbacks. See [Mini Watch](docs/web-mini-watch.md).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

@@ -1,7 +1,7 @@
 /* Shared semantic colors; PiP chrome is browser-owned, not another inner card. */
-html, body { height: 100%; overflow: hidden; }
+html, body { min-height: 100%; overflow: auto; }
 body { padding: .5rem; max-width: none; }
-.mini-watch { padding: 0; min-width: 0; height: 100%; display: flex; flex-direction: column; gap: .4rem; }
+.mini-watch { padding: 0; min-width: 0; display: flex; flex-direction: column; gap: .4rem; }
 .mini-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .2rem .5rem;
   flex: 0 0 auto; min-width: 0; padding: 0; background: none; }
 .mini-summary { align-self: flex-start; min-height: 1.6rem; padding: .1rem .25rem; border-color: transparent;
@@ -13,11 +13,10 @@ body { padding: .5rem; max-width: none; }
 .mini-prompts section[hidden] { display: none; }
 .mini-prompts section { margin: 0 0 .4rem; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
 .mini-daily { margin: 0 0 0 auto; min-width: 0; max-width: 100%; text-align: right; font-size: .8rem; overflow-wrap: anywhere; color: var(--ink); }
-.mini-health { flex: 0 0 auto; min-height: 0; max-height: 25%; overflow: auto;
+.mini-health { flex: 0 0 auto; min-height: 0;
   font-size: .75rem; color: var(--muted); margin: 0; }
 .mini-health[hidden] { display: none; }
-.mini-prompts { min-height: 3.6rem; max-height: 10.8rem; overflow: auto; flex: 0 1 auto; }
-.mini-prompts[data-expanded="true"] { max-height: none; }
+.mini-prompts { min-height: 0; overflow-x: auto; flex: 0 0 auto; }
 .mini-prompt-table { table-layout: auto; border-collapse: separate; border-spacing: 0; width: 100%;
   margin: 0; font-size: .9rem; line-height: 1.5; background: var(--panel); }
 .mini-prompt-table th, .mini-prompt-table td { padding: .15rem .25rem; border: 0;
@@ -44,8 +43,8 @@ body { padding: .5rem; max-width: none; }
 .mini-running { color: var(--watch-running); }
 .mini-success { color: var(--watch-success); }
 .mini-error { color: var(--error); }
-.mini-accounts { list-style: none; padding: .2rem; margin: 0; min-height: 2.8rem; max-height: 8.4rem;
-  flex: 0 1 auto; overflow: auto; font-size: .8rem; line-height: 1.4; overflow-wrap: anywhere; }
+.mini-accounts { list-style: none; padding: .2rem; margin: 0; min-height: 2.8rem;
+  flex: 0 0 auto; font-size: .8rem; line-height: 1.4; overflow-wrap: anywhere; }
 .mini-accounts li { min-height: 2.65rem; padding-bottom: .4rem; }
 .mini-accounts progress { display: block; appearance: none; border: 0; border-radius: 1rem; overflow: hidden;
   width: 100%; height: .65rem; margin-top: .2rem; color: var(--watch-quota-fill); accent-color: var(--watch-quota-fill); }
@@ -57,7 +56,8 @@ body { padding: .5rem; max-width: none; }
 .mini-warning { color: var(--warn); }
 .mini-accounts li.mini-exhausted { color: var(--error); }
 .mini-prompt-table :focus-visible { outline-offset: -3px; }
-@media (max-height: 15rem) { .mini-prompts, .mini-accounts { min-height: 2rem; flex-shrink: 1; } }
+.mini-measuring { position: fixed; left: 0; top: 0; visibility: hidden; height: auto; }
+.mini-measure-host { position: fixed; left: 0; top: 0; visibility: hidden; pointer-events: none; }
 /* Web uses the opener's resolved roles; never restyle Classic or native PiP chrome. */
 html[data-theme="web"], [data-theme="web"] body { background: var(--bg); color: var(--ink); }
 [data-theme="web"] .mini-accounts { background: var(--panel); border-radius: .4rem; }
