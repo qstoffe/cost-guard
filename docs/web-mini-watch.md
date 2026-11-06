@@ -102,7 +102,7 @@ elastic width and the same left-title/right-total alignment. The running/recent 
 remains exactly **Session (Total CCost), #, CCost, Duration, Ctx**. Earlier starts collapsed
 every time a fresh Mini window opens; keyboard/click/touch works, and ordinary Live
 updates preserve the choice. The newest **up to three distinct eligible finished
-sessions** come from full Watch's canonical Earlier Prompts selection, displayed
+sessions** come from full Watch's canonical Earlier Sessions selection, displayed
 oldest-to-newest within that subset, including its unknown-finish fallback ordering.
 Running/recently ended sessions never appear in both tables. After the shared terminal
 grace a session may enter history; resuming moves it back out coherently.

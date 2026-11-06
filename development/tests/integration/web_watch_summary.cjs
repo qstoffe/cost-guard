@@ -339,7 +339,7 @@ Object.assign(initial.view, {cards_state:'observed', history_state:'observed', d
 initial.view.active_cards = [];
 vm.runInContext('fresh.update(initial)', context);
 assert.equal(context.fresh.empty.textContent, 'No running prompts');
-assert.equal(context.fresh.history.textContent, 'No earlier prompts');
+assert.equal(context.fresh.history.textContent, 'No earlier sessions');
 assert.match(context.fresh.daily.textContent, /Daily activity unavailable/);
 // Independent sublanes cannot turn advancing prompt observations into a global delay.
 const advancing = structuredClone(input);

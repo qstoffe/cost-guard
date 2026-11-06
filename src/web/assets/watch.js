@@ -273,7 +273,7 @@ const WatchView = (() => {
       this.state = state;
       this.root = el('div', undefined, 'watch-view');
       this.earlier = el('details', undefined, 'watch-earlier');
-      this.earlier.append(el('summary', 'Earlier Prompts'));
+      this.earlier.append(el('summary', 'Earlier Sessions'));
       this.history = el('div', undefined, 'watch-history'); this.earlier.append(this.history);
       this.active = el('div', undefined, 'watch-active');
       this.empty = el('p'); this.empty.setAttribute('role', 'status');
@@ -311,7 +311,7 @@ const WatchView = (() => {
           if (!this.cards.has(key)) this.cards.set(key, new Card(historical));
           const card = this.cards.get(key); card.update(value, historical); return card.root;
         });
-        if (historical && !wanted.length && !historyLoading) wanted.push(el('p', view.history_state === 'unavailable' ? 'Earlier prompts unavailable' : 'No earlier prompts'));
+        if (historical && !wanted.length && !historyLoading) wanted.push(el('p', view.history_state === 'unavailable' ? 'Earlier sessions unavailable' : 'No earlier sessions'));
         reconcile(parent, wanted);
       }
       for (const key of this.cards.keys()) if (!keep.has(key)) this.cards.delete(key);

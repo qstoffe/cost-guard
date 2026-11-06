@@ -68,7 +68,7 @@ in the [verification notes](../development/journal/web/browser-links.md).
 v80.139 recognizes persisted failed/interrupted runs that ended before producing an
 assistant response, including resumed work followed by a system notice. The server
 retires the correct prompt, freezes duration and preserves known usage through
-refresh/retention and Earlier Prompts. The running aggregate excludes terminal grace;
+refresh/retention and Earlier Sessions. The running aggregate excludes terminal grace;
 Mini retains those final rows briefly without labeling them running. A later real attempt can still run; age, inactivity, missing
 usage and quota percentages alone never establish an end. Generic failures stay
 errors unless the source supports a specific abort/quota cause.
@@ -441,7 +441,7 @@ One authenticated `/api/live` watchdog runs at ten-second intervals after the pr
 
 [Built-in browser, deterministic and real-source verification](../development/architecture/governance/verification/web-connection.md) records the tested states and explicit physical-tray/suspension/restart/macOS limits.
 
-Watch gives each prompt/session card a subtle rounded frame. **Earlier Prompts** starts collapsed: five eligible
+Watch gives each prompt/session card a subtle rounded frame. **Earlier Sessions** starts collapsed: five eligible
 distinct sessions selected by newest supported prompt finish, then displayed oldest finished first,
 newest finished last, one exact latest-finished prompt each with deterministic ID ties. Unknown-ended
 history fills spare slots before known finishes, ordered by stable identity; it never displaces a known finish. It updates
@@ -659,7 +659,7 @@ not the visible prompt-cost delta. Completed same-source results remain useful
 baselines while newer evidence catches up; lifecycle generations cannot starve them.
 Known prompt/session/daily/account figures stay visible quietly during routine refresh,
 with no fleeting Loading/Refreshing/Retrying prose or temporary card-height change in
-Running or Earlier Prompts. Observed **No running prompts**/**No earlier prompts** remain.
+Running Prompts or Earlier Sessions. Observed **No running prompts**/**No earlier sessions** remain.
 Column/summary help explains metric scope rather than internal freshness logs. Missing initial
 Watch data remains quiet; elapsed time or independent Earlier/account/daily loading never
 creates a global Watch failure warning. **No running prompts** requires observed membership
