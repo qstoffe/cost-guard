@@ -36,6 +36,7 @@ class StatsPeriod:
     start_ms: int | None
     end_ms: int
     metrics: tuple[Stat, ...]
+    matched: Stat | None = None
 
 
 def windows(zone, now):

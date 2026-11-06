@@ -14,7 +14,7 @@ const ReportRoutes = (() => {
       models: ['Models', 'normal'],
       accounts: ['Accounts', null], sessions: ['Sessions', 'sessions'],
        'token-mix': ['Token Mix', 'token-mix'],
-       'ai-stats': ['AI Stats', 'ai-stats'], settings: ['Settings', null]};
+       'ai-stats': ['AI Stats', 'ai-stats'], comparisons: ['Comparisons', 'comparisons'], settings: ['Settings', null]};
     if (!routes[path]) return {title: 'Page not found', section: '', request: null};
     const [title, kind] = routes[path];
     let request = kind ? {kind} : null;

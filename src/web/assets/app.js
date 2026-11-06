@@ -59,6 +59,7 @@ function applySettings(value) {
     if (state.accounts) ReportView.syncUnits(state.accounts.root);
     if (state.tokenMix) ReportView.syncUnits(state.tokenMix.root);
     if (state.stats) ReportView.syncUnits(state.stats.root);
+    if (state.comparisons) ReportView.syncUnits(state.comparisons.root);
   }
   miniWatch?.settings(confirmed.values, hostInstance);
   return confirmed;
@@ -192,6 +193,18 @@ function show(state) {
     state.stats.update(state); state.stats.attach(output);
     return;
   }
+  if (state.section === 'comparisons') {
+    refresh.textContent = 'Retry Comparisons'; refresh.hidden = !state.failed;
+    cancel.hidden = !state.loading || !!state.result && !state.withheld;
+    notice.textContent = '';
+    ReportView.defaultUnit();
+    state.comparisons ||= new ComparisonsView.View((offset, revision) => {
+      state.request = {kind: 'comparisons', comparison_offset: offset, comparison_revision: revision};
+      state.orderReset = false; acquire(state);
+    });
+    state.comparisons.update(state); state.comparisons.attach(output);
+    return;
+  }
   if (state.section === 'settings') {
     heading.hidden = true;
     if (!settingsView) settingsView = new WebSettings.View(api, applySettings);
@@ -299,6 +312,8 @@ async function acquire(state, background = false, prices = false) {
         if (hostState.terminal) break;
          if (state.section === 'token-mix' && !TokenMixView.valid(job.result)) throw new Error('report_unavailable');
          if (state.section === 'ai-stats' && !AIStatsView.valid(job.result)) throw new Error('report_unavailable');
+         if (state.section === 'comparisons' && !ComparisonsView.valid(job.result)) throw new Error('report_unavailable');
+         if (state.section === 'comparisons') state.orderRetried = false;
         // Partial data is usable but never a successful 100% acquisition. Paint
         // completion only after the whole successful result has arrived.
         if (state.section === 'models' && !state.result && job.result.source.status === 'acquired') {
@@ -329,11 +344,15 @@ async function acquire(state, background = false, prices = false) {
        if (state === current && !background) {
         notice.textContent = state.message;
          if (state.section === 'models' && !state.result) show(state);
-         if (state.section === 'ai-stats') show(state);
+         if (['ai-stats', 'comparisons'].includes(state.section)) show(state);
       }
       await new Promise(resolve => setTimeout(resolve, 500));
     }
   } catch (error) {
+    if (state.section === 'comparisons' && error.message === 'session_catalog_changed' && !state.orderRetried) {
+      state.request = {kind: 'comparisons'}; state.orderReset = true; state.retryOrder = true;
+      state.orderRetried = true;
+    }
     state.message = prices ? 'Price list refresh failed; previous prices retained' : background ? 'Update delayed; last completed report retained.' :
       `${state.result ? 'STALE — last known snapshot retained. ' : ''}${failure(error.message)}`;
     if (error.message === 'report_timeout' && state.lastWork) state.message += ` Last observed work: ${state.lastWork}.`;
@@ -346,6 +365,9 @@ async function acquire(state, background = false, prices = false) {
   } finally {
     state.loading = false; state.priceRefreshing = false; state.active = null; state.checkedAt = Date.now();
     show(state); scheduleCachedReport();
+    if (state.retryOrder && state === current && !document.hidden && hostState.writable) {
+      state.retryOrder = false; acquire(state);
+    }
     if (state === current && state.section === 'ai-stats' && !state.result && !state.failed && !document.hidden &&
         JSON.stringify(request) !== JSON.stringify(state.request)) acquire(state);
   }
@@ -414,9 +436,9 @@ function navigate() {
   if (redirected) document.getElementById('content').focus();
   if (route.section === 'settings' && csrf && !hostState.terminal) settingsView.read();
   if (csrf && hostState.writable && current.request && !current.explicit && !current.detail && !current.result && !current.attempted &&
-      (current.section !== 'ai-stats' || !document.hidden)) {
+       (!['ai-stats', 'comparisons'].includes(current.section) || !document.hidden)) {
     current.attempted = true;
-    if (current.section !== 'ai-stats' || !document.hidden) acquire(current);
+    if (!['ai-stats', 'comparisons'].includes(current.section) || !document.hidden) acquire(current);
   }
 }
 async function connect() {
@@ -445,7 +467,7 @@ async function connect() {
            }
         }
         if (hostState.writable && current?.request && !current.explicit && !current.result && !current.attempted &&
-            (current.section !== 'ai-stats' || !document.hidden)) {
+             (!['ai-stats', 'comparisons'].includes(current.section) || !document.hidden)) {
           current.attempted = true; acquire(current);
         }
       }, connectionStatus);
@@ -489,7 +511,7 @@ document.addEventListener('visibilitychange', () => {
   if (!document.hidden) liveConnection?.resync();
   if (!document.hidden) {
     enterCachedReport(current);
-    if (current?.section === 'ai-stats' && !current.result && !current.attempted) {
+    if (['ai-stats', 'comparisons'].includes(current?.section) && !current.result && !current.attempted) {
       current.attempted = true; acquire(current);
     }
   }

@@ -50,6 +50,14 @@ Browser sorting/coherent replacement never acquire or revalue usage. This scoped
 ownership update describes base `42cc45f624d7b9cda560e365e53a93cec36ff7bc` plus
 FR 000599's source diff, not a whole-document revalidation.
 
+Web Comparisons adds source-neutral exact first-input identity and compact per-root
+run metrics over canonical prompt analysis, not a second valuation/timing engine.
+All-history source batches and revision-aware fingerprints remain in reports; the
+application exports only derived page/run values and ephemeral safe previews. The
+browser pages ten groups, retains all repetitions and shares Watch table/help plus
+five-minute visible-route cached-report lifecycle. AI Stats reuses its existing
+period acquisition for a conditional extra fact. [Owners and limits](modules/web.md).
+
 Sessions additionally shares the full observed catalog with `application/session_catalog.py`.
 The Web coordinator owns a separate single-worker scalar-index lane; HTTP never acquires
 history. Validated source/dependency-keyed summaries enable exact global sort, with

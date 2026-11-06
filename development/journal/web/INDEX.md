@@ -54,6 +54,9 @@ Status: current
 - AI Stats: `development/journal/web/ai-stats.md` records canonical ten-card metrics,
   shared one-hour re-entry, cold/warm finite timings, split UI/process proof and
   Decision Delegate-authorized accessibility/documentation exceptions.
+- Exact first-input comparisons: `development/journal/web/comparisons.md` records
+  causal per-run boundaries, private compact indexing, bounded catalog batching,
+  responsive/help/paging evidence and explicitly partial real-source coverage.
 
 Historical observations keep their original dates and exceptions; this routing
 update does not refresh their validity or certify older failed probes. Parent

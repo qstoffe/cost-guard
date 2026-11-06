@@ -15,6 +15,7 @@ from .quota_display import quota_displays
 from .quota_ccost import quota_ccost_tokens
 from .prompt_costs import detail_tokens
 from .ai_stats import stat_tokens
+from .comparisons import display_tokens as comparison_tokens
 
 
 def decimal(value):
@@ -258,6 +259,7 @@ def _with_display(value, timezone_id, now_ms):
             alternate.update(quota_ccost_tokens(values, now_ms))
             alternate.update(detail_tokens(values))
             alternate.update(stat_tokens(values))
+            alternate.update(comparison_tokens(values, timezone_id))
         variants[unit] = alternate
     tokens = dict(variants[ccost_unit()])
     tokens.update(quota_tokens(values))

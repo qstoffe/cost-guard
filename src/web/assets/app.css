@@ -1,4 +1,15 @@
 /* Local system fonts and shared semantic roles; no external assets or theme storage. */
+.comparison-group, .comparison-groups { margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.comparison-group { margin-block: 1.25rem 2rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--line); }
+.comparison-group h3 { margin-bottom: .25rem; overflow-wrap: anywhere; }
+.comparison-preview { color: var(--muted); margin-block: .25rem .75rem; overflow-wrap: anywhere; }
+.comparison-table { width: 100%; }
+.comparison-table td { vertical-align: top; }
+.comparison-table td:first-child { min-width: 12rem; max-width: 26rem; white-space: normal; overflow-wrap: anywhere; }
+.comparison-table .numeric { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.comparison-facts { display: flex; flex-wrap: wrap; gap: .4rem 1.5rem; margin-top: .6rem; font-size: .85rem; color: var(--muted); }
+.comparison-state { font-size: .8rem; }
+[data-section="comparisons"] .report-search { display: none; }
 :root {
   color-scheme: light dark;
   font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -403,20 +414,22 @@ footer { border-top: 1px solid var(--line); color: var(--muted); font-size: .8re
 .watch-card > p:empty, .watch-view > p:empty { display: none; }
 /* One Watch-derived visual contract for semantic Web data tables. The shell
    clips corners and owns horizontal panning; document scrolling stays vertical. */
-.watch-table-scroll, .sessions-table-pan, .overview-models, .token-mix-pan {
+.watch-table-scroll, .sessions-table-pan, .overview-models, .token-mix-pan, .comparison-group .table-scroll {
   overflow-x: auto; max-height: none; border: 1px solid var(--line); border-radius: .4rem;
   background: var(--panel); scrollbar-color: var(--control-line) var(--surface);
 }
-:is(.watch-prompt-table, .sessions-table, .overview-model-table, .token-mix-table) :is(th, td) {
+:is(.watch-prompt-table, .sessions-table, .overview-model-table, .token-mix-table, .comparison-table) :is(th, td) {
   padding: .35rem .6rem; min-width: 0; max-width: none;
   background: transparent; white-space: nowrap; overflow-wrap: normal;
 }
-:is(.watch-prompt-table, .sessions-table, .overview-model-table, .token-mix-table) th { background: var(--surface); }
-:is(.watch-prompt-table, .sessions-table, .overview-model-table, .token-mix-table) :is(th, td):not(:last-child) { border-right: 1px solid var(--line); }
-:is(.sessions-table, .overview-model-table, .token-mix-table) th button {
+:is(.watch-prompt-table, .sessions-table, .overview-model-table, .token-mix-table, .comparison-table) th { background: var(--surface); }
+:is(.watch-prompt-table, .sessions-table, .overview-model-table, .token-mix-table, .comparison-table) :is(th, td):not(:last-child) { border-right: 1px solid var(--line); }
+:is(.sessions-table, .overview-model-table, .token-mix-table, .comparison-table) th button {
   width: auto; min-height: 0; padding: 0; border: 0; border-radius: 0; font: inherit; color: inherit;
 }
 .sessions-table th button::after { content: none; }
+.comparison-table th button::after { content: none; }
+.comparison-table :is(th, td):first-child { min-width: 12rem; max-width: 26rem; white-space: normal; overflow-wrap: anywhere; }
 .sessions-table tfoot td { border-top: 1px solid var(--line); background: var(--surface); }
 .overview-model-table :is(th, td):nth-child(2) { max-width: 45ch; white-space: normal; overflow-wrap: anywhere; }
 .watch-prompt-table { display: grid; width: 100%; grid-template-columns: repeat(2, max-content) minmax(14rem, 1fr) repeat(7, max-content); }

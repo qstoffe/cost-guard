@@ -26,9 +26,18 @@ class ModelsPriceRefresh(ReportRequest):
 
 def parse_report(value):
     page_fields = {"session_page_size", "session_offset", "session_catalog_revision"}
-    if not isinstance(value, dict) or set(value) - ({"kind", "session_id", "date_text", "session_limit", "stats_scope"} | page_fields):
+    comparison_fields = {'comparison_offset', 'comparison_revision'}
+    if not isinstance(value, dict) or set(value) - ({"kind", "session_id", "date_text", "session_limit", "stats_scope"} | page_fields | comparison_fields):
         raise ValueError("invalid_request")
     kind = ReportKind(value.get("kind"))
+    comparison_offset = value.get('comparison_offset', 0)
+    comparison_revision = value.get('comparison_revision')
+    if (comparison_fields & set(value) and kind is not ReportKind.COMPARISONS
+            or type(comparison_offset) is not int or not 0 <= comparison_offset <= 1_000_000 or comparison_offset % 10
+            or comparison_revision is not None and (not isinstance(comparison_revision, str)
+                or not re.fullmatch(r'[0-9a-f]{64}', comparison_revision))
+            or comparison_offset and comparison_revision is None):
+        raise ValueError('invalid_request')
     stats_scope = value.get('stats_scope', '30-days')
     if ('stats_scope' in value and kind is not ReportKind.AI_STATS
             or stats_scope not in ('30-days', 'month', 'all')):
@@ -65,7 +74,8 @@ def parse_report(value):
         except (ValueError, OverflowError) as exc:
             raise ValueError("invalid_request") from exc
     return ReportRequest(kind, session_id=session or None, date_text=date or None, session_limit=limit,
-                         session_page_size=size, session_offset=offset, session_catalog_revision=revision, stats_scope=stats_scope)
+                         session_page_size=size, session_offset=offset, session_catalog_revision=revision, stats_scope=stats_scope,
+                         comparison_offset=comparison_offset, comparison_revision=comparison_revision)
 
 
 class ProgressRelay:
@@ -163,7 +173,7 @@ class ReportJobs:
             for key, job in self._jobs.items():
                 if job["request"] == request and job["status"] in {"queued", "running"}:
                     return key
-                if (request.kind in {ReportKind.TOKEN_MIX, ReportKind.AI_STATS} and job["request"] == request
+                if (request.kind in {ReportKind.TOKEN_MIX, ReportKind.AI_STATS, ReportKind.COMPARISONS} and job["request"] == request
                         and job["status"] == "complete" and time.monotonic() - job.get("finished_at", 0) < 60):
                     # Coalesce staggered tab freshness checks as well as in-flight work.
                     # Retain the actual observation timestamp; reuse is not new acquisition.
@@ -269,7 +279,7 @@ class ReportJobs:
                     self.analysis = "failed"
                     self._stop()
             if self._active is None:
-                for key, job in sorted(self._jobs.items(), key=lambda item: item[1]["request"].kind in {ReportKind.TOKEN_MIX, ReportKind.AI_STATS}):
+                for key, job in sorted(self._jobs.items(), key=lambda item: item[1]["request"].kind in {ReportKind.TOKEN_MIX, ReportKind.AI_STATS, ReportKind.COMPARISONS}):
                     if job["status"] != "queued":
                         continue
                     receiver, sender = self._context.Pipe(duplex=False)
