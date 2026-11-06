@@ -1,0 +1,96 @@
+{
+  "feature": "FR 000608",
+  "version": "80.188",
+  "date": "2026-11-06",
+  "base": "7843b3563e2906e80395f6b548652b951be7763f",
+  "focusedTests": {"tests": 8, "outcome": "PASS"},
+  "fullSuite": {
+    "units": 152,
+    "tests": 1785,
+    "passed": 1784,
+    "skipped": 1,
+    "skip": "test_macos_web: zsh/PTY unavailable; native macOS CI owns shell execution",
+    "failures": 0,
+    "errors": 0,
+    "seconds": 95.4
+  },
+  "validator": {"passes": 11, "failures": 0, "existingAdvisoryWarnings": 6},
+  "browserCommand": "node development/tests/integration/probe_mini_fit.cjs <browser> <output> <scale> <zoom>",
+  "browserRuns": [
+    {
+      "browser": "Chrome/156.0.8078.80",
+      "emulatedDeviceScale": 1,
+      "actualBrowserZoom": 1,
+      "outcome": "PASS",
+      "layouts": 116,
+      "pairedCostLayouts": 54,
+      "nativeLimitedFitCases": 0,
+      "sampleRequestedOuterWidth": 650,
+      "sampleAchievedInnerWidth": 634
+    },
+    {
+      "browser": "Edg/156.0.4314.58",
+      "emulatedDeviceScale": 1.5,
+      "actualBrowserZoom": 1.25,
+      "outcome": "PASS",
+      "layouts": 116,
+      "pairedCostLayouts": 54,
+      "nativeLimitedFitCases": 6,
+      "sampleRequestedOuterWidth": 650,
+      "sampleAchievedInnerWidth": 427,
+      "limitedFitMeaning": "Browser clamps are separately recorded and assert truthful limitation/accessibility, not exact-fit PASS"
+    }
+  ],
+  "pairedCostMatrix": {
+    "requestedOuterWidths": [650, 520, 280],
+    "fontAndCssZoom": [["100%", 1], ["150%", 1], ["100%", 1.25]],
+    "appearances": ["classic-light", "web-light", "web-dark"],
+    "units": ["credits", "usd"],
+    "largeCreditsPair": "?123 456 (?987 654 321)",
+    "largeUsdPair": "?$1 234.56 (?$9 876 543.21)",
+    "assertions": [
+      "Both exact four-column layouts; name-only Session",
+      "Concurrent prompt costs 49 and 173 share full-session total 562",
+      "Historical latest-prompt cost 49 (562), not session cost duplicated",
+      "Independent prompt/total zero, N/A, partial and pending display tokens",
+      "Historical Prompt #, provider-qualified main model, effort, finished duration, calls, mixed/subagent/partial/abort caveats",
+      "Stable keyed focus and live visible/help corrections; Escape stays dismissed",
+      "Actual CDP delayed hover, keyboard focus and touch on active Session and historical cost",
+      "Nonwrapping untruncated right-aligned paired amounts; horizontal panning for oversized narrow layout",
+      "No document horizontal overflow or second table vertical scroller",
+      "Cost growth does not increase header-based opening request width"
+    ]
+  },
+  "preservedBrowserChecks": [
+    "16 opening-header snapshots per run, two-row reserve and native limits",
+    "Pointer/Enter/Space disclosure fitting and manual width via browser APIs",
+    "No passive Live/SSE native resize; one EventSource; no geometry storage",
+    "Activity midnight, DST offsets, unknown finish, retained help/focus",
+    "Four theme/appearance combinations and Credits/USD"
+  ],
+  "realInstallation": {
+    "command": "py -3 development/tests/integration/probe_mini_source.py",
+    "source": "V2",
+    "coherentPublications": 39,
+    "runningCount": 1,
+    "runningComplete": true,
+    "runningCostComplete": true,
+    "accounts": 3,
+    "primaryPeriodCostsAvailable": 1,
+    "finishedHistoryCards": 5,
+    "knownFinishes": 5,
+    "singleAcquisitionOwner": true,
+    "seconds": 23.999,
+    "ownedCloseSeconds": 0.1,
+    "sharedOpenCodeUntouched": true,
+    "inference": false
+  },
+  "exception": {
+    "decider": "Decision Delegate",
+    "scope": "FR 000608 only",
+    "reason": "Integrated browser disconnected; direct headless layout/help/geometry and real-source evidence adequately cover this bounded presentation change. Physical-only reassurance is not indispensable; no On Hold or owner question needed.",
+    "unperformedUnverified": ["physical Windows native frame/work area", "actual OS display scaling", "physical manual dragging", "monitor transition", "screen-reader speech"],
+    "noVisibleDesktopAuthorization": true,
+    "noFunctionalFailureWaiver": true
+  }
+}

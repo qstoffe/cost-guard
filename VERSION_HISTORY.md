@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.188 — 2026-11-06
+
+- Mini Watch uses name-only Session and a single CCost (Total) cell showing prompt cost followed by the full-session cost in parentheses in both four-column tables. Running prompt numbers move to Session help; Earlier cost help exposes that latest prompt’s model, effort, duration, calls and relevant attribution/outcome caveats. Existing canonical scopes, Activity/Ctx, shared scrolling and header-based opening fit are unchanged.
+
 ## v80.187 — 2026-11-06
 
 - Mini Watch Fit on open measures the narrowest styled header width for Cost Guard · Watch, Earlier Sessions and complete CCost Today, then fits content/two running-row height at that width. Initial content waits for styles to avoid premature scrollbar wrapping. Native clamps remain scrollable and disclosed; Remember last size, disclosure-only height resizing and passive Live behavior are unchanged. Settings help now describes content fitting rather than a fixed 650-DIP target.

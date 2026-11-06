@@ -8,27 +8,31 @@ module.exports = function sessionTables(vm, context, controller, view, input, he
   assert.equal(view.earlierToggle.attributes['aria-controls'], view.earlier.id);
   assert.equal(view.earlier.attributes['aria-labelledby'], view.earlierToggle.id);
   assert.deepEqual(view.body.parentNode.querySelectorAll('th').map(cell => cell.textContent),
-    ['Session (Total CCost)', '#', 'CCost', 'Duration', 'Ctx']);
+    ['Session', 'CCost (Total)', 'Duration', 'Ctx']);
   assert.deepEqual(view.historyBody.parentNode.querySelectorAll('th').map(cell => cell.textContent),
-    ['Activity', 'Session (Total CCost)', 'Ctx']);
+    ['Activity', 'Session', 'CCost (Total)', 'Ctx']);
   assert.match(view.historyBody.parentNode.attributes['aria-label'], /latest valid session context \(Ctx\)/);
   const activityHeader = view.historyBody.parentNode.querySelectorAll('th')[0];
   assert.match(helpText(activityHeader.children[0]), /latest supported finish[\s\S]*full local date and offset/);
-  const contextHeader = view.historyBody.parentNode.querySelectorAll('th')[2];
+  const contextHeader = view.historyBody.parentNode.querySelectorAll('th')[3];
   assert.match(helpText(contextHeader.children[0]), /Last valid estimate of the next request’s context[\s\S]*Not historical prompt context or a sum[\s\S]*N\/A means unavailable/);
   assert.equal(contextHeader.title, undefined);
   for (const body of [view.body, view.historyBody]) {
     const header = body.parentNode.querySelectorAll('th')[body === view.body ? 0 : 1];
-    assert.deepEqual(header.children[0].children.map(node => node.textContent), ['Session', ' (Total CCost)']);
-    assert.equal(header.querySelectorAll('button').length, 2, 'separate text-sized targets, no help in the grid gap');
-    const [session, total] = header.children[0].children;
+    assert.equal(header.textContent, 'Session');
+    assert.equal(header.querySelectorAll('button').length, 1);
+    const session = header.children[0];
     assert.equal(helpText(session), 'The name of the session.');
-    assert.match(helpText(total), /Reference cost of the entire session[\s\S]*earlier prompts and linked subagents/);
     assert.doesNotMatch(helpText(session), /CCost/);
+    const costHeader = body.parentNode.querySelectorAll('th')[body === view.body ? 1 : 2];
+    assert.match(helpText(costHeader.children[0]), /First: .*prompt’s reference CCost[\s\S]*In parentheses: the entire session’s reference CCost[\s\S]*Not provider billing[\s\S]*N\/A[\s\S]*partial pricing/);
   }
-  const cost = row => row.children[row.children.length === 3 ? 1 : 0].children[0].children[1].textContent;
-  assert.deepEqual(view.body.children.map(cost), [' (4583)', ' (4583)']);
-  assert.notEqual(view.body.children[0].children[2].textContent, '4583');
+  const cost = (row, historical = false) => row.children[historical ? 2 : 1].children[0].textContent;
+  assert.deepEqual(view.body.children.map(row => cost(row)), ['2 (4583)', '3 (4583)']);
+  const title = view.body.children[0].children[0].children[0].children[0];
+  assert.equal(title.tabIndex, 0); assert.equal(title.title, undefined);
+  assert.equal(helpText(title), 'Concurrent\nPrompt #23 in this session');
+  assert.equal(view.body.children[0].children[0].textContent, 'Concurrent', 'Session contains no cost');
   const history = index => ({...active, session_id:'history-'+index, title:'Earlier '+index, focal_id:'',
     session_summary:{...summary, context:{display:{watch_next_context_tokens:String(900+index)}}},
     rows:[{...active.rows[0], live_context:{display:{watch_next_context_tokens:'17'}},
@@ -39,12 +43,30 @@ module.exports = function sessionTables(vm, context, controller, view, input, he
   assert.equal(view.earlier.hidden, false);
   assert.equal(view.earlierToggle.attributes['aria-expanded'], 'true');
   assert.deepEqual(view.historyBody.children.map(row => row.dataset.id), ['history-2','history-3','history-4']);
-  assert.deepEqual(view.historyBody.children.map(row => row.children[2].textContent), ['902','903','904']);
-  assert.ok(view.historyBody.children.every(row => row.children.length === 3 && cost(row) === ' (4583)'));
+  assert.deepEqual(view.historyBody.children.map(row => row.children[3].textContent), ['902','903','904']);
+  assert.ok(view.historyBody.children.every(row => row.children.length === 4 && cost(row, true) === '2 (4583)'));
   assert.equal(view.earlier.parentNode, view.prompts, 'both tables use one region');
   const row = view.historyBody.children[0];
   assert.equal(row.querySelectorAll('button').length,0,'history values have no duplicate cues');
   assert.match(row.attributes['aria-label'], /Earlier session · Earlier 2/);
+  const detail = row.children[2].children[0];
+  assert.equal(detail.tabIndex, 0); assert.equal(detail.title, undefined);
+  const historicalItem = input.view.history_cards[2].rows[0], originalItem = structuredClone(historicalItem);
+  Object.assign(historicalItem, {model:'Example Model', effort:'high', display:{watch_duration_ms:'4m 12s'}});
+  Object.assign(historicalItem.prompt, {prompt_number:7, calls:12, linked_agent_count:2, has_additional_model:true,
+    unresolved_cost:true, aborted:true, abort_reason:'quota_limit',
+    cost_detail:{model_count:2, calls_complete:false, parts:[{role:'main',provider_id:'example',model_id:'model'}]}});
+  controller.update(input);
+  assert.match(helpText(detail), /Prompt #7\nMain model: Example Model \[example\/model\]\nEffort: high\nDuration: 4m 12s\nCalls: 12/);
+  assert.match(helpText(detail), /Linked subagents: 2[\s\S]*Multiple models[\s\S]*Partial pricing[\s\S]*attribution incomplete[\s\S]*Aborted · quota limit/);
+  assert.doesNotMatch(helpText(detail), /preview|raw prompt/i);
+  Object.assign(historicalItem, {model:'N/A', effort:'N/A', display:{}});
+  Object.assign(historicalItem.prompt, {prompt_number:null, calls:null, linked_agent_count:0, has_additional_model:false,
+    unresolved_cost:false, aborted:false, abort_reason:'', cost_detail:null});
+  controller.update(input);
+  assert.equal(row.children[2].children[0], detail, 'detail target is stable across corrections');
+  assert.equal(helpText(detail), 'Prompt number unavailable\nMain model: N/A\nEffort: N/A\nDuration: N/A');
+  Object.assign(historicalItem, originalItem); controller.update(input);
   for (let index=0;index<20;index++) {input.view.now_ms++; controller.update(input);}
   assert.equal(view.historyBody.children[0],row,'publication preserves row/focus identity');
   assert.equal(view.earlier.hidden,false,'SSE never resets disclosure');
@@ -66,7 +88,8 @@ module.exports = function sessionTables(vm, context, controller, view, input, he
   assert.equal(view.earlier.hidden,true);
   view.earlierToggle.fire('click'); assert.equal(view.historyBody.children[0],row,'toggle never reacquires or rebuilds');
   vm.runInContext('ReportView.setUnit("usd")',context); controller.settings();
-  assert.ok([...view.body.children,...view.historyBody.children].every(row => cost(row)===' ($45.82)'));
+  assert.ok(view.body.children.every(row => cost(row).endsWith(' ($45.82)')));
+  assert.ok(view.historyBody.children.every(row => cost(row, true)==='$0.01 ($45.82)'));
   vm.runInContext('ReportView.setUnit("credits")',context); controller.settings();
   for (const [value,expected] of [
     [{...summary,cost:null,state:'loading'},'Loading…'],
@@ -77,8 +100,9 @@ module.exports = function sessionTables(vm, context, controller, view, input, he
     [{...summary,state:'refreshing'},'4583'], [{...summary,state:'unavailable'},'4583']]) {
     input.view.active_cards = saved.active_cards.map(card=>({...card,session_summary:value}));
     input.view.history_cards = [history(0)].map(card=>({...card,session_summary:value})); controller.update(input);
-    assert.ok([...view.body.children,...view.historyBody.children].every(row=>cost(row)===' ('+expected+')'));
-    const note=view.body.children[0].children[0].children[0].children[2].textContent;
+    assert.ok(view.body.children.every(row=>cost(row).endsWith(' ('+expected+')')));
+    assert.equal(cost(view.historyBody.children[0], true), '2 ('+expected+')');
+    const note=view.body.children[0].children[0].children[0].children[1].textContent;
     assert.equal(Boolean(note),['partial','unavailable'].includes(value.state),'confirmed retained/partial evidence stays visible, routine refresh stays quiet');
   }
   const resumed = {...history(3),focal_id:active.focal_id};
@@ -99,15 +123,26 @@ module.exports = function sessionTables(vm, context, controller, view, input, he
   assert.equal(view.observationHelp,undefined);
   input.view.history_state='observed'; controller.update(input);
   assert.equal(view.historyBody.textContent,'No earlier sessions','canonical empty clears retained history');
-  assert.equal(view.historyBody.children[0].children[0].colSpan,3);
+  assert.equal(view.historyBody.children[0].children[0].colSpan,4);
   input.view.history_state='loading'; controller.update(input);
   assert.equal(view.historyBody.textContent,'Loading earlier sessions…');
-  assert.equal(view.historyBody.children[0].children[0].colSpan,3);
+  assert.equal(view.historyBody.children[0].children[0].colSpan,4);
   input.view.history_state='unavailable'; controller.update(input);
   assert.equal(view.historyBody.textContent,'Earlier sessions unavailable');
-  assert.equal(view.historyBody.children[0].children[0].colSpan,3);
+  assert.equal(view.historyBody.children[0].children[0].colSpan,4);
   input.view = {...saved,active_cards:saved.active_cards.map(card=>({...card,title:''}))}; controller.update(input);
   assert.equal(view.body.children[0].children[0].children[0].children[0].textContent,active.session_id);
   assert.equal(view.body.children[0].children[0].querySelectorAll('button').length,0);
+  for (const [promptCost,total,expected] of [['N/A','562','N/A (562)'], ['49','Loading…','49 (Loading…)'],
+      ['?49','?562','?49 (?562)'], ['0','0','0 (0)']]) {
+    const card = structuredClone(active);
+    card.rows[0].prompt.display_units = {}; card.rows[0].prompt.display = {ccost:promptCost};
+    card.session_summary = {...summary,cost:{display:{known_ccost:total}},state:'observed'};
+    input.view = {...saved,active_cards:[card],history_cards:[{...card,session_id:'distinct-earlier',focal_id:''}]};
+    controller.update(input);
+    assert.equal(cost(view.body.children[0]),expected);
+    assert.equal(cost(view.historyBody.children[0],true),expected,'independent prompt/whole-session formats');
+    assert.match(view.historyBody.children[0].children[2].children[0].attributes['aria-label'],/Prompt reference CCost: .*; whole-session reference CCost:/);
+  }
   view.earlierToggle.fire('click'); input.view=saved; controller.update(input);
 };
