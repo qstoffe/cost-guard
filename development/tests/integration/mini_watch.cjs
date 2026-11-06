@@ -54,7 +54,8 @@ function setup() {
     api.requests.push(options); calls++; return new Promise((yes, no) => {resolve = yes; reject = no;});
   }};
   const button = new Node('button'), feedback = new Node('span');
-  const controller = new Controller(owner, button, feedback, () => returned++);
+  const controller = new Controller(owner, button, feedback, () => returned++, () => ({ready:true,
+    read: () => ({width:628,height:500}), close: () => {}}));
   assert.equal(button.disabled,true,'no placement assumption before confirmed settings');
   controller.settings({miniWatchPlacement:'remember-last'},'fixture-host');
   return {owner, api, button, feedback, controller, calls: () => calls, focused: () => focused, returned: () => returned,
@@ -103,7 +104,7 @@ function setup() {
   assert.equal(view.dailyNote.textContent,'');
   assert.notEqual(view.daily.parentNode, view.summary, 'daily metric is outside the navigation target');
   view.daily.fire('click'); view.daily.fire('keydown'); assert.equal(test.returned(),0);
-  assert.equal(api.requests[0].height,250); assert.equal(api.requests[0].width,560);
+   assert.equal(api.requests[0].height,500); assert.equal(api.requests[0].width,628);
   assert.equal(api.requests[0].preferInitialWindowPlacement,true);
   require('../fixtures/mini_sessions.cjs')(vm,context,controller,view,input,helpText);
   require('../fixtures/mini_disclosure.cjs')(view,child,controller,input);
@@ -280,8 +281,8 @@ function setup() {
   owner.media.matches = true; owner.media.fire('change');
   assert.equal(themeStyle.getPropertyValue('--bg'),'#eef2f8','retired document no longer follows the owner');
    const reopen = controller.toggle(), second = win(); test.opened(second); await reopen;
-   assert.equal(api.requests.at(-1).height,250,'reopening requests the compact size again');
-   assert.equal(api.requests.at(-1).preferInitialWindowPlacement,false,'Remember last permits browser-native bounds after first open');
+   assert.equal(api.requests.at(-1).height,500,'reopening forwards measured layout');
+   assert.equal(api.requests.at(-1).preferInitialWindowPlacement,true,'Fit on open prioritizes measured size over remembered position');
    assert.equal(second.document.head.children.filter(n => n.rel === 'icon').length, 1);
    assert.equal(second.document.documentElement.style.getPropertyValue('--bg'),'#0c1422','fresh Web opens in current owner appearance');
    assert.equal(owner.media.events.change.length,1,'reopen has exactly one appearance listener');
@@ -293,7 +294,7 @@ function setup() {
   controller.settings({miniWatchPlacement:'standard'},'same-host');
   const replaceOpen = controller.toggle(), replaced = win(); test.opened(replaced); await replaceOpen;
   assert.equal(api.requests.at(-1).preferInitialWindowPlacement,true);
-  controller.settings({miniWatchPlacement:'remember-last'},'same-host');
+   controller.settings({miniWatchPlacement:'remember-last',miniWatchSize:'remember-last'},'same-host');
   assert.equal(controller.window,replaced,'mode changes never move or close existing PiP');
   api.window = win(); controller.update(input); assert.equal(button.textContent, 'Mini Watch: Off', 'ownership replacement');
   assert.equal(replaced.timers.size, 0);
@@ -305,7 +306,7 @@ function setup() {
   const late = win(); pendingClose.opened(late); await promise; assert.equal(late.closed, true);
   const boundary = setup(); boundary.controller.settings({miniWatchPlacement:'remember-last'},'host-1');
   for (const [identity,initial] of [['host-1',true],['host-1',false],['host-2',true],['host-2',false]]) {
-    boundary.controller.settings({miniWatchPlacement:'remember-last'},identity);
+     boundary.controller.settings({miniWatchPlacement:'remember-last',miniWatchSize:'remember-last'},identity);
     const opening = boundary.controller.toggle(); boundary.opened(win()); await opening;
     assert.equal(boundary.api.requests.at(-1).preferInitialWindowPlacement,initial,'host identity resets first opening only');
     boundary.controller.close();

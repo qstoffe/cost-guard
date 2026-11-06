@@ -75,13 +75,14 @@ errors unless the source supports a specific abort/quota cause.
 
 ## Web settings
 
-**Settings → Web settings**, at `/#/settings`, contains four dropdowns:
+**Settings → Web settings**, at `/#/settings`, contains five dropdowns:
 
 | Setting | Inherited choice (first) | Explicit choices |
 | --- | --- | --- |
 | Theme | Default (Classic) | Classic / Web |
 | CCost display | Default (Credits) | Credits / USD |
-| Mini Watch placement | Default (Remember last) | Remember last / Standard placement |
+| Mini Watch position | Default (Remember last) | Remember last / Standard position |
+| Mini Watch size | Default (Fit on open) | Fit on open / Remember last size |
 | Quota display | Default (Used) | Used / Remaining |
 
 Default labels reflect the current shipped defaults, not fixed lifetime names.
@@ -99,16 +100,16 @@ or Python-prepared CCost tokens, including retained report and live session view
 reload, report/history/pricing/account acquisition, host restart, Apply button or
 browser-local preference. All dropdowns disable briefly during a write. Failure
 restores the last confirmed choices and shows an accessible error; select again to retry.
-Mini placement affects the **next opening**, never the size/existence of an open window.
+Mini position/size preferences affect the **next opening**, never the size/existence of an open window.
 Until the initial settings read succeeds, controls cannot claim a saved choice and
 Mini stays unavailable; opening Settings retries the read.
 
 ```json
-{"webSettings": {"theme": "default", "ccostDisplayUnit": "credits", "miniWatchPlacement": "remember-last", "quotaDisplayMode": "default"}}
+{"webSettings": {"theme": "default", "ccostDisplayUnit": "credits", "miniWatchPlacement": "remember-last", "miniWatchSize": "fit-on-open", "quotaDisplayMode": "default"}}
 ```
 
 The enums are lowercase `default|classic|web`, `default|credits|usd`,
-`default|remember-last|standard` and `default|used|remaining`. Missing overrides show Default without creating a
+`default|remember-last|standard`, `default|fit-on-open|remember-last` and `default|used|remaining`. Missing overrides show Default without creating a
 user file. **Default inherits that preference's current application default**, including
 after a future version changes it. Explicit Classic/Credits/Remember last stay pinned
 even when their effective behavior currently equals Default. Reads/saves preserve the
@@ -125,13 +126,16 @@ CCost is read before report/Live presentation. Reopening Settings recognizes val
 external edits, without polling or automatic cross-tab broadcast. Existing tabs
 retain confirmed values until their next settings read or successful change.
 
-Remember last reuses browser-native Mini bounds in the **same live opener and host**.
-Its first opening, reload/new opener or host restart starts with the standard
-560×250-DIP request and browser-initial placement. Standard placement requests that
-initial geometry every opening. The browser/OS owns position and clamping; no exact
-screen coordinates are promised. The mode persists in user config; geometry is never
-written to config, SQLite, browser storage, cookies or URLs. See [Mini Watch](web-mini-watch.md)
-for supported-browser behavior and the explicitly unverified physical checks.
+Mini defaults to **Fit on open**: approximately 650 total outer DIPs wide, with
+measured content height and capacity for two running rows, all accounts and warnings.
+Earlier Sessions pointer/keyboard activation grows/shrinks to measured content;
+passive Live updates never resize. Outer height is capped at 1,000 DIPs or known
+available work area, and native clamps retain accessible document scrolling.
+Remember last size permits browser-native manual bounds in the **same live opener
+and host**. Native placement couples position and dimensions: Fit prioritizes sizing
+and may reset position; Standard position may reset remembered size. Reload/host
+restart starts fresh. No exact coordinates are promised or pixel geometry persisted.
+See [Mini Watch](web-mini-watch.md) for browser limits and measured evidence.
 
 Quota display applies immediately to native finite quotas in Accounts, full Watch and
 an already-open Mini, including retained observations. Remaining uses the same account,
@@ -323,7 +327,7 @@ acquisition or client-side valuation. [Verification and limits](../development/j
 | Session detail | `/#/sessions/<id>` (legacy `/live` alias) | Complete chronological live history, no user-facing pages or modes; links from session names and Watch |
 | Cost per Active Hour | `/#/cost-per-hour` | Explicit capture of canonical Today, month-to-date and rolling-30-day reference rates; independent finite refresh/cancel |
 | Historical Token Mix | `/#/token-mix` | Explicit **Load Token Mix**, then quiet ~five-minute visible-page checks. One total/token-volume summary and two 13-column model/publisher tables split Input / Cached input / Cache write / Output percentages and category CCost, with Prompts/Calls/Tokens/Total CCost. Every column sorts locally by exact source values; all rows and full names remain readable through horizontal panning. Partial/unavailable coverage stays explicit. |
-| Web Settings | `/#/settings` | Theme, CCost display, Mini placement and Quota display; inherited/explicit intent, authenticated narrow config read/write, no report acquisition |
+| Web Settings | `/#/settings` | Theme, CCost display, Mini position/size and Quota display; inherited/explicit intent, authenticated narrow config read/write, no report acquisition |
 
 Generic finite report tables retain search/filter/page controls and ascending/descending/original-order sorting. Token Mix instead has independent ascending/descending table sorts, default Total CCost descending, without filters, a pager or nested vertical scrolling. Header text owns shared hover/focus/touch help; no question-mark prefixes or icons are used. Models uses its independent filter/multi-sort contract; Watch keeps fixed chronological cards. Accounts and Sessions have no report toolbar, search, filters or snapshot controls. Sessions' catalog headings request full-catalog server sorting, not presentation-only page sorting. Detail has no sort or pager. Decimal keys stay exact and unknowns sort last.
 

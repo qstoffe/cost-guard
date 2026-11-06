@@ -25,8 +25,8 @@ async function main() {
   }});
   vm.runInContext(fs.readFileSync('src/web/assets/settings.js', 'utf8'), context);
   const Settings = vm.runInContext('WebSettings', context);
-   const defaults = {theme: 'classic', ccostDisplayUnit: 'credits', miniWatchPlacement: 'remember-last', quotaDisplayMode: 'used'};
-   const inherited = {theme: 'default', ccostDisplayUnit: 'default', miniWatchPlacement: 'default', quotaDisplayMode: 'default'};
+   const defaults = {theme: 'classic', ccostDisplayUnit: 'credits', miniWatchPlacement: 'remember-last', miniWatchSize: 'fit-on-open', quotaDisplayMode: 'used'};
+   const inherited = {theme: 'default', ccostDisplayUnit: 'default', miniWatchPlacement: 'default', miniWatchSize: 'default', quotaDisplayMode: 'default'};
   const calls = []; let saved = {...inherited}, failure = null, release;
   const api = async (path, value) => {
     calls.push({path, value});
@@ -38,7 +38,8 @@ async function main() {
   const view = new Settings.View(api), output = new Node('div');
   const theme = view.controls.get('theme'), ccost = view.controls.get('ccostDisplayUnit'), placement = view.controls.get('miniWatchPlacement');
    const quota = view.controls.get('quotaDisplayMode');
-   assert.equal(view.controls.size, 4);
+   assert.equal(view.controls.size, 5);
+   const size = view.controls.get('miniWatchSize');
   assert.equal(view.root.children[0].textContent, 'Web settings');
   const save = select => select.events.change();
   view.attach(output); const root = output.firstChild;
@@ -49,7 +50,9 @@ async function main() {
   assert.deepEqual(ccost.children.map(option => [option.value,option.textContent]),
     [['default','Default (Credits)'],['credits','Credits'],['usd','USD']]);
    assert.deepEqual(placement.children.map(option => [option.value,option.textContent]),
-     [['default','Default (Remember last)'],['remember-last','Remember last'],['standard','Standard placement']]);
+     [['default','Default (Remember last)'],['remember-last','Remember last'],['standard','Standard position']]);
+   assert.deepEqual(size.children.map(option => [option.value,option.textContent]),
+     [['default','Default (Fit on open)'],['fit-on-open','Fit on open'],['remember-last','Remember last size']]);
    assert.deepEqual(quota.children.map(option => [option.value,option.textContent]),
      [['default','Default (Used)'],['used','Used'],['remaining','Remaining']]);
   theme.focus(); theme.value = 'web'; const pending = save(theme);
@@ -71,7 +74,8 @@ async function main() {
     assert.equal(theme.disabled, false);
     ccost.value = 'usd'; await save(ccost);
     assert.equal(ccost.value, 'default'); assert.equal(documentState.unit, 'credits');
-     placement.value = 'standard'; await save(placement); assert.equal(placement.value, 'default');
+      placement.value = 'standard'; await save(placement); assert.equal(placement.value, 'default');
+      size.value = 'remember-last'; await save(size); assert.equal(size.value, 'default');
      quota.value = 'remaining'; await save(quota); assert.equal(quota.value, 'default');
      assert.equal(documentState.quotaMode, 'used');
   }
@@ -109,7 +113,7 @@ async function main() {
   failure = 'offline'; const unread = new Settings.View(api); await unread.read();
   assert.equal(unread.controls.get('theme').disabled, true, 'unconfirmed initial read cannot claim or write a choice');
   assert.throws(() => Settings.apply({webSettings: defaults}), /settings_unavailable/);
-   assert.ok(calls.every(call => ['/api/settings', '/api/settings/theme', '/api/settings/ccost', '/api/settings/mini-placement', '/api/settings/quota-display'].includes(call.path)));
+   assert.ok(calls.every(call => ['/api/settings', '/api/settings/theme', '/api/settings/ccost', '/api/settings/mini-placement', '/api/settings/mini-size', '/api/settings/quota-display'].includes(call.path)));
   assert.ok(calls.filter(call => call.value).every(call => Object.keys(call.value).length === 1));
   console.log('Web settings state machine passed');
 }

@@ -33,7 +33,7 @@ class ThemeTests(unittest.TestCase):
 
     def test_defaults_missing_file_and_cli_configuration_stay_independent(self):
         before = load_configuration(self.root).values
-        self.assertEqual({"theme": "classic", "ccostDisplayUnit": "credits", "miniWatchPlacement": "remember-last", "quotaDisplayMode": "used"}, before["webSettings"])
+        self.assertEqual({"theme": "classic", "ccostDisplayUnit": "credits", "miniWatchPlacement": "remember-last", "miniWatchSize": "fit-on-open", "quotaDisplayMode": "used"}, before["webSettings"])
         self.assertEqual(before["webSettings"], self.settings.read()["webSettings"])
         self.assertEqual(dict.fromkeys(before["webSettings"], "default"), self.settings.read()["webSettingsChoices"])
         self.assertFalse(self.path.exists())
@@ -52,7 +52,7 @@ class ThemeTests(unittest.TestCase):
         ):
             with self.subTest(overrides=overrides):
                 self.path.write_text(json.dumps(overrides))
-                expected = dict(expected, miniWatchPlacement="remember-last", quotaDisplayMode="used")
+                expected = dict(expected, miniWatchPlacement="remember-last", miniWatchSize="fit-on-open", quotaDisplayMode="used")
                 self.assertEqual(expected, load_configuration(self.root).values["webSettings"])
                 self.assertEqual(expected, self.settings.read()["webSettings"])
                 self.assertEqual(expected, WebSettings(self.root).read()["webSettings"])
@@ -82,8 +82,8 @@ class ThemeTests(unittest.TestCase):
         self.assertEqual("classic", self.settings.read()["webSettings"]["theme"], "Default bypasses retained legacy Web")
 
     def test_inheritance_and_explicit_equal_defaults_survive_new_shipped_defaults(self):
-        current = {"theme": "classic", "ccostDisplayUnit": "credits", "miniWatchPlacement": "remember-last", "quotaDisplayMode": "used"}
-        future = {"theme": "web", "ccostDisplayUnit": "usd", "miniWatchPlacement": "standard", "quotaDisplayMode": "remaining"}
+        current = {"theme": "classic", "ccostDisplayUnit": "credits", "miniWatchPlacement": "remember-last", "miniWatchSize": "fit-on-open", "quotaDisplayMode": "used"}
+        future = {"theme": "web", "ccostDisplayUnit": "usd", "miniWatchPlacement": "standard", "miniWatchSize": "remember-last", "quotaDisplayMode": "remaining"}
         for field, value in current.items():
             self.settings.write(field, value)
         self.assertEqual(current, self.settings.read()["webSettingsChoices"])
@@ -223,7 +223,7 @@ class ThemeTests(unittest.TestCase):
         other_tab = WebSettings(self.root)
         other_tab.write("theme", "web")
         self.settings.write("ccostDisplayUnit", "usd")
-        self.assertEqual({"theme": "web", "ccostDisplayUnit": "usd", "miniWatchPlacement": "remember-last", "quotaDisplayMode": "used"}, other_tab.read()["webSettings"])
+        self.assertEqual({"theme": "web", "ccostDisplayUnit": "usd", "miniWatchPlacement": "remember-last", "miniWatchSize": "fit-on-open", "quotaDisplayMode": "used"}, other_tab.read()["webSettings"])
 
     def test_source_guard_ignores_only_actual_user_override(self):
         guard = SourceGuard(self.root, interval=0)
@@ -263,6 +263,7 @@ class ThemeTests(unittest.TestCase):
             self.assertEqual(401, request('/api/settings/theme', {"theme":"web"})[0])
             self.assertEqual(401, request('/api/settings/ccost', {"ccostDisplayUnit":"usd"})[0])
             self.assertEqual(401, request('/api/settings/mini-placement', {"miniWatchPlacement":"standard"})[0])
+            self.assertEqual(401, request('/api/settings/mini-size', {"miniWatchSize":"remember-last"})[0])
             self.assertEqual(401, request('/api/settings/quota-display', {"quotaDisplayMode":"remaining"})[0])
             _, headers, body = request('/api/bootstrap', {"credential":server.session.bootstrap()})
             cookie = headers['Set-Cookie'].split(';')[0]
@@ -273,6 +274,7 @@ class ThemeTests(unittest.TestCase):
                 self.assertEqual(403, request('/api/settings/theme', {"theme":"web"}, **headers)[0])
                 self.assertEqual(403, request('/api/settings/ccost', {"ccostDisplayUnit":"usd"}, **headers)[0])
                 self.assertEqual(403, request('/api/settings/mini-placement', {"miniWatchPlacement":"standard"}, **headers)[0])
+                self.assertEqual(403, request('/api/settings/mini-size', {"miniWatchSize":"remember-last"}, **headers)[0])
                 self.assertEqual(403, request('/api/settings/quota-display', {"quotaDisplayMode":"remaining"}, **headers)[0])
             for value in ({}, {"theme":"web","path":"PRIVATE"}, {"theme":[]}, {"theme":"bad"}):
                 self.assertEqual(400, request('/api/settings/theme', value)[0])
@@ -281,6 +283,12 @@ class ThemeTests(unittest.TestCase):
                 self.assertEqual(400, request('/api/settings/ccost', value)[0])
             for value in ({}, {"theme":"web"}, {"miniWatchPlacement":"standard","path":"PRIVATE"}, {"miniWatchPlacement":[]}, {"miniWatchPlacement":"bad"}):
                 self.assertEqual(400, request('/api/settings/mini-placement', value)[0])
+            for value in ({}, {"miniWatchSize":"remember-last","path":"PRIVATE"}, {"miniWatchSize":None}, {"miniWatchSize":[]}, {"miniWatchSize":"bad"}):
+                self.assertEqual(400, request('/api/settings/mini-size', value)[0])
+            for value in ("remember-last", "fit-on-open"):
+                result = json.loads(request('/api/settings/mini-size', {"miniWatchSize":value})[2])
+                self.assertEqual(value, result["webSettingsChoices"]["miniWatchSize"])
+                self.assertEqual(value, WebSettings(self.root).read()["webSettings"]["miniWatchSize"])
             self.assertEqual(200, request('/api/settings/theme', {"theme":"web"})[0])
             self.assertEqual(200, request('/api/settings/ccost', {"ccostDisplayUnit":"usd"})[0])
             for value in ({}, {"quotaDisplayMode":"remaining", "path":"PRIVATE"}, {"quotaDisplayMode":None},
@@ -291,7 +299,7 @@ class ThemeTests(unittest.TestCase):
             self.assertEqual("remaining", WebSettings(self.root).read()["webSettingsChoices"]["quotaDisplayMode"])
             self.assertIn(b'data-theme="web"', request('/')[2])
             self.assertEqual(self.settings.read(), json.loads(request('/api/settings')[2]))
-            for field, endpoint in (("theme", "theme"), ("ccostDisplayUnit", "ccost"), ("miniWatchPlacement", "mini-placement"), ("quotaDisplayMode", "quota-display")):
+            for field, endpoint in (("theme", "theme"), ("ccostDisplayUnit", "ccost"), ("miniWatchPlacement", "mini-placement"), ("miniWatchSize", "mini-size"), ("quotaDisplayMode", "quota-display")):
                 result = json.loads(request('/api/settings/' + endpoint, {field: "default"})[2])
                 self.assertEqual("default", result["webSettingsChoices"][field])
                 self.assertEqual(result["webSettingsDefaults"][field], result["webSettings"][field])

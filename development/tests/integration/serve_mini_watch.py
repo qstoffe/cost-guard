@@ -140,7 +140,7 @@ def main():
                         primary_quota_label='5-hour'), quota_periods=periods)
                     publish(value=replace(frame, quota=replace(frame.quota, accounts=(idle,))))
                 elif command.startswith('history-'):
-                    _, count, prompt_count = command.split('-')
+                    _, count, prompt_count, *account_count = command.split('-')
                     history = tuple(replace(frame.history_cards[0], session_id=f'earlier-{index}',
                         title='Earlier long session title ' * 20, rows=(replace(frame.history_cards[0].rows[0],
                             prompt=replace(frame.history_cards[0].rows[0].prompt,
@@ -148,7 +148,8 @@ def main():
                     current = tuple(replace(cards[0], focal_id=str(index), title='Active long title ' * 30,
                         rows=(replace(cards[0].rows[0], prompt=replace(cards[0].rows[0].prompt,
                             event_id=str(index), prompt_number=index + 23)),)) for index in range(int(prompt_count)))
-                    publish(value=replace(frame, active_cards=current, history_cards=history,
+                    quota = replace(frame.quota, accounts=frame.quota.accounts[:int(account_count[0])]) if account_count else frame.quota
+                    publish(value=replace(frame, active_cards=current, history_cards=history, quota=quota,
                         running=running_prompts(current, 'observed')))
                 elif command.startswith('density-'):
                     _, prompts, accounts, *flags = command.split('-')
