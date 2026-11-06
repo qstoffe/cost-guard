@@ -1,6 +1,63 @@
 # Live Sessions catalog and complete history
 
-FR 000593, 2026-11-05. Current owner map: `development/architecture/modules/web.md`.
+FR 000593 baseline and FR 000602 follow-up. Current owner map: `development/architecture/modules/web.md`.
+
+## FR 000602 — table parity and truthful acquisition, 2026-11-06
+
+This supersedes the baseline's alternating admission policy below: seven latest-visible-page
+admissions share each eight-turn cycle with oldest-attempt background work. The same four-root,
+two-second admission limits remain; slow individual reads still use source transport bounds.
+The 120-root deterministic regression follows page 1 then page 2, proves background progress
+and observes exactly one acquisition per unchanged root. Full-catalog metric sorting remains
+explicitly pending until every key validates, never a visible-page approximation.
+
+Catalog summaries now distinguish pending, unavailable, retained and validated values. Root
+failures back off; terminal source contracts wait for changed evidence. Lane-wide factory or
+dependency failures also expose unavailable/retained state, rather than infinite Loading.
+Current successful summary evidence alone confirms running; status updates do not replace a
+selected title. Dates use local Date fields (real timezone/DST), not locale-string parsing.
+Web detail selects a separate first-request context token; raw context, rich CLI/Watch
+transitions, canonical cost splits and complete-session totals retain their meanings.
+
+Watch, Sessions/detail, Models and both actual post-596 Token Mix tables share compact cells,
+surface headers, full dividers and one rounded horizontal shell. Detail grows previews on
+roomy screens, yields before metrics and keeps one document-scrolling semantic history.
+Initial/pinned acquisition has indeterminate progress; complete retained history stays usable.
+
+The integrated OpenCode browser served the source-neutral fixture and measured all six table
+types: 5.25px/9px header padding and 6px rounded shells with the 15px root font. Its screenshot
+operation refused a non-visible Review tab after focus; no external desktop was opened.
+Hidden Chrome separately captured synthetic pixels and actual HTTP/assets, all three themes,
+1920/1366/800/360 CSS widths and 1/1.5 CSS zoom. Thin borders legitimately compute to fractional
+CSS pixels under zoom; assertions check the resulting one-pixel line instead of false 1px
+computed-style equality. The fixture was corrected to publish current Watch cards rather than
+its older row-only projection; neither case waived product assertions. Large history,
+selection/scroll, navigation, failures/recovery, running colors, long pager labels and both
+13-column tables are covered. Browser/VM locale/DST checks use Swedish and US locales plus
+Stockholm/New York spring/autumn instants; timestamp sorts remain raw.
+
+Read-only V2 probe: 2,731 roots, global index 0→12 in the bounded observation, 50ms first page,
+211ms maximum API reply; a real two-prompt detail arrived in 23.910s (14,701 bytes). One Live
+owner/two streams were preserved, with zero inference calls, source writes or shared-service
+stops. All owned workers closed. Global metric sort correctly remained pending; this is not
+full cold-catalog readiness or a latency improvement claim. One index slice reached 7.005s
+because its individual read exceeded the admission budget. Independent history phase errors
+were counted but not classified; this probe does not certify those unrelated lanes. Natural
+new-session arrival and physical desktop/browser-zoom/macOS/assistive behavior remain unmeasured.
+The first live attempt lost its probe host during concurrent source edits and is not PASS;
+the unchanged-source repeat above passed.
+
+The first Full run found the obsolete anchor-only pager selector in the real-HTTP VM test;
+it now verifies an enabled button and the same URL-backed older page. A later concurrent Full
+run hit the unchanged Windows PATH-discovery fixture's five-second child-probe boundary;
+isolated native and changed-detail reruns passed without changing assertions or timeouts.
+Contention is plausible, not established. Final serial Full passed all **149 files**, zero
+failures, **317.5s**, with unchanged timeouts; validation passed 11 checks with six existing
+advisory warning categories. Final rendered discovery was **5,131ms**. An optional synthetic
+scratch summary encountered native `SCRATCH_SESSION_BOUNDARY`; the active read-only Decision
+Delegate directed omission, no substitute read/rebootstrap, and permitted the independent
+owning-transport branch GET. This waived no tests. No new product requirement or test
+exception was requested or approved. The completion retains explicit unmeasured scope.
 
 ## Design and scoped decision
 
