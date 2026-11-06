@@ -117,6 +117,13 @@ class MiniWatchTests(unittest.TestCase):
             ccost_display_unit="usd").to_json()["running"]["display"]["ccost"])
 
     @unittest.skipUnless(shutil.which("node"), "optional JS VM unavailable")
+    def test_opening_reserve_measures_real_and_reference_in_both_disclosure_states(self):
+        result = subprocess.run([shutil.which("node"), "development/tests/fixtures/mini_opening.cjs"],
+            cwd=ROOT, text=True, encoding="utf-8", capture_output=True, timeout=15)
+
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+
+    @unittest.skipUnless(shutil.which("node"), "optional JS VM unavailable")
     def test_app_owned_window_races_health_settings_and_independent_dom(self):
         payload = {"state": "running", "view": project_live(replace(self.frame,
             active_cards=self.cards, running=running_prompts(self.cards, "observed"))).to_json()}

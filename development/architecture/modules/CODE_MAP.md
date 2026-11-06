@@ -94,6 +94,10 @@ are checked across widths, font/CSS zoom, themes and units. Older
 `integration/probe_mini_activity.cjs`, invoked by the current `probe_mini_fit.cjs`,
 checks historical-only column indices, midnight/DST tokens, live tooltip/focus identity,
 pointer/touch help and nominal/narrow geometry in Classic/Web light/dark and both units.
+`fixtures/mini_opening.cjs` pins inert real/reference measurement in both states,
+larger-real precedence and cleanup on failed layout. `integration/probe_mini_width.cjs`
+checks achieved text/control geometry, bounded tolerance, stable gutter/markers,
+light/dark fonts/units and pointer/keyboard reference toggles through the native fit probe.
 `fixtures/mini_disclosure.cjs` covers bounded sizing state and failures;
 `integration/probe_mini_disclosure.cjs` measures native pointer/keyboard outer/inner
 bounds and safe fallbacks. `integration/probe_watch_quiet.cjs` checks actual card

@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.193 — 2026-11-06
+
+- Mini Watch Fit on open reserves the widest real or `CCost Today 90 000 · 999 prompts` header across both Earlier Sessions states, with eight CSS pixels of tolerance and measured stable scrollbar space. Equal-width markers prevent disclosure shifts. Reference values exist only in inert measurement clones; real totals, Remember last size, height-only click resizing and passive Live behavior are unchanged. Native clamps remain disclosed and responsive.
+
 ## v80.192 — 2026-11-06
 
 - AI Stats selectors inherit readable selected-label colors and avoid low-contrast color cross-fades. Month/All time retain hover/focus/touch scope help. Canonical metric reasons distinguish complete empty periods, source gaps, unknown execution boundaries, unpriced requests, missing telemetry and pending/provisional work. Cards and dynamic title help explain missing/partial values instead of the generic vault fallback, preserving supported zeros/subtotals, conservative calculation checks and the existing finite loading lifecycle. Compact evidence now retains snapshot completeness with a revisioned cache key.
