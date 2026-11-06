@@ -288,6 +288,9 @@ Session, Busiest Day, Night Owl, Coding Streak, Peak Parallel Sessions). Record 
 link actual root-session names. Short original trait lines follow the measured
 values, stay stable across unit/theme changes and distinguish empty from unknown.
 Focus, tap or hover the actual titles for metric-specific shared contextual help.
+Card detail rows grow with their text: session names, dates and long descriptions
+wrap without cutting off line height or focus outlines. Siblings share a height
+within each responsive grid row; longer or enlarged text can make that row taller.
 
 Comparisons adds a conditional **Biggest AI Speed Gap** eleventh card to Fun Facts,
 without replacing the original ten cards. It uses only reliably finished matched

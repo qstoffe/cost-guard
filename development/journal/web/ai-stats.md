@@ -1,15 +1,17 @@
 # Web AI Stats and historical re-entry
 
-Source revision: 42cc45f624d7b9cda560e365e53a93cec36ff7bc
-Checked revision: 42cc45f624d7b9cda560e365e53a93cec36ff7bc
+Source revision: 558eabfd31c727b1df6ef599d33b71de15956348
+Checked revision: 558eabfd31c727b1df6ef599d33b71de15956348
 Last checked: 2026-11-06
 Status: current
 
 ## Summary
 
-FR 000599's source/evidence is the revision above plus this delivery's diff.
+FR000611 observes the base above plus its delivery diff. The shared Overview/Fun
+Facts detail track is content-sized, with wrapping and equal sibling heights within
+each responsive grid row. Keyed card/link identity, metrics and acquisition are unchanged.
 AI Stats replaces the hourly-cost page, not canonical rate APIs or CLI/detail
-semantics. Ten equal cards consume Python-prepared metrics and deterministic
+semantics. Ten baseline cards consume Python-prepared metrics and deterministic
 original traits. Five periods share source coverage; month/all extend lazily.
 `analysis/ai_stats.py` owns clipped time unions, event-time cost, local calendar/DST,
 root averages/concurrency and stable records. `reports/ai_stats.py` owns compact
@@ -19,6 +21,69 @@ last-success re-entry bands. Over-hour entry withholds normal metrics; already-a
 views keep accepted nodes through ordinary refresh, failure and navigation races.
 
 ## Evidence
+
+### FR000611: clipping remediation and current verification
+
+Reproduce with an explicit installed Chrome/Edge executable and absolute JSON output:
+
+```text
+node development/tests/integration/probe_ai_stats.cjs <browser-executable> <output-json>
+```
+
+Hidden Chromium used a disposable profile, shipped authenticated HTTP/CSP/assets
+and canonical synthetic reports. Integrated browsing returned `browser.disconnected`;
+no visible desktop, personal profile or shared OS input was used. Pre-fix CSS
+reproduced a **22.5px detail track minus 7.5px margins = 15px element**, versus
+**23.25px line-height / 20px text ranges**. Both session links and Busiest Day date
+exceeded their hidden clipping rectangle despite fitting outer cards.
+
+Final browser: **PASS, 10 checks, 9 normal layouts and 80 text layouts**. The focused
+`development/tests/integration/probe_ai_stats_layout.cjs` companion checks actual
+text ranges, clipping ancestors, separate rows, within-row equal heights and page
+overflow. Classic/Web light/dark at 360/1366/1920px; 100/125/150/200% root text sizing;
+Arial/Georgia; Credits/USD; short/long/unbroken session names, month/day date text,
+large values, N/A, empty details, partial/unknown status and long traits; all five
+periods and both optional matched-card labels are covered. Actual Tab focus, visible
+unclipped outline, retained focused link during update, pointer hit/hover/click and
+Enter preserve the canonical destination. Existing AX, safe literal hostile titles,
+touch/help, retained cards and refresh-lifecycle checks still run. This is synthetic
+rendered UI, not real-source browser painting or physical-device/speech/other-engine proof.
+
+Local Full: **153 files, zero failures, 105.5s**. Working-tree validator: **11 passes,
+zero failures, six existing advisory warnings** in the categories recorded below.
+No caps or structure baselines changed. Evidence: `scratch:/ai-stats-before.json`,
+`scratch:/ai-stats-final.json`, `scratch:/full-tests.json`.
+
+The real read-only V2 probe shown below used production ReportJobs and an isolated
+disposable cache, with no inference, account refresh or shared-service stop:
+
+| Attempt | Result | Seconds | Coverage |
+| --- | --- | ---: | --- |
+| Cold 30 days | **FAILED: report_timeout** | 120.029 | zero periods; progress 2688/2725 roots |
+| Warm 30 days | complete | 9.003 | four periods |
+| All-time extension | complete | 10.212 | five periods |
+| Warm All time | complete | 5.165 | five periods |
+
+**Decision Delegate approved an FR000611-only exception to successful cold live
+acquisition:** this probe does not exercise the changed CSS; direct rendered evidence
+establishes the clipping fix. No further cold retry, backend repair or deadline
+increase was required. Full tests, validation and protected Git delivery were not
+waived. Cold-acquisition reliability and timing variance remain unresolved; concurrent
+Full testing is a possible influence, not an established cause. Exit zero and warm
+success do not turn the cold failure into PASS. No On Hold or owner decision was needed.
+
+**Documentation exception, Decision Delegate, FR000611 only:** the knowledge helper
+read this leaf, but apply failed before writes with `INDEX_LIMIT` because existing
+ancestor indexes exceed eight routes; the Web index also uses a backticked route to
+this leaf rather than a helper-recognized link. The delegate authorized a targeted
+ordinary patch, not index restructuring, new routes, size-limit changes or a helper
+PASS/full ancestor validation claim. Architecture needs no update for this CSS-only
+change. This leaf remains within 12 KiB.
+
+### Historical FR000599 evidence and exceptions only
+
+The following observations use `42cc45f624d7b9cda560e365e53a93cec36ff7bc` plus
+FR000599's delivery diff, not current FR000611 performance or inherited exceptions.
 
 Windows workstation, Python 3.14, real read-only V2 source; no inference, account
 refresh or shared-service stop. Reproduce finite cold/warm acquisition with:
@@ -43,22 +108,12 @@ The real installation changed during measurement; these are not immutable whole-
 installation transactions, universal performance guarantees or hourly scan timings.
 All final finite acquisitions completed inside the unchanged 120-second deadline.
 
-Deterministic `test_ai_stats.py` covers independent metrics, event clipping, child vs
-root concurrency, stable ties/clone dedup, zero/unknown/partial/provisional evidence,
-Stockholm 7/9-hour DST nights, rolling/calendar edges, lazy 31-day month coverage,
-archived/deleted roots, warm no-hydration/no-repricing reuse, pricing invalidation,
-active evidence, optional-cache failure, display/scope allowlisting and actual
-spawned finite-process output. Host tests prove concurrent/recent same-scope
-coalescing, distinct scopes and unchanged observation clocks. The Node policy
-matrix pins TTL, TTL+1, exactly one hour and one hour+1 millisecond.
-
-Final Full: **151 files, zero failures, 97.5s**. The earlier full run failed two old
-UI harness assumptions; their route/script fixtures were corrected, not waived.
-Raw reports: `scratch:/full-tests.json` (old failure),
-`scratch:/full-tests-final.json` (final pass).
-Working-tree product validator: **11 passes, zero failures, six advisory warnings**
-(existing Web guide/README/context/report-service/Watch/version-history categories).
-No file caps or structure baselines changed.
+`test_ai_stats.py` covers canonical accounting, DST/period edges, uncertainty,
+revision-aware reuse and actual spawned finite-process output. Host and Node
+tests independently cover scope coalescing, observation clocks and re-entry bands.
+Historical Full corrected two stale route/script fixture assumptions rather than
+waiving them. Validator advisory categories were Web guide, README, context,
+report service, Watch coordinator and version history; no caps/baselines changed.
 
 Hidden Chromium with disposable profile, shipped HTTP/CSP/assets and canonical
 synthetic datasets: `probe_ai_stats.cjs` **PASS, 8 checks / 9 layouts**. Covers
@@ -108,6 +163,10 @@ validator, acceptance/security and protected Git delivery are not waived.
 
 ## Next investigations
 
+Cold acquisition still can time out on this installation. Investigate its unchanged
+catalog/hydration costs when performance is in scope; timing variance is not yet
+attributed to concurrent testing or another proven cause.
+
 Investigate the combined Node-launched production-process fixture if it becomes
 necessary for another task; preserve independent real-process proof meanwhile.
 The whole-app help audit needs a modern synthetic Sessions runtime before it can
@@ -119,6 +178,9 @@ inflation during a feature's ownership update.
 
 ## Rejected hypotheses
 
+- A card's `scrollHeight <= clientHeight` proves its text is readable: false; the
+  inner detail can clip glyph height. Content-sized rows and wrapping fix the cause
+  without JS-measured heights, negative margins or stacking hacks.
 - More polling or extending the finite deadline: does not fix repeated catalog I/O;
   the existing 64-root batching bound was sufficient on the observed installation.
 - Fresh HTTP/timer/page visit means fresh history: false; acquisition clocks drive
