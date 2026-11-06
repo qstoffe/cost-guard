@@ -14,11 +14,9 @@ const result = JSON.parse(fs.readFileSync(0, 'utf8')), output = new Node('main')
 const context = vm.createContext({document: {createElement: tag => new Node(tag)}, output, result, Date, URLSearchParams});
 require('../fixtures/web_help_vm.cjs')(vm, context);
 for (const file of ['render.js', 'reports.js']) vm.runInContext(fs.readFileSync('src/web/assets/' + file, 'utf8'), context);
-vm.runInContext('ReportView.render(output, result, {pages: {}, section: "cost-per-hour"})', context);
-assert.match(output.textContent, /Today.*Month to date.*Rolling 30 days/);
-assert.match(output.textContent, /canonical event\/completion timestamp/);
-assert.match(output.textContent, /not agent-worker-hours/);
-assert.ok(all(output, 'a').some(a => a.href === '#/sessions'));
+// The retired period page is gone; the reusable session-detail rate still renders
+// exactly the prepared server values, with reversible unit bindings.
+vm.runInContext('for (const metric of result.view.active_hours) output.append(ReportView.element("p", () => ReportView.hourlySummary(metric)))', context);
 for (const value of result.view.active_hours) {
   assert.ok(output.textContent.includes(value.display.rate));
   assert.ok(output.textContent.includes(value.display.duration_ms));
@@ -30,9 +28,9 @@ assert.equal(first, output.children[0]);
 for (const value of result.view.active_hours) assert.ok(output.textContent.includes(value.display_units.usd.rate));
 vm.runInContext('ReportView.setUnit("credits", output)', context);
 assert.equal(credits, output.textContent);
-assert.equal(true, vm.runInContext('ReportRoutes.resolve("#/cost-per-hour").explicit', context));
-assert.equal('cost-per-hour', vm.runInContext('ReportRoutes.resolve("#/cost-per-hour").request.kind', context));
+assert.equal('#/ai-stats', vm.runInContext('ReportRoutes.resolve("#/cost-per-hour").redirect', context));
+assert.equal('ai-stats', vm.runInContext('ReportRoutes.resolve("#/ai-stats").request.kind', context));
 assert.equal(true, vm.runInContext('ReportRoutes.resolve("#/watch").live', context));
 assert.equal(null, vm.runInContext('ReportRoutes.resolve("#/accounts").request', context));
 assert.equal(true, vm.runInContext('ReportRoutes.resolve("#/accounts").live', context));
-console.log('PASS explicit hourly capture route, three scopes, frozen server display and reversible memory-only units');
+console.log('PASS retired hourly route alias and preserved shared session-rate display/units');

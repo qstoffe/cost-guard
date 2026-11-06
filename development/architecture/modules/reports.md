@@ -72,6 +72,7 @@ Schema version and application instance UUID are separate from per-request-view 
 | Session detail | SESSION / prompt_blocks, request_identities | Complete requested root/child tree, stable event/message/part references and opaque request key; no global Watch cap; inherited FR000200 running metrics |
 | Date/range | DATE / prompt_blocks | Configured-local inclusive date target mapped to exclusive end; DST, context and duration remain existing semantics |
 | Historical Token Mix | TOKEN_MIX / model_token_mix, publisher_token_mix and total | Separate deep all-available-history method, not build's dashboard fallback; existing availability fail-open behavior; no request rows or promise to recover pruned history |
+| Web AI Stats | AI_STATS / ai_stats periods, ten metrics each | Automatic finite 30-day scope; lazy month/all coverage, configured-local calendar/DST, event-time cost, overlap-safe root execution; no accounts/request rows or CLI mode change |
 
 The [Web route inventory](../../../docs/web-beta.md#navigation-and-static-reports) maps views; visual/native acceptance is separate. Application tests pin canonical V1/V2 lifecycle/child/compaction/partial, timezone/account-error, uncapped detail, deduplication, immutable export and typed-failure parity. Fresh ownership, cleanup and forbidden application/Web imports in CLI/Diagnostics remain covered. Focused workload/history tests cover revision/catalog invalidation, deletion and publisher totals; no new dependency or permanent gate.
 
@@ -94,6 +95,27 @@ split shares/costs and replace only Web partial prefixes, preserving CLI semanti
 `test_web_token_mix.py` covers parity, incremental invalidation, active/empty scope,
 cache corruption and a >500-key no-hydration/no-repricing refresh. Performance and
 browser proof retain their actual limits in the Token Mix journal.
+
+## Web AI Stats acquisition and accounting
+
+`src/reports/ai_stats.py` owns candidate roots/active ancestry, source revisions and
+disposable `ai-stats-evidence` caching. It reuses compact canonical request/category
+facts from `token_mix_cache.py` and adds prompt/compaction execution intervals, never
+prompt text. Source, analysis dependencies and reference pricing key reuse; current
+membership removes deleted roots, archived roots remain, and unstable evidence is
+not persisted. Changed/missed roots use existing 64-root observed batches, at most
+four concurrent source reads, inside unchanged finite job/security limits.
+
+`src/analysis/ai_stats.py` owns event-time deduplication, exact cost/root averages,
+clipped execution unions, root concurrency, local-date/night/DST splitting, longest
+streak and deterministic records. Zero/unknown/partial/provisional stay distinct.
+`src/application/ai_stats.py` prepares unit-aware values and deterministic original
+trait text; projection explicitly allowlists periods/metrics. JS never revalues.
+Independent `active_hour.py` APIs and session-detail rate remain supported.
+Scoped source check: base `42cc45f624d7b9cda560e365e53a93cec36ff7bc` plus FR
+000599's diff, not revalidation of every contract above. `development/tests/test_ai_stats.py`
+pins arithmetic, revisions, finite process/coalescing and policy edges; browser and
+real-source probes/evidence are routed by [AI Stats findings](../../journal/web/ai-stats.md).
 
 ## Allowed dependencies
 

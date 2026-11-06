@@ -41,11 +41,14 @@ flowchart TD
 
 Arrows show calls/consumption, not a single linear execution pipeline. `src/web/host.py` owns HTTP/jobs and one `src/application/live.py` publisher thread. `src/web/jobs.py` isolates finite report processes with parent-loss cleanup. Live ticks the shared Watch coordinator; its Web adapter owns four isolated session-capture workers plus separate single-worker account-history and Sessions-detail lanes. Blocking captures never borrow Live's mutable service. `src/application/session_detail.py` retains revision-aware pages and `src/reports/session_history.py` retains observed evidence outside cache. HTTP leases/pages never acquire source data. Source-change stops, never reloads; CLI/Diagnostics remain independent. `src/web/` owns loopback HTTP/security/assets, bounded SSE/replay, finite report processes, private instance/restart locks and best-effort source-change stop. Windows and experimental macOS menus share this host; macOS native proof is pending. Web reuses Watch's renderer-independent acquisition seam, not a CLI process or per-tab coordinator. Bootstrap dispatches CLI reports/Watch directly. Source normalization establishes evidence, not cost; analysis consumes provider-neutral pricing contracts. The cache never replaces source authority. Recovery belongs to acquisition, not rendering. `src/numbers.py` scopes CCost display units with exception-safe ContextVar reset; canonical valuation and native quotas are unchanged.
 
-Finite Web Token Mix alone opts into disposable revision-keyed compact request facts
-and canonical category valuations (`reports/token_mix_cache.py`). It retains the
-CLI's grouping/source semantics through `token_mix_history.history_projection`;
-active-visible low-frequency checks stay outside Live. Browser-local sorting and
-coherent retained-view replacement never acquire or revalue usage.
+Finite Web Token Mix and AI Stats reuse disposable revision-keyed compact request
+facts/category valuations (`reports/token_mix_cache.py`); `reports/ai_stats.py` adds
+qualified root timing, while `analysis/ai_stats.py` owns the ten canonical metrics.
+Token Mix retains CLI grouping semantics. Shared `assets/cached-reports.js` governs
+5/15-minute visible-page checks and one-hour re-entry withholding outside Live.
+Browser sorting/coherent replacement never acquire or revalue usage. This scoped
+ownership update describes base `42cc45f624d7b9cda560e365e53a93cec36ff7bc` plus
+FR 000599's source diff, not a whole-document revalidation.
 
 Sessions additionally shares the full observed catalog with `application/session_catalog.py`.
 The Web coordinator owns a separate single-worker scalar-index lane; HTTP never acquires

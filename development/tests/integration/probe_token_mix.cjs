@@ -134,7 +134,7 @@ async function main() {
       globalThis.retainedX=document.querySelector('.token-mix-pan').scrollLeft; globalThis.retainedY=window.scrollY;
       globalThis.oldValue=current.tokenMix.summary.textContent`);
     assert.ok(await evaluate(`retainedX>0`),'refresh proof starts with a genuinely panned narrow table');
-    if(cadence!=='--wall-clock') await evaluate(`current.checkedAt=Date.now()-300001; scheduleTokenMix()`);
+    if(cadence!=='--wall-clock') await evaluate(`current.checkedAt=Date.now()-300001; scheduleCachedReport()`);
     await until(`current.loading`,cadence==='--wall-clock'?315000:15000);
     const startedAt=await evaluate(`Date.now()`);
     if(cadence==='--wall-clock') assert.ok(startedAt-loadedAt>=299000 && startedAt-loadedAt<312000);

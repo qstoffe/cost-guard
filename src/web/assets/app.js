@@ -19,16 +19,33 @@ let hostState = {kind: 'starting', writable: false, terminal: false};
 let hostInstance = null;
 let snapshotRender = null;
 let settingsView = null;
-let tokenMixTimer = null;
-const TOKEN_MIX_CADENCE = 300000;
-function scheduleTokenMix() {
-  clearTimeout(tokenMixTimer);
+let cachedReportTimer = null;
+function historical(state) { return !!CachedReports.cadences[state?.section]; }
+function scheduleCachedReport() {
+  clearTimeout(cachedReportTimer);
   const state = current;
-  if (state?.section !== 'token-mix' || !state.result || state.loading || document.hidden || !hostState.writable) return;
-  const delay = Math.max(0, (state.checkedAt || Date.now()) + TOKEN_MIX_CADENCE - Date.now());
-  tokenMixTimer = setTimeout(() => {
+  if (!historical(state) || !state.result || state.loading || document.hidden || !hostState.writable) return;
+  const cadence = CachedReports.cadences[state.section];
+  const delay = Math.max(0, (state.checkedAt || CachedReports.observation(state.result)) + cadence - Date.now());
+  cachedReportTimer = setTimeout(() => {
     if (current === state && !document.hidden && hostState.writable) acquire(state, true);
   }, delay);
+}
+function enterCachedReport(state) {
+  if (!historical(state)) return;
+  const band = CachedReports.entry(state.result, state.section);
+  state.withheld = band === 'withhold';
+  if (!document.hidden && hostState.writable && state.result && ['quiet', 'withhold'].includes(band))
+    acquire(state, !state.withheld);
+}
+function selectStats(state, period) {
+  state.period = period;
+  state.request = {kind: 'ai-stats', stats_scope: ['all', 'month'].includes(period) ? period : '30-days'};
+  state.result = state.statsResults?.get(period) || null;
+  state.failed = false; state.message = '';
+  enterCachedReport(state); show(state);
+  if (!state.result && !document.hidden) acquire(state);
+  scheduleCachedReport();
 }
 const miniWatch = typeof MiniWatch === 'undefined' ? null : new MiniWatch.Controller(window,
   document.getElementById('mini-watch-toggle'), document.getElementById('mini-watch-feedback'),
@@ -41,6 +58,7 @@ function applySettings(value) {
     if (state.watch) ReportView.syncUnits(state.watch.root);
     if (state.accounts) ReportView.syncUnits(state.accounts.root);
     if (state.tokenMix) ReportView.syncUnits(state.tokenMix.root);
+    if (state.stats) ReportView.syncUnits(state.stats.root);
   }
   miniWatch?.settings(confirmed.values, hostInstance);
   return confirmed;
@@ -70,7 +88,7 @@ function connectionStatus(message, state = {}) {
   if (hostState.terminal) for (const view of views.values()) { view.detail?.detach(); view.catalog?.detach(); }
   document.getElementById('scope-controls').inert = !hostState.writable;
   if (current) show(current);
-  scheduleTokenMix();
+  scheduleCachedReport();
 }
 async function api(path, value) {
   if (hostState.terminal) throw new Error(hostState.kind === 'authorization_required' ? 'authentication_required' :
@@ -159,11 +177,21 @@ function show(state) {
   output.setAttribute('aria-busy', state.loading ? 'true' : 'false');
   notice.textContent = hostState.writable ? state.message : 'Last known contents are retained, not updating. See connection notice above.';
   if (state.section === 'token-mix') {
-    refresh.textContent = 'Load Token Mix'; refresh.hidden = !!state.result;
-    cancel.hidden = !!state.result || !state.loading;
-    heading.hidden = !!state.result;
-    output.setAttribute('aria-busy', state.loading && !state.result ? 'true' : 'false');
+    refresh.textContent = state.result ? 'Retry Token Mix' : 'Load Token Mix';
+    refresh.hidden = !!state.result && !state.withheld;
+    cancel.hidden = !!state.result && !state.withheld || !state.loading;
+    heading.hidden = !!state.result && !state.withheld;
+    output.setAttribute('aria-busy', state.loading && (!state.result || state.withheld) ? 'true' : 'false');
   } else { refresh.textContent = 'Refresh snapshot'; refresh.hidden = false; cancel.hidden = false; heading.hidden = false; }
+  if (state.section === 'ai-stats') {
+    refresh.textContent = 'Retry AI Stats'; refresh.hidden = !state.failed;
+    cancel.hidden = !state.loading || !!state.result && !state.withheld;
+    notice.textContent = ''; output.setAttribute('aria-busy', state.loading && (!state.result || state.withheld) ? 'true' : 'false');
+    ReportView.defaultUnit();
+    state.stats ||= new AIStatsView.View(period => selectStats(state, period));
+    state.stats.update(state); state.stats.attach(output);
+    return;
+  }
   if (state.section === 'settings') {
     heading.hidden = true;
     if (!settingsView) settingsView = new WebSettings.View(api, applySettings);
@@ -199,10 +227,17 @@ function show(state) {
       // Host/source health owns startup and failure feedback, not an elapsed timer.
       output.replaceChildren();
     }
-  } else if (state.result && state.section === 'token-mix') {
+  } else if (state.result && state.section === 'token-mix' && !state.withheld) {
     ReportView.defaultUnit();
     state.tokenMix ||= new TokenMixView.View();
     state.tokenMix.update(state.result); state.tokenMix.attach(output);
+  } else if (state.withheld) {
+    const message = state.failed ? state.message : 'Retained report is over one hour old. Acquiring current history…';
+    const observed = new Date(CachedReports.observation(state.result)).toLocaleString();
+    const text = ReportView.element('p', `${message} Last successful observation: ${observed}.`);
+    text.setAttribute('role', state.failed ? 'alert' : 'status');
+    const bar = ReportView.element('progress'); bar.setAttribute('aria-label', 'Acquiring current report');
+    output.replaceChildren(...(state.loading ? [bar, text] : [text]));
   } else if (state.result) {
     // Connection/source status is not a new frozen report. Replacing its DOM
     // discards scroll, focus and selection during ordinary health checks.
@@ -242,6 +277,7 @@ function failure(code) {
 }
 async function acquire(state, background = false, prices = false) {
   if (state.loading || !hostState.writable) return;
+  const request = state.request;
   state.loading = true;
   state.priceRefreshing = prices; state.priceMessage = '';
   state.failed = false;
@@ -251,7 +287,7 @@ async function acquire(state, background = false, prices = false) {
   state.message = background ? '' : state.result ? 'Refreshing; last known snapshot retained until success.' : 'Loading snapshot…';
   show(state);
   try {
-    state.active = (await api(prices ? '/api/models/refresh' : '/api/reports', prices ? {} : state.request)).id;
+    state.active = (await api(prices ? '/api/models/refresh' : '/api/reports', prices ? {} : request)).id;
     show(state);
     while (true) {
       const job = await api('/api/jobs/' + state.active);
@@ -261,7 +297,8 @@ async function acquire(state, background = false, prices = false) {
           throw new Error(job.result?.error?.code || job.error || job.status);
         }
         if (hostState.terminal) break;
-        if (state.section === 'token-mix' && !TokenMixView.valid(job.result)) throw new Error('report_unavailable');
+         if (state.section === 'token-mix' && !TokenMixView.valid(job.result)) throw new Error('report_unavailable');
+         if (state.section === 'ai-stats' && !AIStatsView.valid(job.result)) throw new Error('report_unavailable');
         // Partial data is usable but never a successful 100% acquisition. Paint
         // completion only after the whole successful result has arrived.
         if (state.section === 'models' && !state.result && job.result.source.status === 'acquired') {
@@ -271,22 +308,33 @@ async function acquire(state, background = false, prices = false) {
             if (typeof requestAnimationFrame === 'function') await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
           }
         }
-        state.result = job.result;
+        if (state.section === 'ai-stats') {
+          state.statsResults ||= new Map();
+          for (const row of job.result.view.ai_stats) {
+            const old = state.statsResults.get(row.period);
+            if (!old || CachedReports.observation(old) <= CachedReports.observation(job.result))
+              state.statsResults.set(row.period, job.result);
+          }
+          state.result = state.statsResults.get(state.period) || null;
+        } else state.result = job.result;
+        state.withheld = historical(state) && state.result && CachedReports.entry(state.result, state.section) === 'withhold';
         state.pages = {};
-        state.message = state.section === 'token-mix' ? '' : 'Snapshot captured. Navigation and source activity do not update it.';
+        state.message = historical(state) ? '' : 'Snapshot captured. Navigation and source activity do not update it.';
         break;
       }
        if (!background) state.message = `${job.status}: ${reportWork(job.progress)}. ${state.result ? 'Last known snapshot retained.' : ''}`;
-       overviewProgress(state, job.progress);
+        overviewProgress(state, job.progress);
+        if (state.section === 'ai-stats' && (!state.result || state.withheld)) state.lastWork = reportWork(job.progress);
       // Do not redraw a retained report while polling: keep selection and scroll useful.
        if (state === current && !background) {
         notice.textContent = state.message;
-        if (state.section === 'models' && !state.result) show(state);
+         if (state.section === 'models' && !state.result) show(state);
+         if (state.section === 'ai-stats') show(state);
       }
       await new Promise(resolve => setTimeout(resolve, 500));
     }
   } catch (error) {
-    state.message = prices ? 'Price list refresh failed; previous prices retained' : background ? 'Update delayed; last completed Token Mix retained.' :
+    state.message = prices ? 'Price list refresh failed; previous prices retained' : background ? 'Update delayed; last completed report retained.' :
       `${state.result ? 'STALE — last known snapshot retained. ' : ''}${failure(error.message)}`;
     if (error.message === 'report_timeout' && state.lastWork) state.message += ` Last observed work: ${state.lastWork}.`;
     if (prices) state.priceMessage = state.message;
@@ -297,7 +345,9 @@ async function acquire(state, background = false, prices = false) {
     state.failed = true;
   } finally {
     state.loading = false; state.priceRefreshing = false; state.active = null; state.checkedAt = Date.now();
-    show(state); scheduleTokenMix();
+    show(state); scheduleCachedReport();
+    if (state === current && state.section === 'ai-stats' && !state.result && !state.failed && !document.hidden &&
+        JSON.stringify(request) !== JSON.stringify(state.request)) acquire(state);
   }
 }
 function navigate() {
@@ -337,9 +387,14 @@ function navigate() {
       pages: {}, loading: false, active: null, explicit: route.explicit,
       message: route.live ? 'Live acquisition starting; one runtime shared across tabs.' : cached ? 'Snapshot captured. Reused frozen observation.' : request ? 'Capture/Refresh to acquire this report.' : 'Choose a report scope.'});
   }
+  const previous = current;
   if (current?.detail) current.detail.detach();
   if (current?.catalog) current.catalog.detach();
   current = views.get(key);
+  if (current.section === 'ai-stats') {
+    current.period ||= '30-days'; current.statsResults ||= new Map();
+    current.request = {kind: 'ai-stats', stats_scope: ['all', 'month'].includes(current.period) ? current.period : '30-days'};
+  }
   if (route.section === 'models') current.refreshPrices = () => acquire(current, false, true);
   document.getElementById('search').value = current.search || '';
   if (match && csrf && !hostState.terminal && sessionDetailAvailable && !current.detail) {
@@ -354,12 +409,14 @@ function navigate() {
    if ((match || route.catalog) && csrf && !sessionDetailAvailable) current.message = 'Live session source unavailable.';
   document.getElementById('search').disabled = !!current.detail;
   show(current);
-  scheduleTokenMix();
+  if (current !== previous) enterCachedReport(current);
+  scheduleCachedReport();
   if (redirected) document.getElementById('content').focus();
   if (route.section === 'settings' && csrf && !hostState.terminal) settingsView.read();
-  if (csrf && hostState.writable && current.request && !current.explicit && !current.detail && !current.result && !current.attempted) {
+  if (csrf && hostState.writable && current.request && !current.explicit && !current.detail && !current.result && !current.attempted &&
+      (current.section !== 'ai-stats' || !document.hidden)) {
     current.attempted = true;
-    acquire(current);
+    if (current.section !== 'ai-stats' || !document.hidden) acquire(current);
   }
 }
 async function connect() {
@@ -380,14 +437,15 @@ async function connect() {
         miniWatch?.update(liveValue);
         if (current?.live) { current.message = 'Live observation; source/account freshness shown below.'; show(current); }
         for (const job of progress?.jobs || []) {
-           if (current?.active === job.id && !(current.section === 'token-mix' && current.result)) {
+           if (current?.active === job.id && !(historical(current) && current.result && !current.withheld) && current.section !== 'ai-stats') {
              notice.textContent = `${job.status}: ${job.progress?.phase || job.status} · ${job.progress?.completed ?? 0}${job.progress?.total == null ? '' : '/' + job.progress.total}`;
               if (current.section === 'models' && !current.result && ['queued', 'running'].includes(job.status)) {
                overviewProgress(current, job.progress || {}); show(current);
              }
            }
         }
-        if (hostState.writable && current?.request && !current.explicit && !current.result && !current.attempted) {
+        if (hostState.writable && current?.request && !current.explicit && !current.result && !current.attempted &&
+            (current.section !== 'ai-stats' || !document.hidden)) {
           current.attempted = true; acquire(current);
         }
       }, connectionStatus);
@@ -429,7 +487,13 @@ window.addEventListener('offline', () => connectionStatus('OFFLINE — last obse
 window.addEventListener('online', () => liveConnection?.resync());
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) liveConnection?.resync();
-  scheduleTokenMix();
+  if (!document.hidden) {
+    enterCachedReport(current);
+    if (current?.section === 'ai-stats' && !current.result && !current.attempted) {
+      current.attempted = true; acquire(current);
+    }
+  }
+  scheduleCachedReport();
 });
 document.getElementById('search').addEventListener('input', event => {
   if (current) { current.search = event.target.value; current.pages = {}; show(current); }

@@ -31,17 +31,23 @@ Evidence and the scoped split-verification decision: [Models pricing](../../jour
 
 `src/web/assets/app.js` owns finite refresh/stale/cancel state and memory-only observations; Models keeps its frozen normal report. `reports.js` owns route resolution and explicit-only deep-history admission. Accounts bypasses finite jobs/report shell and consumes app-level retained Live, even without a Watch DOM. `account-cards.js` is the single Watch/Accounts subscription renderer: account-keyed membership, bound metric/reset/help updates, per-card signatures excluding the publication clock, shared physical-width cap and existing subgrid styles. Empty success clears membership; missing/failed empty publications retain usable cards with truthful warnings. Settings synchronize visible/detached roots without acquisition. `render.js` presents DTOs with exact Decimal/vector sorting; generic reports retain presentation search/50-row paging, while Models has independent catalog/version filters and complete document-scrolling rows. Totals never come from cells. Sessions bypasses finite jobs and the report shell: `sessions.js` renders six-column live catalog pages; `session.js` renders one ten-column complete chronological history. Both use intrinsic metric tracks, elastic title/preview and document vertical scrolling. Shared Watch `ContextLine` and contextual-help components consume canonical report context, not a browser estimator.
 
-Token Mix is the exception to indefinitely frozen finite reports after its deliberate
-first load. `token-mix.js` owns a retained compact summary and exactly two 13-column
+Token Mix and AI Stats are the two cached historical finite views, not Live owners.
+`token-mix.js` owns a retained compact summary and exactly two 13-column
 tables, exact integer/Decimal/rational sort keys, prepared unit tokens and text-only
 ContextHelp. Keyed reconciliation preserves rows, focus and panning; it never values
-or acquires usage. `app.js` schedules one approximately-five-minute check only while
-active, visible and writable, validates the whole result before replacement, and
-retains old figures/provenance through slow or failed work. Navigation/visibility
-suspends future checks. Finite jobs remain isolated/bounded and lower-priority Token
-Mix jobs coalesce in-flight/recent tab requests; observation times are not relabeled.
-Web-only compact report caching belongs to `reports/token_mix_cache.py`, not Live.
-Current tests and measured limits: [Token Mix findings](../../journal/web/token-mix.md).
+or acquires usage. `ai-stats.js` renders ten equal server-prepared emoji cards, five
+periods, safe record links and shared title help. AI Stats automatically acquires
+30-day coverage; Today/7 days reuse it, month/all extend lazily. `cached-reports.js`
+and `app.js` share 5-minute Token Mix / 15-minute AI Stats active-visible scheduling
+and last-success re-entry bands: fresh immediate, overdue through 60m quiet, >60m
+withheld with bounded progress/recovery. Active pages never blank at minute 61.
+Navigation/visibility suspends new checks, not running bounded work. Whole-result
+validation and synchronous retained-node updates preserve focus/scroll. Both
+low-priority kinds coalesce in-flight/recent identical scopes without relabeling
+observations. Compact report evidence belongs to reports, not Live. Scoped update:
+base `42cc45f624d7b9cda560e365e53a93cec36ff7bc` plus FR 000599's diff; other
+contracts retain their original checks. [AI Stats findings](../../journal/web/ai-stats.md)
+and [Token Mix findings](../../journal/web/token-mix.md) separate proof/limits.
 
 The Web Reports menu, date form and date-only renderer are retired. `reports.js`
 resolves old `#/reports` hashes to a scope-free Sessions redirect; `app.js` replaces
@@ -50,7 +56,8 @@ discarded, including invalid dates and unrelated sort/page parameters. No hidden
 date job or Sessions date filter remains. CLI date/range engines, canonical DTOs,
 shared `/api/reports` validation/jobs and date-history progress labels used by
 surviving captures are unchanged. Current routes: Models, Watch, Sessions/detail,
-Accounts, Token Mix, Cost per Active Hour and Settings (`docs/web-beta.md`).
+Accounts, Token Mix, AI Stats and Settings (`docs/web-beta.md`). The old
+`#/cost-per-hour` hash aliases AI Stats; reusable rate APIs/session-detail help remain.
 Actual checks and explicit proof limits: [Reports retirement verification](../governance/verification/web-reports-retired.md).
 
 `application/session_catalog.py` owns full observed membership, six exact server comparators and stable older-page epochs. Seven latest-visible-page admissions alternate with one oldest-attempt background turn, within four-root/two-second admission slices; unchanged validated scalars are reused. Per-root failures expose unavailable/retained states with bounded backoff, terminal failures wait for changed evidence, and lane-wide failure never masquerades as pending. Running requires current successful evidence. `reports/session_summary.py` caches source/dependency/algorithm-checked scalars; active/running roots bypass reuse. Every metric key must validate before global sorting, otherwise activity order is explicit. `watch/web_coordinator.py` shares catalog observations and isolates this lane from detail, account history and four card workers. HTTP never acquires history; transport/cancellation still bounds individual reads.

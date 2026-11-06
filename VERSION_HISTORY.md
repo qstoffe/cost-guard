@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.183 — 2026-11-06
+
+- Web AI Stats replaces Cost per Active Hour with ten equal emoji cards, five periods, canonical overlap-safe time/cost facts, real session records and original data-driven trait lines. Automatic 30-day acquisition reuses compact revision-keyed evidence; broader month/all-time coverage is lazy and bounded. Quiet visible-page refresh runs about every 15 minutes. AI Stats and Token Mix share truthful one-hour re-entry withholding/recovery; Token Mix retains its explicit first load, tables/sorts and five-minute cadence. CLI, session-detail rate and live pages keep their independent contracts.
+
 ## v80.182 — 2026-11-06
 
 - Mini Watch subscription help contains only primary-window Capacity and Next reset; visible usage/warnings stay intact. Models replaces its explanation cards with semantic header help and adds an explicit price-list refresh plus the true upstream fetch time. Strict retrieval cannot claim a cached fallback as success; one isolated, coalesced report rebuilds prices/ratios coherently without account refresh or mid-publication Watch repricing. Failed refresh retains the old table/date and permits retry; filters, multi-sort and display units survive.

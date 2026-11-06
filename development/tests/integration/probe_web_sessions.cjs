@@ -84,7 +84,7 @@ async function main() {
      for(const width of [1920,360]) {
        await command('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false},sessionId);
        assert.deepEqual(await evaluate('[...document.querySelectorAll("nav a")].map(node=>node.textContent)'),
-         ['Models','Watch','Sessions','Accounts','Token Mix','Cost per Active Hour','Settings']);
+          ['Models','Watch','Sessions','Accounts','Token Mix','AI Stats','Settings']);
        assert.equal(await evaluate(`[...document.querySelectorAll('a')].filter(node=>node.getAttribute('href')?.startsWith('#/reports')).length`),0);
        assert.equal(await evaluate('document.documentElement.scrollWidth <= innerWidth'),true);
      }
@@ -96,7 +96,7 @@ async function main() {
      await evaluate('history.forward()'); await until('location.hash === "#/sessions" && current.catalog');
      assert.deepEqual(await evaluate('reportKinds'),[]);
      checks.push('retired-hashes-valid-invalid-reload-back-forward-no-jobs-or-date-filter-wide-narrow-nav');
-     for(const section of ['token-mix','cost-per-hour']) {
+      for(const section of ['token-mix']) {
        const before=await evaluate('reportKinds.length');
        await evaluate(`location.hash='#/${section}'`); await until(`current.section === '${section}'`);
        assert.equal(await evaluate('reportKinds.length'),before,'opening remains explicit');
@@ -117,7 +117,7 @@ async function main() {
        await fixture('resume-captures');
      }
      assert.equal(await evaluate('reportKinds.includes("date")'),false);
-     checks.push('token-mix-and-active-hour-explicit-capture-refresh-cancel-retained-result');
+      checks.push('token-mix-explicit-first-capture-reacquisition-cancel-retained-result; AI Stats lifecycle has its own probe');
      await evaluate("location.hash='#/sessions'");
     await until('current?.catalog?.data?.total === 120');
     assert.deepEqual(await evaluate('[...document.querySelectorAll("#result th")].map(node=>node.textContent.replace(/ [↑↓↕]$/, ""))'),

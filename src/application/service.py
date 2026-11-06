@@ -48,7 +48,7 @@ class ReportApplication:
 
     def execute(self, request: ReportRequest, *, progress: ProgressSink | None = None) -> ReportResult:
         scope = record(kind=request.kind, session_id=request.session_id, date_text=request.date_text,
-                       session_limit=request.session_limit)
+                       session_limit=request.session_limit, stats_scope=request.stats_scope)
         now = int(self._clock())
         unknown = record(status="not_acquired", observed_at_ms=None, revisions=(), atomicity="per_root_snapshot")
         if not self._lock.acquire(blocking=False):
@@ -86,7 +86,8 @@ class ReportApplication:
                     ReportKind.SESSION: "complete_root_tree",
                     ReportKind.DATE: "local_range",
                      ReportKind.TOKEN_MIX: "all_available_history_selectable_models",
-                     ReportKind.COST_PER_HOUR: "explicit_period_execution_history",
+                      ReportKind.COST_PER_HOUR: "explicit_period_execution_history",
+                      ReportKind.AI_STATS: "available_execution_history",
                 }[request.kind]),
                 ("local_day_start_ms", local_day_start_ms(service.timezone_id, now_ms=now)),
                 ("local_month_start_ms", local_month_start_ms(service.timezone_id, now_ms=now)),
@@ -113,7 +114,7 @@ class ReportApplication:
                              # Normal is an aggregate comparison/account report. Its
                              # month-wide causal identities are not displayed and can
                              # dwarf the report; per-root revision evidence stays above.
-                             for parts in (() if request.session_page_size or request.kind in {ReportKind.NORMAL, ReportKind.COST_PER_HOUR}
+                              for parts in (() if request.session_page_size or request.kind in {ReportKind.NORMAL, ReportKind.COST_PER_HOUR, ReportKind.AI_STATS}
                                            else service.report_request_identities()))
             observe(WorkProgress("Preparing report", "finalizing", 1, 2, stage="finalizing"))
             view = project(report, service.timezone_id, service.config.get("ccostDisplayUnit", "credits"))
@@ -155,6 +156,8 @@ class ReportApplication:
     def _validate(request: ReportRequest) -> str | None:
         if not isinstance(request.kind, ReportKind):
             return "invalid_request"
+        if request.stats_scope not in ('30-days', 'month', 'all'):
+            return 'invalid_request'
         if request.kind is ReportKind.SESSION and not request.session_id:
             return "invalid_request"
         if request.kind is ReportKind.DATE and not request.date_text:

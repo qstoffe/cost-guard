@@ -499,19 +499,6 @@ const ReportView = (() => {
   function hourlySummary(value) {
     return `Reference cost per active hour: ${display(value, 'rate')} · ${value.status} · CCost ${display(value, 'known_ccost')} · Active execution ${display(value, 'duration_ms')}`;
   }
-  function hourlyPeriods(parent, view, scope) {
-    parent.append(element('p', 'Reference spending per hour of observed concurrent execution, not agent-worker-hours, actual billing, a consultant invoice or human time saved. Unknown pricing/time is not zero.'));
-    parent.append(element('p', `Timezone: ${scope.timezone_id}. Today and month-to-date use local calendar boundaries (including DST). Rolling 30 days is exactly 30 × 24 hours before this observation.`, 'detail'));
-    const grid = element('div', undefined, 'report-concepts');
-    for (const value of view.active_hours || []) {
-      const card = element('div');
-      card.append(element('h3', value.scope), element('p', () => hourlySummary(value)),
-        element('p', `${display(value, 'start_ms')} → ${display(value, 'end_ms')} · ${value.observed_requests} observed requests`, 'detail'));
-      grid.append(card);
-    }
-    parent.append(grid, element('p', 'Execution intervals are clipped before unioning, within and across sessions; idle gaps are excluded. CCost is deduplicated and allocated by each request’s canonical event/completion timestamp, even when execution crosses a boundary. Tokens are never prorated. Running work is provisional and frozen at capture. Complete means complete observed evidence, not recovered deleted/pruned history.', 'detail'));
-    const sessions = element('a', 'Browse sessions and their Snapshot/Live rates'); sessions.href = '#/sessions'; parent.append(sessions);
-  }
   function render(parent, result, state) {
     defaultUnit(result.view);
     parent.replaceChildren();
@@ -537,11 +524,6 @@ const ReportView = (() => {
     const definitions = element('details');
     definitions.append(element('summary', 'Reading this report'), element('p', 'CCost — Estimated reference cost, not your bill. Unknown prices are not zero.\nDuration — Recorded execution time, frozen with this snapshot.\nSearch, sorting and pages change what you see, not the totals or report scope.\nRefresh acquires a new snapshot. Navigation and live updates do not refresh reports.\nClosing this tab does not stop Cost Guard; the CLI runs separately.', 'help-copy'));
     if (!overview) parent.append(definitions);
-    if (view.kind === 'cost-per-hour') {
-      hourlyPeriods(parent, view, result.scope);
-      for (const note of view.notes || []) parent.append(element('p', note, 'warning'));
-      return;
-    }
     parent.append(element('p', 'Token category order: ' + mixLegend(view), 'detail'));
     if (view.session_usage.length || view.kind === 'sessions') {
       if (!view.session_usage.length) parent.append(element('p', result.source.status === 'partial' ? 'Partial source: no sessions returned; unavailable history is not empty success.' : 'Source acquired: no available sessions.'));

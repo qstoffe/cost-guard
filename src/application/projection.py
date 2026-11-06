@@ -182,6 +182,9 @@ def project(report, timezone_id="UTC", ccost_display_unit="credits", *, prompt_d
         session_page=fields(report.session_page, "offset size total catalog_revision") if report.session_page else None,
         prompt_blocks=tuple(block(item, source_complete=not report.source_warnings, details=prompt_details) for item in report.prompt_blocks),
         active_hours=tuple(hourly(item) for item in report.active_hours),
+        ai_stats=tuple(record(period=item.period, start_ms=item.start_ms, end_ms=item.end_ms,
+            metrics=tuple(fields(metric, 'metric value status session_id session_title detail') for metric in item.metrics))
+            for item in report.ai_stats),
         accounts_quotas=accounts(report.accounts_quotas), notes=report.notes,
         range_comparison=comparison(report.range_comparison) if report.range_comparison else None,
         recent_model_notice=report.recent_model_notice,

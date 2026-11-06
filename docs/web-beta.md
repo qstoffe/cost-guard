@@ -258,36 +258,47 @@ shows a compact, actionable warning with hover/focus/touch-accessible connection
 details. A server that never served the page cannot display an offline page. The
 global footer is removed; guarantees remain in relevant optional report help.
 
-## Cost per Active Hour
+## AI Stats
 
-v80.115 adds Web-only `/#/cost-per-hour`: **Today**, **Month to date** and
-**Rolling 30 days**. The minimal live Sessions detail does not show this rate.
-Use **Refresh snapshot** to capture period history explicitly. Opening/revisiting
-the page never scans it. Progress, Cancel, the existing 120-second/8 MiB job bounds
-and dependency-aware derived cache apply; Watch/accounts keep their own cadence.
+v80.183 replaces the old hourly-cost page with Web-only **AI Stats** at `/#/ai-stats`.
+Old `/#/cost-per-hour` bookmarks resolve here without acquiring the retired report.
+The reusable canonical rate analysis/API and independent session-detail rate remain
+supported; this is not a CLI, Sessions or Watch redesign.
 
-Each scope shows reference CCost, active execution duration and rate with observation
-time and complete/partial/provisional/unavailable status. Complete means complete
-*observed* evidence, not recovered deleted/pruned history. Unknown or zero duration,
-incomplete telemetry, unpriceable cost or known source gaps suppress the rate; true
-priced zero with positive known duration can show zero. Running work is provisional.
-Source loss retains the last observation and never proves completion.
+Ten equal emoji cards form **Overview** (AI Hourly Rate, Total AI Cost, AI Working
+Time, Average Cost per Session) and **Fun Facts** (Most Expensive Session, Longest
+Session, Busiest Day, Night Owl, Coding Streak, Peak Parallel Sessions). Record cards
+link actual root-session names. Short original trait lines follow the measured
+values, stay stable across unit/theme changes and distinguish empty from unknown.
+Focus, tap or hover the actual titles for metric-specific shared contextual help.
 
-Python computes `CCost / (active milliseconds / 3,600,000)` using unrounded Decimal
-inputs, then applies the shared credits/USD display policy: `CCost/h` or `$/h`
-(100 credits = $1.00, two USD decimals). JavaScript only chooses prepared text.
-Active time reuses qualified prompt, child, compaction, tool and background execution
-boundaries, excluding idle gaps and unverified time. Clip to the window, then union
-overlap within **and across** sessions: this is observed concurrent execution,
-not summed agent-worker-hours. Distinct concurrent requests still each incur CCost.
-Deduplicated request cost is allocated by its canonical event/completion timestamp;
-cross-boundary requests are **not** proportionally token-billed.
+The exact selector is **Today | 7 days | 30 days | This month | All time**, initially
+**30 days**. Entry automatically acquires bounded 30-day history; Today/7 days reuse
+that coverage. Rolling windows mean precisely 7/30 × 24 hours. Today/month use the
+configured timezone, including DST; a 31-day calendar month extends coverage when
+needed. All time is lazy and includes available archived roots, not deleted/pruned
+history. This month and All time have label-bound help. First/broader acquisition
+shows honest finite progress and permits cancel; healthy cards have no permanent
+Load/Refresh/Cancel toolbar. Smaller cached periods remain usable during All time.
 
-Today/month use configured timezone boundaries including DST. Rolling 30 days is
-exactly the preceding 30 × 24 hours at capture, not another calendar-month scope.
-This is reference spending per active hour, not provider billing, a consultant
-invoice or human hours/salary saved. No model selector, new CLI command/option,
-provider/model call, browser persistence or durable history ledger is added.
+Python owns all arithmetic: canonical event-time deduplicated reference CCost, exact
+Decimal ratios, clipped unioned execution time and deterministic record ties.
+Concurrent requests each cost tokens, but simultaneous execution counts once for
+Working Time/Busiest Day. Root sessions—not child agents—determine average and peak
+parallel count. Night Owl measures unioned execution from 22:00–06:00 local time;
+Coding Streak is the longest run of local dates with positive activity, not commits
+or a current streak. Known zero, missing/partial pricing, unknown duration, source
+gaps and provisional running evidence remain distinct. No unknown denominator can
+create an exact rate. Reference CCost is neither billing nor measured human work,
+salary savings or consultant invoices.
+
+AI Stats checks about every **15 minutes**, only while visible and active. Compact
+revision-/pricing-keyed evidence reuses unchanged roots; changed roots use bounded
+historical batches. Ordinary updates retain every card/link, period, focus and scroll
+until one coherent result is ready. The shared one-hour re-entry policy below also
+applies. Existing 120-second/8 MiB finite limits, cancellation and security remain.
+No new settings, account/provider calls, inference, external assets or browser-stored
+private history are added. [Verification and limits](../development/journal/web/ai-stats.md).
 
 **Settings → CCost display** switches Python-prepared reference
 amounts in place, without report jobs or provider refresh. Native money, quotas,
@@ -329,7 +340,7 @@ Run `python cost-guard-web.py --foreground` using already installed Python 3.11+
 
 ## Navigation and static reports
 
-The Beta shell provides Models, global Watch, live Accounts, a live Sessions catalog, explicit historical Token Mix, Cost per Active Hour, Settings and complete live session detail. Global `/#/watch` is canonical; legacy `/#/live` links replace the same history entry. Accounts consumes the same latest retained account publication as Watch, not Models' frozen Normal report. Explicit Refresh on finite report views creates a new observation for that view, not a silent cross-view update.
+The Beta shell provides Models, global Watch, live Accounts, a live Sessions catalog, historical Token Mix, AI Stats, Settings and complete live session detail. Global `/#/watch` is canonical; legacy `/#/live` links replace the same history entry. Accounts consumes the same latest retained account publication as Watch, not Models' frozen Normal report. Finite observations and live publications retain their independent scopes; only the two historical views use the cached-refresh policy below.
 
 Sessions is the historical navigation entry point. The former `/#/reports` page is retired: old links, including date queries, replace that history entry with `/#/sessions` without starting a date report or applying a filter. Sessions has no date-range filter; sort on Last activity or its other catalog columns. CLI date/date-range reporting and the shared backend report APIs remain supported.
 
@@ -360,19 +371,37 @@ acquisition or client-side valuation. [Verification and limits](../development/j
 | Accounts | `/#/accounts` | Shared live Watch subscription cards, native windows/pace, Today/period CCost, Capacity and account-specific warnings; no finite report |
 | Sessions | `/#/sessions` | Live six-column catalog, 50 sessions/page, globally sorted canonical keys and stable older-page membership; available archived roots included |
 | Session detail | `/#/sessions/<id>` (legacy `/live` alias) | Complete chronological live history, no user-facing pages or modes; links from session names and Watch |
-| Cost per Active Hour | `/#/cost-per-hour` | Explicit capture of canonical Today, month-to-date and rolling-30-day reference rates; independent finite refresh/cancel |
+| AI Stats | `/#/ai-stats` (legacy `/#/cost-per-hour` alias) | Ten equal cards, five periods, automatic 30-day first load, lazy broader history, quiet ~15-minute visible-page checks and shared one-hour re-entry policy |
 | Historical Token Mix | `/#/token-mix` | Explicit **Load Token Mix**, then quiet ~five-minute visible-page checks. One total/token-volume summary and two 13-column model/publisher tables split Input / Cached input / Cache write / Output percentages and category CCost, with Prompts/Calls/Tokens/Total CCost. Every column sorts locally by exact source values; all rows and full names remain readable through horizontal panning. Partial/unavailable coverage stays explicit. |
 | Web Settings | `/#/settings` | Theme, CCost display, Mini position/size and Quota display; inherited/explicit intent, authenticated narrow config read/write, no report acquisition |
 
 Generic finite report tables retain search/filter/page controls and ascending/descending/original-order sorting. Token Mix instead has independent ascending/descending table sorts, default Total CCost descending, without filters, a pager or nested vertical scrolling. Header text owns shared hover/focus/touch help; no question-mark prefixes or icons are used. Models uses its independent filter/multi-sort contract; Watch keeps fixed chronological cards. Accounts and Sessions have no report toolbar, search, filters or snapshot controls. Sessions' catalog headings request full-catalog server sorting, not presentation-only page sorting. Detail has no sort or pager. Decimal keys stay exact and unknowns sort last.
 
-Token Mix first-load progress and Cancel belong only to the deliberate bounded acquisition. Once loaded, active visible pages check about every five minutes; hidden tabs and other routes suspend scheduling. Returning paints the retained result immediately and performs at most one overdue check. Unchanged source revisions reuse disposable compact request facts and canonical category valuations; only changed/new/late-updated roots need history acquisition, while removed roots disappear. Price/config/analysis changes invalidate the relevant facts; availability changes regroup the same shown history. Source catalogs are still read to discover revisions, not trusted as usage. Global fork deduplication, publisher grouping and pricing tiers remain CLI-owned semantics. Host jobs coalesce in-flight requests and briefly reuse completed observations across tabs without relabeling observation time. No new account polling, inference, browser history ledger or unconditional periodic full scan is introduced.
+Token Mix retains deliberate **Load Token Mix** first acquisition, bounded progress/cancel and its approximately **five-minute** active-visible cadence. Hidden tabs and other routes suspend new checks. Unchanged source revisions reuse disposable compact request facts and canonical category valuations; only changed/new/late-updated roots need history acquisition, while removed roots disappear. Price/config/analysis changes invalidate the relevant facts; availability changes regroup the same shown history. Source catalogs are still read to discover revisions, not trusted as usage. Global fork deduplication, publisher grouping and pricing tiers remain CLI-owned semantics. Host jobs coalesce in-flight requests and briefly reuse completed observations across tabs without relabeling observation time. No new account polling, inference, browser history ledger or unconditional periodic full scan is introduced.
 
-The old overview and both tables remain usable while refresh runs. Complete results reconcile together in place, preserving independent sorts, Credits/USD, rows, focus and scroll/pan anchors. Failure retains the actual old observation with concise update-delayed feedback; it never becomes live merely because HTTP works. Fully unavailable values remain N/A; partial costs/volumes use readable **Partial**, not CLI question-mark notation. Deleted/pruned history stays unavailable. Timeout/cancellation/empty history remain distinct; Live and its account scheduler continue independently. URL fragments contain only scope/locators, never prompt content.
+During ordinary Token Mix refresh the accepted summary and both tables remain usable. Complete results reconcile together in place, preserving independent sorts, Credits/USD, rows, focus and scroll/pan anchors. Failure retains the actual old observation with concise update-delayed feedback; it never becomes live merely because HTTP works. Fully unavailable values remain N/A; partial costs/volumes use readable **Partial**, not CLI question-mark notation. Deleted/pruned history stays unavailable. Timeout/cancellation/empty history remain distinct; Live and its account scheduler continue independently. URL fragments contain only scope/locators, never prompt content.
+
+### Historical-view re-entry freshness
+
+**AI Stats and Token Mix only** share these bands, measured from the last successful
+acquisition—not the last visit, timer tick or failed attempt:
+
+| Retained scope age on visible re-entry | Behavior |
+| --- | --- |
+| Up to its normal cadence (15 / 5 minutes) | Display immediately; no unnecessary scan |
+| Older than cadence, at most 60 minutes | Display immediately and start at most one quiet check |
+| More than 60 minutes | Keep last-good cache internally, withhold normal metrics and show bounded acquisition progress |
+| Acquisition fails, times out or is cancelled | End progress, show actionable failure/last-success provenance and allow retry; never fabricate zero/freshness |
+
+The over-hour exception applies on route re-entry or selection of an inactive stale
+scope. An already-open view does **not** blank at minute 61 during routine refresh.
+Running finite work may finish after navigation; returning does not duplicate it.
+AI Stats' all-time and smaller-scope observation clocks remain independent. Watch,
+Accounts, Sessions and Models keep their own freshness contracts.
 
 Session-ID links open `/#/sessions/<id>`. Fragment routes support direct links, reload and browser Back/Forward without expanding the HTTP path allowlist. The one-use bootstrap fragment is removed before requests; ordinary session routes are preserved on reload. Names/prompts are text, never links or tooltips containing source paths. Navigation and paging never put prompt/history payloads in browser storage or history state.
 
-Every finite result retains observation time, source status and per-root revision evidence; Models and Token Mix hide verbose snapshot prose, not partial/error truth. A running prompt is **running at that snapshot**, with provisional values. **Refresh snapshot** reacquires generic finite views; Models has explicit **Refresh price list** beside its true fetch time, while reload retains normal pricing TTL caching. Token Mix alone performs the bounded low-frequency refresh described above; other frozen reports do not update from navigation or source events. Accounts, Watch and Sessions remain live consumers. Failed refresh preserves the last known result. Missing/empty/partial/source-failure and independently unavailable accounts remain distinct from acquired zero.
+Every finite result retains observation time, source status and per-root revision evidence; minimal historical/Models chrome does not hide partial/error truth. A running prompt is **running at that snapshot**, with provisional values. **Refresh snapshot** reacquires generic finite views; Models has explicit **Refresh price list** beside its true fetch time, while reload retains normal pricing TTL caching. AI Stats and Token Mix perform the bounded low-frequency refresh described above; other frozen reports do not update from navigation or source events. Accounts, Watch and Sessions remain live consumers. Failed refresh preserves the last known result. Missing/empty/partial/source-failure and independently unavailable accounts remain distinct from acquired zero.
 
 Session detail shows **Prompt | Model | Effort | CCost | Calls | Duration | Ictx | Ictx CCost | Extra CCost | Token Mix %**. Python's category order remains **I = Input; C = Cached input; W = Cache write; O = Output**. Input is uncached, Cached input is cache read, Cache write is cache creation, and Output includes reasoning. Full-session totals and main/linked-child breakdown come from the canonical result, never from loaded chunks. Unknown, incomplete and estimated amounts remain honest; a published Cache write price does not imply observed tokens. CCost is not billing. The browser performs no valuation or token attribution.
 

@@ -6,6 +6,7 @@ const ReportRoutes = (() => {
     if (['overview', 'models/all'].includes(path)) path = 'models';
     // Retired date-page bookmarks discard their scope; Sessions has no date filter.
     if (path === 'reports') return {redirect: '#/sessions'};
+    if (path === 'cost-per-hour') return {redirect: '#/ai-stats'};
     const params = new URLSearchParams(query);
     const session = /^sessions\/([A-Za-z0-9_-]{1,200})(\/live)?$/.exec(path);
     if (session) return {title: 'Session ' + session[1], section: 'sessions', session, request: null};
@@ -13,7 +14,7 @@ const ReportRoutes = (() => {
       models: ['Models', 'normal'],
       accounts: ['Accounts', null], sessions: ['Sessions', 'sessions'],
        'token-mix': ['Token Mix', 'token-mix'],
-       'cost-per-hour': ['Cost per Active Hour', 'cost-per-hour'], settings: ['Settings', null]};
+       'ai-stats': ['AI Stats', 'ai-stats'], settings: ['Settings', null]};
     if (!routes[path]) return {title: 'Page not found', section: '', request: null};
     const [title, kind] = routes[path];
     let request = kind ? {kind} : null;
@@ -25,13 +26,12 @@ const ReportRoutes = (() => {
       request = null;
     }
     return {title, section: path === 'live' ? 'watch' : path.split('/')[0], request, live: ['live', 'watch', 'accounts'].includes(path),
-      catalog: path === 'sessions', explicit: path === 'token-mix' || path === 'cost-per-hour', params};
+      catalog: path === 'sessions', explicit: path === 'token-mix', params};
   }
   function controls(parent, route) {
     parent.replaceChildren();
     const e = ReportView.element;
     parent.className = '';
-    if (route.section === 'cost-per-hour') parent.append(e('p', 'Capture/Refresh explicitly reads available period history (120-second limit). Cancel stops only this view’s finite capture; Watch and accounts continue independently. Opening or revisiting this page never starts a scan.'));
   }
   return {resolve, controls};
 })();
