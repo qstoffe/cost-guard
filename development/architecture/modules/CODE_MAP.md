@@ -82,10 +82,13 @@ All paths in this table are relative to the repository root. Test names live und
 
 ## Shared synthetic fixtures
 
-Mini's session totals/history presentation is covered by `test_mini_watch.py`,
+Mini's session totals/history presentation, canonical Activity clock and unknown-finish help are covered by `test_mini_watch.py`,
 `fixtures/mini_sessions.cjs` and `integration/probe_mini_sessions.cjs`; the paired
-`integration/probe_mini_session_alignment.cjs` pins first-cell edges/natural suffix
+`integration/probe_mini_session_alignment.cjs` pins Session-cell edges/natural suffix
 widths across widths, font/CSS zoom, themes and units in the real hidden PiP probe.
+`integration/probe_mini_activity.cjs`, invoked by the current `probe_mini_fit.cjs`,
+checks historical-only column indices, midnight/DST tokens, live tooltip/focus identity,
+pointer/touch help and nominal/narrow geometry in Classic/Web light/dark and both units.
 `fixtures/mini_disclosure.cjs` covers bounded sizing state and failures;
 `integration/probe_mini_disclosure.cjs` measures native pointer/keyboard outer/inner
 bounds and safe fallbacks. `integration/probe_watch_quiet.cjs` checks actual card

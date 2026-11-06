@@ -1,5 +1,63 @@
 # Mini Watch and finished history
 
+## FR 000603 — v80.184 historical Activity, 2026-11-06
+
+Base `1c2550a5aa2f7071e268f21bdf19c2e54907571c`. Earlier Sessions alone now has
+**Activity | Session (Total CCost) | Ctx**. Its canonical singleton representative
+prompt supplies `finished_clock` and `finished_date_time`; Mini performs no timezone
+conversion or activity estimation. A null completion or absent representative shows
+**— / Unknown finish time**, even if misleading display tokens exist. Keyed time
+spans retain focus and update open help in place. Shared ContextHelp supplies the
+600-ms hover delay, immediate keyboard focus and touch pinning, without native titles.
+Semantic Session-cell classes replace first-column layout assumptions; Activity and
+Ctx use intrinsic minima, leaving the title elastic and whole-session total visible.
+Running/recent rows retain their original five columns and displayed metrics.
+No backend, acquisition, pricing, history eligibility/order, timer, setting or sizing
+policy changed. User guide and code map updated; architecture boundaries unchanged.
+
+### Verification and limits
+
+- Local Full: **151 bounded units, 1,768 passed tests, one existing macOS zsh/PTY
+  skip, zero failures/errors, 101.0s**. Focused Mini: **7 tests passed**. Working-tree
+  validator: **11 passes, zero failures**, six existing advisory size warnings.
+- Current `probe_mini_fit.cjs` now invokes focused `probe_mini_activity.cjs` through
+  shipped HTTP/auth/CSP/SSE and an owned strictly headless profile. Passing
+  [Chrome scale 1](../../architecture/governance/verification/mini-activity/activity-chrome.json),
+  [Edge scale 1](../../architecture/governance/verification/mini-activity/activity-edge.json),
+  and [Chrome scale 1.5 / actual 125% browser zoom](../../architecture/governance/verification/mini-activity/activity-chrome-zoom-serial.json)
+  runs each record **46 layouts**, including **24 Activity-specific combinations**:
+  Classic/Web light/dark × 650/520/280 requested outer DIPs × Credits/USD.
+  Chrome **156.0.8078.80**, Edge **156.0.4314.58**. At nominal scale 1: **650 outer /
+  634 inner**, Activity **58.23 CSS px**; three history rows, intact totals and Ctx,
+  and no added horizontal/vertical scrollbar. At scale 1.5/125% zoom, the native
+  650×550 request clamps to **551 outer / 428 inner**; those Activity cases also
+  have no scrollbar. Genuine narrowing retains region-local horizontal panning.
+- Midnight **23:47 → 00:08**, repeated Stockholm **02:30 +0200 / +0100**, unknown
+  finishes, null/missing representatives, truthful retained retries, canonical
+  newest-three ordering, resume exclusion, empty/loading/unavailable colspan 3,
+  stable rows/time/focus/open help, delayed pointer hover and actual CDP touch input
+  passed. Existing opening/disclosure/reserve/clamp/preferences checks also passed.
+  The retained [headless screenshot](../../architecture/governance/verification/mini-activity/activity-chrome-fit.png)
+  was inspected for Activity placement and intact session costs/context.
+- An earlier [concurrent zoom run](../../architecture/governance/verification/mini-activity/activity-chrome-zoom.json)
+  failed the existing cumulative width-rounding assertion: achieved compact width
+  **603** versus the **601** baseline. Sizing production code and that assertion
+  were unchanged. The entire unchanged probe passed on a fresh serial run. This
+  retains an intermittent native/headless sizing uncertainty, not proof of its
+  root cause or a relaxed gate. Full was run separately without browser load.
+- [Read-only installed V2 probe](../../architecture/governance/verification/mini-activity/live-proof.txt):
+  two active/two history cards, **two known historical finishes with valid clock/
+  full-date-offset tokens**, three accounts, one Live owner, coherent advancing
+  streams, **3.718s** including owned shutdown, zero surviving owned workers. Daily
+  was not published before close; incidental history jobs record cancellation-path
+  errors during shutdown, so this is not an all-history/Daily success claim. No
+  inference, real-user settings mutation or shared OpenCode stop.
+
+Integrated browser was attempted first but disconnected. **No requirement/test
+exception was requested or granted.** Physical desktop/OS frames, manual dragging,
+monitor transitions, macOS and screen-reader speech remain untested, not PASS.
+No ZIP, tag or GitHub Release was generated.
+
 ## FR 000591 — v80.180 open/click fit, 2026-11-06
 
 Implemented the owner's revised scope from base `6a3f1e735698c96c7e6947a15c44efedf2597789`.

@@ -2,6 +2,7 @@
 import http.client
 import argparse
 import json
+import re
 from pathlib import Path
 import sys
 import time
@@ -136,7 +137,17 @@ def main():
                 if any('totals' in card or 'provisional' in card for card in cards):
                     raise RuntimeError('probe_watch_card_legacy_totals')
                 if first_rows is not None and view.get('history_cards'):
+                    history_prompts = [row['prompt'] for card in view['history_cards'] for row in card['rows']]
+                    known_finishes = [prompt for prompt in history_prompts if prompt['completed_at_ms'] is not None]
+                    for prompt in history_prompts:
+                        tokens = prompt['display']
+                        if prompt['completed_at_ms'] is not None:
+                            assert re.fullmatch(r'\d{2}:\d{2}', tokens['finished_clock'])
+                            assert re.fullmatch(r'\d{4}-\d{2}-\d{2} \d{2}:\d{2} [+-]\d{4}', tokens['finished_date_time'])
+                        else:
+                            assert (tokens['finished_clock'], tokens['finished_date_time']) == ('—', 'Unknown finish time')
                     card_evidence = dict(active_cards=len(view['active_cards']), history_cards=len(view['history_cards']),
+                        known_history_finishes=len(known_finishes), unknown_history_finishes=len(history_prompts)-len(known_finishes),
                         row_cards=sum(bool(card['rows']) for card in cards),
                         first_rows_seconds=first_rows,
                         max_rows_per_card=max(len(card['rows']) for card in cards),

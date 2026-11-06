@@ -108,7 +108,8 @@ class MiniWatchTests(unittest.TestCase):
 
     def test_finish_export_uses_terminal_evidence_local_date_and_dst_offset(self):
         for when, clock, full in (
-                ((2026, 11, 3, 23, 30), '00:30', '2026-11-04 00:30 +0100'),
+                ((2026, 11, 5, 22, 47), '23:47', '2026-11-05 23:47 +0100'),
+                ((2026, 11, 5, 23, 8), '00:08', '2026-11-06 00:08 +0100'),
                 ((2026, 10, 25, 0, 30), '02:30', '2026-10-25 02:30 +0200'),
                 ((2026, 10, 25, 1, 30), '02:30', '2026-10-25 02:30 +0100')):
             finished = int(datetime(*when, tzinfo=timezone.utc).timestamp() * 1000)

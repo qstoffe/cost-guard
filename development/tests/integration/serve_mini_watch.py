@@ -4,6 +4,7 @@ Uses shipped HTTP/assets/CSP/session/SSE and disposable Settings. No real source
 provider, browser launch or inference. The one-use URL stays inside the probe pipe.
 """
 from dataclasses import replace
+from datetime import datetime, timezone
 from decimal import Decimal
 import json
 from pathlib import Path
@@ -74,11 +75,11 @@ def main():
         cost_groups = (project_live(many_cost_groups(frame)).to_json()['active_cards'][0]['rows'][0]['prompt']
             if sys.argv[2:] == ["--help-audit"] else None)
 
-        def publish(state="running", value=frame):
+        def publish(state="running", value=frame, timezone_name="UTC"):
             current = int(time.time() * 1000)
             value = replace(value, now_ms=current, quota=replace(value.quota, now_ms=current))
             host.events.publish("live", {"state": state, "source_observed_at_ms": value.now_ms,
-                "view": project_live(value).to_json(),
+                "view": project_live(value, timezone_name).to_json(),
                 "probe_cost_groups": cost_groups,
                 "probe_accounts": with_display(project_accounts(value.quota), now_ms=value.now_ms).to_json()})
 
@@ -163,6 +164,16 @@ def main():
                     idle = replace(base_account, account=replace(base_account.account, quotas=quotas,
                         primary_quota_label='5-hour'), quota_periods=periods)
                     publish(value=replace(frame, quota=replace(frame.quota, accounts=(idle,))))
+                elif command in {'history-times', 'history-dst'}:
+                    instants = ((2026, 11, 5, 22, 47), (2026, 11, 5, 23, 8), None) if command == 'history-times' else (
+                        (2026, 10, 25, 0, 30), (2026, 10, 25, 1, 30), (2026, 11, 5, 23, 8))
+                    history = tuple(replace(frame.history_cards[0], session_id=f'earlier-{index}',
+                        title='Earlier long session title ' * 20, rows=(replace(frame.history_cards[0].rows[0],
+                            prompt=replace(frame.history_cards[0].rows[0].prompt,
+                                completed_at_ms=int(datetime(*instant, tzinfo=timezone.utc).timestamp() * 1000) if instant else None)),))
+                        for index, instant in enumerate(instants))
+                    publish(value=replace(frame, active_cards=cards[:1], history_cards=history,
+                        quota=replace(frame.quota, accounts=frame.quota.accounts[:1])), timezone_name='Europe/Stockholm')
                 elif command.startswith('history-'):
                     _, count, prompt_count, *account_count = command.split('-')
                     history = tuple(replace(frame.history_cards[0], session_id=f'earlier-{index}',

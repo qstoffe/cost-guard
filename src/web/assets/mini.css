@@ -26,7 +26,7 @@ body { padding: .5rem; max-width: none; }
 .mini-prompt-table th:first-child, .mini-prompt-table td:first-child { border-left: 1px solid var(--line); }
 .mini-prompt-table th { border-top: 1px solid var(--line); }
 /* Metrics and the nonshrinking total set intrinsic minima. Only the title flexes. */
-.mini-prompt-table th:not(:first-child) { width: 1%; }
+.mini-prompt-table th:not(.mini-session-cell) { width: 1%; }
 .mini-session-value { display: grid; grid-template-columns: minmax(0, 1fr) max-content; }
 .mini-source-note { grid-column: 1 / -1; white-space: normal; font-size: .7rem; color: var(--warn); }
 .mini-source-note:empty { display: none; }
@@ -39,7 +39,8 @@ body { padding: .5rem; max-width: none; }
 .mini-prompt-table th .help-trigger { white-space: pre; }
 .mini-empty { white-space: normal; overflow-wrap: anywhere; }
 .mini-prompt-table td { font-variant-numeric: tabular-nums; text-align: right; }
-.mini-prompt-table td:first-child { text-align: left; }
+.mini-prompt-table td.mini-session-cell { text-align: left; }
+.mini-activity { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .mini-running { color: var(--watch-running); }
 .mini-success { color: var(--watch-success); }
 .mini-error { color: var(--error); }

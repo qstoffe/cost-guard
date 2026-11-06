@@ -215,7 +215,7 @@ const MiniWatch = (() => {
       this.earlier.setAttribute('role', 'region'); this.earlier.setAttribute('aria-labelledby', this.earlierToggle.id);
       this.historyBody = this.table(this.earlier, true); this.historyRows = new Map();
       this.body = this.table(this.prompts, false); this.prompts.insertBefore(this.earlier, this.prompts.children[0]);
-      this.promptRows = new Map(); this.emptyPrompts = this.emptyRow(5); this.emptyHistory = this.emptyRow(2);
+      this.promptRows = new Map(); this.emptyPrompts = this.emptyRow(5); this.emptyHistory = this.emptyRow(3);
       this.accounts = el('ul', undefined, 'mini-accounts'); this.lines = new Map();
       this.accounts.tabIndex = 0; this.accounts.setAttribute('aria-label', 'Primary subscription usage and same-period observed CCost');
       this.disclosureSize = mount === doc.body ? new DisclosureSize(this, mode) : null;
@@ -223,17 +223,18 @@ const MiniWatch = (() => {
     }
     table(parent, historical) {
       const table = this.el('table', undefined, 'mini-prompt-table'), head = this.el('thead'), header = this.el('tr');
-      table.setAttribute('aria-label', historical ? 'Earlier sessions: whole-session CCost and latest valid session context (Ctx)' :
+      table.setAttribute('aria-label', historical ? 'Earlier sessions: latest supported finish, whole-session CCost and latest valid session context (Ctx)' :
         'Active prompts: whole-session CCost in Session; per-prompt CCost, Duration and estimated next incoming context (Ctx)');
-      for (const name of historical ? ['Session', 'Ctx'] : ['Session', '#', 'CCost', 'Duration', 'Ctx']) {
+      for (const name of historical ? ['Activity', 'Session', 'Ctx'] : ['Session', '#', 'CCost', 'Duration', 'Ctx']) {
         const cell = this.el('th'); cell.scope = 'col';
-        const explanation = {Session: 'The name of the session.',
+        const explanation = {Activity: 'The session’s latest supported finish, in configured local time.\nFocus or hover the time for the full local date and offset.', Session: 'The name of the session.',
           '#': 'The prompt’s number within its session.', CCost: 'Estimated cost of this prompt only, not your bill.\nN/A means unavailable, not zero; ? means partial pricing.',
           Duration: 'Time spent on this prompt; freezes when updates are unavailable.', Ctx: historical ?
             'Last valid estimate of the next request’s context in this session.\nNot historical prompt context or a sum. N/A means unavailable.' :
             'Estimated context for this prompt’s next request.\nN/A means unavailable, not zero.'}[name];
         const button = ContextHelp.button(name, explanation, this.doc);
         if (name === 'Session') {
+          cell.className = 'mini-session-cell';
           const value = this.el('span', undefined, 'mini-session-value mini-session-heading');
           const total = ContextHelp.button(' (Total CCost)', 'Reference cost of the entire session, including earlier prompts and linked subagents.\n? — Partial pricing or data.', this.doc);
           total.className += ' mini-session-total';
@@ -248,10 +249,11 @@ const MiniWatch = (() => {
       const row = this.el('tr'), cell = this.el('td'); cell.colSpan = columns;
       cell.append(this.el('span', '', 'mini-empty')); row.append(cell); return row;
     }
-    sessionRow(columns) {
+    sessionRow(columns, sessionIndex = 0) {
       const row = this.el('tr');
       for (let index = 0; index < columns; index++) row.append(this.el('td'));
-      const cell = row.children[0], value = this.el('span', undefined, 'mini-session-value');
+      const cell = row.children[sessionIndex], value = this.el('span', undefined, 'mini-session-value');
+      cell.className = 'mini-session-cell';
       value.append(this.el('span', '', 'mini-session'), this.el('span', '', 'mini-session-total'));
       value.append(this.el('span', '', 'mini-source-note'));
       cell.append(value); return row;
@@ -343,10 +345,20 @@ const MiniWatch = (() => {
       }).slice(-3);
       const wanted = cards.map(card => {
         let row = this.historyRows.get(card.session_id);
-        if (!row) { row = this.sessionRow(2); row.dataset.id = card.session_id; this.historyRows.set(card.session_id, row); }
-        const session = this.drawSession(row.children[0], card);
+        if (!row) {
+          row = this.sessionRow(3, 1); row.dataset.id = card.session_id;
+          const time = this.el('span', '', 'mini-activity');
+          ContextHelp.value(time, () => row.finishHelp || 'Unknown finish time'); row.children[0].append(time);
+          this.historyRows.set(card.session_id, row);
+        }
+        // History exports one canonical representative; never rank or reformat it here.
+        const prompt = card.rows?.[0]?.prompt;
+        const known = prompt?.completed_at_ms != null && prompt.display?.finished_clock && prompt.display?.finished_date_time;
+        row.finishHelp = known ? prompt.display.finished_date_time : 'Unknown finish time';
+        ReportView.text(row.children[0].children[0], known ? prompt.display.finished_clock : '—');
+        const session = this.drawSession(row.children[1], card);
         const context = ReportView.display(card.session_summary?.context, 'watch_next_context_tokens');
-        const cell = row.children[1];
+        const cell = row.children[2];
         ReportView.text(cell, context);
         row.setAttribute('aria-label', `Earlier session · ${session}`); return row;
       });
