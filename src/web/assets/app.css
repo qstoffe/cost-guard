@@ -122,6 +122,23 @@ section > label { display: flex; align-items: center; flex-wrap: wrap; gap: var(
 section > label input { min-width: 0; }
 .table-scroll { overflow: auto; max-height: 65vh; border: 1px solid var(--line); border-radius: .6rem;
   background: var(--panel); scrollbar-color: var(--control-line) var(--surface); }
+[data-section="token-mix"] .report-search, [data-section="token-mix"] #notice:empty { display: none; }
+[data-section="token-mix"] #notice { border: 0; padding: 0; background: transparent; }
+.token-mix-view h2 { font-size: 1.5rem; margin: 0 0 .75rem; }
+.token-mix-summary { display: flex; flex-wrap: wrap; gap: .75rem 2rem; }
+.token-mix-summary > div { display: flex; flex-direction: column; font-variant-numeric: tabular-nums; }
+.token-mix-summary > div > span { color: var(--muted); width: fit-content; }
+.token-mix-status { color: var(--muted); font-size: .85rem; }
+.token-mix-section { padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.token-mix-pan { overflow-x: auto; scrollbar-color: var(--control-line) var(--surface); }
+.token-mix-table { width: max-content; min-width: 100%; }
+.token-mix-table th, .token-mix-table td { padding: .45rem .6rem; white-space: nowrap; }
+.token-mix-table th:first-child, .token-mix-table td:first-child {
+  width: 100%; min-width: 0; max-width: none; white-space: nowrap; overflow-wrap: normal;
+}
+.token-mix-table th button { width: auto; }
+.token-mix-table th button::after { content: none; }
+.token-mix-table .partial { color: var(--muted); }
 table { border-collapse: separate; border-spacing: 0; width: 100%; font-variant-numeric: tabular-nums; font-size: .85rem; }
 caption { text-align: left; padding: .9rem 1rem; font-weight: 650; background: var(--surface); }
 th, td { padding: .7rem .85rem; text-align: right; vertical-align: top; border-bottom: 1px solid var(--line); white-space: nowrap; }

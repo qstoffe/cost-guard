@@ -1,8 +1,8 @@
 # Reports source contracts
 
-Source revision: 1b0fd64375bfc10c6653dda86dea41e2d0c1eb88
-Checked revision: 1b0fd64375bfc10c6653dda86dea41e2d0c1eb88
-Last checked: 2026-10-29
+Source revision: 904c9aea9a5f0e682437b74d7f66d3d5a6d813ff
+Checked revision: 904c9aea9a5f0e682437b74d7f66d3d5a6d813ff
+Last checked: 2026-11-06
 Status: current
 
 [Architecture overview](../OVERVIEW.md) · [Owner/test routes](CODE_MAP.md). Source remains authoritative.
@@ -76,6 +76,24 @@ Schema version and application instance UUID are separate from per-request-view 
 The [Web route inventory](../../../docs/web-beta.md#navigation-and-static-reports) maps views; visual/native acceptance is separate. Application tests pin canonical V1/V2 lifecycle/child/compaction/partial, timezone/account-error, uncapped detail, deduplication, immutable export and typed-failure parity. Fresh ownership, cleanup and forbidden application/Web imports in CLI/Diagnostics remain covered. Focused workload/history tests cover revision/catalog invalidation, deletion and publisher totals; no new dependency or permanent gate.
 
 Historical model/publisher `Tokens` reuse `TokenMix.total_tokens` and its exact `known_total_tokens` subtotal, accumulated during the existing category pass. Incomplete telemetry keeps shares/complete totals unknown while retaining known-category volume (including reasoning). The application exports the subtotal as an exact decimal string for Web sorting, independent of compact Python display tokens and price completeness. Narrow CLI falls back to labeled metrics; Web retains its keyboard-scrollable tables. No acquisition, publisher, analysis-layer or account boundary changes. [Volume evidence](../governance/verification/historical-token-volumes.md).
+
+## Web historical Token Mix acceleration
+
+`token_mix_history.history_projection` is the shared grouping/availability/deduplication
+owner. CLI retains its original acquisition path. Only finite Web composition opts
+into `token_mix_cache`: compact normalized request identity, prompt association,
+token coverage and canonical per-request category valuations are keyed by source,
+tree revision, analysis dependencies and reference catalog. No prompt text or raw
+provider payload is cached. Unstable/active evidence is not persisted. Current root
+membership removes deleted usage; availability changes regroup without repricing.
+Changed roots use bounded 64-root observed batches; SQLite bulk get/put avoids one
+connection per root. The optional cache is disposable, not a second history source.
+Exact integer strings accompany existing numeric DTO fields; Web display tokens
+split shares/costs and replace only Web partial prefixes, preserving CLI semantics.
+
+`test_web_token_mix.py` covers parity, incremental invalidation, active/empty scope,
+cache corruption and a >500-key no-hydration/no-repricing refresh. Performance and
+browser proof retain their actual limits in the Token Mix journal.
 
 ## Allowed dependencies
 

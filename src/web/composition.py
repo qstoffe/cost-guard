@@ -28,7 +28,8 @@ def application(request):
                 max_age_hours=float(config.get("pricingMaxAgeHours", 1))),
             account_provider=accounts[0] if accounts else None, account_providers=accounts,
             model_availability_source=_model_availability_source(selection),
-            cache_repository=cache, config=config, now_ms=now, progress=progress)
+            cache_repository=cache, config=config, now_ms=now, progress=progress,
+            cache_token_mix_history=True)
 
     return ReportApplication(factory)
 

@@ -219,10 +219,15 @@ def history_tokens(values, timezone_id):
         for index, (name, _label) in enumerate(TOKEN_CATEGORIES):
             cost = "N/A" if not priced else prefix + ccost_amount(decimal(costs[index]))
             tokens[name] = shares[index] + ("" if costs is None else f" ({cost})")
+            tokens["mix_" + name + "_share"] = "N/A" if shares[index] == "--" else shares[index]
+            tokens["mix_" + name + "_cost"] = ("N/A" if not priced else
+                ("" if values["cost_complete"] else "Partial ") + ccost_amount(decimal(costs[index])))
         tokens["total_cost"] = prefix + ccost_amount(sum((decimal(item) for item in costs), Decimal(0))) if priced else "N/A"
+        tokens["mix_total_cost"] = tokens["total_cost"].replace("?", "Partial ", 1)
         known_volume = values.get("known_total_tokens")
         tokens["total_tokens"] = token_volume(values.get("total_tokens"),
                                              None if known_volume is None else int(known_volume))
+        tokens["mix_total_tokens"] = tokens["total_tokens"].replace("?", "Partial ", 1)
     return tokens
 
 

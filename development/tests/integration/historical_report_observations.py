@@ -17,6 +17,7 @@ def measured_report(sender, request):
     original_init = ReportService.__init__
     original_observe = ProgressRelay.observe
     last = [float('-inf')]
+    cpu_started = time.process_time()
 
     def report(event=None):
         now = time.monotonic()
@@ -27,6 +28,7 @@ def measured_report(sender, request):
         source = services[-1].source if services else None
         print(json.dumps(dict(report_observation=request.kind.value,
             seconds=round(now - observations.started, 3), progress=event,
+            cpu_seconds=round(time.process_time() - cpu_started, 3),
             metrics=metrics, operations=dict(observations.completed),
             max_seconds=dict(observations.maximum),
             source_stage=getattr(source, '_diagnostics', {}).get('last_snapshot_stage'))), flush=True)

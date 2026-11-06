@@ -46,6 +46,8 @@ Status: current
   global metric sorts, stable older pages, unpaged history and real-source timings.
 - [Shared live Accounts](accounts-live.md): one Watch/Accounts renderer and feed,
   stable keyed cards, hidden Edge/Chrome parity and real V2 account-owner evidence.
+- Historical Token Mix: `development/journal/web/token-mix.md` records dedicated
+  exact split tables, coherent quiet refresh and measured incremental acquisition.
 
 Historical observations keep their original dates and exceptions; this routing
 update does not refresh their validity or certify older failed probes. Parent

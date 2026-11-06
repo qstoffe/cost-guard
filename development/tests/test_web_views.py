@@ -205,7 +205,7 @@ class WebViewTests(unittest.TestCase):
                         cwd=ROOT, input=json.dumps(payload), text=True, capture_output=True, timeout=60)
                 self.assertEqual(0, result.returncode, result.stdout + result.stderr)
                 self.assertIn("web views passed", result.stdout)
-                self.assertEqual(len(jobs.results), 3, "Only two Normal captures and explicit Token Mix submit jobs")
+                self.assertEqual(len(jobs.results), 4, "Two Normal captures, explicit Token Mix and one due background check")
             finally:
                 stopped.set()
                 thread.join(3)

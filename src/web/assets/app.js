@@ -19,6 +19,17 @@ let hostState = {kind: 'starting', writable: false, terminal: false};
 let hostInstance = null;
 let snapshotRender = null;
 let settingsView = null;
+let tokenMixTimer = null;
+const TOKEN_MIX_CADENCE = 300000;
+function scheduleTokenMix() {
+  clearTimeout(tokenMixTimer);
+  const state = current;
+  if (state?.section !== 'token-mix' || !state.result || state.loading || document.hidden || !hostState.writable) return;
+  const delay = Math.max(0, (state.checkedAt || Date.now()) + TOKEN_MIX_CADENCE - Date.now());
+  tokenMixTimer = setTimeout(() => {
+    if (current === state && !document.hidden && hostState.writable) acquire(state, true);
+  }, delay);
+}
 const miniWatch = typeof MiniWatch === 'undefined' ? null : new MiniWatch.Controller(window,
   document.getElementById('mini-watch-toggle'), document.getElementById('mini-watch-feedback'),
   () => { if (location.hash !== '#/watch') location.hash = '#/watch'; });
@@ -29,6 +40,7 @@ function applySettings(value) {
     if (state.catalog) ReportView.syncUnits(state.catalog.root);
     if (state.watch) ReportView.syncUnits(state.watch.root);
     if (state.accounts) ReportView.syncUnits(state.accounts.root);
+    if (state.tokenMix) ReportView.syncUnits(state.tokenMix.root);
   }
   miniWatch?.settings(confirmed.values, hostInstance);
   return confirmed;
@@ -58,6 +70,7 @@ function connectionStatus(message, state = {}) {
   if (hostState.terminal) for (const view of views.values()) { view.detail?.detach(); view.catalog?.detach(); }
   document.getElementById('scope-controls').inert = !hostState.writable;
   if (current) show(current);
+  scheduleTokenMix();
 }
 async function api(path, value) {
   if (hostState.terminal) throw new Error(hostState.kind === 'authorization_required' ? 'authentication_required' :
@@ -145,6 +158,12 @@ function show(state) {
   cancel.disabled = !hostState.writable || !state.active;
   output.setAttribute('aria-busy', state.loading ? 'true' : 'false');
   notice.textContent = hostState.writable ? state.message : 'Last known contents are retained, not updating. See connection notice above.';
+  if (state.section === 'token-mix') {
+    refresh.textContent = 'Load Token Mix'; refresh.hidden = !!state.result;
+    cancel.hidden = !!state.result || !state.loading;
+    heading.hidden = !!state.result;
+    output.setAttribute('aria-busy', state.loading && !state.result ? 'true' : 'false');
+  } else { refresh.textContent = 'Refresh snapshot'; refresh.hidden = false; cancel.hidden = false; heading.hidden = false; }
   if (state.section === 'settings') {
     if (!settingsView) settingsView = new WebSettings.View(api, applySettings);
     settingsView.attach(output);
@@ -179,6 +198,10 @@ function show(state) {
       // Host/source health owns startup and failure feedback, not an elapsed timer.
       output.replaceChildren();
     }
+  } else if (state.result && state.section === 'token-mix') {
+    ReportView.defaultUnit();
+    state.tokenMix ||= new TokenMixView.View();
+    state.tokenMix.update(state.result); state.tokenMix.attach(output);
   } else if (state.result) {
     // Connection/source status is not a new frozen report. Replacing its DOM
     // discards scroll, focus and selection during ordinary health checks.
@@ -211,14 +234,14 @@ function failure(code) {
      pricing_unavailable: 'Reference pricing unavailable.', busy: 'Report service busy. Retry Refresh.'};
   return errors[code] || 'Source/report unavailable. Check the local source and retry Refresh.';
 }
-async function acquire(state) {
+async function acquire(state, background = false) {
   if (state.loading || !hostState.writable) return;
   state.loading = true;
   state.failed = false;
   Object.assign(state, {percent: 0, progressSequence: 0, progressStart: 0, stagedProgress: false});
   state.lastWork = null;
   overviewProgress(state, {phase: 'queued'});
-  state.message = state.result ? 'Refreshing; last known snapshot retained until success.' : 'Loading snapshot…';
+  state.message = background ? '' : state.result ? 'Refreshing; last known snapshot retained until success.' : 'Loading snapshot…';
   show(state);
   try {
     state.active = (await api('/api/reports', state.request)).id;
@@ -231,6 +254,7 @@ async function acquire(state) {
           throw new Error(job.result?.error?.code || job.error || job.status);
         }
         if (hostState.terminal) break;
+        if (state.section === 'token-mix' && !TokenMixView.valid(job.result)) throw new Error('report_unavailable');
         // Partial data is usable but never a successful 100% acquisition. Paint
         // completion only after the whole successful result has arrived.
         if (state.section === 'models' && job.result.source.status === 'acquired') {
@@ -242,27 +266,31 @@ async function acquire(state) {
         }
         state.result = job.result;
         state.pages = {};
-        state.message = 'Snapshot captured. Navigation and source activity do not update it.';
+        state.message = state.section === 'token-mix' ? '' : 'Snapshot captured. Navigation and source activity do not update it.';
         break;
       }
-       state.message = `${job.status}: ${reportWork(job.progress)}. ${state.result ? 'Last known snapshot retained.' : ''}`;
+       if (!background) state.message = `${job.status}: ${reportWork(job.progress)}. ${state.result ? 'Last known snapshot retained.' : ''}`;
        overviewProgress(state, job.progress);
       // Do not redraw a retained report while polling: keep selection and scroll useful.
-      if (state === current) {
+       if (state === current && !background) {
         notice.textContent = state.message;
         if (state.section === 'models' && !state.result) show(state);
       }
       await new Promise(resolve => setTimeout(resolve, 500));
     }
   } catch (error) {
-    state.message = `${state.result ? 'STALE — last known snapshot retained. ' : ''}${failure(error.message)}`;
+    state.message = background ? 'Update delayed; last completed Token Mix retained.' :
+      `${state.result ? 'STALE — last known snapshot retained. ' : ''}${failure(error.message)}`;
     if (error.message === 'report_timeout' && state.lastWork) state.message += ` Last observed work: ${state.lastWork}.`;
     if (state.section === 'models') {
       state.message = state.message.replaceAll('retry Refresh', 'reload to retry').replaceAll('Retry Refresh', 'Reload to retry');
       if (!/reload/i.test(state.message)) state.message += ' Reload to retry.';
     }
     state.failed = true;
-  } finally { state.loading = false; state.active = null; show(state); }
+  } finally {
+    state.loading = false; state.active = null; state.checkedAt = Date.now();
+    show(state); scheduleTokenMix();
+  }
 }
 function navigate() {
   // Replace, never push: legacy bookmarks keep their place in Back/Forward history.
@@ -317,6 +345,7 @@ function navigate() {
    if ((match || route.catalog) && csrf && !sessionDetailAvailable) current.message = 'Live session source unavailable.';
   document.getElementById('search').disabled = !!current.detail;
   show(current);
+  scheduleTokenMix();
   if (redirected) document.getElementById('content').focus();
   if (route.section === 'settings' && csrf && !hostState.terminal) settingsView.read();
   if (csrf && hostState.writable && current.request && !current.explicit && !current.detail && !current.result && !current.attempted) {
@@ -342,7 +371,7 @@ async function connect() {
         miniWatch?.update(liveValue);
         if (current?.live) { current.message = 'Live observation; source/account freshness shown below.'; show(current); }
         for (const job of progress?.jobs || []) {
-           if (current?.active === job.id) {
+           if (current?.active === job.id && !(current.section === 'token-mix' && current.result)) {
              notice.textContent = `${job.status}: ${job.progress?.phase || job.status} · ${job.progress?.completed ?? 0}${job.progress?.total == null ? '' : '/' + job.progress.total}`;
               if (current.section === 'models' && !current.result && ['queued', 'running'].includes(job.status)) {
                overviewProgress(current, job.progress || {}); show(current);
@@ -391,6 +420,7 @@ window.addEventListener('offline', () => connectionStatus('OFFLINE — last obse
 window.addEventListener('online', () => liveConnection?.resync());
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) liveConnection?.resync();
+  scheduleTokenMix();
 });
 document.getElementById('search').addEventListener('input', event => {
   if (current) { current.search = event.target.value; current.pages = {}; show(current); }

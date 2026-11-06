@@ -1,8 +1,8 @@
 # Optional Web runtime
 
-Source revision: e6b2ad827f3f3681123e6ba1eac292b5dc8f31c3
-Checked revision: e6b2ad827f3f3681123e6ba1eac292b5dc8f31c3
-Last checked: 2026-10-30
+Source revision: 904c9aea9a5f0e682437b74d7f66d3d5a6d813ff
+Checked revision: 904c9aea9a5f0e682437b74d7f66d3d5a6d813ff
+Last checked: 2026-11-06
 Status: current
 
 ## Responsibility and ownership
@@ -17,6 +17,18 @@ current reference; older per-cell/native-tooltip descriptions below are historic
 `src/web/http.py` owns bounded loopback HTTP, fixed assets and routing; `src/web/security.py` owns one-use bootstrap/HttpOnly sessions/CSRF; `src/web/jobs.py` owns finite admission, process isolation, progress, cancellation and retention; at most 64 progress messages drain per host turn to prevent scan backpressure without starving control/Live. `src/web/composition.py` creates fresh canonical ReportApplication integrations.
 
 `src/web/assets/app.js` owns finite refresh/stale/cancel state and memory-only observations; Models keeps its frozen normal report. `reports.js` owns route resolution and explicit-only deep-history admission. Accounts bypasses finite jobs/report shell and consumes app-level retained Live, even without a Watch DOM. `account-cards.js` is the single Watch/Accounts subscription renderer: account-keyed membership, bound metric/reset/help updates, per-card signatures excluding the publication clock, shared physical-width cap and existing subgrid styles. Empty success clears membership; missing/failed empty publications retain usable cards with truthful warnings. Settings synchronize visible/detached roots without acquisition. `render.js` presents DTOs with exact Decimal/vector sorting; generic reports retain presentation search/50-row paging, while Models has independent catalog/version filters and complete document-scrolling rows. Totals never come from cells. Sessions bypasses finite jobs and the report shell: `sessions.js` renders six-column live catalog pages; `session.js` renders one ten-column complete chronological history. Both use intrinsic metric tracks, elastic title/preview and document vertical scrolling. Shared Watch `ContextLine` and contextual-help components consume canonical report context, not a browser estimator.
+
+Token Mix is the exception to indefinitely frozen finite reports after its deliberate
+first load. `token-mix.js` owns a retained compact summary and exactly two 13-column
+tables, exact integer/Decimal/rational sort keys, prepared unit tokens and text-only
+ContextHelp. Keyed reconciliation preserves rows, focus and panning; it never values
+or acquires usage. `app.js` schedules one approximately-five-minute check only while
+active, visible and writable, validates the whole result before replacement, and
+retains old figures/provenance through slow or failed work. Navigation/visibility
+suspends future checks. Finite jobs remain isolated/bounded and lower-priority Token
+Mix jobs coalesce in-flight/recent tab requests; observation times are not relabeled.
+Web-only compact report caching belongs to `reports/token_mix_cache.py`, not Live.
+Current tests and measured limits: [Token Mix findings](../../journal/web/token-mix.md).
 
 The Web Reports menu, date form and date-only renderer are retired. `reports.js`
 resolves old `#/reports` hashes to a scope-free Sessions redirect; `app.js` replaces

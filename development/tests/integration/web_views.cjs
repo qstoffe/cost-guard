@@ -52,6 +52,7 @@ async function main() {
   const reportKinds = [];
   const bootstrapStatuses = [];
   let releaseBootstrap, releaseReport;
+  let deepGate = null, releaseDeep, failDeep = false;
   const bootstrapGate = new Promise(resolve => { releaseBootstrap = resolve; });
   const reportGate = new Promise(resolve => { releaseReport = resolve; });
   ids.result.textContent = 'Starting Cost Guard'; // Server-rendered startup shell.
@@ -61,7 +62,12 @@ async function main() {
       assert.equal(location.hash, '#/models', 'erase bootstrap before any exchange request');
       await bootstrapGate;
     }
-    if (path === '/api/reports') { reportKinds.push(JSON.parse(options.body).kind); await reportGate; }
+    if (path === '/api/reports') {
+      const kind = JSON.parse(options.body).kind;
+      reportKinds.push(kind); await reportGate;
+      if (kind === 'token-mix' && deepGate) await deepGate;
+      if (kind === 'token-mix' && failDeep) throw new Error('synthetic_refresh_failure');
+    }
     const headers = {...options.headers, Origin: input.origin};
     if (cookie) headers.Cookie = cookie;
     requests++;
@@ -76,7 +82,7 @@ async function main() {
     return {resync() {}};
   }};
   const context = vm.createContext({LiveConnection: transport, AbortController, clearTimeout, document: {documentElement: new Node('html'), body: new Node('body'), querySelector: () => toolbar, createElement: tag => new Node(tag),
-    getElementById: id => ids[id], querySelectorAll: () => nav, addEventListener() {}}, window: {addEventListener: (key, fn) => { handlers[key] = fn; },
+    getElementById: id => ids[id], querySelectorAll: () => nav, addEventListener: (key, fn) => { handlers['document:' + key] = fn; }}, window: {addEventListener: (key, fn) => { handlers[key] = fn; },
       matchMedia: () => ({addEventListener() {}, removeEventListener() {}})},
     location, history, URLSearchParams, fetch: wire, setTimeout: vmTimeout, Date, console});
   context.document.createElementNS = (_, tag) => new Node(tag);
@@ -87,7 +93,7 @@ async function main() {
     detail: current?.detail && {busy:current.detail.busy, total:current.detail.data?.total,
       state:current.detail.data?.state}})`, context)});
   require('../fixtures/web_help_vm.cjs')(vm, context);
-  for (const path of ['/render.js', '/account-cards.js', '/watch.js', '/session.js', '/sessions.js', '/reports.js', '/settings.js', '/app.js']) {
+  for (const path of ['/render.js', '/token-mix.js', '/account-cards.js', '/watch.js', '/session.js', '/sessions.js', '/reports.js', '/settings.js', '/app.js']) {
     const response = await fetch(input.origin + path);
     assert.equal(response.status, 200);
     vm.runInContext(await response.text(), context);
@@ -314,12 +320,47 @@ async function main() {
   assert.equal(requests, beforeDeep, 'deep history never starts from navigation');
   assert.equal(ids.refresh.disabled, false);
   ids.refresh.click();
-  await until(() => ids.notice.textContent.includes('Snapshot captured'));
-  assert.match(ids.result.textContent, /Historical models/);
-  assert.match(ids.result.textContent, /Full-report I\/C\/W\/O tokens/);
-  const deep = ids.result.textContent;
-  navigate('overview'); navigate('token-mix');
-  assert.equal(ids.result.textContent, deep, 'history result retained as a frozen immutable observation');
+   await until(() => vm.runInContext('!!current.result && !current.loading', context));
+   assert.match(ids.result.textContent, /Token Mix % by model/);
+   assert.match(ids.result.textContent, /Total Token Mix %/);
+   assert.equal(ids.refresh.hidden, true);
+   assert.equal(ids.heading.hidden, true);
+   assert.equal(ids.notice.textContent, '');
+   const deep = ids.result.textContent;
+   navigate('overview'); navigate('token-mix');
+   assert.equal(ids.result.textContent, deep, 'return immediately paints retained historical result');
+   const deepRoot = ids.result.firstChild, deepRows = all(ids.result, 'tr');
+   const beforeCheck = reportKinds.length;
+   context.document.hidden = true;
+   vm.runInContext('current.checkedAt=Date.now()-300001', context);
+   handlers['document:visibilitychange']();
+   await delay(10);
+   assert.equal(reportKinds.length, beforeCheck, 'hidden tab does not acquire history');
+   deepGate = new Promise(resolve => { releaseDeep = resolve; });
+   context.document.hidden = false;
+   handlers['document:visibilitychange']();
+   await until(() => reportKinds.length === beforeCheck + 1);
+   assert.equal(ids.result.textContent, deep, 'slow refresh retains every value');
+   assert.equal(ids.result.firstChild, deepRoot);
+   assert.equal(ids.result.attrs['aria-busy'], 'false');
+   assert.equal(ids.notice.textContent, '', 'background work adds no loading panel');
+   vm.runInContext('scheduleTokenMix(); scheduleTokenMix()', context);
+   assert.equal(reportKinds.length, beforeCheck + 1, 'one refresh in flight');
+   releaseDeep(); deepGate = null;
+   await until(() => !vm.runInContext('current.loading', context));
+   assert.deepEqual(all(ids.result, 'tr'), deepRows, 'coherent refresh keeps unchanged row and heading identities');
+   const retainedObservation = vm.runInContext('current.result.observed_at_ms', context);
+   failDeep = true;
+   vm.runInContext('current.checkedAt=Date.now()-300001; scheduleTokenMix()', context);
+   await until(() => ids.notice.textContent.includes('Update delayed'));
+   assert.equal(ids.result.textContent, deep);
+   assert.equal(vm.runInContext('current.result.observed_at_ms', context), retainedObservation);
+   failDeep = false;
+   navigate('models');
+   const beforeInactive = reportKinds.length;
+   handlers['document:visibilitychange']();
+   await delay(10);
+   assert.equal(reportKinds.length, beforeInactive, 'inactive route does not acquire history');
   // Exact sorting of Decimal wire values, even where Number would collapse them.
   const cmp = (a, b) => { context.a = a; context.b = b; return vm.runInContext('ReportView.compare(a, b)', context); };
   assert.equal(cmp('1.00000000000000000001', '1.00000000000000000002'), -1);
