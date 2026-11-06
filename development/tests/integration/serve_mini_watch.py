@@ -124,6 +124,14 @@ def main():
                         jobs.step += 1
                     elif action == 'busy':
                         jobs.busy = 2
+                    elif action == 'source':
+                        from src.web.source_startup import SourceStartup
+                        host.source_startup = SourceStartup(root, host.events.publish, host.stopping)
+                        host.source_startup.finished.set()
+                    elif action == 'ready':
+                        host.source_startup._selected(None)
+                    elif action == 'failed':
+                        jobs.mode = 'failed'
                     else:
                         raise ValueError('unknown_loading_fixture_action')
                     print('{"ok":true}', flush=True)
@@ -248,6 +256,11 @@ def main():
         finally:
             timer.cancel()
             host.close()
+            if sys.argv[2:] == ['--stats-slices']:
+                print(json.dumps(dict(active=jobs._active is not None, hostFailure=host.failure is not None,
+                    servingAlive=host.thread.is_alive(),
+                    httpWorkersAlive=any(thread.is_alive() for thread in host.server._pool._threads),
+                    eventsClosed=host.events.closed)), flush=True)
 
 
 if __name__ == "__main__":

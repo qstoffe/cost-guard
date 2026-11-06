@@ -8,12 +8,14 @@ async function main() {
   const config = await fs.mkdtemp(path.join(path.dirname(output), 'ai-stats-config-'));
   const server = spawn('py', ['-3', 'development/tests/integration/serve_mini_watch.py', config, '--ai-stats'],
     {windowsHide:true, stdio:['pipe','pipe','pipe']});
+  const serverClosed = new Promise(resolve=>server.once('close',(code,signal)=>resolve({code,signal})));
   const lines = readline.createInterface({input:server.stdout})[Symbol.asyncIterator]();
   const fixture=async command=>{server.stdin.write(JSON.stringify({command})+'\n');return JSON.parse((await lines.next()).value);};
   let serverErrors = ''; server.stderr.on('data', value => { serverErrors += value.toString(); });
   const child = spawn(browser, ['--headless=new','--no-first-run','--no-default-browser-check','--disable-extensions',
     '--disable-background-networking','--remote-debugging-pipe','--user-data-dir='+profile,'about:blank'],
     {windowsHide:true,stdio:['ignore','ignore','ignore','pipe','pipe']});
+  const browserClosed = new Promise(resolve=>child.once('close',(code,signal)=>resolve({code,signal})));
   const pending = new Map(); let sequence = 0, buffer = '', errors = [];
   child.stdio[4].on('data', chunk => {
     buffer += chunk.toString(); let index;
@@ -33,8 +35,8 @@ async function main() {
     const value=await command('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true},target);
     if(value.exceptionDetails) throw new Error(JSON.stringify(value.exceptionDetails)); return value.result.value;
   };
-  const until=async (expression, target=tab)=>{
-    const end=Date.now()+15000;
+   const until=async (expression, target=tab, timeout=15000)=>{
+     const end=Date.now()+timeout;
     while(Date.now()<end) {if(await evaluate(expression,target))return;await new Promise(resolve=>setTimeout(resolve,30));}
     const state=await evaluate(`({section:typeof current==='undefined'?null:current?.section,
       loading:typeof current==='undefined'?null:current?.loading,
@@ -53,9 +55,10 @@ async function main() {
   try {
     const launch=JSON.parse((await lines.next()).value);
     if (process.argv.includes('--slices-only')) {
-      await require('./probe_ai_stats_slices.cjs')({command,evaluate,until,config,checks});
-      evidence={outcome:'PASS',checks,runtimeErrors:errors};
-      console.log(JSON.stringify(evidence)); return;
+      const productionCleanup=await require('./probe_ai_stats_slices.cjs')({command,evaluate,until,config,checks});
+      assert.deepEqual(errors,[]);
+      evidence={outcome:'PASS',checks,runtimeErrors:errors,productionCleanup};
+      return;
     }
     const {targetId}=await command('Target.createTarget',{url:'about:blank'});
     tab=(await command('Target.attachToTarget',{targetId,flatten:true})).sessionId;
@@ -71,7 +74,7 @@ async function main() {
       ['Today','7 days','30 days','This month','All time']);
     assert.equal(await evaluate(`document.querySelectorAll('.ai-stats-view img').length`),0);
     assert.equal(await evaluate(`[...document.querySelectorAll('.ai-stat-detail a')].every(a=>a.textContent.includes('<img') && a.hash.startsWith('#/sessions/'))`),true);
-    assert.equal(await evaluate(`document.getElementById('refresh').hidden && document.getElementById('cancel').hidden`),true);
+    assert.equal(await evaluate(`document.getElementById('refresh').hidden && !document.getElementById('cancel')`),true);
     checks.push('automatic default, retired-route alias, ten cards, five exact periods, safe real record links, no healthy toolbar');
     await require('./probe_ai_stats_states.cjs')({command,evaluate,until,fixture,tab,contrasts,states,checks});
     await require('./probe_ai_stats_layout.cjs')({command,evaluate,until,tab,textLayouts,checks});
@@ -138,7 +141,8 @@ async function main() {
     assert.equal(await evaluate(`!!output.querySelector('.ai-stat') && current.loading`),true,'ready smaller period remains usable during broader acquisition');
     await evaluate(`location.hash='#/accounts'`); await until(`current.section==='accounts'`);
     await evaluate(`location.hash='#/ai-stats'`); await until(`current.section==='ai-stats' && current.loading`);
-    await evaluate(`selectStats(current,'all'); document.getElementById('cancel').click()`);
+    // Internal authenticated test ownership still exercises real backend cancellation.
+    await evaluate(`selectStats(current,'all'); api('/api/jobs/'+current.active+'/cancel',{})`);
     await until(`current.failed && !current.loading`);
     assert.match(await evaluate(`current.message`),/cancelled/i);
     assert.equal(await evaluate(`!!output.querySelector('.ai-stat')`),false);
@@ -146,7 +150,7 @@ async function main() {
     assert.equal(await evaluate(`!!output.querySelector('.ai-stat')`),true);
     await fixture('stats-release-all');
     await evaluate(`selectStats(current,'all')`); await until(`current.result && !current.loading`);
-    checks.push('in-flight All time survives route departure/return without duplicate; cached smaller scopes stay usable; cancel is terminal/nonzero and retry recovers');
+    checks.push('no UI Cancel; in-flight All time survives route departure/return; smaller scopes stay usable; direct internal API cancellation remains terminal and retry recovers');
     // Gate only the test transport, keeping the actual HTTP/job and accepted DOM.
     await evaluate(`window.__api=api; window.__calls=0; window.__hold=false; window.__fail=false;
       api=async function(path,value) { if(path==='/api/reports') { __calls++; if(__hold) await new Promise(resolve=>window.__release=resolve); if(__fail) throw new Error('synthetic_failure'); } return __api(path,value); };`);
@@ -189,19 +193,30 @@ async function main() {
     const two=await evaluate(`api('/api/reports',{kind:'ai-stats',stats_scope:'all'})`,peer);
     assert.equal(one.id,two.id);
     checks.push('two independent tabs exercise fixture scope-job association (production coalescing/process proof is separate)');
-    await require('./probe_ai_stats_slices.cjs')({command,evaluate,until,config,checks});
+    const productionCleanup=await require('./probe_ai_stats_slices.cjs')({command,evaluate,until,config,checks});
     assert.deepEqual(errors,[]);
     evidence={outcome:'PASS',layouts,textLayouts,contrasts,states,checks,limitations:[
       'AIStatsJobs uses immediate canonical fixture results; browser proof does not establish production spawning or coalescing.',
       'Production slice/priority/two-tab browser proof uses fixed synthetic history with valid coverage after repricing; real-source acquisition is separate.',
       'Actual screen-reader speech, native physical device/font rendering and non-Chromium engines are unverified.'
-    ],runtimeErrors:errors};
-    console.log(JSON.stringify({outcome:evidence.outcome,checks:checks.length,layouts:layouts.length}));
+    ],runtimeErrors:errors,productionCleanup};
   } finally {
-    clearTimeout(deadline); await fs.writeFile(output,JSON.stringify(evidence,null,2));
-    server.stdin.write('{"command":"stop"}\n');
-    await command('Browser.close').catch(()=>{});
-    await new Promise(resolve=>server.once('exit',resolve));
+    try {
+      server.stdin.write('{"command":"stop"}\n');
+      await command('Browser.close').catch(()=>{});
+      const [serverExit,browserExit]=await Promise.all([serverClosed,browserClosed]);
+      assert.deepEqual(serverExit,{code:0,signal:null});
+      assert.deepEqual(browserExit,{code:0,signal:null});
+      assert.equal(serverErrors,'');
+      assert.deepEqual(errors,[]);
+      evidence.cleanup={serverExit,browserExit,serverErrors,runtimeErrors:errors};
+    } catch(error) {
+      evidence.outcome='FAIL'; evidence.cleanupError=error.message; throw error;
+    } finally {
+      clearTimeout(deadline);
+      await fs.writeFile(output,JSON.stringify(evidence,null,2));
+    }
+    console.log(JSON.stringify(evidence));
   }
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.195 — 2026-11-06
+
+- Removes the shared Web report Cancel control and direct click handler. Started finite acquisitions and bounded pending intent survive route/visibility changes, retain their own results/errors and never start new inactive refresh scans. AI Stats keeps up to five requested scopes in one host-owned logical job, prioritizing narrow work then resuming earlier goals. Hidden return reads settled outcomes before client timeout; internal cancellation, finite watchdogs, shutdown and source/security bounds remain.
+- Confirms report-child exit before releasing process ownership. Valid terminal IPC permits a bounded natural-exit grace; forced-stop bounds remain. Unconfirmed exit latches an honest host fault and retains handles for bounded owner cleanup instead of closing a live process or admitting replacement work.
+
 ## v80.194 — 2026-11-06
 
 - AI Stats shares source-aware checkpoints across finite workers and period changes, removing only its logical 120-second abandonment. Selected-period progress, stable evidence reuse, active/revision revalidation, bounded stalls/resources and inactive-route teardown retain truthful failures and canonical metric reasons. Unknown old roots remain candidates; earlier Today/7-day completion is conditional on proved independent coverage. Bulk compact persistence avoids duplicate full-analysis cache writes, with repeatable fixed-history benchmarks. Other report deadlines, Watch, pricing and source read-only ownership remain unchanged.

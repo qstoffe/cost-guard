@@ -8,7 +8,7 @@ Status: current
 ## Responsibility and ownership
 
 `assets/report-loading.js` owns the four finite pages' shared
-determinate loader, monotonic stage bands and bounded cancelable admission retries.
+determinate loader, monotonic stage bands and bounded admission retries.
 AI Stats alone has a resumable logical attempt; every child retains its finite watchdog.
 `app.js` starts only eligible visible routes, preserves quiet-refresh DOM and applies
 validated results atomically. Historical cache/load/projection observations are
@@ -16,7 +16,10 @@ allowlisted by `application/service.py`; batch counts cannot consume global band
 The existing `source_startup.py` owner supplies detached typed `report_status()`
 proof to HTTP admission and status without a second selection or wake path. Real
 transient failures/429 use bounded backoff; terminal failures do not. Live stream
-reconnect is not source failure. Hidden documents cannot strand completion on a
+reconnect is not source failure. No shared report Cancel markup/handler remains.
+Navigation/hiding preserves the original bounded page-memory admission intent and
+in-flight acquisition, never starting new inactive periodic checks. Hidden documents
+read settled server outcomes before applying the client deadline and cannot strand completion on a
 suspended animation frame. Existing process, result, priority, source, valuation,
 freshness and CLI/Live ownership boundaries remain unchanged. Current evidence and
 limits: [finite report loading](../../journal/web/report-loading.md).
@@ -29,6 +32,18 @@ boundary changes. [Writing conventions and surface inventory](web-help.md) are t
 current reference; older per-cell/native-tooltip descriptions below are historical.
 
 `src/web/http.py` owns bounded loopback HTTP, fixed assets and routing; `src/web/security.py` owns one-use bootstrap/HttpOnly sessions/CSRF; `src/web/jobs.py` owns finite admission, process isolation, progress, cancellation and retention; at most 64 progress messages drain per host turn to prevent scan backpressure without starving control/Live. `src/web/composition.py` creates fresh canonical ReportApplication integrations.
+
+Only validated terminal IPC grants up to one second for natural child teardown,
+including a completed Stats slice whose logical job requeues. Cancellation,
+watchdog, malformed/abandoned IPC and shutdown force termination promptly, retaining
+the existing one-second terminate and kill joins. Exit must be confirmed before
+closing handles or releasing the active slot. An unconfirmed exit latches
+`report_worker_stop_timeout`, blocks all result reuse/admission/polling and retains
+the exact owner for bounded cleanup retries. HTTP cancellation propagates this fault
+to the host rather than hiding it in a request future. Serving cleanup still closes
+Live/events/HTTP; main-owner close retries the retained child, without clearing the
+host failure or double-counting worker time. This is a safety repair, not proof of
+the rare Windows shutdown delay's cause; see the report-loading journal.
 
 Models' explicit `POST /api/models/refresh` accepts only authenticated/CSRF-protected
 `{}` and submits the Web-only `ModelsPriceRefresh` request marker. Existing job equality
@@ -43,7 +58,7 @@ failure retains the prior DOM/date. Mini help selects exactly primary-window Cap
 and `watch_reset` tokens; richer Full Watch/Accounts help and visible warnings remain.
 Evidence and the scoped split-verification decision: [Models pricing](../../journal/web/models-pricing.md).
 
-`src/web/assets/app.js` owns finite refresh/stale/cancel state and memory-only observations; Models keeps its frozen normal report. `reports.js` owns route resolution; eligible visible finite pages acquire automatically through `app.js`, without hidden-page preloading. Accounts bypasses finite jobs/report shell and consumes app-level retained Live, even without a Watch DOM. `account-cards.js` is the single Watch/Accounts subscription renderer: account-keyed membership, bound metric/reset/help updates, per-card signatures excluding the publication clock, shared physical-width cap and existing subgrid styles. Empty success clears membership; missing/failed empty publications retain usable cards with truthful warnings. Settings synchronize visible/detached roots without acquisition. `render.js` presents DTOs with exact Decimal/vector sorting; generic reports retain presentation search/50-row paging, while Models has independent catalog/version filters and complete document-scrolling rows. Totals never come from cells. Sessions bypasses finite jobs and the report shell: `sessions.js` renders six-column live catalog pages; `session.js` renders one ten-column complete chronological history. Both use intrinsic metric tracks, elastic title/preview and document vertical scrolling. Shared Watch `ContextLine` and contextual-help components consume canonical report context, not a browser estimator.
+`src/web/assets/app.js` owns finite refresh/stale state and memory-only observations; Models keeps its frozen normal report. `reports.js` owns route resolution; eligible visible finite pages acquire automatically through `app.js`, without hidden-page preloading. Accounts bypasses finite jobs/report shell and consumes app-level retained Live, even without a Watch DOM. `account-cards.js` is the single Watch/Accounts subscription renderer: account-keyed membership, bound metric/reset/help updates, per-card signatures excluding the publication clock, shared physical-width cap and existing subgrid styles. Empty success clears membership; missing/failed empty publications retain usable cards with truthful warnings. Settings synchronize visible/detached roots without acquisition. `render.js` presents DTOs with exact Decimal/vector sorting; generic reports retain presentation search/50-row paging, while Models has independent catalog/version filters and complete document-scrolling rows. Totals never come from cells. Sessions bypasses finite jobs and the report shell: `sessions.js` renders six-column live catalog pages; `session.js` renders one ten-column complete chronological history. Both use intrinsic metric tracks, elastic title/preview and document vertical scrolling. Shared Watch `ContextLine` and contextual-help components consume canonical report context, not a browser estimator.
 
 Token Mix, AI Stats and Comparisons are cached historical finite views, not Live owners.
 `token-mix.js` owns a retained compact summary and exactly two 13-column
@@ -58,8 +73,11 @@ is conditional on validated coverage. `cached-reports.js`
 and `app.js` share 5-minute Token Mix / 15-minute AI Stats active-visible scheduling
 and last-success re-entry bands: fresh immediate, overdue through 60m quiet, >60m
 withheld with bounded progress/recovery. Active pages never blank at minute 61.
-AI Stats navigation/visibility stops polling; no interested tab for 15 seconds cancels
-its owned child/queue entry, retaining reusable stable checkpoints. Other running
+AI Stats logical work is host-owned, independent of polling interest. Its one job
+retains at most five validated requested scopes: the latest selection prioritizes
+the next slice, then earlier missing goals resume from the same observation/scan.
+Coherent narrow results can remain usable while wider goals finish. Internal cancel,
+shutdown and finite-child/no-progress/resource bounds remain. Other running
 finite reports keep their original lifecycle. Whole-result
 validation and synchronous retained-node updates preserve focus/scroll. Both
 historical kinds coalesce without relabeling observations. AI Stats shares one active

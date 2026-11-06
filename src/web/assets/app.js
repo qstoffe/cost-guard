@@ -6,7 +6,6 @@ const statusLine = document.getElementById('status');
 const output = document.getElementById('result');
 const notice = document.getElementById('notice');
 const refresh = document.getElementById('refresh');
-const cancel = document.getElementById('cancel');
 const heading = document.getElementById('heading');
 const views = new Map(); // Bounded page-memory only; never browser storage/history payloads.
 let csrf = null;
@@ -22,9 +21,6 @@ let settingsView = null;
 let cachedReportTimer = null;
 function historical(state) { return !!CachedReports.cadences[state?.section]; }
 function firstReport(state = current) {
-  if (state?.resumeStats && csrf && hostState.writable && !document.hidden && !state.loading) {
-    state.resumeStats = false; acquire(state); return;
-  }
   if (csrf && hostState.writable && state?.request && !state.detail && !state.result && !state.attempted && !document.hidden) {
     state.attempted = true; acquire(state);
   }
@@ -140,7 +136,6 @@ async function api(path, value, signal) {
 function show(state) {
   if (state !== current) return;
   refresh.disabled = !csrf || !hostState.writable || !(state.request || state.detail) || state.loading;
-  cancel.disabled = !hostState.writable || !state.loading;
   output.setAttribute('aria-busy', state.loading ? 'true' : 'false');
   notice.textContent = hostState.writable ? state.message : 'Last known contents are retained, not updating. See connection notice above.';
   const finite = ReportLoading.sections.includes(state.section);
@@ -154,14 +149,14 @@ function show(state) {
   if (state.section === 'token-mix') {
     refresh.textContent = 'Retry Token Mix';
     refresh.hidden = !state.failed;
-    cancel.hidden = !!state.result && !state.withheld || !state.loading;
     heading.hidden = !!state.result && !state.withheld;
     output.setAttribute('aria-busy', state.loading && (!state.result || state.withheld) ? 'true' : 'false');
-  } else { refresh.textContent = 'Refresh snapshot'; refresh.hidden = false; cancel.hidden = false; heading.hidden = false; }
-  if (state.section === 'models') { refresh.textContent = 'Retry Models'; refresh.hidden = !state.failed; }
+  } else { refresh.textContent = 'Refresh snapshot'; refresh.hidden = false; heading.hidden = false; }
+  if (state.section === 'models') { refresh.textContent = 'Retry Models'; refresh.hidden = !state.failed; heading.hidden = true; }
+  const toolbar = document.querySelector('.toolbar');
+  if (toolbar) toolbar.hidden = refresh.hidden && heading.hidden;
   if (state.section === 'ai-stats') {
     refresh.textContent = 'Retry AI Stats'; refresh.hidden = !state.failed;
-    cancel.hidden = !state.loading || !!state.result && !state.withheld;
     notice.textContent = ''; output.setAttribute('aria-busy', state.loading && (!state.result || state.withheld) ? 'true' : 'false');
     ReportView.defaultUnit();
     state.stats ||= new AIStatsView.View(period => selectStats(state, period));
@@ -170,7 +165,6 @@ function show(state) {
   }
   if (state.section === 'comparisons') {
     refresh.textContent = 'Retry Comparisons'; refresh.hidden = !state.failed;
-    cancel.hidden = !state.loading || !!state.result && !state.withheld;
     notice.textContent = '';
     ReportView.defaultUnit();
     state.comparisons ||= new ComparisonsView.View((offset, revision) => {
@@ -303,9 +297,11 @@ async function acquire(state, background = false, prices = false) {
       AIStatsView.prioritize(state, api);
     show(state);
     while (true) {
-      attempt.check(hostState);
+      // A throttled/hidden tab may return after the client budget, while the
+      // server already completed. Read that outcome before declaring a timeout.
+      attempt.check(hostState, false);
       const job = await api('/api/jobs/' + state.active, undefined, attempt.controller.signal);
-      attempt.check(hostState);
+      attempt.check(hostState, ['queued', 'running'].includes(job.status));
       const statsProgress = state.section === 'ai-stats' && AIStatsView.observe(state, job);
       if (job.progress?.stage?.startsWith('date-')) state.lastWork = reportWork(job.progress);
       if (!['queued', 'running'].includes(job.status)) {
@@ -357,8 +353,7 @@ async function acquire(state, background = false, prices = false) {
       `${state.result ? 'STALE — last known snapshot retained. ' : ''}${failure(error.message)}`;
     if (error.message === 'report_timeout' && state.lastWork) state.message += ` Last observed work: ${state.lastWork}.`;
     if (prices) state.priceMessage = state.message;
-    state.failed = error.message !== 'suspended';
-    if (!state.failed) { state.attempted = false; state.message = ''; state.resumeStats = state.section === 'ai-stats'; }
+    state.failed = true;
     if (error.message === 'report_timeout' && state.active) {
       try { await api('/api/jobs/' + state.active + '/cancel', {}); } catch (_) { /* Host owns its hard deadline too. */ }
     }
@@ -370,7 +365,6 @@ async function acquire(state, background = false, prices = false) {
     }
     if (state === current && state.section === 'ai-stats' && !state.result && !state.failed && !document.hidden &&
          JSON.stringify(request) !== JSON.stringify(state.request)) acquire(state);
-    if (attempt.reason === 'suspended' && state === current) firstReport(state);
   }
 }
 function navigate() {
@@ -414,8 +408,8 @@ function navigate() {
   if (current?.detail) current.detail.detach();
   if (current?.catalog) current.catalog.detach();
   current = views.get(key);
-  if (previous !== current && previous?.attempt && (!previous.active || previous.section === 'ai-stats'))
-    previous.attempt.cancel('suspended');
+  // A requested report (including bounded admission backoff) belongs to its view,
+  // not the active route. Navigation never abandons it or starts another attempt.
   if (current.section === 'ai-stats') {
     current.period ||= '30-days'; current.statsResults ||= new Map();
     current.request = {kind: 'ai-stats', stats_scope: current.period};
@@ -483,14 +477,6 @@ refresh.addEventListener('click', () => {
   if (!hostState.writable) return;
    if (current?.request) acquire(current);
 });
-cancel.addEventListener('click', async () => {
-  const state = current;
-  state?.attempt?.cancel();
-  if (state?.active) {
-    try { await api('/api/jobs/' + state.active + '/cancel', {}); }
-    catch (_) { if (state === current) notice.textContent = 'Cancellation unavailable.'; }
-  }
-});
 window.addEventListener('hashchange', () => {
   // Pasting into an already-open unauthorized tab can be same-document navigation.
   // Erase first, exchange through the existing guard, then reload only the clean URL.
@@ -507,8 +493,7 @@ window.addEventListener('pageshow', () => liveConnection?.resync());
 window.addEventListener('offline', () => connectionStatus('OFFLINE — last observation retained, not live. Check the connection and reload to retry.', {kind: 'offline', writable: false}));
 window.addEventListener('online', () => liveConnection?.resync());
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden && current?.attempt && (!current.active || current.section === 'ai-stats'))
-    current.attempt.cancel('suspended');
+  // Keep existing acquisitions, but never schedule new hidden-route refreshes.
   if (!document.hidden) liveConnection?.resync();
   if (!document.hidden) {
     enterCachedReport(current);

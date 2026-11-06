@@ -1,7 +1,7 @@
 # Web AI Stats: resumable coverage and historical re-entry
 
 Source baseline: d381d399f401c24302fa559eb62ec68e33aba4e7
-Checked scope: FR000614 implementation delta, not a whole-module audit
+Checked scope: FR000614 implementation delta, with FR000615 lifetime override below; not a whole-module audit
 Last checked: 2026-11-06
 Status: implementation verified; scoped coverage/performance/documentation exceptions
 
@@ -30,8 +30,13 @@ AI Stats alone can exceed 120 logical seconds: each child keeps that watchdog,
 256 missing roots, 64-root batches, maximum-four V2 reads. Each slice verifies fresh
 membership/revisions; volatile facts refresh before publication. Fixed source/
 pricing/algorithm-keyed per-root checkpoints contain no prompts/session text.
-Resource/stall/storage errors terminate honestly; 15 seconds without interested tabs
-stops work. Other deadlines, queue/result bounds, parent-loss/read-only ownership remain.
+Resource/stall/storage errors terminate honestly. FR000615 supersedes the earlier
+15-second interest expiry and user-facing cancellation: one host-owned logical job
+retains at most five validated requested scopes. Explicit selection prioritizes the
+next missing slice, then earlier goals resume without another user action or polling
+interest. Checkpoints, finite child watchdogs, internal cancellation/shutdown and
+other deadlines/queue/result/parent-loss/read-only bounds remain. Current lifetime
+verification and limits: [shared report loading](report-loading.md).
 
 ## Reproducible verification
 

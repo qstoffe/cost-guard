@@ -408,6 +408,9 @@ if ($errors.Count) { throw 'Invalid production PowerShell syntax' }
 $realLauncher = (Get-Command py.exe -CommandType Application -ErrorAction SilentlyContinue).Source
 $function = $ast.Find({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Find-BetaPython'}, $true)
 Invoke-Expression $function.Extent.Text
+# Discovery timing may cross its 120ms activity turn. This isolated harness
+# extracts discovery only; startup activity rendering is tested separately.
+function Write-LaunchActivity {}
 function Get-Command { return @() }
 if (Find-BetaPython) { throw 'Missing Python must not succeed' }
 Write-Output 'STAGE:direct-python'

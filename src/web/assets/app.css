@@ -110,7 +110,7 @@
   .settings-picker option { width: 100%; }
   .settings-picker option .settings-choice-help { position: static; grid-column: 2; max-height: none; visibility: visible; }
 }
-[data-section="settings"] #refresh, [data-section="settings"] #cancel,
+[data-section="settings"] #refresh,
 [data-section="settings"] .toolbar, [data-section="settings"] .report-search, [data-section="settings"] #notice { display: none; }
 [data-section="settings"] main { padding-top: .65rem; }
 @media (max-width: 40rem) { .settings-link { margin-inline-start: 0; } }
@@ -168,6 +168,7 @@ button:not(:disabled):active { border-color: var(--accent); box-shadow: inset 0 
 .skip { position: absolute; left: -10000px; }
 .skip:focus { left: 1rem; top: 1rem; background: var(--panel); z-index: 5; }
 .toolbar, .pager { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.toolbar[hidden] { display: none; }
 .toolbar h2 { margin: 0 auto 0 0; font-size: 1.5rem; letter-spacing: -.025em; }
 h3 { margin: var(--space-6) 0 var(--space-2); font-size: 1.1rem; }
 h4 { margin: var(--space-5) 0 var(--space-2); }
@@ -365,7 +366,7 @@ footer { border-top: 1px solid var(--line); color: var(--muted); font-size: .8re
    vertically; narrow screens may pan the full table horizontally. */
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 [data-section="models"] main { padding-top: .65rem; }
-[data-section="models"] .toolbar,
+[data-section="models"] #heading,
 [data-section="models"] #notice, [data-section="models"] #scope-controls,
 [data-section="models"] .report-search { display: none; }
 .report-loading { display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 45vh; text-align: center; }

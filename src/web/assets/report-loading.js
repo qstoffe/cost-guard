@@ -125,12 +125,12 @@ const ReportLoading = (() => {
       this.controller = new AbortController(); this.reason = null;
     }
     cancel(reason = 'cancelled') { this.reason = reason; this.controller.abort(); }
-    check(host) {
+    check(host, enforceDeadline = true) {
       if (this.reason) throw new Error(this.reason);
       // Stream reconnect is not failed HTTP/source readiness. Admission and typed
       // replies prove the finite source independently of the Live connection.
       if (interrupted(host)) throw new Error(host.kind);
-      if (this.clock() >= this.end) throw new Error('report_timeout');
+      if (enforceDeadline && this.clock() >= this.end) throw new Error('report_timeout');
     }
     pause(milliseconds) {
       return new Promise((resolve, reject) => {

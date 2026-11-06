@@ -7,6 +7,12 @@ import unittest
 
 class WebLoadingTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which('node'), 'optional JS VM unavailable')
+    def test_navigation_preserves_pending_and_admitted_report_intent(self):
+        result = subprocess.run(['node', 'development/tests/integration/web_report_lifetime.cjs'],
+            cwd=Path(__file__).resolve().parents[2], capture_output=True, text=True, timeout=10)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+
+    @unittest.skipUnless(shutil.which('node'), 'optional JS VM unavailable')
     def test_observed_progress_and_cancelable_bounded_admission(self):
         result = subprocess.run(['node', 'development/tests/integration/web_report_loading.cjs'],
             cwd=Path(__file__).resolve().parents[2], capture_output=True, text=True, timeout=10)

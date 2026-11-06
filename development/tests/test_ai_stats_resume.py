@@ -234,7 +234,7 @@ class StatsResumeTests(unittest.TestCase):
         self.assertEqual(1, len({r.observation_ms for r in requests}))
         self.assertIn('today', {r.stats_scope for r in requests})
 
-    def test_watchdog_retries_shrink_then_fail_and_inactive_work_stops(self):
+    def test_watchdog_retries_shrink_then_fail_without_extending_other_deadlines(self):
         from src.web.stats_jobs import timed_out
         job = dict(request=ReportRequest(ReportKind.AI_STATS), status='running')
 
@@ -247,12 +247,56 @@ class StatsResumeTests(unittest.TestCase):
         normal = dict(request=ReportRequest(), status='running')
         timed_out(normal)
         self.assertEqual(('failed', 'report_timeout'), (normal['status'], normal['error']))
+
+    def test_requested_scopes_resume_without_polling_or_losing_earlier_goals(self):
+        from src.web.stats_jobs import accept, request
         jobs = ReportJobs()
         self.addCleanup(jobs.close)
-        key = jobs.submit(ReportRequest(ReportKind.AI_STATS))
-        jobs._jobs[key]['seen'] -= 16
-        jobs.tick()
-        self.assertEqual('cancelled', jobs.snapshot(key)['status'])
+        broad = ReportRequest(ReportKind.AI_STATS, stats_scope='30-days')
+        with patch('src.web.jobs.time.monotonic', return_value=0):
+            key = jobs.submit(broad)
+        with patch('src.web.jobs.time.monotonic', return_value=600):
+            self.assertEqual(key, jobs.submit(replace(broad, stats_scope='7-days')))
+            job = jobs._jobs[key]
+            narrow = request(job, key)
+            accept(job, dict(error=None, view=dict(ai_stats=[dict(period='7-days')],
+                ai_stats_work=dict(completed=1))))
+            resumed = request(job, key)
+            pending = job['status']
+            accept(job, dict(error=None, view=dict(ai_stats=[dict(period='7-days'), dict(period='30-days')],
+                ai_stats_work=dict(completed=2))))
+
+        self.assertEqual('7-days', narrow.stats_scope)
+        self.assertEqual('30-days', resumed.stats_scope)
+        self.assertEqual(narrow.observation_ms, resumed.observation_ms)
+        self.assertEqual(narrow.scan, resumed.scan)
+        self.assertEqual('queued', pending)
+        self.assertEqual('complete', job['status'])
+        self.assertEqual(('30-days', '7-days'), job['goals'])
+
+    def test_unobserved_host_owned_stats_starts_finishes_and_still_allows_internal_cancel(self):
+        clock = [0.0]
+        context, receiver, sender, process = Mock(), Mock(), Mock(), Mock()
+        context.Pipe.return_value = receiver, sender
+        context.Process.return_value = process
+        receiver.poll.return_value = True
+        receiver.recv.return_value = ('result', json.dumps(dict(error=None, source=dict(status='acquired'),
+            view=dict(ai_stats=[dict(period='30-days')], ai_stats_work=dict(completed=1)))).encode())
+        process.is_alive.return_value = False
+        jobs = ReportJobs(context=context)
+        self.addCleanup(jobs.close)
+        with patch('src.web.jobs.time.monotonic', side_effect=lambda: clock[0]):
+            key = jobs.submit(ReportRequest(ReportKind.AI_STATS))
+            clock[0] = 600
+            jobs.tick()  # No tab snapshot/heartbeat since admission.
+            self.assertEqual('running', jobs._jobs[key]['status'])
+            clock[0] += 20
+            jobs.tick()
+            self.assertEqual('complete', jobs._jobs[key]['status'])
+            queued = jobs.submit(ReportRequest(ReportKind.AI_STATS, stats_scope='all'))
+            jobs.cancel(queued)
+
+        self.assertEqual('cancelled', jobs.snapshot(queued)['status'])
         self.assertIsNone(jobs._active)
 
     def test_actual_spawned_slices_checkpoint_and_complete_one_logical_job(self):

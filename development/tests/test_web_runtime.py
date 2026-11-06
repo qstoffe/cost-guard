@@ -14,11 +14,13 @@ import time
 import unittest
 from unittest.mock import patch
 from unittest.mock import Mock
+from unittest.mock import call
 
+from development.tests.fixtures.report_process import ReportProcess
 from development.tests.fixtures.web_reports import finite_report
 from src.reports import ReportKind, ReportRequest
 from src.web.http import LoopbackServer
-from src.web.jobs import MAX_RESULT_BYTES, ProgressRelay, ReportJobs, parse_report, run_report
+from src.web.jobs import MAX_RESULT_BYTES, ProgressRelay, ReportJobs, ReportWorkerStopError, parse_report, run_report
 from src.web.security import BrowserSession
 
 
@@ -177,6 +179,14 @@ class WebRuntimeTests(unittest.TestCase):
         submit.assert_called_once_with(ModelsPriceRefresh())
         with patch.object(self.jobs, 'submit', side_effect=RuntimeError('busy')):
             self.assertEqual(429, self.request('/api/models/refresh', {})[0])
+
+    def test_worker_cleanup_failure_is_unavailable_not_retryable_admission_busy(self):
+        self.login()
+        with patch.object(self.jobs, 'submit', side_effect=ReportWorkerStopError('report_worker_stop_timeout')):
+            for path, value in [('/api/reports', {'kind': 'normal'}), ('/api/models/refresh', {})]:
+                status, _, body = self.request(path, value)
+                self.assertEqual(503, status)
+                self.assertEqual({'error': 'report_worker_stop_timeout'}, json.loads(body))
 
     def test_progress_bursts_are_coalesced_without_starving_host_turns(self):
         from collections import deque
@@ -495,6 +505,135 @@ class WebRuntimeTests(unittest.TestCase):
 
 
 class JobBoundaryTests(unittest.TestCase):
+    def test_valid_terminal_ipc_allows_natural_exit_without_termination(self):
+        for message, expected in [
+                (('result', json.dumps(dict(error=None, source=dict(status='acquired'))).encode()), 'complete'),
+                (('error', 'report_unavailable'), 'failed')]:
+            with self.subTest(message=message[0]):
+                child = ReportProcess(messages=[message], exit_after_join=1)
+                jobs = ReportJobs(context=child.context)
+                key = jobs.submit(ReportRequest())
+                jobs.tick()
+
+                jobs.tick()
+
+                self.assertEqual(expected, jobs.snapshot(key)['status'])
+                child.process.join.assert_called_once_with(timeout=1)
+                child.process.terminate.assert_not_called()
+                child.process.kill.assert_not_called()
+                child.receiver.close.assert_called_once()
+                child.process.close.assert_called_once()
+                self.assertIsNone(jobs._active)
+                jobs.close()
+
+    def test_completed_stats_slice_gets_grace_even_when_logical_job_requeues(self):
+        result = dict(error=None, source=dict(status='acquired'),
+            view=dict(ai_stats=[], ai_stats_work=dict(completed=1)))
+        child = ReportProcess(messages=[('result', json.dumps(result).encode())], exit_after_join=1)
+        next_child = ReportProcess(exit_after_join=1)
+        child.context.Pipe.side_effect = [(child.receiver, child.sender), (next_child.receiver, next_child.sender)]
+        child.context.Process.side_effect = [child.process, next_child.process]
+        jobs = ReportJobs(context=child.context)
+        self.addCleanup(jobs.close)
+        key = jobs.submit(ReportRequest(ReportKind.AI_STATS))
+        jobs.tick()
+
+        jobs.tick()
+
+        self.assertEqual('running', jobs.snapshot(key)['status'])
+        self.assertEqual(2, jobs.snapshot(key)['work']['slices'])
+        self.assertIs(next_child.process, jobs._active[1])
+        child.process.join.assert_called_once_with(timeout=1)
+        child.process.terminate.assert_not_called()
+        child.process.close.assert_called_once()
+
+    def test_exhausted_natural_grace_falls_back_to_bounded_termination(self):
+        child = ReportProcess(messages=[('error', 'report_unavailable')], exit_after_join=2)
+        jobs = ReportJobs(context=child.context)
+        jobs.submit(ReportRequest())
+        jobs.tick()
+
+        jobs.tick()
+
+        self.assertEqual([call.join(timeout=1), call.is_alive(), call.terminate(), call.join(timeout=1),
+            call.is_alive(), call.is_alive(), call.close()], child.process.mock_calls[1:])
+        child.process.kill.assert_not_called()
+        self.assertIsNone(jobs._active)
+
+    def test_watchdog_cancel_shutdown_and_invalid_ipc_force_stop_without_grace(self):
+        for action in ('watchdog', 'cancel', 'shutdown', 'unknown', 'invalid-result', 'invalid-error', 'eof'):
+            with self.subTest(action=action):
+                messages = {'unknown': [('other', 'not-terminal')], 'invalid-result': [('result', b'{}')],
+                    'invalid-error': [('error', {})], 'eof': [('error', 'unused')]}.get(action, ())
+                child = ReportProcess(messages=messages, exit_after_join=1)
+                if action == 'eof':
+                    child.receiver.recv.side_effect = EOFError
+                jobs = ReportJobs(context=child.context, deadline=1)
+                key = jobs.submit(ReportRequest())
+                with patch('src.web.jobs.time.monotonic', return_value=0):
+                    jobs.tick()
+
+                with patch('src.web.jobs.time.monotonic', return_value=2 if action == 'watchdog' else 0):
+                    if action == 'cancel':
+                        jobs.cancel(key)
+                    elif action == 'shutdown':
+                        jobs.close()
+                    else:
+                        jobs.tick()
+
+                self.assertEqual([call.is_alive(), call.terminate(), call.join(timeout=1)],
+                    child.process.mock_calls[1:4])
+                child.process.join.assert_called_once_with(timeout=1)
+                child.process.close.assert_called_once()
+                self.assertIsNone(jobs._active)
+
+    def test_unconfirmed_exit_latches_failure_retains_owner_and_allows_bounded_cleanup_retry(self):
+        child = ReportProcess(messages=[('result', json.dumps(dict(error=None,
+            source=dict(status='acquired'))).encode())])
+        jobs = ReportJobs(context=child.context)
+        request = ReportRequest(ReportKind.COMPARISONS)
+        key = jobs.submit(request)
+        queued = jobs.submit(ReportRequest(ReportKind.TOKEN_MIX))
+        with patch('src.web.jobs.time.monotonic', return_value=10):
+            jobs.tick()
+        owner = jobs._active
+
+        with patch('src.web.jobs.time.monotonic', return_value=12), \
+                self.assertRaisesRegex(ReportWorkerStopError, '^report_worker_stop_timeout$') as caught:
+            jobs.tick()
+
+        self.assertIs(owner, jobs._active)
+        self.assertEqual('failed', jobs._jobs[key]['status'])
+        self.assertEqual([call(timeout=1)] * 3, child.process.join.call_args_list)
+        child.process.terminate.assert_called_once()
+        child.process.kill.assert_called_once()
+        child.receiver.close.assert_not_called()
+        child.process.close.assert_not_called()
+        for operation in (lambda: jobs.submit(request), lambda: jobs.snapshot(key), jobs.tick,
+                jobs.readiness, jobs.updates, lambda: jobs.cancel(key)):
+            with self.assertRaises(ReportWorkerStopError) as latched:
+                operation()
+            self.assertIs(caught.exception, latched.exception)
+        self.assertEqual(2, len(jobs._jobs))
+        self.assertEqual(1, child.context.Process.call_count)
+        with self.assertRaises(ReportWorkerStopError):
+            jobs.close()
+        self.assertIs(owner, jobs._active)
+        self.assertEqual([call(timeout=1)] * 5, child.process.join.call_args_list)
+        self.assertEqual('cancelled', jobs._jobs[queued]['status'])
+
+        child.alive = False
+        with patch('src.web.jobs.time.monotonic', return_value=15):
+            jobs.close()
+        jobs.close()
+
+        self.assertIsNone(jobs._active)
+        self.assertEqual(5000, jobs._jobs[key]['worker_ms'])
+        child.receiver.close.assert_called_once()
+        child.process.close.assert_called_once()
+        with self.assertRaises(ReportWorkerStopError):
+            jobs.snapshot(key)  # Even the retained valid report cannot conceal the fault.
+
     def test_worker_compacts_json_without_dropping_provenance_or_raising_limit(self):
         values = {"rows": [{"a": 1, "b": 2}] * 4}
         self.assertGreater(len(json.dumps(values).encode("ascii")), 70)

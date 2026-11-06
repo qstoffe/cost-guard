@@ -20,6 +20,10 @@ MAX_JOBS = 16
 MAX_PENDING = 4
 
 
+class ReportWorkerStopError(RuntimeError):
+    """Owned child exit is unconfirmed; keep its handles and stop the host."""
+
+
 @dataclass(frozen=True, slots=True)
 class ModelsPriceRefresh(ReportRequest):
     """Web-only explicit pricing action, distinct from a cached Normal capture."""
@@ -167,18 +171,23 @@ class ReportJobs:
         self._jobs = OrderedDict()
         self._active = None
         self._closed = False
+        self._failure = None
         self.analysis = "not_requested"
         self.source = "not_acquired"
         self.accounts = "not_acquired"
 
     def submit(self, request):
         with self._lock:
+            self._check_failure()
             if self._closed:
                 raise RuntimeError("stopping")
             for key, job in self._jobs.items():
                 if stats_jobs.is_stats(job) and request.kind is ReportKind.AI_STATS:
                     if job['status'] in {'queued', 'running'}:
-                        job.update(request=request, seen=time.monotonic())
+                        # At most the five validated scopes; priority never erases
+                        # an earlier logical goal or creates another job/worker.
+                        job['goals'] = tuple(dict.fromkeys((*job['goals'], request.stats_scope)))
+                        job['request'] = request
                         return key
                     if (job['status'] == 'complete' and stats_jobs.ready(job, request.stats_scope)
                             and time.monotonic() - job.get('finished_at', 0) < 60):
@@ -197,16 +206,17 @@ class ReportJobs:
                 del self._jobs[victim]
             key = uuid4().hex
             self._jobs[key] = dict(request=request, status="queued", result=None, error=None, progress=None,
-                                   queued_at=time.monotonic(), seen=time.monotonic())
+                                   queued_at=time.monotonic())
+            if request.kind is ReportKind.AI_STATS:
+                self._jobs[key]['goals'] = (request.stats_scope,)
             return key
 
     def snapshot(self, key):
         with self._lock:
+            self._check_failure()
             job = self._jobs.get(key)
             if job is None:
                 return None
-            if stats_jobs.is_stats(job):
-                job['seen'] = time.monotonic()
             return dict(id=key, status=job["status"], progress=job["progress"] or {
                         "phase": job["status"], "completed": 0, "total": None},
                         result=job["result"], error=job["error"],
@@ -215,6 +225,7 @@ class ReportJobs:
 
     def readiness(self):
         with self._lock:
+            self._check_failure()
             return dict(http="ready", analysis=self.analysis, source=self.source, accounts=self.accounts)
 
     def updates(self):
@@ -223,24 +234,38 @@ class ReportJobs:
                 dict(id=key, status=job["status"], progress=job["progress"])
                 for key, job in self._jobs.items()]}
 
-    def _stop(self):
+    def _check_failure(self):
+        if self._failure is not None:
+            raise self._failure
+
+    def _stop(self, *, finished=False):
         if self._active is None:
             return
         key, process, receiver, started = self._active
         job = self._jobs[key]
-        job['worker_ms'] = job.get('worker_ms', 0) + max(0, time.monotonic() - started) * 1000
+        if finished:
+            # Valid terminal IPC means the child can finish its own pipe/parent
+            # monitor teardown. Watchdog/cancel/shutdown never take this grace.
+            process.join(timeout=1)
         if process.is_alive():
             process.terminate()
-        process.join(timeout=1)
+            process.join(timeout=1)
         if process.is_alive():
             process.kill()
             process.join(timeout=1)
+        if process.is_alive():
+            self._failure = self._failure or ReportWorkerStopError('report_worker_stop_timeout')
+            job.update(status='failed', error='report_worker_stop_timeout')
+            self.analysis = 'failed'
+            raise self._failure  # Retain receiver, process and _active ownership.
         receiver.close()
         process.close()
+        job['worker_ms'] = job.get('worker_ms', 0) + max(0, time.monotonic() - started) * 1000
         self._active = None
 
     def cancel(self, key):
         with self._lock:
+            self._check_failure()
             job = self._jobs.get(key)
             if job is None:
                 return False
@@ -253,6 +278,7 @@ class ReportJobs:
 
     def tick(self):
         with self._lock:
+            self._check_failure()
             if self._closed:
                 return
             if self._active:
@@ -263,14 +289,14 @@ class ReportJobs:
     def _tick_active(self):
         key, process, receiver, started = self._active
         job = self._jobs[key]
+        finished = False
         try:
-            if stats_jobs.is_stats(job) and time.monotonic() - job['seen'] > stats_jobs.INTEREST_SECONDS:
-                job.update(status='cancelled', error='suspended')
-            elif time.monotonic() - started > self._deadline:
+            if time.monotonic() - started > self._deadline:
                 stats_jobs.timed_out(job)
             elif receiver.poll():
                 if not self._receive(job, receiver):
                     return
+                finished = True
             elif process.is_alive():
                 return
             else:
@@ -278,7 +304,7 @@ class ReportJobs:
         except (EOFError, OSError, ValueError, KeyError, TypeError):
             job.update(status='failed', error='report_unavailable')
         self.analysis = job['status']
-        self._stop()
+        self._stop(finished=finished)
 
     def _receive(self, job, receiver):
         # Bounded bursts preserve host/control turns and avoid IPC backpressure.
@@ -300,9 +326,11 @@ class ReportJobs:
                                  or isinstance(job['request'], ModelsPriceRefresh)
                                  else 'reported' if not result['error'] else 'unavailable')
                 return True
-            else:
+            elif kind == 'error' and isinstance(payload, str):
                 job.update(status='failed', error=payload)
                 return True
+            else:
+                raise ValueError('invalid_report_message')
             if not receiver.poll():
                 return False
         return False
@@ -312,9 +340,6 @@ class ReportJobs:
                 item[1]['request'].kind in {ReportKind.TOKEN_MIX, ReportKind.AI_STATS, ReportKind.COMPARISONS},
                 item[1]['queued_at'])):
             if job['status'] != 'queued':
-                continue
-            if stats_jobs.is_stats(job) and time.monotonic() - job['seen'] > stats_jobs.INTEREST_SECONDS:
-                job.update(status='cancelled', error='suspended')
                 continue
             receiver, sender = self._context.Pipe(duplex=False)
             process = self._context.Process(target=run_owned_report,
@@ -340,7 +365,9 @@ class ReportJobs:
     def close(self):
         with self._lock:
             self._closed = True
-            self._stop()
-            for job in self._jobs.values():
-                if job["status"] in {"queued", "running"}:
-                    job["status"] = "cancelled"
+            try:
+                self._stop()
+            finally:
+                for job in self._jobs.values():
+                    if job["status"] in {"queued", "running"}:
+                        job["status"] = "cancelled"

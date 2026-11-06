@@ -10,16 +10,18 @@ import threading
 import time
 import traceback
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, call, patch
 
 from development.tests.fixtures.account_workers import Provider
+from development.tests.fixtures.report_process import ReportProcess
 from development.tests.fixtures.watch_runtime import MutableSource, make_service
 from src.accounts.acquisition import AccountAcquisition
 from src.sources.opencode_v2_transport import V2Endpoint, V2HttpClient
 from src.watch.acquisition import LiveAcquisition
 from src.watch.web_coordinator import WebWatchCoordinator
 from src.web.host import WebHost
-from src.web.jobs import ReportJobs
+from src.web.http import LoopbackServer
+from src.web.jobs import ReportJobs, ReportWorkerStopError
 from src.reports import ReportRequest
 
 
@@ -42,6 +44,90 @@ class PendingSource(MutableSource):
 
 
 class WebShutdownTests(unittest.TestCase):
+    def test_watchdog_cleanup_failure_reaches_host_and_main_owner_retries_retained_child(self):
+        child = ReportProcess()
+        jobs = ReportJobs(context=child.context)
+        jobs.submit(ReportRequest())
+        with patch('src.web.jobs.time.monotonic', return_value=time.monotonic() - 121):
+            jobs.tick()  # Expired active worker before the real serving thread starts.
+
+        self.failed_report_owner(child, jobs)
+
+    def test_authenticated_http_cancel_failure_stops_host_not_an_unobserved_future(self):
+        child = ReportProcess()
+        jobs = ReportJobs(context=child.context)
+        key = jobs.submit(ReportRequest())
+        jobs.tick()
+
+        def cancel(host):
+            def request(path, value, headers=None):
+                connection = http.client.HTTPConnection('127.0.0.1', host.server.server_port, timeout=3)
+                supplied = {'Origin': host.server.origin, 'Content-Type': 'application/json', **(headers or {})}
+                try:
+                    connection.request('POST', path, json.dumps(value), supplied)
+                    response = connection.getresponse()
+                    return response.status, response.getheader('Set-Cookie'), json.loads(response.read())
+                finally:
+                    connection.close()
+
+            status, cookie, auth = request('/api/bootstrap', {'credential': host.server.session.bootstrap()})
+            self.assertEqual(200, status)
+            headers = {'Cookie': cookie.split(';')[0], 'X-CG-CSRF': auth['csrf']}
+            status, _, body = request(f'/api/jobs/{key}/cancel', {}, headers)
+            self.assertEqual(503, status)
+            self.assertEqual({'error': 'report_worker_stop_timeout'}, body)
+
+        self.failed_report_owner(child, jobs, action=cancel)
+
+    def failed_report_owner(self, child, jobs, *, action=None):
+        with tempfile.TemporaryDirectory() as directory:
+            host = WebHost(Path(directory), jobs=jobs, store=Mock())
+            host.live = Mock(stopping=Event())  # Observe independent resource teardown, no source acquisition.
+            owner = jobs._active
+            with patch.object(jobs, 'close', wraps=jobs.close) as close_jobs, \
+                    patch.object(LoopbackServer, 'server_close', autospec=True,
+                        side_effect=LoopbackServer.server_close) as close_server:
+                try:
+                    host.start()
+                    if action:
+                        action(host)
+                    self.assertTrue(host.stopped.wait(3))
+                    host.thread.join(1)
+                    self.assertFalse(host.thread.is_alive())
+                    self.assertIsInstance(host.failure, ReportWorkerStopError)
+                    self.assertEqual('report_worker_stop_timeout', str(host.failure))
+                    self.assertEqual('runtime_fault', host.reason)
+                    self.assertTrue(host.live.stopping.is_set())
+                    host.live.close.assert_called_once()
+                    self.assertTrue(host.events.closed)
+                    close_server.assert_called_once_with(host.server)
+                    self.assertEqual(-1, host.server.socket.fileno())
+                    self.assertTrue(all(not thread.is_alive() for thread in host.server._pool._threads))
+                    self.assertIs(owner, jobs._active)
+                    child.receiver.close.assert_not_called()
+                    child.process.close.assert_not_called()
+                    self.assertEqual(1, close_jobs.call_count)  # Serving finally attempted cleanup.
+                    with self.assertRaises(ReportWorkerStopError):
+                        host.close()  # Main owner retries, but never claims live-child cleanup succeeded.
+                    self.assertIs(owner, jobs._active)
+                    self.assertEqual(2, close_jobs.call_count)
+                    self.assertEqual([call(timeout=1)] * 6, child.process.join.call_args_list)
+
+                    child.alive = False
+                    host.close()
+                    host.close()
+
+                    self.assertIsNone(jobs._active)
+                    child.receiver.close.assert_called_once()
+                    child.process.close.assert_called_once()
+                    self.assertIsInstance(host.failure, ReportWorkerStopError)
+                    self.assertEqual('runtime_fault', host.reason)
+                    host.store.remove.assert_called_with(host.nonce)
+                    host.store.log.assert_called_with('runtime_fault')
+                finally:
+                    child.alive = False
+                    host.close()
+
     def test_close_joins_owned_idle_account_workers_before_returning(self):
         idle = Event()
         provider = Provider('fixture')

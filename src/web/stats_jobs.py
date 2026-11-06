@@ -1,12 +1,9 @@
-"""AI Stats logical-job slices, liveness and shared period priority; no analysis."""
+"""Host-owned AI Stats slices and bounded requested-scope priority; no analysis."""
 from dataclasses import dataclass
 import time
 
 from src.reports import ReportKind, ReportRequest
 from src.reports.ai_stats import BATCH_SIZE, SLICE_ROOTS
-
-INTEREST_SECONDS = 15
-
 
 @dataclass(frozen=True, slots=True)
 class StatsSlice(ReportRequest):
@@ -28,10 +25,10 @@ def request(job, key):
     original = job['request']
     if not is_stats(job):
         return original
-    now = time.monotonic()
-    job.setdefault('seen', now)
     job.setdefault('observation_ms', int(time.time() * 1000))
-    return StatsSlice(ReportKind.AI_STATS, stats_scope=original.stats_scope,
+    scope = next((scope for scope in (original.stats_scope, *job.get('goals', ()))
+                  if not ready(job, scope)), original.stats_scope)
+    return StatsSlice(ReportKind.AI_STATS, stats_scope=scope,
         observation_ms=job['observation_ms'], scan='ai-stats-scan-' + key,
         batch_size=job.get('batch_size', BATCH_SIZE))
 
@@ -43,7 +40,7 @@ def accept(job, result):
     if result['error'] or not work:
         job['status'] = 'failed' if result['error'] else 'complete'
         return
-    if ready(job, job['request'].stats_scope):
+    if all(ready(job, scope) for scope in job.get('goals', (job['request'].stats_scope,))):
         job['status'] = 'complete'
         return
     completed = work['completed']
