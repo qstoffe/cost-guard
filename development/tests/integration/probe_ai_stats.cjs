@@ -44,7 +44,7 @@ async function main() {
     const jobs=(await lines.next()).value;
     throw new Error('Condition not reached: '+expression+' '+JSON.stringify({errors,serverErrors,state,jobs}));
   };
-  const layouts=[], checks=[]; let evidence={outcome:'FAIL'};
+  const layouts=[], textLayouts=[], checks=[]; let evidence={outcome:'FAIL',layouts,textLayouts,checks};
   const deadline=setTimeout(()=>{child.kill();server.kill();},180000);
   try {
     const launch=JSON.parse((await lines.next()).value);
@@ -64,6 +64,7 @@ async function main() {
     assert.equal(await evaluate(`[...document.querySelectorAll('.ai-stat-detail a')].every(a=>a.textContent.includes('<img') && a.hash.startsWith('#/sessions/'))`),true);
     assert.equal(await evaluate(`document.getElementById('refresh').hidden && document.getElementById('cancel').hidden`),true);
     checks.push('automatic default, retired-route alias, ten cards, five exact periods, safe real record links, no healthy toolbar');
+    await require('./probe_ai_stats_layout.cjs')({command,evaluate,until,tab,textLayouts,checks});
     for(const theme of ['classic','light','dark']) for(const width of [360,1366,1920]) {
       await command('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false},tab);
       await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:theme==='dark'?'dark':'light'}]},tab);
@@ -77,11 +78,11 @@ async function main() {
           foreground:getComputedStyle(document.querySelector('[aria-pressed="true"]')).color,
           background:getComputedStyle(document.querySelector('[aria-pressed="true"]')).backgroundColor}; })()`);
       assert.equal(layout.count,10); assert.equal(layout.pageOverflow,false); assert.equal(layout.badScroll,false);
-      assert.equal(layout.headings,10); assert.equal(new Set(layout.heights).size,1);
+      assert.equal(layout.headings,10);
       assert.equal(new Set(layout.widths).size,1); assert.notEqual(layout.foreground,layout.background);
       layouts.push({theme,width,...layout});
     }
-    checks.push('Classic/Web light/dark, 360/1366/1920px, equal geometry, no page overflow or nested scrolling');
+    checks.push('Classic/Web light/dark, 360/1366/1920px, equal column widths, no page overflow or nested scrolling (row heights checked with text geometry)');
     await evaluate(`window.__root=current.stats.root; window.__cards=[...document.querySelectorAll('.ai-stat')];
       window.__observation=current.result.observed_at_ms; selectStats(current,'today'); selectStats(current,'7-days'); selectStats(current,'30-days');`);
     assert.equal(await evaluate(`current.result.observed_at_ms===__observation && !current.loading && __cards.every((c,i)=>c===document.querySelectorAll('.ai-stat')[i])`),true);
@@ -177,10 +178,10 @@ async function main() {
     assert.equal(one.id,two.id);
     checks.push('two independent tabs exercise fixture scope-job association (production coalescing/process proof is separate)');
     assert.deepEqual(errors,[]);
-    evidence={outcome:'PASS',layouts,checks,limitations:[
+    evidence={outcome:'PASS',layouts,textLayouts,checks,limitations:[
       'AIStatsJobs uses immediate canonical fixture results; browser proof does not establish production spawning or coalescing.',
       'Production finite-process/coalescing tests and real-source acquisition probes are separate.',
-      'Actual screen-reader speech, native physical device/font rendering and non-Chromium engines are unverified; scoped Decision Delegate exception applies.'
+      'Actual screen-reader speech, native physical device/font rendering and non-Chromium engines are unverified.'
     ],runtimeErrors:errors};
     console.log(JSON.stringify({outcome:evidence.outcome,checks:checks.length,layouts:layouts.length}));
   } finally {

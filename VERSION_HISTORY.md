@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.191 — 2026-11-06
+
+- AI Stats Overview and Fun Facts use content-sized detail rows instead of a fixed clipped slot. Session names, dates, long traits and the optional matched-run fact can wrap while sibling cards retain equal height within each grid row. Canonical values, session destinations, periods, formatting, keyed DOM and acquisition remain unchanged. Rendered-browser regressions check actual text/link regions, focus and pointer activation across themes, widths and enlarged text.
+
 ## v80.190 — 2026-11-06
 
 - Web Comparisons prefixes the existing safe first-input preview with `Prompt 1:` beneath each session-title heading, preserving truncation, privacy/attachment placeholders and the nine-column table. Regression checks retain the shared loader's zero-layout empty notice while preserving meaningful coverage and failure status. Exact first-input matching and accounting are unchanged.
