@@ -1,10 +1,35 @@
 """Opt-in child-process report timings; numeric metadata only, never source rows."""
 from contextlib import ExitStack
 import json
+import sys
 import time
 from unittest.mock import patch
 
 from development.tests.integration.web_live_observations import ProbeObservations
+
+
+def peak_memory():
+    """Own-process numeric Windows high-water marks, not a logical-job memory sum."""
+    if sys.platform != 'win32':
+        return None
+    import ctypes
+    from ctypes import wintypes
+
+    class Counters(ctypes.Structure):
+        _fields_ = [('cb', wintypes.DWORD), ('PageFaultCount', wintypes.DWORD)] + [
+            (name, ctypes.c_size_t) for name in ('PeakWorkingSetSize', 'WorkingSetSize',
+            'QuotaPeakPagedPoolUsage', 'QuotaPagedPoolUsage', 'QuotaPeakNonPagedPoolUsage',
+            'QuotaNonPagedPoolUsage', 'PagefileUsage', 'PeakPagefileUsage')]
+
+    kernel, psapi = ctypes.WinDLL('kernel32'), ctypes.WinDLL('psapi')
+    kernel.GetCurrentProcess.restype = wintypes.HANDLE
+    psapi.GetProcessMemoryInfo.argtypes = [wintypes.HANDLE, ctypes.POINTER(Counters), wintypes.DWORD]
+    psapi.GetProcessMemoryInfo.restype = wintypes.BOOL
+    counters = Counters()
+    counters.cb = ctypes.sizeof(counters)
+    if not psapi.GetProcessMemoryInfo(kernel.GetCurrentProcess(), ctypes.byref(counters), counters.cb):
+        return None
+    return dict(working_set_bytes=counters.PeakWorkingSetSize, commit_bytes=counters.PeakPagefileUsage)
 
 
 def measured_report(sender, request):
@@ -29,8 +54,9 @@ def measured_report(sender, request):
         print(json.dumps(dict(report_observation=request.kind.value,
             seconds=round(now - observations.started, 3), progress=event,
             cpu_seconds=round(time.process_time() - cpu_started, 3),
-            metrics=metrics, operations=dict(observations.completed),
-            max_seconds=dict(observations.maximum),
+             metrics=metrics, operations=dict(observations.completed),
+             max_seconds=dict(observations.maximum),
+             process_peak_memory=peak_memory(),
             source_stage=getattr(source, '_diagnostics', {}).get('last_snapshot_stage'))), flush=True)
 
     def initialize(service, *args, **kwargs):

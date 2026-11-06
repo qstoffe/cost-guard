@@ -7,14 +7,14 @@ Status: current
 
 [Architecture overview](../OVERVIEW.md) · [Owner/test routes](CODE_MAP.md). Source remains authoritative.
 
-FR000612 renews only the AI Stats contract below; other sections retain their prior
-scoped checks at `904c9aea9a5f0e682437b74d7f66d3d5a6d813ff`, not a whole-module audit.
+FR000614 renews only the AI Stats delta below against `d381d399f401c24302fa559eb62ec68e33aba4e7`;
+other sections retain their prior scoped checks, not a whole-module audit.
 
 ## Responsibility and ownership
 
 `src/reports/` owns use cases/neutral projections over abstract sources/providers, analysis and cache; never concrete integrations, Watch or presentation.
 
-Candidate roots are ordered by whole-tree activity, so newly updated child work is not skipped. Hydrated snapshots/analysis remain the semantic authority; session metadata activity is only a bounded discovery gate. Session dominant model is selected by whole-session attributed CCost; listing order is recent tree activity, never cost.
+Candidate roots are ordered by whole-tree activity. Hydrated snapshots/analysis remain the semantic authority; metadata is not temporal exclusion proof for AI Stats, whose unknown roots remain candidates in every period. Other reports retain their scoped discovery rules. Session dominant model is selected by whole-session attributed CCost; listing order is recent tree activity, never cost.
 
 ## Public contract
 
@@ -75,7 +75,7 @@ Schema version and application instance UUID are separate from per-request-view 
 | Session detail | SESSION / prompt_blocks, request_identities | Complete requested root/child tree, stable event/message/part references and opaque request key; no global Watch cap; inherited FR000200 running metrics |
 | Date/range | DATE / prompt_blocks | Configured-local inclusive date target mapped to exclusive end; DST, context and duration remain existing semantics |
 | Historical Token Mix | TOKEN_MIX / model_token_mix, publisher_token_mix and total | Separate deep all-available-history method, not build's dashboard fallback; existing availability fail-open behavior; no request rows or promise to recover pruned history |
-| Web AI Stats | AI_STATS / ai_stats periods, ten metrics each | Automatic finite 30-day scope; lazy month/all coverage, configured-local calendar/DST, event-time cost, overlap-safe root execution; no accounts/request rows or CLI mode change |
+| Web AI Stats | AI_STATS / ai_stats periods plus ai_stats_work | Shared resumable acquisition, selected-scope priority and conditional coherent milestones; configured-local calendar/DST, event-time cost and overlap-safe root execution; no accounts/request rows or CLI mode change |
 
 The [Web route inventory](../../../docs/web-beta.md#navigation-and-static-reports) maps views; visual/native acceptance is separate. Application tests pin canonical V1/V2 lifecycle/child/compaction/partial, timezone/account-error, uncapped detail, deduplication, immutable export and typed-failure parity. Fresh ownership, cleanup and forbidden application/Web imports in CLI/Diagnostics remain covered. Focused workload/history tests cover revision/catalog invalidation, deletion and publisher totals; no new dependency or permanent gate.
 
@@ -101,14 +101,26 @@ browser proof retain their actual limits in the Token Mix journal.
 
 ## Web AI Stats acquisition and accounting
 
-`src/reports/ai_stats.py` owns candidate roots/active ancestry, source revisions and
-disposable `ai-stats-evidence` caching. It reuses compact canonical request/category
-facts from `token_mix_cache.py` and adds prompt/compaction execution intervals and
-snapshot-completeness evidence, never prompt text. Evidence algorithm 3 invalidates
-older payloads lacking coverage. Source, analysis dependencies and reference pricing key reuse; current
-membership removes deleted roots, archived roots remain, and unstable evidence is
-not persisted. Changed/missed roots use existing 64-root observed batches, at most
-four concurrent source reads, inside unchanged finite job/security limits.
+`src/reports/ai_stats.py::StatsAcquisition` owns shared root coverage, active ancestry,
+bounded slices, fresh membership/revision verification and coherent period projection.
+`ai_stats_evidence.py` owns compact encoding/validation and pricing-independent scalar
+exclusion proofs. Canonical request/category facts reuse `token_mix_cache.py`; intervals,
+completeness and matched-run scalars add no raw prompts/session text. Stable evidence
+is source-/revision-/algorithm-/pricing-keyed. Volatile checkpoints use one fixed
+per-root transient namespace and pinned logical scan, and refresh before publication.
+Metadata orders work only; every unknown root may affect every period. Valid stable
+end bounds prioritize Today, then 7 days, then selected scope; only proved irrelevant
+missing roots permit earlier coherent short-period publication. Decision Delegate's
+FR000614 exception makes early completion conditional, not an unconditional latency claim.
+
+Each Web slice acquires at most 256 missing roots in batches of at most 64, with at
+most four overlapping V2 reads. Direct canonical analysis avoids duplicate full-bundle
+cache writes; compact evidence/proofs persist in bulk. The final complete catalog and
+revision check invalidates changed/new/active evidence. Projection calculates only
+selected/contained ready rows, preserving warm performance; `ai_stats_work` separately
+exports all scope counts/readiness. Hard root/fact bounds and specific checkpoint
+failures prohibit unbounded memory or infinite failed persistence loops. Page reload
+and host restart reuse only valid derived evidence, never a durable history source.
 
 `src/analysis/ai_stats.py` owns event-time deduplication, exact cost/root averages,
 clipped execution unions, root concurrency, local-date/night/DST splitting, longest
@@ -120,11 +132,12 @@ Snapshot incompleteness, warnings and migration gaps cannot imply complete metri
 `src/application/ai_stats.py` allowlists plain-language explanations and prepares
 unit-aware values, status labels and complete-value traits. Projection carries the
 reason tuple; JS shows the explanation in-card and in current-period title help,
-without parsing errors, inventing causes or changing finite loading. JS never revalues.
+without parsing errors or inventing causes. The shared loader consumes truthful scope
+coverage across finite workers; JS never revalues.
 Independent `active_hour.py` APIs and session-detail rate remain supported.
-Scoped source check: `e4d715e170917f5ef2d69d31a68dbc3eb297ff8a`, not revalidation
-of every contract above. `development/tests/test_ai_stats.py`
-pins arithmetic, revisions, finite process/coalescing and policy edges; browser and
+Scoped source check: FR000614 delta on the base above, not revalidation
+of every contract above. `development/tests/test_ai_stats.py` and `test_ai_stats_resume.py`
+pin arithmetic, revisions, real spawned slices/coalescing and policy edges; browser and
 real-source probes/evidence are routed by [AI Stats findings](../../journal/web/ai-stats.md).
 
 ## Allowed dependencies

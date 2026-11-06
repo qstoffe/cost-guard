@@ -13,6 +13,7 @@ import time
 from uuid import uuid4
 
 from src.reports import ReportKind, ReportRequest
+from . import stats_jobs
 
 MAX_RESULT_BYTES = 8 * 1024 * 1024
 MAX_JOBS = 16
@@ -40,7 +41,7 @@ def parse_report(value):
         raise ValueError('invalid_request')
     stats_scope = value.get('stats_scope', '30-days')
     if ('stats_scope' in value and kind is not ReportKind.AI_STATS
-            or stats_scope not in ('30-days', 'month', 'all')):
+            or stats_scope not in ('today', '7-days', '30-days', 'month', 'all')):
         raise ValueError('invalid_request')
     session = value.get("session_id", "")
     date = value.get("date_text", "")
@@ -106,10 +107,14 @@ def run_report(sender, request):
         relay = ProgressRelay(sender)
         result = application(request).execute(request, progress=relay.observe).to_json()
         relay.flush()
+        started = time.perf_counter()
         payload = json.dumps(result, ensure_ascii=True, allow_nan=False, separators=(",", ":")).encode("ascii")
         if len(payload) > MAX_RESULT_BYTES:
             sender.send(("error", "result_too_large"))
         else:
+            if request.kind is ReportKind.AI_STATS:
+                sender.send(('metrics', dict(serialization_ms=(time.perf_counter() - started) * 1000,
+                                             result_bytes=len(payload))))
             sender.send(("result", payload))
     except Exception:
         # No exception text, paths, private source fields or credentials on IPC.
@@ -171,9 +176,16 @@ class ReportJobs:
             if self._closed:
                 raise RuntimeError("stopping")
             for key, job in self._jobs.items():
+                if stats_jobs.is_stats(job) and request.kind is ReportKind.AI_STATS:
+                    if job['status'] in {'queued', 'running'}:
+                        job.update(request=request, seen=time.monotonic())
+                        return key
+                    if (job['status'] == 'complete' and stats_jobs.ready(job, request.stats_scope)
+                            and time.monotonic() - job.get('finished_at', 0) < 60):
+                        return key
                 if job["request"] == request and job["status"] in {"queued", "running"}:
                     return key
-                if (request.kind in {ReportKind.TOKEN_MIX, ReportKind.AI_STATS, ReportKind.COMPARISONS} and job["request"] == request
+                if (request.kind in {ReportKind.TOKEN_MIX, ReportKind.COMPARISONS} and job["request"] == request
                         and job["status"] == "complete" and time.monotonic() - job.get("finished_at", 0) < 60):
                     # Coalesce staggered tab freshness checks as well as in-flight work.
                     # Retain the actual observation timestamp; reuse is not new acquisition.
@@ -184,7 +196,8 @@ class ReportJobs:
                 victim = next(k for k, j in self._jobs.items() if j["status"] not in {"queued", "running"})
                 del self._jobs[victim]
             key = uuid4().hex
-            self._jobs[key] = dict(request=request, status="queued", result=None, error=None, progress=None)
+            self._jobs[key] = dict(request=request, status="queued", result=None, error=None, progress=None,
+                                   queued_at=time.monotonic(), seen=time.monotonic())
             return key
 
     def snapshot(self, key):
@@ -192,9 +205,13 @@ class ReportJobs:
             job = self._jobs.get(key)
             if job is None:
                 return None
+            if stats_jobs.is_stats(job):
+                job['seen'] = time.monotonic()
             return dict(id=key, status=job["status"], progress=job["progress"] or {
                         "phase": job["status"], "completed": 0, "total": None},
-                        result=job["result"], error=job["error"])
+                        result=job["result"], error=job["error"],
+                        work={name: job.get(name, 0) for name in
+                              ('slices', 'queue_ms', 'worker_ms', 'serialization_ms', 'result_bytes')})
 
     def readiness(self):
         with self._lock:
@@ -209,7 +226,9 @@ class ReportJobs:
     def _stop(self):
         if self._active is None:
             return
-        _, process, receiver, _ = self._active
+        key, process, receiver, started = self._active
+        job = self._jobs[key]
+        job['worker_ms'] = job.get('worker_ms', 0) + max(0, time.monotonic() - started) * 1000
         if process.is_alive():
             process.terminate()
         process.join(timeout=1)
@@ -237,69 +256,86 @@ class ReportJobs:
             if self._closed:
                 return
             if self._active:
-                key, process, receiver, started = self._active
-                job = self._jobs[key]
-                if time.monotonic() - started > self._deadline:
-                    job.update(status="failed", error="report_timeout")
-                    self.analysis = "failed"
-                    self._stop()
-                elif receiver.poll():
-                    try:
-                        # Coalesce bounded bursts. One message per host turn can
-                        # backpressure a deep scan until its hard deadline even
-                        # when analysis itself is fast. Never unbound this drain:
-                        # HTTP/control/cancellation must retain scheduling turns.
-                        for _ in range(64):
-                            kind, payload = receiver.recv()
-                            if kind != "progress":
-                                break
-                            sequence = (job["progress"] or {}).get("sequence", 0) + 1
-                            job["progress"] = dict(payload, sequence=sequence)
-                            if not receiver.poll():
-                                return
-                        else:
-                            return
-                        if kind == "result":
-                            job["result"] = json.loads(payload)
-                            result = job["result"]
-                            job["status"] = "failed" if result["error"] else "complete"
-                            job["finished_at"] = time.monotonic()
-                            self.source = result["source"]["status"]
-                            self.accounts = ("not_requested" if job["request"].kind is not ReportKind.NORMAL
-                                             or isinstance(job["request"], ModelsPriceRefresh)
-                                             else "reported" if not result["error"] else "unavailable")
-                        else:
-                            job.update(status="failed", error=payload)
-                    except (EOFError, OSError, ValueError, KeyError):
-                        job.update(status="failed", error="report_unavailable")
-                    self.analysis = job["status"]
-                    self._stop()
-                elif not process.is_alive():
-                    job.update(status="failed", error="report_unavailable")
-                    self.analysis = "failed"
-                    self._stop()
+                self._tick_active()
             if self._active is None:
-                for key, job in sorted(self._jobs.items(), key=lambda item: item[1]["request"].kind in {ReportKind.TOKEN_MIX, ReportKind.AI_STATS, ReportKind.COMPARISONS}):
-                    if job["status"] != "queued":
-                        continue
-                    receiver, sender = self._context.Pipe(duplex=False)
-                    process = self._context.Process(target=run_owned_report,
-                                                    args=(self._target, sender, job["request"]),
-                                                    name="cost-guard-report", daemon=True)
-                    try:
-                        process.start()
-                    except Exception:
-                        receiver.close()
-                        sender.close()
-                        process.close()
-                        job.update(status="failed", error="worker_unavailable")
-                        self.analysis = "failed"
-                        return
-                    sender.close()
-                    self._active = key, process, receiver, time.monotonic()
-                    job["status"] = "running"
-                    self.analysis = "loading"
-                    break
+                self._start_next()
+
+    def _tick_active(self):
+        key, process, receiver, started = self._active
+        job = self._jobs[key]
+        try:
+            if stats_jobs.is_stats(job) and time.monotonic() - job['seen'] > stats_jobs.INTEREST_SECONDS:
+                job.update(status='cancelled', error='suspended')
+            elif time.monotonic() - started > self._deadline:
+                stats_jobs.timed_out(job)
+            elif receiver.poll():
+                if not self._receive(job, receiver):
+                    return
+            elif process.is_alive():
+                return
+            else:
+                job.update(status='failed', error='report_unavailable')
+        except (EOFError, OSError, ValueError, KeyError, TypeError):
+            job.update(status='failed', error='report_unavailable')
+        self.analysis = job['status']
+        self._stop()
+
+    def _receive(self, job, receiver):
+        # Bounded bursts preserve host/control turns and avoid IPC backpressure.
+        for _ in range(64):
+            kind, payload = receiver.recv()
+            if kind == 'progress':
+                sequence = (job['progress'] or {}).get('sequence', 0) + 1
+                job['progress'] = dict(payload, sequence=sequence)
+            elif kind == 'metrics':
+                for name in ('serialization_ms', 'result_bytes'):
+                    job[name] = job.get(name, 0) + payload[name]
+            elif kind == 'result':
+                result = json.loads(payload)
+                stats_jobs.accept(job, result)
+                if job['status'] in {'failed', 'complete'}:
+                    job['finished_at'] = time.monotonic()
+                self.source = result['source']['status']
+                self.accounts = ('not_requested' if job['request'].kind is not ReportKind.NORMAL
+                                 or isinstance(job['request'], ModelsPriceRefresh)
+                                 else 'reported' if not result['error'] else 'unavailable')
+                return True
+            else:
+                job.update(status='failed', error=payload)
+                return True
+            if not receiver.poll():
+                return False
+        return False
+
+    def _start_next(self):
+        for key, job in sorted(self._jobs.items(), key=lambda item: (
+                item[1]['request'].kind in {ReportKind.TOKEN_MIX, ReportKind.AI_STATS, ReportKind.COMPARISONS},
+                item[1]['queued_at'])):
+            if job['status'] != 'queued':
+                continue
+            if stats_jobs.is_stats(job) and time.monotonic() - job['seen'] > stats_jobs.INTEREST_SECONDS:
+                job.update(status='cancelled', error='suspended')
+                continue
+            receiver, sender = self._context.Pipe(duplex=False)
+            process = self._context.Process(target=run_owned_report,
+                args=(self._target, sender, stats_jobs.request(job, key)), name='cost-guard-report', daemon=True)
+            try:
+                process.start()
+            except Exception:
+                receiver.close()
+                sender.close()
+                process.close()
+                job.update(status='failed', error='worker_unavailable')
+                self.analysis = 'failed'
+                return
+            sender.close()
+            now = time.monotonic()
+            job['queue_ms'] = job.get('queue_ms', 0) + max(0, now - job['queued_at']) * 1000
+            job['slices'] = job.get('slices', 0) + 1
+            self._active = key, process, receiver, now
+            job['status'] = 'running'
+            self.analysis = 'loading'
+            break
 
     def close(self):
         with self._lock:

@@ -60,6 +60,9 @@ async function main() {
   await assert.rejects(unavailable.backoff(new Error('source_starting')),/source_wait_timeout/);
   const expired=new L.Attempt(()=>now); now+=120000;
   assert.throws(()=>expired.check({writable:true}),/report_timeout/);
+  const resumable=new L.Attempt(()=>now,true); now+=600000;
+  assert.doesNotThrow(()=>resumable.check({writable:true}));
+  resumable.cancel(); assert.throws(()=>resumable.check({writable:true}),/cancelled/);
   for (const kind of ['offline','stopped','identity_changed','authorization_required'])
     assert.throws(()=>new L.Attempt(()=>now).check({kind,writable:false}),new RegExp(kind));
   assert.doesNotThrow(()=>new L.Attempt(()=>now).check({kind:'reconnecting',writable:false}));

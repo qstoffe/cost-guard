@@ -7,6 +7,7 @@ from dataclasses import replace
 from datetime import datetime, timezone
 from decimal import Decimal
 import json
+import os
 from pathlib import Path
 import shutil
 import sys
@@ -23,6 +24,7 @@ from development.tests.fixtures.web_help_reports import HelpAuditJobs
 from development.tests.fixtures.token_mix_views import TokenMixJobs
 from development.tests.fixtures.models_refresh import ModelsRefreshJobs
 from development.tests.fixtures.ai_stats_views import AIStatsJobs, evidence_views
+from development.tests.fixtures.stats_slices import slice_report
 from development.tests.fixtures.matched_inputs import ComparisonsJobs
 from development.tests.fixtures.report_loading import LoadingJobs
 from src.application.live_projection import project_live
@@ -49,6 +51,15 @@ def main():
             jobs = TokenMixJobs()
         if sys.argv[2:] == ['--ai-stats']:
             jobs = AIStatsJobs()
+        if sys.argv[2:] == ['--stats-slices']:
+            if sys.platform == 'win32':
+                import multiprocessing
+                executable = Path(sys.executable).with_name('pythonw.exe')
+                if not executable.is_file():
+                    raise RuntimeError('fixture_gui_interpreter_unavailable')
+                multiprocessing.set_executable(str(executable))
+            os.environ.update(COST_GUARD_STATS_FIXTURE=str(root), COST_GUARD_STATS_BROWSER='1')
+            jobs = ReportJobs(target=slice_report)
         if sys.argv[2:] == ['--comparisons']:
             jobs = ComparisonsJobs()
         if sys.argv[2:] == ['--report-loading']:
@@ -119,6 +130,13 @@ def main():
                     continue
                 if command == 'jobs-status' and sys.argv[2:] == ['--ai-stats']:
                     print(json.dumps(jobs.updates()), flush=True)
+                    continue
+                if command == 'stats-slices-status' and sys.argv[2:] == ['--stats-slices']:
+                    loads = root / 'loads.jsonl'
+                    print(json.dumps(dict(jobs=len(jobs._jobs), active=jobs._active is not None,
+                        work=[dict(kind=job['request'].kind.value, scope=job['request'].stats_scope,
+                            status=job['status'], progress=job['progress']) for job in jobs._jobs.values()],
+                        loads=[json.loads(line) for line in loads.read_text().splitlines()] if loads.exists() else [])), flush=True)
                     continue
                 if command == 'stats-evidence' and sys.argv[2:] == ['--ai-stats']:
                     print(json.dumps(evidence_views()), flush=True)

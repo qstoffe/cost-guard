@@ -39,7 +39,10 @@ async function main() {
     const state=await evaluate(`({section:typeof current==='undefined'?null:current?.section,
       loading:typeof current==='undefined'?null:current?.loading,
       message:typeof current==='undefined'?null:current?.message,
-      host:typeof hostState==='undefined'?null:hostState.kind})`,target);
+      host:typeof hostState==='undefined'?null:hostState.kind,
+      active:typeof current==='undefined'?null:current?.active,
+      percent:typeof current==='undefined'?null:current?.percent,
+      hidden:document.hidden})`,target);
     server.stdin.write('{"command":"jobs-status"}\n');
     const jobs=(await lines.next()).value;
     throw new Error('Condition not reached: '+expression+' '+JSON.stringify({errors,serverErrors,state,jobs}));
@@ -49,6 +52,11 @@ async function main() {
   const deadline=setTimeout(()=>{child.kill();server.kill();},180000);
   try {
     const launch=JSON.parse((await lines.next()).value);
+    if (process.argv.includes('--slices-only')) {
+      await require('./probe_ai_stats_slices.cjs')({command,evaluate,until,config,checks});
+      evidence={outcome:'PASS',checks,runtimeErrors:errors};
+      console.log(JSON.stringify(evidence)); return;
+    }
     const {targetId}=await command('Target.createTarget',{url:'about:blank'});
     tab=(await command('Target.attachToTarget',{targetId,flatten:true})).sessionId;
     await command('Page.enable',{},tab); await command('Runtime.enable',{},tab);
@@ -181,10 +189,11 @@ async function main() {
     const two=await evaluate(`api('/api/reports',{kind:'ai-stats',stats_scope:'all'})`,peer);
     assert.equal(one.id,two.id);
     checks.push('two independent tabs exercise fixture scope-job association (production coalescing/process proof is separate)');
+    await require('./probe_ai_stats_slices.cjs')({command,evaluate,until,config,checks});
     assert.deepEqual(errors,[]);
     evidence={outcome:'PASS',layouts,textLayouts,contrasts,states,checks,limitations:[
       'AIStatsJobs uses immediate canonical fixture results; browser proof does not establish production spawning or coalescing.',
-      'Production finite-process/coalescing tests and real-source acquisition probes are separate.',
+      'Production slice/priority/two-tab browser proof uses fixed synthetic history with valid coverage after repricing; real-source acquisition is separate.',
       'Actual screen-reader speech, native physical device/font rendering and non-Chromium engines are unverified.'
     ],runtimeErrors:errors};
     console.log(JSON.stringify({outcome:evidence.outcome,checks:checks.length,layouts:layouts.length}));

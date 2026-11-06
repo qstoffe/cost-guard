@@ -232,16 +232,18 @@ claim successful completion. Stable nodes, reserved stage height, tabular numera
 and stage-only polite announcements avoid poll-by-poll jumping or announcement spam.
 
 Authenticated **Waiting for source…** and **Waiting for report slot…** stages use
-cancelable 500ms-to-4s backoff, at most eight retries and a 120-second total attempt
-budget. The host's one existing startup owner supplies detached typed admission
+cancelable 500ms-to-4s backoff and at most eight retries. Other reports retain a
+120-second total attempt budget; AI Stats can span multiple bounded workers below.
+The host's one existing startup owner supplies detached typed admission
 proof, not merely HTTP health or the Live stream's writable flag. Transient typed
 source failures can retry; permission/authentication, unsupported source, invalid
 data, real report failures and exhausted waits remain actionable errors. **Retry**
 is recovery-only, not an initial Load button. A Live stream reconnect alone does not
 invalidate successful finite HTTP work. No extra wake, scan, hidden-page preload,
-new queue, result-size exception or extension of the server's 120-second job deadline
-is introduced. Unadmitted waits suspend on navigation/hiding; already admitted work
-keeps its original bounded lifecycle. A small **Updating…** line accompanies quiet
+new queue or result-size exception is introduced. Every child still has a 120-second
+watchdog. Unadmitted waits suspend on navigation/hiding; AI Stats additionally stops
+polling on departure and its unobserved work expires after 15 seconds. Other admitted
+reports keep their bounded lifecycle. A small **Updating…** line accompanies quiet
 refresh without replacing usable data, sorting, selection, scroll or focus.
 Reload captures Models using normal pricing TTL caching; Back/Forward to a retained view and live host
 heartbeats do not refresh its frozen report or reset its table scroll/selection.
@@ -301,15 +303,21 @@ AI Stats reuses its own legitimate period acquisition, never starts an independe
 all-history Comparisons scan and never claims intrinsic model speed or answer quality.
 
 The exact selector is **Today | 7 days | 30 days | This month | All time**, initially
-**30 days**. Entry automatically acquires bounded 30-day history; Today/7 days reuse
-that coverage. Rolling windows mean precisely 7/30 × 24 hours. Today/month use the
-configured timezone, including DST; a 31-day calendar month extends coverage when
-needed. All time is lazy and includes available archived roots, not deleted/pruned
-history, not guaranteed complete lifetime history. This month and All time have
+**30 days**. Entry starts resumable acquisition for that period. Changing selection
+immediately changes presentation and prioritizes its missing evidence after the
+current finite slice, sharing completed work rather than starting another archive
+scan. Today and 7 days can publish before wider periods **only when independent
+coverage is proved**. On a cold or invalidated archive, metadata cannot exclude old
+roots: unknown execution ends or recent work in old trees may require checking the
+entire archive before even Today is coherent. Recent-first ordering is not a promise
+of earlier short-period completion. Rolling windows mean precisely 7/30 × 24 hours.
+Today/month use the configured timezone, including DST. All time includes available
+archived roots, not deleted/pruned history or guaranteed complete lifetime history.
+This month and All time have
 label-bound hover, keyboard-focus and touch help, including while selected. All five
 buttons retain the same readable selected colors without foreground/background cross-fades.
 First/broader acquisition
-shows honest finite progress and permits cancel; healthy cards have no permanent
+shows the shared 0–100% progress control and permits cancel; healthy cards have no permanent
 Load/Refresh/Cancel toolbar. Smaller cached periods remain usable during All time.
 
 Python owns all arithmetic: canonical event-time deduplicated reference CCost, exact
@@ -338,7 +346,27 @@ AI Stats checks about every **15 minutes**, only while visible and active. Compa
 revision-/pricing-keyed evidence reuses unchanged roots; changed roots use bounded
 historical batches. Ordinary updates retain every card/link, period, focus and scroll
 until one coherent result is ready. The shared one-hour re-entry policy below also
-applies. Existing 120-second/8 MiB finite limits, cancellation and security remain.
+applies. A logical AI Stats acquisition has **no arbitrary total 120-second expiry**:
+each fresh worker handles at most 256 missing roots, using batches of at most 64 and
+the existing maximum four overlapping V2 source reads. Each child still has a
+120-second watchdog; repeated timeouts reduce batches to 16, then one, and a repeated
+one-root stall fails specifically. Every slice rechecks complete catalog membership
+and revisions before publishing a coherent selected-period result. Progress counts
+verified roots; growing/changing coverage may hold its monotonic percentage while
+the displayed denominator changes. No fabricated ETA or partial-scan 100% is shown.
+
+Stable compact evidence is disposable and contains no prompts/session text. Source,
+revision, pricing and algorithm dependencies govern reuse across period changes,
+reload and host restart. Active evidence is refreshed, not reused as stable history.
+Navigating away or hiding the document stops its polling; after 15 seconds with no
+interested tab, the host terminates owned incremental work. Returning resumes from
+valid derived evidence; it never installs a background history daemon. Explicit
+Cancel/shutdown still terminates owned children. Checkpoint storage failure, repeated
+revision churn, source/authentication failure and resource exhaustion produce honest
+errors, never silently truncated totals. Limits remain four pending jobs, one active
+child, sixteen retained results and 8 MiB/result; AI Stats additionally bounds roots
+at 100,000 and retained request/interval facts at 250,000. Other report kinds retain
+their original total 120-second deadline. Security and source read-only ownership remain.
 No new settings, account/provider calls, inference, external assets or browser-stored
 private history are added. [Verification and limits](../development/journal/web/ai-stats.md).
 
@@ -466,7 +494,7 @@ acquisition or client-side valuation. [Verification and limits](../development/j
 | Accounts | `/#/accounts` | Shared live Watch subscription cards, native windows/pace, Today/period CCost, Capacity and account-specific warnings; no finite report |
 | Sessions | `/#/sessions` | Live six-column catalog, 50 sessions/page, globally sorted canonical keys and stable older-page membership; available archived roots included |
 | Session detail | `/#/sessions/<id>` (legacy `/live` alias) | Complete chronological live history, no user-facing pages or modes; links from session names and Watch |
-| AI Stats | `/#/ai-stats` (legacy `/#/cost-per-hour` alias) | Ten baseline cards plus a conditional matched-input fact, five periods, automatic 30-day first load, lazy broader history, quiet ~15-minute visible-page checks and shared one-hour re-entry policy |
+| AI Stats | `/#/ai-stats` (legacy `/#/cost-per-hour` alias) | Ten baseline cards plus a conditional matched-input fact, five selectable periods, resumable bounded acquisition, conditional shorter-period milestones, quiet ~15-minute visible-page checks and shared one-hour re-entry policy |
 | Comparisons | `/#/comparisons` | All available root history, exact first-input matching, ten groups/page with every individual repetition, first-prompt metrics and qualified local gaps; quiet ~five-minute visible-page checks |
 | Historical Token Mix | `/#/token-mix` | Automatic visible first load, then quiet ~five-minute visible-page checks. One total/token-volume summary and two 13-column model/publisher tables split Input / Cached input / Cache write / Output percentages and category CCost, with Prompts/Calls/Tokens/Total CCost. Every column sorts locally by exact source values; all rows and full names remain readable through horizontal panning. Partial/unavailable coverage stays explicit. |
 | Web Settings | `/#/settings` | Theme, CCost display, Mini position/size and Quota display; inherited/explicit intent, authenticated narrow config read/write, no report acquisition |
@@ -938,7 +966,7 @@ Reports select `kind`: `normal` (Models, including report account DTOs), `all-mo
 - Twelve HTTP workers/admitted sockets, with at most four authenticated streams so eight ordinary/control slots remain; bounded listen backlog. Two-second socket timeouts and an absolute five-second ordinary request/header deadline, including dripping clients. Only fully authenticated SSE cancels that deadline and retains its slot until disconnect, expiry or terminal shutdown. Connections close after one request.
 - Request line <=2048 bytes, aggregate headers <=16 KiB, individual header lines <4096 bytes, JSON body <=4096 bytes. Duplicate headers/JSON keys, transfer encoding, non-JSON controls and unsupported methods are denied. No autoreload or directory listing.
 - At most four queued/running reports and one spawned analysis process. Identical in-flight requests coalesce. Sixteen jobs retained; old completed/cancelled entries are evicted, so a missing ID is not an empty report.
-- A fresh ReportApplication/ReportService owns each job's mutable integrations and one-shot account cleanup. Existing integration request timeouts apply; a 120-second hard process deadline bounds whole-job work. Cancellation/shutdown terminate and join only that owned process. No live scheduler is shared or cleaned by these one-shot jobs.
+- A fresh ReportApplication/ReportService owns each child's mutable integrations and one-shot account cleanup. Existing integration request timeouts apply; a 120-second hard process deadline bounds work. Only AI Stats can resume one logical job across finite children; other jobs retain their total deadline. Cancellation/shutdown terminate and join only that owned process. No live scheduler is shared or cleaned by these one-shot jobs.
 - Each finite report child monitors multiprocessing's exact parent kernel sentinel. A crashed/force-stopped Web parent or lost ownership proof exits that child nonzero, including a blocked scan; PID reuse is not a liveness signal. This child-only safety monitor stops/joins on ordinary completion.
 - Results are limited to 8 MiB per job. Oversize: `result_too_large`; scope the request. Long Token Mix may time out but never blocks shutdown. Progress exports only approved phase/stage/counts and a stale-safe job sequence, not source text. Child IPC coalesces at 100ms; host drains at most 64 messages/turn.
 

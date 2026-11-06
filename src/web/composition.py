@@ -38,9 +38,14 @@ def application(request):
             cache_repository=cache, config=config, now_ms=now, progress=progress,
             cache_token_mix_history=True)
         service.catalog = catalog  # Pin one coherent valuation/catalog for this job.
+        if request.kind is ReportKind.AI_STATS:
+            service.stats_slice_roots = getattr(request, 'slice_roots', None)
+            service.stats_batch_size = getattr(request, 'batch_size', 64)
+            service.stats_scan = getattr(request, 'scan', None)
         return service
 
-    return ReportApplication(factory)
+    observation = getattr(request, 'observation_ms', 0)
+    return ReportApplication(factory, clock=(lambda: observation) if observation else None)
 
 
 def live_acquisition(*, selection=None):

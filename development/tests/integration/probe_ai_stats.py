@@ -25,7 +25,11 @@ def isolated_report(sender, request):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--cold-and-warm', action='store_true')
+    parser.add_argument('--budget-seconds', type=float, default=600,
+                        help='Bounded probe budget per logical attempt; child watchdogs remain unchanged')
     args = parser.parse_args()
+    if not 1 <= args.budget_seconds <= 1800:
+        parser.error('budget-seconds must be between 1 and 1800')
     temporary = tempfile.TemporaryDirectory(dir=os.environ['OPENCODE_TOOLKIT_SESSION_SCRATCH'], prefix='ai-stats-cache-') if args.cold_and_warm else None
     if temporary:
         os.environ['COST_GUARD_PROBE_CACHE'] = temporary.name
@@ -38,7 +42,7 @@ def main():
                     jobs._jobs[key]['finished_at'] = 0
                 started = time.monotonic()
                 key = jobs.submit(request)
-                while time.monotonic() - started < 130:
+                while time.monotonic() - started < args.budget_seconds:
                     jobs.tick()
                     job = jobs.snapshot(key)
                     if job['status'] not in ('queued', 'running'):
@@ -49,7 +53,7 @@ def main():
                         print(json.dumps(dict(scope=scope, attempt=attempt, status=job['status'],
                             seconds=round(time.monotonic() - started, 3), error=job['error'],
                             result_error=result.get('error'), periods=len((result.get('view') or {}).get('ai_stats', [])),
-                            progress=job.get('progress'), metric_states=states)), flush=True)
+                             progress=job.get('progress'), work=job.get('work'), metric_states=states)), flush=True)
                         break
                     time.sleep(.05)
                 else:

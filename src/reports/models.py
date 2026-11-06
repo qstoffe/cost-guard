@@ -263,4 +263,5 @@ class ReportProjection:
     active_hours: tuple[ActiveHour, ...] = ()
     model_catalog: ModelCatalogProjection | None = None
     ai_stats: tuple[StatsPeriod, ...] = ()
+    ai_stats_work: Mapping[str, object] = field(default_factory=dict)
     comparisons: MatchesPage | None = None

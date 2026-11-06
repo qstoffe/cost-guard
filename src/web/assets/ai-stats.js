@@ -21,6 +21,58 @@ const AIStatsView = (() => {
         row.metrics.filter(metric => metric.metric === key && typeof metric.display?.value === 'string' &&
           typeof metric.display?.trait === 'string').length === 1));
   }
+  function remember(state, result) {
+    if (!valid(result)) return;
+    state.statsResults ||= new Map();
+    for (const row of result.view.ai_stats) {
+      const old = state.statsResults.get(row.period);
+      if (!old || CachedReports.observation(old) <= CachedReports.observation(result))
+        state.statsResults.set(row.period, result);
+    }
+    state.result = state.statsResults.get(state.period) || null;
+  }
+  function observe(state, job) {
+    if (job.result) remember(state, job.result);
+    const scope = job.result?.view?.ai_stats_work?.scopes?.[state.period];
+    if (!scope) {
+      const progress = job.progress || {};
+      if (progress.stage === 'history-load' && progress.total > 0) {
+        state.percent = Math.max(state.percent || 0, Math.min(95, Math.floor(30 + 65 * progress.completed / progress.total)));
+        state.stageLabel = 'Verifying shared history';
+        state.stage = `${state.stageLabel} (${progress.completed}/${progress.total} roots)`;
+      } else if (['queued', 'pricing', 'catalog'].includes(progress.phase) && !progress.stage) {
+        ReportLoading.observe(state, progress);
+      }
+      // Slice-local finalization is NOT logical report finalization.
+      return true;
+    }
+    // Scope-level counts, not batch-local progress or time, own the central bar.
+    if (state.statsCoverage?.period !== state.period || state.statsCoverage.attempt !== state.attempt)
+      state.statsCoverage = {period:state.period, attempt:state.attempt, total:scope.total, revised:false};
+    state.statsCoverage.revised ||= scope.total > state.statsCoverage.total;
+    state.statsCoverage.total = scope.total;
+    const ready = scope.ready && job.result.view.ai_stats?.some(row => row.period === state.period);
+    state.percent = Math.max(state.percent || 0, ready ? 100 :
+      Math.min(99, Math.floor(30 + 65 * scope.completed / Math.max(1, scope.total))));
+    let label = ready ? 'Report ready' : job.status === 'queued' ? 'Waiting for report slot; verified work retained' :
+      'Verifying shared history; unknown older roots may affect this period';
+    if (!ready && state.statsCoverage.revised) label += '; history grew, total revised';
+    state.stageLabel = label;
+    state.stage = `${label} (${scope.completed.toLocaleString()}/${scope.total.toLocaleString()} roots)`;
+    return true;
+  }
+  async function prioritize(state, api) {
+    if (state.priorityUpdate || !state.active) return;
+    state.priorityUpdate = true;
+    try {
+      let sent;
+      do {
+        sent = state.request.stats_scope;
+        await api('/api/reports', {kind: 'ai-stats', stats_scope: sent});
+      } while (state.loading && state.active && sent !== state.request.stats_scope);
+    } catch (_) { /* The normal polling/admission path reports authoritative errors. */ }
+    finally { state.priorityUpdate = false; }
+  }
   class View {
     constructor(select) {
       const e = ReportView.element;
@@ -101,5 +153,5 @@ const AIStatsView = (() => {
     }
     attach(parent) { if (parent.firstChild !== this.root) parent.replaceChildren(this.root); }
   }
-  return {View, valid};
+  return {View, valid, remember, observe, prioritize};
 })();

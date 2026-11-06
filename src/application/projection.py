@@ -187,6 +187,10 @@ def project(report, timezone_id="UTC", ccost_display_unit="credits", *, prompt_d
             metrics=tuple(fields(metric, 'metric value status session_id session_title detail reasons') for metric in item.metrics),
             matched=fields(item.matched, 'metric value status session_id session_title detail') if item.matched else None)
             for item in report.ai_stats),
+        ai_stats_work=record(scopes=record(**{key: record(**value)
+            for key, value in report.ai_stats_work.get('scopes', {}).items()}),
+            **{key: report.ai_stats_work[key] for key in ('completed', 'total', 'remaining')
+               if key in report.ai_stats_work}) if report.ai_stats_work else None,
         comparisons=comparisons_page(report.comparisons),
         accounts_quotas=accounts(report.accounts_quotas), notes=report.notes,
         range_comparison=comparison(report.range_comparison) if report.range_comparison else None,
