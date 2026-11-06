@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v80.180, 2026-11-06), the supported distribution.
+Use **current `main`** (v80.181, 2026-11-06), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -361,7 +361,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.180 (2026-11-06):** Mini Watch defaults to measured Fit on open near 650 outer DIPs, with two running-row capacity and all subscription rows. Earlier Sessions clicks grow/shrink; passive Live updates never resize. Separate position/size preferences honestly describe native browser coupling and scroll fallbacks. See [Mini Watch](docs/web-mini-watch.md).
+**v80.181 (2026-11-06):** Web Settings uses compact, aligned Setting / Value rows without nested headings or a framed panel. Labels and current values have contextual help; supported Chrome/Edge native pickers explain each hovered or keyboard-focused choice before saving. Touch/narrow layouts and a native-select Choice help fallback retain accessible explanations. File-backed defaults, confirmed saves and rollback remain unchanged. See [Settings](docs/web-beta.md#web-settings).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

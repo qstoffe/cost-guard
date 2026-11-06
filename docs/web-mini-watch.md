@@ -14,7 +14,7 @@ Mini; a fresh page starts Off. Browser PiP replacement may also close it.
 
 ## Position and size preferences
 
-**Settings → Web settings** separates **Mini Watch position** (Default / Remember
+**Settings** separates **Mini Watch position** (Default / Remember
 last / Standard position) and **Mini Watch size** (Default / Fit on open / Remember
 last size). Defaults resolve to **Remember last** and **Fit on open**. Existing
 `miniWatchPlacement` intent is retained; `miniWatchSize` is the only new enum.
@@ -156,7 +156,7 @@ No `Last quota update` or raw source enums appear. Unavailable cost
 shows **(?)** without hiding a known percentage. Partial observed subtotals are
 disclosed in help; the compact cost has no visible estimate decoration.
 
-**Settings → Web settings → Quota display** offers **Default (Used) / Used / Remaining**.
+**Settings → Quota display** offers **Default (Used) / Used / Remaining**.
 Remaining switches this already-open window along with Accounts and full Watch, without
 quota refresh, restart or another stream. A Copilot quota can show **91.6% remaining
 (22912)** beside independently observed Used **(1814)** and native Capacity 25000.

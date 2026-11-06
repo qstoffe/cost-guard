@@ -46,6 +46,10 @@ application and separate Mini Watch document. FR 000601 grouped-detail follow-up
 - Functions read current display tokens. `ContextHelp.refresh(container)` updates
   open help without reopening it; `ReportView.syncUnits` refreshes once after text
   updates. Never price or total data inside a help function.
+- `ContextHelp.dismiss(container)` cancels pending/open help within a disabled or
+  saving subtree without moving focus or dismissing unrelated targets. Settings
+  uses this before locking controls; native option previews stay inside their picker,
+  never a competing tooltip layered over the list.
 - One manual Popover per document holds noninteractive `role="tooltip"` text with
   preserved line breaks. The active trigger references it via `aria-describedby`;
   other description IDs survive. No duplicate native `title`/`aria-description`,
@@ -91,7 +95,7 @@ application and separate Mini Watch document. FR 000601 grouped-detail follow-up
 | Models: More information, price evidence and promotion notes | Concepts shortened into named lines; exact source evidence/terms remain optional visible data |
 | Sessions/detail, Token Mix, active-hour | Shared sort help; Reading this report and Sample/price coverage are line-separated. Session context/retention and finite-capture guidance remain visible; the retired Reports date form has no help surface |
 | Accounts | Observation details stays a keyboard/touch-native disclosure with exact source/native-money/pace/billing facts; no native title explanations existed |
-| Settings | Visible ARIA-associated explanations rewritten; retain native selects, save feedback and default labels, no redundant popovers |
+| Settings | Intrinsic label and current-choice help replace visible paragraphs; native customizable option previews share their text with an accessible fallback disclosure. Retain native focus/selection, save feedback and changing default labels |
 | Navigation / host status | Visible action labels retained. Host warning becomes one real details disclosure, not CSS-hover plus native tooltip. Observation lines shortened; hidden status has no redundant title |
 
 Audit searched every shipped Web asset for `title`, `aria-description`, tooltip roles,

@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.181 — 2026-11-06
+
+- Web Settings replaces nested headings, a framed panel and persistent explanation paragraphs with compact aligned Setting / Value rows. Shared label/value help distinguishes inherited defaults from explicit choices. Feature-detected customizable native pickers show hovered/keyboard-focused option explanations beside the list, with readable touch/narrow previews and a native-select Choice help fallback. Authenticated immediate commitment, confirmed-only application, file preservation and failed-save rollback are unchanged; no new preferences or acquisition are added.
+
 ## v80.180 — 2026-11-06
 
 - Mini Watch separates position and size preferences. Default Fit on open measures actual layout before requesting approximately 650 outer DIPs with two running-row capacity and all accounts; Earlier Sessions activation grows/collapses to measured content. Remember last size retains browser-native dimensions where placement permits. Native screen clamps retain document scrolling; passive Live updates never resize. No stored pixel geometry, extra acquisition owner or release archive is added.

@@ -252,16 +252,22 @@ This is ordinary editor-conflict detection, not a hostile same-user race guarant
 `/api/settings/mini-placement`, `/api/settings/mini-size` and `/api/settings/quota-display` expose effective `webSettings`, symbolic/explicit
 `webSettingsChoices`, current `webSettingsDefaults` and allowlisted error codes,
 behind existing Host/Origin/session/CSRF/body/stopping guards. Early HTML selects
-the effective theme before CSS paint. `assets/settings.js` owns the sole native
-five dropdowns (Default first with a canonical-default-derived label) under Web
-settings and confirmed-only CSS/display-token switching, rollback and
+the effective theme before CSS paint. `assets/settings.js` owns the five native
+dropdowns (Default first with a canonical-default-derived label) in the unframed
+compact Settings grid. Feature-detected base-select/selectedcontent enhances native
+options with a bounded adjacent description column; narrow/touch presentation
+shows inline descriptions, while unsupported browsers keep native selects plus
+a Choice help disclosure. Shared ContextHelp covers separate intrinsic labels and
+current values; save locking dismisses their pending/open help. Native focus,
+typeahead, preview/commit and cancellation are not reimplemented. Confirmed-only CSS/display-token switching, rollback and
 keyboard focus recovery. `#/settings` reads on entry, never submits report jobs,
 restarts the host or polls. Other tabs converge on their next read, not a broadcast.
 Explicit nested theme, including inheriting `default`, overrides legacy user `webTheme`; normalization happens before
 shipped nested defaults merge. Web CCost never follows CLI `ccostDisplayUnit` after
 promotion. Only separately approved promotions get independent Web fields; other
 settings remain shared. CLI/Watch settings and acquisition stay unchanged. Tests: `test_web_theme.py`,
-`integration/web_theme.cjs`, and `integration/web_views.cjs`; evidence/limits:
+`integration/web_theme.cjs`, `integration/web_views.cjs` and real hidden Chrome/Edge
+`integration/probe_web_settings.cjs`; evidence/limits: [compact Settings](../governance/verification/web-settings-597.json),
 [Web settings verification](../governance/verification/web-settings.md); historical
 [theme verification](../governance/verification/web-theme.md).
 
