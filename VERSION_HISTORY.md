@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.190 — 2026-11-06
+
+- Web Comparisons prefixes the existing safe first-input preview with `Prompt 1:` beneath each session-title heading, preserving truncation, privacy/attachment placeholders and the nine-column table. Regression checks retain the shared loader's zero-layout empty notice while preserving meaningful coverage and failure status. Exact first-input matching and accounting are unchanged.
+
 ## v80.189 — 2026-11-06
 
 - Models, Token Mix, AI Stats and Comparisons automatically load on visible first entry with one stable centered determinate percentage/stage component. Observed stage counts advance monotonically without timers or approximation glyphs; usable partial results finish the attempt without claiming full coverage. Typed source readiness and busy slots use bounded cancelable backoff, while permanent errors remain actionable. Quiet refresh retains data, focus and paging with a small updating indicator; finite job/security/deadline and historical freshness limits are unchanged.
