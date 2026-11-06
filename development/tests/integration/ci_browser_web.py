@@ -65,7 +65,7 @@ def main():
                 errors = []
                 page.on("pageerror", lambda error: errors.append(type(error).__name__))
                 page.goto(owner.browser_url())
-                expect(page.locator("#notice")).to_contain_text("Snapshot captured", timeout=30000)
+                expect(page.locator("#result .overview-models")).to_be_visible(timeout=30000)
                 assert "bootstrap" not in page.url
                 assert any(cookie["httpOnly"] for cookie in context.cookies())
                 assert page.locator("#result table").count() > 0

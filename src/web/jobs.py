@@ -403,7 +403,8 @@ class ReportJobs:
                 item[1].get('priority', 1), item[1].get('served_at', 0),
                 item[1]['request'].kind in {ReportKind.TOKEN_MIX, ReportKind.AI_STATS, ReportKind.COMPARISONS},
                 item[1]['queued_at'])):
-            if job['status'] != 'queued' or job.get('priority', 1) >= 3 or time.monotonic() < job.get('not_before', 0):
+            if (job['status'] != 'queued' or job.get('priority', 1) >= 3
+                    or 'not_before' in job and time.monotonic() < job['not_before']):
                 continue
             if key in self._parked:
                 process, receiver = self._parked[key]

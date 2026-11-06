@@ -180,3 +180,38 @@ workers, in 108.1 seconds, including the final source and version metadata. The
 ordinary base was reconciled through backlog-only changes without altering tested
 product code. No product ZIP, tag or GitHub Release was generated. CI/merge results
 belong to the delivery PR rather than a post-merge reporting commit.
+
+## First Linux CI failure and causal repair
+
+The first [CI run](https://github.com/qstoffe/cost-guard/actions/runs/42311802751)
+failed Linux Full and browser checks; Windows and both macOS jobs passed. Canonical
+job-log retrieval returned HTTP 401, so raw logs remain unavailable. Decision
+Delegate authorized the already-discovered annotations endpoint through the same
+GitHub helper/credentials, not another identity, log-download bypass or test waiver.
+Annotations identified the shutdown test and browser readiness assertion.
+
+The shutdown test backdated monotonic time by 121 seconds. Replacing that setup with
+an explicit -121 origin reproduced its host-stop assertion failure locally (one of
+five tests failed). `_start_next` treated absent `not_before` as zero and therefore
+never started this child. It now checks only explicit deadlines. A new deterministic
+test proves parked jobs still wait until their actual deadline, including a negative
+clock origin. All 42 focused shutdown/dispatcher tests then passed in 10.169 seconds.
+The runner's uptime was not measured; reproduction proves the scheduling defect,
+not the exact runner clock value. No wait, watchdog or ownership assertion weakened.
+
+Models now follows historical quiet-refresh presentation, so the browser's old
+"Snapshot captured" notice is not a readiness contract. Its check now waits for the
+actual rendered Models surface; subsequent table, authentication, SSE, navigation
+and accessibility assertions remain. That guarded CI script runs only on real
+hosted CI, not a workstation with spoofed runner variables. Fresh verification of
+the repaired head belongs to the subsequent local record and PR checks.
+
+Repaired-head local verification: Full **155/155 files passed**, four isolated
+workers, 106.9 seconds; validator **eleven passes / zero failures / six unchanged
+advisories**. Hidden authenticated Edge repeated all seven dispatcher scenarios
+successfully. A fresh read-only real Stats startup observed first Live at 1.234 s,
+zero finite jobs before Live, and usable 30-day Stats at 20.105 s with zero omitted
+roots, no host failure and Live running. Own serving/Live threads closed and zero
+parked children remained. This smoke overlapped local checks, so its timings are
+not a new isolated performance comparison. CI result/merge still belong to the PR;
+the failed first run is not reclassified as success.

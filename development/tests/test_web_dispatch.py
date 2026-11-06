@@ -290,6 +290,30 @@ class DispatcherTests(unittest.TestCase):
 
 
 class QuantumProcessTests(unittest.TestCase):
+    def test_parked_job_respects_explicit_backoff_even_with_negative_clock_origin(self):
+        from unittest.mock import Mock
+        jobs = ReportJobs()
+        self.addCleanup(jobs.close)
+        key = jobs.submit(ManagedReport())
+        child, connection = Mock(), Mock()
+        child.is_alive.return_value = False
+        jobs._parked[key] = child, connection
+        jobs._jobs[key]['not_before'] = -120
+
+        with patch('src.web.jobs.time.monotonic', return_value=-121):
+            jobs.tick()
+
+        self.assertEqual('queued', jobs.snapshot(key)['status'])
+        self.assertIsNone(jobs._active)
+        connection.send.assert_not_called()
+
+        with patch('src.web.jobs.time.monotonic', return_value=-120):
+            jobs.tick()
+
+        self.assertEqual('running', jobs.snapshot(key)['status'])
+        self.assertIs(jobs._active[1], child)
+        connection.send.assert_called_once_with('run')
+
     def test_parent_loss_terminates_a_parked_private_stack(self):
         from src.web.process_identity import process_identity, terminate_owned
         code = '''

@@ -2,6 +2,8 @@
 
 Version **v80.197**, 2026-11-07. Implementation and local verification complete;
 the delivery PR and actual `main` read-back determine publication/merge status.
+The first Linux CI run failed; its causal repair and fresh checks are distinguished
+from the earlier successful local baseline below and in the measurement journal.
 
 ## Implemented
 
@@ -30,7 +32,8 @@ the delivery PR and actual `main` read-back determine publication/merge status.
 
 ## Verification and measurements
 
-- **Full: 155/155 files passed**, four isolated workers, 108.1 s. Includes partial
+- **Full: 155/155 files passed**, four isolated workers, 106.9 s after CI repair
+  (earlier baseline: 108.1 s). Includes partial
   and strict source behavior, view parity, config/pricing, fresh/stale boundaries,
   finite queue/size/watchdog/security/lifecycle tests, actual parked-child parent
   crash, 30→7→30 Stats continuation and sleep/missed-period stagger contracts.
@@ -58,6 +61,15 @@ the delivery PR and actual `main` read-back determine publication/merge status.
   Numeric sampled IO and child observations are explained in the measurement journal.
 - **Direct Watch/Stats startup:** first Live at 1.010/1.079 s, zero finite jobs before
   Live; direct Stats usable at 14.623 s. Both own hosts/children closed correctly.
+- **Linux CI repair:** explicit negative-clock setup reproduced the shutdown failure.
+  New jobs no longer inherit a fictitious zero deadline; parked backoff and all
+  ownership/watchdog assertions remain. All 42 focused tests passed. Browser CI now
+  waits for rendered Models, not obsolete notice text, retaining subsequent checks.
+  Full, validator and all seven hidden Edge scenarios passed again after repair.
+  Fresh real Stats startup: first Live 1.234 s, zero finite jobs before Live,
+  Stats usable at 20.105 s, no omitted roots/host failure; own threads/children closed.
+  This concurrent smoke is not an isolated performance comparison. Final CI/merge
+  truth remains on the PR; the original failed run remains failed.
 
 ## Limits and decisions
 
@@ -71,6 +83,8 @@ sleep/resume, multi-hour wall-clock idle, assistive technology and non-Windows l
 installation proof were not performed; deterministic virtual-clock/hidden-interest
 and CI/native checks prove only their stated scopes. Earlier failed prototypes remain
 documented failures, not retrospective passes.
+One Decision Delegate consultation authorized same-identity annotation evidence
+after job logs returned HTTP 401; no log-download bypass or test waiver was granted.
 
 Architecture and current Web documentation were updated; see
 [`data-dispatch.md`](../../../journal/web/data-dispatch.md) for causal measurements,

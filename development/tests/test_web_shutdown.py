@@ -48,7 +48,8 @@ class WebShutdownTests(unittest.TestCase):
         child = ReportProcess()
         jobs = ReportJobs(context=child.context)
         jobs.submit(ReportRequest())
-        with patch('src.web.jobs.time.monotonic', return_value=time.monotonic() - 121):
+        # Monotonic clocks have an unspecified origin; backdating can cross zero.
+        with patch('src.web.jobs.time.monotonic', return_value=-121):
             jobs.tick()  # Expired active worker before the real serving thread starts.
 
         self.failed_report_owner(child, jobs)
