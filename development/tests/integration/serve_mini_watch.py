@@ -21,6 +21,7 @@ from development.tests.fixtures.web_reports import finite_report
 from development.tests.fixtures.web_help_reports import HelpAuditJobs
 from development.tests.fixtures.token_mix_views import TokenMixJobs
 from development.tests.fixtures.models_refresh import ModelsRefreshJobs
+from development.tests.fixtures.ai_stats_views import AIStatsJobs
 from src.application.live_projection import project_live
 from src.application.display import with_display
 from src.application.projection import accounts as project_accounts
@@ -43,6 +44,8 @@ def main():
         jobs = HelpAuditJobs() if sys.argv[2:] == ["--help-audit"] else ReportJobs(target=finite_report)
         if sys.argv[2:] == ['--token-mix']:
             jobs = TokenMixJobs()
+        if sys.argv[2:] == ['--ai-stats']:
+            jobs = AIStatsJobs()
         if sys.argv[2:] == ['--models-refresh']:
             (root / 'pricing-mode.txt').write_text('unchanged')
             jobs = ModelsRefreshJobs(root)
@@ -92,6 +95,15 @@ def main():
                     host.stop()
                     print('{"ok":true}', flush=True)
                     break
+                if command == 'jobs-status' and sys.argv[2:] == ['--ai-stats']:
+                    print(json.dumps(jobs.updates()), flush=True)
+                    continue
+                if command in ('stats-hold-all', 'stats-release-all') and sys.argv[2:] == ['--ai-stats']:
+                    jobs.hold_all = command == 'stats-hold-all'
+                    jobs.jobs = {key: job for key, job in jobs.jobs.items()
+                                 if getattr(job.get('request'), 'stats_scope', '') != 'all'}
+                    print('{"ok":true}', flush=True)
+                    continue
                 if command == "terminal":
                     ended = replace(cards[1], rows=(replace(cards[1].rows[0],
                         prompt=replace(cards[1].rows[0].prompt, in_progress=False, completed_successfully=True)),))

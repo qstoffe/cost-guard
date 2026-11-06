@@ -13,6 +13,7 @@ from typing import Mapping
 
 from src.analysis.quota_pace import QuotaPace
 from src.analysis.active_hour import ActiveHour
+from src.analysis.ai_stats import StatsPeriod
 from src.analysis.context import PriceWarningSeverity
 from src.analysis.valuation import ComparisonCost
 from src.analysis.token_mix import TokenMix
@@ -31,6 +32,7 @@ class ReportKind(str, Enum):
     DATE = "date"
     TOKEN_MIX = "token-mix"
     COST_PER_HOUR = "cost-per-hour"  # Web-only explicit finite capture; no CLI option.
+    AI_STATS = "ai-stats"
 
 
 @dataclass(frozen=True, slots=True)
@@ -258,3 +260,4 @@ class ReportProjection:
     range_comparison: ComparisonCost | None = None
     active_hours: tuple[ActiveHour, ...] = ()
     model_catalog: ModelCatalogProjection | None = None
+    ai_stats: tuple[StatsPeriod, ...] = ()

@@ -3,6 +3,8 @@ const assert = require('node:assert/strict');
 const vm = require('node:vm');
 const fs = require('node:fs');
 const timers = new Set();
+// The HTTP fixture's historical acquisition clock is intentionally near epoch.
+class FixtureDate extends Date { static now() { return 10000000; } }
 const vmTimeout = (callback, milliseconds) => {
   const token = setTimeout(() => { timers.delete(token); callback(); }, milliseconds);
   timers.add(token); return token;
@@ -93,7 +95,8 @@ async function main() {
     detail: current?.detail && {busy:current.detail.busy, total:current.detail.data?.total,
       state:current.detail.data?.state}})`, context)});
   require('../fixtures/web_help_vm.cjs')(vm, context);
-  for (const path of ['/render.js', '/token-mix.js', '/account-cards.js', '/watch.js', '/session.js', '/sessions.js', '/reports.js', '/settings.js', '/app.js']) {
+   context.Date = FixtureDate;
+   for (const path of ['/render.js', '/token-mix.js', '/cached-reports.js', '/ai-stats.js', '/account-cards.js', '/watch.js', '/session.js', '/sessions.js', '/reports.js', '/settings.js', '/app.js']) {
     const response = await fetch(input.origin + path);
     assert.equal(response.status, 200);
     vm.runInContext(await response.text(), context);
@@ -346,14 +349,14 @@ async function main() {
    assert.equal(ids.result.firstChild, deepRoot);
    assert.equal(ids.result.attrs['aria-busy'], 'false');
    assert.equal(ids.notice.textContent, '', 'background work adds no loading panel');
-   vm.runInContext('scheduleTokenMix(); scheduleTokenMix()', context);
+    vm.runInContext('scheduleCachedReport(); scheduleCachedReport()', context);
    assert.equal(reportKinds.length, beforeCheck + 1, 'one refresh in flight');
    releaseDeep(); deepGate = null;
    await until(() => !vm.runInContext('current.loading', context));
    assert.deepEqual(all(ids.result, 'tr'), deepRows, 'coherent refresh keeps unchanged row and heading identities');
    const retainedObservation = vm.runInContext('current.result.observed_at_ms', context);
    failDeep = true;
-   vm.runInContext('current.checkedAt=Date.now()-300001; scheduleTokenMix()', context);
+    vm.runInContext('current.checkedAt=Date.now()-300001; scheduleCachedReport()', context);
    await until(() => ids.notice.textContent.includes('Update delayed'));
    assert.equal(ids.result.textContent, deep);
    assert.equal(vm.runInContext('current.result.observed_at_ms', context), retainedObservation);
@@ -430,7 +433,7 @@ async function main() {
   const reloaded = vm.createContext({LiveConnection: transport, AbortController, clearTimeout, document: context.document, window: context.window, location, history,
      URLSearchParams, fetch: wire, setTimeout: vmTimeout, Date, console});
   require('../fixtures/web_help_vm.cjs')(vm, reloaded);
-   for (const file of ['/render.js', '/account-cards.js', '/watch.js', '/session.js', '/sessions.js']) vm.runInContext(await (await fetch(input.origin + file)).text(), reloaded);
+    for (const file of ['/render.js', '/cached-reports.js', '/account-cards.js', '/watch.js', '/session.js', '/sessions.js']) vm.runInContext(await (await fetch(input.origin + file)).text(), reloaded);
   vm.runInContext(await (await fetch(input.origin + '/reports.js')).text(), reloaded);
   vm.runInContext(await (await fetch(input.origin + '/settings.js')).text(), reloaded);
   ids.notice.textContent = 'reload pending';
@@ -443,7 +446,7 @@ async function main() {
   const watchReload = vm.createContext({LiveConnection: transport, AbortController, clearTimeout, document: context.document, window: context.window, location, history,
     URLSearchParams, fetch: wire, setTimeout, Date, console});
   require('../fixtures/web_help_vm.cjs')(vm, watchReload);
-  for (const script of ['/render.js', '/reports.js', '/settings.js', '/app.js']) {
+   for (const script of ['/render.js', '/cached-reports.js', '/reports.js', '/settings.js', '/app.js']) {
     vm.runInContext(await (await fetch(input.origin + script)).text(), watchReload);
   }
   await until(() => ids.heading.textContent === 'Watch');
@@ -473,7 +476,7 @@ async function main() {
   const unavailable = vm.createContext({LiveConnection: transport, AbortController, clearTimeout, document: context.document, window: context.window, location, history,
     URLSearchParams, fetch: wire, setTimeout, Date, console});
   require('../fixtures/web_help_vm.cjs')(vm, unavailable);
-  for (const script of ['/render.js', '/reports.js', '/settings.js', '/app.js']) {
+   for (const script of ['/render.js', '/cached-reports.js', '/reports.js', '/settings.js', '/app.js']) {
     vm.runInContext(await (await fetch(input.origin + script)).text(), unavailable);
   }
   await until(() => ids.result.textContent.includes('Unable to establish'));

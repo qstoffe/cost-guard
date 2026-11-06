@@ -1,6 +1,7 @@
 """Immediate synthetic reports for UI-help auditing, not report-process proof."""
 from pathlib import Path
 import tempfile
+import time
 from uuid import uuid4
 
 from src.application import ReportApplication
@@ -30,7 +31,7 @@ class HelpAuditJobs:
                     pricing_provider=FakePricingProvider(), account_provider=FakeAccountProvider(),
                     cache_repository=CacheRepository(database), config=config, now_ms=now, progress=progress)
 
-            result = ReportApplication(factory, clock=lambda: 4000).execute(request).to_json()
+            result = ReportApplication(factory, clock=lambda: int(time.time() * 1000)).execute(request).to_json()
         key = uuid4().hex
         self.jobs[key] = dict(id=key, status="failed" if result["error"] else "complete",
                               progress=None, result=result, error=None)

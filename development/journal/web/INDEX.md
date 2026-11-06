@@ -51,6 +51,9 @@ Status: current
   stable keyed cards, hidden Edge/Chrome parity and real V2 account-owner evidence.
 - Historical Token Mix: `development/journal/web/token-mix.md` records dedicated
   exact split tables, coherent quiet refresh and measured incremental acquisition.
+- AI Stats: `development/journal/web/ai-stats.md` records canonical ten-card metrics,
+  shared one-hour re-entry, cold/warm finite timings, split UI/process proof and
+  Decision Delegate-authorized accessibility/documentation exceptions.
 
 Historical observations keep their original dates and exceptions; this routing
 update does not refresh their validity or certify older failed probes. Parent
