@@ -336,7 +336,11 @@ URL alone cannot. Unsupported/missing input and unavailable content are excluded
 never fetched from referenced paths/URLs. Deleted/pruned history cannot be restored.
 
 Each of up to **ten unframed groups per page** has the newest-active member's title,
-a short safe prompt preview, one Watch-style table and a quiet fact strip below it.
+then **`Prompt 1:`** and the existing short safe first-input preview, one Watch-style
+table and a quiet fact strip below it. Long previews keep their truncation ellipsis;
+attachment-only, private/withheld or unavailable input keeps an honest placeholder.
+No prompt column or repeated per-row preview is added. Empty shared notices reserve
+no box or blank height; meaningful progress, coverage and error status stays visible.
 Previous/Next pages groups, not runs; all repeated runs remain separately linked,
 including three executions of the same provider/model/effort. Groups and rows sort
 by newest supported session-tree activity, with deterministic ties. If a page's

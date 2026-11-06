@@ -76,7 +76,7 @@ const ComparisonsView = (() => {
       this.ids = new Set(group.runs.map(run => run.session_id));
       ReportView.text(this.title, `${group.runs[0].title || 'Matched first input'} · ${group.runs.length} sessions`);
       ReportView.text(this.caption, this.title.textContent); this.scroll.setAttribute('aria-label', this.title.textContent);
-      ReportView.text(this.preview, group.preview);
+      ReportView.text(this.preview, `Prompt 1: ${group.preview || 'Input preview unavailable'}`);
       for (const [id, row] of this.rows) if (!this.ids.has(id)) { row.root.remove(); this.rows.delete(id); }
       group.runs.forEach((run, index) => {
         let row = this.rows.get(run.session_id);

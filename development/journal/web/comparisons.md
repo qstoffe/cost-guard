@@ -1,13 +1,16 @@
 # Exact first-input Web Comparisons
 
-Source revision: fcd2e53ab2eb9dc0b22aa12a6fbdbba1d1ea51d8
-Checked revision: fcd2e53ab2eb9dc0b22aa12a6fbdbba1d1ea51d8
+Source revision: 519712251290c878aa829d591617d9f7242154c9
+Checked revision: 519712251290c878aa829d591617d9f7242154c9
 Last checked: 2026-11-06
 Status: current
 
 ## Summary
 
-This assessment covers the source revision above plus FR 000606's feature diff.
+The original implementation evidence below covers base
+`fcd2e53ab2eb9dc0b22aa12a6fbdbba1d1ea51d8` plus FR 000606's feature diff.
+The presentation follow-up covers the current source revision above plus
+FR 000610's display-only diff; it does not revalidate unrelated architecture.
 `src/analysis/input_identity.py` fingerprints complete ordered semantic first-input
 parts, preserving case/whitespace. Recorded inline attachment bytes can prove
 identity; filenames/paths/URLs cannot. Root-only normalized events exclude first
@@ -35,7 +38,47 @@ oversized/unavailable results are not silently truncated into complete evidence.
 AI Stats reuses its own period acquisition for an optional eleventh card, never a
 separate Comparisons archive scan. Unknown coverage omits the optional fact.
 
-## Evidence
+## FR 000610 presentation follow-up
+
+Each group's existing safe ephemeral preview now begins with `Prompt 1:` using
+`ReportView.text`, with an honest unavailable fallback. No backend identity,
+fingerprint, preview length, privacy, acquisition, accounting or table column
+changes were needed. FR 000609 had already added Comparisons' `#notice:empty`
+`display:none` rule; this follow-up preserves it rather than duplicating CSS.
+
+Current verification on Windows, 2026-11-06:
+
+- Full suite: **153 test-file executions, zero failures, 103.0 seconds**.
+  The focused matching file includes 17 tests, including short/truncated/compacted
+  markup/privacy/attachment/unavailable previews and a different-first-input root
+  whose later identical prompt must not join the true first-input pair.
+- Package validator: **11 passes, zero failures**, six existing advisory/design
+  budget warnings. No budgets or baselines changed.
+- Extended hidden fresh-profile Chrome probe: **PASS**, 12 Classic/Web light/dark
+  layouts at 360/1366/1920px. It checks zero empty-notice height/client rects,
+  heading → one labeled preview → unchanged nine-column table, hostile text and
+  all placeholders, no page overflow, meaningful notices/status/alerts, no matches,
+  partial coverage, retained failure, quiet-refresh DOM/focus, paging and Back.
+  Preview/status edge cases are synthetic UI injections; canonical preparation
+  and first-input matching are separately covered by Python tests.
+- Shared-loader hidden probe: **PASS**, 10 checks and 24 layouts, retaining initial
+  observed progress, accessible state, quiet refresh, busy-slot recovery and cancel.
+- Read-only real-installation finite scans: cold **83.026s**, warm **5.014s**, both
+  completed with full observed coverage: **2,764 roots**, 599 excluded, 293 groups,
+  10 displayed groups / 93 separate runs. Warm reused 2,745 compact entries and
+  hydrated 28 roots. These are one installation's observations, not latency promises.
+  No inference, source writes or shared-service stop occurred.
+
+Evidence: `scratch:/full-tests.txt`, `scratch:/validation.txt`,
+`scratch:/comparisons-browser.json`, `scratch:/report-loading/browser.json` and
+`scratch:/comparisons-live.txt`. The integrated browser was disconnected. Initial
+relative-output hidden-browser launches timed out before any page assertion;
+resolving the output/profile path absolutely allowed the Chrome probe to run.
+The probe now normalizes that path and includes browser stderr in CDP timeouts.
+No test/requirement exceptions were requested. Physical desktop appearance,
+screen-reader speech, non-Chromium engines and native macOS were not certified.
+
+## Original implementation evidence
 
 Reproduce deterministic checks with `py -3 development/tools/run_tests.py --suite
 full` and `py -3 development/tools/validate_package.py --working-tree`. The focused

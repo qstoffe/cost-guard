@@ -1,7 +1,8 @@
 // Authenticated shipped HTTP/assets and canonical fixtures in hidden fresh-profile Chromium.
 const assert = require('node:assert/strict'), fs = require('node:fs/promises'), path = require('node:path');
 const {spawn} = require('node:child_process'), readline = require('node:readline');
-const [browser, output] = process.argv.slice(2);
+const [browser, outputPath] = process.argv.slice(2);
+const output = path.resolve(outputPath);
 async function main() {
   await fs.stat(browser); await fs.stat(path.dirname(output));
   const profile = await fs.mkdtemp(path.join(path.dirname(output), 'comparison-browser-'));
@@ -12,8 +13,9 @@ async function main() {
   let serverErrors = ''; server.stderr.on('data', chunk => serverErrors += chunk.toString());
   const child = spawn(browser, ['--headless=new','--no-first-run','--no-default-browser-check','--disable-extensions',
     '--disable-background-networking','--remote-debugging-pipe','--user-data-dir='+profile,'about:blank'],
-    {windowsHide:true,stdio:['ignore','ignore','ignore','pipe','pipe']});
-  const pending = new Map(); let sequence=0, buffer='', errors=[];
+    {windowsHide:true,stdio:['ignore','ignore','pipe','pipe','pipe']});
+  const pending = new Map(); let sequence=0, buffer='', errors=[], browserErrors='';
+  child.stderr.on('data', chunk => browserErrors += chunk.toString());
   child.stdio[4].on('data', chunk => {
     buffer+=chunk.toString(); let index;
     while((index=buffer.indexOf('\0'))>=0) {
@@ -24,7 +26,7 @@ async function main() {
     }
   });
   const command=(method,params={},sessionId)=>new Promise((resolve,reject)=>{
-    const id=++sequence,timer=setTimeout(()=>{pending.delete(id);reject(new Error('CDP timeout: '+method));},15000);
+    const id=++sequence,timer=setTimeout(()=>{pending.delete(id);reject(new Error('CDP timeout: '+method+' '+browserErrors));},15000);
     pending.set(id,{resolve,reject,timer});child.stdio[3].write(JSON.stringify({id,method,params,...(sessionId?{sessionId}:{})})+'\0');
   });
   let tab;
@@ -38,6 +40,9 @@ async function main() {
     throw new Error('Condition not reached: '+expression+' '+JSON.stringify({errors,serverErrors,
       state:await evaluate(`({message:current?.message,loading:current?.loading,section:current?.section})`)}));
   };
+  const emptyNotice=async()=>assert.deepEqual(await evaluate(`(() => {const node=document.getElementById('notice');
+    return {text:node.textContent,display:getComputedStyle(node).display,height:node.getBoundingClientRect().height,
+      rects:node.getClientRects().length};})()`),{text:'',display:'none',height:0,rects:0});
   let evidence={outcome:'FAIL'}, layouts=[]; const checks=[];
   const deadline=setTimeout(()=>{child.kill();server.kill();},150000);
   try {
@@ -52,7 +57,13 @@ async function main() {
     assert.equal(await evaluate(`document.querySelectorAll('.comparison-group').length`),10, JSON.stringify({errors,
       state:await evaluate(`({message:current.message,withheld:current.withheld,groups:current.result.view.comparisons.groups.length,dom:output.innerHTML.slice(0,1200)})`)}));
     assert.equal(await evaluate(`document.querySelectorAll('.comparison-table tbody tr').length`),30);
-    assert.equal(await evaluate(`document.querySelectorAll('.comparison-group img').length`),0);
+     assert.equal(await evaluate(`document.querySelectorAll('.comparison-group img').length`),0);
+     await emptyNotice();
+     assert.equal(await evaluate(`(() => {const node=current.comparisons.status;return node.getAttribute('role')==='status' && node.getBoundingClientRect().height>0 && node.textContent.includes('root sessions checked')})()`),true);
+     assert.equal(await evaluate(`[...document.querySelectorAll('.comparison-group')].every(group=>
+       group.children[0].tagName==='H3' && group.children[1].className==='comparison-preview' &&
+       group.children[1].textContent.startsWith('Prompt 1: ') && group.children[2].querySelector('.comparison-table') &&
+       group.querySelectorAll('.comparison-preview').length===1 && !group.querySelector('tbody .comparison-preview'))`),true);
     assert.equal(await evaluate(`document.querySelector('.comparison-group h3').textContent.includes('Quest <img')`),true);
     assert.deepEqual(await evaluate(`[...document.querySelectorAll('.comparison-table')[0].querySelectorAll('th')].map(n=>n.textContent)`),
       ['Session','Started','Model','Effort','CCost','Duration','Context','Token Mix','Calls']);
@@ -60,10 +71,17 @@ async function main() {
     const comparisonAX=await command('Accessibility.getFullAXTree',{},tab);
     assert.ok(comparisonAX.nodes.filter(n=>n.role?.value==='columnheader').length>=90);
     checks.push('automatic all-history acquisition; ten unframed groups, all three same-model repeats, exact columns, safe titles and links');
-    for(const theme of ['classic','light','dark']) for(const width of [360,1366,1920]) {
-      await command('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false},tab);
-      await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:theme==='dark'?'dark':'light'}]},tab);
-      const layout=await evaluate(`(() => {document.documentElement.dataset.theme=${JSON.stringify(theme==='classic'?'classic':'web')};
+     const previews=['Short input','x'.repeat(120)+'…','Explain <img src=x onerror=alert(1)> & markup',
+       'Attachment input','Input preview withheld (potentially private)','Input preview unavailable'];
+     await evaluate(`window.__comparisonResult=current.result;current.result=structuredClone(current.result);
+       ${JSON.stringify(previews)}.forEach((preview,index)=>current.result.view.comparisons.groups[index].preview=preview);show(current)`);
+     assert.deepEqual(await evaluate(`[...document.querySelectorAll('.comparison-preview')].slice(0,6).map(n=>n.textContent)`),previews.map(text=>'Prompt 1: '+text));
+     assert.equal(await evaluate(`document.querySelectorAll('.comparison-preview *').length`),0);
+     checks.push('one labeled safe first-input preview between heading and unchanged table; short/one ellipsis/markup/attachment/withheld/unavailable cases');
+     for(const theme of ['classic-light','classic-dark','web-light','web-dark']) for(const width of [360,1366,1920]) {
+       await command('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false},tab);
+       await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:theme.endsWith('dark')?'dark':'light'}]},tab);
+       const layout=await evaluate(`(() => {document.documentElement.dataset.theme=${JSON.stringify(theme.startsWith('classic')?'classic':'web')};
         const group=document.querySelector('.comparison-group'), scroll=group.querySelector('.table-scroll'), css=getComputedStyle(group);
         return {overflow:document.documentElement.scrollWidth>innerWidth, border:css.borderTopWidth,
           padding:css.paddingLeft, background:css.backgroundColor, horizontal:scroll.scrollWidth>scroll.clientWidth,
@@ -71,10 +89,14 @@ async function main() {
           numeric:[...group.querySelectorAll('td.numeric')].every(td=>getComputedStyle(td).textAlign==='right')};})()`);
       assert.equal(layout.overflow,false);assert.equal(layout.border,'0px');assert.equal(layout.padding,'0px');
       assert.equal(layout.numeric,true);assert.equal(layout.rowCount,30);
-      if(width===360)assert.equal(layout.horizontal,true);
-      layouts.push({theme,width,...layout});
-    }
-    checks.push('Classic/Web light/dark at 360/1366/1920px; unindented sections, right-aligned metrics, narrow table overflow not page overflow');
+       if(width===360)assert.equal(layout.horizontal,true);
+       await emptyNotice();
+       layouts.push({theme,width,...layout});
+     }
+     await evaluate(`current.result=__comparisonResult;show(current);notice.textContent='Meaningful source warning'`);
+     assert.equal(await evaluate(`notice.getBoundingClientRect().height>0 && getComputedStyle(notice).display!=='none'`),true);
+     await evaluate(`show(current)`);await emptyNotice();
+     checks.push('Classic/Web light/dark at 360/1366/1920px; zero-height/zero-rect empty notice, meaningful notice visible, narrow table overflow not page overflow');
     await command('Emulation.setDeviceMetricsOverride',{width:1366,height:900,deviceScaleFactor:1,mobile:false},tab);
     await evaluate(`document.activeElement.blur();document.querySelector('.comparison-table').scrollIntoView()`);
     const point=await evaluate(`(() => {const r=document.querySelector('.comparison-table th:nth-child(7) button').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`);
@@ -99,15 +121,32 @@ async function main() {
     assert.equal(await evaluate(`document.activeElement===__target && __target.isConnected && current.comparisons.root===__root`),true);
     await evaluate(`ReportView.setUnit('usd',output)`);
     assert.match(await evaluate(`__target.textContent`),/\$/);
-    assert.equal(await evaluate(`__calls`),1);
+     assert.equal(await evaluate(`__calls`),1);
+     await emptyNotice();
     checks.push('rich value help, canonical unit changes without acquisition, quiet refresh retains DOM/focus');
     await evaluate(`current.comparisons.next.click()`);await until(`!current.loading && current.result.view.comparisons.offset===10`);
     assert.equal(await evaluate(`document.querySelectorAll('.comparison-group').length`),1);
-    await evaluate(`current.comparisons.previous.click()`);await until(`!current.loading && current.result.view.comparisons.offset===0`);
+     await evaluate(`current.comparisons.previous.click()`);await until(`!current.loading && current.result.view.comparisons.offset===0`);
+     await emptyNotice();
     await evaluate(`window.__link=document.querySelector('.comparison-table tbody a').hash; location.hash=__link`);
     await until(`location.hash===__link && document.title.startsWith('Session ')`);
-    await evaluate(`history.back()`);await until(`current.section==='comparisons'`);
-    checks.push('Previous/Next page comparison groups, canonical Sessions detail route and browser Back');
+     await evaluate(`history.back()`);await until(`current.section==='comparisons'`);
+     await emptyNotice();
+     checks.push('Previous/Next page comparison groups, canonical Sessions detail route and browser Back');
+     await evaluate(`window.__comparisonResult=current.result;current.result=structuredClone(current.result);
+       Object.assign(current.result.view.comparisons,{groups:[],total:0,complete:true});show(current)`);
+     assert.match(await evaluate(`current.comparisons.status.textContent`),/No verified exact first-input matches/);
+     await emptyNotice();
+     await evaluate(`current.result=structuredClone(__comparisonResult);current.result.view.comparisons.complete=false;
+       current.failed=true;current.message='Synthetic background failure; retained report.';show(current)`);
+     assert.match(await evaluate(`current.comparisons.status.textContent`),/Synthetic background failure.*Partial history coverage/);
+     assert.equal(await evaluate(`current.comparisons.status.getBoundingClientRect().height>0 && document.querySelectorAll('.comparison-group').length===10`),true);
+     await emptyNotice();
+     await evaluate(`current.result=null;show(current)`);
+     assert.equal(await evaluate(`document.querySelector('.comparison-groups [role="alert"]').textContent===current.message`),true);
+     await emptyNotice();
+     await evaluate(`current.result=__comparisonResult;current.failed=false;current.message='';show(current)`);
+     checks.push('complete no-match, partial coverage, retained background failure and unavailable alert remain truthful with no empty shared notice');
     await evaluate(`location.hash='#/ai-stats'`);await until(`current.section==='ai-stats' && current.result && !current.loading`);
     assert.equal(await evaluate(`document.querySelectorAll('.ai-stat').length`),11);
     assert.match(await evaluate(`document.querySelectorAll('.ai-stat')[10].textContent`),/Biggest AI Speed Gap.*3.0×/);

@@ -58,6 +58,35 @@ class MatchedInputsTests(unittest.TestCase):
         b = replace(message, parts=(replace(part, data={'text': 'x' * 1000 + 'b'}),))
         self.assertNotEqual(fingerprint(a), fingerprint(b), 'display preview truncation never controls identity')
 
+    def test_safe_preview_preserves_short_truncated_markup_and_placeholder_meanings(self):
+        message = first_input(next(iter(source(1).snapshots.values())))
+        part = message.parts[0]
+        for text, expected in [('Short input', 'Short input'), ('x' * 121, 'x' * 120 + '…'),
+                               ('  Explain\n <b>this</b>  ', 'Explain <b>this</b>'),
+                               ('password=synthetic', 'Input preview withheld (potentially private)')]:
+            with self.subTest(text=text):
+                changed = replace(message, parts=(replace(part, data={'text': text}),))
+
+                self.assertEqual(expected, preview(changed))
+        attachment = replace(part, kind='file', data={'url': 'data:text/plain,a'})
+        self.assertEqual('Attachment input', preview(replace(message, parts=(attachment,))))
+        self.assertEqual('Input preview unavailable', preview(None))
+
+    def test_equal_later_input_in_a_different_root_never_joins_the_first_input_pair(self):
+        history = source(2, repeats=2)
+        matched = first_input(history.snapshots['root-0000']).parts[0].data['text']
+        snapshot = history.snapshots['root-0003']
+        first, response, later, final = snapshot.messages
+        messages = (replace(first, parts=(replace(first.parts[0], data={'text': 'Different first input'}),)),
+                    response, replace(later, parts=(replace(later.parts[0], data={'text': matched}),)), final)
+        history.snapshots['root-0003'] = replace(snapshot, messages=messages,
+            parts=tuple(part for message in messages for part in message.parts))
+
+        result = self.service(history).build(ReportRequest(ReportKind.COMPARISONS)).comparisons
+
+        self.assertEqual(1, result.total)
+        self.assertEqual(['root-0001', 'root-0000'], [run.session_id for run in result.groups[0].runs])
+
     def test_synthetic_child_subtask_and_partial_history_never_promote_a_later_prompt(self):
         snapshot = next(iter(source(1).snapshots.values()))
         self.assertIsNone(first_input(replace(snapshot, complete=False)))
