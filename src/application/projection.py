@@ -184,7 +184,7 @@ def project(report, timezone_id="UTC", ccost_display_unit="credits", *, prompt_d
         prompt_blocks=tuple(block(item, source_complete=not report.source_warnings, details=prompt_details) for item in report.prompt_blocks),
         active_hours=tuple(hourly(item) for item in report.active_hours),
         ai_stats=tuple(record(period=item.period, start_ms=item.start_ms, end_ms=item.end_ms,
-            metrics=tuple(fields(metric, 'metric value status session_id session_title detail') for metric in item.metrics),
+            metrics=tuple(fields(metric, 'metric value status session_id session_title detail reasons') for metric in item.metrics),
             matched=fields(item.matched, 'metric value status session_id session_title detail') if item.matched else None)
             for item in report.ai_stats),
         comparisons=comparisons_page(report.comparisons),

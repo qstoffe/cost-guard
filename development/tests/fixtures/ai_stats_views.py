@@ -15,6 +15,40 @@ from .synthetic_month import SyntheticMonthSource
 from .token_mix_views import TokenMixJobs
 
 
+def evidence_views():
+    """Canonical, explicitly synthetic period states, with no browser-invented causes."""
+    from decimal import Decimal
+    from src.analysis.ai_stats import StatsRoot, period_stats
+    from src.analysis.models import TraceEntry
+    from src.application.projection import project
+    from src.domain import ModelRef, TokenUsage
+    from src.reports import ReportRequest
+    from src.reports.models import ReportProjection
+
+    now = int(time.time() * 1000)
+    at = now - 3_600_000
+    entry = TraceEntry('root', 'prompt', 'message', None, at, 0,
+                       ModelRef('synthetic', 'model'), None, TokenUsage(input=4))
+    root = StatsRoot('root', 'Synthetic record', (entry,), ((at, 3_600_000, False),))
+    missing = replace(root, entries=(replace(entry, tokens=TokenUsage(input=4, known_fields=())),))
+    base = stats_result(ReportRequest(ReportKind.AI_STATS, stats_scope='all'))
+    cases = (
+        ('complete', (root,), True, Decimal(4)), ('empty', (), True, Decimal(4)),
+        ('source-gap', (root,), False, Decimal(4)),
+        ('unknown-duration', (replace(root, intervals=((at, None, False),)),), True, Decimal(4)),
+        ('missing-price', (root,), True, None), ('missing-telemetry', (missing,), True, Decimal(4)),
+        ('pending-usage', (replace(root, cost_pending=True),), True, Decimal(4)),
+        ('provisional', (replace(root, intervals=((at, 3_600_000, True),)),), True, Decimal(4)),
+    )
+    result = []
+    for name, roots, complete, price in cases:
+        period = period_stats(roots, lambda *_: price, period='all', start=None, now=now,
+                              zone='UTC', source_complete=complete)
+        view = project(ReportProjection(ReportKind.AI_STATS, 'AI Stats', 'SYNTHETIC', ai_stats=(period,))).to_json()
+        result.append(dict(name=name, result={**base, 'view': view}))
+    return result
+
+
 def stats_result(request):
     with tempfile.TemporaryDirectory() as tmp:
         database = CacheDatabase(Path(tmp))
@@ -23,14 +57,18 @@ def stats_result(request):
         # A literal hostile title must remain text in the two record links.
         for sid, snapshot in tuple(source.snapshots.items()):
             root = replace(snapshot.root, title='Quest <img src=x onerror=alert(1)> — ' + sid)
-            source.snapshots[sid] = replace(snapshot, root=root, sessions=(root,))
+            source.snapshots[sid] = replace(snapshot, root=root, sessions=(root,), complete=True)
 
         def factory(now, progress):
             return ReportService(selection=SourceSelection(source, 'v2', (), source.probe()),
                 pricing_provider=FakePricingProvider(), account_provider=None,
                 cache_repository=CacheRepository(database), config={'timezone': 'UTC'}, now_ms=now, progress=progress)
 
-        return ReportApplication(factory).execute(request).to_json()
+        result = ReportApplication(factory).execute(request).to_json()
+        # Keep the baseline at ten cards; optional matched facts have separate probes.
+        for period in result['view']['ai_stats']:
+            period['matched'] = None
+        return result
 
 
 def stats_report(sender, request):

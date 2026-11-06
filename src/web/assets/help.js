@@ -156,11 +156,11 @@ const ContextHelp = (() => {
     return attach(target, content, true);
   }
   // Sorting keeps its original click/focus target; only the visible label owns hover.
-  function heading(action, content) {
+  function heading(action, content, passive = false) {
     const label = action.ownerDocument.createElement('span');
     label.className = 'help-label'; label.textContent = action.textContent;
     action.textContent = ''; action.append(label); action.className = 'help-action';
-    attach(action, content, false, label); return label;
+    attach(action, content, passive, label); return label;
   }
   function value(target, content) {
     target.className = (target.className || '') + ' help-value'; target.tabIndex = 0;

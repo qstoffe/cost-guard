@@ -44,7 +44,8 @@ async function main() {
     const jobs=(await lines.next()).value;
     throw new Error('Condition not reached: '+expression+' '+JSON.stringify({errors,serverErrors,state,jobs}));
   };
-  const layouts=[], textLayouts=[], checks=[]; let evidence={outcome:'FAIL',layouts,textLayouts,checks};
+  const layouts=[], textLayouts=[], contrasts=[], states=[], checks=[];
+  let evidence={outcome:'FAIL',layouts,textLayouts,contrasts,states,checks};
   const deadline=setTimeout(()=>{child.kill();server.kill();},180000);
   try {
     const launch=JSON.parse((await lines.next()).value);
@@ -64,6 +65,7 @@ async function main() {
     assert.equal(await evaluate(`[...document.querySelectorAll('.ai-stat-detail a')].every(a=>a.textContent.includes('<img') && a.hash.startsWith('#/sessions/'))`),true);
     assert.equal(await evaluate(`document.getElementById('refresh').hidden && document.getElementById('cancel').hidden`),true);
     checks.push('automatic default, retired-route alias, ten cards, five exact periods, safe real record links, no healthy toolbar');
+    await require('./probe_ai_stats_states.cjs')({command,evaluate,until,fixture,tab,contrasts,states,checks});
     await require('./probe_ai_stats_layout.cjs')({command,evaluate,until,tab,textLayouts,checks});
     for(const theme of ['classic','light','dark']) for(const width of [360,1366,1920]) {
       await command('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false},tab);
@@ -122,6 +124,8 @@ async function main() {
     await fixture('stats-hold-all');
     await evaluate(`current.statsResults.delete('all'); selectStats(current,'all')`);
     await until(`current.loading && !!current.active`);
+    assert.equal(await evaluate(`!!output.querySelector('progress') && !output.querySelector('.ai-stat') && current.percent<100`),true);
+    assert.doesNotMatch(await evaluate(`output.textContent`),/Unavailable|vault/);
     await evaluate(`selectStats(current,'today')`);
     assert.equal(await evaluate(`!!output.querySelector('.ai-stat') && current.loading`),true,'ready smaller period remains usable during broader acquisition');
     await evaluate(`location.hash='#/accounts'`); await until(`current.section==='accounts'`);
@@ -178,7 +182,7 @@ async function main() {
     assert.equal(one.id,two.id);
     checks.push('two independent tabs exercise fixture scope-job association (production coalescing/process proof is separate)');
     assert.deepEqual(errors,[]);
-    evidence={outcome:'PASS',layouts,textLayouts,checks,limitations:[
+    evidence={outcome:'PASS',layouts,textLayouts,contrasts,states,checks,limitations:[
       'AIStatsJobs uses immediate canonical fixture results; browser proof does not establish production spawning or coalescing.',
       'Production finite-process/coalescing tests and real-source acquisition probes are separate.',
       'Actual screen-reader speech, native physical device/font rendering and non-Chromium engines are unverified.'

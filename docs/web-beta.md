@@ -305,7 +305,10 @@ The exact selector is **Today | 7 days | 30 days | This month | All time**, init
 that coverage. Rolling windows mean precisely 7/30 × 24 hours. Today/month use the
 configured timezone, including DST; a 31-day calendar month extends coverage when
 needed. All time is lazy and includes available archived roots, not deleted/pruned
-history. This month and All time have label-bound help. First/broader acquisition
+history, not guaranteed complete lifetime history. This month and All time have
+label-bound hover, keyboard-focus and touch help, including while selected. All five
+buttons retain the same readable selected colors without foreground/background cross-fades.
+First/broader acquisition
 shows honest finite progress and permits cancel; healthy cards have no permanent
 Load/Refresh/Cancel toolbar. Smaller cached periods remain usable during All time.
 
@@ -319,6 +322,17 @@ or a current streak. Known zero, missing/partial pricing, unknown duration, sour
 gaps and provisional running evidence remain distinct. No unknown denominator can
 create an exact rate. Reference CCost is neither billing nor measured human work,
 salary savings or consultant invoices.
+
+After acquisition, each card explains its own evidence. **No data** means a completely
+observed period has no applicable requests or positive execution-time denominator;
+real zero totals still show zero. **Partial** qualifies an observed cost subtotal,
+never an exact full total. **Provisional** qualifies timing while executions remain
+in progress. **Unavailable** names missing source coverage, execution boundaries,
+reference-price evidence or token telemetry; an unknown cause is explicitly unknown.
+The concise explanation stays in the card and joins its title's contextual help.
+Playful trait lines are reserved for supported complete values. **Loading** belongs
+only to an active/waiting acquisition, not a returned incomplete metric. Switching
+Credits/USD changes formatting, not these states or the underlying evidence.
 
 AI Stats checks about every **15 minutes**, only while visible and active. Compact
 revision-/pricing-keyed evidence reuses unchanged roots; changed roots use bounded

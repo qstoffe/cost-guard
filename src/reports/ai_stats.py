@@ -14,7 +14,7 @@ from .models import ReportKind, ReportProjection
 from .token_mix_cache import cache_key, encode, decode
 from .matched_runs import project_run, encode_run, decode_run
 
-ALGORITHM = 'ai-stats-evidence-2-matched-first-input-1'
+ALGORITHM = 'ai-stats-evidence-3-matched-first-input-1'
 NAMESPACE = 'ai-stats-evidence'
 BATCH_SIZE = 64  # Existing finite historical-report bound; source overlaps at most four reads.
 
@@ -23,6 +23,7 @@ def _payload(bundle, reference, snapshot, config):
     intervals = [(p.prompt_time_ms, p.execution_duration_ms, p.in_progress) for p in bundle.prompts]
     intervals.extend((c.created_at_ms, c.duration_ms, c.in_progress) for c in bundle.compactions)
     return dict(usage=encode(bundle, reference), intervals=intervals,
+                complete=snapshot.complete,
                 matched=encode_run(project_run(snapshot, bundle, reference, config)),
                 pending=any(p.in_progress and not p.entries for p in bundle.prompts))
 
@@ -30,7 +31,8 @@ def _payload(bundle, reference, snapshot, config):
 def _decode(payload, root):
     facts = decode(payload['usage'])
     intervals = payload['intervals']
-    if not isinstance(intervals, list) or type(payload['pending']) is not bool:
+    if (not isinstance(intervals, list) or type(payload['pending']) is not bool
+            or type(payload['complete']) is not bool):
         raise ValueError('invalid_timing')
     for left, duration, running in intervals:
         if (type(left) is not int or duration is not None and (type(duration) is not int or duration < 0)
@@ -40,7 +42,7 @@ def _decode(payload, root):
     if matched is not None and matched.session_id != root.session_id:
         raise ValueError('invalid_match_root')
     return StatsRoot(root.session_id, root.title, tuple(e for e, _p, _c in facts),
-                     tuple(tuple(pair) for pair in intervals), payload['pending']), facts, matched
+                     tuple(tuple(pair) for pair in intervals), payload['pending'], payload['complete']), facts, matched
 
 
 def build_ai_stats(service, scope):
@@ -99,6 +101,7 @@ def build_ai_stats(service, scope):
             bundle = item.bundle
             match_complete = match_complete and item.snapshot.complete and bundle.source_revision == revisions[root.session_id]
             payload = _payload(bundle, reference, item.snapshot, service.config)
+            payload['complete'] &= bundle.source_revision == revisions[root.session_id]
             include(_decode(payload, root))
             service.metrics.add('ai_stats_valued_requests', len(bundle.trace_entries))
             if bundle.cacheable and bundle.source_revision == revisions[root.session_id]:

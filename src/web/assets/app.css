@@ -194,7 +194,9 @@ section > label input { min-width: 0; }
 [data-section="ai-stats"] .report-search, [data-section="ai-stats"] #notice:empty { display: none; }
 [data-section="ai-stats"] #notice { border: 0; padding: 0; background: transparent; }
 .ai-stats-periods { display: flex; flex-wrap: wrap; gap: .35rem; margin: 0 0 1rem; }
+.ai-stats-periods button { transition-property: border-color; }
 .ai-stats-periods [aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.ai-stats-periods .help-label:hover { color: inherit; }
 .ai-stats-section { padding: 0; border: 0; background: transparent; box-shadow: none; }
 .ai-stats-section h3 { margin: 1.1rem 0 .65rem; }
 .ai-stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr)); gap: .8rem; }
