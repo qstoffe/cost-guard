@@ -19,7 +19,7 @@ module.exports = async function sessions({evaluate,until,fixture,command,pipSess
     await fixture(`history-${count}-12`);
     await until(`liveValue.view.history_cards.length===${count} && miniWatch.view.body.rows.length===12 && miniWatch.view.historyRows.size===${Math.min(count,3)}`);
     const value = await evaluate(`(() => {const w=miniWatch.window,d=w.document,v=miniWatch.view;
-      const cells=[...v.prompts.querySelectorAll('tbody td:first-child')].filter(cell=>cell.querySelector('.mini-session-value'));
+      const cells=[...v.prompts.querySelectorAll('tbody td.mini-session-cell')];
       const rect=node=>node.getBoundingClientRect(), active=v.body.rows[0].cells[0];
       return {width:w.innerWidth,height:w.innerHeight, pageOverflow:d.documentElement.scrollWidth>w.innerWidth || d.documentElement.scrollHeight>w.innerHeight,
         headings:[...v.historyBody.parentNode.querySelectorAll('th')].map(cell=>cell.textContent),
@@ -38,11 +38,11 @@ module.exports = async function sessions({evaluate,until,fixture,command,pipSess
     assert.equal(value.pageOverflow,false); assert.equal(value.onlyRegion,true); assert.equal(value.scroll,true);
     assert.equal(value.unframed,true,'earlier table does not inherit generic section-card chrome');
     assert.ok(value.accounts>=32); assert.equal(value.suffixVisible,true); assert.equal(value.ellipsis,true);
-    assert.deepEqual(value.headings,['Session (Total CCost)','Ctx']);
+    assert.deepEqual(value.headings,['Activity','Session (Total CCost)','Ctx']);
     assert.match(await evaluate(`miniWatch.view.historyBody.parentNode.getAttribute('aria-label')`), /latest valid session context \(Ctx\)/);
      assert.equal(await evaluate(`miniWatch.view.historyBody.querySelectorAll('button').length`),0);
     assert.deepEqual(value.ids,Array.from({length:Math.min(count,3)},(_,index)=>'earlier-'+(Math.max(0,count-3)+index)));
-    assert.ok(value.columns.every(count=>count===2)); assert.ok(value.costs.every(cost=>cost===' (4583)'));
+    assert.ok(value.columns.every(count=>count===3)); assert.ok(value.costs.every(cost=>cost===' (4583)'));
      assert.ok(value.accessible.includes(value.title)); assert.match(value.title,/Active long title/);
     if (value.width>=540) assert.equal(value.sameHeaderRow,true);
     await evaluate(`miniWatch.view.prompts.scrollTop=miniWatch.view.prompts.scrollHeight`);
@@ -66,7 +66,7 @@ module.exports = async function sessions({evaluate,until,fixture,command,pipSess
   await evaluate(`miniWatch.view.earlierToggle.click()`);
   assert.equal(await evaluate(`miniWatch.view.earlier.hidden`),false,'mouse/touch click disclosure');
   await evaluate(`miniWatch.view.prompts.scrollTop=0`);
-   await command('Runtime.evaluate',{expression:`document.querySelector('th .help-trigger').focus({preventScroll:true})`},pipSession);
+   await command('Runtime.evaluate',{expression:`document.querySelector('th.mini-session-cell .help-trigger').focus({preventScroll:true})`},pipSession);
   assert.equal(await evaluate(`miniWatch.view.doc.getElementById('context-help').matches(':popover-open')`),true);
    assert.equal(await evaluate(`miniWatch.view.doc.getElementById('context-help').textContent`),'The name of the session.','Session has name-only help');
    await command('Runtime.evaluate',{expression:`document.querySelector('th .mini-session-total').focus({preventScroll:true})`},pipSession);

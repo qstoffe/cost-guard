@@ -679,14 +679,16 @@ remain. No Observation details, Copilot Unaccounted usage or global warning list
 
 **[Mini Watch](web-mini-watch.md)** is an explicit, highlighted-while-On floating view with
 compact per-prompt tables and thin primary-subscription bars on supported desktop browsers.
-The first column right-aligns `(<whole-session CCost>)` beside the independently truncated
+The Session column right-aligns `(<whole-session CCost>)` beside the independently truncated
 title; prompt CCost/Duration/Ctx remain separate. A collapsed-by-default **Earlier Sessions**
-header button shows up to three canonical finished sessions, with whole-session cost and
-current session Ctx, above running prompts in one scroll region. Explicit expansion attempts
-one height-only native enlargement only if it introduces a new vertical session scrollbar;
-collapse restores the pre-expansion size unless the user has resized it. Live updates never
-auto-fit, and refusal/clamping silently retains scrolling. Subscription scrolling
-stays independent. It reuses this tab's live publication and persisted session aggregate,
+header button shows up to three canonical finished sessions as **Activity | Session
+(Total CCost) | Ctx** above running prompts. Activity uses configured-local HH:mm finish
+tokens with full date/offset help, or a truthful unknown; the running table stays five columns.
+Default opening fit targets approximately 650 outer DIPs with a two-prompt height reserve.
+Explicit expansion/collapse permits one native height adjustment, retaining current width
+where native clamps permit; Fit collapse remeasures, while Remember last size restores
+eligible pre-expansion bounds. Live updates never auto-fit. Refusal/clamping retains
+accessible document scrolling and narrow table panning. It reuses this tab's live publication and persisted session aggregate,
 not another Watch engine, acquisition loop or browser-side valuation.
 
 Four isolated session workers publish coherent canonical rows independently, without

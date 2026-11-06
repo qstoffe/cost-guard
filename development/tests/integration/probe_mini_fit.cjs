@@ -169,7 +169,8 @@ async function main() {
       layouts.push({case:theme+'-'+color,...colors,...await read()});
       assert.ok(colors.mini!=='rgba(0, 0, 0, 0)');
     }
-    const capture=await command('Page.captureScreenshot',{format:'png'},pip);
+     await require('./probe_mini_activity.cjs')({evaluate,until,fixture,command,pip,ownerSession:sessionId,layouts,checks:evidence.checks});
+     const capture=await command('Page.captureScreenshot',{format:'png'},pip);
     await fs.writeFile(output.replace(/\.json$/,'-fit.png'),Buffer.from(capture.data,'base64'));
     await close();await settings('miniWatchSize','mini-size','default');
     evidence.checks.push('Absent activation keeps disclosure functional; four position/size intentions and symbolic defaults round-trip; browser coupling/remembered width measured; one SSE/no geometry storage');

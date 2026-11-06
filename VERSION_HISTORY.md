@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.184 — 2026-11-06
+
+- Mini Watch Earlier Sessions adds a narrow Activity column before Session (Total CCost) and Ctx. Canonical server-prepared local HH:mm values expose full date and timezone offset through shared hover/focus/touch help; unknown finishes remain explicit. The running/recent table, history selection, totals, acquisition and click-fit sizing retain their existing contracts.
+
 ## v80.183 — 2026-11-06
 
 - Web AI Stats replaces Cost per Active Hour with ten equal emoji cards, five periods, canonical overlap-safe time/cost facts, real session records and original data-driven trait lines. Automatic 30-day acquisition reuses compact revision-keyed evidence; broader month/all-time coverage is lazy and bounded. Quiet visible-page refresh runs about every 15 minutes. AI Stats and Token Mix share truthful one-hour re-entry withholding/recovery; Token Mix retains its explicit first load, tables/sorts and five-minute cadence. CLI, session-detail rate and live pages keep their independent contracts.

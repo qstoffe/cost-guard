@@ -1,4 +1,4 @@
-// Rendered first-cell alignment and intrinsic suffix widths in actual hidden Document PiP.
+// Rendered Session-cell alignment and intrinsic suffix widths in actual hidden Document PiP.
 const assert = require('node:assert/strict');
 module.exports = async function alignment({evaluate,until,fixture,command,sessionId,pipSession,layouts,checks}) {
   const original = await evaluate(`({width:miniWatch.window.outerWidth,height:miniWatch.window.outerHeight,
@@ -29,9 +29,9 @@ module.exports = async function alignment({evaluate,until,fixture,command,sessio
             const zoom=parseFloat(style(d.documentElement).zoom);
             const errors=[],suffixes=[],titleWidths=[];
             for(const body of [v.body,v.historyBody]) {
-              const table=body.parentNode,header=table.querySelector('th'),head=header.querySelector('.mini-session-heading');
-              const cells=[header,...[...body.rows].map(row=>row.cells[0])];
-              if(table.querySelectorAll('th').length!==(body===v.body?5:2)) errors.push('extra column');
+              const table=body.parentNode,header=table.querySelector('th.mini-session-cell'),head=header.querySelector('.mini-session-heading');
+              const cells=[header,...[...body.rows].map(row=>row.querySelector('td.mini-session-cell'))];
+              if(table.querySelectorAll('th').length!==(body===v.body?5:3)) errors.push('extra column');
               if(head.children[0].textContent!=='Session'||head.children[1].textContent!==' (Total CCost)') errors.push('header text');
               header.querySelector('button').focus();
                if(v.doc.getElementById('context-help').textContent!=='The name of the session.') errors.push('Session header scope');
@@ -79,5 +79,5 @@ module.exports = async function alignment({evaluate,until,fixture,command,sessio
   await fixture('running');await until(`miniWatch.view.body.rows.length===2`);
   await evaluate(`miniWatch.view.earlier.hidden=${original.earlierHidden};
     miniWatch.view.earlierToggle.setAttribute('aria-expanded','${!original.earlierHidden}');miniWatch.view.prompts.scrollTop=0`);
-  checks.push('Both single first cells edge-anchor Session and natural-width parenthesized cost; short/long/fallback titles, all display states, live identity, 3 widths, enlarged font/CSS zoom, themes and units preserve suffixes without page overflow');
+  checks.push('Both Session cells edge-anchor Session and natural-width parenthesized cost; short/long/fallback titles, all display states, live identity, 3 widths, enlarged font/CSS zoom, themes and units preserve suffixes without page overflow');
 };

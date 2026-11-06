@@ -91,9 +91,15 @@ grace policy. No browser timer invents cost, completion or growing elapsed time.
 
 ### Earlier Sessions
 
-The neutral **Earlier Sessions** header button expands a separate two-column table
-**above** the running prompts: **Session (Total CCost)** in one column, plus **Ctx**.
-The first column uses the same left-title/right-total alignment. It starts collapsed
+The neutral **Earlier Sessions** header button expands a separate three-column table
+**above** the running prompts: **Activity | Session (Total CCost) | Ctx**.
+Activity shows only the canonical representative prompt's supported finish in configured
+local **HH:mm** (24-hour, no seconds). Focus, hover or tap the time for the server-prepared
+full **YYYY-MM-DD HH:mm +offset**; DST repeated hours remain distinguishable.
+Unknown finish times show **—** with **Unknown finish time** help, never a source-update
+or current-time substitute. Activity is narrow and nonwrapping; Session keeps the remaining
+elastic width and the same left-title/right-total alignment. The running/recent table
+remains exactly **Session (Total CCost), #, CCost, Duration, Ctx**. Earlier starts collapsed
 every time a fresh Mini window opens; keyboard/click/touch works, and ordinary Live
 updates preserve the choice. The newest **up to three distinct eligible finished
 sessions** come from full Watch's canonical Earlier Prompts selection, displayed
@@ -109,7 +115,7 @@ explicit; confirmed retained/partial totals remain indicated in the row. Collaps
 does not revalue or reacquire history.
 
 Earlier Sessions has no tooltip. Both tables use their actual headings for help.
-Within the same first column, **Session** explains only the name and **(Total CCost)**
+Within the same Session column, **Session** explains only the name and **(Total CCost)**
 only the whole-session cost, with no help in the gap. Hover opens after **600 ms**;
 the passive help cursor is immediate, as are deliberate keyboard-focus/tap requests.
 There is no table-level `?`, row cue or daily/header help icon. The return-to-Watch
@@ -211,7 +217,7 @@ its parenthesized total suffix right-anchored. Numeric metric values remain righ
 The four prompt-metric columns fit their full heading or longest displayed value, without
 wrapping, clipping or ellipses. Session takes all remaining width; its inner layout
 ellipsizes only the title while the full-session cost suffix never shrinks or ellipsizes.
-The complete first-column heading stays readable. Widths adapt to live values/units;
+The complete Session-column heading stays readable. Widths adapt to live values/units;
 an empty message does not expand metric columns. If a manually narrowed window cannot
 fit every heading/metric, the prompt region scrolls horizontally instead of clipping.
 There are no premature vertical max-height caps on prompts, accounts or warnings.
