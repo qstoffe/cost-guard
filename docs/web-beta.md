@@ -75,7 +75,11 @@ errors unless the source supports a specific abort/quota cause.
 
 ## Web settings
 
-**Settings → Web settings**, at `/#/settings`, contains five dropdowns:
+**Settings**, at `/#/settings`, contains five compact dropdown rows, with setting
+names on the left and aligned values on the right. There is no extra page/panel
+heading, frame or persistent explanatory paragraph. Narrow/zoomed layouts stack
+only when needed; touch controls have larger targets. Save/loading/error feedback
+remains visible below the grid.
 
 | Setting | Inherited choice (first) | Explicit choices |
 | --- | --- | --- |
@@ -84,6 +88,21 @@ errors unless the source supports a specific abort/quota cause.
 | Mini Watch position | Default (Remember last) | Remember last / Standard position |
 | Mini Watch size | Default (Fit on open) | Fit on open / Remember last size |
 | Quota display | Default (Used) | Used / Remaining |
+
+Hover/focus a setting label for its scope, or the current value for that choice's
+effect. Labels use the shared 600ms pointer-hover help (immediate keyboard help),
+not a separate question-mark button. In supported modern Chrome/Edge, a native
+customizable picker keeps its standard selection/keyboard behavior and displays
+the hovered or keyboard-focused option's explanation **beside the option list**.
+Keyboard navigation changes only the preview until Enter/Space commits; Escape
+cancels. Touch/narrow pickers show descriptions within the open list, before a
+committing tap. Long descriptions scroll within the bounded native popup.
+
+Browsers without customizable-select/selected-content support retain ordinary
+native selects plus an expandable **Choice help** reference for all options,
+including Default. OS-rendered option popups cannot reliably show per-option
+hover help; the disclosure and current-value help are the accessible alternative,
+not a claim of native option-hover support. No closed row has a help paragraph.
 
 Default labels reflect the current shipped defaults, not fixed lifetime names.
 Classic is dark independently of system preference; Web follows system light/dark.
@@ -155,7 +174,7 @@ A provider-confirmed idle 0%-Used window shows a healthy **100% remaining** bar 
 its CCost Capacity/Remaining can remain unknown; **Window not started** is preserved.
 Native money, Remaining/day/workday pace and CLI orientation remain independent.
 
-Only these four nested fields are writable. A setting stays shared while Web only
+Only these five nested fields are writable. A setting stays shared while Web only
 consumes it; promotion to an editable Web control requires a separate approved
 feature and an independent value in `webSettings`. No other settings migrate here.
 CLI `colorScheme`, custom palettes and unpromoted shared settings are unchanged.
@@ -254,7 +273,7 @@ This is reference spending per active hour, not provider billing, a consultant
 invoice or human hours/salary saved. No model selector, new CLI command/option,
 provider/model call, browser persistence or durable history ledger is added.
 
-**Settings → Web settings → CCost display** switches Python-prepared reference
+**Settings → CCost display** switches Python-prepared reference
 amounts in place, without report jobs or provider refresh. Native money, quotas,
 Unaccounted usage and Relative CCost stay unchanged. The saved independent
 `webSettings.ccostDisplayUnit` applies across routes, publications and live Sessions,

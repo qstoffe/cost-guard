@@ -14,19 +14,40 @@ const WebSettings = (() => {
   };
   const fields = [
     {key: 'theme', id: 'web-theme', label: 'Theme', endpoint: 'theme', choices: [['classic', 'Classic'], ['web', 'Web']],
-      explanation: 'Classic uses a dark CLI-inspired palette. Web follows your system appearance. Terminal colors are unchanged.'},
+      explanation: 'Appearance of Web and Mini Watch. Terminal colors are unchanged.',
+      help: {classic: 'Use the dark, CLI-inspired palette, independent of system appearance.',
+        web: 'Follow your system’s light or dark appearance.'}},
     {key: 'ccostDisplayUnit', id: 'ccost-unit', label: 'CCost display', endpoint: 'ccost', choices: [['credits', 'Credits'], ['usd', 'USD']],
-      explanation: 'Credits and USD show the same estimated reference cost, not your bill. Terminal display is unchanged.'},
+      explanation: 'Units for estimated reference cost in Web and Mini Watch, not your bill. Terminal display is unchanged.',
+      help: {credits: 'Show estimated reference cost in Credits; the underlying cost is unchanged.',
+        usd: 'Show the same estimated reference cost in US dollars, not actual charges.'}},
     {key: 'miniWatchPlacement', id: 'mini-placement', label: 'Mini Watch position', endpoint: 'mini-placement',
       choices: [['remember-last', 'Remember last'], ['standard', 'Standard position']],
-       explanation: 'Applies on the next opening. Remember last asks for the browser’s last position in this live tab; Standard asks for initial browser placement, not exact coordinates. Browser placement and size are coupled: Fit on open prioritizes fit and may reset position. Reload or host restart starts fresh.'},
+      explanation: 'Position requested on the next Mini Watch opening. The browser couples position and size; exact coordinates are not guaranteed.',
+      help: {'remember-last': 'Ask for the browser’s last position in this live tab. Fit on open may reset it. Reload or host restart starts fresh.',
+        standard: 'Ask for initial browser placement, not exact coordinates. This can also reset remembered size.'}},
     {key: 'miniWatchSize', id: 'mini-size', label: 'Mini Watch size', endpoint: 'mini-size',
       choices: [['fit-on-open', 'Fit on open'], ['remember-last', 'Remember last size']],
-       explanation: 'Fit on open requests about 650 outer DIPs wide and measured content height with room for two running prompts. Remember last size lets the browser reuse manual dimensions in this live tab; Standard position can reset them. Earlier Sessions clicks can grow/shrink; passive updates never resize. Screen limits may require scrolling. No pixel geometry is saved.'},
+      explanation: 'Size requested on the next Mini Watch opening. Earlier Sessions clicks can resize it; passive Live updates never do. No pixel geometry is saved.',
+      help: {'fit-on-open': 'Open about 650 outer DIPs wide, fitted to content with room for two running prompts. Earlier Sessions clicks can grow or shrink it; Live updates never resize. Screen limits may require scrolling.',
+        'remember-last': 'Let the browser reuse manual size in this live tab. Standard position can reset it. Reload or host restart starts fresh; Earlier Sessions clicks can still resize.'}},
     {key: 'quotaDisplayMode', id: 'quota-display', label: 'Quota display', endpoint: 'quota-display',
       choices: [['used', 'Used'], ['remaining', 'Remaining']],
-       explanation: 'Remaining needs a known quota limit; unlimited plans still show Used.\nCCost used and the daily remaining allowance are unchanged.'}
+      explanation: 'Orientation of provider-native quotas in Web and Mini Watch. CCost used and the daily remaining allowance are unchanged.',
+      help: {used: 'Show how much of each provider-native quota has been used.',
+        remaining: 'Show the amount left when a quota limit is known. Unlimited plans still show Used.'}}
   ];
+  function choiceHelp(field, choice, defaults) {
+    if (choice !== 'default') return field.help[choice];
+    const value = defaults?.[field.key], label = field.choices.find(([key]) => key === value)?.[1];
+    return label ? `Follow the shipped default, currently ${label}; do not pin this value. ${field.help[value]}` :
+      'Follow the shipped default, rather than pinning an explicit value. Reading the current default…';
+  }
+  function enhancedPicker() {
+    return typeof CSS !== 'undefined' && CSS.supports('appearance', 'base-select') &&
+      CSS.supports('selector(select::picker(select))') && CSS.supports('max-width', 'stretch') &&
+      typeof HTMLSelectedContentElement !== 'undefined';
+  }
   function apply(value, root) {
     const settings = value?.webSettings, choices = value?.webSettingsChoices, defaults = value?.webSettingsDefaults;
     if (fields.some(field => {
@@ -46,22 +67,50 @@ const WebSettings = (() => {
     constructor(api, applySettings = apply) {
       this.api = api; this.applySettings = applySettings;
       const e = ReportView.element;
-      this.root = e('section'); this.root.className = 'web-settings';
-      this.root.append(e('h3', 'Web settings'), e('p', 'Changes save immediately and apply only to Web.'));
+      this.root = e('section'); this.root.className = 'web-settings'; this.root.setAttribute('aria-label', 'Settings');
+      this.enhanced = enhancedPicker();
+      const grid = e('div', undefined, 'settings-grid');
+      const name = e('span', 'Setting', 'settings-column'), value = e('span', 'Value', 'settings-column');
+      name.setAttribute('aria-hidden', 'true'); value.setAttribute('aria-hidden', 'true'); grid.append(name, value);
+      this.root.append(grid);
       this.controls = new Map();
+      this.defaultHelp = new Map();
       this.confirmed = Object.fromEntries(fields.map(field => [field.key, 'default']));
       for (const field of fields) {
         const select = e('select'); select.id = field.id;
-        const inherited = e('option', 'Default'); inherited.value = 'default'; select.append(inherited);
-        for (const [value, text] of field.choices) {
-          const option = e('option', text); option.value = value; select.append(option);
+        select.className = this.enhanced ? 'settings-picker' : '';
+        select.addEventListener('keydown', () => { select.dataset.helpInput = 'keyboard'; });
+        select.addEventListener('pointermove', () => { select.dataset.helpInput = 'pointer'; });
+        if (this.enhanced) {
+          const button = e('button'); button.type = 'button'; button.append(e('selectedcontent')); select.append(button);
         }
         const label = e('label', field.label); label.htmlFor = select.id;
-        const explanation = e('p', field.explanation, 'help-copy'); explanation.id = field.id + '-explanation';
-        select.setAttribute('aria-describedby', explanation.id + ' settings-feedback');
+        ContextHelp.value(label, field.explanation + ' Changes save immediately and apply only to Web.');
+        ContextHelp.attach(select, () => choiceHelp(field, this.confirmed[field.key], this.defaults));
+        const cell = e('div', undefined, 'settings-value'); cell.append(select);
+        const reference = e('dl', undefined, 'settings-choice-reference');
+        for (const [value, text] of [['default', 'Default'], ...field.choices]) {
+          const option = e('option'); option.value = value; option.setAttribute('aria-label', text);
+          const description = e(this.enhanced ? 'span' : 'dd', choiceHelp(field, value, this.defaults), 'settings-choice-help');
+          // selectedcontent clones option children: keep description IDs outside that clone.
+          const accessible = this.enhanced ? e('span', description.textContent) : description;
+          accessible.id = `${field.id}-${value}-help`;
+          if (this.enhanced) { accessible.hidden = true; cell.append(accessible); }
+          if (value === 'default') this.defaultHelp.set(field.key, this.enhanced ? [description, accessible] : [description]);
+          option.setAttribute('aria-describedby', accessible.id);
+          if (this.enhanced) {
+            option.append(e('span', text, 'settings-choice-label'), description);
+          } else { option.textContent = text; reference.append(e('dt', text), description); }
+          select.append(option);
+        }
+        if (!this.enhanced) {
+          const details = e('details', undefined, 'settings-choice-fallback');
+          details.append(e('summary', 'Choice help'), reference); cell.append(details);
+        }
+        select.setAttribute('aria-describedby', 'settings-feedback');
         select.value = this.confirmed[field.key]; select.disabled = true;
         select.addEventListener('change', () => this.save(field));
-        label.append(select); this.root.append(label, explanation);
+        grid.append(label, cell);
         this.controls.set(field.key, select);
       }
       this.feedback = e('p'); this.feedback.id = 'settings-feedback'; this.feedback.setAttribute('role', 'status');
@@ -76,16 +125,22 @@ const WebSettings = (() => {
     }
     lock(busy) {
       this.busy = busy;
+      ContextHelp.dismiss(this.root);
       for (const [key, select] of this.controls) {
         select.disabled = busy || !this.loaded; select.value = this.confirmed[key];
       }
     }
     confirm(value) {
       const state = this.applySettings(value);
-      this.confirmed = state.choices; this.loaded = true;
+      this.confirmed = state.choices; this.defaults = state.defaults; this.loaded = true;
       for (const field of fields) {
-        const label = field.choices.find(([choice]) => choice === state.defaults[field.key])[1];
-        this.controls.get(field.key).firstChild.textContent = `Default (${label})`;
+        const select = this.controls.get(field.key);
+        const label = `Default (${field.choices.find(([choice]) => choice === state.defaults[field.key])[1]})`;
+        select.querySelector('option').setAttribute('aria-label', label);
+        if (this.enhanced) {
+          const option = select.querySelector('option'); option.firstChild.textContent = label; option.setAttribute('aria-label', label);
+        } else { select.firstChild.textContent = label; }
+        for (const description of this.defaultHelp.get(field.key)) description.textContent = choiceHelp(field, 'default', this.defaults);
       }
     }
     async read() {

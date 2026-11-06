@@ -43,10 +43,65 @@
 #mini-watch-toggle { min-height: 2rem; padding: .25rem .65rem; font-size: .8rem; }
 #mini-watch-toggle[aria-pressed="true"]:not(:disabled) { color: var(--accent); background: var(--accent-soft); border-color: var(--accent); }
 #mini-watch-feedback { color: var(--muted); font-size: .8rem; }
-.web-settings { max-width: 42rem; }
-.web-settings select { min-width: 10rem; max-width: 100%; }
+.web-settings { container-type: inline-size; max-width: 42rem; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.settings-grid { display: grid; grid-template-columns: max-content minmax(0, 20rem); gap: .65rem 2rem; align-items: center; }
+.settings-column { color: var(--muted); font-size: .8rem; padding-bottom: .25rem; border-bottom: 1px solid var(--line); }
+.settings-grid > label { justify-self: start; margin: 0; }
+.settings-value { min-width: 0; }
+.web-settings select { width: 100%; min-width: 0; min-height: 2.25rem; height: 2.25rem; padding: .2rem .6rem; font-size: .9rem; }
+.web-settings #settings-feedback { min-height: 1.55em; margin-block: .65rem 0; font-size: .85rem; }
+.settings-choice-fallback { font-size: .8rem; margin-top: .25rem; }
+.settings-choice-reference { padding-block: .5rem; }
+.settings-choice-reference dt { font-weight: 600; margin-top: .4rem; }
+.settings-choice-reference .settings-choice-help { display: block; margin: 0; color: var(--muted); }
+/* Native customizable select: the browser owns focus, commitment, typeahead and dismissal.
+   Descriptions are part of the popup, not a second top-layer tooltip over its options. */
+@supports (appearance: base-select) {
+  .settings-picker, .settings-picker::picker(select) { appearance: base-select; }
+  .settings-picker > button { all: unset; display: contents; }
+  .settings-picker selectedcontent .settings-choice-help { display: none; }
+  .settings-picker::picker(select) { border: 1px solid var(--control-line); border-radius: .55rem;
+    padding: .3rem; color: var(--ink); background: var(--panel); box-shadow: var(--shadow);
+    min-width: anchor-size(width); width: 38rem; max-width: stretch; min-height: 12rem; max-height: stretch; overflow: auto; }
+  .settings-picker option { position: static; display: grid; grid-template-columns: 1rem minmax(0, 1fr); width: 43%;
+    gap: .6rem; align-items: start; padding: .5rem; border-radius: .3rem; cursor: pointer; }
+  .settings-picker option::checkmark { grid-column: 1; }
+  .settings-choice-label { grid-column: 2; }
+  .settings-picker option .settings-choice-help { position: absolute; inset: .8rem .8rem auto 46%;
+    max-height: calc(100% - 1.6rem); overflow: auto; font-size: .85rem; color: var(--muted); white-space: normal; }
+  .settings-picker option:is(:hover, :focus) { background: var(--hover); outline: 1px solid var(--accent); outline-offset: -1px; }
+  @media (hover: hover) {
+    .settings-picker option .settings-choice-help { visibility: hidden; }
+    .settings-picker option:focus .settings-choice-help { visibility: visible; }
+    .settings-picker:not([data-help-input="keyboard"]):has(option:hover) option:not(:hover) .settings-choice-help { visibility: hidden; }
+    .settings-picker:not([data-help-input="keyboard"]) option:hover .settings-choice-help { visibility: visible; }
+  }
+}
+@media (pointer: coarse) { .web-settings select { height: 2.95rem; min-height: 2.95rem; } }
+@media (hover: none) {
+  .settings-picker option { width: 100%; }
+  .settings-picker option .settings-choice-help { position: static; grid-column: 2; max-height: none; }
+}
+@media (max-width: 32rem) {
+  .settings-grid { gap: .6rem 1rem; grid-template-columns: max-content minmax(0, 1fr); }
+  .settings-picker option { width: 100%; }
+  .settings-picker option .settings-choice-help { position: static; grid-column: 2; max-height: none; visibility: visible; }
+}
+@media (max-width: 24rem) {
+  .settings-grid { grid-template-columns: minmax(0, 1fr); gap: .35rem; }
+  .settings-column { display: none; }
+  .settings-value { margin-bottom: .5rem; }
+}
+@container (max-width: 24rem) {
+  .settings-grid { grid-template-columns: minmax(0, 1fr); gap: .35rem; }
+  .settings-column { display: none; }
+  .settings-value { margin-bottom: .5rem; }
+  .settings-picker option { width: 100%; }
+  .settings-picker option .settings-choice-help { position: static; grid-column: 2; max-height: none; visibility: visible; }
+}
 [data-section="settings"] #refresh, [data-section="settings"] #cancel,
-[data-section="settings"] .report-search, [data-section="settings"] #notice { display: none; }
+[data-section="settings"] .toolbar, [data-section="settings"] .report-search, [data-section="settings"] #notice { display: none; }
+[data-section="settings"] main { padding-top: .65rem; }
 @media (max-width: 40rem) { .settings-link { margin-inline-start: 0; } }
 * { box-sizing: border-box; }
 body {

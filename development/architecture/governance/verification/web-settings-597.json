@@ -1,0 +1,56 @@
+{
+  "feature": "FR 000597",
+  "date": "2026-11-06",
+  "productVersion": "80.181",
+  "outcome": "PASS",
+  "browserEvidence": {
+    "method": "Hidden installed browsers, disposable profiles/configuration, shipped HTTP/CSP/CSRF/assets, native CDP pointer/key/touch input",
+    "browsers": ["Chrome/156.0.8078.80", "Edg/156.0.4314.58"],
+    "probe": "development/tests/integration/probe_web_settings.cjs",
+    "checksPassedInBoth": [
+      "All 15 options: real native-popup pointer hover reveals its own nonzero-layout explanation beside the list; opening/preview/Escape makes zero writes",
+      "Native Space, Arrow, Escape preview/cancel; explicit pointer commitment writes exactly once through HTTP and survives reload",
+      "Classic, Web light and Web dark at 1280/520/360 viewport widths and CSS zoom 100/200%: no page overflow, aligned compact controls, no frame, bounded descriptions",
+      "Emulated touch opens the native picker with all descriptions available before a committing tap",
+      "Separate shared setting-label/current-value help, intrinsic help cursor, activation dismissal, retained feedback description ID",
+      "Accessibility tree: Theme combobox name and Web option description; no duplicated IDs from selectedcontent cloning",
+      "Readonly disposable config produces visible failure and rollback; native keyboard Enter retry succeeds",
+      "Changing the disposable shipped Theme default updates native Default label/help without unpinning explicit Classic; selecting Default inherits Web",
+      "Route removal dismisses help without preventing navigation",
+      "Actual disposable-profile browser zoom 200% preserves usable native picker and no page overflow",
+      "Feature-disabled native-select fallback exposes Choice help before commitment and retains a working native keyboard save"
+    ]
+  },
+  "deterministic": {
+    "fullSuite": "149 test files, zero failures, 91.7 seconds",
+    "settings": "web_theme.cjs covers supported API values, inheritance/default changes, one-field saves, confirmed-only application, all failure-code rollbacks, focus and external reads",
+    "help": "web_help.cjs covers the shared 600ms delay, focus/touch, lifecycle, suppression and subtree-scoped dismissal",
+    "package": "Working-tree validator: 11 passes, zero failures; six advisory prose/design warnings, no caps raised"
+  },
+  "realInstallation": {
+    "command": "py -3 development/tests/integration/probe_web_live.py --accounts",
+    "outcome": "PASS",
+    "source": "V2",
+    "liveOwners": 1,
+    "streams": 2,
+    "accountCards": 3,
+    "finiteJobs": 0,
+    "modelCalls": 0,
+    "ownedThreadsAfterClose": 0,
+    "ownedProcessesAfterClose": 0,
+    "sharedOpenCode": "untouched",
+    "limit": "Shared HTTP/SSE/account integration, not real-source visual or complete history coverage. Cancellation during shutdown appears in history-phase observations."
+  },
+  "earlierAttempts": [
+    "Integrated browser was disconnected; no repeated attempt, external visible browser or personal profile used",
+    "Browser iteration caught unsupported active-option detection, zoom overflow and a label attribute suppressing rich option content; corrected and rerun with nonzero-layout assertions and inspected screenshot",
+    "First Full run failed the causally outdated Settings VM assertions; fixture/heading assertions were corrected, final Full passed",
+    "The short real live probe failed probe_owned_workers_remaining while a quota request was pending; the account-aware alternative waited for publication and passed owned-worker shutdown"
+  ],
+  "exceptions": [],
+  "limits": [
+    "No physical desktop/OS input or actual assistive-technology session; accessibility association is native AX-tree proof",
+    "Fallback is feature-disabled real Chromium, not a Firefox/Safari run; OS-rendered native popups cannot promise per-option hover help",
+    "No paid inference, new settings or persistence/network/acquisition path; no release ZIP"
+  ]
+}

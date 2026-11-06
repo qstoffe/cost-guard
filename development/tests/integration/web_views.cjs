@@ -186,7 +186,8 @@ async function main() {
   navigate('settings');
   await until(() => all(ids.result, 'select')[0]?.disabled === false);
   assert.equal(all(ids.result, 'select').length, 5, 'Theme, CCost display, Mini position/size and quota orientation');
-  assert.match(ids.result.textContent, /Web settings/);
+  assert.equal(ids.result.firstChild.getAttribute('aria-label'), 'Settings');
+  assert.equal(all(ids.result, 'h3').length, 0, 'compact Settings has no inner panel heading');
   assert.equal(all(ids.result, 'button').length, 0, 'no save or apply action');
   assert.equal(ids.heading.textContent, 'Settings');
   assert.equal(nav.at(-1).getAttribute('aria-current'), 'page');

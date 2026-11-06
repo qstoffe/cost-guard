@@ -134,30 +134,30 @@ def main():
                 theme = page.get_by_role("combobox", name="Theme", exact=True)
                 expect(theme).to_be_enabled()
                 expect(theme).to_have_value("default")
-                assert theme.locator("option").all_text_contents() == ["Default (Classic)", "Classic", "Web"]
+                assert theme.locator("option").evaluate_all("items => items.map(item => item.getAttribute('aria-label') || item.label)") == ["Default (Classic)", "Classic", "Web"]
                 theme.select_option("web")
                 expect(page.locator("#settings-feedback")).to_have_text("Theme saved.")
                 expect(page.locator("html")).to_have_attribute("data-theme", "web")
                 assert json.loads(user_config.read_text()) == {"webSettings": {"theme": "web"}}
                 ccost = page.get_by_role("combobox", name="CCost display", exact=True)
                 expect(ccost).to_have_value("default")
-                assert ccost.locator("option").all_text_contents() == ["Default (Credits)", "Credits", "USD"]
+                assert ccost.locator("option").evaluate_all("items => items.map(item => item.getAttribute('aria-label') || item.label)") == ["Default (Credits)", "Credits", "USD"]
                 ccost.select_option("usd")
                 expect(page.locator("#settings-feedback")).to_have_text("CCost display saved.")
                 assert json.loads(user_config.read_text()) == {"webSettings": {"theme": "web", "ccostDisplayUnit": "usd"}}
                 placement = page.get_by_role("combobox", name="Mini Watch position", exact=True)
                 expect(placement).to_have_value("default")
                 assert page.locator(".web-settings select").count() == 5
-                assert placement.locator("option").all_text_contents() == ["Default (Remember last)", "Remember last", "Standard position"]
+                assert placement.locator("option").evaluate_all("items => items.map(item => item.getAttribute('aria-label') || item.label)") == ["Default (Remember last)", "Remember last", "Standard position"]
                 size = page.get_by_role("combobox", name="Mini Watch size", exact=True)
                 expect(size).to_have_value("default")
-                assert size.locator("option").all_text_contents() == ["Default (Fit on open)", "Fit on open", "Remember last size"]
+                assert size.locator("option").evaluate_all("items => items.map(item => item.getAttribute('aria-label') || item.label)") == ["Default (Fit on open)", "Fit on open", "Remember last size"]
                 placement.select_option("remember-last")
                 expect(page.locator("#settings-feedback")).to_have_text("Mini Watch position saved.")
                 expect(placement).to_have_value("remember-last")
                 quota = page.get_by_role("combobox", name="Quota display", exact=True)
                 expect(quota).to_have_value("default")
-                assert quota.locator("option").all_text_contents() == ["Default (Used)", "Used", "Remaining"]
+                assert quota.locator("option").evaluate_all("items => items.map(item => item.getAttribute('aria-label') || item.label)") == ["Default (Used)", "Used", "Remaining"]
                 quota.select_option("remaining")
                 expect(page.locator("#settings-feedback")).to_have_text("Quota display saved.")
                 assert page.locator("html").evaluate("el => getComputedStyle(el).getPropertyValue('--bg').trim()") == "#eef2f8"

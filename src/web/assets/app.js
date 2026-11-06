@@ -165,6 +165,7 @@ function show(state) {
     output.setAttribute('aria-busy', state.loading && !state.result ? 'true' : 'false');
   } else { refresh.textContent = 'Refresh snapshot'; refresh.hidden = false; cancel.hidden = false; heading.hidden = false; }
   if (state.section === 'settings') {
+    heading.hidden = true;
     if (!settingsView) settingsView = new WebSettings.View(api, applySettings);
     settingsView.attach(output);
     return;

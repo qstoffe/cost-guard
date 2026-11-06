@@ -8,7 +8,7 @@ Reports and Watch sort credit/balance/budget accounts before usage-limit account
 
 Aligned 10-cell **Used** bars, percentages and Used/Total native amounts share a row. 100% used means exhausted; 0% used means unused. Native money equivalents use the same orientation. Provider-confirmed Unlimited shows native Used when known, without a percentage, finite denominator or Remaining pace. Reports align every quota bar and Remaining using one report-wide label column; Watch globally aligns only primary bars, with individual narrow fallback. Native money/units, reset, status and warnings remain.
 
-Web alone offers **Settings → Web settings → Quota display → Remaining** (Default is Used).
+Web alone offers **Settings → Quota display → Remaining** (Default is Used).
 Finite native percentages, Remaining/Total amounts and bars change together in Accounts,
 Watch and Mini. Unlimited or insufficient evidence keeps Used/unknown; zero Remaining
 remains exhausted/red even with no fill. CCost parentheses now switch between observed

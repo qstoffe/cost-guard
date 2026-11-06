@@ -7,6 +7,31 @@ Status: current
 
 ## Summary
 
+### Compact Settings and native option help — 2026-11-06
+
+FR 000597 (v80.181) replaces the old framed Settings page with aligned compact
+rows. Separate label/current-choice help uses ContextHelp; native customizable
+selects own keyboard/touch/focus/commit/cancel. A stable description column belongs
+to the popup itself, not an overlapping competing tooltip. Narrow/touch pickers
+show inline descriptions; unsupported browsers retain native controls with a
+Choice help disclosure. Never use an option `label` attribute for rich choices:
+the tested Chromium rendered the label but suppressed the rich description.
+Nonzero DOM layout plus real pointer/AX assertions and an inspected screenshot
+distinguish actual help from an invisible string. Description IDs stay outside
+selectedcontent's cloned subtree.
+
+Final Full passed 149 files, validator passed 11 checks (six advisory warnings),
+and installed Chrome/Edge passed option-hover, keyboard/touch, rollback/reload,
+default-change, theme/width/CSS zoom and actual browser-zoom matrices. The short
+real V2 probe failed its owned-worker assertion during a pending quota request;
+the account-aware probe waited for publication and passed with one owner, two
+streams, three accounts and zero owned threads/processes after close. Neither
+probe is complete history or real-source visual coverage. Shared OpenCode was
+untouched. No waiver; physical OS/screen-reader use and non-Chromium engines
+remain unverified. [Detailed evidence](../architecture/governance/verification/web-settings-597.json).
+
+### Historical appearance implementation
+
 FR 000538's candidate on this base introduces one deliberately narrow write owner,
 `src/web/theme.py`, not a generic configuration editor or preferences store.
 `config.validated_values` shares startup validation before minimal JSONC mutation;

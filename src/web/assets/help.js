@@ -112,7 +112,9 @@ const ContextHelp = (() => {
       if (pending && !pending.isConnected) cancelOpening();
       if (active && !active.isConnected) close();
     }).observe(doc.body, {childList: true, subtree: true});
-    const value = {leave, refresh, click(target, passive) {
+    const value = {leave, refresh, dismiss(target) {
+      if (active && target.contains(active) || pending && target.contains(pending)) close(true);
+    }, click(target, passive) {
       if (!passive || active === target && origin === 'pinned') { close(); blocked = target; }
       else { blocked = null; show(target, 'pinned'); }
     }, enter(target, event) {
@@ -170,5 +172,6 @@ const ContextHelp = (() => {
     return attach(target, content, true);
   }
   function refresh(target) { documents.get(target.ownerDocument)?.refresh(target); }
-  return {attach, button, heading, value, refresh, HOVER_DELAY};
+  function dismiss(target) { documents.get(target.ownerDocument)?.dismiss(target); }
+  return {attach, button, heading, value, refresh, dismiss, HOVER_DELAY};
 })();

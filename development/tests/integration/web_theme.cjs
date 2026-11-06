@@ -13,13 +13,23 @@ class Node {
   get firstChild() { return this.children[0]; }
   setAttribute(key, value) { this[key] = value; }
   addEventListener(key, fn) { this.events[key] = fn; }
+  querySelector(selector) {
+    for (const child of this.children) {
+      if (selector === '#' + child.id || selector === child.tag) return child;
+      const found = child.querySelector(selector); if (found) return found;
+    }
+    return null;
+  }
 }
 async function main() {
   const html = new Node('html'); html.dataset.theme = 'classic';
   documentState = {documentElement: html, body: new Node('body')};
   documentState.activeElement = documentState.body;
-  const context = vm.createContext({document: documentState, ReportView: {
-   element(tag, text) { const node = new Node(tag); node.textContent = text; return node; },
+  const help = new Map();
+  const context = vm.createContext({document: documentState, ContextHelp: {
+    value(target, text) { help.set(target, text); }, attach(target, text) { help.set(target, text); }, dismiss() {}
+  }, ReportView: {
+   element(tag, text, className) { const node = new Node(tag); node.textContent = text; node.className = className; return node; },
     setUnit(unit) { documentState.unit = unit; },
     setQuotaMode(mode) { documentState.quotaMode = mode; }
   }});
@@ -40,7 +50,12 @@ async function main() {
    const quota = view.controls.get('quotaDisplayMode');
    assert.equal(view.controls.size, 5);
    const size = view.controls.get('miniWatchSize');
-  assert.equal(view.root.children[0].textContent, 'Web settings');
+  assert.equal(view.root['aria-label'], 'Settings');
+  assert.equal(view.root.querySelector('h3'), null);
+  assert.equal(view.root.querySelector('label').htmlFor, theme.id);
+  assert.match(help.get(view.root.querySelector('label')), /Appearance.*Terminal colors/);
+  assert.equal(view.enhanced, false, 'unsupported browsers retain native selects and a choice-help disclosure');
+  assert.ok(view.root.querySelector('summary'));
   const save = select => select.events.change();
   view.attach(output); const root = output.firstChild;
   await view.read();
@@ -54,7 +69,9 @@ async function main() {
    assert.deepEqual(size.children.map(option => [option.value,option.textContent]),
      [['default','Default (Fit on open)'],['fit-on-open','Fit on open'],['remember-last','Remember last size']]);
    assert.deepEqual(quota.children.map(option => [option.value,option.textContent]),
-     [['default','Default (Used)'],['used','Used'],['remaining','Remaining']]);
+      [['default','Default (Used)'],['used','Used'],['remaining','Remaining']]);
+  assert.match(help.get(theme)(), /Follow the shipped default, currently Classic; do not pin/);
+  assert.match(view.root.querySelector('#mini-size-fit-on-open-help').textContent, /two running prompts.*Live updates never resize/);
   theme.focus(); theme.value = 'web'; const pending = save(theme);
   assert.equal(theme.disabled, true); assert.equal(ccost.disabled, true);
   assert.equal(html.dataset.theme, 'classic', 'never optimistically claim saved theme');
@@ -62,7 +79,8 @@ async function main() {
   release(); await pending;
   assert.equal(html.dataset.theme, 'web');
   assert.equal(documentState.activeElement, theme, 'save restores keyboard focus after native disabled blur');
-  assert.equal(view.feedback.textContent, 'Theme saved.');
+   assert.equal(view.feedback.textContent, 'Theme saved.');
+  assert.match(help.get(theme)(), /system’s light or dark/);
   const count = calls.length; await save(theme);
   assert.equal(calls.length, count, 'unchanged selection never writes');
   view.attach(output); assert.equal(output.firstChild, root, 'heartbeat retains native focus owner');
@@ -93,6 +111,8 @@ async function main() {
   assert.equal(theme.value, 'classic');
   defaults.theme = 'web'; await view.read();
   assert.equal(theme.value, 'classic'); assert.equal(theme.firstChild.textContent, 'Default (Web)');
+  assert.match(view.root.querySelector('#web-theme-default-help').textContent, /currently Web.*system’s light or dark/);
+  assert.match(help.get(theme)(), /dark, CLI-inspired/, 'explicit choice help does not follow a changed default');
   assert.equal(html.dataset.theme, 'classic');
   placement.value = 'remember-last'; const pinPlacement = save(placement); release(); await pinPlacement;
    assert.equal(placement.value, 'remember-last');
