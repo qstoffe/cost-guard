@@ -338,7 +338,7 @@ footer { border-top: 1px solid var(--line); color: var(--muted); font-size: .8re
   background: var(--panel); scrollbar-color: var(--control-line) var(--surface);
 }
 :is(.watch-prompt-table, .sessions-table, .overview-model-table, .token-mix-table) :is(th, td) {
-  position: static; padding: .35rem .6rem; min-width: 0; max-width: none;
+  padding: .35rem .6rem; min-width: 0; max-width: none;
   background: transparent; white-space: nowrap; overflow-wrap: normal;
 }
 :is(.watch-prompt-table, .sessions-table, .overview-model-table, .token-mix-table) th { background: var(--surface); }

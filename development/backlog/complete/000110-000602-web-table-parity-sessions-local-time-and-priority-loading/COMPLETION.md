@@ -55,13 +55,32 @@ the current highest Complete prefix 000109, not Ready priority 000185.
   14,701 bytes. One Live owner/two streams retained; no inference/source writes/shared
   OpenCode stop; zero remaining owned workers and no cleanup failures. The earlier
   probe lost its host during concurrent source edits and is not PASS.
+- **Later bounded V2 observation:** the same 2,731 roots, global index **0→18** and
+  visible coverage **0→16** (16 ready, 33 pending, one retained); 40ms first page,
+  282ms maximum API reply and two-prompt detail in **11.840s** (14,701 bytes).
+  The 44.974s observation retained one owner/two streams, zero inference, no remaining
+  owned workers or cleanup failures. This is not a comparative performance claim.
+
+## CI repair and rendered regression
+
+The first PR run passed Linux Full (149 files, 1,748 tests: 1,727 passed and 21
+platform skips), validation and all three native jobs. Its rendered smoke then
+caught an unintended shared `position: static` override on Sessions headings.
+Removing that one declaration restores the generic sticky Sessions/Token Mix
+headings while preserving the existing Watch/Models static rules. The CI assertion
+was not changed. The hidden browser matrix passed again with new route-specific
+position assertions across all themes, widths and zooms; synthetic discovery was
+**5,051ms**. Post-repair Full passed **149 files, zero failures, 304.3s** using the
+same serial command and unchanged timeouts. Validation passed all 11 checks with
+the same six advisories. Corrected-head CI results belong in the PR/run, not a
+follow-up reporting commit.
 
 ## Limits, decisions and current documentation
 
 Cold full-catalog metric sorting **remained pending**, not fully ready; this retains
 the explicitly scoped limitation documented by FR 000593 and required by this FR.
 Visible-priority is not a guarantee that slow source reads finish instantly: one real
-slice reached 7.005s. Natural new-session arrival, physical desktop/browser zoom,
+slice reached 7.5244s in the later observation. Natural new-session arrival, physical desktop/browser zoom,
 macOS and assistive-technology behavior were not measured. Independent history phase
 error counters do not establish those unrelated lanes' root cause or health.
 

@@ -47,6 +47,13 @@ new-session arrival and physical desktop/browser-zoom/macOS/assistive behavior r
 The first live attempt lost its probe host during concurrent source edits and is not PASS;
 the unchanged-source repeat above passed.
 
+A later 44.974s V2 observation of the same 2,731 roots recorded global coverage 0→18
+and visible coverage 0→16 (16 ready, 33 pending, one retained). First page was 40ms,
+maximum API reply 282ms and the two-prompt detail 11.840s/14,701 bytes. One owner/two
+streams remained, with zero inference, remaining owned workers or cleanup failures.
+The largest index slice was 7.5244s; global metric sort stayed pending. These are
+bounded observations, not a controlled latency comparison or full-catalog readiness.
+
 The first Full run found the obsolete anchor-only pager selector in the real-HTTP VM test;
 it now verifies an enabled button and the same URL-backed older page. A later concurrent Full
 run hit the unchanged Windows PATH-discovery fixture's five-second child-probe boundary;
@@ -58,6 +65,17 @@ scratch summary encountered native `SCRATCH_SESSION_BOUNDARY`; the active read-o
 Delegate directed omission, no substitute read/rebootstrap, and permitted the independent
 owning-transport branch GET. This waived no tests. No new product requirement or test
 exception was requested or approved. The completion retains explicit unmeasured scope.
+
+The first FR 000602 PR run passed Linux Full (149 files; 1,727 passed tests and 21
+platform skips), validation and the three native jobs, then caught a shared CSS
+`position: static` override in the rendered sticky-heading assertion. Removing only
+that declaration preserves generic sticky Sessions/Token Mix headings and the
+existing explicit Watch/Models static rules. The CI assertion remains unchanged.
+The post-repair hidden browser matrix passed with route-specific computed-position
+assertions in every theme/width/zoom combination (5,051ms synthetic discovery);
+validation again passed 11 checks with the six existing advisories.
+Post-repair serial Full passed all **149 files**, zero failures, in **304.3s** with
+unchanged per-file timeouts. Corrected-head CI results are retained in the PR/run.
 
 ## Design and scoped decision
 

@@ -222,7 +222,7 @@ async function main() {
            pageWidth:document.documentElement.scrollWidth,viewport:innerWidth,tables:tables.map(table=>{
              const pan=table.parentNode,th=table.querySelector('th'),cell=table.querySelector('td'),head=getComputedStyle(th),shell=getComputedStyle(pan),button=th.querySelector('button');
              return {columns:table.querySelectorAll('th').length,padding:[head.paddingTop,head.paddingRight],headerHeight:th.getBoundingClientRect().height/Number(getComputedStyle(document.body).zoom),
-               headerBackground:head.backgroundColor,border:shell.borderTopWidth,radius:shell.borderTopLeftRadius,
+               headerBackground:head.backgroundColor,position:head.position,border:shell.borderTopWidth,radius:shell.borderTopLeftRadius,
                divider:getComputedStyle(cell).borderRightWidth,innerVertical:pan.scrollHeight>pan.clientHeight,maxHeight:shell.maxHeight,
                buttonHeight:button.getBoundingClientRect().height/Number(getComputedStyle(document.body).zoom),
                numericFit:[...table.querySelector('tbody tr').cells].every((c,i)=>(table.matches('.watch-prompt-table')?i===2:table.matches('.session-catalog-table')?i===1:i===0)||getComputedStyle(c).whiteSpace!=='nowrap'||c.scrollWidth<=c.clientWidth+1),
@@ -232,6 +232,7 @@ async function main() {
            assert.deepEqual(table.padding,['5.25px','9px']); assert.equal(table.radius,'6px');
            assert.ok(Math.abs(parseFloat(table.border)*zoom-1)<.01); assert.ok(Math.abs(parseFloat(table.divider)*zoom-1)<.01);
            assert.equal(table.innerVertical,false); assert.equal(table.maxHeight,'none'); assert.equal(table.numericFit,true);
+           assert.equal(table.position,['watch','models'].includes(route)?'static':'sticky');
            assert.ok(table.buttonHeight<25, 'compact visible-text header targets');
          }
          layouts.push({route,theme,width,zoom,...facts});
