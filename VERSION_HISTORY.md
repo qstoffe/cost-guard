@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.194 — 2026-11-06
+
+- AI Stats shares source-aware checkpoints across finite workers and period changes, removing only its logical 120-second abandonment. Selected-period progress, stable evidence reuse, active/revision revalidation, bounded stalls/resources and inactive-route teardown retain truthful failures and canonical metric reasons. Unknown old roots remain candidates; earlier Today/7-day completion is conditional on proved independent coverage. Bulk compact persistence avoids duplicate full-analysis cache writes, with repeatable fixed-history benchmarks. Other report deadlines, Watch, pricing and source read-only ownership remain unchanged.
+
 ## v80.193 — 2026-11-06
 
 - Mini Watch Fit on open reserves the widest real or `CCost Today 90 000 · 999 prompts` header across both Earlier Sessions states, with eight CSS pixels of tolerance and measured stable scrollbar space. Equal-width markers prevent disclosure shifts. Reference values exist only in inert measurement clones; real totals, Remember last size, height-only click resizing and passive Live behavior are unchanged. Native clamps remain disclosed and responsive.

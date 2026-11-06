@@ -18,6 +18,7 @@ from src.domain.progress import WorkProgress
 
 from .contracts import ObjectValue, ProgressEvent, ReportError, ReportResult, record
 from .projection import identity, project
+from src.reports.ai_stats import StatsCheckpointError
 
 
 ServiceFactory = Callable[[int, Callable[[str], None]], ReportService]
@@ -26,7 +27,7 @@ _PHASES = frozenset({"pricing", "catalog", "history", "projection", "quotas", "a
 _STAGES = frozenset({"sampling", "availability", "comparison", "models", "quotas", "account-cache",
                      "account-load", "account-analysis", "account-projection", "finalizing",
                      "date-cache", "date-load", "date-catalog-before", "date-messages", "date-catalog-after", "date-analysis",
-                     "history-cache", "history-load", "history-projection"})
+                     "history-cache", "history-load", "history-projection", "history-verify"})
 
 
 class ReportApplication:
@@ -124,6 +125,9 @@ class ReportApplication:
             observe(WorkProgress("Preparing report", "finalizing", 2, 2, stage="finalizing"))
             recovered("application-report")
             return ReportResult(self._instance_id, sequence, now, scope, source, view)
+        except StatsCheckpointError as exc:
+            return ReportResult(self._instance_id, sequence, now, scope, unknown,
+                                error=ReportError(str(exc)))
         except SourceError as exc:
             permission = exc.exception_type == 'PermissionError'
             return ReportResult(self._instance_id, sequence, now, scope,
@@ -160,7 +164,7 @@ class ReportApplication:
     def _validate(request: ReportRequest) -> str | None:
         if not isinstance(request.kind, ReportKind):
             return "invalid_request"
-        if request.stats_scope not in ('30-days', 'month', 'all'):
+        if request.stats_scope not in ('today', '7-days', '30-days', 'month', 'all'):
             return 'invalid_request'
         if type(request.comparison_offset) is not int or request.comparison_offset < 0 or request.comparison_offset % 10:
             return 'invalid_request'

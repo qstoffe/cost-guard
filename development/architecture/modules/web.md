@@ -8,7 +8,8 @@ Status: current
 ## Responsibility and ownership
 
 `assets/report-loading.js` owns the four finite pages' shared
-determinate loader, monotonic stage bands and bounded cancelable admission attempt.
+determinate loader, monotonic stage bands and bounded cancelable admission retries.
+AI Stats alone has a resumable logical attempt; every child retains its finite watchdog.
 `app.js` starts only eligible visible routes, preserves quiet-refresh DOM and applies
 validated results atomically. Historical cache/load/projection observations are
 allowlisted by `application/service.py`; batch counts cannot consume global bands.
@@ -50,15 +51,25 @@ tables, exact integer/Decimal/rational sort keys, prepared unit tokens and text-
 ContextHelp. Keyed reconciliation preserves rows, focus and panning; it never values
 or acquires usage. `ai-stats.js` renders ten equal server-prepared emoji cards, five
 periods, safe record links and shared title help. AI Stats automatically acquires
-30-day coverage; Today/7 days reuse it, month/all extend lazily. `cached-reports.js`
+selected 30-day scope through shared bounded slices; period changes immediately
+reprioritize missing work, while valid compact evidence is shared across scopes.
+Unknown old roots cannot be excluded by metadata, so earlier Today/7-day completion
+is conditional on validated coverage. `cached-reports.js`
 and `app.js` share 5-minute Token Mix / 15-minute AI Stats active-visible scheduling
 and last-success re-entry bands: fresh immediate, overdue through 60m quiet, >60m
 withheld with bounded progress/recovery. Active pages never blank at minute 61.
-Navigation/visibility suspends new checks, not running bounded work. Whole-result
+AI Stats navigation/visibility stops polling; no interested tab for 15 seconds cancels
+its owned child/queue entry, retaining reusable stable checkpoints. Other running
+finite reports keep their original lifecycle. Whole-result
 validation and synchronous retained-node updates preserve focus/scroll. Both
-low-priority kinds coalesce in-flight/recent identical scopes without relabeling
-observations. Compact report evidence belongs to reports, not Live. Scoped update:
-base `42cc45f624d7b9cda560e365e53a93cec36ff7bc` plus FR 000599's diff; other
+historical kinds coalesce without relabeling observations. AI Stats shares one active
+job across all scopes/tabs; latest explicit selection owns the next finite slice.
+`stats_jobs.py` pins observation/scan identity, accepts coherent milestones, bounds
+no-progress retries and shrinks timed-out batches. `jobs.py` retains one fresh child,
+parent-loss termination, fair low-priority requeue and bounded IPC. Only its logical
+AI Stats acquisition may exceed 120 seconds; other report deadlines are unchanged.
+Compact report evidence belongs to reports, not Live. Scoped update:
+FR000614 delta on `d381d399f401c24302fa559eb62ec68e33aba4e7`; other
 contracts retain their original checks. [AI Stats findings](../../journal/web/ai-stats.md)
 and [Token Mix findings](../../journal/web/token-mix.md) separate proof/limits.
 
@@ -343,7 +354,7 @@ Overlapping clicks coalesce; deliberate later launches restart. Private lifetime
 
 Private /control/status, /control/stop and /control/open require a separate secret header, exact Host, empty body and no Origin/Cookie. No control secret reaches browser storage or normal logs. Open issues a fresh one-use fragment without invalidating same-instance browser sessions; old-instance cookies/control fail against replacements. Browser-open failure is distinct from server failure and retryable via native Open.
 
-Twelve HTTP slots admit four streams; ordinary requests have five-second absolute deadlines. Healthy authenticated streams have no rotation timer; two-second writes, ten-second heartbeats, per-turn authorization and three-second native reconnect remain. HTTP health cannot mask an interrupted stream. Connected status is compact; actionable non-sticky notices retain expandable observation details. [FR 000532 evidence](../governance/verification/web-live-stability.md) records real-source soak and fault checks. Finite work: four outstanding jobs, one process, sixteen results, 8 MiB/result, 120 seconds. Detail admission: sixteen observed trees, thirty-two handles; abandoned handles expire after five minutes, never rows/history. Stop publishes terminal state and joins owned work; retained `/api/live` stays readable while stopping. DTOs retain decimal strings/null/provisional values, not raw errors. No same-user-malware boundary.
+Twelve HTTP slots admit four streams; ordinary requests have five-second absolute deadlines. Healthy authenticated streams have no rotation timer; two-second writes, ten-second heartbeats, per-turn authorization and three-second native reconnect remain. HTTP health cannot mask an interrupted stream. Connected status is compact; actionable non-sticky notices retain expandable observation details. [FR 000532 evidence](../governance/verification/web-live-stability.md) records real-source soak and fault checks. Finite work: four outstanding jobs, one process, sixteen results, 8 MiB/result, 120 seconds per child. Only AI Stats resumes across finite children without a total logical deadline; bounded stalls/checkpoint faults/revision churn remain terminal. Detail admission: sixteen observed trees, thirty-two handles; abandoned handles expire after five minutes, never rows/history. Stop publishes terminal state and joins owned work; retained `/api/live` stays readable while stopping. DTOs retain decimal strings/null/provisional values, not raw errors. No same-user-malware boundary.
 
 Guard membership/mtime_ns/size covers shipped Python/assets/Beta launchers/root entries/manifests, excluding development/docs/user config/cache/log/bytecode/environment. No links are followed; stat errors retry the original baseline. Proven change triggers terminal source_changed/shutdown without browser acknowledgement. Identical metadata can be missed; no atomic-update/file-lock guarantee. Changed code needs manual launch.
 

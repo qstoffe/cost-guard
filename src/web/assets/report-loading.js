@@ -120,8 +120,8 @@ const ReportLoading = (() => {
     return host.terminal || ['offline', 'stopped', 'identity_changed', 'authorization_required'].includes(host.kind);
   }
   class Attempt {
-    constructor(clock = () => Date.now()) {
-      this.clock = clock; this.end = clock() + 120000; this.retries = 0;
+    constructor(clock = () => Date.now(), resumable = false) {
+      this.clock = clock; this.end = resumable ? Infinity : clock() + 120000; this.retries = 0;
       this.controller = new AbortController(); this.reason = null;
     }
     cancel(reason = 'cancelled') { this.reason = reason; this.controller.abort(); }

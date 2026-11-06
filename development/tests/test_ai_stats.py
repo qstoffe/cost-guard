@@ -289,7 +289,7 @@ class AIStatsAcquisitionTests(unittest.TestCase):
         self.fresh(original).build(ReportRequest(ReportKind.AI_STATS))
         self.assertEqual(loads + 1, source.load_count)
 
-    def test_31_day_month_extension_and_all_history_are_lazy_reusing_roots(self):
+    def test_unknown_old_roots_are_verified_once_then_reused_across_periods(self):
         now = epoch('2026-10-31T22:00:00+00:00')
         start = epoch('2026-10-01T00:00:00+00:00')
         source = SyntheticMonthSource(2, 3, month_start_ms=start)
@@ -298,7 +298,7 @@ class AIStatsAcquisitionTests(unittest.TestCase):
         original = report_service(self, source, now_ms=now)
         initial = self.fresh(original, now=now).build(ReportRequest(ReportKind.AI_STATS))
         self.assertEqual({'today', '7-days', '30-days'}, {row.period for row in initial.ai_stats})
-        self.assertEqual(1, source.load_count)
+        self.assertEqual(3, source.load_count)
         extended = self.fresh(original, now=now).build(ReportRequest(ReportKind.AI_STATS, stats_scope='month'))
         self.assertIn('month', {row.period for row in extended.ai_stats})
         self.assertEqual(3, source.load_count)
@@ -321,14 +321,16 @@ class AIStatsAcquisitionTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             parse_report({'kind': 'ai-stats', 'stats_scope': 'yesterday'})
 
-    def test_host_coalesces_ai_stats_but_not_distinct_scopes(self):
+    def test_host_shares_acquisition_and_updates_priority_across_scopes(self):
         jobs = ReportJobs()
         self.addCleanup(jobs.close)
         request_30 = ReportRequest(ReportKind.AI_STATS)
         first = jobs.submit(request_30)
         self.assertEqual(first, jobs.submit(request_30))
-        self.assertNotEqual(first, jobs.submit(ReportRequest(ReportKind.AI_STATS, stats_scope='all')))
-        jobs._jobs[first].update(status='complete', finished_at=time.monotonic(), result={'observed_at_ms': 123})
+        self.assertEqual(first, jobs.submit(ReportRequest(ReportKind.AI_STATS, stats_scope='all')))
+        self.assertEqual('all', jobs._jobs[first]['request'].stats_scope)
+        jobs._jobs[first].update(status='complete', finished_at=time.monotonic(),
+            result={'observed_at_ms': 123, 'view': {'ai_stats': [{'period': '30-days'}]}})
         self.assertEqual(first, jobs.submit(request_30))
         self.assertEqual(123, jobs.snapshot(first)['result']['observed_at_ms'])
         jobs._jobs[first]['finished_at'] -= 61

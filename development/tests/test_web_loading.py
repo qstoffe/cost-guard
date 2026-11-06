@@ -12,6 +12,12 @@ class WebLoadingTests(unittest.TestCase):
             cwd=Path(__file__).resolve().parents[2], capture_output=True, text=True, timeout=10)
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
 
+    @unittest.skipUnless(shutil.which('node'), 'optional JS VM unavailable')
+    def test_ai_stats_scope_progress_and_serialized_priority(self):
+        result = subprocess.run(['node', 'development/tests/integration/ai_stats_progress.cjs'],
+            cwd=Path(__file__).resolve().parents[2], capture_output=True, text=True, timeout=10)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+
 
 if __name__ == '__main__':
     unittest.main()

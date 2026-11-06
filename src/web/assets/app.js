@@ -22,6 +22,9 @@ let settingsView = null;
 let cachedReportTimer = null;
 function historical(state) { return !!CachedReports.cadences[state?.section]; }
 function firstReport(state = current) {
+  if (state?.resumeStats && csrf && hostState.writable && !document.hidden && !state.loading) {
+    state.resumeStats = false; acquire(state); return;
+  }
   if (csrf && hostState.writable && state?.request && !state.detail && !state.result && !state.attempted && !document.hidden) {
     state.attempted = true; acquire(state);
   }
@@ -44,10 +47,13 @@ function enterCachedReport(state) {
     acquire(state, !state.withheld);
 }
 function selectStats(state, period) {
+  if (state.period === period) return;
   state.period = period;
-  state.request = {kind: 'ai-stats', stats_scope: ['all', 'month'].includes(period) ? period : '30-days'};
+  state.request = {kind: 'ai-stats', stats_scope: period};
   state.result = state.statsResults?.get(period) || null;
   state.failed = false; state.message = '';
+  ReportLoading.reset(state);
+  if (state.loading) AIStatsView.prioritize(state, api);
   enterCachedReport(state); show(state);
   if (!state.result && !document.hidden) acquire(state);
   scheduleCachedReport();
@@ -248,6 +254,10 @@ function failure(code) {
      pricing_unavailable: 'Reference pricing unavailable.', busy: 'Report service busy. Retry when a slot is available.',
      source_wait_timeout: 'Source startup did not recover within the bounded retry window. Check OpenCode, then Retry.',
      report_slot_timeout: 'Report slots remained busy through the bounded retry window. Wait for another report to finish, then Retry.',
+     ai_stats_slice_timeout: 'An AI Stats work slice repeatedly stalled, even at one root. Saved stable work is retained; check the source and Retry.',
+     ai_stats_revision_churn: 'History kept changing without verified forward progress. Saved stable work is retained; Retry when the source settles.',
+     ai_stats_checkpoint_unavailable: 'AI Stats could not save resumable evidence. Check local cache access or disk space, then Retry.',
+     ai_stats_resource_limit: 'AI Stats reached its bounded history/live-root resource limit. No truncated totals are shown.',
      source_permission_denied: 'Permission denied reading the source. Correct source access before Retry.',
      http_auth_failure: 'Source authentication failed. Restore OpenCode source authorization before Retry.',
      registration_invalid: 'OpenCode source registration is invalid. Repair it before Retry.',
@@ -263,7 +273,7 @@ async function acquire(state, background = false, prices = false) {
   if (state.loading || !hostState.writable) return;
   const request = state.request;
   state.loading = true;
-  const attempt = state.attempt = new ReportLoading.Attempt();
+  const attempt = state.attempt = new ReportLoading.Attempt(undefined, state.section === 'ai-stats');
   state.priceRefreshing = prices; state.priceMessage = '';
   state.failed = false;
   ReportLoading.reset(state);
@@ -275,7 +285,8 @@ async function acquire(state, background = false, prices = false) {
     while (true) {
       attempt.check(hostState);
       try {
-        state.active = (await api(prices ? '/api/models/refresh' : '/api/reports', prices ? {} : request,
+        state.active = (await api(prices ? '/api/models/refresh' : '/api/reports', prices ? {} :
+          state.section === 'ai-stats' ? state.request : request,
           attempt.controller.signal)).id;
         state.progressSequence = 0;
         return;
@@ -288,11 +299,14 @@ async function acquire(state, background = false, prices = false) {
   }
   try {
     await admit();
+    if (state.section === 'ai-stats' && request.stats_scope !== state.request.stats_scope)
+      AIStatsView.prioritize(state, api);
     show(state);
     while (true) {
       attempt.check(hostState);
       const job = await api('/api/jobs/' + state.active, undefined, attempt.controller.signal);
       attempt.check(hostState);
+      const statsProgress = state.section === 'ai-stats' && AIStatsView.observe(state, job);
       if (job.progress?.stage?.startsWith('date-')) state.lastWork = reportWork(job.progress);
       if (!['queued', 'running'].includes(job.status)) {
          if (job.status !== 'complete' || !job.result || job.result.error) {
@@ -307,17 +321,14 @@ async function acquire(state, background = false, prices = false) {
          if (state.section === 'ai-stats' && !AIStatsView.valid(job.result)) throw new Error('report_unavailable');
          if (state.section === 'comparisons' && !ComparisonsView.valid(job.result)) throw new Error('report_unavailable');
          if (state.section === 'comparisons') state.orderRetried = false;
+         if (state.section === 'ai-stats' && !job.result.view.ai_stats.some(row => row.period === state.period)) {
+           await admit(); continue; // A simultaneous scope change finished a different period.
+         }
          const initial = !state.result || state.withheld;
          if (state.section === 'models' && (!job.result.view || job.result.view.kind !== 'normal' ||
              !['acquired', 'partial'].includes(job.result.source?.status))) throw new Error('report_unavailable');
-        if (state.section === 'ai-stats') {
-          state.statsResults ||= new Map();
-          for (const row of job.result.view.ai_stats) {
-            const old = state.statsResults.get(row.period);
-            if (!old || CachedReports.observation(old) <= CachedReports.observation(job.result))
-              state.statsResults.set(row.period, job.result);
-          }
-          state.result = state.statsResults.get(state.period) || null;
+         if (state.section === 'ai-stats') {
+           AIStatsView.remember(state, job.result);
          } else state.result = job.result;
          // A usable partial response finishes this attempt, not source coverage.
           if (state.result) {
@@ -330,7 +341,7 @@ async function acquire(state, background = false, prices = false) {
         state.message = historical(state) ? '' : 'Snapshot captured. Navigation and source activity do not update it.';
         break;
       }
-         ReportLoading.observe(state, job.progress);
+          if (!statsProgress) ReportLoading.observe(state, job.progress);
         if (state.section === 'ai-stats' && (!state.result || state.withheld)) state.lastWork = reportWork(job.progress);
       // Do not redraw a retained report while polling: keep selection and scroll useful.
         if (state === current && !background) show(state);
@@ -347,7 +358,7 @@ async function acquire(state, background = false, prices = false) {
     if (error.message === 'report_timeout' && state.lastWork) state.message += ` Last observed work: ${state.lastWork}.`;
     if (prices) state.priceMessage = state.message;
     state.failed = error.message !== 'suspended';
-    if (!state.failed) { state.attempted = false; state.message = ''; }
+    if (!state.failed) { state.attempted = false; state.message = ''; state.resumeStats = state.section === 'ai-stats'; }
     if (error.message === 'report_timeout' && state.active) {
       try { await api('/api/jobs/' + state.active + '/cancel', {}); } catch (_) { /* Host owns its hard deadline too. */ }
     }
@@ -403,10 +414,11 @@ function navigate() {
   if (current?.detail) current.detail.detach();
   if (current?.catalog) current.catalog.detach();
   current = views.get(key);
-  if (previous !== current && previous?.attempt && !previous.active) previous.attempt.cancel('suspended');
+  if (previous !== current && previous?.attempt && (!previous.active || previous.section === 'ai-stats'))
+    previous.attempt.cancel('suspended');
   if (current.section === 'ai-stats') {
     current.period ||= '30-days'; current.statsResults ||= new Map();
-    current.request = {kind: 'ai-stats', stats_scope: ['all', 'month'].includes(current.period) ? current.period : '30-days'};
+    current.request = {kind: 'ai-stats', stats_scope: current.period};
   }
   if (route.section === 'models') current.refreshPrices = () => acquire(current, false, true);
   document.getElementById('search').value = current.search || '';
@@ -451,7 +463,8 @@ async function connect() {
             }
             if (current?.active === job.id && ReportLoading.sections.includes(current.section) &&
                 (!current.result || current.withheld) && ['queued', 'running'].includes(job.status)) {
-              ReportLoading.observe(current, job.progress || {}); show(current);
+              if (current.section !== 'ai-stats') ReportLoading.observe(current, job.progress || {});
+              show(current);
             }
         }
          firstReport();
@@ -494,7 +507,8 @@ window.addEventListener('pageshow', () => liveConnection?.resync());
 window.addEventListener('offline', () => connectionStatus('OFFLINE — last observation retained, not live. Check the connection and reload to retry.', {kind: 'offline', writable: false}));
 window.addEventListener('online', () => liveConnection?.resync());
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden && current?.attempt && !current.active) current.attempt.cancel('suspended');
+  if (document.hidden && current?.attempt && (!current.active || current.section === 'ai-stats'))
+    current.attempt.cancel('suspended');
   if (!document.hidden) liveConnection?.resync();
   if (!document.hidden) {
     enterCachedReport(current);
