@@ -121,12 +121,14 @@ class ReportService:
         account_providers: Sequence[AccountProvider] | None = None,
         model_availability_source: ModelAvailabilitySource | None = None,
         comparison_pricing_provider: PricingProvider | None = None,
+        cache_token_mix_history: bool = False,
     ) -> None:
         self.selection = selection
         self.source = selection.source
         self.metrics = getattr(self.source, "metrics", AcquisitionMetrics(generation=selection.selected))
         self.pricing_provider = pricing_provider
         self.comparison_pricing_provider = comparison_pricing_provider or pricing_provider
+        self.cache_token_mix_history = cache_token_mix_history
         values = tuple(account_providers) if account_providers is not None else ((account_provider,) if account_provider else ())
         self.account_providers = values
         self.account_provider = account_provider
@@ -417,6 +419,9 @@ class ReportService:
     def build_token_mix_history(self, progress: HistoryProgress | None = None) -> ReportProjection:
         """Deep available-history model comparison; never used by normal reports/Watch."""
         self.metrics.mode = "token-mix-history"
+        if self.cache_token_mix_history:
+            from .token_mix_cache import build_cached_token_mix
+            return build_cached_token_mix(self, progress or (lambda _label, _percent: None))
         return build_token_mix_history(self, progress or (lambda _label, _percent: None))
 
     def build_cost_per_hour(self) -> ReportProjection:

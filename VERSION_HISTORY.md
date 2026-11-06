@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.178 — 2026-11-06
+
+- Web Token Mix replaces the frozen report shell with a compact total and two 13-column tables. Category shares and costs sort independently using exact source values; full names, all rows, partial coverage and shared text help remain accessible. An explicit first load enables quiet five-minute visible-page checks: revision-keyed request facts and canonical category costs reuse unchanged roots, with bounded changed-root batches, shared host jobs and coherent in-place replacement. CLI history/valuation and other pages retain their semantics.
+
 ## v80.177 — 2026-11-06
 
 - Watch CCost/Calls value help consolidates canonically attributed requests by main/subagent role, provider-qualified model, actual effort and price tier before bounding the payload. Counts, unknown categories, partial prices and omitted evidence remain explicit; a single-model prompt keeps its accessible linked-agent star without a redundant model popup. Known Full/Mini session totals reuse source/valuation-matched baselines without per-root periodic scans or timer-generated delay warnings. A shared pricing-identity check, fair single cost lane and revision-qualified completed baselines retain corrections, deletions, late children, compaction, source failures and restart reuse. Initial unknown totals show Loading…; billing, CLI and Token Mix semantics are unchanged.

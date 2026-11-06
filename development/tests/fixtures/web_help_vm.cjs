@@ -2,6 +2,12 @@
 const fs = require('node:fs');
 module.exports = function loadHelp(vm, context) {
   const doc = context.document, sample = doc.createElement('div'), proto = Object.getPrototypeOf(sample);
+  if (!Object.getOwnPropertyDescriptor(proto, 'classList')) Object.defineProperty(proto, 'classList', {get() {
+    return {toggle: (name, enabled) => {
+      const names = new Set((this.className || '').split(' ').filter(Boolean));
+      if (enabled) names.add(name); else names.delete(name); this.className = [...names].join(' ');
+    }};
+  }});
   proto.getAttribute ||= function(name) { return this.attributes?.[name] ?? this[name] ?? null; };
   proto.removeAttribute ||= function(name) { if (this.attributes) delete this.attributes[name]; delete this[name]; };
   proto.getBoundingClientRect ||= () => ({left:20,top:20,bottom:40,width:100,height:20});

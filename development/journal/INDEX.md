@@ -24,6 +24,7 @@ Installed OpenCode Toolkit shared repository skills own development procedures. 
 - [Web Daily and shutdown lifecycle](web/live-lifecycle.md): catalog-bracket amplification, Windows buffered-read cancellation, causal regressions and bounded probe diagnostics.
 - [Live Sessions](web/sessions-live.md): truthful global scalar sorts, cold-index exception, stable catalog epochs, complete revision-pinned history and measured synthetic/real-source limits.
 - [Historical date reports](web/historical-reports.md): serial V2 read cost, bounded date-only overlap, revision-safe progress, deadline/cancellation and retained live-source failures.
+- Web historical Token Mix: `development/journal/web/token-mix.md` records compact revision-keyed facts, exact split tables, retained refresh, cold/warm source measurements and browser proof limits.
 - [Watch prompt tables and live token mix](web/watch-prompt-tables.md): canonical coverage/rounding route, native V2/SSE/browser regressions and the scoped completed-partial CLI parity exception.
 - [Watch card polish](web/watch-polish.md): Watch-only reset clock/formatting, canonical quota colors, responsive frames and headless/real-source evidence limits.
 - [Watch session summary](web/watch-session-summary.md): ECTX, inline session guidance, evidence-gated fair scalar scheduling, shared pricing identity, persisted incremental root-tree cost and measured no-op/restart work. [Grouped cost help](web/contextual-help.md) retains role/model/effort/tier, Calls/model conditionality and browser proof limits.

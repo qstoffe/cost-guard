@@ -12,7 +12,7 @@ const ReportRoutes = (() => {
     const routes = {watch: ['Watch', null], live: ['Watch', null],
       models: ['Models', 'normal'],
       accounts: ['Accounts', null], sessions: ['Sessions', 'sessions'],
-      'token-mix': ['Token Mix · deep history', 'token-mix'],
+       'token-mix': ['Token Mix', 'token-mix'],
        'cost-per-hour': ['Cost per Active Hour', 'cost-per-hour'], settings: ['Settings', null]};
     if (!routes[path]) return {title: 'Page not found', section: '', request: null};
     const [title, kind] = routes[path];
@@ -31,7 +31,6 @@ const ReportRoutes = (() => {
     parent.replaceChildren();
     const e = ReportView.element;
     parent.className = '';
-    if (route.section === 'token-mix') parent.append(e('p', 'Explicit deep scan of all available history; may take time. Capture/Refresh starts it; Cancel stops only this finite job. Live continues. Reopening retains the frozen result in page memory.'));
     if (route.section === 'cost-per-hour') parent.append(e('p', 'Capture/Refresh explicitly reads available period history (120-second limit). Cancel stops only this view’s finite capture; Watch and accounts continue independently. Opening or revisiting this page never starts a scan.'));
   }
   return {resolve, controls};

@@ -80,3 +80,37 @@ class CacheRepository:
         if row is None:
             raise RuntimeError("first-sighting insert was not readable")
         return str(row[0])
+
+    def get_many(self, namespace: str, keys, *, busy_timeout_ms: int = DEFAULT_BUSY_TIMEOUT_MS) -> dict[str, CacheEntry]:
+        """Bounded SQL batches on one connection; malformed disposable JSON is a miss."""
+        keys = tuple(dict.fromkeys(keys))
+        result = {}
+        if not keys:
+            return result
+        with self.database.connect(operation="read", busy_timeout_ms=busy_timeout_ms) as connection:
+            for start in range(0, len(keys), 500):
+                chunk = keys[start:start + 500]
+                placeholders = ",".join("?" for _key in chunk)
+                rows = connection.execute(
+                    "SELECT cache_key,payload_json,source_revision,algorithm_version FROM cache_entries "
+                    f"WHERE namespace=? AND cache_key IN ({placeholders})", (namespace, *chunk)).fetchall()
+                for key, payload, revision, algorithm in rows:
+                    try:
+                        result[key] = CacheEntry(namespace, key, json.loads(payload), revision, algorithm)
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+        return result
+
+    def put_many(self, entries, *, busy_timeout_ms: int = DEFAULT_BUSY_TIMEOUT_MS) -> None:
+        """Atomically publish a caller-bounded batch of independent reconstructible entries."""
+        rows = [(entry.namespace, entry.key,
+            json.dumps(entry.payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True),
+            entry.source_revision, entry.algorithm_version) for entry in entries]
+        if not rows:
+            return
+        with self.database.connect(operation="write", busy_timeout_ms=busy_timeout_ms) as connection:
+            connection.executemany("""INSERT INTO cache_entries(
+                namespace,cache_key,payload_json,source_revision,algorithm_version,updated_at_utc)
+                VALUES(?,?,?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(namespace,cache_key) DO UPDATE SET
+                payload_json=excluded.payload_json,source_revision=excluded.source_revision,
+                algorithm_version=excluded.algorithm_version,updated_at_utc=CURRENT_TIMESTAMP""", rows)

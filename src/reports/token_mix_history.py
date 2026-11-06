@@ -46,6 +46,12 @@ def build_token_mix_history(service: ReportService, progress: HistoryProgress) -
         for prompt in bundle.prompts:
             for entry in prompt.entries:
                 prompt_of.setdefault(entry, (prompt.session_id, prompt.prompt_id))
+    return history_projection(service, reference, entries, prompt_of, progress)
+
+
+def history_projection(service, reference, entries, prompt_of, progress, *, valuation=None):
+    """One CLI/Web semantic owner; callers may reuse revision-verified usage facts."""
+    valuation = valuation or reference.reference_category_valuation
     progress(WorkProgress("Checking available OpenCode models", "availability"), None)
     try:
         source = service.model_availability_source
@@ -65,7 +71,7 @@ def build_token_mix_history(service: ReportService, progress: HistoryProgress) -
         software_fault = False
     progress(WorkProgress("Pricing token categories", "finalizing"), None)
     usage = unique_usage(entries)
-    groups = model_token_mixes(usage, prompt_of, reference.reference_category_valuation, model_key=_model_key)
+    groups = model_token_mixes(usage, prompt_of, valuation, model_key=_model_key)
     warnings = tuple(service.selection.warnings)
     # All-history scope: any V1 gap may make the result incomplete.
     notes = [HISTORY_NOTE, *migration_gap_notes(service.selection.migration_gap)]
@@ -92,14 +98,14 @@ def build_token_mix_history(service: ReportService, progress: HistoryProgress) -
     shown_usage = [entry for entry in usage if _model_key(entry.model) in shown_keys]
     publisher_key = lambda model: publisher_for(reference, model.model) or "Unknown / unverified"
     publishers = [PublisherTokenMixProjection(publisher_key(group.model), group.prompts, group.calls, group.mix)
-                  for group in model_token_mixes(shown_usage, prompt_of, reference.reference_category_valuation,
+                   for group in model_token_mixes(shown_usage, prompt_of, valuation,
                                                model_key=publisher_key)]
     publishers.sort(key=lambda row: (-sum(row.mix.costs or ()), -row.calls, row.publisher))
     notes.append("Historical publisher shares use pooled shown requests, not the 100-slot comparison prior. "
                  "Prompts are distinct within each model/publisher; mixed prompts can appear in several rows, "
                  "so row prompt counts are not additive. Unknown / unverified is not an account provider.")
     total = priced_token_mix(((entry.model, entry.tokens) for entry in shown_usage),
-                             reference.reference_category_valuation,
+                             valuation,
                              sample_size=len({prompt_of[entry] for entry in shown_usage if entry in prompt_of}))
     return ReportProjection(
         ReportKind.TOKEN_MIX, "Token Mix % by model", service.selection.selected.upper(), warnings,

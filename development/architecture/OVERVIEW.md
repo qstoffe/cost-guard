@@ -1,8 +1,8 @@
 # Cost Guard v80 architecture
 
-Source revision: 020e50071671ee863ceffcd37b6871af789bbe0f
-Checked revision: 020e50071671ee863ceffcd37b6871af789bbe0f
-Last checked: 2026-11-04
+Source revision: 904c9aea9a5f0e682437b74d7f66d3d5a6d813ff
+Checked revision: 904c9aea9a5f0e682437b74d7f66d3d5a6d813ff
+Last checked: 2026-11-06
 Status: current
 
 ## Development data and authority
@@ -40,6 +40,12 @@ flowchart TD
 ```
 
 Arrows show calls/consumption, not a single linear execution pipeline. `src/web/host.py` owns HTTP/jobs and one `src/application/live.py` publisher thread. `src/web/jobs.py` isolates finite report processes with parent-loss cleanup. Live ticks the shared Watch coordinator; its Web adapter owns four isolated session-capture workers plus separate single-worker account-history and Sessions-detail lanes. Blocking captures never borrow Live's mutable service. `src/application/session_detail.py` retains revision-aware pages and `src/reports/session_history.py` retains observed evidence outside cache. HTTP leases/pages never acquire source data. Source-change stops, never reloads; CLI/Diagnostics remain independent. `src/web/` owns loopback HTTP/security/assets, bounded SSE/replay, finite report processes, private instance/restart locks and best-effort source-change stop. Windows and experimental macOS menus share this host; macOS native proof is pending. Web reuses Watch's renderer-independent acquisition seam, not a CLI process or per-tab coordinator. Bootstrap dispatches CLI reports/Watch directly. Source normalization establishes evidence, not cost; analysis consumes provider-neutral pricing contracts. The cache never replaces source authority. Recovery belongs to acquisition, not rendering. `src/numbers.py` scopes CCost display units with exception-safe ContextVar reset; canonical valuation and native quotas are unchanged.
+
+Finite Web Token Mix alone opts into disposable revision-keyed compact request facts
+and canonical category valuations (`reports/token_mix_cache.py`). It retains the
+CLI's grouping/source semantics through `token_mix_history.history_projection`;
+active-visible low-frequency checks stay outside Live. Browser-local sorting and
+coherent retained-view replacement never acquire or revalue usage.
 
 Sessions additionally shares the full observed catalog with `application/session_catalog.py`.
 The Web coordinator owns a separate single-worker scalar-index lane; HTTP never acquires
@@ -173,4 +179,4 @@ flowchart TD
 | PR / merge | Authorized delivery | Required Git safety; self-review not a gate | Installed `/repo-backlog` and actual GitHub default/protection/check state | No force/protection bypass; uncertain merge requires read-back, not replay |
 | Delivery / handoff | Confirmed merge and default read-back | Truthful finish and native bulk cleanup attempt required; deletion success not required; no delivery receipt | Installed native `repo_backlog` finish | Cleanup failure/skip does not block handoff; no second task here; fresh worker starts after response |
 
-Milestone-30 source assessment: `development/journal/architecture.md` (base revision above plus this maintenance diff). Global coordination is retained; two unreachable comparison modules are removed and evidence moves to the existing analysis records owner. [Module-level comparison map](modules/analysis.md#comparison-ownership-checked-2026-11-04). Native desktop proof remains separate.
+Milestone-30 source assessment: `development/journal/architecture.md` (historical base `020e50071671ee863ceffcd37b6871af789bbe0f` plus that maintenance diff). Global coordination is retained; two unreachable comparison modules are removed and evidence moves to the existing analysis records owner. [Module-level comparison map](modules/analysis.md#comparison-ownership-checked-2026-11-04). Native desktop proof remains separate.

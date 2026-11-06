@@ -29,7 +29,6 @@ const ReportView = (() => {
       ({partial: '\nPartial quota data.', stale: '\nRetained quota · not current.', unavailable: '\nQuota unavailable.', error: '\nQuota refresh failed.'}[quota.availability] || '') +
       (view.note ? '\n' + view.note : '');
   }
-  const mixLabels = row => Object.values(row?.display?.token_categories || {});
   const mixText = row => Object.entries(row?.display?.token_categories || {})
     .map(([key, label]) => label + ': ' + display(row, key)).join(' · ');
   const mixLegend = row => display(row, 'token_category_legend') + '. Output includes reasoning.';
@@ -521,6 +520,10 @@ const ReportView = (() => {
     parent.replaceChildren();
     const view = result.view;
     const section = state.section || 'models';
+    if (view.kind === 'token-mix') {
+      state.tokenMix ||= new TokenMixView.View();
+      state.tokenMix.update(result); state.tokenMix.attach(parent); return;
+    }
     const overview = ['models', 'overview'].includes(section) && ['normal', 'all-models'].includes(view.kind);
     if (overview) {
       overviewModels(parent, view, state);
@@ -559,30 +562,7 @@ const ReportView = (() => {
       parent.append(element('p', 'Normal report · local-month / Today CCost and account-native windows. Independent frozen observations; not Watch rolling usage.', 'detail'));
       overviewAccounts(parent, accounts, 'Accounts · independent observations', true);
     }
-    if (view.token_mix && view.kind === 'token-mix') {
-      const mix = view.token_mix;
-      parent.append(element('h3', view.kind === 'token-mix' ? 'Token Mix · available deep history' : 'Token Mix · independent report sample'));
-      mixSummary(parent, mix);
-      if (view.kind === 'token-mix') {
-        if (!view.model_token_mix.length) parent.append(element('p', 'No available historical model rows. Missing history is not reconstructed.'));
-        table(parent, 'Historical models · canonical totals above, independent of filters',
-          ['Model', 'Prompts', 'Calls', 'Tokens', ...mixLabels(view), 'CCost'], view.model_token_mix,
-          row => [row.model, known(row.prompts), known(row.calls), display(row.mix, 'total_tokens'), ...['input', 'cache', 'write', 'output', 'total_cost'].map(key => display(row.mix, key))], null, state, 'history',
-          row => [row.model, row.prompts, row.calls, row.mix.known_total_tokens ?? row.mix.total_tokens, ...row.mix.shares, row.mix.total_cost]);
-        table(parent, 'Historical publishers · same shown usage, not the comparison prior',
-          ['Publisher', 'Prompts', 'Calls', 'Tokens', ...mixLabels(view), 'CCost'], view.publisher_token_mix || [],
-          row => [row.publisher, known(row.prompts), known(row.calls), display(row.mix, 'total_tokens'), ...['input', 'cache', 'write', 'output', 'total_cost'].map(key => display(row.mix, key))], null, state, 'publishers',
-          row => [row.publisher, row.prompts, row.calls, row.mix.known_total_tokens ?? row.mix.total_tokens, ...row.mix.shares, row.mix.total_cost]);
-      }
-    }
     for (const note of view.notes || []) parent.append(element('p', note, 'warning'));
-  }
-  function mixSummary(parent, mix) {
-    parent.append(element('p', () => `Total Token Mix % · ${display(mix, 'total_tokens')} tokens · ` +
-      mixText(mix), mix.cost_complete ? 'metric-value' : 'metric-value partial'));
-    parent.append(element('p', mixLegend(mix), 'detail'));
-    const details = element('details'); details.append(element('summary', 'Sample and price coverage'), element('p',
-      `Full-report I/C/W/O tokens: ${display(mix, 'totals')}\nRequests: ${mix.request_count} · Prompts: ${mix.sample_size} · Priced requests: ${mix.priced_requests}\n${mix.cost_complete ? 'Complete prices' : 'Incomplete prices'}\n? — Incomplete token data. N/A — No known token categories.\nTotals add the known categories. K/M/B are rounded; sorting uses exact amounts.\nOutput includes reasoning. One prompt can use several models.`, 'help-copy')); parent.append(details);
   }
   function contextSummary(parent, block) {
     parent.append(element('p', () => display(block, 'next_context'), block.next_context_warning ? 'threshold' : 'detail'));

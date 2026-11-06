@@ -19,6 +19,7 @@ sys.path.insert(0, str(ROOT))
 from development.tests.fixtures.watch_summary import summary_watch, many_cost_groups
 from development.tests.fixtures.web_reports import finite_report
 from development.tests.fixtures.web_help_reports import HelpAuditJobs
+from development.tests.fixtures.token_mix_views import TokenMixJobs
 from src.application.live_projection import project_live
 from src.application.display import with_display
 from src.application.projection import accounts as project_accounts
@@ -39,8 +40,10 @@ def main():
         if not (root / "config/default-config.jsonc").exists():
             shutil.copyfile(ROOT / "config/default-config.jsonc", root / "config/default-config.jsonc")
         jobs = HelpAuditJobs() if sys.argv[2:] == ["--help-audit"] else ReportJobs(target=finite_report)
+        if sys.argv[2:] == ['--token-mix']:
+            jobs = TokenMixJobs()
         host = WebHost(root, jobs=jobs)
-        timer = Timer(300, host.stop)
+        timer = Timer(420 if sys.argv[2:] == ['--token-mix'] else 300, host.stop)
         frame = summary_watch()
         now = int(time.time() * 1000)
         frame = replace(frame, now_ms=now, daily_usage=replace(frame.daily_usage,

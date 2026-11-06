@@ -39,6 +39,8 @@ def token_mix(value):
         sample_size=value.sample_size, request_count=value.request_count,
         costs=value.costs, priced_requests=value.priced_requests,
         cost_complete=value.cost_complete, total_tokens=value.total_tokens,
+        exact_totals=tuple(None if item is None else str(item) for item in value.totals),
+        exact_total_tokens=None if value.total_tokens is None else str(value.total_tokens),
         known_total_tokens=None if value.known_total_tokens is None else Decimal(value.known_total_tokens),
         total_cost=None if value.costs is None else sum(value.costs, Decimal(0)),
     )
@@ -167,7 +169,8 @@ def project(report, timezone_id="UTC", ccost_display_unit="credits", *, prompt_d
             "ERROR: Model availability lookup failed internally; showing full pricing catalog.",
             "⚠ Could not verify currently selectable OpenCode models; showing all historically used models.",
             "ERROR: Model availability lookup failed internally; showing all historically used models.",
-        } for warning in report.source_warnings),
+         } for warning in report.source_warnings),
+         historical_source_gap=any(note.startswith('OpenCode V1 has session(s) relevant to this report') for note in report.notes),
         model_comparison=model_rows(report.model_comparison), model_comparison_sample_size=report.model_comparison_sample_size,
         model_catalog=record(rows=model_rows(catalog.rows, set(catalog.selectable)),
             promotion_notes=catalog.promotion_notes,

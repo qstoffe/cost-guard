@@ -153,6 +153,11 @@ class ReportJobs:
             for key, job in self._jobs.items():
                 if job["request"] == request and job["status"] in {"queued", "running"}:
                     return key
+                if (request.kind is ReportKind.TOKEN_MIX and job["request"] == request
+                        and job["status"] == "complete" and time.monotonic() - job.get("finished_at", 0) < 60):
+                    # Coalesce staggered tab freshness checks as well as in-flight work.
+                    # Retain the actual observation timestamp; reuse is not new acquisition.
+                    return key
             if sum(j["status"] in {"queued", "running"} for j in self._jobs.values()) >= MAX_PENDING:
                 raise RuntimeError("busy")
             while len(self._jobs) >= MAX_JOBS:
@@ -238,6 +243,7 @@ class ReportJobs:
                             job["result"] = json.loads(payload)
                             result = job["result"]
                             job["status"] = "failed" if result["error"] else "complete"
+                            job["finished_at"] = time.monotonic()
                             self.source = result["source"]["status"]
                             self.accounts = ("not_requested" if job["request"].kind is not ReportKind.NORMAL
                                              else "reported" if not result["error"] else "unavailable")
@@ -252,7 +258,7 @@ class ReportJobs:
                     self.analysis = "failed"
                     self._stop()
             if self._active is None:
-                for key, job in self._jobs.items():
+                for key, job in sorted(self._jobs.items(), key=lambda item: item[1]["request"].kind is ReportKind.TOKEN_MIX):
                     if job["status"] != "queued":
                         continue
                     receiver, sender = self._context.Pipe(duplex=False)
