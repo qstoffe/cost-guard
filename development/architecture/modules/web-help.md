@@ -1,12 +1,14 @@
 # Web contextual help: writing and interaction
 
-Source revision: 50d88a4bcfba6c1f853607ce0ee84a5c9663c0a3
-Checked revision: 50d88a4bcfba6c1f853607ce0ee84a5c9663c0a3
+Source revision: e4d715e170917f5ef2d69d31a68dbc3eb297ff8a
+Checked revision: e4d715e170917f5ef2d69d31a68dbc3eb297ff8a
 Last checked: 2026-11-06
 Status: current
 
 Owner: `src/web/assets/help.js`; shared styles: `app.css`. Applies to the main
-application and separate Mini Watch document. FR 000601 grouped-detail follow-up: 2026-11-06.
+application and separate Mini Watch document. FR000612 checks only the optional
+passive heading API and AI Stats usage; other audit rows retain their prior scope
+at `50d88a4bcfba6c1f853607ce0ee84a5c9663c0a3`.
 
 ## Writing patterns
 
@@ -41,11 +43,15 @@ application and separate Mini Watch document. FR 000601 grouped-detail follow-up
 - `ContextHelp.attach(action, textOrFunction)` augments actions such as sorting
   and checkboxes without replacing click behavior or their pointer cursor. Activation
   immediately dismisses help instead of pinning it. Do not add a separate cue.
-- `ContextHelp.heading(action, text)` returns a text-sized inline label for a
+- `ContextHelp.heading(action, text, passive=false)` returns a text-sized inline label for a
   sortable header. Keep click, keyboard focus and ARIA descriptions on the original
   action; bind pointer entry/exit, movement fallback and panel positioning to the
   label. Update that returned label, not the action's entire content. Empty action
   space still sorts but neither opens help nor highlights the header/label.
+  AI Stats month/all selectors opt into `passive=true` so a tap can explain their
+  scope while retaining normal selection. Default sorting/action dismissal is unchanged.
+  Selector labels inherit their button's foreground, including on hover; selected
+  foreground/background do not cross-fade through unreadable intermediate colors.
   Mini's Session and CCost (Total) are separate column headings. Each cost heading
   explains prompt cost followed by the entire session's cost in parentheses.
 - Functions read current display tokens. `ContextHelp.refresh(container)` updates

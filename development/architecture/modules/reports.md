@@ -1,11 +1,14 @@
 # Reports source contracts
 
-Source revision: 904c9aea9a5f0e682437b74d7f66d3d5a6d813ff
-Checked revision: 904c9aea9a5f0e682437b74d7f66d3d5a6d813ff
+Source revision: e4d715e170917f5ef2d69d31a68dbc3eb297ff8a
+Checked revision: e4d715e170917f5ef2d69d31a68dbc3eb297ff8a
 Last checked: 2026-11-06
 Status: current
 
 [Architecture overview](../OVERVIEW.md) · [Owner/test routes](CODE_MAP.md). Source remains authoritative.
+
+FR000612 renews only the AI Stats contract below; other sections retain their prior
+scoped checks at `904c9aea9a5f0e682437b74d7f66d3d5a6d813ff`, not a whole-module audit.
 
 ## Responsibility and ownership
 
@@ -100,20 +103,27 @@ browser proof retain their actual limits in the Token Mix journal.
 
 `src/reports/ai_stats.py` owns candidate roots/active ancestry, source revisions and
 disposable `ai-stats-evidence` caching. It reuses compact canonical request/category
-facts from `token_mix_cache.py` and adds prompt/compaction execution intervals, never
-prompt text. Source, analysis dependencies and reference pricing key reuse; current
+facts from `token_mix_cache.py` and adds prompt/compaction execution intervals and
+snapshot-completeness evidence, never prompt text. Evidence algorithm 3 invalidates
+older payloads lacking coverage. Source, analysis dependencies and reference pricing key reuse; current
 membership removes deleted roots, archived roots remain, and unstable evidence is
 not persisted. Changed/missed roots use existing 64-root observed batches, at most
 four concurrent source reads, inside unchanged finite job/security limits.
 
 `src/analysis/ai_stats.py` owns event-time deduplication, exact cost/root averages,
 clipped execution unions, root concurrency, local-date/night/DST splitting, longest
-streak and deterministic records. Zero/unknown/partial/provisional stay distinct.
-`src/application/ai_stats.py` prepares unit-aware values and deterministic original
-trait text; projection explicitly allowlists periods/metrics. JS never revalues.
+streak and deterministic records. Each `Stat` carries source-derived reason codes:
+source coverage, unknown timing, unpriced requests, missing token telemetry, pending
+usage, provisional execution or an absent denominator. Complete-empty undefined
+metrics use `no-data`; real zero totals and qualified partial subtotals survive.
+Snapshot incompleteness, warnings and migration gaps cannot imply complete metrics.
+`src/application/ai_stats.py` allowlists plain-language explanations and prepares
+unit-aware values, status labels and complete-value traits. Projection carries the
+reason tuple; JS shows the explanation in-card and in current-period title help,
+without parsing errors, inventing causes or changing finite loading. JS never revalues.
 Independent `active_hour.py` APIs and session-detail rate remain supported.
-Scoped source check: base `42cc45f624d7b9cda560e365e53a93cec36ff7bc` plus FR
-000599's diff, not revalidation of every contract above. `development/tests/test_ai_stats.py`
+Scoped source check: `e4d715e170917f5ef2d69d31a68dbc3eb297ff8a`, not revalidation
+of every contract above. `development/tests/test_ai_stats.py`
 pins arithmetic, revisions, finite process/coalescing and policy edges; browser and
 real-source probes/evidence are routed by [AI Stats findings](../../journal/web/ai-stats.md).
 
