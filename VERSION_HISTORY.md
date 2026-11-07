@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.199 — 2026-11-07
+
+- AI Stats retains a qualified observed working-time lower bound and observed session/day leaders instead of discarding usable evidence when one execution boundary or snapshot is incomplete. Missing prices/usage do not erase independent timing. Unknown averages, hourly rates, night shares, streaks and peak concurrency remain explicitly unavailable, never inferred. Explicit completed compaction-part ends recover missing message-level timing; missing native ends stay unknown. Revisioned analysis/evidence/coverage caches invalidate old semantics, with count-only local diagnosis and complete-history parity checks.
+
 ## v80.198 — 2026-11-07
 
 - Models separates its price-refresh toolbar from monospace table-price styles. The action matches Watch's compact system-font sizing; supporting text and native checkbox labels share a centered visual axis, wrap safely with long feedback/enlarged text and retain coarse-pointer targets. Keyboard refresh restores focus unless the user moves elsewhere. Pricing observations, explicit refresh semantics, table tiers, filters and sorting are unchanged.

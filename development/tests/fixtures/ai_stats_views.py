@@ -39,6 +39,7 @@ def evidence_views():
         ('missing-price', (root,), True, None), ('missing-telemetry', (missing,), True, Decimal(4)),
         ('pending-usage', (replace(root, cost_pending=True),), True, Decimal(4)),
         ('provisional', (replace(root, intervals=((at, 3_600_000, True),)),), True, Decimal(4)),
+        ('observed-time', (replace(root, intervals=((at, 1_800_000, False), (at - 86_400_000, None, False))),), True, Decimal(4)),
     )
     result = []
     for name, roots, complete, price in cases:

@@ -13,6 +13,19 @@ from .models import CompactionRecord
 from .duration import execution_duration
 
 
+def _native_end(message, part):
+    """A durable completed part may retain its own end when the message does not.
+
+    Do not use normalized updated_at (which can fall back to creation), summary
+    presence, session activity or the next unrelated prompt as an end timestamp.
+    """
+    if message.completed_at_ms is not None:
+        return message.completed_at_ms
+    timing = part.data.get('time')
+    end = timing.get('end') if isinstance(timing, dict) else None
+    return end if type(end) is int and end > 0 else None
+
+
 def completed_compactions(
     snapshot: SessionSnapshot,
     *,
@@ -127,13 +140,14 @@ def completed_compactions(
         provenance = provider_context.get("provenance") if isinstance(provider_context.get("provenance"), dict) else {}
         model_id = str(model.get("id") or model.get("modelID") or provenance.get("modelID") or event.metadata.get("model_id", ""))
         provider_id = str(model.get("providerID") or provenance.get("providerID") or event.metadata.get("provider_id", ""))
+        end = _native_end(message, compaction_part)
         result.append(CompactionRecord(
             session_id=snapshot.root.session_id,
             user_message_id=event.event_id,
             summary_message_id=message.message_id,
             created_at_ms=event.created_at_ms,
-            completed_at_ms=message.completed_at_ms or message.created_at_ms or event.created_at_ms,
-            duration_ms=execution_duration(event.created_at_ms, message.completed_at_ms),
+            completed_at_ms=end or message.created_at_ms or event.created_at_ms,
+            duration_ms=execution_duration(event.created_at_ms, end),
             automatic=event.metadata.get("auto", "false").lower() == "true",
             model_id=model_id,
             provider_id=provider_id,

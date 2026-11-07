@@ -327,8 +327,16 @@ salary savings or consultant invoices.
 
 After acquisition, each card explains its own evidence. **No data** means a completely
 observed period has no applicable requests or positive execution-time denominator;
-real zero totals still show zero. **Partial** qualifies an observed cost subtotal,
-never an exact full total. **Provisional** qualifies timing while executions remain
+real zero totals still show zero. **Partial** qualifies an observed subtotal,
+never an exact full total. With incomplete timing, Working Time shows **≥** the
+measured overlap-safe subtotal (a lower bound, rounded down); Longest Session and
+Busiest Day show **Observed** leaders, not verified overall winners. Most Expensive
+Session can likewise retain its observed subtotal when pricing/usage is incomplete.
+Missing prices do not erase independently known execution; missing execution ends
+do not erase independently known costs. Averages, hourly rates, Night Owl, Coding
+Streak and Peak Parallel Sessions remain unavailable when their required evidence
+cannot be proved; no unknown denominator or overlap is guessed. Complete histories
+retain their original values and traits. **Provisional** qualifies timing while executions remain
 in progress. **Unavailable** names missing source coverage, execution boundaries,
 reference-price evidence or token telemetry; an unknown cause is explicitly unknown.
 The concise explanation stays in the card and joins its title's contextual help.

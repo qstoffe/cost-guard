@@ -80,8 +80,9 @@ module.exports = async function({command,evaluate,until,fixture,tab,contrasts,st
   checks.push('selected month/all keyboard scope help and Escape; actual selected-label hover/touch help; no duplicate native title or history acquisition');
 
   const cases=await fixture('stats-evidence');
-  for(const item of cases) for(const unit of ['credits','usd']) {
-    await evaluate(`current.result=${JSON.stringify(item.result)};current.period='all';current.stats.update(current);
+  for(const item of cases) for(const theme of ['classic','light','dark']) for(const unit of ['credits','usd']) {
+    await evaluate(`document.documentElement.dataset.theme=${JSON.stringify(theme==='classic'?'classic':'web')};
+      current.result=${JSON.stringify(item.result)};current.period='all';current.stats.update(current);
       ReportView.setUnit(${JSON.stringify(unit)},output);`);
     const rendered=await evaluate(`[...document.querySelectorAll('.ai-stat')].map(card=>({
       value:card.querySelector('.ai-stat-value').textContent,trait:card.querySelector('.ai-stat-trait').textContent,
@@ -102,7 +103,19 @@ module.exports = async function({command,evaluate,until,fixture,tab,contrasts,st
       assert.ok((await evaluate(`document.getElementById('context-help').textContent`)).includes(expected[affected].display.explanation));
       await escape();
     }
-    states.push({case:item.name,unit,rendered});
+    if(item.name==='observed-time') {
+      assert.match(rendered[2].value,/^≥ /);
+      assert.equal(rendered[2].state,'Partial');
+      assert.match(rendered[5].value,/^Observed /);
+      assert.match(rendered[5].trait,/not a verified overall winner/);
+      for(const index of [0,7,8,9]) assert.equal(rendered[index].value,'Unavailable');
+      await evaluate(`document.activeElement.blur();document.dispatchEvent(new KeyboardEvent('keydown',{key:'Tab',bubbles:true}));
+        document.querySelectorAll('.ai-stat h4 button')[2].focus();`);
+      await until(`!document.getElementById('context-help').hidden`);
+      assert.match(await evaluate(`document.getElementById('context-help').textContent`),/Observed lower bound/);
+      await escape();
+    }
+    states.push({case:item.name,theme,unit,rendered});
   }
   await evaluate(`current.result=${JSON.stringify(cases.find(item=>item.name==='source-gap').result)}; current.stats.update(current);
     document.activeElement.blur(); document.dispatchEvent(new KeyboardEvent('keydown',{key:'Tab',bubbles:true}));
@@ -114,5 +127,5 @@ module.exports = async function({command,evaluate,until,fixture,tab,contrasts,st
   assert.match(await evaluate(`document.getElementById('context-help').textContent`),/unknown start or end times/);
   await escape();
   await evaluate(`current.result=${JSON.stringify(original)};current.period='30-days';current.stats.update(current);`);
-  checks.push('eight canonical evidence cases in both units: complete, empty/zero, source gap, unknown time, missing prices/telemetry, pending and provisional; reason/help updates retain focused heading');
+  checks.push('nine canonical evidence cases in both units and three themes, including observed lower bound/qualified leaders and unknown ratios/streak/peak; reason/help updates retain focused heading');
 };

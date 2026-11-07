@@ -56,9 +56,9 @@ Status: current
   stable keyed cards, hidden Edge/Chrome parity and real V2 account-owner evidence.
 - Historical Token Mix: `development/journal/web/token-mix.md` records dedicated
   exact split tables, coherent quiet refresh and measured incremental acquisition.
-- AI Stats: `development/journal/web/ai-stats.md` records canonical ten-card metrics,
-  shared one-hour re-entry, cold/warm finite timings, split UI/process proof and
-  Decision Delegate-authorized accessibility/documentation exceptions.
+- [AI Stats](ai-stats.md): independent exact/observed/unknown metrics, count-only
+  source diagnosis, compaction-end recovery, versioned coverage, resumable history,
+  cold/warm parity/timings and scoped documentation/proof limits.
 - Exact first-input comparisons: `development/journal/web/comparisons.md` records
   causal per-run boundaries, private compact indexing, bounded catalog batching,
   responsive/help/paging evidence and explicitly partial real-source coverage.

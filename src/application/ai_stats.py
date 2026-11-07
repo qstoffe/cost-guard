@@ -35,6 +35,10 @@ def explanation(values):
     status = values['status']
     reason = ' '.join(REASONS[code] for code in dict.fromkeys(values.get('reasons', ())) if code in REASONS)
     if status == 'partial':
+        if values.get('metric') in ('longest-session', 'busiest-day', 'expensive-session'):
+            return 'Largest observed subtotal, not a verified overall winner. ' + reason
+        if values.get('metric') == 'working-time':
+            return 'Observed lower bound on unioned execution time; the full total is unknown. ' + reason
         return 'Observed subtotal only. ' + (reason or 'The reason for incomplete evidence is unknown.')
     if reason:
         return reason
@@ -69,11 +73,14 @@ def stat_tokens(values):
         if metric == 'hourly-rate':
             text += '/h'
     elif metric in {'working-time', 'longest-session', 'busiest-day'}:
-        text = duration_text(value)
+        measured = int(value) // 1000 * 1000 if metric == 'working-time' and values['status'] == 'partial' else value
+        text = duration_text(measured)
     elif metric == 'night-owl':
         text = f'{Decimal(value):.0f}%'
     else:
         text = str(value) + (' days' if metric == 'streak' else '')
+    if value is not None and values['status'] == 'partial':
+        text = ('≥ ' if metric == 'working-time' else 'Observed ') + text
     return {'value': text, 'trait': line, 'explanation': explanation(values),
             'state': {'partial': 'Partial', 'provisional': 'Provisional', 'no-data': 'No data',
                       'unavailable': 'Unavailable'}.get(values['status'], '')}
