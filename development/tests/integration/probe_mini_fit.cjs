@@ -105,6 +105,7 @@ async function main() {
       await close();
     }
     evidence.checks.push('Opening real layout and two-row reserve; actual native clamps recorded separately from uncapped no-scroll cases');
+    await require('./probe_history_readiness.cjs')({fixture,evaluate,until,command,sessionId,open,close,checks:evidence.checks});
     const disclosureAccounts=Number(zoom)===1?3:1;
     await fixture(`history-3-1-${disclosureAccounts}`);await until(`liveValue.view.history_cards.length===3 && liveValue.view.accounts.accounts.length===${disclosureAccounts}`);
     await open();

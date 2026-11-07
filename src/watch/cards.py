@@ -4,6 +4,8 @@ from dataclasses import dataclass, field, replace
 from .models import WatchCard, WatchRow
 from .source_status import SourceStatus
 from .session_costs import SessionCostState
+from .history_publication import HistoryPublication
+from src.sources.errors import SourceConcurrentChangeError, SourceDataError
 from .tools import RUNNING_VISIBLE_AFTER_MS, without_live_activity
 
 
@@ -23,6 +25,9 @@ class CardSession:
     refresh_requested: bool = True
     source_status: SourceStatus = field(default_factory=SourceStatus)
     cost: SessionCostState = field(default_factory=SessionCostState)
+    verified_generation: int = 0
+    failure_code: str = ""
+    history_status: SourceStatus = field(default_factory=SourceStatus)
 
 
 class WatchCards:
@@ -36,10 +41,16 @@ class WatchCards:
         self.turn = 0
         self.on_duration = on_duration
         self.monotonic = monotonic
+        self.history = HistoryPublication()
+        self.catalog_revision = 0
+        self.evidence_revision = 0
 
     def catalog(self, observation):
+        previous = (self.active_candidates, {key: entry.revision for key, entry in self.sessions.items()})
         self.active_candidates = observation.active_candidates | observation.live_candidates
         roots = {root.session_id: root for root in observation.roots}
+        if previous != (self.active_candidates, {key: observation.revisions.get(key) for key in roots}):
+            self.catalog_revision += 1
         for key in set(self.sessions) - roots.keys():
             del self.sessions[key]
         for key, root in roots.items():
@@ -50,9 +61,10 @@ class WatchCards:
                 self.sessions[key] = CardSession(root, revision, self.generation)
                 if self.monotonic is not None:
                     self.sessions[key].source_status = SourceStatus(self.monotonic)
+                    self.sessions[key].history_status = SourceStatus(self.monotonic)
             else:
                 entry.root = root
-                if entry.revision != revision:
+                if entry.revision != revision or (key in previous[0]) != (key in self.active_candidates):
                     self.generation += 1
                     entry.revision, entry.generation = revision, self.generation
                     # Keep visible history and its coherent metrics during refresh.
@@ -60,7 +72,7 @@ class WatchCards:
                     if entry.capture is None:
                         entry.latest_ms = None
                     entry.refresh_requested = True
-                elif (entry.capture is not None and any(row.in_progress for row in entry.capture.rows)) or entry.source_status.failed_at is not None:
+                elif (entry.capture is not None and any(row.in_progress for row in entry.capture.rows)) or entry.source_status.failed_at is not None or entry.history_status.failed_at is not None:
                     entry.refresh_requested = True
 
     def accept(self, result, now_ms):
@@ -72,6 +84,7 @@ class WatchCards:
             return
         if result.phase == "rows":
             capture, tools, snapshot = result.value
+            revision_matches = snapshot is None or snapshot.source_revision == entry.revision
             if entry.capture is not None and capture.observed_at_ms < entry.capture.observed_at_ms:
                 return
             previous = {row.event_id: row for row in entry.capture.rows} if entry.capture else {}
@@ -120,8 +133,22 @@ class WatchCards:
             entry.state = "partial" if capture.retained else "observed"
             if not capture.retained:
                 entry.source_status.clear()
+            if capture.authoritative and revision_matches:
+                entry.verified_generation = entry.generation
+                self.evidence_revision += 1
+                entry.history_status.clear()
+                entry.failure_code = ""
+            else:
+                entry.verified_generation = 0
+                entry.refresh_requested = True
+                error = (SourceDataError("History tree is incomplete") if revision_matches else
+                    SourceConcurrentChangeError("History revision changed during capture"))
+                entry.history_status.fail(error)
+                entry.failure_code = str(error.code)
         else:
             entry.source_status.fail(result.value)
+            entry.failure_code = str(getattr(result.value, "code", "unknown_source_failure"))
+            entry.refresh_requested = True
 
     def _focals(self, entry, now_ms):
         if entry.capture is None:
@@ -133,6 +160,9 @@ class WatchCards:
         return tuple(running + recent)
 
     def historical_ids(self, now_ms):
+        return tuple(card.session_id for card in self.history.project(self, now_ms))
+
+    def _ranked_ids(self, now_ms):
         # Unknown-ended history sorts before known finishes and fills spare slots;
         # neither source receipt nor start time is passed off as a finish clock.
         eligible = [(entry.finished_ms, key) for key, entry in self.sessions.items()
@@ -150,16 +180,19 @@ class WatchCards:
         for entry in self.sessions.values():
             entry.terminals = {key: seen for key, seen in entry.terminals.items()
                 if 0 <= now_ms - seen < self.recent_ms}
-        historical = set(self.historical_ids(now_ms))
+        historical = set(self._ranked_ids(now_ms))
         active, history = [], []
         for key, entry in self.sessions.items():
-            busy = bool(self._focals(entry, now_ms)) or (key in self.active_candidates and entry.latest_ms is None)
+            busy = bool(self._focals(entry, now_ms)) or (key in self.active_candidates
+                and entry.verified_generation != entry.generation)
+            unverified = entry.verified_generation != entry.generation or entry.source_status.failed_at is not None
             due = entry.refresh_requested or (key in historical and entry.capture is None)
-            needed = busy or entry.latest_ms is None or key in historical
+            needed = busy or unverified or key in historical
             if due and needed and key not in self.workers.jobs:
                 (active if busy else history).append((entry.admission_order, key, entry))
         active.sort(key=lambda item: (item[0], item[1]))
-        history.sort(key=lambda item: (item[0], item[1]))
+        # Metadata is an admission hint only, never a finish bound/proof.
+        history.sort(key=lambda item: (item[0], -(item[2].root.updated_at_ms or 0), item[1]))
         while (active or history) and len(self.workers.jobs) < self.workers.limit:
             # Reserve recurring admission for history even with 100 busy roots.
             candidates = history if history and (not active or self.turn % 4 == 3) else active
@@ -182,7 +215,7 @@ class WatchCards:
     def _tick_costs(self, now_ms):
         if self.costs is None:
             return
-        visible = set(self.historical_ids(now_ms)) | {key for key, entry in self.sessions.items() if self._focals(entry, now_ms)}
+        visible = set(self._ranked_ids(now_ms)) | {key for key, entry in self.sessions.items() if self._focals(entry, now_ms)}
         self.costs.tick({key: entry.cost for key, entry in self.sessions.items()}, visible, now_ms)
 
     def _card(self, entry, focal, now_ms):
@@ -226,11 +259,10 @@ class WatchCards:
             focals = self._focals(entry, now_ms)
             for focal in focals:
                 active.append((focal.at_ms, key, focal.event_id, self._card(entry, focal, now_ms)))
-            if not focals and key in self.active_candidates and entry.capture is None and entry.latest_ms is None:
-                active.append((entry.root.created_at_ms, key, "", self._card(entry, None, now_ms)))
-        history = [self._card(self.sessions[key], None, now_ms) for key in self.historical_ids(now_ms)]
-        history.sort(key=lambda card: ((card.rows[-1].prompt.completed_at_ms or 0) if card.rows else 0,
-            card.session_id, card.rows[-1].prompt.event_id if card.rows else ""))
+            if not focals and key in self.active_candidates and entry.verified_generation != entry.generation:
+                placeholder = WatchCard(key, entry.root.title or key, "", (), state="loading")
+                active.append((entry.root.created_at_ms, key, "", placeholder))
+        history = self.history.project(self, now_ms)
         pending = any(key in self.active_candidates and entry.latest_ms is None for key, entry in self.sessions.items())
         visible = [entry for key, entry in self.sessions.items()
             if key in self.active_candidates or self._focals(entry, now_ms)]

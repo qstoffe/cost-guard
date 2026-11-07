@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.203 — 2026-11-07
+
+- Shared Watch/Mini Earlier history gates newest-five membership on complete revision-matched root coverage, publishes one coherent proof epoch and retains it with truthful refresh/failure qualification. Unknown/incomplete candidates cannot masquerade as newest sessions; active prompts, Today and accounts remain independent. Metadata guides bounded admission, never certifies finish bounds. Cold large/churning sources may remain loading/unavailable; no startup-speedup claim.
+- Mini's historical first heading is **Finished**, retaining canonical local finish/date/offset, missing-time help and the existing four-column layout, interactions and sizing.
+
 ## v80.202 — 2026-11-07
 
 - Web report demand distinguishes a selected source awaiting its first healthy Live observation from an unavailable source. Models remains in its ordinary determinate loader and recovers automatically, with existing bounded backoff and explicit source-wait timeout.

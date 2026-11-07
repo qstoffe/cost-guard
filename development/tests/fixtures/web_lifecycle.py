@@ -1,5 +1,6 @@
 """Finite synthetic end-to-end Web cycle, real acquisition/HTTP/SSE/job owners."""
 from decimal import Decimal
+from dataclasses import replace
 import http.client
 import json
 import multiprocessing
@@ -35,12 +36,13 @@ def run_cycle(*, competing=False, failed_daily=False, http_timeout=False, deep_d
     started = time.monotonic()
     with tempfile.TemporaryDirectory() as tmp:
         source = SyntheticMonthSource(3, 2, month_start_ms=1000)
+        source.snapshots = {key: replace(value, complete=True) for key, value in source.snapshots.items()}
         config, selection, service, _ = make_service(tmp, source, now_ms=80_000_000)
 
         def factory(now):
             if failed_daily:
                 raise transport_failure(TimeoutError(), phase='snapshot')
-            return make_service(tmp, SyntheticMonthSource(3, 2, month_start_ms=1000), now_ms=now)[2]
+            return make_service(tmp, source, now_ms=now)[2]
 
         coordinator = WebWatchCoordinator(selection=selection, report_service=service,
             config=config, service_factory=factory, clock_ms=lambda: 80_000_000)

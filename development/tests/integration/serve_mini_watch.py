@@ -217,6 +217,16 @@ def main():
                     idle = replace(base_account, account=replace(base_account.account, quotas=quotas,
                         primary_quota_label='5-hour'), quota_periods=periods)
                     publish(value=replace(frame, quota=replace(frame.quota, accounts=(idle,))))
+                elif command.startswith('proof-'):
+                    state = command.removeprefix('proof-')
+                    history = tuple(replace(frame.history_cards[0], session_id=f'proof-{index}',
+                        title=f'Latest sample {index}') for index in range(5))
+                    publish(value=replace(frame, history_cards=history,
+                        history_state='loading' if state == 'switch' else state,
+                        history_scope='other-source' if state == 'switch' else 'fixed-source',
+                        history_epoch=0 if state in {'loading', 'switch'} else 1,
+                        history_total=12, history_checked=12 if state == 'observed' else 4,
+                        history_verified_at_ms=None if state in {'loading', 'switch'} else 1000))
                 elif command in {'history-times', 'history-dst'}:
                     instants = ((2026, 11, 5, 22, 47), (2026, 11, 5, 23, 8), None) if command == 'history-times' else (
                         (2026, 10, 25, 0, 30), (2026, 10, 25, 1, 30), (2026, 11, 5, 23, 8))

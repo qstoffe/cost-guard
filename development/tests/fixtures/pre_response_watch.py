@@ -93,8 +93,8 @@ class PreResponseWatch:
     def cold_capture(self, now):
         cold = WatchCards(self.workers)
         cold.catalog(observe_catalog(self.source))
-        entry = cold.sessions[self.stopped]
-        self.workers._capture(entry.root, entry.generation, now, None, ())
+        for entry in cold.sessions.values():
+            self.workers._capture(entry.root, entry.generation, now, None, ())
         for result in self.workers.drain():
             if result.phase != "timing":
                 cold.accept(result, now)

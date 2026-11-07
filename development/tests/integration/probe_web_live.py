@@ -126,17 +126,28 @@ def main():
         if args.watch_cards or args.tool_outcomes:
             observations.stage = 'watch_cards'
             first_rows = None
+            publications = []
             deadline = time.monotonic() + 90
             while time.monotonic() < deadline:
                 state, _ = get('/api/live', cookie=cookie)
                 live = state['values'].get('live', {})
                 view = live.get('view') or {}
+                publications.append((time.monotonic(), state['sequence']))
+                if view.get('history_state') == 'loading':
+                    assert not view.get('history_cards'), 'provisional history escaped the producer'
                 cards = [*view.get('active_cards', []), *view.get('history_cards', [])]
                 if any(card['rows'] for card in cards) and first_rows is None:
                     first_rows = round(time.monotonic() - started, 3)
                 if any('totals' in card or 'provisional' in card for card in cards):
                     raise RuntimeError('probe_watch_card_legacy_totals')
-                if first_rows is not None and view.get('history_cards'):
+                if first_rows is not None and view.get('history_state') == 'observed':
+                    assert view['history_checked'] == view['history_total']
+                    assert view['history_epoch'] > 0 and view['history_verified_at_ms'] is not None
+                    owner = owners[0].coordinator
+                    expected = sorted((entry.finished_ms, key) for key, entry in owner.cards.sessions.items()
+                        if entry.latest_ms and not owner.cards._focals(entry, owner.clock_ms()))
+                    expected = sorted(expected, key=lambda pair: (-pair[0], pair[1]))[:5]
+                    assert {card['session_id'] for card in view['history_cards']} == {key for _, key in expected}
                     history_prompts = [row['prompt'] for card in view['history_cards'] for row in card['rows']]
                     known_finishes = [prompt for prompt in history_prompts if prompt['completed_at_ms'] is not None]
                     for prompt in history_prompts:
@@ -150,6 +161,11 @@ def main():
                         known_history_finishes=len(known_finishes), unknown_history_finishes=len(history_prompts)-len(known_finishes),
                         row_cards=sum(bool(card['rows']) for card in cards),
                         first_rows_seconds=first_rows,
+                        first_verified_history_seconds=round(time.monotonic() - started, 3),
+                        history_checked=view['history_checked'], history_total=view['history_total'],
+                        history_state=view['history_state'], proof_epoch=view['history_epoch'],
+                        publication_advances=len(set(seq for _, seq in publications)),
+                        max_http_sample_gap_seconds=round(max((b[0]-a[0] for a,b in zip(publications, publications[1:])), default=0), 3),
                         max_rows_per_card=max(len(card['rows']) for card in cards),
                         pending_captures=len(owners[0].coordinator.card_workers.jobs))
                     if card_evidence['max_rows_per_card'] != 1 or card_evidence['pending_captures'] > 4:
@@ -159,6 +175,9 @@ def main():
                     raise RuntimeError('probe_watch_cards_failed')
                 time.sleep(.25)
             else:
+                print(json.dumps(dict(history_verification='inconclusive', history_state=view.get('history_state'),
+                    checked=view.get('history_checked'), total=view.get('history_total'),
+                    cause=view.get('history_cause'), deadline_seconds=90)))
                 raise RuntimeError('probe_watch_cards_timeout')
         if args.tool_outcomes:
             activities = [row['tool'] for card in cards for row in card['rows'] if row.get('tool')]

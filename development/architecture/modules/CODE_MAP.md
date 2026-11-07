@@ -89,7 +89,16 @@ All paths in this table are relative to the repository root. Test names live und
 
 ## Shared synthetic fixtures
 
-Mini's session totals/history presentation, canonical Activity clock and unknown-finish help are covered by `test_mini_watch.py`,
+Web Earlier proof is owned by `src/watch/history_publication.py` and revision/status
+coverage in `cards.py`. `test_watch_cards.py` and `test_web_live.py` cover delayed
+capture, atomic refresh, source failures, removal/resumption and independent active
+publication; `integration/benchmark_history_readiness.py` asserts fixed 2700-root
+winners/coverage and cold/warm/changed reads. Current Mini Fit invokes
+`integration/probe_history_readiness.cjs` for actual Full/Mini DOM and AX state parity.
+[Measurements and the real-source exception](../../journal/web/history-readiness.md)
+separate correctness from unproven private cold-start speed.
+
+Mini's session totals/history presentation, canonical Finished clock and unknown-finish help are covered by `test_mini_watch.py`,
 `fixtures/mini_sessions.cjs`; `integration/probe_mini_session_alignment.cjs`, invoked
 by current `probe_mini_fit.cjs`, pins both four-column layouts, name-only Session,
 independent prompt (whole-session) cost scopes and symmetric Session/cost help for each

@@ -37,7 +37,7 @@ module.exports = async function checkPromptCost(evaluate) {
     assert.equal(help.name, 'CCost (I + E)');
     assert.equal(help.open, true); assert.equal(help.click, true);
     assert.equal(help.within, true); assert.equal(help.role, 'tooltip');
-    assert.match(help.text, /I — Incoming context cost[\s\S]*E — Other cost[\s\S]*I \+ E when fully priced[\s\S]*not the Input/);
+    assert.match(help.text, /Estimated reference cost of this prompt, not your bill[\s\S]*I — Incoming context cost on the first model request[\s\S]*E — Other cost: output, later requests and linked subagents[\s\S]*Total = I \+ E when fully priced, before display rounding/);
   }
   for (const sample of result.geometry) {
     assert.equal(sample.complete, true); assert.equal(sample.numbered, true);

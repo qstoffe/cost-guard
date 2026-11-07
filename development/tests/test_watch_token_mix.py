@@ -35,7 +35,7 @@ class WatchTokenMixTests(unittest.TestCase):
             {self.root.session_id: "initial"}, frozenset({self.root.session_id})))
 
     def capture(self, snapshot, now=4000, previous=None):
-        self.source.snapshot = snapshot
+        self.source.snapshot = replace(snapshot, complete=True)
         self.service.invalidate_roots((self.root.session_id,))
         self.service.set_now_ms(now)
         capture, item = capture_rows(self.service, self.root, previous)
@@ -99,6 +99,8 @@ class WatchTokenMixTests(unittest.TestCase):
             {self.root.session_id: "new"}, frozenset()))
         self.publish(replace(captures[0], observed_at_ms=9000), generation)
         self.assertIsNone(self.wire(9000)["active_cards"][-1]["rows"][0]["prompt"]["token_mix_percent"])
+        self.assertEqual([], self.wire(39000)["history_cards"], "stale generation is not history proof")
+        self.publish(replace(captures[-1], observed_at_ms=10000))
         history = self.wire(39000)["history_cards"][-1]["rows"][0]["prompt"]
         self.assertIsNone(history["token_mix_percent"])
         self.assertEqual(history["duration_ms"], self.wire(99000)["history_cards"][-1]["rows"][0]["prompt"]["duration_ms"])

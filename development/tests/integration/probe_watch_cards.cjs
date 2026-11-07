@@ -119,7 +119,16 @@ async function main() {
              .every((th,i)=>th.querySelector('button').textContent===(i===0&&table.closest('.watch-history')?'Finished':names[i]) && help(th.querySelector('button')).length>20))
             && [...document.querySelectorAll('tbody tr')].every(row=>row.cells.length===10 && /^\\d\\d:\\d\\d$/.test(row.cells[0].textContent)
                && (row.closest('.watch-history')?/^\\d{4}-\\d\\d-\\d\\d \\d\\d:\\d\\d [+-]\\d{4}$/:/^\\d{4}-\\d\\d-\\d\\d \\d\\d:\\d\\d$/).test(help(row.cells[0].firstChild))); })()`);
-       assert.equal(headers, true, 'both tables share the ten columns and local clock disclosures');
+        assert.equal(headers, true, 'both tables share the ten columns and local clock disclosures');
+        await evaluate(`INPUT.view.history_state='loading';INPUT.view.history_epoch=0;INPUT.view.history_checked=4;INPUT.view.history_total=12;redraw()`);
+        assert.equal(await evaluate(`document.querySelectorAll('.watch-history article').length`),0,
+          'provisional legacy cards cannot bypass producer readiness');
+        const loadingAX = (await command('Accessibility.getFullAXTree',{},sessionId)).nodes
+          .filter(node=>!node.ignored).map(node=>node.name?.value||'').join('\n');
+        assert.match(loadingAX,/Loading earlier sessions….*4\/12 checked/);
+        await evaluate(`INPUT.view.history_state='observed';redraw()`);
+        assert.equal(await evaluate(`document.querySelectorAll('.watch-history article').length`),5);
+        const historyReadiness = {loadingDOM:true,loadingAX:true,verifiedFive:true};
        await evaluate(`document.activeElement.blur();window.scrollTo(0,0)`);
        const hover = await evaluate(`(() => { const r=document.querySelector('.watch-history th button').getBoundingClientRect(); return {x:r.x+r.width/2,y:r.y+r.height/2}; })()`);
         await command('Input.dispatchMouseEvent', {type:'mouseMoved',...hover}, sessionId);
@@ -179,7 +188,7 @@ async function main() {
         assert.ok(quotas.resetGaps.every(gap=>gap>=0 && gap<=4), JSON.stringify(quotas.resetGaps));
        assert.equal(quotas.aligned, true); assert.equal(quotas.legible, true);
         assert.equal(quotas.monthlyDivider, false);
-         assert.match(quotas.secondary, /Weekly · 100% used \(840\)Capacity: 840 \(guesstimate\)Reset/);
+          assert.match(quotas.secondary, /Weekly · 100% used \(840\)Weekly Capacity: 840 \(guesstimate\)Monthly Capacity: 3600 \(guesstimate\)Reset/);
        const polish = await evaluate(`(() => {
          const style=n=>getComputedStyle(n), rect=n=>n.getBoundingClientRect();
          const cards=[...document.querySelectorAll('.watch-subscription')], first=cards[0], grid=first.parentNode;
@@ -274,7 +283,7 @@ async function main() {
          if (!flags.some(Boolean)) assert.equal(result.band,normalBand);
          else assert.notEqual(result.band,normalBand);
        }
-       assert.equal(polish.outcomes.at(-2).warning,true);
+        assert.equal(polish.outcomes.at(-2).warning,false, 'brief stale refresh stays quiet; actionable restrictions remain visible');
        assert.equal(polish.outcomes.at(-1).restriction,true);
         assert.equal(polish.unlimited,true);
          const promptCost = await checkPromptCost(evaluate);
@@ -328,7 +337,7 @@ async function main() {
         return {count,scroll,success,error}; })()`);
       assert.equal(scale.count, 100); assert.equal(scale.scroll, false);
       assert.notEqual(scale.success, layout.runningColor); assert.notEqual(scale.error, layout.runningColor);
-           cases.push({theme, ...layout, quotas, polish, context, promptCost, transitions, scale,
+           cases.push({theme, ...layout, quotas, polish, context, promptCost, transitions, scale, historyReadiness,
              contextScreenshot:`context-${theme}-${width}.png`, screenshot: `watch-${theme}-${width}.png`, outcome: 'PASS'});
       await command('Target.closeTarget', {targetId});
     }
