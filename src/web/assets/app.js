@@ -296,6 +296,7 @@ async function acquire(state, background = false, prices = false) {
    const attempt = state.attempt = new ReportLoading.Attempt(undefined, state.section === 'ai-stats' || !!demand);
   state.priceRefreshing = prices; state.priceMessage = '';
   state.failed = false;
+  state.dispatchError = null;
   ReportLoading.reset(state);
   state.lastWork = null;
   ReportLoading.observe(state, {phase: 'queued'});
@@ -312,7 +313,9 @@ async function acquire(state, background = false, prices = false) {
           demand ? {request: scope, retry: retryOnce} : scope, attempt.controller.signal);
          state.active = admission.id;
           if (demand && !prices) {
-            state.dispatchError = admission.error || null;
+             // Only a current terminal source fault may accompany a usable
+             // retained result. Temporary admission errors cannot poison success.
+             state.dispatchError = admission.terminal ? admission.error || 'report_unavailable' : null;
             if (!admission.result && state.result) { state.withheld = true; show(state); }
             if (admission.result) publication = {status: 'complete', result: admission.result};
           else if (admission.terminal || !admission.id) throw new Error(admission.error || 'report_unavailable');

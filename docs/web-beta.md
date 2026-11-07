@@ -3,6 +3,12 @@
 After authentication, **Web Beta v…** shows the running server's CLI product version,
 not a release lookup or newly edited source. Offline views retain their original version.
 
+On initial Models entry, source selection may finish before the first healthy Live
+observation. Models keeps its centered loading progress and **Waiting for source…**
+stage, then continues automatically; no manual Retry is needed for a healthy startup.
+Waiting uses bounded backoff. Genuine source/authentication/permission errors and
+exhausted waits still show actionable failure feedback and **Retry Models**.
+
 ## Contextual help
 
 Heading labels and useful metric labels/values explain metrics in Web and Mini

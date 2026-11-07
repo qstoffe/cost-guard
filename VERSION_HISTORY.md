@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.202 — 2026-11-07
+
+- Web report demand distinguishes a selected source awaiting its first healthy Live observation from an unavailable source. Models remains in its ordinary determinate loader and recovers automatically, with existing bounded backoff and explicit source-wait timeout.
+- Explicitly recoverable legacy source-unavailable admission replies use bounded retries. A transient admission error cannot overwrite a valid report, while current terminal source errors retain actionable Retry feedback. Foreground priority, shared jobs, pricing and source/security boundaries are unchanged.
+
 ## v80.201 — 2026-11-07
 
 - Both Mini tables expose full Session name/represented prompt ordinal and separate compact prompt-detail CCost help, retaining keyed targets and unchanged paired costs/columns.

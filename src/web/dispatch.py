@@ -197,8 +197,10 @@ class DataDispatcher:
             if not ready:
                 if self.blocked_since is None:
                     self.blocked_since = self.clock()
-                self.source_error = error or 'source_unavailable'
                 self.source_terminal = terminal or self.clock() - self.blocked_since >= 120
+                # A selected source can still be waiting for its first healthy
+                # Live observation. Identity alone is not report readiness.
+                self.source_error = error or ('source_wait_timeout' if self.source_terminal else 'source_starting')
                 if self.source_terminal:
                     for entry in self.entries.values():
                         if entry['job']:

@@ -17,14 +17,26 @@ sys.path.insert(0, str(ROOT))
 from development.tests.fixtures.opencode_v2_service import FakeV2Service, fixture
 from development.tests.fixtures.session_snapshots import make_snapshot
 from development.tests.fixtures.watch_runtime import MutableSource, make_service
-from development.tests.fixtures.web_reports import finite_report
-from development.tests.fixtures.ai_stats_views import stats_report
+from development.tests.fixtures.report_loading import LoadingJobs
 from src.sources.opencode_v2 import OpenCodeV2Source
 from src.sources.selection import SourceSelector
 from src.watch.acquisition import LiveAcquisition
 from src.watch.coordinator import WatchCoordinator
 from src.web.host import WebHost
 from src.web.jobs import ReportJobs
+from src.web.dispatch import DataDispatcher
+
+
+def startup_report(sender, request):
+    """Current canonical synthetic publication in a real owned finite child."""
+    import time
+    jobs = LoadingJobs()
+    key = jobs.submit(request)
+    result = jobs.jobs[key]['result']
+    result['source'] = dict(status='acquired', observed_at_ms=int(time.time() * 1000),
+                            identity=request.source_identity)
+    sender.send(('result', json.dumps(result).encode('utf-8')))
+    sender.close()
 
 
 def main():
@@ -66,7 +78,11 @@ def main():
         stack.enter_context(patch("src.web.source_startup.wake_cli_service", side_effect=wake))
         stack.enter_context(patch("src.web.composition.live_acquisition", side_effect=acquire))
         host = WebHost(ROOT)
-        host.jobs = ReportJobs(target=stats_report if '--ai-stats' in sys.argv else finite_report)
+        host.jobs = ReportJobs(target=startup_report)
+        host.dispatcher = DataDispatcher(host.jobs)
+        # Synthetic Live config must never be compared with real installation
+        # dependencies. The dispatcher and HTTP still use their production owners.
+        host.dependencies = None
         stack.callback(host.close)
         host.start()
         host.publish_ready()
