@@ -4,7 +4,8 @@ const vm = require('node:vm');
 const fs = require('node:fs');
 const timers = new Set();
 // The HTTP fixture's historical acquisition clock is intentionally near epoch.
-class FixtureDate extends Date { static now() { return 10000000; } }
+let fixtureNow = 10000000;
+class FixtureDate extends Date { static now() { return fixtureNow; } }
 const vmTimeout = (callback, milliseconds) => {
   const token = setTimeout(() => { timers.delete(token); callback(); }, milliseconds);
   timers.add(token); return token;
@@ -76,6 +77,11 @@ async function main() {
     const response = await fetch(input.origin + path, {...options, headers});
     if (path === '/api/bootstrap') bootstrapStatuses.push(response.status);
     if (response.headers.get('set-cookie')) cookie = response.headers.get('set-cookie').split(';')[0];
+    if (path.startsWith('/api/jobs/') || path === '/api/detail') {
+      const value = await response.clone().json();
+      const observed = value.result?.source?.observed_at_ms ?? value.result?.observed_at_ms;
+      if (Number.isFinite(observed)) fixtureNow = Math.max(fixtureNow, observed);
+    }
     return response;
   };
   // Finite-page harness isolates transport; live lifecycle has its own VM/browser tests.
@@ -137,7 +143,7 @@ async function main() {
   assert.equal(vm.runInContext('current.percent', context), 5, 'genuinely new acquisition resets prior progress');
    assert.equal(all(ids.result, 'progress')[0].getAttribute('aria-valuetext'), '5 percent');
   releaseReport();
-  await until(() => ids.notice.textContent.includes('Snapshot captured'));
+  await until(() => vm.runInContext('!!current.result && !current.loading && !current.withheld', context));
   assert.equal(location.hash, '#/models');
   const shell = await (await fetch(input.origin + '/', {headers: {Cookie: cookie}})).text();
   assert.doesNotMatch(shell, /href=["']#\/reports/);
@@ -429,7 +435,7 @@ async function main() {
   // Reload with an ordinary deep link must not erase it or require the bootstrap again.
   location.hash = '#/sessions/root-0000';
   const reloaded = vm.createContext({LiveConnection: transport, AbortController, clearTimeout, document: context.document, window: context.window, location, history,
-     URLSearchParams, fetch: wire, setTimeout: vmTimeout, Date, console});
+     URLSearchParams, fetch: wire, setTimeout: vmTimeout, Date: FixtureDate, console});
   require('../fixtures/web_help_vm.cjs')(vm, reloaded);
     for (const file of ['/render.js', '/report-loading.js', '/cached-reports.js', '/account-cards.js', '/watch.js', '/session.js', '/sessions.js']) vm.runInContext(await (await fetch(input.origin + file)).text(), reloaded);
   vm.runInContext(await (await fetch(input.origin + '/reports.js')).text(), reloaded);
@@ -442,7 +448,7 @@ async function main() {
   // Legacy deep-link reload canonicalizes once. Back/Forward revisit the same entry.
   location.hash = '#/live';
   const watchReload = vm.createContext({LiveConnection: transport, AbortController, clearTimeout, document: context.document, window: context.window, location, history,
-    URLSearchParams, fetch: wire, setTimeout, Date, console});
+    URLSearchParams, fetch: wire, setTimeout: vmTimeout, Date: FixtureDate, console});
   require('../fixtures/web_help_vm.cjs')(vm, watchReload);
    for (const script of ['/render.js', '/report-loading.js', '/cached-reports.js', '/reports.js', '/settings.js', '/app.js']) {
     vm.runInContext(await (await fetch(input.origin + script)).text(), watchReload);
@@ -454,7 +460,7 @@ async function main() {
   navigate('watch');
   assert.equal(ids.heading.textContent, 'Watch');
   navigate('models');
-  await until(() => vm.runInContext('Boolean(current?.result) && !current.loading', watchReload));
+   await until(() => vm.runInContext('Boolean(current?.result) && !current.loading && !current.withheld', watchReload));
   const retained = ids.result.textContent, terminalRequests = requests;
   vm.runInContext("connectionStatus('STOPPED — NOT LIVE. Use the OS launcher.', {kind: 'stopped', terminal: true, writable: false})", watchReload);
   assert.match(ids['host-state'].textContent, /STOPPED — NOT LIVE/);
@@ -471,7 +477,7 @@ async function main() {
   offline = true;
   ids.result.textContent = 'Starting Cost Guard';
   const unavailable = vm.createContext({LiveConnection: transport, AbortController, clearTimeout, document: context.document, window: context.window, location, history,
-    URLSearchParams, fetch: wire, setTimeout, Date, console});
+     URLSearchParams, fetch: wire, setTimeout: vmTimeout, Date: FixtureDate, console});
   require('../fixtures/web_help_vm.cjs')(vm, unavailable);
    for (const script of ['/render.js', '/report-loading.js', '/cached-reports.js', '/reports.js', '/settings.js', '/app.js']) {
     vm.runInContext(await (await fetch(input.origin + script)).text(), unavailable);

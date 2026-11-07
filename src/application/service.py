@@ -15,10 +15,12 @@ from src.pricing.base import PricingUnavailableError
 from src.runtime_errors import recoverable, recovered
 from src.sources.errors import SourceError
 from src.domain.progress import WorkProgress
+from src.analysis.cache import dependency_signature
 
 from .contracts import ObjectValue, ProgressEvent, ReportError, ReportResult, record
 from .projection import identity, project
 from src.reports.ai_stats import StatsCheckpointError
+from src.reports.history_work import HistoryContinuation, HistoryCheckpointError
 
 
 ServiceFactory = Callable[[int, Callable[[str], None]], ReportService]
@@ -109,6 +111,10 @@ class ReportApplication:
                               for root, revision in service.report_source_revisions())
             source = record(
                 generation=service.selection.selected, status="partial" if report.source_warnings else "acquired",
+                omitted_roots=report.history_omitted_roots,
+                identity=dependency_signature((service.selection.selected, getattr(service.source, 'source_instance', None))),
+                dependencies=dependency_signature(service._dependencies(service._load_catalog())),
+                pricing_signature=service._load_comparison_catalog().analysis_signature,
                 observed_at_ms=now, revisions=revisions, atomicity="per_root_snapshot",
                 accounts_atomic_with_sessions=False,
             )
@@ -125,7 +131,10 @@ class ReportApplication:
             observe(WorkProgress("Preparing report", "finalizing", 2, 2, stage="finalizing"))
             recovered("application-report")
             return ReportResult(self._instance_id, sequence, now, scope, source, view)
-        except StatsCheckpointError as exc:
+        except HistoryContinuation:
+            return ReportResult(self._instance_id, sequence, now, scope, unknown,
+                                error=ReportError('history_continue'))
+        except (StatsCheckpointError, HistoryCheckpointError) as exc:
             return ReportResult(self._instance_id, sequence, now, scope, unknown,
                                 error=ReportError(str(exc)))
         except SourceError as exc:

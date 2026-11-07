@@ -46,6 +46,7 @@ const SessionsCatalog = (() => {
       }
       head.append(header); this.body = el('tbody'); table.append(head, this.body); pan.append(table);
       const pager = el('div', undefined, 'pager sessions-pager');
+      this.pan = pan; this.pager = pager;
       this.previous = el('button', 'Previous'); this.next = el('button', 'Next'); this.label = el('span');
       for (const button of [this.previous, this.next]) {
         button.type = 'button'; button.disabled = true;
@@ -53,6 +54,10 @@ const SessionsCatalog = (() => {
       }
       this.label.setAttribute('aria-live', 'polite'); pager.append(this.previous, this.label, this.next);
       this.root.append(this.status, pan, pager);
+      if (typeof ReportLoading !== 'undefined') {
+        this.loader = new ReportLoading.View(); this.root.append(this.loader.root);
+        this.freshness();
+      }
     }
     configure(params) {
       this.offset = Number(params?.get('offset') || 0);
@@ -61,15 +66,21 @@ const SessionsCatalog = (() => {
       this.direction = params?.get('direction') === '1' ? 1 : -1;
       this.generation++; this.rerun = true;
     }
+    rememberedDestination() { return destination(this.offset || 0, this.epoch || this.data?.epoch, this.sort || 'activity', this.direction || -1); }
     attach(parent) {
+      this.freshness();
       if (this.root.parentNode !== parent) parent.replaceChildren(this.root);
       if (this.attached) return;
       this.attached = true; this.poll();
     }
-    detach() { this.attached = false; this.generation++; clearTimeout(this.timer); }
+    interest(visible = this.attached && !document.hidden, token = this.token) {
+      if (token) this.api('/api/sessions', {action: 'interest', token, visible}).catch(() => {});
+    }
+    detach() { this.attached = false; this.interest(false); this.generation++; clearTimeout(this.timer); }
     async poll() {
       if (!this.attached || this.busy) return;
       clearTimeout(this.timer);
+      if (document.hidden) { this.timer = setTimeout(() => this.poll(), 30000); return; }
       await this.load();
       if (this.attached) this.timer = setTimeout(() => this.poll(), this.rerun ? 0 : 5000);
     }
@@ -81,14 +92,19 @@ const SessionsCatalog = (() => {
       try {
         const data = await this.api('/api/sessions', {token: this.token, offset: this.offset,
           epoch: this.epoch, sort: this.sort, direction: this.direction});
-        if (!this.attached || generation !== this.generation) return;
+        if (!this.attached || generation !== this.generation) { this.interest(false, data.token); return; }
+        const opened = this.token !== data.token;
         this.token = data.token; this.update(data);
+        if (opened) this.interest();
       } catch (error) {
         if (!this.attached || generation !== this.generation) return;
         this.status.replaceChildren(el('span', `Sessions unavailable (${error.message}); last observed rows retained. `));
         if (error.message === 'catalog_expired') {
           this.token = null;
-          const first = el('a', 'Return to page 1'); first.href = destination(0, null, this.sort, this.direction); this.status.append(first);
+          this.pan.hidden = true; this.pager.hidden = true;
+          if (this.loader) this.loader.root.hidden = true;
+          this.status.replaceChildren(el('span', 'Page position changed; '));
+          const first = el('a', 'return to latest sessions'); first.href = destination(0, null, this.sort, this.direction); this.status.append(first);
         }
         this.status.hidden = false;
         if (['instance_stopping', 'authentication_required', 'host_identity_changed'].includes(error.message)) this.detach();
@@ -98,7 +114,10 @@ const SessionsCatalog = (() => {
       }
     }
     update(data) {
-      this.data = data;
+       this.data = data;
+       this.observedAt = Number.isFinite(data.age_ms) ? Date.now() - data.age_ms : null;
+       this.freshness();
+      if (data.epoch) this.epoch = data.epoch;
       this.status.textContent = [data.state === 'source_unavailable' ? 'Source unavailable; retained rows are not current.' :
         data.state === 'loading' ? 'Waiting for the shared session source…' : '',
         data.pending_sort ? `Global sort unavailable: indexed ${data.indexed} of ${data.available} sessions. Showing Last activity, newest first until ready.` : ''].filter(Boolean).join(' ');
@@ -126,6 +145,14 @@ const SessionsCatalog = (() => {
       link(this.previous, Math.max(0, data.offset - 50), data.offset > 0);
       link(this.next, data.offset + 50, data.offset + 50 < data.total);
       this.pagerBusy();
+    }
+    freshness() {
+      if (!this.loader) return;
+      const old = this.observedAt == null || Date.now() - this.observedAt > 3600000;
+      this.pan.hidden = old; this.pager.hidden = old;
+      this.loader.root.hidden = !old || this.data?.state === 'source_unavailable';
+      this.loader.update({percent: 0, stage: 'Waiting for a current session catalog observation',
+        stageLabel: 'Loading requested Sessions page'});
     }
     pagerBusy() {
       for (const button of [this.previous, this.next]) button.disabled = this.busy || !button.destination;

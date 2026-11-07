@@ -19,6 +19,7 @@ let hostInstance = null;
 let snapshotRender = null;
 let settingsView = null;
 let cachedReportTimer = null;
+let demand = null; // Enabled only after the authenticated host advertises it.
 function historical(state) { return !!CachedReports.cadences[state?.section]; }
 function firstReport(state = current) {
   if (csrf && hostState.writable && state?.request && !state.detail && !state.result && !state.attempted && !document.hidden) {
@@ -29,6 +30,10 @@ function scheduleCachedReport() {
   clearTimeout(cachedReportTimer);
   const state = current;
   if (!historical(state) || !state.result || state.loading || document.hidden || !hostState.writable) return;
+  if (demand) {
+    cachedReportTimer = setTimeout(() => { if (current === state) acquire(state, true); }, 5000);
+    return; // Lookup a publication, never schedule a browser-owned source refresh.
+  }
   const cadence = CachedReports.cadences[state.section];
   const delay = Math.max(0, (state.checkedAt || CachedReports.observation(state.result)) + cadence - Date.now());
   cachedReportTimer = setTimeout(() => {
@@ -39,6 +44,7 @@ function enterCachedReport(state) {
   if (!historical(state)) return;
   const band = CachedReports.entry(state.result, state.section);
   state.withheld = band === 'withhold';
+  if (demand && !document.hidden && hostState.writable) { acquire(state, !!state.result && !state.withheld); return; }
   if (!document.hidden && hostState.writable && state.result && ['quiet', 'withhold'].includes(band))
     acquire(state, !state.withheld);
 }
@@ -46,10 +52,11 @@ function selectStats(state, period) {
   if (state.period === period) return;
   state.period = period;
   state.request = {kind: 'ai-stats', stats_scope: period};
+  demand?.update();
   state.result = state.statsResults?.get(period) || null;
   state.failed = false; state.message = '';
   ReportLoading.reset(state);
-  if (state.loading) AIStatsView.prioritize(state, api);
+  if (state.loading) AIStatsView.prioritize(state, api, !!demand);
   enterCachedReport(state); show(state);
   if (!state.result && !document.hidden) acquire(state);
   scheduleCachedReport();
@@ -84,7 +91,7 @@ function connectionStatus(message, state = {}) {
     banner.hidden = hostState.kind === 'connected' || (hostState.kind === 'starting' && !(current?.result || current?.detail?.data || liveValue?.view));
     const summary = document.getElementById('host-message');
     const details = document.getElementById('host-details');
-    const timing = `Last host check: ${time(hostState.authenticatedAt)}\nLast source update: ${time(hostState.observedAt)}\nReports stay frozen. Account updates are separate.`;
+    const timing = `Last host check: ${time(hostState.authenticatedAt)}\nLast source update: ${time(hostState.observedAt)}\n${demand ? 'Reports refresh through the host; retained results keep their source observation time.' : 'Reports stay frozen.'} Account updates are separate.`;
     if (summary && details) { summary.textContent = message; details.textContent = timing; }
     else banner.textContent = `${message} · ${timing}`;
     const warning = document.getElementById('host-warning');
@@ -251,7 +258,12 @@ function failure(code) {
      ai_stats_slice_timeout: 'An AI Stats work slice repeatedly stalled, even at one root. Saved stable work is retained; check the source and Retry.',
      ai_stats_revision_churn: 'History kept changing without verified forward progress. Saved stable work is retained; Retry when the source settles.',
      ai_stats_checkpoint_unavailable: 'AI Stats could not save resumable evidence. Check local cache access or disk space, then Retry.',
-     ai_stats_resource_limit: 'AI Stats reached its bounded history/live-root resource limit. No truncated totals are shown.',
+      ai_stats_resource_limit: 'AI Stats reached its bounded history/live-root resource limit. No truncated totals are shown.',
+      history_slice_timeout: 'A history work slice stalled without new saved evidence. Check the source and Retry.',
+      history_no_progress: 'History made no verified forward progress. Saved stable work is retained; check the source and Retry.',
+      history_revision_churn: 'History kept changing. Saved stable work is retained; Retry when the source settles.',
+      history_checkpoint_unavailable: 'History could not save resumable evidence. Check local cache access or disk space, then Retry.',
+      history_resource_limit: 'History reached its bounded work limit. No truncated totals are shown.',
      source_permission_denied: 'Permission denied reading the source. Correct source access before Retry.',
      http_auth_failure: 'Source authentication failed. Restore OpenCode source authorization before Retry.',
      registration_invalid: 'OpenCode source registration is invalid. Repair it before Retry.',
@@ -266,8 +278,10 @@ function failure(code) {
 async function acquire(state, background = false, prices = false) {
   if (state.loading || !hostState.writable) return;
   const request = state.request;
+  let publication = null;
+  let retry = !!state.failed && !background;
   state.loading = true;
-  const attempt = state.attempt = new ReportLoading.Attempt(undefined, state.section === 'ai-stats');
+   const attempt = state.attempt = new ReportLoading.Attempt(undefined, state.section === 'ai-stats' || !!demand);
   state.priceRefreshing = prices; state.priceMessage = '';
   state.failed = false;
   ReportLoading.reset(state);
@@ -279,9 +293,18 @@ async function acquire(state, background = false, prices = false) {
     while (true) {
       attempt.check(hostState);
       try {
-        state.active = (await api(prices ? '/api/models/refresh' : '/api/reports', prices ? {} :
-          state.section === 'ai-stats' ? state.request : request,
-          attempt.controller.signal)).id;
+        const scope = state.section === 'ai-stats' ? state.request : request;
+        const retryOnce = retry;
+        retry = false; // Only the explicit user attempt may clear host backoff.
+        const admission = await api(prices ? '/api/models/refresh' : demand ? '/api/data' : '/api/reports', prices ? {} :
+          demand ? {request: scope, retry: retryOnce} : scope, attempt.controller.signal);
+         state.active = admission.id;
+          if (demand && !prices) {
+            state.dispatchError = admission.error || null;
+            if (!admission.result && state.result) { state.withheld = true; show(state); }
+            if (admission.result) publication = {status: 'complete', result: admission.result};
+          else if (admission.terminal || !admission.id) throw new Error(admission.error || 'report_unavailable');
+        }
         state.progressSequence = 0;
         return;
       } catch (error) {
@@ -294,13 +317,14 @@ async function acquire(state, background = false, prices = false) {
   try {
     await admit();
     if (state.section === 'ai-stats' && request.stats_scope !== state.request.stats_scope)
-      AIStatsView.prioritize(state, api);
+      AIStatsView.prioritize(state, api, !!demand);
     show(state);
     while (true) {
       // A throttled/hidden tab may return after the client budget, while the
       // server already completed. Read that outcome before declaring a timeout.
       attempt.check(hostState, false);
-      const job = await api('/api/jobs/' + state.active, undefined, attempt.controller.signal);
+       const job = publication || await api('/api/jobs/' + state.active, undefined, attempt.controller.signal);
+       publication = null;
       attempt.check(hostState, ['queued', 'running'].includes(job.status));
       const statsProgress = state.section === 'ai-stats' && AIStatsView.observe(state, job);
       if (job.progress?.stage?.startsWith('date-')) state.lastWork = reportWork(job.progress);
@@ -320,12 +344,15 @@ async function acquire(state, background = false, prices = false) {
          if (state.section === 'ai-stats' && !job.result.view.ai_stats.some(row => row.period === state.period)) {
            await admit(); continue; // A simultaneous scope change finished a different period.
          }
-         const initial = !state.result || state.withheld;
+          const initial = !state.result || state.withheld;
+          if (demand && !prices && state.result && state.dataRevision ===
+              state.active + ':' + CachedReports.observation(job.result)) break;
          if (state.section === 'models' && (!job.result.view || job.result.view.kind !== 'normal' ||
              !['acquired', 'partial'].includes(job.result.source?.status))) throw new Error('report_unavailable');
          if (state.section === 'ai-stats') {
            AIStatsView.remember(state, job.result);
-         } else state.result = job.result;
+          } else state.result = job.result;
+          state.dataRevision = state.active + ':' + CachedReports.observation(job.result);
          // A usable partial response finishes this attempt, not source coverage.
           if (state.result) {
             state.percent = 100; state.stage = state.stageLabel = 'Report ready';
@@ -358,7 +385,8 @@ async function acquire(state, background = false, prices = false) {
       try { await api('/api/jobs/' + state.active + '/cancel', {}); } catch (_) { /* Host owns its hard deadline too. */ }
     }
   } finally {
-    state.loading = false; state.priceRefreshing = false; state.active = null; state.attempt = null; state.checkedAt = Date.now();
+     if (state.dispatchError && !prices) { state.failed = true; state.message = failure(state.dispatchError); }
+     state.loading = false; state.priceRefreshing = false; state.active = null; state.attempt = null; state.checkedAt = Date.now();
     show(state); scheduleCachedReport();
     if (state.retryOrder && state === current && !document.hidden && hostState.writable) {
       state.retryOrder = false; acquire(state);
@@ -402,7 +430,9 @@ function navigate() {
     const cached = request && [...views.values()].find(value => value.result && JSON.stringify(value.request) === JSON.stringify(request));
     views.set(key, {request, live: route.live, section: route.section, result: cached?.result || null,
       pages: {}, loading: false, active: null,
-      message: route.live ? 'Live acquisition starting; one runtime shared across tabs.' : cached ? 'Snapshot captured. Reused frozen observation.' : request ? 'Capture/Refresh to acquire this report.' : 'Choose a report scope.'});
+      message: route.live ? 'Live acquisition starting; one runtime shared across tabs.' : cached ?
+        (demand ? 'Reusing the last verified observation; the host checks freshness.' : 'Snapshot captured. Reused frozen observation.') :
+        request ? (demand ? 'Loading the host-owned report…' : 'Capture/Refresh to acquire this report.') : 'Choose a report scope.'});
   }
   const previous = current;
   if (current?.detail) current.detail.detach();
@@ -428,6 +458,7 @@ function navigate() {
    if ((match || route.catalog) && csrf && !sessionDetailAvailable) current.message = 'Live session source unavailable.';
   document.getElementById('search').disabled = !!current.detail;
   show(current);
+  demand?.update();
   if (current !== previous) enterCachedReport(current);
   scheduleCachedReport();
   if (redirected) document.getElementById('content').focus();
@@ -441,7 +472,9 @@ async function connect() {
     // Lightweight file read precedes reports; HTML already carries the early-paint theme.
     try { applySettings(await api('/api/settings')); }
     catch (_) { notice.textContent = 'Unable to read saved Web settings. Open Settings for details.'; }
-    const state = await api('/api/status');
+     const state = await api('/api/status');
+     if (state.data_dispatcher && typeof DataDemand !== 'undefined')
+       demand = new DataDemand.Controller(api, () => current, () => !!csrf && hostState.writable);
     if (typeof state.product_version === 'string') document.getElementById('product-version').textContent = ' ' + state.product_version;
     sessionDetailAvailable = state.session_detail === true && typeof SessionDetail !== 'undefined';
     statusLine.textContent = `HTTP ${state.http}; analysis ${state.analysis}; source ${state.source}; accounts ${state.accounts}. Snapshot health is shown below.`;
@@ -490,12 +523,21 @@ window.addEventListener('hashchange', () => {
   if (current?.section === 'models') document.getElementById('content').focus();
 });
 window.addEventListener('pageshow', () => liveConnection?.resync());
+for (const link of document.querySelectorAll('nav a')) {
+  if (link.getAttribute('href') === '#/sessions') link.addEventListener('click', event => {
+    const catalog = views.get('sessions-catalog')?.catalog;
+    if (catalog?.rememberedDestination) { event.preventDefault(); location.hash = catalog.rememberedDestination(); }
+  });
+}
 window.addEventListener('offline', () => connectionStatus('OFFLINE — last observation retained, not live. Check the connection and reload to retry.', {kind: 'offline', writable: false}));
 window.addEventListener('online', () => liveConnection?.resync());
 document.addEventListener('visibilitychange', () => {
+  demand?.update();
+  current?.catalog?.interest();
   // Keep existing acquisitions, but never schedule new hidden-route refreshes.
   if (!document.hidden) liveConnection?.resync();
   if (!document.hidden) {
+    current?.catalog?.poll(); current?.detail?.poll();
     enterCachedReport(current);
     firstReport();
   }

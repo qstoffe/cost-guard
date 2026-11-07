@@ -42,6 +42,7 @@ const SessionDetail = (() => {
       this.loading();
       this.context = new WatchView.ContextLine();
       const scroll = el('div', undefined, 'sessions-table-pan');
+      this.scroll = scroll;
       scroll.tabIndex = 0; scroll.setAttribute('role', 'region'); scroll.setAttribute('aria-label', 'Session prompt history');
       const table = el('table', undefined, 'sessions-table session-history-table');
       const head = el('thead'), header = el('tr');
@@ -51,6 +52,7 @@ const SessionDetail = (() => {
       this.root.append(back, this.heading, el('p', 'Session ID: ' + id), this.context.root, this.status, scroll);
     }
     attach(parent) {
+      this.freshness();
       if (this.root.parentNode !== parent) parent.replaceChildren(this.root);
       if (this.attached) return;
       this.attached = true; this.poll();
@@ -63,6 +65,7 @@ const SessionDetail = (() => {
     async poll() {
       if (!this.attached || this.busy) return;
       clearTimeout(this.timer);
+      if (document.hidden) { this.timer = setTimeout(() => this.poll(), 30000); return; }
       const generation = this.generation;
       await this.load();
       if (this.attached) this.timer = setTimeout(() => this.poll(), generation === this.generation ? 5000 : 0);
@@ -109,6 +112,7 @@ const SessionDetail = (() => {
       } finally { this.busy = false; }
     }
     sourceStatus(data) {
+      this.freshness();
       if (data.state === 'loading' || data.pending && data.state === 'observed') {
         if (!this.data) this.loading();
         else { this.status.textContent = ''; this.status.hidden = true; }
@@ -123,6 +127,12 @@ const SessionDetail = (() => {
       const progress = el('progress'); progress.setAttribute('aria-label', 'Loading session');
       this.status.replaceChildren(el('span', 'Loading session… '), progress);
       this.status.hidden = false;
+    }
+    freshness() {
+      if (!this.scroll) return;
+      const observed = this.data?.result?.observed_at_ms;
+      this.scroll.hidden = !Number.isFinite(observed) || Date.now() - observed > 3600000 || observed > Date.now();
+      if (this.scroll.hidden) this.loading();
     }
     update(data) {
       ReportView.defaultUnit();
@@ -164,6 +174,7 @@ const SessionDetail = (() => {
         if (delta) window.scrollBy(0, delta);
       }
       this.data = data;
+      this.freshness();
     }
   }
   // Unit bindings must not manufacture new tooltip DOM for unchanged text cells.

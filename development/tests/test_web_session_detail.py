@@ -106,9 +106,32 @@ class SessionDetailTests(unittest.TestCase):
                 self.tick(service)
                 self.assertEqual(self.details.page(live, 0), frozen)
                 entering = self.details.open("root", "live")
-                self.assertIsNone(self.details.page(entering, 0)["result"])
+                self.assertIsNotNone(self.details.page(entering, 0)['result'], 'valid warm detail is immediate on return')
                 self.tick(service)
                 self.assertIsNotNone(self.details.page(entering, 0)["result"])
+
+    def test_return_age_matrix_and_failure_do_not_renew_observation(self):
+        source = SyntheticMonthSource(1, 1, month_start_ms=1000)
+        service = self.service(source)
+        token = self.details.open('root-0000', 'live')
+        self.tick(service)
+        observed = self.details.page(token, 0)['result']['observed_at_ms']
+        self.details.close(token)
+        start = self.clock
+        for minutes in (0, 15, 59, 60, 61):
+            self.clock = start + minutes * 60
+            returned = self.details.open('root-0000', 'live')
+            page = self.details.page(returned, 0)
+            self.assertEqual(minutes <= 60, page['result'] is not None)
+            if page['result']:
+                self.assertEqual(observed, page['result']['observed_at_ms'])
+            self.details.close(returned)
+        self.clock = start + 3600
+        returned = self.details.open('root-0000', 'live')
+        self.details.tick(service, unavailable=True)
+        self.assertEqual(observed, self.details.page(returned, 0)['result']['observed_at_ms'])
+        self.clock += 1
+        self.assertIsNone(self.details.page(returned, 0)['result'], 'failed acquisition must not renew retained age')
 
     def test_omission_outage_missing_reconnect_and_multitab_share_analysis(self):
         source = SyntheticMonthSource(1, 100, month_start_ms=1000)

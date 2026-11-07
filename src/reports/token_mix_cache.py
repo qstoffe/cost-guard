@@ -5,6 +5,7 @@ not hydrated snapshots or verbose derived prompt records. Global clone deduplica
 and grouping still belong to token_mix_history. Deleted roots are never read back.
 """
 from decimal import Decimal, InvalidOperation
+from dataclasses import replace
 import sqlite3
 
 from src.analysis.cache import dependency_signature
@@ -13,6 +14,8 @@ from src.cache.repository import CacheEntry
 from src.domain import ModelRef, TokenUsage
 from src.domain.progress import WorkProgress
 from .token_mix_history import history_projection
+from .history_work import HistoryWork, HistoryCheckpointError, active_roots, revisions
+from .history_snapshots import load as load_snapshots, warnings as history_warnings
 
 ALGORITHM = 'web-token-mix-evidence-1'
 NAMESPACE = 'web-token-mix-evidence'
@@ -78,51 +81,83 @@ def build_cached_token_mix(service, progress):
     progress(WorkProgress('Loading pricing catalog', 'pricing'), None)
     reference = service._load_comparison_catalog()
     progress(WorkProgress('Checking history revisions', 'catalog'), None)
-    roots = [root for root in service.source.list_sessions() if root.parent_session_id is None]
+    sessions = tuple(service.source.list_sessions())
+    roots = [root for root in sessions if root.parent_session_id is None]
+    versions = revisions(service, roots)
+    work = HistoryWork(service, sessions, roots, versions, reference)
+    active = active_roots(sessions)
     keys = {root.session_id: cache_key(service, root, reference) for root in roots}
     try:
         cached = service.cache_repository.get_many(NAMESPACE, keys.values(), busy_timeout_ms=50)
     except (OSError, sqlite3.Error):
         cached = {}
-    entries, prompts, costs = [], {}, {}
+    facts_by_root = {}
+    fact_count = 0
+    unavailable = set()
     pending = []
 
-    def include(facts):
-        for entry, prompt, parts in facts:
-            entries.append(entry)
-            if prompt is not None:
-                prompts.setdefault(entry, prompt)
-            costs[entry.model, entry.tokens] = parts
+    def include(root, facts):
+        nonlocal fact_count
+        fact_count += len(facts)
+        if getattr(service, 'history_checkpoint', None) and fact_count > 250_000:
+            raise HistoryCheckpointError('history_resource_limit')
+        facts_by_root[root.session_id] = facts
 
     for index, root in enumerate(roots):
-        revision = service.source.get_session_tree_revision(root.session_id)
+        revision = versions[root.session_id]
         key = keys[root.session_id]
-        facts = load(cached.pop(key, None), revision)
+        facts = load(cached.pop(key, None), revision) if root.session_id not in active else None
         service.metrics.add('token_mix_cache_hits' if facts is not None else 'token_mix_cache_misses')
         if facts is not None:
             service._acquisition.revisions[root.session_id] = revision
-            include(facts)
+            include(root, facts)
+            work.saved += 1
         else:
             pending.append((root, key))
         progress(WorkProgress('Checking history cache', 'history', index + 1, len(roots), stage='history-cache'), None)
     progress(WorkProgress('Updating changed history', 'history', 0, len(pending), stage='history-load'), None)
-    for start in range(0, len(pending), BATCH_SIZE):
-        chunk = pending[start:start + BATCH_SIZE]
+    batch_size = getattr(service, 'history_batch_size', BATCH_SIZE)
+    for start in range(0, len(pending), batch_size):
+        chunk = pending[start:start + batch_size]
         writes = []
-        service.prepare_roots([root for root, _key in chunk], progress_scope='date')
+        partial = getattr(service, 'allow_partial_history', False)
+        snapshots = load_snapshots(service, [root for root, _key in chunk]) if partial else None
+        if not partial:
+            service.prepare_roots([root for root, _key in chunk], progress_scope='date')
         for root, key in chunk:
-            item = service._analyze(root)
+            if partial and root.session_id not in snapshots:
+                unavailable.add(root.session_id)
+                continue
+            item = service._analyze(root, snapshot=snapshots[root.session_id]) if partial else service._analyze(root)
             payload = encode(item.bundle, reference)
             service.metrics.add('token_mix_valued_requests', len(payload))
-            include(decode(payload))
-            if (item.bundle.cacheable and service.source.get_session_tree_revision(root.session_id)
+            include(root, decode(payload))
+            if (item.bundle.cacheable and root.session_id not in active
+                    and item.bundle.source_revision == versions[root.session_id]
+                    and service.source.get_session_tree_revision(root.session_id)
                     == item.bundle.source_revision):
                 writes.append(CacheEntry(NAMESPACE, key, payload, item.bundle.source_revision, ALGORITHM))
             service._analyzed.pop(root.session_id, None)
         try:
             service.cache_repository.put_many(writes, busy_timeout_ms=50)
         except (OSError, sqlite3.Error):
-            pass
+            writes = []
         progress(WorkProgress('Updating changed history', 'history', start + len(chunk), len(pending), stage='history-load'), None)
-    return history_projection(service, reference, entries, prompts, progress,
+        work.checkpoint(len(writes), processed=len(chunk), remaining=start + len(chunk) < len(pending))
+    unavailable.update(work.verify())
+    if unavailable and len(unavailable) == len(roots):
+        raise HistoryCheckpointError('history_revision_churn')
+    entries, prompts, costs = [], {}, {}
+    for sid, facts in facts_by_root.items():
+        if sid in unavailable:
+            service._acquisition.revisions.pop(sid, None)
+            continue
+        for entry, prompt, parts in facts:
+            entries.append(entry)
+            if prompt is not None:
+                prompts.setdefault(entry, prompt)
+            costs[entry.model, entry.tokens] = parts
+    report = history_projection(service, reference, entries, prompts, progress,
         valuation=lambda model, tokens: costs[model, tokens])
+    return replace(report, source_warnings=(*report.source_warnings, *history_warnings(unavailable)),
+                   history_omitted_roots=len(unavailable))

@@ -5,6 +5,12 @@ from src.application.session_catalog import SORTS
 
 
 def catalog_page(owner, value):
+    if value.get('action') == 'interest':
+        if (set(value) != {'action', 'token', 'visible'} or type(value['visible']) is not bool
+                or not isinstance(value['token'], str) or not re.fullmatch(r'[a-f0-9]{32}', value['token'])):
+            raise ValueError('invalid_request')
+        owner.interest(value['token'], value['visible'])
+        return {'status': 'accepted'}
     if set(value) - {"token", "offset", "sort", "direction", "epoch"}:
         raise ValueError("invalid_request")
     offset = value.get("offset", 0)

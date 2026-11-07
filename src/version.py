@@ -1,7 +1,7 @@
 """Product version metadata kept in one runtime location."""
-VERSION = "80.196"
+VERSION = "80.197"
 DISPLAY_VERSION = f"v{VERSION}"
-RELEASE_DATE = "2026-11-06"
+RELEASE_DATE = "2026-11-07"
 PRODUCT_NAME = "Cost Guard"
 
 

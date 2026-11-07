@@ -268,3 +268,4 @@ class ReportProjection:
     ai_stats: tuple[StatsPeriod, ...] = ()
     ai_stats_work: Mapping[str, object] = field(default_factory=dict)
     comparisons: MatchesPage | None = None
+    history_omitted_roots: int = 0

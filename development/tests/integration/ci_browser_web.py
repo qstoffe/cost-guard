@@ -6,13 +6,14 @@ import shutil
 import socket
 import sys
 import tempfile
+import time
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
 
 from development.tools.ci_web_beta import hosted_only, save
-from development.tests.fixtures.web_reports import finite_report, SyntheticSessionsRuntime
+from development.tests.fixtures.web_reports import current_report, SyntheticSessionsRuntime
 from src.web.host import WebHost
 from src.web.jobs import ReportJobs
 from src.web.http import RequestHandler
@@ -37,8 +38,8 @@ def main():
         (config_root / "config").mkdir()
         shutil.copyfile(ROOT / "config/default-config.jsonc", config_root / "config/default-config.jsonc")
         user_config = config_root / "config/user-config.jsonc"
-        owner = WebHost(config_root, jobs=ReportJobs(target=finite_report))
-        owner.live = SyntheticSessionsRuntime(config_root)
+        owner = WebHost(config_root, jobs=ReportJobs(target=current_report))
+        owner.live = SyntheticSessionsRuntime(config_root, clock_ms=lambda: int(time.time() * 1000))
         stream_patch.start()
         owner.start()
         owner.publish_ready()
@@ -65,7 +66,7 @@ def main():
                 errors = []
                 page.on("pageerror", lambda error: errors.append(type(error).__name__))
                 page.goto(owner.browser_url())
-                expect(page.locator("#notice")).to_contain_text("Snapshot captured", timeout=30000)
+                expect(page.locator("#result .overview-models")).to_be_visible(timeout=30000)
                 assert "bootstrap" not in page.url
                 assert any(cookie["httpOnly"] for cookie in context.cookies())
                 assert page.locator("#result table").count() > 0

@@ -40,6 +40,20 @@ def slow_report(sender, request):
 
 
 class LiveTests(unittest.TestCase):
+    def test_first_live_readiness_requires_a_healthy_published_frame(self):
+        from types import SimpleNamespace
+        published = []
+        runtime = LiveRuntime(None, lambda *_: published.append(runtime.observed.is_set()))
+        driver = SimpleNamespace(source_state='starting', observed_at_ms=None, error=None,
+                                 coordinator=SimpleNamespace(report_service=SimpleNamespace(timezone_id='UTC', config={})))
+        runtime._publish_frame(driver, None)
+        self.assertFalse(runtime.observed.is_set())
+        driver.observed_at_ms = 2200
+        with patch('src.application.live.project_live', return_value=None):
+            runtime._publish_frame(driver, object())
+        self.assertTrue(runtime.observed.is_set())
+        self.assertEqual([False, False], published, 'readiness must follow publication, not precede it')
+
     def test_card_and_shared_activity_export_the_same_canonical_outcomes(self):
         payload = project_live(outcome_watch()).to_json()
         shared = payload['rows'][0]['tool']

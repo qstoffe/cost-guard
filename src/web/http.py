@@ -15,6 +15,7 @@ from .security import BrowserSession, COOKIE_SECONDS
 from .instance_state import checkout_identity
 from .settings import SettingsError, WebSettings
 from .session_catalog import catalog_page
+from .dispatch_http import handle as handle_dispatch
 
 ASSETS = {"/": ("index.html", "text/html; charset=utf-8"),
            "/favicon.ico": ("favicon.ico", "image/x-icon"),
@@ -31,7 +32,8 @@ ASSETS = {"/": ("index.html", "text/html; charset=utf-8"),
              "/token-mix.js": ("token-mix.js", "text/javascript; charset=utf-8"),
              "/ai-stats.js": ("ai-stats.js", "text/javascript; charset=utf-8"),
              "/comparisons.js": ("comparisons.js", "text/javascript; charset=utf-8"),
-            "/cached-reports.js": ("cached-reports.js", "text/javascript; charset=utf-8"),
+             "/cached-reports.js": ("cached-reports.js", "text/javascript; charset=utf-8"),
+             "/data-demand.js": ("data-demand.js", "text/javascript; charset=utf-8"),
             "/report-loading.js": ("report-loading.js", "text/javascript; charset=utf-8"),
              "/settings.js": ("settings.js", "text/javascript; charset=utf-8"),
              "/mini.js": ("mini.js", "text/javascript; charset=utf-8"),
@@ -308,6 +310,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                 else:
                     self.reply(200, {"csrf": session[1]}, cookie=session[0])
                 return
+            if handle_dispatch(self, value):
+                return
             if self.path in {"/api/reports", "/api/models/refresh"}:
                 try:
                     if self.path == "/api/models/refresh":
@@ -328,6 +332,9 @@ class RequestHandler(BaseHTTPRequestHandler):
                             self.reply(503, {"error": readiness["error"], "retryable": readiness["retryable"]})
                             return
                     key = self.server.jobs.submit(request)
+                    dispatcher = getattr(self.server.lifecycle, 'dispatcher', None)
+                    if self.path == '/api/models/refresh' and dispatcher:
+                        dispatcher.price_refresh(key)
                 except ReportWorkerStopError:
                     raise
                 except RuntimeError:
@@ -362,6 +369,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             if self.path == "/api/status":
                 value = self.server.jobs.readiness()
                 value["product_version"] = DISPLAY_VERSION
+                value['data_dispatcher'] = getattr(self.server.lifecycle, 'dispatcher', None) is not None
                 if self.server.lifecycle:
                     value["lifecycle"] = self.server.lifecycle.public_status()
                     value["session_detail"] = self.server.lifecycle.live is not None

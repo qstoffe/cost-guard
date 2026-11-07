@@ -14,6 +14,7 @@ from .ai_stats_evidence import (ALGORITHM, NAMESPACE, COVERAGE, INVALID, coverag
 from .migration_notice import migration_gap_notes
 from .models import ReportKind, ReportProjection
 from .token_mix_cache import cache_key
+from .history_snapshots import load as load_snapshots, warnings as history_warnings
 
 BATCH_SIZE = 64
 SLICE_ROOTS = 256
@@ -52,6 +53,7 @@ class StatsAcquisition:
         service.progress(WorkProgress('Checking history revisions', 'catalog'))
         sessions = service.session_catalog()
         self.roots, _activity = service._ordered_roots(sessions)
+        self.provenance = {r.session_id: r.provenance for r in self.roots}
         ancestry = root_by_session(sessions)
         self.active = {ancestry.get(s.session_id) for s in sessions if s.active is True}
         if len(self.roots) > MAX_ROOTS:
@@ -62,6 +64,7 @@ class StatsAcquisition:
         self.evidence = {}
         self.fact_count = 0
         self.fresh = set()
+        self.unavailable = set()
         self.pending = []
         self.scan = getattr(service, 'stats_scan', None)
         with service.metrics.measure('ai_stats_restore'):
@@ -124,22 +127,23 @@ class StatsAcquisition:
             raise StatsCheckpointError('ai_stats_resource_limit')
         self.evidence[sid] = value, volatile
 
+    def _discard(self, sid):
+        previous = self.evidence.pop(sid, None)
+        if previous:
+            self.fact_count -= len(previous[0][0].entries) + len(previous[0][0].intervals)
+        self.service._acquisition.revisions.pop(sid, None)
+
     def _batch(self, roots):
         service = self.service
-        observed = getattr(service.source, 'load_session_snapshots_observed', None)
-        batch = getattr(service.source, 'load_session_snapshots', None)
-        ids = tuple(r.session_id for r in roots)
         with service.metrics.measure('ai_stats_snapshots'):
-            if callable(observed):
-                snapshots = observed(ids, lambda step, done, total: service.progress(
-                    WorkProgress('Loading history batch', 'history', done, total, stage='date-' + step)))
-            elif callable(batch):
-                snapshots = batch(ids)
-            else:
-                snapshots = {sid: service.source.load_session_snapshot(sid) for sid in ids}
+            snapshots = load_snapshots(service, roots)
         writes = []
         for root in roots:
-            snapshot = snapshots[root.session_id]
+            snapshot = snapshots.get(root.session_id)
+            if snapshot is None:
+                self.unavailable.add(root.session_id)
+                self._discard(root.session_id)
+                continue
             # The compact evidence cache is sufficient here: do not also persist
             # the much larger full analysis bundle in one SQLite transaction/root.
             bundle = service._analyze_snapshot(snapshot)
@@ -159,6 +163,12 @@ class StatsAcquisition:
                 proof = coverage(value)
                 self.bounds[coverage_key(root)] = CacheEntry(COVERAGE, coverage_key(root), proof, snapshot.source_revision, COVERAGE)
                 writes.append(self.bounds[coverage_key(root)])
+                if getattr(service, 'shared_web_evidence', False) and snapshot.complete:
+                    from .shared_evidence import entries
+                    # Stats and coverage are already in this batch. Publish only
+                    # the other compatible products, without duplicate writes.
+                    writes.extend(entry for entry in entries(service, root, snapshot.source_revision, value)
+                                  if entry.namespace not in (NAMESPACE, COVERAGE))
         try:
             with service.metrics.measure('ai_stats_cache_write'):
                 service.cache_repository.put_many(writes, busy_timeout_ms=50)
@@ -202,6 +212,8 @@ class StatsAcquisition:
         latest, _activity = service._ordered_roots(sessions)
         if len(latest) > MAX_ROOTS:
             raise StatsCheckpointError('ai_stats_resource_limit')
+        if any(r.session_id in self.provenance and r.provenance != self.provenance[r.session_id] for r in latest):
+            raise StatsCheckpointError('source_identity_changed')
         ancestry = root_by_session(sessions)
         self.active = {ancestry.get(s.session_id) for s in sessions if s.active is True}
         revisions = _revisions(service, latest)
@@ -209,8 +221,13 @@ class StatsAcquisition:
         invalid = {sid for sid, revision in self.revisions.items() if revisions.get(sid) != revision}
         invalid.update(r.session_id for r in latest if r.session_id not in previous)
         invalid.update(self.active - self.fresh)
+        if getattr(service, 'allow_partial_history', False):
+            self.unavailable.update(invalid & (self.evidence.keys() | self.fresh))
+            self.unavailable.intersection_update(r.session_id for r in latest)
         for sid in invalid:
-            self.evidence.pop(sid, None)
+            self._discard(sid)
+        for sid in previous - {r.session_id for r in latest}:
+            self._discard(sid)
         self.roots, self.revisions = latest, revisions
         self.pending = [r for r in latest if r.session_id not in self.evidence]
         for root in latest:
@@ -219,6 +236,8 @@ class StatsAcquisition:
 
     def project(self):
         service = self.service
+        if self.unavailable and len(self.unavailable) == len(self.roots):
+            raise StatsCheckpointError('ai_stats_revision_churn')
         evidence, costs, matches = [], {}, []
         for root in self.roots:
             item = self.evidence.get(root.session_id)
@@ -232,15 +251,17 @@ class StatsAcquisition:
         rows, scopes = [], {}
         selected_start = dict(self.periods)[self.scope]
         for name, start in self.periods:
-            excluded = [self.bounds.get(coverage_key(r)) for r in self.pending if self._excludes(r, start)]
-            ready = len(excluded) == len(self.pending) and all(
+            excluded = [self.bounds.get(coverage_key(r)) for r in self.pending
+                        if r.session_id not in self.unavailable and self._excludes(r, start)]
+            omitted = sum(r.session_id in self.unavailable for r in self.pending)
+            ready = len(excluded) + omitted == len(self.pending) and all(
                 not volatile or sid in self.fresh for sid, (_facts, volatile) in self.evidence.items())
             scopes[name] = dict(completed=len(self.roots) - len(self.pending) + len(excluded), total=len(self.roots), ready=ready)
             contained = selected_start is None or start is not None and start >= selected_start
             if not ready or not contained:
                 continue
             gaps = migration_gap_notes(service.selection.migration_gap, start_ms=start)
-            complete = not service.selection.warnings and not gaps
+            complete = not service.selection.warnings and not gaps and not omitted
             rows.append(replace(period_stats(evidence, lambda model, tokens: costs[model, tokens], period=name,
                 start=start, now=service.now_ms, zone=service.timezone_id, source_complete=complete),
                 matched=period_fact([m for m in matches if m], start, service.now_ms,
@@ -248,7 +269,8 @@ class StatsAcquisition:
                     and all(item.payload['matched'] for item in excluded))))
         gaps = migration_gap_notes(service.selection.migration_gap, start_ms=dict(self.periods)[self.scope])
         return ReportProjection(ReportKind.AI_STATS, 'AI Stats', service.selection.selected.upper(),
-            tuple(service.selection.warnings), notes=gaps, ai_stats=tuple(rows),
+            (*service.selection.warnings, *history_warnings(self.unavailable)), notes=gaps, ai_stats=tuple(rows),
+            history_omitted_roots=len(self.unavailable),
             ai_stats_work=dict(scopes=scopes, remaining=len(self.pending), completed=len(self.roots) - len(self.pending),
                                total=len(self.roots)))
 

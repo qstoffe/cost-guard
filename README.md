@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v80.196, 2026-11-06), the supported distribution.
+Use **current `main`** (v80.197, 2026-11-07), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -361,7 +361,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.196 (2026-11-06):** Sessions separates fresh canonical running evidence from scalar-summary loading, updates supported metrics without replacing focused cells, and exposes distinct provider-qualified contributors on the `Multiple models` text through shared hover/focus/touch help. Failures and retained/partial values remain explicit; catalog sorting, bounded acquisition and canonical accounting are unchanged. See [Web Beta](docs/web-beta.md).
+**v80.197 (2026-11-07):** The Web host prioritizes visible report demand, warms useful unvisited reports through bounded background work and shares compatible compact evidence without merging report totals. Verified results remain immediately reusable for up to one hour; changing roots are explicitly omitted from partial history. Sessions main navigation restores the last valid page/sort and offers explicit recovery after expiry or source change. Watch/Accounts keep their protected Live owners; finite process, security and read-only source boundaries remain. See [Web Beta](docs/web-beta.md).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

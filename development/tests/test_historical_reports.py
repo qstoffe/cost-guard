@@ -175,6 +175,29 @@ class HistoricalReportScaleTests(unittest.TestCase):
 
 
 class HistoricalReportSourceTests(unittest.TestCase):
+    def test_available_history_omits_only_unstable_trees_and_strict_reads_still_fail(self):
+        from src.sources.errors import SourceConcurrentChangeError
+        with source_with_current_service() as (source, remote, _):
+            remote.sessions[1].pop('parentID')
+            original = source._load_messages
+            reads = []
+
+            def changing(native):
+                value = original(native)
+                reads.append(native.data['id'])
+                if native.data['id'] == 'ses_current':
+                    remote.sessions[0]['time']['updated'] += 1
+                return value
+
+            with patch.object(source, '_load_messages', side_effect=changing):
+                snapshots = source.load_session_snapshots_available(('ses_current', 'ses_current_child'), lambda *_: None)
+                self.assertEqual({'ses_current_child'}, set(snapshots))
+                self.assertTrue(snapshots['ses_current_child'].complete)
+                self.assertEqual(1, reads.count('ses_current_child'))
+                with self.assertRaises(SourceConcurrentChangeError):
+                    source.load_session_snapshots_observed(('ses_current',), lambda *_: None)
+            self.assertFalse(any(thread.name.startswith('cost-guard-v2-history') for thread in threading.enumerate()))
+
     def test_serial_parallel_range_parity_includes_children_archives_and_partial_prices(self):
         wire = HistoricalWire(4)
         wire.sessions[0]['time']['created'] = DAY - 86_400_000

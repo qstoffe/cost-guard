@@ -500,6 +500,13 @@ const ReportView = (() => {
   function hourlySummary(value) {
     return `Reference cost per active hour: ${display(value, 'rate')} · ${value.status} · CCost ${display(value, 'known_ccost')} · Active execution ${display(value, 'duration_ms')}`;
   }
+  function historyWarning(result) {
+    if (result?.source?.status !== 'partial') return '';
+    const count = result.source.omitted_roots;
+    return Number.isSafeInteger(count) && count > 0 ?
+      `Partial history: ${count} changing root session${count === 1 ? '' : 's'} could not be verified and were omitted. Totals and groups do not cover the full source.` :
+      'Partial source history. Values may be incomplete.';
+  }
   function render(parent, result, state) {
     defaultUnit(result.view);
     parent.replaceChildren();
@@ -519,7 +526,8 @@ const ReportView = (() => {
       return;
     }
     parent.append(element('p', `Snapshot: ${new Date(result.observed_at_ms).toLocaleString()} · ${view.source_label} · ${result.source.status} · ${result.source.atomicity}. Frozen; Refresh explicitly to reacquire.`, 'snapshot'));
-    if (result.source.status === 'partial') parent.append(element('p', `Partial source data (${view.source_warning_count} warnings). Values may be incomplete.`, 'warning'));
+    if (result.source.status === 'partial') parent.append(element('p', Number.isSafeInteger(result.source.omitted_roots) && result.source.omitted_roots > 0 ?
+      historyWarning(result) : `Partial source data (${view.source_warning_count} warnings). Values may be incomplete.`, 'warning'));
     if (view.model_availability_unverified) parent.append(element('p', 'Model availability unverified: showing the full catalog or all historically used models, not a verified selectable list.', 'warning'));
     if (view.model_availability_empty) parent.append(element('p', 'No available OpenCode models match the pricing catalog.', 'warning'));
     const definitions = element('details');
@@ -564,5 +572,5 @@ const ReportView = (() => {
     return ['Complete session', ccost(block, 'total_ccost'), known(block.total_calls),
       display(block, 'duration_ms'), '—', known(block.total_ictx_cost_text), known(block.total_extra_cost_text), known(block.total_mix_text)];
   }
-  return {render, renderLive, element, detailCells, detailTotals, compare, overviewAccounts, display, contextSummary, text, setUnit, syncUnits, defaultUnit, mixLegend, hourlySummary, bind, setQuotaMode, quotaView, quotaHelp};
+  return {render, renderLive, element, detailCells, detailTotals, compare, overviewAccounts, display, contextSummary, text, setUnit, syncUnits, defaultUnit, mixLegend, hourlySummary, historyWarning, bind, setQuotaMode, quotaView, quotaHelp};
 })();

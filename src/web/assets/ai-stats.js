@@ -61,14 +61,15 @@ const AIStatsView = (() => {
     state.stage = `${label} (${scope.completed.toLocaleString()}/${scope.total.toLocaleString()} roots)`;
     return true;
   }
-  async function prioritize(state, api) {
+  async function prioritize(state, api, managed = false) {
     if (state.priorityUpdate || !state.active) return;
     state.priorityUpdate = true;
     try {
       let sent;
       do {
         sent = state.request.stats_scope;
-        await api('/api/reports', {kind: 'ai-stats', stats_scope: sent});
+        const request = {kind: 'ai-stats', stats_scope: sent};
+        await api(managed ? '/api/data' : '/api/reports', managed ? {request, retry: false} : request);
       } while (state.loading && state.active && sent !== state.request.stats_scope);
     } catch (_) { /* The normal polling/admission path reports authoritative errors. */ }
     finally { state.priorityUpdate = false; }
@@ -126,7 +127,7 @@ const AIStatsView = (() => {
         ReportLoading.show(this.content, state);
         return;
       }
-      this.status.textContent = state.failed ? state.message : '';
+      ReportView.text(this.status, [state.failed && state.message, ReportView.historyWarning(state.result)].filter(Boolean).join(' '));
       // Mutate the ten retained cards in one synchronous commit; never touch focus/scroll.
       for (const metric of row.metrics) {
         const card = this.cards.get(metric.metric);

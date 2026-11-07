@@ -23,7 +23,8 @@ from .session_snapshots import make_snapshot
 class SyntheticSessionsRuntime:
     """Session acquisition only; deliberately no Watch/SSE source observation."""
 
-    def __init__(self, root):
+    def __init__(self, root, *, clock_ms=lambda: 4000):
+        self.clock_ms = clock_ms
         database = CacheDatabase(root / "session-cache")
         database.initialize()
         snapshot = make_snapshot()
@@ -33,7 +34,7 @@ class SyntheticSessionsRuntime:
         self.service = ReportService(selection=SourceSelection(source, "v1", (), source.probe()),
             pricing_provider=FakePricingProvider(), account_provider=None,
             cache_repository=CacheRepository(database), config=dict(load_configuration(root).values, timezone="UTC"),
-            now_ms=4000, progress=lambda _: None)
+            now_ms=self.clock_ms(), progress=lambda _: None)
         self.catalog = SessionCatalog()
         self.details = SessionDetails()
         self.stopping = Event()
@@ -46,6 +47,7 @@ class SyntheticSessionsRuntime:
     def run(self):
         try:
             while not self.stopping.is_set():
+                self.service.now_ms = self.clock_ms()
                 self.catalog.observe(observe_catalog(self.service.source, include_archived_revisions=True))
                 self.details.tick(self.service)
                 if self.catalog.needed():
@@ -63,7 +65,12 @@ class SyntheticSessionsRuntime:
             raise self.failure
 
 
-def finite_report(sender, request):
+def current_report(sender, request):
+    """Real-browser fixture: acquire synthetic facts at the browser's wall clock."""
+    finite_report(sender, request, now_ms=int(time.time() * 1000))
+
+
+def finite_report(sender, request, *, now_ms=4000):
     try:
         if request.kind is ReportKind.TOKEN_MIX:
             sender.send(("progress", {"phase": "history", "completed": 1, "total": 100}))
@@ -88,7 +95,7 @@ def finite_report(sender, request):
                     pricing_provider=FakePricingProvider(), account_provider=None, cache_repository=cache, config=config,
                     now_ms=now, progress=progress)
 
-            result = ReportApplication(factory, clock=lambda: 4000).execute(request)
+            result = ReportApplication(factory, clock=lambda: now_ms).execute(request)
             sender.send(("result", json.dumps(result.to_json()).encode()))
     finally:
         sender.close()

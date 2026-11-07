@@ -1,0 +1,677 @@
+"""Host-owned demand, freshness/backoff and real cooperative process arbitration."""
+import time
+import unittest
+import tempfile
+import subprocess
+import sys
+from threading import Timer
+from types import SimpleNamespace
+from dataclasses import replace
+from unittest.mock import patch
+
+from development.tests.fixtures.dispatch_reports import quantum_report, durable_history_report, HistoryFixture
+from development.tests.fixtures.compact_reports import report_service, NOW
+from development.tests.fixtures.synthetic_month import SyntheticMonthSource
+from src.reports import ReportKind, ReportRequest
+from src.web.dispatch import DataDispatcher, cadence, usable
+from src.web.jobs import ReportJobs
+from src.web.report_control import ManagedReport
+
+
+def result(observed, *, sample=100):
+    return dict(error=None, source=dict(status='acquired', observed_at_ms=observed),
+                view=dict(kind='normal', model_comparison_sample_size=sample))
+
+
+class RecordingJobs:
+    def __init__(self):
+        self.values = {}
+        self.priorities = {}
+
+    def submit(self, request):
+        key = str(len(self.values))
+        self.values[key] = dict(status='queued', result=None, request=request)
+        return key
+
+    def snapshot(self, key):
+        return self.values.get(key)
+
+    def prioritize(self, priorities):
+        self.priorities = priorities
+
+    def cancel(self, key):
+        self.values[key]['status'] = 'cancelled'
+
+
+class DispatcherTests(unittest.TestCase):
+    def setUp(self):
+        self.now = 1000
+        self.jobs = RecordingJobs()
+        self.dispatch = DataDispatcher(self.jobs, clock=lambda: self.now, wall_clock=lambda: self.now)
+        self.dispatch.tick(identity='source')
+        self.models = ReportRequest()
+
+    def test_no_speculative_launch_before_interest_and_foreground_completes_first(self):
+        self.dispatch.tick()
+        self.assertEqual({}, self.jobs.values)
+        self.dispatch.interest('tab', 'models', True, self.models)
+        self.dispatch.tick(identity='source')
+        self.assertFalse(self.dispatch.warm_allowed)
+        self.assertEqual(1, len(self.jobs.values))
+        self.assertEqual(ReportKind.NORMAL, self.jobs.values['0']['request'].kind)
+        self.assertEqual('source', self.jobs.values['0']['request'].source_identity)
+        self.jobs.values['0'].update(status='complete', result=result(1_000_000))
+        self.dispatch.tick(identity='source')
+        self.assertTrue(self.dispatch.warm_allowed)
+        self.assertEqual(2, len(self.jobs.values))
+        self.assertEqual(ReportKind.AI_STATS, self.jobs.values['1']['request'].kind)
+
+    def test_hidden_and_expired_tabs_drop_priority_but_host_work_survives(self):
+        self.dispatch.interest('one', 'models', True, self.models)
+        key = self.dispatch.lookup(self.models)['id']
+        self.dispatch.tick()
+        self.assertEqual(0, self.jobs.priorities[key])
+        self.dispatch.interest('one', 'watch', False)
+        self.dispatch.tick()
+        self.assertEqual(1, self.jobs.priorities[key])
+        self.now += 91
+        self.dispatch.tick()
+        self.assertEqual({}, self.dispatch.tabs)
+        self.assertEqual('queued', self.jobs.values[key]['status'])
+
+    def test_two_tabs_coalesce_and_cached_observation_is_not_renewed_on_failure(self):
+        self.dispatch.interest('one', 'models', True, self.models)
+        self.dispatch.interest('two', 'models', True, self.models)
+        key = self.dispatch.lookup(self.models)['id']
+        self.assertEqual(key, self.dispatch.lookup(self.models)['id'])
+        self.jobs.values[key].update(status='complete', result=result(1_000_000))
+        self.dispatch.tick()
+        self.now += 300
+        self.assertEqual(1_000_000, self.dispatch.lookup(self.models)['result']['source']['observed_at_ms'])
+        self.dispatch.lookup(self.models, retry=True)
+        current = self.dispatch.entries[self.models]['job']
+        self.jobs.values[current].update(status='failed', result={'error': {'code': 'http_auth_failure', 'retryable': False}})
+        self.dispatch.tick()
+        lookup = self.dispatch.lookup(self.models)
+        self.assertTrue(lookup['terminal'])
+        self.assertEqual(1_000_000, lookup['result']['source']['observed_at_ms'])
+
+    def test_source_identity_rotation_cancels_work_and_removes_old_results(self):
+        self.dispatch.interest('one', 'models', True, self.models)
+        self.dispatch.tick(identity='first')
+        self.dispatch.tick(identity='second')
+        self.assertEqual('cancelled', self.jobs.values['0']['status'])
+        self.assertFalse(any(entry['result'] for entry in self.dispatch.entries.values()))
+
+    def test_age_boundary_and_qualified_sample_cadence(self):
+        for kind in (ReportKind.NORMAL, ReportKind.TOKEN_MIX, ReportKind.AI_STATS, ReportKind.COMPARISONS):
+            value = result(1_000_000)
+            value['scope'] = dict(kind=kind.value, timezone_id='UTC', local_day_start_ms=0)
+            for minutes, expected in [(0, True), (15, True), (59, True), (60, True), (61, False)]:
+                with self.subTest(kind=kind, minutes=minutes):
+                    self.assertEqual(expected, usable(value, 1_000_000 + minutes * 60_000))
+        self.assertFalse(usable(result(1_000_001), 1_000_000))
+        self.assertEqual(900, cadence(self.models, result(0, sample=99), True))
+        self.assertEqual(3600, cadence(self.models, result(0, sample=100), True))
+        self.assertEqual(3600, cadence(self.models, result(0, sample=100), False))
+
+    def test_completed_human_work_returns_to_idle_priority_and_sleep_due_work_staggers(self):
+        self.dispatch.interest('one', 'models', True, self.models)
+        key = self.dispatch.lookup(self.models)['id']
+        self.jobs.values[key].update(status='complete', result=result(1_000_000))
+        self.dispatch.tick()
+        self.assertFalse(self.dispatch.entries[self.models]['requested'])
+        self.dispatch.interest('one', 'watch', False)
+        self.now += 7200
+        before = len(self.jobs.values)
+        self.dispatch.tick()
+        self.assertLessEqual(len(self.jobs.values) - before, 1)
+
+    def test_sleep_missed_cycles_coalesce_then_each_default_product_staggers(self):
+        self.dispatch.interest('one', 'watch', False)
+        self.now += 7200
+        seen = []
+        for number in range(4):
+            self.dispatch.tick()
+            pending = [(key, value) for key, value in self.jobs.values.items() if value['status'] == 'queued']
+            self.assertEqual(1, len(pending))
+            key, job = pending[0]
+            seen.append(job['request'].kind)
+            publication = result(int(self.now * 1000))
+            publication['view']['ai_stats'] = [dict(period='30-days')]
+            job.update(status='complete', result=publication)
+            self.now += 14
+            self.dispatch.tick()
+            self.assertEqual(number + 1, len(self.jobs.values), 'no simultaneous due-product stampede')
+            self.now += 1
+        self.assertEqual({ReportKind.NORMAL, ReportKind.AI_STATS, ReportKind.TOKEN_MIX, ReportKind.COMPARISONS}, set(seen))
+        self.dispatch.tick()
+        self.assertEqual(4, len(self.jobs.values), 'missed periods are not replayed')
+
+    def test_source_terminal_error_preserves_valid_result_but_never_launches_new_work(self):
+        self.dispatch.interest('one', 'models', True, self.models)
+        key = self.dispatch.lookup(self.models)['id']
+        self.jobs.values[key].update(status='complete', result=result(1_000_000))
+        self.dispatch.tick()
+        self.dispatch.tick(ready=False, error='http_auth_failure', terminal=True)
+        before = len(self.jobs.values)
+        lookup = self.dispatch.lookup(self.models)
+        self.assertTrue(lookup['terminal'])
+        self.assertEqual('http_auth_failure', lookup['error'])
+        self.assertIsNotNone(lookup['result'])
+        self.assertEqual(before, len(self.jobs.values))
+
+    def test_price_refresh_invalidates_every_warm_projection_only_on_success(self):
+        self.dispatch.interest('one', 'models', True, self.models)
+        key = self.dispatch.lookup(self.models)['id']
+        self.jobs.values[key].update(status='complete', result=result(1_000_000))
+        self.dispatch.tick()
+        failed = self.jobs.submit(self.models)
+        self.dispatch.price_refresh(failed)
+        self.jobs.values[failed].update(status='failed', error='pricing_unavailable')
+        self.dispatch.tick()
+        self.assertIsNotNone(self.dispatch.entries[self.models]['result'])
+        action = self.jobs.submit(self.models)
+        self.dispatch.price_refresh(action)
+        self.jobs.values[action].update(status='complete', result=result(1_000_000))
+        self.dispatch.tick()
+        self.assertIsNone(self.dispatch.entries[self.models]['result'])
+
+    def test_source_identity_must_be_proved_before_any_managed_admission(self):
+        dispatch = DataDispatcher(self.jobs)
+        dispatch.interest('one', 'models', True, self.models)
+        self.assertIsNone(dispatch.lookup(self.models)['id'])
+        dispatch.tick()
+        self.assertEqual({}, self.jobs.values)
+        dispatch.tick(identity='verified')
+        self.assertEqual('verified', self.jobs.values['0']['request'].source_identity)
+
+    def test_coalesced_stats_scope_uses_highest_interested_priority(self):
+        foreground = ReportRequest(ReportKind.AI_STATS, stats_scope='7-days')
+        inactive = ReportRequest(ReportKind.AI_STATS)
+        self.dispatch.interest('one', 'ai-stats', True, foreground)
+        key = self.jobs.submit(ManagedReport(ReportKind.AI_STATS, source_identity='source'))
+        self.dispatch.entries[foreground]['job'] = key
+        self.dispatch.entries[inactive]['job'] = key
+        self.dispatch.tick()
+        self.assertEqual(0, self.jobs.priorities[key])
+
+    def test_managed_terminal_jobs_never_override_dispatcher_invalidation(self):
+        jobs = ReportJobs()
+        self.addCleanup(jobs.close)
+        for kind in (ReportKind.AI_STATS, ReportKind.TOKEN_MIX, ReportKind.COMPARISONS):
+            with self.subTest(kind=kind):
+                request = ManagedReport(kind, source_identity='source')
+                key = jobs.submit(request)
+                jobs._jobs[key].update(status='complete', finished_at=time.monotonic(), result={
+                    'view': {'ai_stats': [{'period': '30-days'}]}})
+                self.assertNotEqual(key, jobs.submit(request))
+
+    def test_stats_scope_promotions_preserve_one_job_and_all_requested_goals(self):
+        jobs = ReportJobs()
+        self.addCleanup(jobs.close)
+        key = jobs.submit(ManagedReport(ReportKind.AI_STATS, source_identity='source'))
+        jobs.select_scope(key, '7-days')
+        self.assertEqual('7-days', jobs._jobs[key]['request'].stats_scope)
+        jobs.select_scope(key, '30-days')
+        self.assertEqual('30-days', jobs._jobs[key]['request'].stats_scope)
+        self.assertEqual(('30-days', '7-days'), jobs._jobs[key]['goals'])
+        self.assertEqual(1, len(jobs._jobs))
+
+    def test_invalid_old_result_id_is_never_returned_during_retry_backoff(self):
+        key = self.dispatch.lookup(self.models)['id']
+        self.jobs.values[key].update(status='complete', result=result(1_000_000))
+        self.dispatch.tick()
+        entry = self.dispatch.entries[self.models]
+        self.now += 3660
+        entry.update(failures=1, due=self.now + 120, error='http_timeout')
+        lookup = self.dispatch.lookup(self.models)
+        self.assertIsNone(lookup['id'])
+        self.assertIsNone(lookup['result'])
+        self.assertTrue(lookup['stale'])
+
+    def test_midnight_invalidates_stats_even_when_its_observation_is_young(self):
+        value = result(86_390_000)
+        value['scope'] = dict(kind='ai-stats', timezone_id='UTC', local_day_start_ms=0)
+        self.assertTrue(usable(value, 86_399_999))
+        self.assertFalse(usable(value, 86_400_000))
+
+    def test_http_lookup_requires_explicit_boolean_and_rejects_nonfinite_scope(self):
+        from src.web.dispatch_http import handle
+        replies = []
+        handler = SimpleNamespace(path='/api/data', server=SimpleNamespace(lifecycle=SimpleNamespace(
+            dispatcher=self.dispatch)), reply=lambda status, value: replies.append((status, value)))
+        for body in ({'request': {'kind': 'normal'}}, {'request': {'kind': 'normal'}, 'retry': None},
+                {'request': {'kind': 'normal'}, 'retry': 0}, {'request': {'kind': 'session', 'session_id': 'root'}, 'retry': False}):
+            handle(handler, body)
+            self.assertEqual(400, replies[-1][0])
+        self.assertEqual({}, self.jobs.values)
+        handle(handler, {'request': {'kind': 'normal'}, 'retry': False})
+        self.assertEqual(200, replies[-1][0])
+        self.assertIsNotNone(replies[-1][1]['id'])
+
+    def test_dependency_observer_invalidates_external_prices_and_requires_restart_for_runtime_config(self):
+        from src.web.dispatch_dependencies import DispatchDependencies
+        config = dict(timezone='UTC', webSettings={'theme': 'light'})
+        prices = SimpleNamespace(analysis_signature='first')
+        observer = DispatchDependencies(lambda: config, lambda: prices, clock=lambda: self.now)
+        self.assertTrue(observer.check(self.dispatch))
+        key = self.dispatch.lookup(self.models)['id']
+        config['webSettings']['theme'] = 'dark'
+        self.now += 30
+        self.assertTrue(observer.check(self.dispatch))
+        self.assertEqual('queued', self.jobs.values[key]['status'])
+        prices.analysis_signature = 'changed'
+        self.now += 30
+        self.assertTrue(observer.check(self.dispatch))
+        self.assertEqual('cancelled', self.jobs.values[key]['status'])
+        self.assertIsNone(self.dispatch.entries[self.models]['job'])
+        config['timezone'] = 'Europe/Stockholm'
+        self.now += 30
+        self.assertFalse(observer.check(self.dispatch))
+
+    def test_temporary_dependency_price_read_failure_is_not_a_proven_invalidation(self):
+        from src.web.dispatch_dependencies import DispatchDependencies
+        observer = DispatchDependencies(lambda: {'timezone': 'UTC'}, lambda: SimpleNamespace(analysis_signature='first'),
+                                        clock=lambda: self.now)
+        observer.check(self.dispatch)
+        key = self.dispatch.lookup(self.models)['id']
+        self.now += 30
+        with patch.object(observer, 'prices', side_effect=OSError('disposable cache unavailable')):
+            self.assertTrue(observer.check(self.dispatch))
+        self.assertEqual(key, self.dispatch.entries[self.models]['job'])
+
+    def test_first_dependency_check_compares_live_pinned_configuration_not_a_new_baseline(self):
+        from src.web.dispatch_dependencies import DispatchDependencies
+        observer = DispatchDependencies(lambda: {'timezone': 'Europe/Stockholm'}, lambda: None)
+        self.assertFalse(observer.check(self.dispatch, baseline={'timezone': 'UTC'}))
+        observer = DispatchDependencies(lambda: {'timezone': 'UTC', 'webSettings': {'theme': 'dark'}}, lambda: None)
+        self.assertTrue(observer.check(self.dispatch, baseline={'timezone': 'UTC', 'webSettings': {'theme': 'light'}}))
+
+
+class QuantumProcessTests(unittest.TestCase):
+    def test_parked_job_respects_explicit_backoff_even_with_negative_clock_origin(self):
+        from unittest.mock import Mock
+        jobs = ReportJobs()
+        self.addCleanup(jobs.close)
+        key = jobs.submit(ManagedReport())
+        child, connection = Mock(), Mock()
+        child.is_alive.return_value = False
+        jobs._parked[key] = child, connection
+        jobs._jobs[key]['not_before'] = -120
+
+        with patch('src.web.jobs.time.monotonic', return_value=-121):
+            jobs.tick()
+
+        self.assertEqual('queued', jobs.snapshot(key)['status'])
+        self.assertIsNone(jobs._active)
+        connection.send.assert_not_called()
+
+        with patch('src.web.jobs.time.monotonic', return_value=-120):
+            jobs.tick()
+
+        self.assertEqual('running', jobs.snapshot(key)['status'])
+        self.assertIs(jobs._active[1], child)
+        connection.send.assert_called_once_with('run')
+
+    def test_parent_loss_terminates_a_parked_private_stack(self):
+        from src.web.process_identity import process_identity, terminate_owned
+        code = '''
+import time
+from src.web.jobs import ReportJobs
+from src.web.report_control import ManagedReport
+from src.reports import ReportKind
+from development.tests.fixtures.dispatch_reports import quantum_report
+jobs = ReportJobs(target=quantum_report)
+key = jobs.submit(ManagedReport(ReportKind.COMPARISONS))
+jobs.prioritize({key: 2})
+while not jobs._parked:
+    jobs.tick()
+    time.sleep(.01)
+print(jobs._parked[key][0].pid, flush=True)
+time.sleep(30)
+'''
+        parent = subprocess.Popen([sys.executable, '-c', code], stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+        worker_pid = birth = None
+        deadline = Timer(8, parent.kill)
+        deadline.start()
+        try:
+            worker_pid = int(parent.stdout.readline())
+            birth = process_identity(worker_pid)
+            self.assertIsNotNone(birth)
+            parent.kill()
+            parent.wait(timeout=5)
+            until = time.monotonic() + 5
+            while process_identity(worker_pid) == birth and time.monotonic() < until:
+                time.sleep(.05)
+            self.assertNotEqual(process_identity(worker_pid), birth)
+        finally:
+            deadline.cancel()
+            deadline.join()
+            if parent.poll() is None:
+                parent.kill()
+            parent.wait(timeout=5)
+            parent.stdout.close()
+            if worker_pid and birth and process_identity(worker_pid) == birth:
+                terminate_owned(worker_pid, birth)
+
+    def test_foreground_finishes_before_background_then_original_stack_resumes(self):
+        jobs = ReportJobs(target=quantum_report)
+        self.addCleanup(jobs.close)
+        background = jobs.submit(ManagedReport(ReportKind.COMPARISONS))
+        jobs.prioritize({background: 2})
+        deadline = time.monotonic() + 15
+        while time.monotonic() < deadline:
+            jobs.tick()
+            before = jobs.snapshot(background)['progress']['completed']
+            if before >= 3:
+                break
+            time.sleep(.01)
+        self.assertGreaterEqual(before, 3)
+        foreground = jobs.submit(ManagedReport())
+        jobs.prioritize({background: 2, foreground: 0})
+        started = time.monotonic()
+        while time.monotonic() < deadline:
+            jobs.tick()
+            if jobs.snapshot(foreground)['status'] == 'complete':
+                break
+            time.sleep(.01)
+        self.assertEqual('complete', jobs.snapshot(foreground)['status'])
+        self.assertNotEqual('complete', jobs.snapshot(background)['status'])
+        self.assertLess(time.monotonic() - started, 3)
+        self.assertGreaterEqual(jobs.snapshot(background)['progress']['completed'], before)
+        jobs.prioritize({background: 0})
+        while time.monotonic() < deadline:
+            jobs.tick()
+            if jobs.snapshot(background)['status'] == 'complete':
+                break
+            time.sleep(.01)
+        self.assertEqual('complete', jobs.snapshot(background)['status'])
+        self.assertEqual(1, jobs.snapshot(background)['work']['slices'])
+
+
+class SharedEvidenceTests(unittest.TestCase):
+    def test_price_dependency_lookup_is_cache_only_even_with_expired_prices(self):
+        from src.pricing.github_copilot import GitHubCopilotPricingProvider, CACHE_NAMESPACE, CACHE_KEY, _catalog_payload
+        service = report_service(self)
+        expected = service._load_catalog()
+        service.cache_repository.put(CACHE_NAMESPACE, CACHE_KEY, _catalog_payload(expected))
+        with patch('src.pricing.github_copilot._default_fetch_text', side_effect=AssertionError('network forbidden')):
+            provider = GitHubCopilotPricingProvider(cache=service.cache_repository, max_age_hours=0, now_ms=lambda: NOW)
+            with patch.object(provider, 'fetch_text', side_effect=AssertionError('network forbidden')) as fetch:
+                actual = provider.cached_catalog()
+        self.assertEqual(expected.analysis_signature, actual.analysis_signature)
+        fetch.assert_not_called()
+
+    def test_unstable_or_later_changed_roots_are_omitted_with_partial_provenance(self):
+        from src.application import ReportApplication
+        for kind, later_changed in ((kind, changed) for kind in
+                (ReportKind.TOKEN_MIX, ReportKind.AI_STATS, ReportKind.COMPARISONS) for changed in (False, True)):
+            with self.subTest(kind=kind, later_changed=later_changed):
+                source = SyntheticMonthSource(3, 3, month_start_ms=NOW - 86400000)
+                source.snapshots = {sid: replace(value, complete=True) for sid, value in source.snapshots.items()}
+                service = report_service(self, source)
+                service.selection = replace(service.selection, warnings=())
+                service.shared_web_evidence = service.allow_partial_history = True
+                service.cache_token_mix_history = True
+                def available(ids, _progress):
+                    snapshots = {sid: source.load_session_snapshot(sid) for sid in ids
+                                 if later_changed or sid != 'root-0000'}
+                    if later_changed:
+                        source.snapshots['root-0000'] = replace(source.snapshots['root-0000'], source_revision='changed')
+                    return snapshots
+                with patch.object(source, 'load_session_snapshots_available', side_effect=available, create=True):
+                    value = ReportApplication(lambda *_: service, clock=lambda: NOW).execute(ReportRequest(kind)).to_json()
+                self.assertIsNone(value['error'])
+                self.assertEqual('partial', value['source']['status'])
+                self.assertEqual(1, value['source']['omitted_roots'])
+                self.assertNotIn('root-0000', [row['session_id'] for row in value['source']['revisions']])
+                if kind is ReportKind.TOKEN_MIX:
+                    self.assertEqual(6, sum(row['calls'] for row in value['view']['model_token_mix']))
+                elif kind is ReportKind.AI_STATS:
+                    row = next(row for row in value['view']['ai_stats'] if row['period'] == '30-days')
+                    self.assertTrue(any('source-incomplete' in metric['reasons'] for metric in row['metrics']))
+                else:
+                    self.assertFalse(value['view']['comparisons']['complete'])
+
+    def test_entirely_unverifiable_history_never_publishes_zero_totals_as_partial_success(self):
+        from src.application import ReportApplication
+        for kind in (ReportKind.TOKEN_MIX, ReportKind.AI_STATS, ReportKind.COMPARISONS):
+            with self.subTest(kind=kind):
+                source = SyntheticMonthSource(1, 3, month_start_ms=NOW - 86400000)
+                service = report_service(self, source)
+                service.shared_web_evidence = service.allow_partial_history = True
+                service.cache_token_mix_history = True
+                with patch.object(source, 'load_session_snapshots_available', return_value={}, create=True):
+                    value = ReportApplication(lambda *_: service, clock=lambda: NOW).execute(ReportRequest(kind)).to_json()
+                self.assertIsNone(value['view'])
+                self.assertIn(value['error']['code'], ('history_revision_churn', 'ai_stats_revision_churn'))
+
+    def test_partial_history_still_rejects_membership_archive_and_source_changes(self):
+        from src.reports.history_work import HistoryWork, revisions
+        from src.reports.service import SessionCatalogChangedError
+        source = SyntheticMonthSource(2, 1, month_start_ms=NOW - 86400000)
+        service = report_service(self, source)
+        service.shared_web_evidence = service.allow_partial_history = True
+        sessions = tuple(source.list_sessions())
+        work = HistoryWork(service, sessions, sessions, revisions(service, sessions), service._load_comparison_catalog())
+        changed = replace(sessions[0], updated_at_ms=NOW)
+        with patch.object(source, 'list_sessions', return_value=(changed, sessions[1])):
+            self.assertEqual({'root-0000'}, work.verify())
+        archived = replace(sessions[0], archived_at_ms=NOW)
+        foreign = replace(sessions[0], provenance=replace(sessions[0].provenance, source_instance='foreign'))
+        for membership in ((archived, sessions[1]), (foreign, sessions[1]), sessions[1:]):
+            with self.subTest(membership=membership), patch.object(source, 'list_sessions', return_value=membership):
+                with self.assertRaises(SessionCatalogChangedError):
+                    work.verify()
+
+    def test_history_revision_bracket_rejects_changed_deleted_archived_and_foreign_roots(self):
+        from src.reports.history_work import HistoryWork, revisions
+        from src.reports.service import SessionCatalogChangedError
+        source = SyntheticMonthSource(2, 1, month_start_ms=NOW - 86400000)
+        service = report_service(self, source)
+        service.shared_web_evidence = True
+        sessions = tuple(source.list_sessions())
+        work = HistoryWork(service, sessions, list(sessions), revisions(service, sessions), service._load_comparison_catalog())
+        changed = replace(sessions[0], updated_at_ms=NOW)
+        archived = replace(sessions[0], archived_at_ms=NOW)
+        foreign = replace(sessions[0], provenance=replace(sessions[0].provenance, source_instance='another-source'))
+        for membership in ((changed, sessions[1]), (archived, sessions[1]), (foreign, sessions[1]), sessions[1:]):
+            with self.subTest(membership=membership[0].session_id), patch.object(source, 'list_sessions', return_value=membership):
+                with self.assertRaises(SessionCatalogChangedError):
+                    work.verify()
+        source.snapshots[sessions[0].session_id] = replace(source.snapshots[sessions[0].session_id], source_revision='changed')
+        with self.assertRaises(SessionCatalogChangedError):
+            work.verify()
+
+    def test_active_descendant_invalidates_stable_root_cache_eligibility(self):
+        from src.reports.history_work import active_roots
+        source = SyntheticMonthSource(1, 1, month_start_ms=NOW - 86400000)
+        root = source.list_sessions()[0]
+        child = replace(root, session_id='child', parent_session_id=root.session_id, active=True)
+        self.assertEqual({root.session_id}, active_roots((root, child)))
+
+    def test_bounded_history_steps_reuse_saved_roots_and_cannot_continue_without_writes(self):
+        from src.reports import ReportService
+        from src.reports.history_work import HistoryContinuation, HistoryCheckpointError
+        source = SyntheticMonthSource(12, 3, month_start_ms=NOW - 86400000)
+        source.snapshots = {key: replace(value, complete=True) for key, value in source.snapshots.items()}
+        original = report_service(self, source)
+        receipts = []
+        for step in range(3):
+            service = ReportService(selection=original.selection, pricing_provider=original.pricing_provider,
+                cache_repository=original.cache_repository, account_provider=None, config=original.config,
+                now_ms=NOW, cache_token_mix_history=True)
+            service.shared_web_evidence = True
+            service.history_checkpoint = receipts.append
+            service.history_slice_roots = 4
+            service.history_batch_size = 2
+            if step < 2:
+                with self.assertRaises(HistoryContinuation):
+                    service.build_token_mix_history()
+            else:
+                report = service.build_token_mix_history()
+        self.assertTrue(report.model_token_mix)
+        self.assertEqual(12, source.load_count, 'continuation must not restart hydrated roots')
+        self.assertEqual([2, 4, 6, 8, 10, 12], [value['completed'] for value in receipts])
+        self.assertEqual(1, len({value['signature'] for value in receipts}))
+        original.shared_web_evidence = True
+        original.cache_token_mix_history = True
+        original.history_checkpoint = receipts.append
+        original.history_slice_roots = 4
+        original.history_batch_size = 2
+        with patch.object(original.cache_repository, 'get_many', return_value={}), patch.object(
+                original.cache_repository, 'put_many', side_effect=OSError('synthetic disk unavailable')):
+            with self.assertRaises(HistoryCheckpointError):
+                original.build_token_mix_history()
+
+    def test_distinct_views_reuse_compatible_roots_without_reusing_each_others_totals(self):
+        from src.reports import ReportService
+        source = SyntheticMonthSource(12, 3, month_start_ms=NOW - 86400000)
+        source.snapshots = {key: replace(value, complete=True) for key, value in source.snapshots.items()}
+        original = report_service(self, source)
+        original.selection = replace(original.selection, warnings=())
+        actual = {}
+        for kind in (ReportKind.NORMAL, ReportKind.TOKEN_MIX, ReportKind.AI_STATS, ReportKind.COMPARISONS):
+            service = ReportService(selection=original.selection, pricing_provider=original.pricing_provider,
+                account_provider=None, cache_repository=original.cache_repository,
+                config=original.config, now_ms=NOW, cache_token_mix_history=True)
+            service.shared_web_evidence = True
+            actual[kind] = service.build_token_mix_history() if kind is ReportKind.TOKEN_MIX else service.build(ReportRequest(kind))
+        self.assertEqual(12, source.load_count)
+        with original.cache_repository.database.connect(operation='read') as connection:
+            self.assertEqual(0, connection.execute(
+                "SELECT COUNT(*) FROM cache_entries WHERE namespace = 'derived-analysis'").fetchone()[0],
+                'managed evidence must not add full raw-bearing analysis payloads')
+        expected_source = SyntheticMonthSource(12, 3, month_start_ms=NOW - 86400000)
+        expected_source.snapshots = {key: replace(value, complete=True) for key, value in expected_source.snapshots.items()}
+        expected_service = report_service(self, expected_source)
+        expected_service.selection = replace(expected_service.selection, warnings=())
+        self.assertEqual(expected_service.build(ReportRequest(ReportKind.AI_STATS)).ai_stats,
+                         actual[ReportKind.AI_STATS].ai_stats)
+        self.assertEqual(expected_service.build_token_mix_history().model_token_mix,
+                         actual[ReportKind.TOKEN_MIX].model_token_mix)
+        self.assertEqual(expected_service.build(ReportRequest(ReportKind.COMPARISONS)).comparisons,
+                          actual[ReportKind.COMPARISONS].comparisons)
+
+    def test_incomplete_snapshots_do_not_publish_shared_complete_evidence(self):
+        from src.reports.shared_evidence import publish
+        from src.reports.ai_stats_evidence import NAMESPACE
+        source = SyntheticMonthSource(1, 3, month_start_ms=NOW - 86400000)
+        service = report_service(self, source)
+        service.shared_web_evidence = True
+        snapshot = next(iter(source.snapshots.values()))
+        bundle = service._analyze_snapshot(snapshot)
+        self.assertFalse(snapshot.complete)
+        publish(service, snapshot, bundle)
+        with service.cache_repository.database.connect(operation='read') as connection:
+            self.assertEqual(0, connection.execute(
+                'SELECT COUNT(*) FROM cache_entries WHERE namespace = ?', (NAMESPACE,)).fetchone()[0])
+
+
+class HistoryJobTests(unittest.TestCase):
+    def test_changing_catalog_does_not_discard_increasing_durable_coverage_but_churn_is_bounded(self):
+        from src.web.history_jobs import checkpoint, resume
+        job = dict(request=ManagedReport(ReportKind.TOKEN_MIX), status='running')
+        for count in range(1, 6):
+            checkpoint(job, dict(signature=str(count) * 64, completed=count * 64, total=2700))
+            resume(job)
+            self.assertEqual('queued', job['status'])
+        for signature in ('a', 'b', 'c'):
+            checkpoint(job, dict(signature=signature * 64, completed=320, total=2700))
+            resume(job)
+        self.assertEqual('failed', job['status'])
+        self.assertEqual('history_revision_churn', job['error'])
+
+    def test_real_children_resume_durable_roots_after_completion_and_watchdog(self):
+        for stall in (False, True):
+            with self.subTest(watchdog=stall), tempfile.TemporaryDirectory() as directory:
+                jobs = ReportJobs(target=durable_history_report, deadline=1.5 if stall else 120)
+                try:
+                    key = jobs.submit(HistoryFixture(ReportKind.TOKEN_MIX, source_identity='source',
+                        directory=directory, stall_once=stall))
+                    end = time.monotonic() + 12
+                    while time.monotonic() < end:
+                        jobs.tick()
+                        snapshot = jobs.snapshot(key)
+                        if snapshot['status'] in {'complete', 'failed'}:
+                            break
+                        time.sleep(.01)
+                    self.assertEqual('complete', snapshot['status'], snapshot)
+                    self.assertGreaterEqual(snapshot['work']['slices'], 3)
+                    self.assertLessEqual(snapshot['result']['view']['roots_read'], 4)
+                    self.assertEqual(10, jobs._jobs[key]['continued']['completed'] + snapshot['result']['view']['roots_read'],
+                        'completed roots must not be hydrated again in the final child')
+                    if stall:
+                        self.assertEqual(16, jobs._jobs[key]['history_batch_size'])
+                finally:
+                    jobs.close()
+
+    def test_only_strict_durable_progress_can_resume_a_finite_watchdog(self):
+        from src.web.history_jobs import checkpoint, resume
+        job = dict(request=ManagedReport(ReportKind.TOKEN_MIX), status='running')
+        proof = dict(signature='a' * 64, completed=64, total=2700)
+        checkpoint(job, proof)
+        resume(job, timeout=True)
+        self.assertEqual('queued', job['status'])
+        self.assertEqual(16, job['history_batch_size'])
+        checkpoint(job, proof)
+        resume(job, timeout=True)
+        self.assertEqual('failed', job['status'])
+        self.assertEqual('history_slice_timeout', job['error'])
+
+    def test_broken_resume_pipe_retains_ownership_until_child_stop_is_confirmed(self):
+        from unittest.mock import Mock
+        jobs = ReportJobs()
+        self.addCleanup(jobs.close)
+        key = jobs.submit(ManagedReport())
+        child, connection = Mock(), Mock()
+        child.is_alive.return_value = False
+        connection.send.side_effect = BrokenPipeError()
+        jobs._parked[key] = child, connection
+        jobs.tick()
+        self.assertEqual('failed', jobs.snapshot(key)['status'])
+        child.close.assert_called_once()
+        connection.close.assert_called_once()
+        self.assertIsNone(jobs._active)
+
+    def test_failed_resume_stop_retains_exact_owner_for_cleanup_retry(self):
+        from unittest.mock import Mock
+        from src.web.jobs import ReportWorkerStopError
+        jobs = ReportJobs()
+        key = jobs.submit(ManagedReport())
+        child, connection = Mock(), Mock()
+        child.is_alive.return_value = True
+        connection.send.side_effect = BrokenPipeError()
+        jobs._parked[key] = child, connection
+        with self.assertRaises(ReportWorkerStopError):
+            jobs.tick()
+        self.assertIs(jobs._active[1], child)
+        self.assertIs(jobs._active[2], connection)
+        child.close.assert_not_called()
+        connection.close.assert_not_called()
+        child.is_alive.return_value = False
+        jobs.close()
+        self.assertIsNone(jobs._active)
+        child.close.assert_called_once()
+
+    def test_cancel_parked_child_cannot_release_a_different_active_owner(self):
+        from unittest.mock import Mock
+        jobs = ReportJobs()
+        parked = jobs.submit(ManagedReport(ReportKind.COMPARISONS))
+        active = jobs.submit(ManagedReport())
+        child, connection, other_child, other_connection = Mock(), Mock(), Mock(), Mock()
+        child.is_alive.return_value = other_child.is_alive.return_value = False
+        jobs._parked[parked] = child, connection
+        owner = jobs._active = (active, other_child, other_connection, time.monotonic())
+        jobs.cancel(parked)
+        self.assertIs(owner, jobs._active)
+        self.assertEqual('cancelled', jobs.snapshot(parked)['status'])
+        other_child.close.assert_not_called()
+        jobs.close()
+        other_child.close.assert_called_once()
+
+
+if __name__ == '__main__':
+    unittest.main()

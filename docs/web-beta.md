@@ -231,28 +231,16 @@ separate partial/unavailable coverage warnings. Failure/cancellation/timeout nev
 claim successful completion. Stable nodes, reserved stage height, tabular numerals
 and stage-only polite announcements avoid poll-by-poll jumping or announcement spam.
 
-Authenticated **Waiting for source…** and **Waiting for report slot…** stages use
-500ms-to-4s backoff and at most eight retries, interruptible by internal
-lifecycle/safety owners. Other reports retain a
-120-second total attempt budget; AI Stats can span multiple bounded workers below.
-The host's one existing startup owner supplies detached typed admission
-proof, not merely HTTP health or the Live stream's writable flag. Transient typed
-source failures can retry; permission/authentication, unsupported source, invalid
-data, real report failures and exhausted waits remain actionable errors. **Retry**
-is recovery-only, not an initial Load button. A Live stream reconnect alone does not
-invalidate successful finite HTTP work. No extra wake, scan, hidden-page preload,
-new queue or result-size exception is introduced. Every child still has a 120-second
-watchdog. There is no user-facing **Cancel**, **Stop loading** or **Abort** report
-control on any of the four finite pages. Once requested, bounded admission intent
-and admitted work continue through navigation, Back/Forward and temporary hiding;
-results/errors stay with the original memory-only view. A hidden tab returning after
-its client budget reads an already-settled server outcome before declaring timeout.
-Inactive/hidden routes never start new periodic checks. Closing/reloading the tab
-does not preserve its pre-admission intent or view memory; admitted jobs remain
-host-owned, not durable across host shutdown/restart. A small **Updating…** line accompanies quiet
-refresh without replacing usable data, sorting, selection, scroll or focus.
-Reload captures Models using normal pricing TTL caching; Back/Forward to a retained view and live host
-heartbeats do not refresh its frozen report or reset its table scroll/selection.
+Authenticated source/slot waits use bounded backoff; terminal failures remain
+actionable. **Retry** is recovery-only. Every actual report child retains its
+120-second active-work watchdog and 8 MiB result limit. Managed historical work
+can resume only through bounded, verified checkpoints. No user-facing Cancel,
+Stop loading or Abort is added. One host dispatcher owns route priority, retained
+results and staggered inactive warming; browser hiding demotes interest without
+discarding useful work. Watch/Mini/Accounts keep their protected Live owner.
+Reloads and other authenticated tabs reuse valid host results, but no fresh result
+is promised across host restart. Quiet **Updating…** retains usable content, sort,
+selection, scroll and focus. Navigation/heartbeats never renew observation age.
 
 Above the table, **Refresh price list** precedes **Prices last fetched: YYYY-MM-DD HH:mm**
 in the configured timezone (or **Unavailable**). This is the last successful upstream
@@ -348,7 +336,7 @@ Playful trait lines are reserved for supported complete values. **Loading** belo
 only to an active/waiting acquisition, not a returned incomplete metric. Switching
 Credits/USD changes formatting, not these states or the underlying evidence.
 
-AI Stats checks about every **15 minutes**, only while visible and active. Compact
+AI Stats targets about **15 minutes** while foreground and **30 minutes** inactive. Compact
 revision-/pricing-keyed evidence reuses unchanged roots; changed roots use bounded
 historical batches. Ordinary updates retain every card/link, period, focus and scroll
 until one coherent result is ready. The shared one-hour re-entry policy below also
@@ -427,9 +415,9 @@ archives are not fully rehydrated at every refresh. Only displayed cached group
 representatives need fresh ephemeral previews (at most ten). Existing derived
 analysis can be read, but matching does not create a new raw-prompt analysis cache.
 
-While this route is active, visible and connected, a quiet cache-first check runs
-approximately every **five minutes**. Inactive/hidden/offline routes admit no periodic
-work; an already-started finite job may finish. Retained DOM/focus, real observation
+The host targets quiet cache-first checks approximately every **five minutes**
+foreground and **twenty minutes** inactive, staggered behind Live/foreground demand.
+Retained DOM/focus, real observation
 times and the shared one-hour re-entry policy apply. Complete no-matches, excluded
 inputs, changing/partial coverage, loading and unavailable results remain distinct.
 [Verification and limitations](../development/journal/web/comparisons.md).
@@ -472,9 +460,9 @@ The optional **Web Beta revalidation** Actions workflow tests the delivered Beta
 
 Run `python cost-guard-web.py --foreground` using already installed Python 3.11+. It binds **127.0.0.1 only**, on an OS-assigned port. There is no LAN/proxy mode, install step, frontend build or automatic browser launch in this explicit developer mode. Leave the console open. Ctrl+C or a detected runtime-source change stops only this host and its owned finite reports; it does not stop OpenCode. Foreground instances are intentionally separate from managed launcher discovery.
 
-## Navigation and static reports
+## Navigation and host-cached reports
 
-The Beta shell provides Models, global Watch, live Accounts, a live Sessions catalog, historical Token Mix, AI Stats, Comparisons, Settings and complete live session detail. Global `/#/watch` is canonical; legacy `/#/live` links replace the same history entry. Accounts consumes the same latest retained account publication as Watch, not Models' frozen Normal report. Finite observations and live publications retain their independent scopes; only the three historical views use the cached-refresh policy below.
+The Beta shell provides Models, global Watch, live Accounts, a Sessions catalog, Token Mix, AI Stats, Comparisons, Settings and live session detail. Global `/#/watch` is canonical; legacy `/#/live` links replace the same history entry. Accounts shares Watch's publication, not a finite report. Models and the three historical reports share host-owned caching, priority and freshness; their distinct report populations/totals remain independent.
 
 Sessions is the historical navigation entry point. The former `/#/reports` page is retired: old links, including date queries, replace that history entry with `/#/sessions` without starting a date report or applying a filter. Sessions has no date-range filter; sort on Last activity or its other catalog columns. CLI date/date-range reporting and the shared backend report APIs remain supported.
 
@@ -505,38 +493,52 @@ acquisition or client-side valuation. [Verification and limits](../development/j
 | Accounts | `/#/accounts` | Shared live Watch subscription cards, native windows/pace, Today/period CCost, Capacity and account-specific warnings; no finite report |
 | Sessions | `/#/sessions` | Live six-column catalog, 50 sessions/page, globally sorted canonical keys and stable older-page membership; available archived roots included |
 | Session detail | `/#/sessions/<id>` (legacy `/live` alias) | Complete chronological live history, no user-facing pages or modes; links from session names and Watch |
-| AI Stats | `/#/ai-stats` (legacy `/#/cost-per-hour` alias) | Ten baseline cards plus a conditional matched-input fact, five selectable periods, resumable bounded acquisition, conditional shorter-period milestones, quiet ~15-minute visible-page checks and shared one-hour re-entry policy |
-| Comparisons | `/#/comparisons` | All available root history, exact first-input matching, ten groups/page with every individual repetition, first-prompt metrics and qualified local gaps; quiet ~five-minute visible-page checks |
-| Historical Token Mix | `/#/token-mix` | Automatic visible first load, then quiet ~five-minute visible-page checks. One total/token-volume summary and two 13-column model/publisher tables split Input / Cached input / Cache write / Output percentages and category CCost, with Prompts/Calls/Tokens/Total CCost. Every column sorts locally by exact source values; all rows and full names remain readable through horizontal panning. Partial/unavailable coverage stays explicit. |
+| AI Stats | `/#/ai-stats` (legacy `/#/cost-per-hour` alias) | Ten baseline cards plus a conditional matched-input fact, five selectable periods, resumable bounded acquisition, conditional shorter-period milestones; host warms default 30 days and checks at ~15/30 minutes visible/inactive |
+| Comparisons | `/#/comparisons` | All available root index, exact first-input matching, ten groups/page with every individual repetition, first-prompt metrics and qualified local gaps; host warms the first page and checks at ~5/20 minutes visible/inactive |
+| Historical Token Mix | `/#/token-mix` | Host-owned first warm-up and ~5/20-minute visible/inactive checks. One total/token-volume summary and two 13-column model/publisher tables split Input / Cached input / Cache write / Output percentages and category CCost, with Prompts/Calls/Tokens/Total CCost. Every column sorts locally by exact source values; all rows and full names remain readable through horizontal panning. Partial/unavailable coverage stays explicit. |
 | Web Settings | `/#/settings` | Theme, CCost display, Mini position/size and Quota display; inherited/explicit intent, authenticated narrow config read/write, no report acquisition |
 
 Generic finite report tables retain search/filter/page controls and ascending/descending/original-order sorting. Token Mix instead has independent ascending/descending table sorts, default Total CCost descending, without filters, a pager or nested vertical scrolling. Header text owns shared hover/focus/touch help; no question-mark prefixes or icons are used. Models uses its independent filter/multi-sort contract; Watch keeps fixed chronological cards. Accounts and Sessions have no report toolbar, search, filters or snapshot controls. Sessions' catalog headings request full-catalog server sorting, not presentation-only page sorting. Detail has no sort or pager. Decimal keys stay exact and unknowns sort last.
 
-Token Mix uses automatic visible first acquisition, shared bounded progress without user cancellation and its approximately **five-minute** active-visible cadence. Hidden tabs and other routes suspend new checks, not existing acquisitions. Unchanged source revisions reuse disposable compact request facts and canonical category valuations; only changed/new/late-updated roots need history acquisition, while removed roots disappear. Price/config/analysis changes invalidate the relevant facts; availability changes regroup the same shown history. Source catalogs are still read to discover revisions, not trusted as usage. Global fork deduplication, publisher grouping and pricing tiers remain CLI-owned semantics. Host jobs coalesce in-flight requests and briefly reuse completed observations across tabs without relabeling observation time. No new account polling, inference, browser history ledger or unconditional periodic full scan is introduced.
+Token Mix targets **five-minute** foreground and **twenty-minute** inactive checks. The host, not hidden browser timers, owns due times. Compact revision/config/price-keyed facts can be shared with AI Stats and Comparisons without sharing their final totals. Changed roots are revalidated; removed roots disappear. Catalog metadata is not usage. Fork deduplication, publisher grouping and pricing tiers retain canonical Python semantics. No new account polling, inference or browser history ledger is introduced.
 
 During ordinary Token Mix refresh the accepted summary and both tables remain usable. Complete results reconcile together in place, preserving independent sorts, Credits/USD, rows, focus and scroll/pan anchors. Failure retains the actual old observation with concise update-delayed feedback; it never becomes live merely because HTTP works. Fully unavailable values remain N/A; partial costs/volumes use readable **Partial**, not CLI question-mark notation. Deleted/pruned history stays unavailable. Timeout/cancellation/empty history remain distinct; Live and its account scheduler continue independently. URL fragments contain only scope/locators, never prompt content.
 
-### Historical-view re-entry freshness
+### Host-owned freshness and background warming
 
-**AI Stats, Token Mix and Comparisons only** share these bands, measured from the last successful
-acquisition—not the last visit, timer tick or failed attempt:
+**Models, AI Stats, Token Mix and Comparisons** share these bands, measured from
+successful source observation—not visits, timers, cache writes or failed attempts:
 
 | Retained scope age on visible re-entry | Behavior |
 | --- | --- |
-| Up to its normal cadence (15 / 5 minutes) | Display immediately; no unnecessary scan |
+| Up to its normal cadence | Display immediately; no unnecessary scan |
 | Older than cadence, at most 60 minutes | Display immediately and start at most one quiet check |
 | More than 60 minutes | Keep last-good cache internally, withhold normal metrics and show bounded acquisition progress |
 | Acquisition fails, times out or is cancelled | End progress, show actionable failure/last-success provenance and allow retry; never fabricate zero/freshness |
 
-The over-hour exception applies on route re-entry or selection of an inactive stale
-scope. An already-open view does **not** blank at minute 61 during routine refresh.
-Running finite work may finish after navigation; returning does not duplicate it.
-AI Stats' all-time and smaller-scope observation clocks remain independent. Watch,
-Accounts, Sessions and Models keep their own freshness contracts.
+The initial selected route wins before speculative heavy warming. Thereafter the
+host opportunistically warms Normal Models, Token Mix, default 30-day AI Stats and
+the first ten-group Comparisons page. It does not eagerly scan every AI Stats period
+or every session detail/page. Models' actual qualified sample controls cadence:
+under 100 completed priceable prompts targets 15 minutes foreground / 45 inactive;
+100 or more has an hourly floor. AI Stats targets 15/30 minutes; Token Mix and
+Comparisons 5/20. Due times are staggered and can be postponed by foreground/Live
+pressure, not promised at an exact second. A proven invalid dependency or expired
+result is withheld until coherent work completes. Failed attempts never renew age.
+Sessions/details use their own source-backed age and bounded leases; Watch/Accounts
+remain Live rather than receiving a one-hour real-time allowance.
 
 Session-ID links open `/#/sessions/<id>`. Fragment routes support direct links, reload and browser Back/Forward without expanding the HTTP path allowlist. The one-use bootstrap fragment is removed before requests; ordinary session routes are preserved on reload. Names/prompts are text, never links or tooltips containing source paths. Navigation and paging never put prompt/history payloads in browser storage or history state.
 
-Every finite result retains observation time, source status and per-root revision evidence; minimal historical/Models chrome does not hide partial/error truth. A running prompt is **running at that snapshot**, with provisional values. **Refresh snapshot** reacquires generic finite views; Models has explicit **Refresh price list** beside its true fetch time, while reload retains normal pricing TTL caching. AI Stats, Token Mix and Comparisons perform the bounded low-frequency refresh described above; other frozen reports do not update from navigation or source events. Accounts, Watch and Sessions remain live consumers. Failed refresh preserves the last known result. Missing/empty/partial/source-failure and independently unavailable accounts remain distinct from acquired zero.
+Every finite result retains observation time, source status and per-root revision evidence. A running prompt is **running at that observation**, with provisional values. Models' explicit **Refresh price list** remains separate from routine cache-first background work: successful retrieval invalidates related warm projections; failed retrieval preserves old valid data/prices. Missing, empty, partial, source failure and unavailable accounts remain distinct from acquired zero.
+
+A continuously changing root can remain unverifiable after bounded source retries.
+Managed historical reports may omit that root and display **Partial history**, with
+the omitted-root count; totals/groups then cover only verified evidence. Mixed
+snapshots are never used, and wholly unverifiable history fails rather than showing
+invented zeros. Cached price changes are checked without fetching upstream prices.
+Changing pinned runtime configuration (for example timezone/source settings) stops
+the old host and requires relaunch; ordinary hot Web preferences remain applicable.
 
 Session detail shows **Prompt | Model | Effort | CCost | Calls | Duration | Ictx | Ictx CCost | Extra CCost | Token Mix %**. Python's category order remains **I = Input; C = Cached input; W = Cache write; O = Output**. Input is uncached, Cached input is cache read, Cache write is cache creation, and Output includes reasoning. Full-session totals and main/linked-child breakdown come from the canonical result, never from loaded chunks. Unknown, incomplete and estimated amounts remain honest; a published Cache write price does not imply observed tokens. CCost is not billing. The browser performs no valuation or token attribution.
 
@@ -567,7 +569,7 @@ Pending summary cells show **Loading…**, not unknown/zero. An acquired zero st
 
 Detail's **Ictx** is only the prompt's first-request incoming context, never a delta/next-context arrow; Watch and CLI retain their richer context displays. Prompt previews yield before metric columns, grow on roomy screens and retain complete text in help. One horizontal region handles genuine minimum-width overflow; the document owns vertical scrolling. Initial capture and pinned-chunk acquisition show an indeterminate **Loading session…** progress bar, never a fabricated percentage. Complete retained history stays usable during background checks; explicit source errors replace loading rather than looping forever.
 
-The browser reads every five seconds. Page 1 follows observed arrivals in the applied sort order; returning there resumes current membership. Page 2+ retains internal epoch membership/order, so arrivals cannot shift boundaries; independently observed values may refresh. Changing sort returns to page 1. Back/Forward uses fragment offset/epoch links; expired/reloaded older views explicitly offer page 1 rather than silently changing membership. Source failure retains rows with compact unavailable guidance. No cross-root atomic snapshot is claimed.
+Visible Sessions reads about every five seconds. Page 1 follows arrivals; older pages retain epoch membership/order. The main Sessions nav restores the last viewed offset/sort/epoch (including page 10), not an implicit page 1. Back/Forward/direct pagination links remain authoritative. Expired or invalid positions say **Page position changed; return to latest sessions** instead of substituting rows. Activity/name work covers requested fifty-row pages only; global scalar indexing is admitted only for a requested metric sort. Hidden/navigation interest demotes that work; inactive warming covers only the first or last viewed page at a low cadence. Source failure and expired observation ages remain explicit; no cross-root atomic snapshot is claimed.
 
 ## Complete live session history
 
@@ -981,6 +983,8 @@ The historical synthetic parity and bounded integration inventory is [Beta stabi
 | `/api/live` | GET | Authenticated coherent live/progress snapshot and instance/sequence; retained terminal state while stopping |
 | `/api/events` | GET | Authenticated multiplexed SSE, bounded replay with Last-Event-ID; no query strings |
 | `/api/reports` | POST | Enqueue/coalesce a finite report; return job ID (202) |
+| `/api/interest` | POST | Authenticated bounded tab/route/visibility/scope lease; no worker-count authority |
+| `/api/data` | POST | Strict `{request,retry}` boolean lookup/admission; shared valid result, progress ID or typed error |
 | `/api/models/refresh` | POST | CSRF-protected `{}`; strict upstream pricing fetch then isolated coherent Models rebuild, coalesced in flight; no account refresh |
 | `/api/sessions` | POST | Read shared catalog; validated token, offset/epoch, sort and direction; at most 50 rows, no source acquisition |
 | `/api/detail` | POST | Shared complete session capture, pinned begin/chunk history and handle release; compatibility page/freeze |
@@ -993,8 +997,8 @@ Reports select `kind`: `normal` (Models, including report account DTOs), `all-mo
 
 - Twelve HTTP workers/admitted sockets, with at most four authenticated streams so eight ordinary/control slots remain; bounded listen backlog. Two-second socket timeouts and an absolute five-second ordinary request/header deadline, including dripping clients. Only fully authenticated SSE cancels that deadline and retains its slot until disconnect, expiry or terminal shutdown. Connections close after one request.
 - Request line <=2048 bytes, aggregate headers <=16 KiB, individual header lines <4096 bytes, JSON body <=4096 bytes. Duplicate headers/JSON keys, transfer encoding, non-JSON controls and unsupported methods are denied. No autoreload or directory listing.
-- At most four queued/running reports and one spawned analysis process. Identical in-flight requests coalesce. Sixteen jobs retained; old completed/cancelled entries are evicted, so a missing ID is not an empty report.
-- A fresh ReportApplication/ReportService owns each child's mutable integrations and one-shot account cleanup. Existing integration request timeouts apply; a 120-second hard process deadline bounds work. Only AI Stats can resume one logical job across finite children; other jobs retain their total deadline. Cancellation/shutdown terminate and join only that owned process. No live scheduler is shared or cleaned by these one-shot jobs.
+- At most four queued/running logical reports, one executing finite child and bounded parked stacks. Identical in-flight demand coalesces. Sixteen jobs and twelve host result entries are bounded; a missing ID is not empty success.
+- Every child owns fresh integrations, existing source-read deadlines, a 120-second active-work watchdog and exact-parent cleanup. Managed Token Mix/Comparisons may continue only after independently received durable progress, with bounded steps/churn; AI Stats keeps its scope/slice bounds. No immortal child or shared mutable Live scheduler is introduced. Cooperative reprioritization waits for a safe checkpoint; an in-flight source operation retains its own deadline.
 - Each finite report child monitors multiprocessing's exact parent kernel sentinel. A crashed/force-stopped Web parent or lost ownership proof exits that child nonzero, including a blocked scan; PID reuse is not a liveness signal. This child-only safety monitor stops/joins on ordinary completion.
 - Results are limited to 8 MiB per job. Oversize: `result_too_large`; scope the request. Long Token Mix may time out but never blocks shutdown. Progress exports only approved phase/stage/counts and a stale-safe job sequence, not source text. Child IPC coalesces at 100ms; host drains at most 64 messages/turn.
 

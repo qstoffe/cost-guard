@@ -171,6 +171,7 @@ class DerivedAnalysisCache:
     def __init__(self, repository: CacheRepository, *, metrics: AcquisitionMetrics | None = None) -> None:
         self.repository = repository
         self.metrics = metrics
+        self.write_enabled = True
 
     def load(
         self,
@@ -215,7 +216,7 @@ class DerivedAnalysisCache:
         provenance: Provenance,
         dependencies: AnalysisDependencies,
     ) -> None:
-        if not bundle.cacheable:
+        if not bundle.cacheable or not self.write_enabled:
             return
         if self.metrics is not None:
             self.metrics.add("cache_writes")

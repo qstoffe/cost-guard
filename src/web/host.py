@@ -15,6 +15,7 @@ from .events import EventHub
 from .process_identity import process_identity
 from .observations import WebObservations
 from .security import BrowserLinkUnavailable
+from .dispatch import DataDispatcher, source_identity
 
 
 class WebHost:
@@ -29,8 +30,14 @@ class WebHost:
         self.reason = None
         self.ready = False
         self.failure = None
+        self._source_identity = None
         self.guard = SourceGuard(root)
         self.jobs = jobs or ReportJobs()
+        self.dispatcher = DataDispatcher(self.jobs) if jobs is None else None
+        self.dependencies = None
+        if jobs is None:
+            from .composition import dispatch_dependencies
+            self.dependencies = dispatch_dependencies(root)
         self.events = EventHub(self.nonce)
         self.observations = WebObservations()
         self.source_startup = None
@@ -126,8 +133,28 @@ class WebHost:
                 elif status == "source_check_unavailable" and previous != status and self.store:
                     self.store.log(status)
                 self.observations.persist(self)
+                if self.dependencies and self.live and self.live.observed.is_set():
+                    baseline = self.live.driver.coordinator.report_service.config
+                    if not self.dependencies.check(self.dispatcher, baseline=baseline):
+                        self.stop('source_changed')
                 if not self.stopping.is_set():
                     if self.source_startup is None or self.source_startup.finished.is_set():
+                        if self.dispatcher:
+                            driver = self.live.driver if self.live else None
+                            selection = driver.coordinator.report_service.selection if driver else None
+                            identity = source_identity(selection) if selection else ''
+                            if identity and self._source_identity and identity != self._source_identity:
+                                self.live.details.invalidate()
+                                with self.live.catalog.lock:
+                                    self.live.catalog.leases.clear()
+                            self._source_identity = identity
+                            error = driver.error if driver else self.live.source_failure if self.live else None
+                            self.dispatcher.tick(identity=identity,
+                                ready=driver is not None and driver.error is None and self.live.observed.is_set(),
+                                error=error.code.value if error else None,
+                                terminal=bool(driver.terminal if driver else error))
+                            if self.live:
+                                self.live.catalog.enable_warm(self.dispatcher.warm_allowed)
                         self.jobs.tick()
                     self.events.publish("progress", self.jobs.updates() if hasattr(self.jobs, "updates")
                                         else self.jobs.readiness())

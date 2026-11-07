@@ -10,9 +10,10 @@ from src.reports import ReportKind, ReportService
 from src.sources.selection import SourceSelector
 
 from .jobs import ModelsPriceRefresh
+from .report_control import ManagedReport
 
 
-def application(request):
+def application(request, *, read_admission=None, history_checkpoint=None):
     # Reuse existing account/model wiring, not CLI source wake or dispatch.
     from src.bootstrap import _account_providers, _model_availability_source
 
@@ -21,16 +22,26 @@ def application(request):
 
     def factory(now, progress):
         selection = SourceSelector().select(str(config["openCode"]["source"]))
+        if read_admission is not None:
+            selection.source.read_admission = read_admission
+        if isinstance(request, ManagedReport) and request.source_identity:
+            from .dispatch import source_identity
+            from src.reports.ai_stats import StatsCheckpointError
+            if source_identity(selection) != request.source_identity:
+                raise StatsCheckpointError('source_identity_changed')
         database = CacheDatabase(root)
         database.initialize()
         cache = CacheRepository(database)
         refresh_prices = isinstance(request, ModelsPriceRefresh)
+        price_options = dict(defer_metadata_refresh=True) if isinstance(request, ManagedReport) else {}
         provider = GitHubCopilotPricingProvider(cache=cache,
-            max_age_hours=float(config.get("pricingMaxAgeHours", 1)))
+            max_age_hours=876000 if isinstance(request, ManagedReport) else float(config.get("pricingMaxAgeHours", 1)),
+            **price_options)
         # Strict fetch precedes acquisition. A failed request cannot publish a new
         # report/date, and this isolated job never refreshes Live's subscriptions.
         catalog = provider.refresh_catalog() if refresh_prices else None
-        accounts = _account_providers(config, selection.selected) if request.kind is ReportKind.NORMAL and not refresh_prices else ()
+        accounts = (_account_providers(config, selection.selected) if request.kind is ReportKind.NORMAL
+                    and not refresh_prices and not isinstance(request, ManagedReport) else ())
         service = ReportService(selection=selection,
             pricing_provider=provider,
             account_provider=accounts[0] if accounts else None, account_providers=accounts,
@@ -38,6 +49,12 @@ def application(request):
             cache_repository=cache, config=config, now_ms=now, progress=progress,
             cache_token_mix_history=True)
         service.catalog = catalog  # Pin one coherent valuation/catalog for this job.
+        if isinstance(request, ManagedReport):
+            service.shared_web_evidence = True
+            service.allow_partial_history = True
+            service.history_batch_size = request.history_batch_size
+            service.history_slice_roots = 256
+            service.history_checkpoint = history_checkpoint
         if request.kind is ReportKind.AI_STATS:
             service.stats_slice_roots = getattr(request, 'slice_roots', None)
             service.stats_batch_size = getattr(request, 'batch_size', 64)
@@ -46,6 +63,12 @@ def application(request):
 
     observation = getattr(request, 'observation_ms', 0)
     return ReportApplication(factory, clock=(lambda: observation) if observation else None)
+
+
+def dispatch_dependencies(root):
+    from .dispatch_dependencies import DispatchDependencies
+    provider = GitHubCopilotPricingProvider(cache=CacheRepository(CacheDatabase(root)))
+    return DispatchDependencies(lambda: load_configuration(root).values, provider.cached_catalog)
 
 
 def live_acquisition(*, selection=None):

@@ -248,7 +248,9 @@ class MatchedInputsTests(unittest.TestCase):
 
         with patch.object(history, 'load_session_snapshots_observed', side_effect=load_batch, create=True):
             result = self.service(history).build(ReportRequest(ReportKind.COMPARISONS)).comparisons
-        self.assertEqual([128, 128, 128, 117], batch_sizes)
+        # The compact all-root scan retains at most ten previews. Its displayed
+        # representative is acquired separately when outside that bounded set.
+        self.assertEqual([128, 128, 128, 117, 1], batch_sizes)
         self.assertEqual(1, result.total)
         self.assertEqual(501, len(result.groups[0].runs))
         self.assertEqual('root-0000', result.groups[0].runs[0].session_id)

@@ -20,6 +20,8 @@ class LiveRuntime:
         self.details = SessionDetails()
         self.catalog = SessionCatalog()
         self.driver = None
+        self.source_failure = None
+        self.observed = Event()
 
     def start(self):
         if self.thread is not None:
@@ -55,6 +57,7 @@ class LiveRuntime:
                 # Yield between history slices and keep account-only updates timely.
                 self.stopping.wait(0.25 if driver.coordinator.today_ccost.history_pending else 1)
         except SourceError as error:
+            self.source_failure = error
             self.publish("live", record(state="failed", error_code=error.code.value, view=None))
         except BaseException as error:
             self.failure = error
@@ -79,7 +82,9 @@ class LiveRuntime:
             source_observed_at_ms=driver.observed_at_ms,
             error_code=driver.error.code.value if driver.error else None,
             view=project_live(frame, driver.coordinator.report_service.timezone_id,
-                driver.coordinator.report_service.config.get("ccostDisplayUnit", "credits")) if frame is not None else None))
+                 driver.coordinator.report_service.config.get("ccostDisplayUnit", "credits")) if frame is not None else None))
+        if frame is not None and driver.error is None and driver.observed_at_ms is not None:
+            self.observed.set()
 
     def close(self):
         self.stopping.set()

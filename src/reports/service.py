@@ -165,6 +165,18 @@ class ReportService:
     def timezone_id(self) -> str:
         return str(self.config.get("timezone") or "Europe/Stockholm")
 
+    @property
+    def shared_web_evidence(self):
+        return getattr(self, '_shared_web_evidence', False)
+
+    @shared_web_evidence.setter
+    def shared_web_evidence(self, enabled):
+        self._shared_web_evidence = enabled
+        # Managed warm scans publish compact allowlisted facts, not a second
+        # full analysis payload/transaction for every root. Existing hits remain
+        # readable; CLI and Live keep their original derived-cache ownership.
+        self._derived.write_enabled = not enabled
+
     def _load_catalog(self) -> PricingCatalog:
         if self.catalog is None:
             self.progress(WorkProgress("Loading pricing catalog", "pricing"))
@@ -200,6 +212,9 @@ class ReportService:
                                       now_ms=self.now_ms, subscription_providers=self._subscription_providers)
         self.metrics.add("analyzed_prompts", len(bundle.prompts))
         self.metrics.add("analyzed_requests", len(bundle.trace_entries))
+        if getattr(self, 'shared_web_evidence', False):
+            from .shared_evidence import publish
+            publish(self, snapshot, bundle)
         return bundle
 
     def prepare_roots(self, roots: Sequence[NormalizedSession], *, detail: bool = False,
@@ -437,7 +452,12 @@ class ReportService:
         self.metrics.mode = "token-mix-history"
         if self.cache_token_mix_history:
             from .token_mix_cache import build_cached_token_mix
-            return build_cached_token_mix(self, progress or (lambda _label, _percent: None))
+            try:
+                return build_cached_token_mix(self, progress or (lambda _label, _percent: None))
+            finally:
+                if getattr(self, 'shared_web_evidence', False):
+                    from .shared_evidence import flush
+                    flush(self)
         return build_token_mix_history(self, progress or (lambda _label, _percent: None))
 
     def build_cost_per_hour(self) -> ReportProjection:
@@ -661,6 +681,9 @@ class ReportService:
         finally:
             self._availability = None
             self.close_accounts()
+            if getattr(self, 'shared_web_evidence', False):
+                from .shared_evidence import flush
+                flush(self)
 
     def report_source_revisions(self) -> tuple[tuple[str, str], ...]:
         """Per-root evidence, not a claim of one cross-root/provider transaction."""
