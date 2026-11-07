@@ -108,12 +108,12 @@ grace policy. No browser timer invents cost, completion or growing elapsed time.
 ### Earlier Sessions
 
 The neutral **Earlier Sessions** header button expands a separate four-column table
-**above** the running prompts: **Activity | Session | CCost (Total) | Ctx**.
-Activity shows only the canonical representative prompt's supported finish in configured
+**above** the running prompts: **Finished | Session | CCost (Total) | Ctx**.
+Finished shows only the canonical representative prompt's supported finish in configured
 local **HH:mm** (24-hour, no seconds). Focus, hover or tap the time for the server-prepared
 full **YYYY-MM-DD HH:mm +offset**; DST repeated hours remain distinguishable.
 Unknown finish times show **—** with **Unknown finish time** help, never a source-update
-or current-time substitute. Activity is narrow and nonwrapping; Session keeps the remaining
+or current-time substitute. Finished is narrow and nonwrapping; Session keeps the remaining
 elastic title width. The running/recent table is exactly
 **Session | CCost (Total) | Duration | Ctx**. Earlier starts collapsed
 every time a fresh Mini window opens; keyboard/click/touch works, and ordinary Live
@@ -122,6 +122,18 @@ sessions** come from full Watch's canonical Earlier Sessions selection, displaye
 oldest-to-newest within that subset, including its unknown-finish fallback ordering.
 Running/recently ended sessions never appear in both tables. After the shared terminal
 grace a session may enter history; resuming moves it back out coherently.
+
+Both views use one server-owned verified population: five eligible distinct sessions in
+Full Watch and the newest three of those in Mini. Before all potentially displacing
+roots have revision-matched complete evidence, **Loading earlier sessions…** reports
+grounded checked/total root counts, not provisional cards or a false empty result.
+Active prompts, Today and subscriptions remain available independently. After proof,
+ordinary refreshes retain the same coherent set with **Previously verified sessions;
+checking for changes** until atomic replacement. Source failure/incomplete evidence
+shows **Unable to verify latest sessions**, retaining only safe previously verified
+cards. Source switching, removal and resumption cannot resurrect stale history.
+Large/churning installations may remain loading/unavailable; metadata is only an
+admission hint, not a safe finish-time bound or a promise of instant cold startup.
 
 Earlier cost cells show the **latest actual canonical prompt’s cost (whole-session
 cost)**. Hover, focus or tap that value for the same prompt’s **Prompt #, main Model**

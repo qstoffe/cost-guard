@@ -624,6 +624,15 @@ before running cards and no nested vertical scrolling or height cap. Collapsed/e
 history has no divider. The active list has no cap/filter/pager; concurrent prompts
 get separate cards, oldest focal first, with one row even during terminal grace.
 
+Earlier membership is published only after revision-matched complete evidence covers
+every potentially displacing root. Until then both Watch and Mini show **Loading
+earlier sessions…** with grounded coverage, not the provisional oldest candidates.
+One source-scoped proof epoch carries the five/three population atomically; ordinary
+refresh retains qualified previously verified cards, while source failures say
+**Unable to verify latest sessions**. Removal/resumption invalidate affected entries.
+No metadata cutoff proves recency, and large/churning sources can remain unverified;
+active prompts, Today and subscriptions do not wait for history.
+
 Session title alone links to that canonical Sessions route. The footer keeps whole-session
 CCost separate from prompt-local costs; duration remains prompt-local. Canonical child/compaction/context evidence still feeds
 prompt metrics. Credits/USD follows Web Settings. Valid metrics remain visible during
@@ -876,11 +885,11 @@ remain. No Observation details, Copilot Unaccounted usage or global warning list
 
 **[Mini Watch](web-mini-watch.md)** is an explicit, highlighted-while-On floating view with
 compact per-prompt tables and thin primary-subscription bars on supported desktop browsers.
-The Session column right-aligns `(<whole-session CCost>)` beside the independently truncated
-title; prompt CCost/Duration/Ctx remain separate. A collapsed-by-default **Earlier Sessions**
-header button shows up to three canonical finished sessions as **Activity | Session
-(Total CCost) | Ctx** above running prompts. Activity uses configured-local HH:mm finish
-tokens with full date/offset help, or a truthful unknown; the running table stays five columns.
+The name-only Session column stays separate from paired prompt CCost (whole-session
+CCost). A collapsed-by-default **Earlier Sessions** header button shows up to three
+verified canonical finished sessions as **Finished | Session | CCost (Total) | Ctx**
+above running prompts. Finished uses configured-local HH:mm finish tokens with full
+date/offset help, or a truthful unknown; running stays **Session | CCost (Total) | Duration | Ctx**.
 Default opening fit targets approximately 650 outer DIPs with a two-prompt height reserve.
 Explicit expansion/collapse permits one native height adjustment, retaining current width
 where native clamps permit; Fit collapse remeasures, while Remember last size restores

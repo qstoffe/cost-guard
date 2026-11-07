@@ -56,6 +56,18 @@ Rolling account history extends the daily plan only to usable native/trailing-wi
 
 ## Allowed dependencies
 
+`watch/history_publication.py` owns Web Earlier membership proof and a bounded
+five-card immutable publication, separate from active card readiness. `cards.py`
+retains per-root scalar coverage keyed to the source-pinned coordinator lifetime and
+catalog generation. Revision/status changes require re-verification even for evicted
+nonwinners. Complete canonical evidence is mandatory; metadata prioritizes admission
+only. `history_state`, opaque source scope, proof epoch/catalog revision, original
+verification time, coverage counts and typed cause travel together through the Live
+DTO. Unchanged ticks never renew evidence; refreshes retain one qualified epoch.
+Removal/resumption invalidates affected entries; clients cannot restore independently
+retained rows. Cold sources without a safe finish-bound certificate still need full
+coverage; no new scanner, persistent raw ledger, worker lane or CLI change is added.
+
 Web cards and Session detail share `reports/session_history.py::analyze_observed`:
 retained objects preserve usage, while a source-certified complete snapshot owns
 current lifecycle through ordinary causal analysis. Failed pre-response starts

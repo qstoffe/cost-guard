@@ -45,12 +45,6 @@ const MiniWatch = (() => {
           old ? {...old, state: card.state, session_summary: card.session_summary} : card;
         oldCards.set(key, value); return value;
       });
-      const oldHistory = new Map((previous?.history_cards || []).map(card => [card.session_id, card]));
-      const history = (view.history_cards || []).map(card => {
-        const old = oldHistory.get(card.session_id);
-        return card.state === 'observed' ? card :
-          old ? {...old, state: card.state, session_summary: card.session_summary} : card;
-      });
       if (prompts) {
         const stamps = cards.map(card => [card.session_id, card.focal_id, card.observed_at_ms]);
         if (!cards.length || cards.every(card => card.observed_at_ms != null))
@@ -78,7 +72,8 @@ const MiniWatch = (() => {
       for (const key of this.clocks.keys()) if (key.startsWith('quota:') && !activeKeys.has(key)) this.clocks.delete(key);
       this.view = {...view,
         active_cards: prompts ? cards : [...oldCards.values()],
-        history_cards: view.history_state === 'observed' ? history : history.length ? history : previous?.history_cards || [],
+        // The producer owns atomic history retention, invalidation and source scope.
+        history_cards: view.history_cards || [],
         // A canonical null clears the previous day. Never carry it across rollover.
         daily_usage: !daily || dailyUsable || !previous?.daily_usage ||
           daily.day_start_ms !== previous.daily_usage.day_start_ms ? daily : previous.daily_usage,
@@ -260,9 +255,9 @@ const MiniWatch = (() => {
       const table = this.el('table', undefined, 'mini-prompt-table'), head = this.el('thead'), header = this.el('tr');
       table.setAttribute('aria-label', historical ? 'Earlier sessions: latest supported finish, latest-prompt CCost (whole-session CCost) and latest valid session context (Ctx)' :
         'Active prompts: prompt CCost (whole-session CCost), Duration and estimated next incoming context (Ctx)');
-      for (const name of historical ? ['Activity', 'Session', 'CCost (Total)', 'Ctx'] : ['Session', 'CCost (Total)', 'Duration', 'Ctx']) {
+      for (const name of historical ? ['Finished', 'Session', 'CCost (Total)', 'Ctx'] : ['Session', 'CCost (Total)', 'Duration', 'Ctx']) {
         const cell = this.el('th'); cell.scope = 'col';
-        const explanation = {Activity: 'The session’s latest supported finish, in configured local time.\nFocus or hover the time for the full local date and offset.', Session: 'The name of the session.',
+        const explanation = {Finished: 'The session’s latest supported finish, in configured local time.\nFocus or hover the time for the full local date and offset.', Session: 'The name of the session.',
           'CCost (Total)': `First: ${historical ? 'the latest prompt’s' : 'this prompt’s'} reference CCost.\nIn parentheses: the entire session’s reference CCost, including linked subagents.\nNot provider billing. N/A means unavailable, not zero; ? means partial pricing.`,
           Duration: 'Time spent on this prompt; freezes when updates are unavailable.', Ctx: historical ?
             'Last valid estimate of the next request’s context in this session.\nNot historical prompt context or a sum. N/A means unavailable.' :
@@ -394,10 +389,12 @@ const MiniWatch = (() => {
       for (const key of this.promptRows.keys()) if (!seen.has(key)) this.promptRows.delete(key);
     }
     drawHistory(view) {
+      this.historyBody.setAttribute('aria-description', `History: ${view?.history_state || 'loading'}; source cause: ${view?.history_cause || 'none'}; proof epoch: ${view?.history_epoch || 0}`);
       const seen = new Set((view?.active_cards || []).map(card => card.session_id));
       // Shared history is already eligible, session-distinct and oldest-to-newest.
       // No clock/ranking/valuation or new acquisition belongs in this view.
-      const cards = (view?.history_cards || []).filter(card => {
+      const usable = view?.history_state === 'observed' || view?.history_epoch > 0;
+      const cards = (usable ? view?.history_cards || [] : []).filter(card => {
         if (seen.has(card.session_id)) return false;
         seen.add(card.session_id); return true;
       }).slice(-3);
@@ -423,9 +420,10 @@ const MiniWatch = (() => {
         row.setAttribute('aria-label', `Earlier session · ${session}`);
         row.setAttribute('aria-description', `Source: ${card.state}; session total: ${card.session_summary?.state || 'loading'}`); return row;
       });
-      ReportView.text(this.emptyHistory.children[0].children[0], view?.history_state === 'observed' ? 'No earlier sessions' :
-        view?.history_state === 'unavailable' ? 'Earlier sessions unavailable' : 'Loading earlier sessions…');
-      reconcile(this.historyBody, wanted.length ? wanted : [this.emptyHistory]);
+      const notice = WatchView.historyNotice(view, cards.length > 0);
+      ReportView.text(this.emptyHistory.children[0].children[0], notice);
+      this.emptyHistory.setAttribute('role', 'status');
+      reconcile(this.historyBody, wanted.length ? [...wanted, ...(notice ? [this.emptyHistory] : [])] : [this.emptyHistory]);
       const keep = new Set(cards.map(card => card.session_id));
       for (const key of this.historyRows.keys()) if (!keep.has(key)) this.historyRows.delete(key);
     }

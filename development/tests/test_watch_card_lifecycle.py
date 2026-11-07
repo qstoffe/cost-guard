@@ -64,6 +64,8 @@ class WebTerminalLifecycleTests(unittest.TestCase):
         self.native.active = {}
 
     def capture(self, now, previous=True):
+        # Pin the actual catalog revision, not the old synthetic "initial" token.
+        self.cards.catalog(observe_catalog(self.service(now).source))
         entry = self.cards.sessions[self.root.session_id]
         self.workers._capture(self.root, entry.generation, now,
             entry.snapshot if previous else None,
@@ -355,16 +357,25 @@ class WebTerminalLifecycleTests(unittest.TestCase):
                 self.assertEqual(expected.duration_ms, actual.duration_ms)
                 terminal_active, terminal_history, state = cards.project(90_000)
                 terminal = project_live(WatchProjection("Watch", "fixture", (), now_ms=90_000,
-                    active_cards=terminal_active, history_cards=terminal_history, cards_state=state)).to_json()
+                    active_cards=terminal_active, history_cards=terminal_history, cards_state=state,
+                    history_state=cards.history.state, history_epoch=cards.history.epoch)).to_json()
                 entry = cards.sessions[stopped]
                 self.workers._capture(entry.root, entry.generation, 100_000, entry.snapshot, ())
+                for result in self.workers.drain():
+                    if result.phase != "timing":
+                        cards.accept(result, 100_000)
+                # Fair admission is not global history proof: account for all
+                # remaining changed roots before expecting authoritative history.
+                for candidate in cards.sessions.values():
+                    self.workers._capture(candidate.root, candidate.generation, 100_000, candidate.snapshot, ())
                 for result in self.workers.drain():
                     if result.phase != "timing":
                         cards.accept(result, 100_000)
                 active, history, state = cards.project(130_000)
                 self.assertNotIn(stopped, [card.session_id for card in active])
                 wire = project_live(WatchProjection("Watch", "fixture", (), now_ms=130_000,
-                    active_cards=active, history_cards=history, cards_state=state)).to_json()
+                    active_cards=active, history_cards=history, cards_state=state,
+                    history_state=cards.history.state, history_epoch=cards.history.epoch)).to_json()
                 exported, = [row["prompt"] for card in wire["history_cards"]
                     if card["session_id"] == stopped for row in card["rows"]]
                 self.assertFalse(exported["in_progress"])
@@ -372,7 +383,8 @@ class WebTerminalLifecycleTests(unittest.TestCase):
                 cold = WatchCards(self.workers)
                 cold.catalog(observe_catalog(self.source))
                 cold_entry = cold.sessions[stopped]
-                self.workers._capture(cold_entry.root, cold_entry.generation, 130_000, None, ())
+                for candidate in cold.sessions.values():
+                    self.workers._capture(candidate.root, candidate.generation, 130_000, None, ())
                 for result in self.workers.drain():
                     if result.phase != "timing":
                         cold.accept(result, 130_000)

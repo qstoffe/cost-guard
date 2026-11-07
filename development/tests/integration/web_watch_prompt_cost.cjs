@@ -13,6 +13,7 @@ class Node {
   addEventListener(kind, handler) { this.events[kind] = handler; }
 }
 const input = JSON.parse(fs.readFileSync(0, 'utf8'));
+input.view.history_state = 'observed'; // This fixture supplies a complete fixed history.
 const context = vm.createContext({input, parent:new Node('div'), document:{createElement:tag => new Node(tag),
   createElementNS:(namespaceURI,tag) => Object.assign(new Node(tag), {namespaceURI})},
   window:{addEventListener() {}, matchMedia:() => ({addEventListener() {}, removeEventListener() {}})}});

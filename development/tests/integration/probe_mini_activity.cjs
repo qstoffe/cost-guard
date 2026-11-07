@@ -1,4 +1,4 @@
-// Historical-only Activity acceptance in the owned headless PiP, not physical OS proof.
+// Historical-only Finished acceptance in the owned headless PiP, not physical OS proof.
 const assert = require('node:assert/strict');
 module.exports = async function activity({evaluate,until,fixture,command,pip,ownerSession,layouts,checks}) {
   const input = (method,params) => command(method,params,pip);
@@ -16,7 +16,7 @@ module.exports = async function activity({evaluate,until,fixture,command,pip,own
     ['23:47','2026-11-05 23:47 +0100'],['00:08','2026-11-06 00:08 +0100'],['—','Unknown finish time']]);
   assert.ok((await values()).every(row=>row.columns===4 && row.focus===0 && !row.native));
   assert.deepEqual(await evaluate(`[...miniWatch.view.historyBody.parentNode.querySelectorAll('th')].map(n=>n.textContent)`),
-    ['Activity','Session','CCost (Total)','Ctx']);
+    ['Finished','Session','CCost (Total)','Ctx']);
   assert.deepEqual(await evaluate(`[...miniWatch.view.body.parentNode.querySelectorAll('th')].map(n=>n.textContent)`),
     ['Session','CCost (Total)','Duration','Ctx']);
   await evaluate('miniWatch.window.resizeTo(650,550)',true); await settle();
@@ -71,5 +71,5 @@ module.exports = async function activity({evaluate,until,fixture,command,pip,own
     }
   }
   await evaluate(`ReportView.setUnit('credits');miniWatch.settings();miniWatch.window.resizeTo(650,550)`,true); await settle();
-  checks.push('Four-column history retains Activity midnight/DST/unknown tokens; stable live focus/help, delayed hover and real touch; four themes, Credits/USD and nominal/narrow PiP geometry');
+   checks.push('Four-column Finished history retains midnight/DST/unknown tokens; stable live focus/help, delayed hover and real touch; four themes, Credits/USD and nominal/narrow PiP geometry');
 };

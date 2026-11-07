@@ -46,6 +46,7 @@ class WatchCardTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.source = SyntheticMonthSource(8, 8, month_start_ms=1000)
+        self.source.snapshots = {key: replace(value, complete=True) for key, value in self.source.snapshots.items()}
         _, _, self.service, _ = make_service(self.tmp.name, self.source, now_ms=100_000_000)
         self.roots = tuple(snapshot.root for snapshot in self.source.snapshots.values())
         self.capture, self.item = capture_rows(self.service, self.roots[0])
@@ -62,6 +63,7 @@ class WatchCardTests(unittest.TestCase):
 
     def test_ten_thousand_prompt_history_keeps_one_latest_canonical_row_and_anchors(self):
         source = SyntheticMonthSource(1, 10000, month_start_ms=1000)
+        source.snapshots = {key: replace(value, complete=True) for key, value in source.snapshots.items()}
         _, _, service, _ = make_service(str(Path(self.tmp.name) / "large"), source, now_ms=100_000_000)
         root = source.snapshots["root-0000"].root
         recent, item = capture_rows(service, root)
@@ -94,7 +96,7 @@ class WatchCardTests(unittest.TestCase):
 
     def test_card_freshness_exports_capture_time_not_projection_or_cost_ticks(self):
         cards = WatchCards(ManualWorkers())
-        cards.catalog(self.catalog())
+        cards.catalog(self.catalog((self.roots[0],)))
         self.publish(cards, self.roots[0], replace(self.capture, observed_at_ms=1234))
 
         first = cards.project(5000)[1][0]
@@ -243,13 +245,139 @@ class WatchCardTests(unittest.TestCase):
         cards.catalog(self.catalog(active=[root.session_id for root in self.roots[:6]]))
         cards.tick(1000)
         self.assertEqual(4, len(workers.jobs))
-        self.assertIn(self.roots[6].session_id, workers.submissions)
+        self.assertTrue(set(workers.submissions) & {root.session_id for root in self.roots[6:]})
         cards = WatchCards(ManualWorkers())
         cards.catalog(self.catalog())
         for root in self.roots:
             self.publish(cards, root, self.capture)
         self.assertFalse(cards.project(1001)[0])
         self.assertTrue(all(not row.marker for card in cards.project(1001)[1] for row in card.rows))
+
+    def test_fixed_catalog_delayed_newer_roots_never_publish_provisional_winners(self):
+        # One source/catalog revision, no new activity across the virtual minute.
+        roots = tuple(replace(self.roots[0], session_id=f"fixed-{index:02}", updated_at_ms=1)
+            for index in range(12))
+        cards = WatchCards(ManualWorkers())
+        observation = self.catalog(roots, revision="fixed-source-revision")
+        cards.catalog(observation)
+        for index, root in enumerate(roots):
+            row = replace(self.capture.rows[-1], at_ms=100 + index, completed_at_ms=1000 + index)
+            self.publish(cards, root, replace(self.capture, rows=(row,), latest_ms=row.at_ms), now=2000)
+            if index < 11:
+                self.assertEqual((), cards.historical_ids(2000), "partial top-k is not authoritative")
+                self.assertEqual((), cards.project(2000)[1])
+        before = cards.project(62000)[1]
+        self.assertEqual([root.session_id for root in roots[-5:]], [card.session_id for card in before])
+        cards.catalog(observation)
+        self.assertEqual(before, cards.project(63000)[1], "unchanged catalog never replaces winners")
+
+    def test_history_refresh_is_an_atomic_publication_not_mixed_card_versions(self):
+        cards = WatchCards(ManualWorkers())
+        cards.catalog(self.catalog())
+        for root in self.roots:
+            self.publish(cards, root, self.capture)
+        before = cards.project(2000)[1]
+        cards.catalog(self.catalog(revision="two"))
+        changed = replace(self.capture, rows=(replace(self.capture.rows[-1], ccost=Decimal("42")),))
+        for root in self.roots[:-1]:
+            self.publish(cards, root, changed)
+            self.assertEqual(before, cards.project(3000)[1], "retain one coherent verified epoch")
+        self.publish(cards, self.roots[-1], changed)
+        after = cards.project(3001)[1]
+        self.assertTrue(all(card.rows[0].prompt.ccost == Decimal("42") for card in after))
+
+    def test_history_failure_partial_revision_recovery_and_terminal_invalidation(self):
+        clock = [0.0]
+        cards = WatchCards(ManualWorkers(), monotonic=lambda: clock[0])
+        cards.catalog(self.catalog())
+        for root in self.roots:
+            self.publish(cards, root, self.capture)
+        verified = cards.project(2000)[1]
+        epoch, stamp = cards.history.epoch, cards.history.verified_at_ms
+        root = self.roots[-1]
+        entry = cards.sessions[root.session_id]
+        cards.accept(CardResult(root.session_id, entry.generation, 'unavailable',
+            transport_failure(TimeoutError(), phase='capture')), 2001)
+        self.assertEqual(verified, cards.project(2002)[1])
+        self.assertEqual('refreshing', cards.history.state)
+        clock[0] = 5
+        self.assertEqual(verified, cards.project(2003)[1])
+        self.assertEqual(('unavailable', epoch, stamp),
+            (cards.history.state, cards.history.epoch, cards.history.verified_at_ms))
+        self.publish(cards, root, replace(self.capture, authoritative=False), now=2004)
+        cards.project(2004)
+        self.assertEqual('unavailable', cards.history.state, 'incomplete trees cannot certify membership')
+        self.publish(cards, root, self.capture, now=2005)
+        cards.project(2005)
+        self.assertEqual('observed', cards.history.state)
+        cards.catalog(self.catalog(self.roots[:-1]))
+        self.assertNotIn(root.session_id, cards.historical_ids(2006))
+
+    def test_status_only_resumption_invalidates_history_and_cost_ticks_do_not_renew_proof(self):
+        cards = WatchCards(ManualWorkers())
+        cards.catalog(self.catalog())
+        for root in self.roots:
+            self.publish(cards, root, self.capture)
+        history = cards.project(2000)[1]
+        epoch, stamp = cards.history.epoch, cards.history.verified_at_ms
+        entry = cards.sessions[history[0].session_id]
+        entry.cost.failed = True
+        cards.project(9000)
+        self.assertEqual((epoch, stamp), (cards.history.epoch, cards.history.verified_at_ms))
+        cards.catalog(self.catalog(active=(entry.root.session_id,)))
+        active, retained, _ = cards.project(9001)
+        self.assertEqual(entry.root.session_id, active[0].session_id)
+        self.assertEqual((), active[0].rows, 'loading a resumed prompt never displays the old representative as active')
+        self.assertNotIn(entry.root.session_id, [card.session_id for card in retained])
+        self.assertEqual('refreshing', cards.history.state)
+
+    def test_actual_workers_delay_newer_capture_without_blocking_live_publication(self):
+        release, started = Event(), Event()
+        source = SyntheticMonthSource(12, 1, month_start_ms=1000)
+        source.snapshots = {key: replace(value, complete=True) for key, value in source.snapshots.items()}
+        roots = tuple(value.root for value in source.snapshots.values())
+        def factory(now):
+            return make_service(str(Path(self.tmp.name) / uuid4().hex), source, now_ms=now)[2]
+        original = capture_rows
+        def delayed(service, root, previous, focal_ids):
+            if root.session_id == roots[-1].session_id:
+                started.set()
+                if not release.wait(10):
+                    raise RuntimeError('test_release_missing')
+            return original(service, root, previous, focal_ids)
+        workers = CardWorkers(factory)
+        self.addCleanup(workers.close)
+        self.addCleanup(release.set)
+        cards = WatchCards(workers)
+        cards.catalog(self.catalog(roots, revision='fixed-worker-catalog'))
+        # The fixture's revision map must match each canonical source snapshot.
+        for key, entry in cards.sessions.items():
+            entry.revision = source.snapshots[key].source_revision
+        def consume(now):
+            for result in workers.drain():
+                if result.phase != 'timing':
+                    cards.accept(result, now)
+        with patch('src.watch.card_workers.capture_rows', side_effect=delayed):
+            for root in roots:
+                entry = cards.sessions[root.session_id]
+                while len(workers.jobs) >= workers.limit:
+                    for future in tuple(workers.jobs.values()):
+                        future.result(timeout=3)
+                    consume(100_000_000)
+                workers.submit(root, entry.generation, 100_000_000)
+            self.assertTrue(started.wait(3))
+            for key, future in tuple(workers.jobs.items()):
+                if key != roots[-1].session_id:
+                    future.result(timeout=3)
+            consume(100_000_000)
+            self.assertEqual((), cards.project(100_060_000)[1])
+            self.assertEqual('loading', cards.history.state)
+            release.set()
+            for future in tuple(workers.jobs.values()):
+                future.result(timeout=3)
+            consume(100_060_000)
+            self.assertEqual(5, len(cards.project(100_060_000)[1]))
+            self.assertEqual('observed', cards.history.state)
 
     def test_history_revision_refresh_retains_visible_metrics_without_expansion_signal(self):
         workers = ManualWorkers()
@@ -265,6 +393,9 @@ class WatchCardTests(unittest.TestCase):
         root = self.roots[0]
         row = replace(self.capture.rows[-1], ccost=Decimal("42"))
         self.publish(cards, root, replace(self.capture, rows=(row,)), now=1003)
+        self.assertEqual(before, cards.project(1003)[1], "one refreshed root cannot replace a verified epoch")
+        for root in self.roots[1:]:
+            self.publish(cards, root, replace(self.capture, rows=(row,)), now=1003)
         self.assertEqual(Decimal("42"), cards.project(1003)[1][0].rows[0].prompt.ccost)
 
     def test_revision_churn_cannot_starve_a_retained_running_card(self):

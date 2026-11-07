@@ -40,6 +40,53 @@ def slow_report(sender, request):
 
 
 class LiveTests(unittest.TestCase):
+    def test_delayed_history_does_not_block_advancing_active_live_publications(self):
+        from types import SimpleNamespace
+        from uuid import uuid4
+        from development.tests.fixtures.synthetic_month import SyntheticMonthSource
+        from src.watch.web_coordinator import WebWatchCoordinator
+        from src.watch.card_workers import capture_rows
+        release, started = Event(), Event()
+        with tempfile.TemporaryDirectory() as tmp:
+            source = SyntheticMonthSource(3, 1, month_start_ms=1000, running_roots=1)
+            source.snapshots = {key: replace(value, complete=True) for key,value in source.snapshots.items()}
+            config, selection, service, _ = make_service(tmp, source, now_ms=1_000_000)
+            def factory(now):
+                return make_service(str(Path(tmp)/uuid4().hex), source, now_ms=now)[2]
+            def delayed(service, root, previous, focal_ids):
+                if root.session_id == 'root-0001':
+                    started.set()
+                    if not release.wait(10):
+                        raise RuntimeError('test_release_missing')
+                return capture_rows(service, root, previous, focal_ids)
+            owner = WebWatchCoordinator(selection=selection, report_service=service, config=config,
+                service_factory=factory, clock_ms=lambda: 1_000_000)
+            published = []
+            runtime = LiveRuntime(None, lambda _, value: published.append(value.to_json()))
+            driver = SimpleNamespace(source_state='running', observed_at_ms=1_000_000, error=None, coordinator=owner)
+            try:
+                with patch('src.watch.card_workers.capture_rows', side_effect=delayed):
+                    owner.initialize(defer_history=True)
+                    self.assertTrue(started.wait(3))
+                    for key,future in tuple(owner.card_workers.jobs.items()):
+                        if key != 'root-0001':
+                            future.result(timeout=3)
+                    durations = []
+                    for index in range(5):
+                        before = time.monotonic()
+                        frame = owner._build_projection(now_ms=1_000_000+index*1000)
+                        runtime._publish_frame(driver, frame)
+                        self.assertLess(time.monotonic()-before, .5, 'blocked history cannot stall Live publication')
+                        wire = published[-1]['view']
+                        self.assertEqual('loading', wire['history_state'])
+                        self.assertEqual([], wire['history_cards'])
+                        durations.append(wire['active_cards'][0]['rows'][0]['prompt']['duration_ms'])
+                    self.assertEqual(5, len(published))
+                    self.assertEqual(4000, durations[-1]-durations[0])
+            finally:
+                release.set()
+                owner.close()
+
     def test_first_live_readiness_requires_a_healthy_published_frame(self):
         from types import SimpleNamespace
         published = []

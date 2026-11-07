@@ -315,7 +315,7 @@ async function main() {
   assert.equal(watch.history.textContent, 'No earlier sessions');
   multiple.view.history_state = 'unavailable';
   vm.runInContext('ReportView.renderLive(parent, example, state)', context);
-  assert.equal(watch.history.textContent, 'Earlier sessions unavailable');
+  assert.equal(watch.history.textContent, 'Unable to verify latest sessions');
   assert.equal(watch.empty.textContent, 'No running prompts');
   assert.equal(watch.earlier.open, true);
   console.log('web live passed');

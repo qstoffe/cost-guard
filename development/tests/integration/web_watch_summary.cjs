@@ -337,7 +337,7 @@ initial.view.active_cards = [{...context.input.view.active_cards[0],rows:[],stat
 context.initial = initial;
 vm.runInContext('globalThis.fresh = new WatchView.View({connection:"Live connected."}); fresh.update(initial)', context);
 assert.equal(context.fresh.empty.textContent, '');
-assert.equal(context.fresh.history.textContent, '');
+assert.equal(context.fresh.history.textContent, 'Loading earlier sessions…');
 assert.equal(context.fresh.daily.textContent, 'CCost Today—');
 assert.equal(context.fresh.accounts.textContent, '');
 const initialCard = [...context.fresh.cards.values()][0];

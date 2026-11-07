@@ -191,15 +191,15 @@ class WebWatchCoordinator(WatchCoordinator):
                 timezone_id=self.report_service.timezone_id,
                 workday_calendar=str(self.config.get("workdayCalendar") or ""))
             frame = replace(frame, quota=replace(frame.quota, accounts=accounts))
-        history_pending = any(entry.latest_ms is None for entry in self.cards.sessions.values())
-        history_failed = any(entry.source_status.state(retained=entry.capture is not None) == "unavailable"
-            for entry in self.cards.sessions.values())
+        proof = self.cards.history
         frame = replace(frame, active_cards=active, history_cards=history, cards_state=state,
             running=running_prompts(active, state),
             daily_usage=self.daily_usage,
             daily_state=self.daily_status.state(retained=self.daily_usage is not None) or ("loading" if self.daily_usage is None
                 else "refreshing" if self.history_job is not None else "observed"),
-            history_state="unavailable" if history_failed else "loading" if history_pending else "observed",
+            history_state=proof.state, history_scope=proof.scope, history_epoch=proof.epoch,
+            history_catalog_revision=proof.catalog_revision, history_verified_at_ms=proof.verified_at_ms,
+            history_checked=proof.checked, history_total=proof.total, history_cause=proof.cause,
             active_count=sum(row.prompt.in_progress for card in active for row in card.rows if row.prompt.event_id == card.focal_id)
                 + sum(not card.rows for card in active))
         self._last_projection = frame

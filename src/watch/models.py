@@ -159,6 +159,13 @@ class WatchProjection:
     history_cards: tuple[WatchCard, ...] = ()
     cards_state: str | None = None
     history_state: str = "loading"
+    history_scope: str = ""
+    history_epoch: int = 0
+    history_catalog_revision: int = 0
+    history_verified_at_ms: int | None = None
+    history_checked: int = 0
+    history_total: int = 0
+    history_cause: str = ""
     daily_usage: DailyUsage | None = None
     daily_state: str = "loading"
     running: RunningPrompts = field(default_factory=RunningPrompts)

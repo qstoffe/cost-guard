@@ -36,7 +36,7 @@ module.exports = async function alignment({evaluate,until,fixture,command,sessio
   assert.deepEqual(await evaluate(`[...miniWatch.view.body.parentNode.querySelectorAll('th')].map(n=>n.textContent)`),
     ['Session','CCost (Total)','Duration','Ctx']);
   assert.deepEqual(await evaluate(`[...miniWatch.view.historyBody.parentNode.querySelectorAll('th')].map(n=>n.textContent)`),
-    ['Activity','Session','CCost (Total)','Ctx']);
+    ['Finished','Session','CCost (Total)','Ctx']);
   assert.deepEqual(await evaluate(`[...miniWatch.view.body.rows].map(row=>row.cells[1].textContent)`),['49 (562)','173 (562)']);
   assert.deepEqual(await evaluate(`[...miniWatch.view.historyBody.rows].map(row=>row.cells[2].textContent)`),Array(3).fill('49 (562)'));
   for (const [table, numbers] of [['body',[7,11]],['historyBody',[7,20,null]]]) {

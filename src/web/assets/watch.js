@@ -4,6 +4,14 @@ const WatchView = (() => {
   const el = (...args) => ReportView.element(...args);
   const display = (row, key) => ReportView.display(row, key);
   const text = (node, value) => ReportView.text(node, value);
+  function historyNotice(view, retained) {
+    if (view?.history_state === 'observed') return retained ? '' : 'No earlier sessions';
+    const suffix = retained ? ' · Previously verified sessions; checking for changes.' : '';
+    if (view?.history_state === 'unavailable') return 'Unable to verify latest sessions' + suffix;
+    const checked = view?.history_checked, total = view?.history_total;
+    const progress = Number.isInteger(total) && total > 0 && Number.isInteger(checked) && checked < total ? ` (${checked}/${total} checked)` : '';
+    return 'Loading earlier sessions…' + progress + suffix;
+  }
   function protectedNode(node) {
     const selection = window.getSelection?.();
     return node.contains(document.activeElement) || Boolean(selection && !selection.isCollapsed &&
@@ -286,7 +294,9 @@ const WatchView = (() => {
       if (this.root.parentNode !== parent) parent.replaceChildren(this.root);
     }
     update(result) {
-      const view = result.view, active = view.active_cards || [], history = view.history_cards || [];
+      const view = result.view, active = view.active_cards || [];
+      const history = view.history_state === 'observed' || view.history_epoch > 0 ? view.history_cards || [] : [];
+      this.history.setAttribute('aria-description', `History: ${view.history_state || 'loading'}; source cause: ${view.history_cause || 'none'}; proof epoch: ${view.history_epoch || 0}`);
       this.earlier.dataset.hasHistory = String(history.length > 0);
       // A healthy host/stream retrying its source is not a disconnected stream.
       // Its global health warning remains visible; don't duplicate it as fleeting
@@ -297,7 +307,6 @@ const WatchView = (() => {
       const hostOwnsRetry = this.state.connectionKind === 'source_retrying';
       const sourceState = hostOwnsRetry ? '' : result.state === 'retrying' ? retryDelayed ? 'Source updates delayed; last observation retained, not current.' : '' :
         result.state !== 'running' ? 'Source unavailable; last observation retained, not current.' : '';
-      const historyLoading = view.history_state === 'loading' || view.history_state == null;
       // Only observed prompt membership establishes empty success. Independent
       // history/accounts/daily acquisition and elapsed time say nothing about it.
       const noRunning = this.state.connection === 'Live connected.' && view.cards_state === 'observed' &&
@@ -311,7 +320,13 @@ const WatchView = (() => {
           if (!this.cards.has(key)) this.cards.set(key, new Card(historical));
           const card = this.cards.get(key); card.update(value, historical, hostOwnsRetry || Boolean(sourceState) || !connected); return card.root;
         });
-        if (historical && !wanted.length && !historyLoading) wanted.push(el('p', view.history_state === 'unavailable' ? 'Earlier sessions unavailable' : 'No earlier sessions'));
+        if (historical) {
+          const notice = historyNotice(view, wanted.length > 0);
+          if (notice) {
+            this.historyNotice ||= el('p'); this.historyNotice.setAttribute('role', 'status');
+            text(this.historyNotice, notice); wanted.push(this.historyNotice);
+          }
+        }
         reconcile(parent, wanted);
       }
       for (const key of this.cards.keys()) if (!keep.has(key)) this.cards.delete(key);
@@ -331,5 +346,5 @@ const WatchView = (() => {
       this.accountCards.update(view);
     }
   }
-  return {View, ContextLine};
+  return {View, ContextLine, historyNotice};
 })();
