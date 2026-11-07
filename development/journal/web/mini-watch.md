@@ -1,5 +1,44 @@
 # Mini Watch and finished history
 
+## FR 000621 — v80.201 symmetric value help and quiet live status, 2026-11-07
+
+Both tables now bind the actual Session text and cost text independently, once per
+keyed row. Session is full title plus the represented canonical ordinal (unknown is
+explicit); cost reuses compact `promptDetails`, not Full Watch's I/C/W/O breakdown.
+History uses `card.rows[0]`, not prompt count/activity order. Paired costs, four-column
+layout, source valuation and native sizing are unchanged. The redundant extra Session
+status line is removed; source flags remain in accessible values and cost help.
+
+Raw status transitions are not new observations. Full Watch card/day, shared quota
+cards and the host use one small presentation-only grace class, evaluated on existing
+publications with no new timer/acquisition. Failed lanes recover only on newer relevant
+evidence, not cost corrections, repeated HTTP/SSE or another lane's success. Card DTOs
+export actual capture time (null for retained capture). A transient partial quota using
+the same verified figure stays quiet; a new genuinely partial native observation and
+typed auth/provider failures remain meaningful. Host retry owns its Watch warning.
+Initial Full loading keeps 30 seconds; retained Full/Accounts values use about 60 seconds;
+Mini keeps its independent ten-minute aggregate owner, with per-focal clocks preventing
+a healthy concurrent prompt from hiding a stuck one. Cached-report final limitations
+and one-hour freshness boundaries are untouched.
+
+Verification and limitations are retained in
+[`mini-status-621.json`](../../architecture/governance/verification/mini-status-621.json).
+Final local Full passed 155 files / 1,886 tests, zero failures/errors, one existing
+Windows zsh/PTY skip. Validator passed 11 checks with six existing advisory warnings;
+no caps or structural baselines were raised. Owned headless Chrome and Edge exercised
+actual Document PiP, independent value targets, pointer/keyboard/touch/Escape, stable
+focus/help, exact prompt/unknown identity, themes, narrow widths and true browser zoom.
+Chrome's final opening screenshot was inspected. Read-only real V2 source evidence is
+separate from synthetic geometry; the shared OpenCode service was not stopped.
+
+The broader default help probe reaches an unconfigured synthetic Sessions catalog;
+its failure is not a help PASS. The broad Accounts invocation passes its subscription
+capacity matrix, then fails a later Settings-navigation condition; the independent
+`--quota-only` invocation passes the task's quota/retained/empty/recovery/host-stop
+checks. Neither broad invocation is reported as an all-driver PASS. Physical desktop,
+screen-reader speech and macOS behavior were not verified. No requirement/test waiver,
+model inference, personal browser identity, ZIP, tag or GitHub Release is claimed.
+
 ## FR 000613 — v80.193 reference header reserve, 2026-11-06
 
 Base `a7947ab8197a3db28405e31df5f88bb15def5be7`. Fit/Default now measures

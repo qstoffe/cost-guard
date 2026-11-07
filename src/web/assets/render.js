@@ -7,6 +7,17 @@ const ReportView = (() => {
   let quotaMode = 'used';
   const bindings = new WeakMap();
   const effects = new WeakMap();
+  // Live presentation grace only: a repeated snapshot or another lane's progress
+  // cannot clear an ongoing failure. Callers supply their own successful evidence.
+  class LiveStatus {
+    update(usable, token, now = Date.now(), threshold = 60000) {
+      const fresh = typeof token === 'number' && typeof this.token === 'number' ? token > this.token : token !== this.token;
+      if (usable && token != null && fresh) {
+        this.token = token; this.since = null;
+      } else if (!usable) this.since ??= now;
+      return this.since != null && now - this.since >= threshold;
+    }
+  }
   function bind(node, update) { effects.set(node, update); update(); }
   function setQuotaMode(value) { if (['used', 'remaining'].includes(value)) quotaMode = value; }
   function quotaView(quota, watch) {
@@ -574,5 +585,5 @@ const ReportView = (() => {
     return ['Complete session', ccost(block, 'total_ccost'), known(block.total_calls),
       display(block, 'duration_ms'), '—', known(block.total_ictx_cost_text), known(block.total_extra_cost_text), known(block.total_mix_text)];
   }
-  return {render, renderLive, element, detailCells, detailTotals, compare, overviewAccounts, display, contextSummary, text, setUnit, syncUnits, defaultUnit, mixLegend, hourlySummary, historyWarning, bind, setQuotaMode, quotaView, quotaHelp};
+  return {render, renderLive, element, detailCells, detailTotals, compare, overviewAccounts, display, contextSummary, text, setUnit, syncUnits, defaultUnit, mixLegend, hourlySummary, historyWarning, bind, setQuotaMode, quotaView, quotaHelp, LiveStatus};
 })();

@@ -74,7 +74,8 @@ def summary_watch():
         skills=(SkillObservation("custom-skill", 1),))
     card = WatchCard("root", "Synthetic active session", "prompt", (WatchRow("root", "Session", item, "▶", tool),),
         state="observed", session_context=guidance,
-        session_cost=SessionCost(ComparisonCost(D("4582.125"), 2000, 2000), True, True), session_cost_state="observed")
+        session_cost=SessionCost(ComparisonCost(D("4582.125"), 2000, 2000), True, True), session_cost_state="observed",
+        observed_at_ms=NOW)
     history = replace(card, session_id="past", title="Synthetic earlier session", focal_id="",
         rows=(WatchRow("past", "Earlier", replace(item, in_progress=False, completed_at_ms=NOW - 1000)),),
         session_context=replace(guidance, severity=PriceWarningSeverity.APPROACHING,

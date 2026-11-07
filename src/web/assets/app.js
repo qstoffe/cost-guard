@@ -78,17 +78,21 @@ function applySettings(value) {
   miniWatch?.settings(confirmed.values, hostInstance);
   return confirmed;
 }
+const connectionGrace = new ReportView.LiveStatus();
 function connectionStatus(message, state = {}) {
   if (hostState.terminal && state.kind !== hostState.kind) return;
   hostState = {...hostState, ...state};
   liveStatus = message;
   miniWatch?.health(hostState);
-  statusLine.textContent = ['connected', 'source_starting'].includes(hostState.kind) ? message : `Connection: ${hostState.kind.replaceAll('_', ' ')}. See notice below.`;
+  const late = connectionGrace.update(hostState.kind === 'connected', hostState.observedAt);
+  const quiet = hostState.kind === 'source_retrying' && liveValue?.view && hostState.observedAt != null && !late;
+  if (!quiet) statusLine.textContent = ['connected', 'source_starting'].includes(hostState.kind) ? message : `Connection: ${hostState.kind.replaceAll('_', ' ')}. See notice below.`;
+  statusLine.setAttribute('aria-description', message);
   const banner = document.getElementById('host-state');
   if (banner) {
     banner.dataset.kind = hostState.kind;
     const time = value => value == null ? 'not yet observed' : new Date(value).toLocaleString();
-    banner.hidden = hostState.kind === 'connected' || (hostState.kind === 'starting' && !(current?.result || current?.detail?.data || liveValue?.view));
+    banner.hidden = quiet || hostState.kind === 'connected' || (hostState.kind === 'starting' && !(current?.result || current?.detail?.data || liveValue?.view));
     const summary = document.getElementById('host-message');
     const details = document.getElementById('host-details');
     const timing = `Last host check: ${time(hostState.authenticatedAt)}\nLast source update: ${time(hostState.observedAt)}\n${demand ? 'Reports refresh through the host; retained results keep their source observation time.' : 'Reports stay frozen.'} Account updates are separate.`;

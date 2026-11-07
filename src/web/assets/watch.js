@@ -4,12 +4,6 @@ const WatchView = (() => {
   const el = (...args) => ReportView.element(...args);
   const display = (row, key) => ReportView.display(row, key);
   const text = (node, value) => ReportView.text(node, value);
-  // Presentation-only grace: retries are not observations or a lifecycle change.
-  function delayed(owner, key, waiting) {
-    if (!waiting) { owner[key] = null; return false; }
-    owner[key] ??= Date.now();
-    return Date.now() - owner[key] >= 30000;
-  }
   function protectedNode(node) {
     const selection = window.getSelection?.();
     return node.contains(document.activeElement) || Boolean(selection && !selection.isCollapsed &&
@@ -54,8 +48,8 @@ const WatchView = (() => {
     if (!value.total.complete) parent.append(el('span', 'Partial CCost pricing', 'warning'));
     if (value.prompt_count_complete === false) parent.append(el('span', 'Prompt count incomplete', 'warning'));
     if (!value.total.observed_requests) parent.append(el('span', 'No recorded usage', 'detail'));
-    if (state === 'unavailable') parent.append(el('span', 'Source unavailable · retained daily observation', 'warning'));
-    if (waiting) parent.append(el('span', 'Daily updates delayed · retained observation, not current', 'detail'));
+    if (waiting) parent.append(el('span', 'Updates delayed · showing last values', 'detail'));
+    parent.setAttribute('aria-description', `Daily source: ${state || 'loading'}; observed: ${value.observed_at_ms ?? 'unknown'}`);
   }
   function promptCost(prompt) {
     const total = display(prompt, 'ccost');
@@ -154,6 +148,7 @@ const WatchView = (() => {
       this.root = el('article', undefined, 'watch-card');
       this.title = el('a'); const heading = el('h3'); heading.append(this.title);
       this.message = el('p', undefined, 'detail'); this.message.setAttribute('role', 'status');
+      this.sourceStatus = new ReportView.LiveStatus();
       const scroll = el('div', undefined, 'watch-table-scroll');
       scroll.tabIndex = 0; scroll.setAttribute('role', 'region'); scroll.setAttribute('aria-label', 'Session prompts');
       const table = el('table', undefined, 'watch-prompt-table');
@@ -171,21 +166,26 @@ const WatchView = (() => {
       const contextLine = contextParts(this);
       this.costLabel = el('span'); this.costStatus = el('span');
       this.costHelp = ContextHelp.value(el('span'), () => 'Reference cost of the entire session, including earlier prompts, linked subagents and provisional work.' +
-        (this.summaryValue?.cost && !this.summaryValue.cost.complete ? '\n? — Partial pricing or source data.' : ''));
+        (this.summaryValue?.cost && !this.summaryValue.cost.complete ? '\n? — Partial pricing or source data.' : '') +
+        `\nSource evidence: ${this.summaryValue?.state || 'loading'}`);
       this.costHelp.append(el('span', 'Total CCost: '), this.costLabel);
       const costLine = el('div'); costLine.append(this.costHelp, this.costStatus);
       this.summary.append(contextLine, costLine);
       this.root.append(heading, this.message, scroll, this.summary, this.activity);
     }
-    update(value, historical) {
+    update(value, historical, sourceNotice = false) {
       this.value = value;
       this.root.dataset.session = value.session_id;
       text(this.title, value.title || value.session_id);
       if (/^[A-Za-z0-9_-]{1,200}$/.test(value.session_id)) this.title.href = '#/sessions/' + value.session_id;
       const focalRole = historical ? '' : promptRole(value.rows.find(item => item.prompt.event_id === value.focal_id)?.prompt);
       this.title.className = ['running', 'success'].includes(focalRole) ? `watch-${focalRole}-title` : '';
-      const retryDelayed = delayed(this, 'retrySince', value.state === 'retrying' || value.state === 'loading' || !value.rows.length);
-      text(this.message, value.state === 'unavailable' ? 'Source unavailable; retained contents are not current.' : value.state === 'partial' ? 'Partial / retained evidence' : retryDelayed ? 'Prompt updates delayed; check source availability. Retained contents are not current.' : '');
+      const hasRows = value.rows.length > 0;
+      const retryDelayed = this.sourceStatus.update(value.state === 'observed', value.observed_at_ms,
+        Date.now(), hasRows ? 60000 : 30000);
+      text(this.message, sourceNotice ? '' : !hasRows && value.state === 'unavailable' ? 'Prompt source unavailable.' :
+        retryDelayed ? hasRows ? 'Updates delayed · showing last values' : 'Prompt updates delayed; check source availability.' : '');
+      this.root.setAttribute('aria-description', `Source evidence: ${value.state}; observed: ${value.observed_at_ms ?? 'unknown'}`);
       this.message.hidden = !this.message.textContent;
       if (!protectedNode(this.body)) {
         const old = new Map([...this.body.children].map(node => [node.dataset.id, node]));
@@ -234,8 +234,7 @@ const WatchView = (() => {
       text(this.costLabel, () => value?.cost ?
         value.cost.observed_requests && !value.cost.priced_requests ? 'N/A' : display(value.cost, 'known_ccost') :
         value?.state === 'unavailable' ? 'N/A' : 'Loading…');
-      text(this.costStatus, value?.state === 'unavailable' ? ' (unavailable; retained observation, not current)' :
-        value?.state === 'partial' ? ' (partial source evidence)' : '');
+      text(this.costStatus, !value?.cost && value?.state === 'unavailable' ? ' (unavailable)' : '');
       ContextHelp.refresh(this.costHelp);
     }
     drawActivity(tool) {
@@ -278,6 +277,7 @@ const WatchView = (() => {
       this.accountCards = new AccountCards.View();
       this.accounts = this.accountCards.root; this.cards = new Map();
       this.daily = el('section', undefined, 'watch-daily');
+      this.dailyStatus = new ReportView.LiveStatus(); this.sourceStatus = new ReportView.LiveStatus();
       this.daily.setAttribute('aria-label', 'CCost Today');
       this.root.append(this.earlier, this.empty, this.active, this.daily, this.accounts);
     }
@@ -292,35 +292,41 @@ const WatchView = (() => {
       // Its global health warning remains visible; don't duplicate it as fleeting
       // table-level acquisition prose or falsely announce a connection loss.
       const connected = this.state.connection === 'Live connected.' || this.state.connectionKind === 'source_retrying';
-      const retryDelayed = delayed(this, 'retrySince', result.state === 'retrying');
-      const sourceState = result.state === 'retrying' ? retryDelayed ? 'Source updates delayed; last observation retained, not current.' : '' :
+      const retryDelayed = this.sourceStatus.update(result.state === 'running' && view.cards_state === 'observed',
+        result.source_observed_at_ms, Date.now(), active.length || history.length ? 60000 : 30000);
+      const hostOwnsRetry = this.state.connectionKind === 'source_retrying';
+      const sourceState = hostOwnsRetry ? '' : result.state === 'retrying' ? retryDelayed ? 'Source updates delayed; last observation retained, not current.' : '' :
         result.state !== 'running' ? 'Source unavailable; last observation retained, not current.' : '';
       const historyLoading = view.history_state === 'loading' || view.history_state == null;
       // Only observed prompt membership establishes empty success. Independent
       // history/accounts/daily acquisition and elapsed time say nothing about it.
       const noRunning = this.state.connection === 'Live connected.' && view.cards_state === 'observed' &&
         !active.some(card => card.rows.some(row => row.prompt.in_progress));
-      text(this.empty, sourceState || (!connected ? 'Live connection interrupted; last observation retained, not live.' : view.cards_state === 'unavailable' ? 'Some prompt sources are unavailable.' : noRunning ? 'No running prompts' : ''));
+      text(this.empty, sourceState || (!connected ? 'Live connection interrupted; last observation retained, not live.' : view.cards_state === 'unavailable' && !active.length ? 'Some prompt sources are unavailable.' : noRunning ? 'No running prompts' : ''));
       this.empty.hidden = !this.empty.textContent;
       const keep = new Set();
       for (const [parent, values, historical] of [[this.active, active, false], [this.history, history, true]]) {
         const wanted = values.map(value => {
           const key = JSON.stringify([value.session_id, value.focal_id || 'history']); keep.add(key);
           if (!this.cards.has(key)) this.cards.set(key, new Card(historical));
-          const card = this.cards.get(key); card.update(value, historical); return card.root;
+          const card = this.cards.get(key); card.update(value, historical, hostOwnsRetry || Boolean(sourceState) || !connected); return card.root;
         });
         if (historical && !wanted.length && !historyLoading) wanted.push(el('p', view.history_state === 'unavailable' ? 'Earlier sessions unavailable' : 'No earlier sessions'));
         reconcile(parent, wanted);
       }
       for (const key of this.cards.keys()) if (!keep.has(key)) this.cards.delete(key);
       const dailyPending = ['loading', 'refreshing', 'retrying'].includes(view.daily_state) || view.daily_state == null;
-      const dailyDelayed = delayed(this, 'dailySince', dailyPending);
+      const usableDaily = view.daily_usage && ['observed', 'refreshing'].includes(view.daily_state);
+      const dailyDelayed = this.dailyStatus.update(Boolean(usableDaily), view.daily_usage?.observed_at_ms,
+        Date.now(), view.daily_usage || this.dailyValue ? 60000 : 30000);
       const dailyValue = view.daily_usage ?? (dailyPending ? this.dailyValue : null);
       this.dailyValue = dailyValue;
-      const dailyState = dailyValue && dailyPending && !dailyDelayed ? 'observed' : view.daily_state;
-      const dailySignature = JSON.stringify([dailyValue, dailyState, dailyDelayed]);
+      const dailyState = view.daily_state;
+      const dailyNotice = dailyDelayed && !hostOwnsRetry && !sourceState && connected;
+      this.daily.setAttribute('aria-description', `Daily source: ${dailyState || 'loading'}; observed: ${dailyValue?.observed_at_ms ?? 'unknown'}`);
+      const dailySignature = JSON.stringify([dailyValue, dailyValue ? null : dailyState, dailyNotice]);
       if (this.dailySignature !== dailySignature && !protectedNode(this.daily)) {
-        daily(this.daily, dailyValue, dailyState, dailyDelayed); this.dailySignature = dailySignature;
+        daily(this.daily, dailyValue, dailyState, dailyNotice); this.dailySignature = dailySignature;
       }
       this.accountCards.update(view);
     }

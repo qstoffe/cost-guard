@@ -277,13 +277,15 @@ function setup() {
   input.view = {...input.view,active_cards:[],cards_state:'unavailable',daily_state:'retrying',quota_stale:true,
     daily_usage:{...daily,total:{...daily.total,display_units:{usd:{known_ccost:'$999'}}}}};
   controller.update(input); assert.equal(view.body.textContent,retainedText); assert.equal(view.daily.textContent,beforeDaily);
-  assert.match(view.accounts.textContent,/Retained quota · not current/,'real stale quota stays meaningful without observation logs');
+  assert.doesNotMatch(view.accounts.textContent,/Retained quota|not current/i,'short retries remain visually quiet');
+  assert.match(retained.attributes['aria-description'],/retained \/ not current/);
   now = 600999; controller.health({kind:'reconnecting'}); assert.equal(view.health.hidden,true);
   now = 601000; controller.update(input); assert.equal(view.health.textContent,'Updates unavailable · showing last values');
   const warning = view.health.textContent; now += 5000; controller.health({kind:'connected'});
   input.view.now_ms++; controller.update(input); assert.equal(view.health.textContent,warning,'retry publications cannot fake recovery');
   assert.equal(view.body.textContent,retainedText); assert.equal(view.observationHelp,undefined);
   input.view = {...healthy.view,now_ms:healthy.view.now_ms+2,
+    active_cards:healthy.view.active_cards.map(card=>({...card,observed_at_ms:card.observed_at_ms+1})),
     daily_usage:{...daily,observed_at_ms:daily.observed_at_ms+1},accounts:{...healthy.view.accounts,accounts:healthy.view.accounts.accounts.map(item =>
       ({...item,observation:{...item.observation,observed_at_ms:item.observation.observed_at_ms+1}}))}};
   controller.update(input); assert.equal(view.health.hidden,true,'genuinely usable recovery clears the one status');
@@ -353,9 +355,21 @@ function setup() {
   assert.equal(lane.observations.view.accounts.accounts[0].primary.used_percent,before.primary.used_percent,'failed quota reads keep real percentages');
   assert.equal(lane.observations.view.accounts.accounts[0].observation.availability,'unavailable','retention does not invent quota freshness');
   now = start+599999; value.view = {...healthy.view,now_ms:healthy.view.now_ms+5,daily_state:'retrying',
+    active_cards:healthy.view.active_cards.map(card=>({...card,observed_at_ms:card.observed_at_ms+2})),
     accounts:{...healthy.view.accounts,accounts:healthy.view.accounts.accounts.map(item=>
       ({...item,observation:{...item.observation,observed_at_ms:item.observation.observed_at_ms+1}}))}};
   lane.update(value); assert.equal(lane.observations.delayed(now),false);
+  value.view.accounts.accounts[0].observation = {...value.view.accounts.accounts[0].observation,
+    availability:'stale',error_code:'auth_failure'};
+  lane.update(value);
+  assert.equal(lane.observations.view.accounts.accounts[0].observation.error_code,'auth_failure','retention cannot hide a new authentication failure');
+  now += 600000;
+  value.view = {...value.view,now_ms:value.view.now_ms+1,
+    daily_usage:{...value.view.daily_usage,observed_at_ms:value.view.daily_usage.observed_at_ms+1},
+    accounts:healthy.view.accounts,
+    active_cards:value.view.active_cards.map((card,index)=>index ? card : {...card,observed_at_ms:card.observed_at_ms+1})};
+  lane.update(value);
+  assert.equal(lane.observations.delayed(now),true,'another focal prompt cannot hide an unobserved retained card');
   now++; value.view.now_ms++; lane.update(value);
   assert.equal(lane.observations.delayed(now),true,'healthy prompt publications do not reset the daily failure clock');
   value.view = {...value.view,daily_state:'observed',daily_usage:{...daily,observed_at_ms:daily.observed_at_ms+1}};

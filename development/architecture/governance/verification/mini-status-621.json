@@ -1,0 +1,99 @@
+{
+  "fr": "000621",
+  "version": "80.201",
+  "date": "2026-11-07",
+  "base": "f445c864cbc121c48303011ddb7da68d55b132ed",
+  "localFull": {
+    "command": "py -3 development/tools/run_tests.py --suite full --json-report $env:OPENCODE_TOOLKIT_SESSION_SCRATCH/full-delivery.json",
+    "outcome": "PASS",
+    "files": 155,
+    "passedTests": 1886,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 1,
+    "skipReason": "Existing zsh/PTY test unavailable on Windows; native macOS CI owns execution.",
+    "seconds": 108.0,
+    "artifact": "scratch:/full-delivery.json"
+  },
+  "validation": {
+    "command": "py -3 development/tools/validate_package.py --working-tree",
+    "outcome": "PASS",
+    "passes": 11,
+    "failures": 0,
+    "existingAdvisoryWarnings": 6,
+    "capsOrBaselinesRaised": false
+  },
+  "browser": {
+    "mode": "Owned strictly headless profiles; shipped HTTP/assets/CSP/SSE and actual Document PiP, no personal profile or OS input",
+    "miniChrome": {
+      "outcome": "PASS",
+      "product": "Chrome/156.0.8078.80",
+      "browserZoom": 1,
+      "artifact": "scratch:/mini-final.json",
+      "inspectedImage": "scratch:/mini-final-opening.png"
+    },
+    "miniEdge": {
+      "outcome": "PASS",
+      "product": "Edg/156.0.4314.58",
+      "browserZoom": 1.5,
+      "artifact": "scratch:/mini-edge-150.json",
+      "scope": "Same tooltip/geometry matrix before final numeric-only observation-clock comparison; final clock regressions covered by Full and Chrome"
+    },
+    "miniChecks": [
+      "Both Session/cost targets in both tables; exact independent canonical ordinals, unknown fallback, compact model/effort/duration/calls",
+      "Separate concurrent prompt/session amounts, unknown/partial/zero/pending and Credits/USD",
+      "Real delayed pointer hover, focus, touch, Escape, open-help correction and stable keyed targets",
+      "Classic/Web light/Web dark, narrow widths, enlarged fonts/CSS zoom, popup bounds and native opening/disclosure fit",
+      "No passive native resize, new SSE, acquisition or geometry persistence; clamps recorded honestly"
+    ],
+    "watch": {
+      "outcome": "PASS",
+      "artifact": "scratch:/watch-chrome/",
+      "cases": 6,
+      "scope": "Three themes by two widths; retained figures/card heights, focus/selection and transient versus sustained source notices"
+    },
+    "accounts": {
+      "outcome": "PASS",
+      "scope": "probe_accounts_live.cjs --quota-only; common route/layout proof plus full quota/status subprobe",
+      "artifact": "scratch:/accounts-focused-final.json",
+      "streams": 1,
+      "routeReportJobs": 0,
+      "checks": ["Watch/Accounts parity", "stable focus/selection/help", "Remaining/USD and actual Mini compatibility", "quiet stale and delayed status", "failed retained empty versus genuine empty", "recovery and terminal host-stop SSE"]
+    },
+    "help": {
+      "outcome": "PASS",
+      "scope": "probe_web_help.cjs --live-status",
+      "artifact": "scratch:/help-live-status.json",
+      "routes": ["Watch", "Mini", "Models", "Accounts", "Token Mix", "AI Stats", "Comparisons", "Settings"],
+      "checks": ["Independent Session/cost help and accessible retained-source evidence", "hover/focus/touch/Escape and stable live targets", "no clipping at narrow/enlarged layouts", "cached-report rendered help inventory unchanged"]
+    },
+    "broaderFailedInvocations": [
+      {"artifact": "scratch:/help-final-output.txt", "reason": "Default all-route help driver reaches Sessions, whose catalog/detail source is not configured in this synthetic host. Relevant Watch/Mini checks passed before this failure; no all-route PASS claimed."},
+      {"artifact": "scratch:/accounts-final.json", "reason": "Broad Accounts driver passed all 96 subscription-capacity matrix cases, then failed the quota subprobe's Settings-navigation condition (hash/current remained Watch; no runtime exception). Independent quota-only invocation passed. No all-driver PASS or diagnosed product root cause claimed."}
+    ]
+  },
+  "realInstallation": {
+    "command": "py -3 development/tests/integration/probe_mini_source.py",
+    "outcome": "PASS",
+    "artifact": "scratch:/real-source-final.txt",
+    "source": "V2",
+    "coherentPublications": 3,
+    "runningCards": 1,
+    "accounts": 3,
+    "quotaCostProjections": 4,
+    "finishedHistoryCards": 5,
+    "knownFinishTimes": 5,
+    "singleAcquisitionOwner": true,
+    "seconds": 11.442,
+    "ownedAcquisitionClosed": true,
+    "closeSeconds": 0.127,
+    "sharedOpenCodeUntouched": true
+  },
+  "decisions": {"requirementOrTestExceptions": [], "decisionDelegateConsulted": false},
+  "limitations": [
+    "Integrated browser was disconnected; hidden evidence is not physical Windows scaling/frame/monitor, macOS or screen-reader proof.",
+    "Synthetic status/geometry cases do not establish every provider's real outage behavior; real-source projection proof is separate.",
+    "Finite report final Partial/history warnings and one-hour stale/withheld boundaries are pinned by existing deterministic cached_reports/web view tests, not inferred from live retry suppression.",
+    "No inference, login, personal browser profile, release ZIP, tag or GitHub Release."
+  ]
+}

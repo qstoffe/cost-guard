@@ -32,6 +32,10 @@ module.exports = function sessionTables(vm, context, controller, view, input, he
   const title = view.body.children[0].children[0].children[0].children[0];
   assert.equal(title.tabIndex, 0); assert.equal(title.title, undefined);
   assert.equal(helpText(title), 'Concurrent\nPrompt #23 in this session');
+  const activeCost = view.body.children[0].children[1].children[0];
+  assert.equal(activeCost.tabIndex, 0);
+  assert.match(helpText(activeCost), /Prompt #23\nMain model:[\s\S]*Effort:[\s\S]*Duration: 10m/);
+  assert.match(helpText(view.body.children[1].children[1].children[0]), /Prompt #24[\s\S]*Duration: 20m/);
   assert.equal(view.body.children[0].children[0].textContent, 'Concurrent', 'Session contains no cost');
   const history = index => ({...active, session_id:'history-'+index, title:'Earlier '+index, focal_id:'',
     session_summary:{...summary, context:{display:{watch_next_context_tokens:String(900+index)}}},
@@ -50,6 +54,9 @@ module.exports = function sessionTables(vm, context, controller, view, input, he
   assert.equal(row.querySelectorAll('button').length,0,'history values have no duplicate cues');
   assert.match(row.attributes['aria-label'], /Earlier session · Earlier 2/);
   const detail = row.children[2].children[0];
+  const historicalTitle = row.children[1].children[0].children[0];
+  assert.equal(historicalTitle.tabIndex, 0);
+  assert.equal(helpText(historicalTitle), 'Earlier 2\nPrompt #23 in this session');
   assert.equal(detail.tabIndex, 0); assert.equal(detail.title, undefined);
   const historicalItem = input.view.history_cards[2].rows[0], originalItem = structuredClone(historicalItem);
   Object.assign(historicalItem, {model:'Example Model', effort:'high', display:{watch_duration_ms:'4m 12s'}});
@@ -58,6 +65,8 @@ module.exports = function sessionTables(vm, context, controller, view, input, he
     cost_detail:{model_count:2, calls_complete:false, parts:[{role:'main',provider_id:'example',model_id:'model'}]}});
   controller.update(input);
   assert.match(helpText(detail), /Prompt #7\nMain model: Example Model \[example\/model\]\nEffort: high\nDuration: 4m 12s\nCalls: 12/);
+  assert.equal(helpText(historicalTitle), 'Earlier 2\nPrompt #7 in this session');
+  assert.equal(row.children[1].children[0].children[0], historicalTitle);
   assert.match(helpText(detail), /Linked subagents: 2[\s\S]*Multiple models[\s\S]*Partial pricing[\s\S]*attribution incomplete[\s\S]*Aborted · quota limit/);
   assert.doesNotMatch(helpText(detail), /preview|raw prompt/i);
   Object.assign(historicalItem, {model:'N/A', effort:'N/A', display:{}});
@@ -66,6 +75,7 @@ module.exports = function sessionTables(vm, context, controller, view, input, he
   controller.update(input);
   assert.equal(row.children[2].children[0], detail, 'detail target is stable across corrections');
   assert.equal(helpText(detail), 'Prompt number unavailable\nMain model: N/A\nEffort: N/A\nDuration: N/A');
+  assert.equal(helpText(historicalTitle), 'Earlier 2\nPrompt number unavailable');
   Object.assign(historicalItem, originalItem); controller.update(input);
   for (let index=0;index<20;index++) {input.view.now_ms++; controller.update(input);}
   assert.equal(view.historyBody.children[0],row,'publication preserves row/focus identity');
@@ -102,8 +112,8 @@ module.exports = function sessionTables(vm, context, controller, view, input, he
     input.view.history_cards = [history(0)].map(card=>({...card,session_summary:value})); controller.update(input);
     assert.ok(view.body.children.every(row=>cost(row).endsWith(' ('+expected+')')));
     assert.equal(cost(view.historyBody.children[0], true), '2 ('+expected+')');
-    const note=view.body.children[0].children[0].children[0].children[1].textContent;
-    assert.equal(Boolean(note),['partial','unavailable'].includes(value.state),'confirmed retained/partial evidence stays visible, routine refresh stays quiet');
+    assert.equal(view.body.children[0].children[0].textContent, 'Concurrent', 'source captions never change Session row height');
+    if (['partial','unavailable'].includes(value.state)) assert.match(helpText(view.body.children[0].children[1].children[0]), /Source evidence:/);
   }
   const resumed = {...history(3),focal_id:active.focal_id};
   input.view = {...saved, active_cards:[...saved.active_cards,resumed],history_cards:[history(3),history(4)]};

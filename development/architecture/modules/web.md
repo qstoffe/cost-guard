@@ -238,10 +238,11 @@ Both tables have four columns: active `Session | CCost (Total) | Duration | Ctx`
 historical `Activity | Session | CCost (Total) | Ctx`. Session contains only the flexible,
 ellipsized title; the cost cell pairs `prompt.ccost (session_summary.cost)` at its
 intrinsic nonwrapping width, using independent shared display/state handling.
-Active Session help preserves the canonical prompt ordinal and full title;
-historical cost help reads the canonical singleton representative's model/effort,
-duration, known calls and relevant linked/mixed/partial/outcome evidence, not another
-prompt or browser aggregation. Stable value nodes use shared ContextHelp without
+Both Session text targets preserve the full title and exact represented prompt ordinal
+(or explicit unknown); both independent cost targets use compact Mini prompt details.
+Active rows use their own focal item; history uses its canonical singleton representative's
+model/effort, duration, known calls and linked/mixed/partial/outcome evidence, never another
+prompt or Full Watch's valuation breakdown. Stable value nodes use shared ContextHelp without
 native titles, row-wide help or dedicated cues. Its header's neutral
 Earlier Sessions disclosure starts collapsed per new PiP document and survives publications.
 It takes the last three of the shared eligible, oldest-to-newest `history_cards`, excludes
@@ -255,7 +256,8 @@ have accessible provenance without a visible approximation glyph. Native close a
 the filled Watch toggle own closing; the title still returns to the existing tab.
 Intrinsic metric/header minima leave all spare width to Session; only titles ellipsize,
 and narrow prompt regions scroll horizontally. Healthy/transient operational text is
-omitted. Independent usable-observation clocks for prompts, Daily and each quota
+omitted, including the redundant retained/partial line below Session. Independent
+usable-observation clocks for each focal prompt, Daily and each quota
 produce one muted notice after ten minutes; definitive host/auth/identity failures
 remain immediately actionable. Partial reads retain unmatched rows but accept valid
 per-card corrections; observed empty publications still evict. Earlier exports canonical
@@ -296,14 +298,22 @@ current width where unclamped. Vertical-only `resizeBy` is preferred, with `resi
 fallback; an observed one-DIP zoom-rounding bias is compensated on subsequent eligible
 clicks, never by an extra/passive call. Native events/two-frame confirmation record achieved
 bounds and cancel stale work. Missing activation/refusal/clamps retain disclosure/scroll.
-No rendering/data event invokes native sizing. Full Watch's card/source presentation waits
-30 continuous seconds before component/retry/refresh delay guidance, keeps retained prompt,
-session, daily and account metric DOM quiet and exposes provenance in cost help.
+No rendering/data event invokes native sizing. Shared presentation-only `ReportView.LiveStatus`
+keeps useful retained Full Watch card/day and Watch/Accounts quota values quiet for about
+60 continuous seconds of failed relevant coverage; initial missing-data guidance retains
+30 seconds. Only newer successful evidence clears a failed lane, not repeat snapshots,
+cost-only projections or another lane's progress. Cards export their actual capture
+`observed_at_ms` through the detached DTO (null for retained capture), without new acquisition.
+The host owns source retry notices, suppressing duplicate Watch captions; actionable
+auth/provider/host failures, genuine incomplete pricing and accessible provenance remain.
+New incomplete quota observations still say Partial; brief revalidation of verified figures
+does not. Mini keeps its independent ten-minute aggregate health owner, not another minute timer.
 Neither app startup without a frame nor independent history/accounts/daily loading
 creates an elapsed-time global Watch warning. Only observed prompt membership on a
 healthy running source/connection establishes “No running prompts”; partial, missing
-and retained observations do not. Initial placeholders never claim observed empty/zero; unavailable/partial and host/auth guidance
-remain explicit. Source states, timings and lifecycle are unchanged. Historical Windows150%
+and retained observations do not. Initial placeholders never claim observed empty/zero.
+Cached reports' final evidence and one-hour stale/withheld policy remain unchanged.
+Source acquisition timings and lifecycle are unchanged. Historical Windows150%
 standard-frame measurements do not prove fresh physical Remember-last behavior;
 the Mini journal records hidden API proof and the scoped physical-verification exception.
 

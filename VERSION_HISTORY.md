@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.201 — 2026-11-07
+
+- Both Mini tables expose full Session name/represented prompt ordinal and separate compact prompt-detail CCost help, retaining keyed targets and unchanged paired costs/columns.
+- Live Mini, Watch and Accounts suppress brief retained/partial refresh captions while preserving pricing gaps, accessible source evidence and actionable failures. Shared presentation grace requires fresh relevant evidence to recover; Mini keeps its independent ten-minute health owner. Completed historical report limitations are unchanged.
+
 ## v80.200 — 2026-11-07
 
 - Shared Watch/Accounts cards name factual quota periods and show separate Decimal-based 30-day Capacity guesstimates before each nonmonthly bar, or qualified N/A. Conditional empty primary rows align monthly peers only when necessary; single/all-monthly and narrow cards remain compact. Native balances, pricing and Mini presentation are unchanged.

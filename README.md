@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v80.200, 2026-11-07), the supported distribution.
+Use **current `main`** (v80.201, 2026-11-07), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -361,7 +361,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.200 (2026-11-07):** Watch and Accounts share period-labelled Capacity and separate theoretical 30-day equivalents, with responsive primary-bar alignment. Watch exposes same-model linked-agent details and canonical subagent prompt counts; Today keeps CCost and prompts without daily Token Mix clutter. Pricing, native quotas and compact Mini layout are unchanged. See [Web Beta](docs/web-beta.md).
+**v80.201 (2026-11-07):** Both Mini tables expose separate Session name/prompt-number and compact prompt-detail cost help. Brief retained/partial refreshes stay quiet across Mini, Watch and Accounts; sustained delays and actionable failures remain truthful. Costs, columns, pricing and acquisition are unchanged. See [Mini Watch](docs/web-mini-watch.md).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

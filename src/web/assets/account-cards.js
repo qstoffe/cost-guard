@@ -53,7 +53,7 @@ const AccountCards = (() => {
     }
     if (value().restricted) parent.append(el('p', () => value().quota.label + ' · Provider restriction reported', 'warning'));
   }
-  function warnings(item) {
+  function warnings(item, quiet, late) {
     const obs = item.observation;
     const cause = {auth_failure: 'Authentication unavailable', transport_failure: 'Connection failed',
       unsupported_auth_method: 'Unsupported authentication method', format_changed: 'Provider format changed',
@@ -61,7 +61,9 @@ const AccountCards = (() => {
       rate_limited: 'Rate limited', account_unavailable: 'Account unavailable'}[obs.error_code];
     const state = {partial: 'Partial quota data', stale: 'Stale · last observation, not current',
       unavailable: 'Quota unavailable', error: 'Refresh failed'}[obs.availability];
-    return [[state || cause ? [state, cause].filter(Boolean).join(' · ') : '', 'warning'],
+    const actionable = ['auth_failure', 'unsupported_auth_method', 'format_changed', 'rate_limited', 'account_unavailable'].includes(obs.error_code);
+    const status = actionable || !quiet ? [state, cause].filter(Boolean).join(' · ') : late ? 'Updates delayed · showing last values' : '';
+    return [[status, 'warning'],
       [obs.status === 'blocked' && ![item.primary, ...item.secondary].some(q => q.exhausted || q.restricted) ?
         'Provider restriction reported; utilization not established' : '', 'warning'],
       [obs.has_warning ? 'Provider warning' : '', 'warning'],
@@ -70,6 +72,7 @@ const AccountCards = (() => {
   class Subscription {
     constructor() {
       this.root = el('section', undefined, 'account-card watch-subscription');
+      this.status = new ReportView.LiveStatus();
       this.spacer = el('div', undefined, 'watch-capacity-spacer'); this.spacer.setAttribute('aria-hidden', 'true');
     }
     align(extra) {
@@ -102,10 +105,21 @@ const AccountCards = (() => {
       this.root.replaceChildren(el('h4', () => item().observation.label), cost, ...track, primary);
       this.warningSignature = null;
     }
-    update(value) {
-      const signature = JSON.stringify(value);
+    update(value, stale) {
+      const obs = value.observation;
+      if (obs.observed_at_ms != null && obs.observed_at_ms !== this.lastObserved)
+        this.partialObservation = obs.availability === 'partial' && !stale;
+      const usable = !stale && (obs.availability === 'available' || this.partialObservation);
+      const late = this.status.update(usable, obs.observed_at_ms);
+      const quiet = this.verified && !this.partialObservation &&
+        (value.primary.used_fraction != null || value.primary.quota.unlimited);
+      const lines = warnings(value, quiet, late);
+      this.sourceNotice = late || (!quiet && obs.availability !== 'available');
+      if (usable) { this.lastObserved = obs.observed_at_ms; if (obs.availability === 'available') this.verified = true; }
+      const signature = JSON.stringify([value, lines]);
       if (signature === this.signature) return;
       this.value = value;
+      this.root.setAttribute('aria-description', `Quota: ${stale ? 'retained / not current' : obs.availability}; observed: ${obs.observed_at_ms ?? 'unknown'}`);
       // Only actual track/slot changes rebuild card contents. Ordinary values,
       // reset clocks, warnings and settings update bound nodes and active help.
       const shape = JSON.stringify([value.primary, ...value.secondary].map(q => [q.quota.label,
@@ -114,7 +128,7 @@ const AccountCards = (() => {
         Boolean(q.quota.quota_display?.used.note || q.quota.quota_display?.remaining.note),
         Boolean(display(q.quota, 'monthly_capacity'))]));
       if (shape !== this.shape) { this.draw(); this.shape = shape; }
-      const lines = warnings(value), warningSignature = JSON.stringify(lines);
+      const warningSignature = JSON.stringify(lines);
       if (warningSignature !== this.warningSignature) {
         for (const node of [...this.lower.children]) if (node.className !== 'watch-account-details') node.remove();
         for (const [text, role] of lines) this.lower.append(el('p', text, role));
@@ -131,6 +145,7 @@ const AccountCards = (() => {
       this.showLoading = showLoading;
       this.root = el('div', undefined, 'live-account-cards');
       this.cards = new Map();
+      this.status = new ReportView.LiveStatus();
       this.message = el('p'); this.message.setAttribute('role', 'status');
       this.grid = el('div', undefined, 'account-grid watch-account-grid');
       if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => this.align()).observe(this.grid);
@@ -162,20 +177,26 @@ const AccountCards = (() => {
       if (view.accounts && (view.accounts.accounts.length || !failed)) {
         const wanted = [], keep = new Set();
         for (const item of view.accounts.accounts) {
-          const key = item.observation.id; keep.add(key);
+          const key = JSON.stringify([item.observation.provider_id, item.observation.id]); keep.add(key);
           if (!this.cards.has(key)) this.cards.set(key, new Subscription());
-          const card = this.cards.get(key); card.update(item); wanted.push(card.root);
+          const card = this.cards.get(key); card.update(item, view.quota_stale); wanted.push(card.root);
         }
         for (const key of this.cards.keys()) if (!keep.has(key)) this.cards.delete(key);
         // Keep responsive row membership in publication order, including reorders.
-        this.cards = new Map(view.accounts.accounts.map(item => [item.observation.id, this.cards.get(item.observation.id)]));
+        this.cards = new Map(view.accounts.accounts.map(item => {
+          const key = JSON.stringify([item.observation.provider_id, item.observation.id]); return [key, this.cards.get(key)];
+        }));
         for (const node of [...this.grid.children]) if (!wanted.includes(node)) node.remove();
         wanted.forEach((node, index) => {
           if (this.grid.children[index] !== node) this.grid.insertBefore(node, this.grid.children[index] || null);
         });
         this.observed = true;
       }
-      const message = failed ? (this.cards.size ? 'Account updates delayed · last observations retained, not current.' : 'Accounts unavailable; retrying.') :
+      const late = this.status.update(!failed && Boolean(view.accounts), view.accounts && JSON.stringify(
+        view.accounts.accounts.map(item => [item.observation.provider_id, item.observation.id, item.observation.observed_at_ms])));
+      const missing = failed && !view.accounts?.accounts.length;
+      const sourceNotice = [...this.cards.values()].some(card => card.sourceNotice);
+      const message = missing && (!this.cards.size || late && !sourceNotice) ? (this.cards.size ? 'Updates delayed · showing last values' : 'Accounts unavailable; retrying.') :
         this.observed && !this.cards.size ? 'No configured accounts detected.' : !this.observed && this.showLoading ? 'Loading accounts…' : '';
       ReportView.text(this.message, message);
       // Keep the healthy view grid-only and preserve its DOM through health updates.

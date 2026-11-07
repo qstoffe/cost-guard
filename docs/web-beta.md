@@ -167,7 +167,8 @@ window and denominator: 5,608/25,000 Used becomes 19,392/25,000 Remaining, about
 The bar fills with available capacity; zero Remaining is still exhausted/red, while a
 full Remaining bar is healthy. Unrounded native evidence determines exhaustion.
 Unlimited plans keep Used with no finite bar; unknown limits/usage never acquire a
-synthetic remaining amount. Stale/partial observations keep their existing warnings.
+synthetic remaining amount. Stale/partial evidence remains qualified in accessible help;
+brief live revalidation does not add a flashing status sentence.
 The bare CCost parentheses switch too: Used is observed period reference cost;
 Remaining is a same-window reference-capacity proxy. Full Watch and Accounts show **Capacity**
 above each quota bar. A verified Copilot included AI-credit limit supplies nominal
@@ -620,7 +621,13 @@ get separate cards, oldest focal first, with one row even during terminal grace.
 Session title alone links to that canonical Sessions route. The footer keeps whole-session
 CCost separate from prompt-local costs; duration remains prompt-local. Canonical child/compaction/context evidence still feeds
 prompt metrics. Credits/USD follows Web Settings. Valid metrics remain visible during
-ordinary refresh; first acquisition, partial evidence and genuine failure stay explicit.
+ordinary refresh. Brief retained/partial source captions stay quiet while supported
+values remain; after about 60 seconds without usable relevant evidence, a concise
+delay notice may appear. Initial loading keeps its existing 30-second guidance.
+Mini retains its separate ten-minute health owner. Replayed snapshots, another
+lane's progress and cost-only updates cannot prove source recovery. Pricing gaps,
+N/A and actionable provider/auth/host failures remain explicit; final cached-report
+coverage and one-hour historical staleness are not live retry captions.
 The ten columns are **Started, Duration, Prompt, Model, Effort, CCost (I + E), Calls,
 Token Mix %, Ictx, Δ Ctx**. Ictx is the first request's effective incoming context;
 the footer's Context remains the estimated next incoming context.
@@ -709,7 +716,7 @@ visible cards or subscription sums. Requests use completion/attribution dates; c
 prompts count once per relevant day, children under their initiator, compaction as usage
 only. The known integer displays **N prompts**, with an explicit incomplete-count
 warning when boundaries are missing, retaining all unassigned cost/tokens. Partial
-CCost pricing and retained-source warnings remain; empty differs from
+CCost pricing and accessible retained-source qualifications remain; empty differs from
 loading. Source changes/minute fallback update retained history and publish cost/count/mix
 coherently. Routine refresh silently retains figures; only a scope without valid data
 loads. Real failures remain visible. Midnight resets, rejecting yesterday's late results;
@@ -846,10 +853,12 @@ Column/summary help explains metric scope rather than internal freshness logs. M
 Watch data remains quiet; elapsed time or independent Earlier/account/daily loading never
 creates a global Watch failure warning. **No running prompts** requires observed membership
 and a healthy running source/connection, not partial or retained evidence.
-After 30 continuous seconds of prompt retries or daily updates, localized delayed/availability guidance appears;
-observed recovery clears it. Explicit unavailable/partial evidence and host/auth/connection
-failures retain their existing guidance. Routine session-total checks have no delayed timer;
-real failed validation or partial evidence remains localized and explicit. These are presentation clocks only, not source
+Initial missing-data guidance keeps 30 seconds. Useful retained prompt/daily/quota values
+stay quiet during brief failures; after about 60 continuous seconds, a restrained delay
+notice may appear under one relevant source/host owner. Only genuinely newer successful
+evidence clears that failure clock. Actionable host/auth/connection failures, unknown
+critical values and pricing gaps remain explicit; raw transient partial states stay accessible.
+Routine session-total checks have no delayed timer. These are presentation clocks only, not source
 observations or lifecycle changes. Optional cache
 failure safely computes from source; disposable-cache details are not default metric help.
 No Session Total Duration returns. CLI, Sessions UI and daily/account totals retain

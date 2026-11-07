@@ -29,8 +29,6 @@ body { padding: .5rem; max-width: none; }
 /* Both cost scopes and the other metrics set intrinsic minima. Only the title flexes. */
 .mini-prompt-table th:not(.mini-session-cell) { width: 1%; }
 .mini-session-value { display: grid; grid-template-columns: minmax(0, 1fr); }
-.mini-source-note { grid-column: 1 / -1; white-space: normal; font-size: .7rem; color: var(--warn); }
-.mini-source-note:empty { display: none; }
 .mini-daily-note { display: block; font-size: .7rem; color: var(--warn); }
 .mini-session, .mini-empty { display: block; width: 0; min-width: 100%; }
 .mini-session { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

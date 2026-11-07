@@ -116,6 +116,7 @@ class WatchCard:
     session_context: object = None
     session_cost: object = None
     session_cost_state: str = "loading"
+    observed_at_ms: int | None = None
 
 
 @dataclass(frozen=True, slots=True)

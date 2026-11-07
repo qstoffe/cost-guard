@@ -4,7 +4,7 @@ const {spawn} = require('node:child_process'), readline = require('node:readline
 const [browser, output, scope] = process.argv.slice(2);
 async function main() {
   assert.ok(path.isAbsolute(browser) && path.isAbsolute(output));
-  assert.ok(scope === undefined || scope === '--watch-only');
+  assert.ok(scope === undefined || ['--watch-only','--live-status'].includes(scope));
   await fs.stat(browser); await fs.stat(path.dirname(output));
   const profile = await fs.mkdtemp(path.join(path.dirname(output), 'help-browser-'));
   const config = await fs.mkdtemp(path.join(path.dirname(output), 'help-config-'));
@@ -158,10 +158,14 @@ async function main() {
      assert.match(quota,/^Capacity: [^\n]+\nNext reset: [^\n]+$/);
     assert.doesNotMatch(quota,/Last quota update|Source:|Availability:/);
     await key(mini,'Escape');
-    await evaluate(owner,`(() => {const p=structuredClone(liveValue);p.view.now_ms++;for(const card of p.view.active_cards){card.title='<script>Exact title</script> '+ 'long title '.repeat(30);card.session_summary.cost.display.known_ccost='?12';card.session_summary.cost.display_units.credits.known_ccost='?12';card.session_summary.cost.complete=false;card.state='observed';}miniWatch.update(p);p.view.now_ms++;for(const card of p.view.active_cards){card.state='retrying';card.session_summary.state='unavailable';}miniWatch.update(p);})()`);
+    await evaluate(owner,`(() => {window.helpMiniUpdate=miniWatch.update;window.helpMiniEpoch=liveValue.view.now_ms;
+      miniWatch.update=function(p){if(p===liveValue&&p?.view?.now_ms===helpMiniEpoch)return;return helpMiniUpdate.call(this,p);};
+      const p=structuredClone(liveValue);p.view.now_ms++;for(const card of p.view.active_cards){card.title='<script>Exact title</script> '+ 'long title '.repeat(30);card.session_summary.cost.display.known_ccost='?12';card.session_summary.cost.display_units.credits.known_ccost='?12';card.session_summary.cost.complete=false;card.state='observed';}miniWatch.update(p);p.view.now_ms++;for(const card of p.view.active_cards){card.state='retrying';card.session_summary.state='unavailable';}miniWatch.update(p);})()`);
     const title=await evaluate(mini,`document.querySelector('.mini-prompts > table .mini-session').textContent`);
     assert.ok(title.startsWith('<script>Exact title</script> '));
-    assert.match(await evaluate(mini,`document.querySelector('.mini-prompts > table .mini-source-note').textContent`),/not current/);
+    assert.equal(await evaluate(mini,`document.querySelector('.mini-source-note')`),null);
+    assert.match(await focus(mini,'.mini-prompts > table .mini-cost-value'),/Prompt #[\s\S]*Main model:[\s\S]*Source evidence: retrying \/ unavailable/);
+    assert.match(await focus(mini,'.mini-prompts > table .mini-session'),/^<script>Exact title<\/script>[\s\S]*Prompt #\d+ in this session$/);
     assert.equal(await evaluate(mini,`document.querySelectorAll('tbody .help-trigger,.mini-header .help-cue').length`),0);
     const heading=await focus(mini,'.mini-prompts > table th:first-child button');
      assert.equal(heading,'The name of the session.');
@@ -169,7 +173,7 @@ async function main() {
      assert.match(totalHeading,/First: this prompt’s reference CCost[\s\S]*In parentheses: the entire session’s reference CCost/);
     assert.equal(await evaluate(mini,`document.querySelector('#context-help script')===null`),true);
     await key(mini,'Escape');
-    await evaluate(owner,`miniWatch.update(liveValue)`);
+    await evaluate(owner,`miniWatch.update=helpMiniUpdate;delete window.helpMiniUpdate;delete window.helpMiniEpoch;miniWatch.update(liveValue)`);
      for (const selector of ['.watch-active tbody td:first-child .help-value','.watch-daily > strong']) {
       const metadata=await focus(owner,selector);assert.ok(metadata.length>0);await key(owner,'Escape');
     }
@@ -178,9 +182,12 @@ async function main() {
     assert.equal(await evaluate(mini,`(() => {const r=document.querySelector('#context-help').getBoundingClientRect();return r.right<=innerWidth&&r.bottom<=innerHeight;})()`),true);
     await key(mini,'Escape');await evaluate(mini,`document.documentElement.style.fontSize=''`);
     assert.equal(await evaluate(owner,`document.querySelectorAll('.watch-prompt-label .help-trigger').length`),0);
-     checks.push('Verbatim selectable/accessible long hostile session title without row cues; distinct Mini headings, direct date/daily value help, retained warnings, no HTML injection and Mini 150% text zoom');
+     checks.push('Verbatim selectable/accessible long hostile session title without row cues; separate Session/cost help, quiet retained row with source evidence in help, no HTML injection and Mini 150% text zoom');
     await command('Page.bringToFront',{},owner);
-    for (const route of scope === '--watch-only' ? [] : ['models','sessions','sessions/root','accounts','token-mix','ai-stats','settings']) {
+    const routes = scope === '--watch-only' ? [] : scope === '--live-status' ?
+      ['models','accounts','token-mix','ai-stats','comparisons','settings'] :
+      ['models','sessions','sessions/root','accounts','token-mix','ai-stats','settings'];
+    for (const route of routes) {
       await evaluate(owner,`location.hash='#/${route}'`);
       await until(owner,`document.body.dataset.section==='${route.split(/[?\/]/)[0]}'`);
       if (route==='token-mix') await evaluate(owner,`acquire(current)`);
@@ -195,7 +202,7 @@ async function main() {
       checks.push(`${route}: rendered help/disclosure inventory (${count} focusable help targets); visible field/disclosure text retained`);
     }
     assert.deepEqual(errors,[]);
-    evidence={outcome:'PASS',browser:version.product,scope:scope || 'all-routes',checks,layouts,limitations:['Immediate in-memory synthetic report jobs; no report-process lifecycle proof.','Headless Chromium only; no physical desktop, screen-reader or other-engine acceptance claimed.',...(scope ? ['Watch/Mini only; no unrelated report-route audit in this mode.'] : [])]};
+    evidence={outcome:'PASS',browser:version.product,scope:scope || 'all-routes',checks,layouts,limitations:['Immediate in-memory synthetic report jobs; no report-process lifecycle proof.','Headless Chromium only; no physical desktop, screen-reader or other-engine acceptance claimed.',...(scope === '--watch-only' ? ['Watch/Mini only; no unrelated report-route audit in this mode.'] : scope === '--live-status' ? ['Live surfaces and cached-report routes only; synthetic Sessions catalog/detail are not configured in this host.'] : [])]};
   } finally {
     clearTimeout(deadline);
     await fs.writeFile(output,JSON.stringify(evidence,null,2));

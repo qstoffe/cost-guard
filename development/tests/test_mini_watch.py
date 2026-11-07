@@ -32,7 +32,7 @@ class MiniWatchTests(unittest.TestCase):
         self.cards = tuple(WatchCard("same-session", "Concurrent", row.event_id,
             (WatchRow("same-session", "Concurrent", row),), "observed",
             session_context=self.frame.active_cards[0].session_context,
-            session_cost=self.frame.active_cards[0].session_cost, session_cost_state="observed")
+            session_cost=self.frame.active_cards[0].session_cost, session_cost_state="observed", observed_at_ms=1000)
             for row in (self.first, self.second))
 
     def test_session_projection_shares_full_totals_not_prompt_values_and_current_context(self):

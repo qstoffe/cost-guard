@@ -27,6 +27,9 @@ module.exports = async function alignment({evaluate,until,fixture,command,sessio
       item.prompt.display_units={credits:{ccost:'49'},usd:{ccost:'$0.49'}};
     }
     p.view.active_cards[1].rows[0].prompt.display_units={credits:{ccost:'173'},usd:{ccost:'$1.73'}};
+    p.view.active_cards[1].rows[0].prompt.prompt_number=11;
+    p.view.history_cards[1].rows[0].prompt.prompt_number=20;
+    p.view.history_cards[2].rows[0].prompt.prompt_number=null;
     ReportView.setUnit('credits');miniWatch.update(p);miniWatch.view.earlier.hidden=false;
     window.costRow=miniWatch.view.historyBody.rows[0];window.costTarget=costRow.querySelector('.mini-cost-value');
     window.nameTarget=miniWatch.view.body.rows[0].querySelector('.mini-session');})()`);
@@ -36,6 +39,19 @@ module.exports = async function alignment({evaluate,until,fixture,command,sessio
     ['Activity','Session','CCost (Total)','Ctx']);
   assert.deepEqual(await evaluate(`[...miniWatch.view.body.rows].map(row=>row.cells[1].textContent)`),['49 (562)','173 (562)']);
   assert.deepEqual(await evaluate(`[...miniWatch.view.historyBody.rows].map(row=>row.cells[2].textContent)`),Array(3).fill('49 (562)'));
+  for (const [table, numbers] of [['body',[7,11]],['historyBody',[7,20,null]]]) {
+    for (const [index, number] of numbers.entries()) for (const target of ['mini-session','mini-cost-value']) {
+      await key('Tab');
+      await evaluate(`miniWatch.view.${table}.rows[${index}].querySelector('.${target}').focus()`);
+      await until(`${help}?.matches(':popover-open')`);
+      const content = await evaluate(`${help}.textContent`);
+      assert.ok(content.includes(number == null ? 'Prompt number unavailable' : 'Prompt #'+number));
+      if(target==='mini-session') assert.equal(content, 'Full untruncated session name '.repeat(15)+'\n'+
+        (number == null ? 'Prompt number unavailable' : 'Prompt #'+number+' in this session'));
+      else assert.match(content,/Main model: Example Model[\s\S]*Effort: high[\s\S]*Duration: 4m 12s[\s\S]*Calls: 12/);
+      await key('Escape'); await evaluate('miniWatch.view.doc.activeElement.blur()');
+    }
+  }
   await key('Tab'); await evaluate(`costTarget.focus();costTarget.scrollIntoView({block:'center'})`);
   await until(`${help}?.matches(':popover-open')`);
   assert.match(await evaluate(`${help}.textContent`),/Prompt #7\nMain model: Example Model \[example\/model\]\nEffort: high\nDuration: 4m 12s\nCalls: 12/);
@@ -49,14 +65,16 @@ module.exports = async function alignment({evaluate,until,fixture,command,sessio
   await key('Escape'); await evaluate('miniWatch.settings()');
   assert.equal(await evaluate(`${help}.matches(':popover-open')`),false,'Live refresh cannot reopen dismissed help');
   await evaluate('costTarget.blur()');
-  for(const target of ['nameTarget','costTarget']) {
+  for(const target of ['nameTarget','costTarget',`miniWatch.view.body.rows[0].querySelector('.mini-cost-value')`,
+    `miniWatch.view.historyBody.rows[0].querySelector('.mini-session')`]) {
     await evaluate(`${target}.scrollIntoView({block:'center'});miniWatch.window.scrollTo(0,0)`);
     await input('Input.dispatchMouseEvent',{type:'mouseMoved',x:0,y:0});
     const point=await evaluate(`(()=>{const r=${target}.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`);
     await input('Input.dispatchMouseEvent',{type:'mouseMoved',...point});
     assert.equal(await evaluate(`${help}.matches(':popover-open')`),false,'shared hover delay');
     await until(`${help}.matches(':popover-open')`);
-    assert.match(await evaluate(`${help}.textContent`),target==='nameTarget'?/Prompt #7 in this session/:/Prompt #8/);
+    assert.match(await evaluate(`${help}.textContent`),target==='nameTarget'?/Prompt #7 in this session/:
+      target.includes('body.rows')?/Prompt #7\nMain model/:/Prompt #8/);
     await input('Input.dispatchMouseEvent',{type:'mouseMoved',x:0,y:0});
     await until(`!${help}.matches(':popover-open')`);
     for(const type of ['touchStart','touchEnd']) await input('Input.dispatchTouchEvent',{
@@ -121,6 +139,11 @@ module.exports = async function alignment({evaluate,until,fixture,command,sessio
           assert.equal(result.pageOverflow,false);
           assert.deepEqual(result.costs,Array(5).fill(unit==='credits'?'?123 456 (?987 654 321)':'?$1 234.56 (?$9 876 543.21)'));
           assert.equal(result.secondVertical,false);
+          await key('Tab'); await evaluate('costTarget.focus();costTarget.scrollIntoView({block:"center"})');
+          await until(`${help}.matches(':popover-open')`);
+          const bounds=await evaluate(`(()=>{const r=${help}.getBoundingClientRect(),w=miniWatch.window;return {left:r.left,top:r.top,right:r.right,bottom:r.bottom,width:w.innerWidth,height:w.innerHeight}})()`);
+          assert.ok(bounds.left>=0&&bounds.top>=0&&bounds.right<=bounds.width+1&&bounds.bottom<=bounds.height+1,JSON.stringify(bounds));
+          await key('Escape');await evaluate('costTarget.blur()');
           if(width===280) assert.equal(result.scroll,true,'extreme narrowing pans the session region');
         }
       }
