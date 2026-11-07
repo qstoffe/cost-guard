@@ -91,10 +91,28 @@ class StatsResumeTests(unittest.TestCase):
     def test_unknown_ends_running_pending_or_incomplete_never_make_exclusion_proofs(self):
         base = dict(usage=[], intervals=[(1, 10, False)], complete=True, pending=False, matched=None)
 
-        for change in (dict(intervals=[(1, None, False)]), dict(intervals=[(1, 10, True)]),
+        for change in (dict(intervals=[(1, None, False)]), dict(intervals=[(1, -1, False)]), dict(intervals=[(1, 10, True)]),
                        dict(pending=True), dict(complete=False)):
             self.assertIsNone(coverage({**base, **change})['end'])
         self.assertEqual(11, coverage(base)['end'])
+
+    def test_old_timing_algorithm_and_coverage_proofs_cannot_be_promoted(self):
+        from src.cache.repository import CacheEntry
+        from src.reports.ai_stats import StatsAcquisition
+        from src.reports.ai_stats_evidence import ALGORITHM, exclusion
+        self.build(scope='all')
+        root = self.source.list_sessions()[0]
+        revision = self.source.get_session_tree_revision(root.session_id)
+        with self.original.cache_repository.database.connect(operation='read') as connection:
+            key = connection.execute('SELECT cache_key FROM cache_entries WHERE namespace=?', (NAMESPACE,)).fetchone()[0]
+        saved = self.original.cache_repository.get_many(NAMESPACE, [key])[key]
+
+        self.assertEqual(ALGORITHM, saved.algorithm_version)
+        self.assertIsNone(StatsAcquisition._decode(replace(saved,
+            algorithm_version='ai-stats-evidence-3-matched-first-input-1'), root, saved.source_revision))
+        old = CacheEntry(COVERAGE, 'synthetic', dict(end=1, matched=True), revision, 'ai-stats-coverage-1')
+        self.assertFalse(exclusion(old, revision, NOW))
+        self.assertTrue(exclusion(replace(old, algorithm_version=COVERAGE), revision, NOW))
 
     def test_active_root_cannot_be_skipped_using_its_previous_stable_exclusion(self):
         from development.tests.fixtures.synthetic_month import make_root_snapshot

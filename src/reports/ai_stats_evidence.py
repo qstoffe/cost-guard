@@ -6,9 +6,9 @@ from src.analysis.cache import dependency_signature
 from .token_mix_cache import encode, decode
 from .matched_runs import project_run, encode_run, decode_run
 
-ALGORITHM = 'ai-stats-evidence-3-matched-first-input-1'
+ALGORITHM = 'ai-stats-evidence-4-observed-timing-1'
 NAMESPACE = 'ai-stats-evidence'
-COVERAGE = 'ai-stats-coverage-1'
+COVERAGE = 'ai-stats-coverage-2'
 INVALID = (KeyError, IndexError, TypeError, ValueError, InvalidOperation, OverflowError)
 
 
@@ -47,7 +47,7 @@ def coverage(value):
     """Only a complete stable root with known ends may be irrelevant to a window."""
     intervals = value['intervals']
     known = value['complete'] and not value['pending'] and all(
-        left > 0 and duration is not None and not running for left, duration, running in intervals)
+        left > 0 and duration is not None and duration >= 0 and not running for left, duration, running in intervals)
     ends = [left + duration for left, duration, _running in intervals] if known else []
     ends.extend(fact['completed'] for fact in value['usage'])
     run = value['matched']

@@ -13,7 +13,7 @@ from src.domain.acquisition import AcquisitionMetrics
 
 from .models import CompactionRecord, PromptRecord, RootAnalysisBundle, TraceEntry
 
-ANALYSIS_ALGORITHM_VERSION = "v78-analysis-16-causal-subagent-windows"
+ANALYSIS_ALGORITHM_VERSION = "v78-analysis-17-native-compaction-end"
 _CACHE_NAMESPACE = "derived-analysis"
 
 

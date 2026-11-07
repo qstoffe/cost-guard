@@ -74,6 +74,14 @@ def main():
         module = types.ModuleType('src.reports.benchmark_baseline')
         module.__package__ = 'src.reports'
         exec(compile(original, '<baseline-ai-stats>', 'exec'), module.__dict__)
+        # The old builder otherwise imports today's formula, making parity a
+        # comparison of the new implementation with itself.
+        analysis = types.ModuleType('src.analysis.benchmark_baseline')
+        analysis.__package__ = 'src.analysis'
+        sys.modules[analysis.__name__] = analysis
+        formulas = subprocess.check_output(['git', 'show', args.baseline + ':src/analysis/ai_stats.py'], cwd=ROOT)
+        exec(compile(formulas, '<baseline-stats-formulas>', 'exec'), analysis.__dict__)
+        module.period_stats = analysis.period_stats
         builders.insert(0, ('baseline', module.build_ai_stats))
     print(json.dumps(dict(environment=dict(python=sys.version.split()[0], platform=sys.platform),
                           source='fixed canonical synthetic history; no simulated I/O delay', baseline=args.baseline)))
@@ -83,7 +91,8 @@ def main():
             for scope in ('7-days', '30-days', 'all'):
                 # The historical baseline did not accept a narrower scope. It
                 # acquired 30-days for a 7-day selection; measure that actual path.
-                actual = '30-days' if label == 'baseline' and scope == '7-days' else scope
+                legacy_narrow = label == 'baseline' and scope == '7-days' and not hasattr(module, 'StatsAcquisition')
+                actual = '30-days' if legacy_narrow else scope
                 for result in scenario(builder, size, actual, scope, args.sliced and label == 'current'):
                     identity = size, scope, result['attempt']
                     if label == 'baseline':

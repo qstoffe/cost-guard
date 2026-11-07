@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v80.198, 2026-11-07), the supported distribution.
+Use **current `main`** (v80.199, 2026-11-07), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -361,7 +361,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.198 (2026-11-07):** Models uses compact system-font price-refresh controls, coherent timestamp/feedback text and vertically aligned checkbox filters. Long dates/errors and enlarged text wrap without hiding controls; numeric price tiers remain monospace. Explicit refresh, factual fetched times, filters and sorting are unchanged. See [Web Beta](docs/web-beta.md).
+**v80.199 (2026-11-07):** AI Stats preserves observed execution subtotals and qualified session/day leaders when history has gaps. Working Time shows a lower bound, not an invented full duration; unsupported rates, shares, streaks and concurrency remain unknown. Complete-history results and read-only source boundaries are unchanged. See [Web Beta](docs/web-beta.md).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

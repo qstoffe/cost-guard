@@ -53,23 +53,23 @@ class AIStatsAnalysisTests(unittest.TestCase):
         at = epoch('2026-11-01T10:00:00+00:00')
         root = StatsRoot('a', 'A', (request('a', at, 4),), ((at, HOUR_MS, False),))
         cases = (
-            (replace(root, intervals=((at, None, False),)), {}, 'working-time', 'unknown-duration'),
-            (root, {'complete': False}, 'working-time', 'source-incomplete'),
-            (replace(root, source_complete=False), {}, 'hourly-rate', 'source-incomplete'),
-            (root, {'valuation': lambda *_: None}, 'average-cost', 'unpriced-requests'),
+            (replace(root, intervals=((at, None, False),)), {}, 'working-time', 'unknown-duration', None, 'unavailable'),
+            (root, {'complete': False}, 'working-time', 'source-incomplete', HOUR_MS, 'partial'),
+            (replace(root, source_complete=False), {}, 'hourly-rate', 'source-incomplete', None, 'unavailable'),
+            (root, {'valuation': lambda *_: None}, 'average-cost', 'unpriced-requests', None, 'unavailable'),
             (replace(root, entries=(replace(root.entries[0], tokens=TokenUsage(input=4, known_fields=())),)),
-             {}, 'expensive-session', 'missing-token-usage'),
-            (replace(root, cost_pending=True), {}, 'hourly-rate', 'pending-usage'),
+             {}, 'expensive-session', 'missing-token-usage', 4, 'partial'),
+            (replace(root, cost_pending=True), {}, 'hourly-rate', 'pending-usage', None, 'unavailable'),
         )
 
-        for evidence, options, key, reason in cases:
+        for evidence, options, key, reason, value, status in cases:
             with self.subTest(reason=reason):
                 result = metrics((evidence,), **options)
                 item = result[key]
-                self.assertEqual((None, 'unavailable'), (item.value, item.status))
+                self.assertEqual((value, status), (item.value, item.status))
                 self.assertIn(reason, item.reasons)
                 display = stat_tokens(asdict(item))
-                self.assertEqual('Unavailable', display['state'])
+                self.assertEqual(status.capitalize(), display['state'])
                 self.assertTrue(display['explanation'])
                 self.assertNotIn('Loading', str(display))
                 self.assertNotIn('vault', str(display))
@@ -221,7 +221,7 @@ class AIStatsAcquisitionTests(unittest.TestCase):
             report = self.fresh(original).build(ReportRequest(ReportKind.AI_STATS, stats_scope='all'))
             metric = project(report).to_json()['ai_stats'][-1]['metrics'][2]
 
-            self.assertEqual((None, 'unavailable', ['source-incomplete']),
+            self.assertEqual((900, 'partial', ['source-incomplete']),
                              (metric['value'], metric['status'], metric['reasons']))
             self.assertIn('coverage is incomplete', metric['display']['trait'])
             self.assertNotIn('PRIVATE_SOURCE_DIAGNOSTIC', str(metric))

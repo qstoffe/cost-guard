@@ -105,7 +105,8 @@ def _time_metrics(roots, per_root, unknown, provisional, zone, source_complete):
     reasons = tuple(code for code, present in (
         ('source-incomplete', not source_complete), ('unknown-duration', unknown)) if present)
     unknown = bool(reasons)
-    duration = None if unknown else sum(right - left for left, right in merged)
+    observed = sum(right - left for left, right in merged)
+    duration = None if unknown else observed
     status = 'unavailable' if unknown else 'provisional' if provisional else 'complete'
     if provisional:
         reasons += ('running-executions',)
@@ -123,15 +124,18 @@ def _time_metrics(roots, per_root, unknown, provisional, zone, source_complete):
         active += delta
         peak = max(peak, active)
     ranked = sorted(roots, key=lambda root: (-sum(b - a for a, b in per_root[root.session_id]), root.session_id))
-    record = ranked[0] if ranked and per_root[ranked[0].session_id] and not unknown else None
-    busy = min(days, key=lambda day: (-days[day], day)) if days and not unknown else None
-    record_status = status if record or unknown else 'no-data'
+    record = ranked[0] if ranked and per_root[ranked[0].session_id] else None
+    busy = min(days, key=lambda day: (-days[day], day)) if days else None
+    observed_status = 'partial' if unknown else status
+    record_status = observed_status if record else status if unknown else 'no-data'
+    ratio_status = status if merged or unknown else 'no-data'
     activity_reasons = reasons if merged or unknown else ('no-execution-time',)
-    metrics = (Stat('working-time', duration, status, reasons=reasons),
+    metrics = (Stat('working-time', observed if observed else duration,
+                   observed_status if observed else status, reasons=reasons),
         Stat('longest-session', sum(b - a for a, b in per_root[record.session_id]) if record else None,
              record_status, record.session_id if record else None, record.title if record else '', reasons=activity_reasons),
          Stat('busiest-day', days[busy] if busy else None, record_status, detail=str(busy or ''), reasons=activity_reasons),
-         Stat('night-owl', Decimal(night) * 100 / duration if duration else None, record_status, reasons=activity_reasons),
+          Stat('night-owl', Decimal(night) * 100 / duration if duration else None, ratio_status, reasons=activity_reasons),
          Stat('streak', None if unknown else longest, status, reasons=reasons),
          Stat('parallel', None if unknown else peak, status, reasons=reasons))
     return duration, status, reasons, metrics
@@ -152,7 +156,7 @@ def _cost_metrics(roots, entries, valuation, source_complete, duration, time_sta
     cost_status = 'complete' if complete else 'partial'
     rate = total.known_ccost * HOUR_MS / duration if complete and duration else None
     average = total.known_ccost / len(groups) if complete and groups else None
-    expensive = min(costs, key=lambda sid: (-costs[sid], sid)) if costs and complete else None
+    expensive = min(costs, key=lambda sid: (-costs[sid], sid)) if costs and (complete or total.known_ccost > 0) else None
     root = next((root for root in roots if root.session_id == expensive), None)
     rate_reasons = tuple(dict.fromkeys((*reasons, *time_reasons)))
     missing_cost_status = 'unavailable' if reasons else 'no-data'
@@ -169,6 +173,7 @@ def _cost_metrics(roots, entries, valuation, source_complete, duration, time_sta
 
 def period_stats(roots, valuation, *, period, start, now, zone, source_complete=True):
     """Cost uses event time, never proportional allocation or displayed amounts."""
+    roots = tuple(root for root in roots if not outside_period(root, start))
     source_complete = source_complete and all(root.source_complete for root in roots)
     entries = tuple(entry for entry in deduplicated_requests(e for root in roots for e in root.entries)
                      if (start is None or entry.completed_at_ms >= start) and entry.completed_at_ms <= now)
@@ -177,3 +182,18 @@ def period_stats(roots, valuation, *, period, start, now, zone, source_complete=
     cost = _cost_metrics(roots, entries, valuation, source_complete, duration, status, reasons)
     values = (cost[0], cost[1], timed[0], *cost[2:], *timed[1:])
     return StatsPeriod(period, start, now, values)
+
+
+def outside_period(root, start):
+    """Complete execution AND request evidence only; never use session metadata.
+
+    A missing end, pending usage or incomplete snapshot cannot prove irrelevance.
+    Global membership/migration warnings are intentionally not discharged here.
+    """
+    if start is None or not root.source_complete or root.cost_pending:
+        return False
+    if any(left <= 0 or duration is None or duration < 0 or running
+           for left, duration, running in root.intervals):
+        return False
+    return (all(left + duration < start for left, duration, _running in root.intervals)
+            and all(entry.completed_at_ms < start for entry in root.entries))
