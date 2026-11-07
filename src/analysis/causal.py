@@ -14,7 +14,7 @@ from src.domain import (
 from .billing import CostEstimator, ProviderScope, measure_prompt_billing
 from .models import PromptRecord, PromptReference, TraceEntry
 from .duration import prompt_duration
-from .prompt_index import PromptIndex
+from .prompt_index import PromptIndex, prompt_owners
 from .child_links import ChildLinkIndex, OPEN_END, part_time as _part_time, scoped_entries
 
 TRACKED_PROVIDER_DEFAULT = "github-copilot"
@@ -29,6 +29,7 @@ def trace_entries(
     snapshot: SessionSnapshot, *, subscription_providers: frozenset[str] = frozenset()
 ) -> tuple[TraceEntry, ...]:
     result: list[TraceEntry] = []
+    owners = prompt_owners(snapshot)
     for order, invocation in enumerate(snapshot.invocations):
         reported = invocation.cost.amount if invocation.cost is not None else 0
         disposition = invocation.cost_disposition
@@ -53,6 +54,7 @@ def trace_entries(
             cost_disposition=disposition,
             source_instance=invocation.provenance.source_instance,
             account_ref=invocation.account_ref,
+            logical_prompt_id=owners.get((invocation.session_id, invocation.initiating_event_id)),
         ))
     return tuple(sorted(result, key=lambda item: (item.completed_at_ms, item.sort_order)))
 

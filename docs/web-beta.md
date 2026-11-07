@@ -28,12 +28,16 @@ pricing/data. CCost is an estimated reference cost, not your bill or native quot
 
 Hover/focus the **CCost value** in either Watch table for Input, Cached input,
 Cache write, Output and Subtotal, grouped into **Main prompt** and **Subagents**
-by provider/model, actual effort and price tier. Repeated agents share a group with
-their contributing-session count; categories are unrounded reference-cost contributions,
+by provider/model, actual effort and price tier (tier names/boundaries are not shown).
+Repeated agents share a group with their contributing-session count and a first
+**Number of prompts** bullet counting distinct canonical child prompts in that group,
+not agents or physical requests. Missing boundaries show N/A or a qualified observed
+lower bound. Categories are unrounded reference-cost contributions,
 not token percentages. Unknown categories remain N/A and omitted groups retain their
 known cost/call coverage. **Calls** uses the same groups for physical model requests,
-not tools. **Model** value help opens only when two or more distinct provider-qualified
-models contributed; the accessible linked-subagent `*` remains even for a single model.
+not tools. Hover, focus or tap **Model** for recorded linked-agent models and effort,
+even when main and all agents share one model. Unrecorded usage remains qualified;
+multi-model main-only work also retains help without a participation star.
 **Token Mix %** has header help only, not another per-cell popup.
 
 Use the clock text itself for exact Started/Finished or quota-reset dates. Prompt previews
@@ -698,17 +702,19 @@ attribution; a recently loaded skill never inherits unrelated tool outcomes.
 Historical cards have no activity section. Narrow tables pan horizontally.
 
 **CCost Today**, four pixels above subscriptions, shows current-local-day reference cost,
-initiating prompts and Input / Cached input / Cache write / Output shares/category costs.
+initiating prompts. Daily Token Mix categories are not shown here; per-prompt cells
+and the dedicated Token Mix page retain them unchanged.
 It includes pre-Watch history, running requests and unassigned-account usage, not just
 visible cards or subscription sums. Requests use completion/attribution dates; continuing
 prompts count once per relevant day, children under their initiator, compaction as usage
-only. The known integer displays **N prompts**, retaining incomplete attribution internally
-and all unassigned cost/tokens. Missing telemetry/prices remain partial; empty differs from
+only. The known integer displays **N prompts**, with an explicit incomplete-count
+warning when boundaries are missing, retaining all unassigned cost/tokens. Partial
+CCost pricing and retained-source warnings remain; empty differs from
 loading. Source changes/minute fallback update retained history and publish cost/count/mix
 coherently. Routine refresh silently retains figures; only a scope without valid data
 loads. Real failures remain visible. Midnight resets, rejecting yesterday's late results;
 CCost Today keeps its label before 03:00. Web Credits/USD and CLI scopes are unchanged.
-CCost Today label/value, prompt count and Token Mix label each have scoped text help;
+CCost Today label/value and prompt count each have scoped text help;
 there is no far-right question-mark cue or oversized summary hitbox.
 
 Retryable source-read failures retain observations quietly in Full Watch's tables,
@@ -735,8 +741,22 @@ without smaller text. Native declarations/order, never depletion or
 provider identity, select the primary. Missing primary stays unavailable; weekly-only
 accounts have no invented five-hour slot or duplicate secondary.
 
-Each quota shows **period · N% used/remaining (CCost)**, then **Capacity: number / ? / N/A**,
-its bar, a tightly adjacent reset and applicable canonical
+Each quota shows **period · N% used/remaining (CCost)**, then factual **Monthly Capacity**,
+**5-hour Capacity**, **Weekly Capacity**, etc. Unknown periods retain **Capacity**.
+Every nonmonthly primary/secondary quota adds a visible **Monthly Capacity** line
+directly underneath and before its own bar: full-window reference Capacity ×
+2,592,000 / verified full-window seconds, calculated with unrounded Decimal.
+This standardized 30-day equivalent is always **(guesstimate)**, never an entitlement,
+bill or forecast. Compare independent restrictions separately; never add them together.
+Unknown duration/recurrence, inactive/expired/stale data, incompatible reference units,
+contradictory native data or incomplete pricing show **Monthly Capacity: N/A**, with
+the reason in the existing Capacity help. Native monthly windows have just one line.
+An empty, aria-hidden noninteractive primary row aligns monthly peers beside an extra
+monthly-equivalent line; it disappears for single/all-monthly or separately wrapped
+cards. Watch and Accounts use the same full-size card contract by default, including
+ordered text, controls, help, warnings, percentages, reset and accessibility; future
+deliberate divergence requires explicit owner approval. Mini stays separately compact.
+The bar is followed by a tightly adjacent reset and applicable canonical
 **Remaining: …/day** and **Remaining: …/workday** (or **no workdays left**). Only real
 secondaries follow a divider. No routine rolling/fixed boilerplate appears. Exact
 account/window/model costs include pre-Watch native-month history, never Today/30-day

@@ -23,7 +23,8 @@ module.exports = async function values({command,evaluate,until,owner,mini,checks
     await evaluate(owner,`document.querySelector(${JSON.stringify(selector)}).focus()`);
     const text=await evaluate(owner,`document.querySelector('#context-help').textContent`);
     assert.match(text,/Main prompt — Main Model · High\n• Input: 8\n• Cached input: 2\n• Cache write: 1\n• Output: 14\nSubtotal: 25/);
-    assert.match(text,/Subagents — Child Model · Low \(2 agents\)[\s\S]*Subtotal: 8[\s\S]*Total CCost: 33/);
+    assert.match(text,/Subagents — Child Model · Low \(2 agents\)\n• Number of prompts: 2\n• Input:[\s\S]*Subtotal: 8[\s\S]*Total CCost: 33/);
+    assert.doesNotMatch(text,/input tokens|Default \(/);
     await evaluate(owner,`ReportView.setUnit('usd',current.watch.root)`);
     assert.match(await evaluate(owner,`document.querySelector('#context-help').textContent`),/• Input: \$0.08[\s\S]*Total CCost: \$0.33/);
     await evaluate(owner,`ReportView.setUnit('credits',current.watch.root);document.activeElement.blur()`);

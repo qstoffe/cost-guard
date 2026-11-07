@@ -3,6 +3,7 @@
 const assert = require('node:assert/strict'), fs = require('node:fs/promises'), path = require('node:path');
 const {spawn} = require('node:child_process'), readline = require('node:readline');
 const [browser, output] = process.argv.slice(2);
+const quotaOnly = process.argv[4] === '--quota-only';
 async function main() {
   assert.ok(path.isAbsolute(browser) && path.isAbsolute(output));
   await fs.stat(browser); await fs.stat(path.dirname(output));
@@ -32,7 +33,7 @@ async function main() {
     pending.set(id, {resolve,reject,timer});
     child.stdio[3].write(JSON.stringify({id,method,params,...(sessionId ? {sessionId} : {})})+'\0');
   });
-  const deadline = setTimeout(() => { child.kill(); server.kill(); }, 150000);
+   const deadline = setTimeout(() => { child.kill(); server.kill(); }, 300000);
   const checks = [], layouts = []; let evidence = {outcome:'FAIL'};
   try {
     const launch = await next(); // One-use URL remains private to the browser pipe.
@@ -40,8 +41,8 @@ async function main() {
     const {targetId} = await command('Target.createTarget', {url:'about:blank'});
     const {sessionId} = await command('Target.attachToTarget', {targetId,flatten:true});
     await command('Page.enable', {}, sessionId); await command('Runtime.enable', {}, sessionId);
-    const evaluate = async expression => {
-      const value = await command('Runtime.evaluate', {expression,returnByValue:true,awaitPromise:true}, sessionId);
+    const evaluate = async (expression,userGesture=false) => {
+      const value = await command('Runtime.evaluate', {expression,returnByValue:true,awaitPromise:true,userGesture}, sessionId);
       if (value.exceptionDetails) throw new Error(JSON.stringify(value.exceptionDetails));
       return value.result.value;
     };
@@ -112,6 +113,23 @@ async function main() {
       await fs.writeFile(output.replace(/\.json$/,'')+`-${theme}-${width}.png`,Buffer.from(image.data,'base64'));
     }
     checks.push('Unchanged ticks preserve nodes/focus/selection/help; live unit/mode/theme, DPR/narrow/reduced-motion layouts');
+    if(!quotaOnly) await require('./probe_subscription_capacity.cjs')({command,evaluate,until,sessionId,navigate,checks,layouts});
+    await navigate('watch');
+    await evaluate(`(async()=>{applySettings(await api('/api/settings/ccost',{ccostDisplayUnit:'credits'}));
+      applySettings(await api('/api/settings/quota-display',{quotaDisplayMode:'used'}));})()`);
+    await evaluate(`miniWatch.toggle()`,true);
+    const targets=await command('Target.getTargets'); let pipSession;
+    for(const target of targets.targetInfos.filter(target=>target.type==='page'&&target.targetId!==targetId)) {
+      const attached=await command('Target.attachToTarget',{targetId:target.targetId,flatten:true});
+      const result=await command('Runtime.evaluate',{expression:`!!document.querySelector('.mini-watch')`,returnByValue:true},attached.sessionId);
+      if(result.result.value){pipSession=attached.sessionId;break;}
+    }
+    assert.ok(pipSession,'actual hidden Document PiP for compact quota compatibility');
+    await require('./probe_quota_display.cjs')({evaluate,until,command,sessionId,pipSession,checks,layouts,fixture,navigate});
+    // Restore this driver's Remaining/USD prerequisites after the compact probe's defaults.
+    await evaluate(`(async()=>{applySettings(await api('/api/settings/ccost',{ccostDisplayUnit:'usd'}));
+      applySettings(await api('/api/settings/quota-display',{quotaDisplayMode:'remaining'}));})()`);
+    await evaluate(`miniWatch.toggle()`,true);await navigate('accounts');
     await fixture('accounts-stale');
     await until(`document.querySelector('.watch-subscription').textContent.includes('Stale')`);
     assert.match(await evaluate(`document.getElementById('result').textContent`),/Connection failed/);
@@ -148,7 +166,7 @@ async function main() {
     evidence={outcome:'PASS',browser:version.product,checks,layouts,streams:1,route_report_jobs:0,
       limitations:['Synthetic acquisition; real-installation account-owner proof is separate.',
         'Headless DOM/layout/input, not physical desktop, assistive technology or macOS proof.']};
-  } catch(error) { evidence={outcome:'FAIL',checks,layouts,reason:error.message};process.exitCode=1; }
+  } catch(error) { evidence={outcome:'FAIL',checks,layouts,reason:error.message,errors};process.exitCode=1; }
   finally {
     clearTimeout(deadline);
     try {await command('Browser.close');} catch {}

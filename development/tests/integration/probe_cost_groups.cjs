@@ -33,15 +33,18 @@ module.exports = async function costGroups({command,evaluate,until,owner,mini,ch
   const sameModel=await evaluate(owner,`(() => {
     document.activeElement?.blur();const p=structuredClone(liveValue);
     for(const card of [...p.view.active_cards,...p.view.history_cards]) for(const row of card.rows) {
-      row.prompt.display.model_detail_help='';
-      for(const tokens of Object.values(row.prompt.display_units)) tokens.model_detail_help='';
+      row.prompt=structuredClone(liveValue.probe_same_model);
     }
     current.watch.update(p);
     return [...document.querySelectorAll('.watch-card tbody td:nth-child(4)')].map(cell=>({
       label:cell.textContent,help:!!cell.querySelector('.help-value'),aria:cell.children[0].getAttribute('aria-label')}));
   })()`);
   assert.ok(sameModel.length>=2);
-  for(const cell of sameModel) {assert.equal(cell.help,false);assert.equal(cell.label,'Model*');assert.match(cell.aria,/Linked subagents participated \(2\)/);}
+  for(const cell of sameModel) {assert.equal(cell.help,true);assert.equal(cell.label,'Model*');assert.match(cell.aria,/Linked subagents participated \(2\)/);}
+  await evaluate(owner,`document.querySelector('.watch-active tbody td:nth-child(4) .help-value').focus()`);
+  await until(owner,`document.querySelector('#context-help')?.matches(':popover-open')`);
+  assert.match(await evaluate(owner,`document.querySelector('#context-help').textContent`),/Main prompt — Main Model · High[\s\S]*Subagents — Main Model · Low/);
+  await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape',code:'Escape',windowsVirtualKeyCode:27},owner);
   const stable=await evaluate(owner,`(() => {
     const real=Date.now,base=real(),p=structuredClone(liveValue),history=structuredClone(p.view.history_cards);
     let offset=0;Date.now=()=>base+offset;
@@ -56,22 +59,23 @@ module.exports = async function costGroups({command,evaluate,until,owner,mini,ch
         current.watch.update(p);miniWatch.update(p);
         if(offset%60000===0||offset===241000) amounts.push({at:offset,
           full:[...current.watch.cards.values()].map(c=>({amount:c.costLabel.textContent,note:c.costStatus.textContent})),
-          mini:[...miniWatch.view.root.querySelectorAll('tbody .mini-session-total')].map(n=>n.textContent)});
+          mini:[...miniWatch.view.root.querySelectorAll('tbody .mini-cost-value')].map(n=>n.textContent)});
       }
       const unknown=structuredClone(p);unknown.view.active_cards=unknown.view.active_cards.slice(0,1);
       unknown.view.active_cards[0].session_id='unknown-total';
       unknown.view.active_cards[0].session_summary={cost:null,context:null,state:'loading'};
       current.watch.update(unknown);miniWatch.update(unknown);
       const loading={full:[...current.watch.cards.values()].find(c=>c.value.session_id==='unknown-total').costLabel.textContent,
-        mini:miniWatch.view.body.querySelector('.mini-session-total').textContent};
+        mini:miniWatch.view.body.querySelector('.mini-cost-value').textContent};
       return {amounts,loading};
     } finally {Date.now=real;document.activeElement?.blur();current.watch.earlier.open=true;current.watch.update(liveValue);miniWatch.update(liveValue);}
   })()`);
   for(const sample of stable.amounts) {
     for(const total of sample.full) {assert.equal(total.amount,'4583');assert.equal(total.note,'');}
-    for(const total of sample.mini) assert.equal(total,' (4583)');
+    assert.ok(sample.mini.length>0,'paired Mini cost targets must actually be present');
+    for(const total of sample.mini) assert.equal(total,'33 (4583)');
   }
-  assert.deepEqual(stable.loading,{full:'Loading…',mini:' (Loading…)'});
+  assert.deepEqual(stable.loading,{full:'Loading…',mini:'33 (Loading…)'});
   layouts.push({case:'241-second-stable-totals',...stable});
   for(const width of [1280,360]) for(const zoom of [1,1.5]) {
     await command('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false},owner);
@@ -99,6 +103,6 @@ module.exports = async function costGroups({command,evaluate,until,owner,mini,ch
   }
   await evaluate(owner,`document.documentElement.style.zoom='';current.watch.update(liveValue)`);
   await command('Emulation.setDeviceMetricsOverride',{width:1280,height:900,deviceScaleFactor:1,mobile:false},owner);
-  checks.push('Backend-aggregated two-agent cost/Calls groups in both real Full Watch tables; no Token Mix cell help; suppressed one-model popup retains accessible star; 241 virtual seconds of other-prompt publications/disclosure/eviction/re-entry and unknown Loading parity in real Full/Mini DOM');
+  checks.push('Backend-aggregated two-agent cost/Calls groups in both real Full Watch tables; no Token Mix cell help; single-model linked work opens recorded effort help and retains accessible star; 241 virtual seconds of other-prompt publications/disclosure/eviction/re-entry and unknown Loading parity in real Full/Mini DOM');
   checks.push('Advancing active row publications retain an open hovered cost target; 30 backend-projected groups preserve omitted cost evidence and real scroll/clamped bounds in both tables at 1280/360 widths and 100%/150% zoom');
 };

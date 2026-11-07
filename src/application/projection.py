@@ -86,7 +86,7 @@ def block(value, *, source_complete=True, details=False):
 
 def quota_record(quota, cost=None, *, provider_id="", availability="available", estimated=False, note=""):
     base = fields(quota, """label period used limit remaining remaining_fraction unit reset_at_ms
-        duration_seconds status unlimited remaining_money limit_money origin model_id scope window_active""")
+        duration_seconds status unlimited remaining_money limit_money origin model_id scope window_active reference_ccost_capacity""")
     return ObjectValue(base.fields + (("availability", availability), ("period_ccost", record(
         cost=comparison(cost), provider_id=provider_id, estimated=estimated, note=note))))
 

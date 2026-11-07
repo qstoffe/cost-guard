@@ -4,6 +4,57 @@ from decimal import Decimal
 from src.numbers import ccost_amount
 
 
+def capacity_period(values):
+    """Use normalized native period facts, never a provider's arbitrary plan name."""
+    native = values.get("origin") == "provider_native"
+    monthly = (native and values.get("period") == "fixed" and values.get("scope") == "account"
+        and values.get("model_id") is None and values.get("duration_seconds") is None
+        and values.get("label", "").casefold() in {"monthly", "month"})
+    duration = values.get("duration_seconds") if native and values.get("period") in {"fixed", "rolling"} else None
+    label = "Monthly" if monthly else {604800: "Weekly", 86400: "Daily"}.get(duration)
+    if not label and duration and duration > 0:
+        if duration % 86400 == 0:
+            label = f"{duration // 86400}-day"
+        elif duration % 3600 == 0:
+            label = f"{duration // 3600}-hour"
+        elif duration % 60 == 0:
+            label = f"{duration // 60}-minute"
+    return monthly, duration, (label + " Capacity" if label else "Capacity")
+
+
+def monthly_tokens(values, capacity, cost, coherent, current, now_ms):
+    monthly, duration, label = capacity_period(values)
+    if monthly:
+        return {"capacity_label": label, "monthly_capacity": "", "monthly_capacity_help": ""}
+    deadline = values.get("reset_at_ms")
+    fraction = values.get("remaining_fraction")
+    reason = None
+    if values.get("unlimited"):
+        reason = "No finite quota limit."
+    elif not duration or duration <= 0:
+        reason = "No verified full recurring window duration; reset time alone is insufficient."
+    elif not current:
+        reason = "Quota source is stale, unavailable or expired."
+    elif (values.get("window_active") is False or deadline is None or now_ms is None
+            or not deadline - duration * 1000 <= now_ms < deadline):
+        reason = "No verified active recurring quota window."
+    elif not coherent or fraction is not None and not 0 <= Decimal(fraction) <= 1:
+        reason = "Contradictory native quota amounts or fractions."
+    elif (fraction is not None and values.get("limit") is not None and Decimal(values["limit"]) > 0
+            and ((values.get("used") is not None and Decimal(fraction) != 1 - Decimal(values["used"]) / Decimal(values["limit"]))
+                 or (values.get("remaining") is not None and Decimal(fraction) != Decimal(values["remaining"]) / Decimal(values["limit"])))):
+        reason = "Contradictory native quota amounts or fractions."
+    elif cost and not cost.get("complete"):
+        reason = "Same-window usage has incomplete attribution or pricing."
+    elif capacity is None or not capacity.is_finite() or capacity <= 0:
+        reason = "No compatible same-window reference CCost Capacity."
+    value = "N/A" if reason else ccost_amount(capacity * Decimal(30 * 24 * 3600) / Decimal(duration)) + " (guesstimate)"
+    explanation = (reason or "Theoretical 30-day guesstimate: full-period CCost Capacity × 2,592,000 ÷ full-window seconds.\n"
+        "Assumes repeated full windows; not a monthly entitlement, bill or spending forecast.\n"
+        "Other quotas may constrain usage; compare each separately, never add their monthly equivalents.")
+    return {"capacity_label": label, "monthly_capacity": value, "monthly_capacity_help": explanation}
+
+
 def quota_ccost_tokens(values, now_ms):
     context = values.get("period_ccost")
     if context is None:
@@ -37,8 +88,11 @@ def quota_ccost_tokens(values, now_ms):
         direct = (context["provider_id"] in {"github-copilot", "github-copilot-enterprise"} and
                   values.get("scope") == "account" and values.get("model_id") is None and
                   values.get("period") == "fixed" and values.get("label", "").casefold() in {"monthly", "month"} and
-                  (values.get("unit") or "").casefold() == "ai credits" and limit is not None and limit > 0)
-        if direct:
+                   (values.get("unit") or "").casefold() == "ai credits" and limit is not None and limit > 0)
+        verified = values.get("reference_ccost_capacity")
+        if verified is not None and Decimal(verified) > 0:
+            basis, capacity = "native", Decimal(verified)
+        elif direct:
             basis, capacity = "native", limit
             remaining = native_remaining if native_remaining is not None else (
                 limit - native_used if native_used is not None else None)
@@ -72,6 +126,8 @@ def quota_ccost_tokens(values, now_ms):
         explanation += "\nUsed CCost has estimated attribution, not verified account attribution."
     if context["note"]:
         explanation += "\n" + context["note"]
+    if values.get("reference_ccost_capacity") is not None and basis == "native":
+        explanation = "Source-verified full-period reference CCost Capacity.\nObserved Used CCost is independent."
     brief = {
         "native": "Reference Remaining uses native AI credits; Used + Remaining need not equal Capacity.",
         "ratio": "Reference Capacity estimates a full period from observed CCost ÷ native fraction used; not a guaranteed budget.",
@@ -84,7 +140,10 @@ def quota_ccost_tokens(values, now_ms):
         brief += "\nUsed CCost has estimated attribution."
     if context["note"]:
         brief += "\n" + context["note"]
-    return {"ccost_used": amount(used), "ccost_remaining": amount(remaining),
+    if values.get("reference_ccost_capacity") is not None and basis == "native":
+        brief = "Source-verified reference Capacity; observed Used CCost is independent."
+    return {**monthly_tokens(values, capacity, cost, coherent, current, now_ms),
+            "ccost_used": amount(used), "ccost_remaining": amount(remaining),
             "ccost_capacity": ("N/A" if basis == "unlimited" else amount(capacity)) +
                 (" (guesstimate)" if basis == "ratio" and capacity is not None else ""),
             "capacity_basis": basis,

@@ -30,6 +30,9 @@ Immutable projections cover dashboard/catalog, lists and detail/date. Global lat
 
 `prompt_costs.py` projects immutable per-session/model/effort category costs from
 canonically owned requests, using each request's unrounded reference price tier.
+Own-session logical prompt identities come from the shared canonical prompt-window
+index, not physical request counts or agent count. Private group membership deduplicates
+those identities across requests and sessions, retaining unknown boundary completeness.
 Unknown telemetry remains unknown, independently of a known subtotal. Prompt rows
 retain positive causal linked-agent counts even without request usage. The bounded
 application adapter exports at most 24 groups plus honest omitted cost/calls and

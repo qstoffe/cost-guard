@@ -184,8 +184,18 @@ verified Copilot included credits use the native allowance/remainder; other curr
 valid windows use observed cost / raw used fraction. Partial pricing, unknown or
 ambiguous scopes, invalid/expired evidence and zero-used ratios withhold estimates.
 `display.py` publishes both Credits/USD tokens; JavaScript only selects tokens.
-Full Watch and Accounts show Today, native percentage with bare reference parentheses, Capacity,
-bar, reset and pace using seven subgrid rows. Only secondary regions have a divider.
+`QuotaComponent.reference_ccost_capacity` is an optional explicitly source-verified
+reference-scale full-window limit, not a conversion inferred from unit names. Current
+adapters do not manufacture it from money, requests or tokens. Nonmonthly 30-day
+comparison uses valid Capacity × 2,592,000 / full duration before formatting, always
+marked guesstimate; missing/contradictory/inactive/stale/incomplete evidence yields N/A
+and a reason. Normalized native fixed monthly metadata retains one original line.
+Full Watch and Accounts share identical ordered Today, native percentage/reference
+parentheses, factual period Capacity, optional visible monthly equivalent, bar, reset
+and pace. Seven/eight-row subgrids and an empty aria-hidden monthly spacer align only
+responsive same-row peers needing an extra primary line. ResizeObserver and membership/
+period updates re-evaluate placement without recreating unchanged help/progress targets.
+Only real secondary regions have a divider and their own monthly-equivalent lines.
 Native ratios/money/source/attribution stay in accessible help.
 Mini keeps a single primary line and exposes Capacity in help. Known Used zero remains
 numeric; unknown reference amounts use ?. Unlimited Capacity is N/A with Used fallback.

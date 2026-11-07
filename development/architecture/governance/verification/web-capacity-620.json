@@ -1,0 +1,94 @@
+{
+  "fr": "000620",
+  "version": "80.200",
+  "date": "2026-11-07",
+  "base": "928f2270f05d39e3485ac5e221ae71860f4903d0",
+  "localFull": {
+    "command": "py -3 development/tools/run_tests.py --suite full --json-report ../full-tests-resumed.json",
+    "outcome": "PASS",
+    "files": 155,
+    "failures": 0,
+    "errors": 0,
+    "seconds": 105.3,
+    "workers": 4,
+    "skipped": 1,
+    "skipReason": "Existing zsh/PTY test unavailable on Windows; native macOS CI owns shell execution.",
+    "artifact": "scratch:/full-tests-resumed.json"
+  },
+  "validation": {
+    "command": "py -3 development/tools/validate_package.py --working-tree",
+    "outcome": "PASS",
+    "passes": 11,
+    "failures": 0,
+    "existingAdvisoryWarnings": 6,
+    "budgetsOrBaselinesRaised": false
+  },
+  "browser": {
+    "product": "Edg/156.0.4314.58",
+    "mode": "owned hidden headless profile; shipped HTTP/assets/CSP/SSE and actual Document PiP",
+    "accountsDriver": "development/tests/integration/probe_accounts_live.cjs",
+    "accountsOutcome": "PASS",
+    "accountsArtifact": "scratch:/accounts-resumed-final.json",
+    "matrixCases": 96,
+    "widths": [360, 800, 1280, 1920],
+    "cssZoom": [1, 1.25],
+    "themes": ["Classic", "Web light", "Web dark"],
+    "scenarios": ["mixed 3+", "single monthly", "all monthly", "period change"],
+    "checks": [
+      "Identical Watch/Accounts ordered text, primary/secondary capacity help, lines, progress ARIA and conditional empty rows",
+      "Monthly peers align only within responsive comparison rows; monthly-only cards have no spacer",
+      "No horizontal overflow; long names and real secondary quotas preserved",
+      "Unchanged ticks retain nodes, selection, focus and help; one SSE and zero route report jobs",
+      "Used/Remaining and Credits/USD apply to retained Watch/Accounts and open Mini",
+      "Mini keeps its existing compact Capacity/Next reset help without monthly layout",
+      "Idle, ratio, stale, failed-retained, genuine empty and recovery updates",
+      "Settings defaults and terminal host-stop SSE feedback"
+    ],
+    "helpCommand": "node development/tests/integration/probe_web_help.cjs <verified Edge executable> <owned output> --watch-only",
+    "helpOutcome": "PASS",
+    "helpArtifact": "scratch:/help-verified.json",
+    "helpChecks": [
+      "Same-model linked agents open recorded model/effort details and retain accessible star",
+      "Number of prompts precedes subagent category bullets; Model/CCost omit tier prose",
+      "Both Full tables, delayed hover, keyboard, touch, Escape and stable open targets",
+      "Bounded 30-group fixture retains omitted evidence at wide/narrow and 100/150 percent zoom",
+      "Full/Mini totals remain stable through 241 virtual seconds and unknown Loading parity"
+    ],
+    "visuallyInspected": "Final v80.200 Accounts Web light, 1200 CSS pixels at DPR 1.5"
+  },
+  "realInstallation": {
+    "command": "py -3 development/tests/integration/probe_web_live.py --accounts --watch-cards --daily",
+    "outcome": "PASS",
+    "source": "V2",
+    "accountCards": 3,
+    "liveOwners": 1,
+    "accountRefreshOwners": 1,
+    "publicationAdvanced": true,
+    "finiteJobsStarted": 0,
+    "modelCallsStartedByProbe": 0,
+    "dailyRequests": 402,
+    "dailyPrompts": 10,
+    "dailyPromptCountComplete": true,
+    "dailyCostComplete": true,
+    "dailyCategoriesReconcile": true,
+    "seconds": 14.7421,
+    "finalOwnedThreads": 0,
+    "finalOwnedProcesses": 0,
+    "cleanupFailures": 0,
+    "observedScheduleHistoryErrors": 1,
+    "errorScope": "Instrumentation recorded one schedule-history error during owned teardown; final assertions and cleanup passed. No root-cause claim.",
+    "sharedOpenCodeStopped": false,
+    "artifact": "scratch:/live-probe.log"
+  },
+  "decisions": {
+    "decider": "Foreground Decision Delegate",
+    "scope": "Disconnected integrated browser: bounded normal-guarded discovery and genuinely hidden Edge fallback; no native permission grant, visible desktop action or acceptance waiver.",
+    "requirementOrTestExceptions": []
+  },
+  "limitations": [
+    "Synthetic child/quota cases establish boundaries and conversion; the real observation does not independently prove every provider or child case.",
+    "Headless input/layout is not physical desktop, screen-reader, native blur delivery, macOS or other-engine proof.",
+    "Watch-only help evidence is not whole-application report-route or finite-report-process lifecycle acceptance.",
+    "No model inference, login, personal browser profile, release ZIP, tag or GitHub Release."
+  ]
+}

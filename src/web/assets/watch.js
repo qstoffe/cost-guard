@@ -50,12 +50,10 @@ const WatchView = (() => {
     parent.append(ContextHelp.value(el('span', () => value.total.observed_requests && !value.total.priced_requests ? 'N/A' : display(value.total, 'known_ccost'), 'metric-value'),
       'Today’s reference CCost, including recorded activity before Watch opened.' + (!value.total.complete ? '\n? — Partial pricing.' : '')));
     const count = ContextHelp.value(el('span', `${value.prompt_count} prompts`), 'Prompts with model requests today, including activity before Watch opened.');
-    parent.append(count, ContextHelp.value(el('span', 'Token Mix %'), 'Token shares, not cost: Input / Cached input / Cache write / Output (including reasoning).'));
-    for (const [key, label] of Object.entries(value.mix.display.token_categories))
-      parent.append(el('span', () => `${label}: ${display(value.mix, key)}`, 'watch-daily-category'));
-    if (!value.total.complete || !value.mix.cost_complete || value.mix.totals.some(amount => amount == null) && value.mix.request_count)
-      parent.append(el('span', 'Partial pricing / token data', 'warning'));
-    if (!value.mix.request_count) parent.append(el('span', 'No recorded usage', 'detail'));
+    parent.append(count);
+    if (!value.total.complete) parent.append(el('span', 'Partial CCost pricing', 'warning'));
+    if (value.prompt_count_complete === false) parent.append(el('span', 'Prompt count incomplete', 'warning'));
+    if (!value.total.observed_requests) parent.append(el('span', 'No recorded usage', 'detail'));
     if (state === 'unavailable') parent.append(el('span', 'Source unavailable · retained daily observation', 'warning'));
     if (waiting) parent.append(el('span', 'Daily updates delayed · retained observation, not current', 'detail'));
   }
@@ -76,9 +74,9 @@ const WatchView = (() => {
     ['Started', 'When this prompt started, in local time. Hover or focus the clock for the full date.'],
     ['Duration', 'Time spent on this prompt.\nStops advancing when work ends or updates are unavailable.'],
     ['Prompt', 'The prompt’s number within its session and a short preview of your message.'],
-    ['Model', '• Main prompt — The model shown in this column.\n• Linked subagents — May use other models; their activity is included in prompt totals.'],
+    ['Model', '• Main prompt — The model shown in this column.\n• Linked subagents — If marked *, hover, focus or tap the Model value to see their recorded models and effort.'],
     ['Effort', 'How much reasoning the model was asked to do.'],
-    ['CCost (I + E)', 'Estimated reference cost of this prompt, not your bill.\n\nI — Incoming context cost on the first model request.\nE — Other cost: output, later requests and linked subagents.\nTotal = I + E when fully priced, before display rounding.\nA displayed zero shows two zero components in this unit, even when component evidence is unavailable.\n\nN/A — Cost unavailable, not zero.\n? — Part of the cost cannot be priced.\nI is a cost here, not the Input token share.'],
+    ['CCost (I + E)', 'Estimated reference cost of this prompt, not your bill.\n\nI — Incoming context cost on the first model request.\nE — Other cost: output, later requests and linked subagents.\nTotal = I + E when fully priced, before display rounding.'],
     ['Calls', 'Model requests for this prompt, including linked subagents.\nNot tool calls.'],
     ['Token Mix %', 'Token percentages in I / C / W / O order, not cost.\n\nI — Input: new input.\nC — Cached input: reused input.\nW — Cache write: input saved for reuse.\nO — Output: generated tokens, including reasoning.\n\nN/A or running — No reliable breakdown yet. Requires recorded usage with all four categories.'],
     ['Ictx', 'Input context size on this prompt’s first request; may be estimated.\nN/A — First-request data unavailable, not zero.\nNot the next session context or a sum of requests.'],

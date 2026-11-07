@@ -94,9 +94,9 @@ at `50d88a4bcfba6c1f853607ce0ee84a5c9663c0a3`.
 | Surface / entry points | Disposition |
 | --- | --- |
 | Full Watch: all ten active/historical headings | Shared buttons; explicit I/C/W/O and I+E lines, exactly two Model bullets, concise Effort without N/A tautology, Ictx versus next context |
-| Watch: Started/Finished, Model, Calls, CCost cells | Clock text reveals real dates; accessible model star proves causal linked agents even when one model suppresses the popup. Model help requires distinct provider-qualified models. CCost/Calls share main/subagent role/model/effort/tier groups and contributing-session counts, not per-agent sections. Token Mix remains header-only; no preview popups or generic N/A help |
+| Watch: Started/Finished, Model, Calls, CCost cells | Clock text reveals real dates; accessible model star and help expose causal linked agents even for one shared model. Main-only model switches retain help without a star. Model/CCost omit tier prose without changing tier grouping/rates; Calls copy is unchanged. CCost adds distinct canonical child-prompt count before each subagent group's category bullets, separate from sessions/requests; missing boundaries stay qualified. Token Mix remains header-only; no preview popups or generic N/A help |
 | Watch: session Context/CCost and price warning | Concise shared context/cost help; severity and canonical threshold remain visible |
-| Watch: daily summary, account Today, primary/secondary quotas, exact reset | Four scoped daily text targets; Today/Capacity labels and numbers share intrinsic targets, reset clock owns exact date. Numeric inferred Capacity has `(guesstimate)`; verified native and unknown figures do not. Preserve native factual lower block |
+| Watch: daily summary, account Today, primary/secondary quotas, exact reset | Three daily targets: Today label, cost and prompt count, without daily Mix; preserve cost/count completeness and retained-source warnings. Period Capacity and nonmonthly 30-day equivalent share one intrinsic explanation. Inferred period Capacity and every numeric monthly extrapolation use `(guesstimate)`; native and unknown figures do not. Preserve native factual lower block |
 | Watch: activity and Earlier Sessions | Native disclosures retain full lists/counts; expanded activity cues explain all-call totals, red outcome subsets, missing evidence and direct skill failures without repeating lists |
 | Mini: both tables’ headings | Session names only; CCost (Total) explains prompt versus whole-session reference cost, not billing. Active-next versus historical-last-valid-next context remains distinct |
 | Mini: session title/cost and prompt/history status | FR 000608's targeted exceptions: running Session reveals its full title and canonical Prompt #; historical paired-cost value reveals that latest prompt's model/effort/duration/known calls and relevant mixed/subagent/partial/outcome facts. No row-wide popup, native title, dedicated cue or raw prompt text. Preserve selectable title, row accessible naming and confirmed unavailable/partial notes |
@@ -129,12 +129,16 @@ coverage. Headless evidence does not prove physical OS pointer/window transition
 ## Server-owned detail boundary
 
 Analysis retains canonical linked-session evidence (including links without requests) in
-the revisioned analysis cache. `reports/prompt_costs.py` groups canonically attributed
+the revisioned analysis cache. Shared `prompt_index.prompt_windows` resolves own-session
+visible/synthetic boundaries; `TraceEntry.logical_prompt_id` survives cache round trips.
+Ambiguous/missing parent boundaries remain unknown, never request-time inference.
+`reports/prompt_costs.py` retains private source/session/prompt identity sets and groups canonically attributed
 requests by session/model/effort/tier and values categories at each request's actual catalog
 tier. Unknown counters never become fabricated zero. `application/prompt_costs.py`
 combines those unrounded parts by producer role/provider/model/effort/tier before
 exporting at most 24 groups, honest omitted cost/calls, full distinct-model count and
-preformatted Credits/USD text. Missing request evidence cannot claim a full Calls sum;
+preformatted Credits/USD text, distinct prompt counts and boundary completeness only;
+raw child identities/text never reach these groups. Missing request evidence cannot claim a full Calls sum;
 the browser never prices, allocates aggregate cost or reacquires source data on hover.
 `test_prompt_cost_detail.py` owns causal scopes, same-model links, model-only switches,
 concurrent/nested work, partial telemetry/pricing, tiers, corrections and bounded detail.

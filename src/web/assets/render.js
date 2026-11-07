@@ -20,7 +20,9 @@ const ReportView = (() => {
     const scope = [quota.label, quota.period !== 'unknown' && quota.period,
       quota.duration_seconds && display(quota, 'window') + ' window',
       quota.scope !== 'account' && quota.scope, quota.model_id].filter(Boolean).join(' · ');
-    return (compact ? '' : `${display(quota, 'ccost_help')}\nCapacity: ${display(quota, 'ccost_capacity')}\n\n`) + scope + '\n' +
+    const monthly = display(quota, 'monthly_capacity');
+    return (compact ? '' : `${display(quota, 'ccost_help')}\n${display(quota, 'capacity_label')}: ${display(quota, 'ccost_capacity')}\n` +
+      (monthly ? `Monthly Capacity: ${monthly}\n${display(quota, 'monthly_capacity_help')}\n` : '') + '\n') + scope + '\n' +
       `Native Used: ${native?.used.native || view.native}\nNative Remaining: ${native?.remaining.mode === 'remaining' ? native.remaining.native : 'unknown / inapplicable'}\n` +
       (quota.limit_money != null || quota.remaining_money != null ? `Native money ${view.mode}: ${view.money} / ${display(quota, 'limit_money')}\n` : '') +
       (compact ? `CCost Used: ${display(quota, 'ccost_used')} · Capacity: ${display(quota, 'ccost_capacity')}\n${display(quota, 'ccost_brief')}\n` : '') +

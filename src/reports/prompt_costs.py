@@ -25,6 +25,8 @@ class PromptCostPart:
     complete: bool
     categories: tuple[Decimal | None, ...]
     price_tier: str = ""
+    prompt_ids: tuple[tuple[str | None, str, str], ...] = ()
+    prompts_complete: bool = False
 
 
 def _price_tier(entry, catalog):
@@ -72,5 +74,8 @@ def prompt_cost_parts(record: PromptRecord, catalog: PricingCatalog) -> tuple[Pr
             interpret_effort(variant, attributable=bool(variant)))
         result.append(PromptCostPart(session, agents[session], provider, model_id, variant,
             model, effort, len(entries), total.known_ccost, total.priced_requests, total.complete,
-            tuple(value if supported else None for value, supported in zip(amounts, known)), tier))
+            tuple(value if supported else None for value, supported in zip(amounts, known)), tier,
+            tuple(dict.fromkeys((entry.source_instance, entry.session_id, entry.logical_prompt_id)
+                for entry in entries if entry.logical_prompt_id)),
+            all(entry.logical_prompt_id is not None for entry in entries)))
     return tuple(result)

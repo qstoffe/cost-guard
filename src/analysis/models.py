@@ -44,6 +44,7 @@ class TraceEntry:
     cost_disposition: CostDisposition = CostDisposition.UNKNOWN
     source_instance: str | None = None
     account_ref: AccountRef | None = None
+    logical_prompt_id: str | None = None  # Proven own-session canonical boundary; not a request or agent ID.
 
     @property
     def request_input_approx(self) -> int:

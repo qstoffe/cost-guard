@@ -8,7 +8,7 @@ from development.tests.fixtures.session_snapshots import make_uncompacted_snapsh
 from src.analysis import analyze_snapshot
 from src.analysis.cache import AnalysisDependencies, _bundle_from_dict, _bundle_to_dict
 from src.application.live_projection import project_live
-from src.domain import ModelInvocation, ModelRef, TokenUsage
+from src.domain import EventKind, ModelInvocation, ModelRef, NormalizedEvent, TokenUsage
 from src.numbers import ccost_amount
 from src.reports.prompt_rows import PromptRowProjector
 from src.watch.models import WatchCard, WatchProjection, WatchRow
@@ -85,10 +85,11 @@ class PromptCostDetailTests(unittest.TestCase):
         waiting = self.project(without_usage)
         self.assertEqual(1, waiting.linked_agent_count)
         displayed = self.wire(waiting)["active_cards"][0]["rows"][0]["prompt"]["display"]
-        self.assertEqual("", displayed["model_detail_help"])
+        self.assertIn("1 linked subagent(s) have no recorded request usage", displayed["model_detail_help"])
         self.assertIn("1 linked subagent(s) have no recorded request usage", displayed["cost_detail_help"])
         self.assertIn("incomplete request evidence", displayed["calls_help"])
-        self.assertEqual("", self.wire(row)["active_cards"][0]["rows"][0]["prompt"]["display"]["model_detail_help"])
+        self.assertIn("Subagents — GPT Test", self.wire(row)["active_cards"][0]["rows"][0]["prompt"]["display"]["model_detail_help"])
+        self.assertEqual("cu", record.entries[-1].logical_prompt_id)
 
     def test_partial_telemetry_and_unpriced_agents_never_manufacture_category_zeroes(self):
         snapshot = make_uncompacted_snapshot()
@@ -146,7 +147,9 @@ class PromptCostDetailTests(unittest.TestCase):
         self.assertEqual(D(".028"), D(combined["known_ccost"]))
         self.assertEqual((D(".02"), D(0), D(0), D(".008")), tuple(D(value) for value in combined["categories"]))
         self.assertIn("Subagents — GPT Test · Low (2 agents): 2", displayed["display"]["calls_help"])
-        self.assertEqual("", displayed["display"]["model_detail_help"])
+        self.assertIn("Subagents — GPT Test · Low (2 agents)", displayed["display"]["model_detail_help"])
+        self.assertFalse(combined["prompts_complete"], "unparented requests cannot establish prompt boundaries")
+        self.assertEqual(0, combined["prompt_count"])
 
     def test_one_linked_agent_with_multiple_efforts_has_distinct_group_subtotals(self):
         snapshot = make_uncompacted_snapshot()
@@ -200,7 +203,8 @@ class PromptCostDetailTests(unittest.TestCase):
         unrecorded = replace(unknown, provider_id="", model_id="", model="")
         missing = self.wire(replace(row, cost_parts=(*row.cost_parts[:2], unrecorded)))
         tokens = missing["active_cards"][0]["rows"][0]["prompt"]["display"]
-        self.assertEqual("", tokens["model_detail_help"], 'missing identity is not evidence of another model')
+        self.assertIn("Unrecorded model", tokens["model_detail_help"])
+        self.assertNotIn("another-provider", tokens["model_detail_help"])
         self.assertIn("Unrecorded model", tokens["cost_detail_help"])
 
     def test_distinct_request_price_tiers_never_pool_their_rates(self):
@@ -212,6 +216,92 @@ class PromptCostDetailTests(unittest.TestCase):
         self.assertEqual(2, len(main))
         self.assertNotEqual(main[0].price_tier, main[1].price_tier)
         self.assertEqual(D("41.6002"), row.ccost)
+        displayed = self.wire(row)["active_cards"][0]["rows"][0]["prompt"]["display"]
+        for key in ("model_detail_help", "cost_detail_help"):
+            self.assertNotIn("input tokens", displayed[key])
+            self.assertNotIn("Default (", displayed[key])
+        self.assertIn("input tokens", displayed["calls_help"], "Calls help is outside the requested copy change")
+
+    def test_distinct_child_prompts_not_requests_or_agents_and_private_ids_stay_server_side(self):
+        snapshot = make_uncompacted_snapshot()
+        second = NormalizedEvent("cu2", "child", EventKind.USER_PROMPT, 1300, prov("child", "cu2"), "private prompt")
+        requests = tuple(replace(snapshot.invocations[1], invocation_id=f"child-{index}",
+            message_id=f"reply-{index}", step_part_id=f"step-{index}",
+            initiating_event_id=parent, completed_at_ms=when)
+            for index, (parent, when) in enumerate((("cu", 1250), ("cu", 1260), ("cu2", 1400))))
+
+        row = self.project(replace(snapshot, events=(*snapshot.events, second, second),
+            invocations=tuple(i for i in snapshot.invocations if i.session_id == "root") + requests))
+        wire = self.wire(row)["active_cards"][0]["rows"][0]["prompt"]
+        group = next(part for part in wire["cost_detail"]["parts"] if part["role"] == "subagents")
+
+        self.assertEqual((1, 3, 2, True), tuple(group[key] for key in ("agent_count", "calls", "prompt_count", "prompts_complete")))
+        help_text = wire["display"]["cost_detail_help"]
+        self.assertEqual(1, help_text.count("Number of prompts:"))
+        self.assertIn("(1 agent)\n• Number of prompts: 2\n• Input:", help_text)
+        self.assertIn("• Number of prompts: 2\n• Input: $", wire["display_units"]["usd"]["cost_detail_help"])
+        self.assertNotIn("prompt_ids", str(wire))
+        self.assertNotIn("cu2", str(wire))
+        self.assertNotIn("private prompt", str(wire))
+
+    def test_one_prompt_across_effort_and_price_tiers_counts_once_in_each_group(self):
+        snapshot = make_uncompacted_snapshot()
+        child = snapshot.invocations[1]
+        requests = tuple(replace(child, invocation_id=f"child-{index}", step_part_id=f"step-{index}",
+            tokens=TokenUsage(input=count, output=1000), variant=effort)
+            for index, (count, effort) in enumerate(((100000, "low"), (100001, "low"), (100001, "high"), (100000, "low"))))
+
+        row = self.project(replace(snapshot,
+            invocations=tuple(i for i in snapshot.invocations if i.session_id == "root") + requests), threshold_catalog())
+        groups = self.wire(row)["active_cards"][0]["rows"][0]["prompt"]["cost_detail"]["parts"]
+        children = [group for group in groups if group["role"] == "subagents"]
+
+        self.assertEqual(3, len(children))
+        self.assertEqual([1, 1, 1], [group["prompt_count"] for group in children])
+        self.assertTrue(all(group["prompts_complete"] for group in children))
+        self.assertEqual([2, 1, 1], [group["calls"] for group in children])
+
+    def test_nested_sessions_with_same_prompt_id_have_distinct_canonical_owners(self):
+        snapshot = make_uncompacted_snapshot()
+        nested = part("nested-task", "ca", "child", "tool", {"tool": "subagent", "state": {
+            "time": {"start": 1250, "end": 1390}, "metadata": {"sessionID": "nested"}}}, 1250)
+        messages = tuple(replace(m, parts=(*m.parts, nested)) if m.message_id == "ca" else m for m in snapshot.messages)
+        event = NormalizedEvent("cu", "nested", EventKind.USER_PROMPT, 1260, prov("nested", "cu"))
+        request = replace(snapshot.invocations[1], session_id="nested", invocation_id="nested-request",
+            message_id="nested-reply", created_at_ms=1300, completed_at_ms=1380)
+
+        row = self.project(replace(snapshot, messages=messages, events=(*snapshot.events, event),
+            sessions=(*snapshot.sessions, replace(snapshot.sessions[1], session_id="nested", parent_session_id="child")),
+            invocations=(*snapshot.invocations, request)))
+        group = self.wire(row)["active_cards"][0]["rows"][0]["prompt"]["cost_detail"]["parts"][1]
+
+        self.assertEqual((2, 2, True), (group["agent_count"], group["prompt_count"], group["prompts_complete"]))
+
+    def test_missing_and_ambiguous_prompt_boundaries_qualify_observed_count(self):
+        snapshot = make_uncompacted_snapshot()
+        extra = replace(snapshot.invocations[1], invocation_id="unknown", message_id="unknown-reply", initiating_event_id=None)
+        row = self.project(replace(snapshot, invocations=(*snapshot.invocations, extra)))
+        text = self.wire(row)["active_cards"][0]["rows"][0]["prompt"]["display"]["cost_detail_help"]
+        self.assertIn("Number of prompts: at least 1 observed (incomplete boundaries)", text)
+        missing = self.project(replace(snapshot, events=tuple(e for e in snapshot.events if e.session_id != "child")))
+        self.assertIn("Number of prompts: N/A", self.wire(missing)["active_cards"][0]["rows"][0]["prompt"]["display"]["cost_detail_help"])
+
+        # Two simultaneous prompts cannot safely own the same synthetic continuation.
+        first = NormalizedEvent("first", "child", EventKind.SUBTASK, 1210, prov("child", "first"))
+        second = replace(first, event_id="second")
+        continuation = replace(first, event_id="continuation", kind=EventKind.SYNTHETIC_CONTINUATION, created_at_ms=1220)
+        ambiguous = self.project(replace(snapshot, events=(*snapshot.events, first, second, continuation),
+            invocations=tuple(replace(i, initiating_event_id="continuation") if i.session_id == "child" else i for i in snapshot.invocations)))
+        self.assertIn("Number of prompts: N/A", self.wire(ambiguous)["active_cards"][0]["rows"][0]["prompt"]["display"]["cost_detail_help"])
+
+    def test_child_synthetic_continuation_resolves_to_one_prompt_not_another_call(self):
+        snapshot = make_uncompacted_snapshot()
+        event = NormalizedEvent("notice", "child", EventKind.BACKGROUND_COMPLETION, 1250, prov("child", "notice"))
+        extra = replace(snapshot.invocations[1], invocation_id="continued", message_id="continued-reply",
+            initiating_event_id="notice", completed_at_ms=1420)
+        row = self.project(replace(snapshot, events=(*snapshot.events, event), invocations=(*snapshot.invocations, extra)))
+        group = self.wire(row)["active_cards"][0]["rows"][0]["prompt"]["cost_detail"]["parts"][1]
+        self.assertEqual((2, 1, True), (group["calls"], group["prompt_count"], group["prompts_complete"]))
 
 
 if __name__ == "__main__":

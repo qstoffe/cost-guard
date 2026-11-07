@@ -115,7 +115,8 @@ async function main() {
       await evaluate(owner,`document.documentElement.dataset.theme='${theme==='classic'?'classic':'web'}';miniWatch.syncTheme()`);
       const cost=await interaction(owner,'.watch-active th:nth-child(6) button');
       assert.match(cost,/I — Incoming context cost on the first model request\.\nE — Other cost/);
-      assert.match(cost,/not your bill[\s\S]*N\/A[\s\S]*not zero[\s\S]*cannot be priced/);
+      assert.match(cost,/not your bill[\s\S]*Total = I \+ E when fully priced, before display rounding/);
+      assert.doesNotMatch(cost,/displayed zero|N\/A|not zero|cannot be priced|Input token share/);
       const mix=await focus(owner,'.watch-active th:nth-child(8) button');
       assert.match(mix,/I \/ C \/ W \/ O[\s\S]*I — Input[\s\S]*C — Cached[\s\S]*W — Cache write[\s\S]*O — Output[\s\S]*reasoning/);
       const model=await focus(owner,'.watch-active th:nth-child(4) button');
@@ -140,7 +141,7 @@ async function main() {
       await command('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false},owner);
       await evaluate(owner,`document.documentElement.style.zoom='${zoom}'`);
        const layout=await evaluate(owner,`(() => {const d=document.querySelector('.watch-daily');return {cues:document.querySelectorAll('.help-cue').length,targets:d.querySelectorAll('.help-value').length,overlaps:[...d.children].some((n,i)=>[...d.children].slice(i+1).some(m=>{const a=n.getBoundingClientRect(),b=m.getBoundingClientRect();return a.left<b.right&&a.right>b.left&&a.top<b.bottom&&a.bottom>b.top;})),pageOverflow:document.documentElement.scrollWidth>innerWidth};})()`);
-       assert.equal(layout.cues,0);assert.equal(layout.targets,4);
+       assert.equal(layout.cues,0);assert.equal(layout.targets,3);
       assert.equal(layout.overlaps,false);assert.equal(layout.pageOverflow,false);
        layouts.push({case:'daily-value-targets',width,zoom,...layout});
        for (const table of ['watch-active','watch-history']) {
@@ -164,8 +165,8 @@ async function main() {
     assert.equal(await evaluate(mini,`document.querySelectorAll('tbody .help-trigger,.mini-header .help-cue').length`),0);
     const heading=await focus(mini,'.mini-prompts > table th:first-child button');
      assert.equal(heading,'The name of the session.');
-     const totalHeading=await focus(mini,'.mini-prompts > table th:first-child button.mini-session-total');
-     assert.match(totalHeading,/Reference cost of the entire session/);
+     const totalHeading=await focus(mini,'.mini-prompts > table th:nth-child(2) button');
+     assert.match(totalHeading,/First: this prompt’s reference CCost[\s\S]*In parentheses: the entire session’s reference CCost/);
     assert.equal(await evaluate(mini,`document.querySelector('#context-help script')===null`),true);
     await key(mini,'Escape');
     await evaluate(owner,`miniWatch.update(liveValue)`);

@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.200 — 2026-11-07
+
+- Shared Watch/Accounts cards name factual quota periods and show separate Decimal-based 30-day Capacity guesstimates before each nonmonthly bar, or qualified N/A. Conditional empty primary rows align monthly peers only when necessary; single/all-monthly and narrow cards remain compact. Native balances, pricing and Mini presentation are unchanged.
+- Full Watch linked Model help works even for one shared model; grouped subagent cost help counts distinct canonical prompts, not agents or requests. Tier valuation/grouping stays intact without tier prose in Model/CCost help. Today retains cost, prompt count and relevant completeness/source warnings without daily Token Mix clutter.
+
 ## v80.199 — 2026-11-07
 
 - AI Stats retains a qualified observed working-time lower bound and observed session/day leaders instead of discarding usable evidence when one execution boundary or snapshot is incomplete. Missing prices/usage do not erase independent timing. Unknown averages, hourly rates, night shares, streaks and peak concurrency remain explicitly unavailable, never inferred. Explicit completed compaction-part ends recover missing message-level timing; missing native ends stay unknown. Revisioned analysis/evidence/coverage caches invalidate old semantics, with count-only local diagnosis and complete-history parity checks.

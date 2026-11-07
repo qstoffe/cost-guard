@@ -51,11 +51,15 @@ class QuotaComponent:
     # (no usage, hence no reset time); None means unknown.
     window_active: bool | None = None
     primary: bool = False  # Explicit adapter-owned comparison window, never depletion-ranked.
+    # Only explicit source conversion may establish a full-window reference limit.
+    # Native money, tokens, requests and similarly named credits do not imply this.
+    reference_ccost_capacity: Decimal | None = None
 
     def __post_init__(self) -> None:
         if self.remaining_fraction is not None and not (0 <= self.remaining_fraction <= 1):
             raise ValueError("Remaining fraction must be between 0 and 1")
-        for value in (self.used, self.limit, self.remaining, self.remaining_money, self.limit_money):
+        for value in (self.used, self.limit, self.remaining, self.remaining_money, self.limit_money,
+                      self.reference_ccost_capacity):
             if value is not None and (not value.is_finite() or value < 0):
                 raise ValueError("Native quota amounts must be finite and nonnegative")
 

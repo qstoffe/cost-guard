@@ -71,7 +71,7 @@ module.exports = function headers({command,evaluate,until,owner,mini,checks,layo
   async function matrix() {
     await evaluate(owner,`document.querySelector('.watch-earlier').open=true;miniWatch.view.earlier.hidden=false`);
     const selectors=[[owner,'.watch-active th:nth-child(3) button'],[owner,'.watch-history th:first-child button'],
-      [mini,'.mini-prompts > table th:first-child button'],[mini,'.mini-prompts > section th:first-child button.mini-session-total']];
+      [mini,'.mini-prompts > table th:first-child button'],[mini,'.mini-prompts > section th:nth-child(3) button']];
     for (const theme of ['classic','light','dark']) for (const [width,zoom] of [[1280,1],[360,1.5]]) {
       await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:theme==='dark'?'dark':'light'}]},owner);
       await command('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false},owner);
