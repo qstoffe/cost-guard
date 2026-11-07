@@ -83,7 +83,23 @@ async function main() {
           return original(url,body,...rest);};
         try{current.failed=true;await acquire(current);return attempts;}finally{api=original;}})()`);
       assert.deepEqual(retryAttempts,[true,false],'automatic admission retries cannot repeatedly clear host backoff');
-      facts.push('explicit Retry clears backoff only once across transient admission failure');
+       facts.push('explicit Retry clears backoff only once across transient admission failure');
+       const transientResult = await evaluate(`(async()=>{const original=api;
+         api=async(url,...rest)=>{const value=await original(url,...rest);
+           return url==='/api/data'?{...value,error:'source_unavailable',terminal:false}:value;};
+         try{await acquire(current,true);return {failed:current.failed,error:current.dispatchError,retry:!refresh.hidden};}
+         finally{api=original;}})()`);
+       assert.deepEqual(transientResult,{failed:false,error:null,retry:false},'a usable result supersedes a transient admission error');
+       const terminalResult = await evaluate(`(async()=>{const original=api;
+         api=async(url,...rest)=>{const value=await original(url,...rest);
+           return url==='/api/data'?{...value,error:'http_auth_failure',terminal:true}:value;};
+         try{await acquire(current,true);return {failed:current.failed,message:current.message,retry:!refresh.hidden};}
+         finally{api=original;}})()`);
+       assert.equal(terminalResult.failed,true);assert.equal(terminalResult.retry,true);
+       assert.match(terminalResult.message,/Source authentication failed/,'terminal source faults remain visible beside retained data');
+       await evaluate(`(async()=>{await acquire(current,true);return true;})()`);
+       assert.equal(await evaluate(`current.failed || !!current.dispatchError || !refresh.hidden`),false,'a new healthy lookup clears an old terminal notice');
+       facts.push('transient admission errors cannot overwrite success; terminal source faults survive until a healthy lookup');
      await fixture('invalidate'); await evaluate(`acquire(current,true);true`);
      await until(`current.loading && current.withheld && !!document.querySelector('.report-loading')`);
      await fixture('complete'); await until(`!!current.result && !current.loading && !current.withheld`);

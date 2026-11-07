@@ -186,6 +186,69 @@ class DispatcherTests(unittest.TestCase):
         dispatch.tick(identity='verified')
         self.assertEqual('verified', self.jobs.values['0']['request'].source_identity)
 
+    def test_first_observation_wait_is_typed_bounded_and_coalesces_foreground_demand(self):
+        self.dispatch.tick(identity='source', ready=False)
+        for tab in ('first', 'second'):
+            self.dispatch.interest(tab, 'models', True, self.models)
+            lookup = self.dispatch.lookup(self.models)
+            self.assertIsNone(lookup['id'])
+            self.assertEqual('source_starting', lookup['error'])
+            self.assertFalse(lookup['terminal'])
+        self.assertEqual({}, self.jobs.values)
+        self.now += 119
+        self.dispatch.tick(ready=False)
+        self.assertEqual('source_starting', self.dispatch.lookup(self.models)['error'])
+        self.dispatch.interest('first', 'models', True, self.models)
+
+        self.dispatch.tick(ready=True)
+
+        self.assertEqual(1, len(self.jobs.values))
+        self.assertEqual(ReportKind.NORMAL, self.jobs.values['0']['request'].kind)
+        self.assertIsNone(self.dispatch.lookup(self.models)['error'])
+        self.assertFalse(self.dispatch.warm_allowed)
+        self.dispatch.tick(ready=False)
+        self.now += 120
+        self.dispatch.tick(ready=False)
+        lookup = self.dispatch.lookup(self.models)
+        self.assertTrue(lookup['terminal'])
+        self.assertEqual('source_wait_timeout', lookup['error'])
+        self.assertEqual('cancelled', self.jobs.values['0']['status'])
+
+    def test_http_handshake_matrix_preserves_temporary_and_terminal_source_evidence(self):
+        from src.web.dispatch_http import handle
+        for selected, identity, observed in ((False, '', False), (True, '', False),
+                (True, 'source', False), (True, 'source', True)):
+            with self.subTest(selected=selected, identity=identity, observed=observed):
+                jobs = RecordingJobs()
+                dispatcher = DataDispatcher(jobs)
+                dispatcher.tick(identity=identity, ready=observed)
+                replies = []
+                startup = SimpleNamespace(report_status=lambda: dict(ready=selected,
+                    error=None if selected else 'source_starting', retryable=not selected))
+                handler = SimpleNamespace(path='/api/data', server=SimpleNamespace(lifecycle=SimpleNamespace(
+                    dispatcher=dispatcher, source_startup=startup)),
+                    reply=lambda status, body: replies.append((status, body)))
+                handle(handler, {'request': {'kind': 'normal'}, 'retry': False})
+                status, body = replies[-1]
+                self.assertEqual(200 if observed else 503, status)
+                if observed:
+                    self.assertIsNotNone(body['id'])
+                    self.assertIsNone(body['error'])
+                else:
+                    self.assertEqual({'error': 'source_starting', 'retryable': True}, body)
+                    self.assertEqual({}, jobs.values)
+        for error in ('http_auth_failure', 'source_permission_denied', 'unsupported_schema',
+                'unsupported_version', 'registration_invalid', 'source_identity_changed'):
+            with self.subTest(error=error):
+                self.dispatch.tick(ready=False, error=error, terminal=True)
+                replies = []
+                handler = SimpleNamespace(path='/api/data', server=SimpleNamespace(lifecycle=SimpleNamespace(
+                    dispatcher=self.dispatch)), reply=lambda status, body: replies.append((status, body)))
+                handle(handler, {'request': {'kind': 'normal'}, 'retry': False})
+                self.assertEqual(200, replies[-1][0])
+                self.assertEqual(error, replies[-1][1]['error'])
+                self.assertTrue(replies[-1][1]['terminal'])
+
     def test_coalesced_stats_scope_uses_highest_interested_priority(self):
         foreground = ReportRequest(ReportKind.AI_STATS, stats_scope='7-days')
         inactive = ReportRequest(ReportKind.AI_STATS)

@@ -15,6 +15,17 @@ guards. No finite admission precedes a pinned source identity and the first heal
 Live frame publication. The browser sends
 interest and reads publications, not refresh due times.
 
+FR 000622 / v80.202 distinguishes source selection from first-Live readiness:
+an identity-bearing dispatcher with no healthy observation or source fault reports
+`source_starting`, not `source_unavailable`. No finite job is admitted in that
+interval. The existing 120-second host bound ends with `source_wait_timeout`;
+actual source error codes/terminal evidence remain authoritative. Browser admission
+uses finite exponential backoff (eight retries, capped at four seconds each),
+including legacy `source_unavailable` only with explicit `retryable:true`.
+Only a current terminal dispatcher error can accompany a usable retained result
+as failure feedback; transient errors cannot poison successful publication, and
+each new acquisition clears the prior attempt's dispatcher notice.
+
 Watch/Mini/Accounts retain their existing single Live/account owners. Settings does
 not acquire history. Finite services own separate source instances and no account
 providers. The host enables inactive Sessions warming only after incomplete

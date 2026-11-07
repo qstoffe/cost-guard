@@ -51,6 +51,9 @@ async function main() {
   }
   assert.equal(L.retryable(Object.assign(new Error('connection_refused'),{retryable:true})),true);
   assert.equal(L.retryable(new Error('connection_refused')),false);
+  assert.equal(L.retryable(Object.assign(new Error('source_unavailable'),{retryable:true})),true);
+  assert.equal(L.retryable(Object.assign(new Error('source_unavailable'),{retryable:false})),false);
+  assert.equal(L.retryable(new Error('source_unavailable')),false);
   const cancelled=new L.Attempt(()=>now), wait=cancelled.pause(4000);
   cancelled.cancel(); await assert.rejects(wait,/cancelled/); assert.equal(timers.size,0);
   const unavailable=new L.Attempt(()=>now);
@@ -58,6 +61,12 @@ async function main() {
     const wait=unavailable.backoff(new Error('source_starting')); runTimer(); await wait;
   }
   await assert.rejects(unavailable.backoff(new Error('source_starting')),/source_wait_timeout/);
+  const legacy=new L.Attempt(()=>now,true);
+  for(let index=0;index<8;index++) {
+    const wait=legacy.backoff(Object.assign(new Error('source_unavailable'),{retryable:true}));
+    runTimer();await wait;
+  }
+  await assert.rejects(legacy.backoff(Object.assign(new Error('source_unavailable'),{retryable:true})),/source_wait_timeout/);
   const expired=new L.Attempt(()=>now); now+=120000;
   assert.throws(()=>expired.check({writable:true}),/report_timeout/);
   const resumable=new L.Attempt(()=>now,true); now+=600000;

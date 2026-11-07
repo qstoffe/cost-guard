@@ -114,7 +114,7 @@ const ReportLoading = (() => {
     'connection_reset', 'connection_disconnected', 'connection_timeout', 'http_status_failure'];
   function retryable(error) {
     return ['busy', 'source_starting'].includes(error.message) ||
-      error.retryable === true && transient.includes(error.message);
+      error.retryable === true && (error.message === 'source_unavailable' || transient.includes(error.message));
   }
   function interrupted(host) {
     return host.terminal || ['offline', 'stopped', 'identity_changed', 'authorization_required'].includes(host.kind);
