@@ -1,8 +1,74 @@
 # Shared Web and Mini contextual help
 
-Current grouping/freshness follow-up: **FR 000601 / v80.177**, recorded below. The FR 000582
+Current grouping/capacity follow-up: **FR 000620 / v80.200**, recorded below. The FR 000582
 inventory and evidence here are historical; removed preview/row/freshness cues are
 not current UI recommendations. Current writing/placement policy lives in the module contract.
+
+## FR 000620: logical prompts and shared capacity comparison (2026-11-07)
+
+Base `928f227`. Shared canonical `prompt_windows` now resolves each physical request's
+own-session parent to a real logical prompt, including supported synthetic continuations.
+Missing/ambiguous boundaries remain unknown; no call/agent/time heuristic substitutes
+for a child prompt. The revisioned analysis cache retains the identity. Report parts
+deduplicate private source/session/prompt sets per model/effort/tier, and the bounded
+Web group exports only count/completeness. Subagent cost sections begin with that count
+or a qualified lower bound/N/A; main sections do not gain the bullet. Same-model linked
+work opens Model help, with unreported fields honest. Only Model/CCost tier prose is
+removed; tier valuation/grouping, Calls help, numeric I/E and CLI totals remain intact.
+
+One Python Decimal calculator supplies factual period Capacity and a separate
+standardized 30-day comparison. Numeric extrapolations are always guesstimates;
+unprovable recurrence/duration/reference basis, stale/expired/inactive/contradictory or
+incomplete evidence yields N/A with a reason. An optional explicit source-verified
+reference limit supports a genuinely compatible fixed weekly capacity without
+guessing conversion from money, requests, tokens or similarly named credits. No adapter
+fabricates that evidence. Monthly native windows keep one original Capacity line.
+
+The existing AccountCards component is the full-size contract on both Watch/Accounts,
+not two similar renderers. Responsive same-row peers reserve an empty aria-hidden,
+unfocusable monthly spacer only beside an actual extra primary Capacity line. A grid
+ResizeObserver and membership/period updates recalculate this without destroying
+unchanged progress/help nodes. Each real secondary quota has its own monthly line;
+no fake secondary rows. Mini's compact two-fact quota help and layout remain unchanged.
+Full Watch Today retains cost/count, completeness and source indicators without daily
+Token Mix categories; canonical mix data and other surfaces retain their original data.
+
+Evidence and limits:
+
+- Final local Full: 155 isolated files, zero failures/errors, 105.3s, including the
+  added independent daily-export preservation case. One existing zsh/PTY test is
+  skipped on Windows; native macOS CI owns that execution.
+- Working-tree validator: 11 passes, zero failures, six existing advisory prose/design
+  warnings; no cap/baseline was increased.
+- Hidden Edge `156.0.4314.58`: shared-route parity and conditional primary alignment
+  passed 96 width/zoom/theme/scenario combinations (360/800/1280/1920, 100/125%,
+  Classic/Web light/dark, mixed 3+, single/all-monthly and period changes). Ordered
+  text, primary/secondary help/lines, ARIA and no horizontal overflow were checked.
+  Account identity/focus/selection, one SSE, no route jobs and stale/empty/recovery
+  passed in the final complete Accounts driver together with actual Document PiP
+  quota compatibility, Used/Remaining/USD, idle/ratio updates and terminal host SSE.
+  The final v80.200 light/1200 screenshot was inspected.
+- Watch-only shared-help audit passed in hidden Edge with actual Document PiP:
+  same-model linked effort help, prompt-count-first category bullets, both tables,
+  retained hover/keyboard/touch/Escape behavior, bounded long groups and 241 virtual
+  seconds of stable totals. This is not an unrelated report-route audit.
+- Existing probe assumptions were repaired, not waived: current separate Mini
+  headings/paired-cost targets and compact two-fact quota help replace retired
+  selectors/copy. Alignment measurements now wait two animation frames after viewport
+  changes. The expanded Accounts driver explicitly restores its Remaining/USD
+  prerequisites after the compact subprobe restores defaults; all assertions remain.
+- Read-only real V2 installation: three accounts, one Live/account-refresh owner,
+  advancing publication, ten initiating daily prompts / 402 requests, complete pricing
+  and reconciled category costs; 14.7421s total, no final owned threads/processes or
+  cleanup failures. The probe initiated no model calls and left shared OpenCode running.
+- Integrated browser was disconnected; the Decision Delegate authorized bounded
+  normal-guarded hidden Edge discovery/execution, not a permission grant or test waiver.
+  The normal invocation ran without an approval prompt. No visible desktop/login or
+  personal browser profile was used. Browser synthetic groups prove child cases;
+  the live observation is not proof of every provider, child boundary or quota duration.
+- Headless input/layout is not physical OS, assistive-technology, macOS or other-engine
+  proof. No requirement/test exception, ZIP, tag or GitHub Release is introduced.
+  Compact durable evidence: `development/architecture/governance/verification/web-capacity-620.json`.
 
 ## FR 000601: grouped request detail and stable totals (2026-11-06)
 

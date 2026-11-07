@@ -288,7 +288,7 @@ p.warning { border-left: 3px solid var(--warn); padding: .65rem .85rem; backgrou
 .live-account-cards .account-card p { margin-block: var(--space-2); }
 .live-account-cards .quota-summary { padding-block: var(--space-2); }
 .account-grid.watch-account-grid { grid-template-columns: repeat(auto-fit, minmax(0, min(100%, var(--watch-account-width, 448px)))); justify-content: start; }
-.live-account-cards .watch-subscription { display: grid; grid-template-rows: subgrid; grid-row: span 7;
+.live-account-cards .watch-subscription { display: grid; grid-template-rows: subgrid; grid-row: span var(--watch-card-rows, 7);
   gap: .25rem; max-width: var(--watch-account-width, 448px); min-width: 0; padding: 0 0 .8rem; text-align: left; overflow-wrap: anywhere; }
 .watch-subscription > h4 { overflow-wrap: anywhere; text-align: center; padding: .43rem .9rem;
   background: var(--accent-soft); color: var(--accent); font-weight: 750; border-bottom: 1px solid var(--line);
@@ -310,7 +310,6 @@ p.warning { border-left: 3px solid var(--warn); padding: .65rem .85rem; backgrou
 .watch-subscription progress::-webkit-progress-value { background: currentColor; border-radius: 2px; }
 .watch-subscription progress::-moz-progress-bar { background: currentColor; border-radius: 2px; }
 .watch-daily { display: flex; align-items: baseline; flex-wrap: wrap; gap: .25rem 1rem; font-size: .85rem; box-shadow: none; margin-bottom: 4px; }
-.watch-daily-category { white-space: nowrap; }
 .watch-session-summary { margin-top: .25rem; color: var(--ink); font-size: .9rem; white-space: normal; overflow-wrap: anywhere; }
 .watch-session-summary > div + div { margin-top: .15rem; }
 .watch-warning-icon { display: inline-block; width: 1em; margin-inline-end: .3em; vertical-align: -.15em; }

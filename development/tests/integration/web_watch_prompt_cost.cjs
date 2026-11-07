@@ -37,7 +37,8 @@ for (const [unit, expected] of [['credits', credits], ['usd', usd], ['credits', 
     assert.equal(button['aria-describedby'], 'context-help');
     assert.equal(button.title, undefined, 'no overlapping native title');
     assert.ok(button.events.focus && button.events.click && button.events.pointerenter);
-    assert.match(explanation, /not your bill[\s\S]*I — Incoming context cost on the first model request\.[\s\S]*E — Other cost[\s\S]*linked subagents[\s\S]*fully priced[\s\S]*rounding[\s\S]*N\/A[\s\S]*not zero[\s\S]*cannot be priced[\s\S]*not the Input token share/);
+    assert.match(explanation, /not your bill[\s\S]*I — Incoming context cost on the first model request\.[\s\S]*E — Other cost[\s\S]*linked subagents[\s\S]*fully priced[\s\S]*rounding/);
+    assert.doesNotMatch(explanation, /displayed zero|N\/A|not zero|cannot be priced|Input token share/);
   }
 }
 assert.equal(JSON.stringify(input), canonical, 'zero display never rewrites raw costs, calls or component evidence');

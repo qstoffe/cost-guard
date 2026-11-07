@@ -24,6 +24,8 @@ def grouped_parts(parts):
             model=first.model, effort=first.effort, price_tier=tier,
             qualify_model=len(identities[first.model or model_id]) > 1,
             agent_count=len({item.session_id for item in items if item.agent and item.session_id}),
+            prompt_count=len({identity for item in items for identity in item.prompt_ids}),
+            prompts_complete=all(item.prompts_complete for item in items),
             calls=sum(item.calls for item in items),
             known_ccost=sum((item.known_ccost for item in items), Decimal(0)),
             priced_requests=sum(item.priced_requests for item in items),
@@ -63,19 +65,26 @@ def detail_tokens(values):
             identity += f" [{part['provider_id']}/{part['model_id']}]"
         if part["effort"] and part["effort"] != "N/A":
             identity += " · " + part["effort"]
-        if part["price_tier"]:
-            identity += " · " + part["price_tier"]
         heading = owner + " — " + identity
+        call_heading = heading + (" · " + part["price_tier"] if part["price_tier"] else "")
         if part["role"] == "subagents" and part["agent_count"]:
-            heading += f" ({part['agent_count']} agent{'s' if part['agent_count'] != 1 else ''})"
-        models.append(heading + f"\n  {part['provider_id']}/{part['model_id']}")
-        calls.append(f"{heading}: {part['calls']}")
+            agents = f" ({part['agent_count']} agent{'s' if part['agent_count'] != 1 else ''})"
+            heading += agents
+            call_heading += agents
+        models.append(heading + (f"\n  {part['provider_id']}/{part['model_id']}" if part['provider_id'] and part['model_id'] else
+            "\n  Provider/model identity unrecorded") + ("\n  Effort unreported" if part["effort"] in {None, "", "N/A"} else ""))
+        calls.append(f"{call_heading}: {part['calls']}")
+        lines = [heading]
+        if part["role"] == "subagents":
+            count = str(part["prompt_count"]) if part["prompts_complete"] else (
+                f"at least {part['prompt_count']} observed (incomplete boundaries)" if part["prompt_count"] else
+                "N/A — prompt boundaries unrecorded")
+            lines.append("• Number of prompts: " + count)
         if not part["priced_requests"]:
-            sections.append(heading + "\nCost unavailable — no reference price for recorded usage.\n"
+            sections.append("\n".join(lines) + "\nCost unavailable — no reference price for recorded usage.\n"
                 + "\n".join(f"• {label}: N/A" for label in ("Input", "Cached input", "Cache write", "Output"))
                 + "\nSubtotal: N/A")
             continue
-        lines = [heading]
         for label, amount in zip(("Input", "Cached input", "Cache write", "Output"), part["categories"]):
             lines.append(f"• {label}: {ccost_amount(None if amount is None else Decimal(amount))}")
         lines.append("Subtotal: " + ccost_amount(Decimal(part["known_ccost"]), unresolved=not part["complete"]))
@@ -107,5 +116,5 @@ def detail_tokens(values):
         calls.append(("Total Calls: " if detail["calls_complete"] else "Observed Calls (incomplete request evidence): ")
             + str(detail["observed_calls"]))
     return {"cost_detail_help": "\n\n".join(sections),
-            "model_detail_help": model_help if detail["model_count"] > 1 else "",
+            "model_detail_help": model_help if detail["model_count"] > 1 or linked else "",
             "calls_help": "\n".join(calls) if detail["group_count"] > 1 or linked and calls else ""}

@@ -13,7 +13,7 @@ from src.domain.acquisition import AcquisitionMetrics
 
 from .models import CompactionRecord, PromptRecord, RootAnalysisBundle, TraceEntry
 
-ANALYSIS_ALGORITHM_VERSION = "v78-analysis-17-native-compaction-end"
+ANALYSIS_ALGORITHM_VERSION = "v78-analysis-18-logical-prompt-boundaries"
 _CACHE_NAMESPACE = "derived-analysis"
 
 
@@ -59,6 +59,7 @@ def _trace_to_dict(entry: TraceEntry) -> dict[str, Any]:
         "cost_disposition": entry.cost_disposition.value,
         "source_instance": entry.source_instance,
         "account_ref": _flat_fields(entry.account_ref) if entry.account_ref else None,
+        "logical_prompt_id": entry.logical_prompt_id,
     }
 
 
@@ -82,6 +83,7 @@ def _trace_from_dict(data: Mapping[str, Any]) -> TraceEntry:
         cost_disposition=CostDisposition(str(data.get("cost_disposition", "unknown"))),
         source_instance=data.get("source_instance"),
         account_ref=AccountRef(**data["account_ref"]) if data.get("account_ref") else None,
+        logical_prompt_id=data.get("logical_prompt_id"),
     )
 
 

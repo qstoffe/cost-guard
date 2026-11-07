@@ -62,9 +62,11 @@ def summary_watch():
             PromptCostPart('root', 0, 'fixture', 'main-model', 'high', 'Main Model', 'High',
                 2, D(25), 2, True, (D(8), D(2), D(1), D(14))),
             PromptCostPart('child', 1, 'fixture', 'child-model', 'low', 'Child Model', 'Low',
-                1, D(8), 1, True, (D(3), D(1), D(0), D(4))),
+                1, D(8), 1, True, (D(3), D(1), D(0), D(4)),
+                prompt_ids=(('fixture', 'child', 'child-prompt'),), prompts_complete=True),
             PromptCostPart('nested', 2, 'fixture', 'child-model', 'low', 'Child Model', 'Low',
-                1, D(0), 1, True, (D(0), D(0), D(0), D(0)))))
+                1, D(0), 1, True, (D(0), D(0), D(0), D(0)),
+                prompt_ids=(('fixture', 'nested', 'nested-prompt'),), prompts_complete=True)))
     guidance = WatchContextGuidance("prompt", 120000, "[Price threshold >100.0K exceeded]",
         PriceWarningSeverity.EXCEEDED, D("2.4"), D(2), D(12))
     tool = ToolObservation(tool_counts=(("shell", 2), ("read", 1)), failed_count=1,
@@ -95,3 +97,11 @@ def many_cost_groups(frame):
     prompt = replace(row.prompt, cost_parts=parts, linked_agent_count=29,
         calls=60, ccost=D(750), incoming_context_ccost=D(8), extra_ccost=D(742))
     return replace(frame, active_cards=(replace(card, rows=(replace(row, prompt=prompt),)),))
+
+
+def same_model_groups(frame):
+    """Single-model linked work must still export actual main/child effort help."""
+    card = frame.active_cards[0]
+    row = card.rows[0]
+    parts = tuple(replace(part, model_id='main-model', model='Main Model') for part in row.prompt.cost_parts)
+    return replace(frame, active_cards=(replace(card, rows=(replace(row, prompt=replace(row.prompt, cost_parts=parts)),)),))

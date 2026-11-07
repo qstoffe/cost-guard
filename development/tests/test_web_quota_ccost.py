@@ -8,12 +8,82 @@ from src.accounts.claude_code import normalize_claude_usage
 from src.analysis.valuation import ComparisonCost
 from src.application.display import with_display
 from src.application.projection import account
+from src.application.quota_ccost import quota_ccost_tokens
 from src.application.watch_accounts import watch_account, watch_quota
 from src.domain import QuotaComponent
 from src.reports.models import QuotaPeriodProjection
+from src.numbers import ccost_amount
 
 
 class WebQuotaCCostTests(unittest.TestCase):
+    def test_factual_labels_and_decimal_thirty_day_equivalents_in_both_units(self):
+        for duration, used, fraction, label, capacity, monthly in (
+                (18000, 100, '.9', '5-hour Capacity', '1000', D(144000)),
+                (604800, 840, '0', 'Weekly Capacity', '840', D(3600)),
+                (86400, 1, '.9', 'Daily Capacity', '10', D(300)),
+                (604800, 1, '.7', 'Weekly Capacity', None, D(100) / D(7))):
+            quota = QuotaComponent('arbitrary plan name', 'rolling', remaining_fraction=D(fraction),
+                duration_seconds=duration, reset_at_ms=20000)
+            wire = with_display(watch_quota(quota, QuotaPeriodProjection(quota, ComparisonCost(D(used), 1, 1), None)),
+                now_ms=1000).to_json()['quota']
+            with self.subTest(duration=duration, fraction=fraction):
+                self.assertEqual(label, wire['display']['capacity_label'])
+                self.assertEqual(ccost_amount(monthly) + ' (guesstimate)', wire['display']['monthly_capacity'])
+                self.assertEqual(f'${monthly / 100:.2f} (guesstimate)', wire['display_units']['usd']['monthly_capacity'])
+                self.assertIn('2,592,000', wire['display']['monthly_capacity_help'])
+                self.assertIn('never add', wire['display']['monthly_capacity_help'])
+                if capacity:
+                    self.assertEqual(capacity + ' (guesstimate)', wire['display']['ccost_capacity'])
+
+    def test_source_verified_fixed_weekly_reference_capacity_is_still_extrapolated_as_guesstimate(self):
+        quota = QuotaComponent('Weekly', 'fixed', duration_seconds=604800, reset_at_ms=20000,
+            reference_ccost_capacity=D(840), unit='requests', used=D(1), limit=D(100))
+        wire = with_display(watch_quota(quota), now_ms=1000).to_json()['quota']['display']
+        self.assertEqual(('native', '840', '3600 (guesstimate)'),
+            (wire['capacity_basis'], wire['ccost_capacity'], wire['monthly_capacity']))
+        self.assertIn('Source-verified', wire['ccost_help'])
+        unverified = with_display(watch_quota(replace(quota, reference_ccost_capacity=None)), now_ms=1000).to_json()['quota']['display']
+        self.assertEqual('N/A', unverified['monthly_capacity'], 'requests and native money are not reference credits')
+
+    def test_native_monthly_is_one_capacity_even_when_original_is_ratio_estimated(self):
+        for provider in ('github-copilot', 'other'):
+            quota = QuotaComponent('Monthly', 'fixed', used=D(10), limit=D(100), unit='AI credits', reset_at_ms=20000)
+            wire = with_display(watch_quota(quota, QuotaPeriodProjection(quota, ComparisonCost(D(2), 1, 1), None),
+                provider_id=provider), now_ms=1000).to_json()['quota']['display']
+            self.assertEqual(('Monthly Capacity', '', ''),
+                (wire['capacity_label'], wire['monthly_capacity'], wire['monthly_capacity_help']))
+            self.assertEqual('100' if provider == 'github-copilot' else '20 (guesstimate)', wire['ccost_capacity'])
+        unknown = with_display(watch_quota(QuotaComponent('Monthly plan', 'unknown')), now_ms=1000).to_json()['quota']['display']
+        self.assertEqual(('Capacity', 'N/A'), (unknown['capacity_label'], unknown['monthly_capacity']))
+
+    def test_unprovable_monthly_equivalents_are_na_with_specific_reasons(self):
+        base = QuotaComponent('5-hour', 'rolling', remaining_fraction=D('.9'), duration_seconds=18000, reset_at_ms=20000)
+        cost = ComparisonCost(D(100), 2, 2)
+        for quota, observed, availability, reason in (
+                (replace(base, duration_seconds=None), cost, 'available', 'duration'),
+                (replace(base, duration_seconds=0), cost, 'available', 'duration'),
+                (replace(base, period='unknown'), cost, 'available', 'duration'),
+                (replace(base, origin='inferred'), cost, 'available', 'duration'),
+                (replace(base, unlimited=True), cost, 'available', 'finite'),
+                (replace(base, window_active=False), cost, 'available', 'active'),
+                (replace(base, reset_at_ms=None), cost, 'available', 'active'),
+                (replace(base, reset_at_ms=20000000), cost, 'available', 'active'),
+                (replace(base, reset_at_ms=1000), cost, 'available', 'expired'),
+                (replace(base, used=D(101), limit=D(100)), cost, 'available', 'Contradictory'),
+                (replace(base, used=D(10), remaining=D(95), limit=D(100)), cost, 'available', 'Contradictory'),
+                (replace(base, used=D(10), remaining_fraction=D('.8'), limit=D(100)), cost, 'available', 'Contradictory'),
+                (base, cost, 'stale', 'stale'), (base, cost, 'error', 'unavailable'),
+                (base, None, 'available', 'compatible'),
+                (base, ComparisonCost(D(100), 3, 2), 'available', 'incomplete'),
+                (base, ComparisonCost(D(0), 2, 0), 'available', 'incomplete')):
+            tokens = with_display(watch_quota(quota, QuotaPeriodProjection(quota, observed, None),
+                availability=availability), now_ms=1000).to_json()['quota']['display']
+            with self.subTest(quota=quota, availability=availability, reason=reason):
+                self.assertEqual('N/A', tokens['monthly_capacity'])
+                self.assertIn(reason, tokens['monthly_capacity_help'])
+        values = dict(dict(watch_quota(base, QuotaPeriodProjection(base, cost, None)).fields)['quota'].fields)
+        self.assertEqual('N/A', quota_ccost_tokens({**values, 'remaining_fraction': '1.1'}, 1000)['monthly_capacity'])
+
     def test_ratio_uses_raw_fraction_and_formats_both_units_only_at_the_end(self):
         quota = QuotaComponent('5-hour', 'rolling', remaining_fraction=D('.9'),
             duration_seconds=18000, reset_at_ms=20000)

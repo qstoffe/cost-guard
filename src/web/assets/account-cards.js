@@ -24,7 +24,9 @@ const AccountCards = (() => {
     ReportView.bind(label, () => label.className = 'watch-quota-summary metric-value' + (view().exhausted ? ' watch-quota-exhausted' : ''));
     label.append(el('span', () => ` (${display(quota(), 'ccost_' + view().mode)})`, 'watch-period-cost'));
     const capacity = el('div', undefined, 'watch-quota-capacity metric-value');
-    capacity.append(ContextHelp.value(el('span', () => 'Capacity: ' + display(quota(), 'ccost_capacity')), () => ReportView.quotaHelp(quota())));
+    capacity.append(ContextHelp.value(el('span', () => display(quota(), 'capacity_label') + ': ' + display(quota(), 'ccost_capacity')), () => ReportView.quotaHelp(quota())));
+    const monthly = display(quota(), 'monthly_capacity') ? el('div',
+      () => 'Monthly Capacity: ' + display(quota(), 'monthly_capacity'), 'watch-monthly-capacity metric-value') : null;
     if (quota().quota_display?.used.note || quota().quota_display?.remaining.note)
       label.append(el('span', () => view().note ? ' · ' + view().note : '', 'warning'));
     const track = el('div', undefined, 'watch-quota-track');
@@ -38,7 +40,7 @@ const AccountCards = (() => {
       });
       track.append(bar);
     } else track.append(el('span', () => quota().unlimited ? 'No usage limit' : 'Usage unavailable', 'detail'));
-    return [label, capacity, track];
+    return [label, capacity, ...(monthly ? [monthly] : []), track];
   }
   function quotaDetails(parent, value) {
     const reset = el('p', undefined, 'detail'), clock = el('span', () => display(value(), 'watch_reset')); reset.append(clock);
@@ -66,7 +68,16 @@ const AccountCards = (() => {
       [item.ccost_account_unknown ? 'CCost account attribution unavailable' : '', 'detail']].filter(([text]) => text);
   }
   class Subscription {
-    constructor() { this.root = el('section', undefined, 'account-card watch-subscription'); }
+    constructor() {
+      this.root = el('section', undefined, 'account-card watch-subscription');
+      this.spacer = el('div', undefined, 'watch-capacity-spacer'); this.spacer.setAttribute('aria-hidden', 'true');
+    }
+    align(extra) {
+      const monthly = !display(this.value.primary.quota, 'monthly_capacity');
+      if (extra && monthly && this.spacer.parentNode !== this.root) this.root.insertBefore(this.spacer, this.primaryTrack);
+      if ((!extra || !monthly) && this.spacer.parentNode) this.spacer.remove();
+      this.root.style.setProperty('--watch-card-rows', extra ? '8' : '7');
+    }
     draw() {
       const item = () => this.value;
       ReportView.bind(this.root, () => {
@@ -87,7 +98,8 @@ const AccountCards = (() => {
         group.append(...quotaTrack(value)); quotaDetails(group, value); secondary.append(group);
       });
       if (item().secondary.length) this.lower.append(secondary);
-      this.root.replaceChildren(el('h4', () => item().observation.label), cost, ...quotaTrack(() => item().primary), primary);
+      const track = quotaTrack(() => item().primary); this.primaryTrack = track.at(-1);
+      this.root.replaceChildren(el('h4', () => item().observation.label), cost, ...track, primary);
       this.warningSignature = null;
     }
     update(value) {
@@ -99,7 +111,8 @@ const AccountCards = (() => {
       const shape = JSON.stringify([value.primary, ...value.secondary].map(q => [q.quota.label,
         q.quota.period, q.quota.scope, q.quota.model_id, q.quota.unlimited, q.used_fraction != null,
         q.quota.reset_at_ms != null, Boolean(q.pace), q.restricted,
-        Boolean(q.quota.quota_display?.used.note || q.quota.quota_display?.remaining.note)]));
+        Boolean(q.quota.quota_display?.used.note || q.quota.quota_display?.remaining.note),
+        Boolean(display(q.quota, 'monthly_capacity'))]));
       if (shape !== this.shape) { this.draw(); this.shape = shape; }
       const lines = warnings(value), warningSignature = JSON.stringify(lines);
       if (warningSignature !== this.warningSignature) {
@@ -120,6 +133,7 @@ const AccountCards = (() => {
       this.cards = new Map();
       this.message = el('p'); this.message.setAttribute('role', 'status');
       this.grid = el('div', undefined, 'account-grid watch-account-grid');
+      if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => this.align()).observe(this.grid);
       physicalWidth(this.root);
       this.update({});
     }
@@ -127,6 +141,18 @@ const AccountCards = (() => {
       if (this.root.parentNode !== parent) {
         ReportView.syncUnits(this.root);
         parent.replaceChildren(this.root);
+        this.align();
+      }
+    }
+    align() {
+      // Only comparison peers on the same responsive grid row need a blank slot.
+      const template = typeof getComputedStyle === 'function' ? getComputedStyle(this.grid).gridTemplateColumns : '';
+      const columns = template && template !== 'none' ? template.trim().split(/\s+/).length : this.cards.size || 1;
+      const cards = [...this.cards.values()];
+      for (let index = 0; index < cards.length; index += columns) {
+        const peers = cards.slice(index, index + columns);
+        const extra = peers.some(card => Boolean(display(card.value.primary.quota, 'monthly_capacity')));
+        for (const card of peers) card.align(extra);
       }
     }
     update(view) {
@@ -141,6 +167,8 @@ const AccountCards = (() => {
           const card = this.cards.get(key); card.update(item); wanted.push(card.root);
         }
         for (const key of this.cards.keys()) if (!keep.has(key)) this.cards.delete(key);
+        // Keep responsive row membership in publication order, including reorders.
+        this.cards = new Map(view.accounts.accounts.map(item => [item.observation.id, this.cards.get(item.observation.id)]));
         for (const node of [...this.grid.children]) if (!wanted.includes(node)) node.remove();
         wanted.forEach((node, index) => {
           if (this.grid.children[index] !== node) this.grid.insertBefore(node, this.grid.children[index] || null);
@@ -155,6 +183,7 @@ const AccountCards = (() => {
       if (!this.cards.size) this.grid.remove();
       if (message && this.message.parentNode !== this.root) this.root.append(this.message);
       if (!message) this.message.remove();
+      this.align();
     }
   }
   return {View};

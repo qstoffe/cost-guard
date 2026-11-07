@@ -56,6 +56,20 @@ def project(entries, mapping, *, now=1000, day=0):
 
 
 class WatchDailyTests(unittest.TestCase):
+    def test_today_cleanup_retains_canonical_mix_and_independent_completeness_for_other_surfaces(self):
+        frame = summary_watch()
+        usage = replace(frame.daily_usage, prompt_count_complete=False,
+            total=replace(frame.daily_usage.total, priced_requests=0))
+
+        wire = project_live(replace(frame, daily_usage=usage, daily_state='unavailable')).to_json()
+
+        self.assertEqual((37, False, 'unavailable'),
+            (wire['daily_usage']['prompt_count'], wire['daily_usage']['prompt_count_complete'], wire['daily_state']))
+        self.assertEqual(('34', 100, 0, False), tuple(wire['daily_usage']['total'][key]
+            for key in ('known_ccost', 'observed_requests', 'priced_requests', 'complete')))
+        self.assertEqual([5000, 3000, 1000, 1000], wire['daily_usage']['mix']['totals'])
+        self.assertIn('token_categories', wire['daily_usage']['mix']['display'])
+
     def test_full_population_per_request_tiers_and_causal_prompt_count(self):
         records = tuple(entry(str(index), 100 + index, session=f"session-{index // 2}", model="tier" if index % 2 else "priced")
                         for index in range(24))
