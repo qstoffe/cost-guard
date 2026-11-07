@@ -1,4 +1,4 @@
-# Models pricing refresh and compact Mini help
+# Models pricing refresh, toolbar presentation and compact Mini help
 
 Source revision: 50d88a4bcfba6c1f853607ce0ee84a5c9663c0a3
 Checked revision: 50d88a4bcfba6c1f853607ce0ee84a5c9663c0a3
@@ -6,6 +6,62 @@ Last checked: 2026-11-06
 Status: current
 
 ## Summary
+
+### Toolbar alignment — FR 000618 / v80.198, 2026-11-07
+
+Scoped delta on `a80b5128ea18f40d07d1d89708e0d5ae7159efb6`; the earlier
+pricing/transport findings below keep their original evidence and limits.
+
+The rendered pre-fix toolbar confirmed the `.model-prices` collision: Refresh and
+date both used `ui-monospace, monospace`, with a 40.25px / 15px-font button and
+12.75px date. `.model-relative` correctly used monospace too. Separating
+`.model-price-controls` restores the normal system-UI family for action/date/status,
+uses Watch's exact 30px height / 12px font / 3.75px 9.75px padding at the default
+15px root, and leaves numeric table styles unchanged. Centered native filter labels
+and wrapping groups avoid overflow without another card/frame. Coarse-pointer action
+and label targets measure 44.25px. Feedback may naturally add rows rather than clip.
+
+Keyboard proof also exposed the disabled-button focus loss that preceded result
+replacement. The explicit action now restores that focus only while its own view
+remains current and the user has not focused/clicked elsewhere. Listener cleanup is
+limited to listeners actually registered by that action. No backend, pricing,
+report scheduling, checkbox meaning, sort or other page style changes were made.
+
+Observed checks on Windows / Chrome 156.0.8078.80:
+
+- `scratch:/models-toolbar-before.json`: actual pre-fix computed styles.
+- `scratch:/models-toolbar-after.json`: PASS, 240 real-DOM cases at
+  360/800/1280/1366/1920px, Classic/Web light/Web dark, 100/125/150/200% root-font
+  scaling and normal/refreshing/long-date-error/unavailable states. Checks inspect
+  actual control bounds, overlap, clipping, page overflow, checkbox text/box centers,
+  desktop shared axis, UI-vs-monospace computed fonts and coarse-pointer targets.
+  Long synthetic localized labels and unbroken error text are stress inputs, not
+  observed upstream messages. Native Enter/Space, native touch, disabled duplicate
+  guard, failure/retry, retained factual time/table, sorting/filter choices and
+  deliberate focus movement pass. Watch's actual toggle computed metrics match.
+  The 360-light and 1280-dark screenshots were visually inspected.
+- `scratch:/models-layout.json`: all six existing light/dark 360/1366/1920
+  canonical tier/filter/sort/panning browser cases PASS.
+- `scratch:/full-tests-final.json`: final supported Full suite, 155 isolated files,
+  zero failures, 111.0s. A broad focused-pattern experiment incorrectly grouped Web
+  tests into one subprocess and timed out; its focus-listener failure was repaired.
+  The final bounded Full run supersedes that experiment, not a timeout waiver.
+- `scratch:/models-live.log`: real V2 installation, authenticated HTTP and actual
+  spawned price refresh PASS: new upstream observation, 29 catalog rows, Watch's
+  catalog remains pinned, 103.150s. Normal 61.448s / 25 selectable / 14 latest;
+  all-models 6.087s / 29 rows / 16 latest. One Live owner, two streams, run origin
+  and advancing publications preserved; 173.2222s overall. No inference/shared
+  service stop; zero remaining owned threads/processes, no cleanup failures.
+  One history-batch observation recorded an error; this was not a whole-history
+  health audit and does not establish that unrelated history work was error-free.
+
+Integrated Review was disconnected; hidden Chromium used an owned temporary
+profile, not a personal browser. Font scaling is not a physical OS/browser-zoom
+claim. Upstream failure proof is controlled offline/invalid provider evidence;
+the real upstream check succeeded. Other engines, a real screen reader and
+physical desktop/touch hardware were not tested. No current requirement/test
+exception was requested or granted. User instructions did not change, so
+`docs/web-beta.md` needs no update; architecture and code-map notes were updated.
 
 FR 000598 / v80.182 changes the checked base with this delivery's source/tests.
 An explicit Models action must distinguish a real successful upstream observation

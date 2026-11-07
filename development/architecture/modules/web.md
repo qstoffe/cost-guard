@@ -56,6 +56,13 @@ failure retains the prior DOM/date. Mini help selects exactly primary-window Cap
 and `watch_reset` tokens; richer Full Watch/Accounts help and visible warnings remain.
 Evidence and the scoped split-verification decision: [Models pricing](../../journal/web/models-pricing.md).
 
+FR 000618 / v80.198 isolates the Models toolbar as `.model-price-controls` rather
+than reusing table-price `.model-prices`. Scoped compact UI-font styles, centered
+filter labels, bounded wrapping and coarse-pointer targets leave numeric monospace
+styles and every acquisition/refresh/filter contract above unchanged. The focused
+`probe_models_toolbar.cjs` real-DOM matrix is called by `probe_models_refresh.cjs`;
+the pricing journal separates rendered layout evidence from real-source checks.
+
 `src/web/assets/app.js` owns finite presentation/retained DOM; the host dispatcher owns warm results, freshness and background due times, including Models. `reports.js` owns route resolution; authenticated visible interests promote existing work. Accounts bypasses finite jobs/report shell and consumes app-level retained Live, even without a Watch DOM. `account-cards.js` is the single Watch/Accounts subscription renderer: account-keyed membership, bound metric/reset/help updates, per-card signatures excluding the publication clock, shared physical-width cap and existing subgrid styles. Empty success clears membership; missing/failed empty publications retain usable cards with truthful warnings. Settings synchronize visible/detached roots without acquisition. `render.js` presents DTOs with exact Decimal/vector sorting; generic reports retain presentation search/50-row paging, while Models has independent catalog/version filters and complete document-scrolling rows. Totals never come from cells. Sessions bypasses finite jobs and the report shell: `sessions.js` renders six-column live catalog pages; `session.js` renders one ten-column complete chronological history. Both use intrinsic metric tracks, elastic title/preview and document vertical scrolling. Shared Watch `ContextLine` and contextual-help components consume canonical report context, not a browser estimator.
 
 Token Mix, AI Stats and Comparisons are cached historical finite views, not Live owners.

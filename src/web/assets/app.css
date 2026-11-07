@@ -394,15 +394,21 @@ footer { border-top: 1px solid var(--line); color: var(--muted); font-size: .8re
 .overview-model-table tr.promotion, .overview-model-table tr.new { color: inherit; font-weight: inherit; }
 .overview-model-table th button { text-align: left; }
 .overview-model-table th[aria-sort] button::after { content: none; }
-.model-tools { display: flex; align-items: start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: .6rem; }
-.model-prices { display: flex; align-items: center; flex-wrap: wrap; gap: .4rem .75rem; }
-.model-prices > span { color: var(--muted); font-size: .85rem; }
+.model-tools { display: flex; align-items: center; justify-content: space-between; gap: .6rem 1rem; flex-wrap: wrap; margin-bottom: .6rem; }
+.model-price-controls { flex: 1 1 24rem; min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: .4rem .75rem; font-size: .8rem; }
+.model-price-controls button { min-height: 2rem; padding: .25rem .65rem; font-size: inherit; }
+.model-price-controls > span { min-width: 0; max-width: 100%; overflow-wrap: anywhere; color: var(--muted); }
+.model-price-controls [role="status"]:empty { display: none; }
 .model-notices:empty { display: none; }
 .model-notices { flex: 1 1 18rem; }
 .model-notices p { margin-block: .25rem; font-size: .85rem; }
-.model-filters { margin-left: auto; display: flex; align-items: center; justify-content: end; gap: .4rem 1rem; flex-wrap: wrap; font-size: .8rem; }
-.model-filters label { display: inline-flex; gap: .4rem; align-items: center; }
-.model-filters input { min-height: auto; margin: 0; }
+.model-filters { max-width: 100%; margin-left: auto; display: flex; align-items: center; justify-content: end; gap: .4rem 1rem; flex-wrap: wrap; font-size: .8rem; }
+.model-filters label { min-width: 0; min-height: 2rem; display: inline-flex; gap: .4rem; align-items: center; }
+.model-filters span { min-width: 0; overflow-wrap: anywhere; }
+.model-filters input { flex: 0 0 auto; min-height: auto; margin: 0; }
+@media (pointer: coarse) {
+  .model-price-controls button, .model-filters label { min-height: 2.95rem; }
+}
 .warning:empty { display: none; }
 .compact-accounts { grid-auto-rows: 1fr; gap: .75rem; margin-top: .75rem; }
 .compact-accounts:has(details[open]) { grid-auto-rows: auto; align-items: start; }

@@ -277,6 +277,14 @@ function failure(code) {
 }
 async function acquire(state, background = false, prices = false) {
   if (state.loading || !hostState.writable) return;
+  // A disabled native button loses focus before the replacement DOM is captured.
+  // Restore only this explicit action, unless the user focused/clicked elsewhere.
+  let priceFocus = prices && document.activeElement?.getAttribute('data-model-control') === 'refresh';
+  const movedPriceFocus = event => {
+    if (event.target?.getAttribute('data-model-control') !== 'refresh') priceFocus = false;
+  };
+  const priceFocusEvents = priceFocus ? ['focusin', 'pointerdown'] : [];
+  for (const event of priceFocusEvents) document.addEventListener(event, movedPriceFocus);
   const request = state.request;
   let publication = null;
   let retry = !!state.failed && !background;
@@ -387,7 +395,10 @@ async function acquire(state, background = false, prices = false) {
   } finally {
      if (state.dispatchError && !prices) { state.failed = true; state.message = failure(state.dispatchError); }
      state.loading = false; state.priceRefreshing = false; state.active = null; state.attempt = null; state.checkedAt = Date.now();
-    show(state); scheduleCachedReport();
+     show(state); scheduleCachedReport();
+    for (const event of priceFocusEvents) document.removeEventListener(event, movedPriceFocus);
+    if (priceFocus && state === current && document.activeElement === document.body)
+      output.querySelector('[data-model-control="refresh"]')?.focus({preventScroll: true});
     if (state.retryOrder && state === current && !document.hidden && hostState.writable) {
       state.retryOrder = false; acquire(state);
     }
