@@ -49,7 +49,7 @@ async function main() {
     const until = async expression => {
       const end = Date.now()+15000;
       while (Date.now()<end) {if (await evaluate(expression)) return; await new Promise(resolve => setTimeout(resolve,40));}
-      throw new Error('Condition not reached: '+expression);
+      throw new Error('Condition not reached: '+expression+' '+JSON.stringify(await evaluate(`({hash:location.hash,section:document.body.dataset.section,current:current?.section,health:hostState.kind})`)));
     };
     const navigate = async section => {
       await evaluate(`document.querySelector('nav a[href="#/${section}"]').click()`);
@@ -131,12 +131,16 @@ async function main() {
       applySettings(await api('/api/settings/quota-display',{quotaDisplayMode:'remaining'}));})()`);
     await evaluate(`miniWatch.toggle()`,true);await navigate('accounts');
     await fixture('accounts-stale');
-    await until(`document.querySelector('.watch-subscription').textContent.includes('Stale')`);
-    assert.match(await evaluate(`document.getElementById('result').textContent`),/Connection failed/);
+    await until(`liveValue.view.accounts.accounts[0].observation.availability==='stale'`);
+    assert.doesNotMatch(await evaluate(`document.querySelector('.watch-subscription').textContent`),/Stale|Connection failed|retained/i);
+    assert.match(await evaluate(`document.querySelector('.watch-subscription').getAttribute('aria-description')`),/not current|stale/);
+    const sustained=await evaluate(`(()=>{const clock=Date.now;Date.now=()=>clock()+60001;
+      try{current.accounts.update(liveValue.view);return current.accounts.root.textContent;}finally{Date.now=clock;}})()`);
+    assert.match(sustained,/Updates delayed · showing last values/);
     await fixture('accounts-failed-empty');
     await until(`liveValue.view.accounts.accounts.length===0`);
     assert.equal(await evaluate(`document.querySelectorAll('.watch-subscription').length`),6);
-    assert.match(await evaluate(`document.getElementById('result').textContent`),/retained, not current/);
+    assert.doesNotMatch(await evaluate(`current.accounts.message.textContent`),/retained|delayed/i);
     await fixture('accounts-empty');
     await until(`document.getElementById('result').textContent==='No configured accounts detected.'`);
     await fixture('quota-ratio');

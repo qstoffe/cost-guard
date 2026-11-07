@@ -92,7 +92,8 @@ All paths in this table are relative to the repository root. Test names live und
 Mini's session totals/history presentation, canonical Activity clock and unknown-finish help are covered by `test_mini_watch.py`,
 `fixtures/mini_sessions.cjs`; `integration/probe_mini_session_alignment.cjs`, invoked
 by current `probe_mini_fit.cjs`, pins both four-column layouts, name-only Session,
-independent prompt (whole-session) cost scopes and historical detail help. Stable
+independent prompt (whole-session) cost scopes and symmetric Session/cost help for each
+focal or canonical historical representative (including unknown ordinals). Stable
 focus/live help, Escape suppression, pointer/keyboard/touch and intrinsic cost widths
 are checked across widths, font/CSS zoom, themes and units. Older
 `integration/probe_mini_sessions.cjs` belongs to the pre-fit/pre-paired-cost probe.
@@ -107,6 +108,10 @@ light/dark fonts/units and pointer/keyboard reference toggles through the native
 `integration/probe_mini_disclosure.cjs` measures native pointer/keyboard outer/inner
 bounds and safe fallbacks. `integration/probe_watch_quiet.cjs` checks actual card
 heights/retained figures across transient and virtual sustained refresh failures.
+`fixtures/live_status.cjs`, run by `web_watch_summary.cjs`, pins the shared presentation-only
+60-second per-source grace, nonfresh/cost-only replay, real partial quotas and actionable
+auth failures. `web_report_lifetime.cjs` covers the host's retry grace/ownership and immediate
+offline/auth/source errors; Mini's independent ten-minute source clocks stay in `mini_watch.cjs`.
 `integration/probe_watch_presentation.cjs` runs that proof plus displayed-zero I/E,
 confirmed focal title/row colors, focus/selection and contrast in Classic/Web light/dark
 at wide/narrow widths. `test_watch_prompt_cost.py`, `test_watch_daily.py` and

@@ -33,6 +33,7 @@ def card(value, now_ms):
     cost = value.session_cost
     return record(session_id=value.session_id, title=value.title, focal_id=value.focal_id,
         rows=tuple(card_row(row, now_ms) for row in value.rows), state=value.state,
+        observed_at_ms=value.observed_at_ms,
         session_summary=record(context=None if context is None else record(
             watch_next_context_tokens=context.tokens,
             warning=fields(context, "owner_id text severity multiplier cached_ccost fresh_ccost")),

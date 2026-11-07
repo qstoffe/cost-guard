@@ -92,6 +92,20 @@ class WatchCardTests(unittest.TestCase):
         self.assertEqual("observed", state)
         self.assertTrue(all(len(card.rows) == 1 for card in history))
 
+    def test_card_freshness_exports_capture_time_not_projection_or_cost_ticks(self):
+        cards = WatchCards(ManualWorkers())
+        cards.catalog(self.catalog())
+        self.publish(cards, self.roots[0], replace(self.capture, observed_at_ms=1234))
+
+        first = cards.project(5000)[1][0]
+        repeated = cards.project(9000)[1][0]
+        wire = project_live(WatchProjection("Watch", "Synthetic", (), history_cards=(repeated,))).to_json()
+
+        self.assertEqual(1234, first.observed_at_ms)
+        self.assertEqual(1234, wire["history_cards"][0]["observed_at_ms"])
+        self.publish(cards, self.roots[0], replace(self.capture, observed_at_ms=9999, retained=True))
+        self.assertIsNone(cards.project(10000)[1][0].observed_at_ms)
+
     def test_history_reorders_selected_set_by_displayed_prompt_with_stable_ties(self):
         cards = WatchCards(ManualWorkers())
         cards.catalog(self.catalog())

@@ -2,9 +2,9 @@
 const assert = require('node:assert/strict'), fs = require('node:fs'), vm = require('node:vm');
 let now = 0, sequence = 0, busy = 0, sourceWait = 0;
 const timers = new Map(), jobs = new Map(), admissions = [], handlers = {}, ids = {};
-const node = () => ({dataset:{}, setAttribute(){}, removeAttribute(){}, addEventListener(){}, focus(){},
+const node = () => ({dataset:{}, attrs:{}, setAttribute(key,value){this.attrs[key]=value;}, removeAttribute(){}, addEventListener(){}, focus(){},
   replaceChildren(...children){this.firstChild=children[0];}, querySelector(){return null;}});
-for (const id of ['status','result','notice','refresh','heading','scope-controls','search','content','skip','product-version']) ids[id]=node();
+for (const id of ['host-state','host-message','host-details','status','result','notice','refresh','heading','scope-controls','search','content','skip','product-version']) ids[id]=node();
 const document = {hidden:false, body:node(), getElementById:id=>ids[id] || null,
   querySelector:()=>null, querySelectorAll:()=>[], addEventListener:(key,fn)=>{handlers[key]=fn;}};
 const location = {hash:'#/watch'}, history = {replaceState(){}};
@@ -33,6 +33,7 @@ const context = vm.createContext({document, location, history, URLSearchParams, 
     else assert.fail('unexpected API '+path);
     return {ok:true,json:async()=>value};
   }});
+context.ReportView.LiveStatus = vm.runInNewContext(fs.readFileSync('src/web/assets/render.js','utf8') + '\nReportView.LiveStatus', {Date:Clock});
 for(const file of ['report-loading.js','cached-reports.js']) vm.runInContext(fs.readFileSync('src/web/assets/'+file,'utf8'),context);
 // Presentation is independently tested in rendered probes; retain actual lifetime logic.
 vm.runInContext(`ReportLoading.show=(parent,state)=>parent.replaceChildren(state);
@@ -90,6 +91,33 @@ async function main(){
   assert.equal(admissions.length,before+9,'return retains error instead of a new hidden retry loop');
   assert.equal(ids.refresh.hidden,false,'real failures retain Retry');
   assert.equal(document.getElementById('cancel'),null);
+  // Host owns source retries; only a previously observed live view earns quiet grace.
+  run(`liveValue={view:{}}; connectionStatus('Retrying source read', {kind:'source_retrying',observedAt:null})`);
+  assert.equal(ids['host-state'].hidden,false,'no successful observation cannot be disguised as retained success');
+  run(`connectionStatus('Live connected.', {kind:'connected',observedAt:100})`);
+  const graceStart=now;
+  run(`connectionStatus('Retrying source read', {kind:'source_retrying',observedAt:100})`);
+  for(const elapsed of [1000,5000,10000,30000,59999]) {
+    now=graceStart+elapsed;
+    run(`connectionStatus('Retrying source read', {kind:'source_retrying',observedAt:100})`);
+    assert.equal(ids['host-state'].hidden,true);
+    assert.equal(ids.status.textContent,'Live connected.');
+    assert.equal(ids.status.attrs['aria-description'],'Retrying source read');
+  }
+  now=graceStart+60000;
+  run(`connectionStatus('Retrying source read', {kind:'source_retrying',observedAt:100})`);
+  assert.equal(ids['host-state'].hidden,false,'sustained source retry has one host notice');
+  run(`connectionStatus('Live connected.', {kind:'connected',observedAt:100});
+    connectionStatus('Retrying source read', {kind:'source_retrying',observedAt:100})`);
+  assert.equal(ids['host-state'].hidden,false,'same source replay never resets failure clock');
+  run(`connectionStatus('Live connected.', {kind:'connected',observedAt:101});
+    connectionStatus('Retrying source read', {kind:'source_retrying',observedAt:101})`);
+  assert.equal(ids['host-state'].hidden,true,'genuinely newer evidence restores grace');
+  for(const kind of ['source_unavailable','offline','authorization_required']) {
+    context.failureKind=kind;
+    run(`connectionStatus('Action required', {kind:failureKind})`);
+    assert.equal(ids['host-state'].hidden,false,'actionable failures remain immediate');
+  }
   console.log('PASS: four routes preserve pending/admitted work, hidden completion, retained errors, bounded retries and no duplicate/new inactive scans');
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

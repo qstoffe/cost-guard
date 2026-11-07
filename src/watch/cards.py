@@ -217,7 +217,8 @@ class WatchCards:
         return WatchCard(capture.session_id, capture.title, focal.event_id if focal else "",
             tuple(projected), state,
             capture.context if state != "unavailable" else None, entry.cost.value,
-            "unavailable" if state == "unavailable" else entry.cost.status)
+            "unavailable" if state == "unavailable" else entry.cost.status,
+            observed_at_ms=None if capture.retained else capture.observed_at_ms)
 
     def project(self, now_ms):
         active = []
