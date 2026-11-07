@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.198 — 2026-11-07
+
+- Models separates its price-refresh toolbar from monospace table-price styles. The action matches Watch's compact system-font sizing; supporting text and native checkbox labels share a centered visual axis, wrap safely with long feedback/enlarged text and retain coarse-pointer targets. Keyboard refresh restores focus unless the user moves elsewhere. Pricing observations, explicit refresh semantics, table tiers, filters and sorting are unchanged.
+
 ## v80.197 — 2026-11-07
 
 - Web finite demand moves to one host-owned priority/warm-result registry. Visible routes preempt cooperative background slices; default reports warm after initial readiness, with staggered refresh, qualified Models sample cadence and a source-observed one-hour display gate. Watch/Accounts retain their Live owners.

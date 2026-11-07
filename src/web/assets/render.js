@@ -233,7 +233,7 @@ const ReportView = (() => {
     state.models ||= {all: false, latest: true, sorts: [{index: 2, direction: -1}]};
     const choice = state.models;
     const tools = element('div', undefined, 'model-tools'), notices = element('div', undefined, 'model-notices');
-    const prices = element('div', undefined, 'model-prices'), refresh = element('button', 'Refresh price list');
+    const prices = element('div', undefined, 'model-price-controls'), refresh = element('button', 'Refresh price list');
     refresh.setAttribute('data-model-control', 'refresh');
     const fetched = element('span', 'Prices last fetched: ' + (view.pricing_retrieved_at_ms > 0 ? display(view, 'pricing_retrieved_at_ms') : 'Unavailable'));
     const progress = element('span'); progress.setAttribute('role', 'status');
