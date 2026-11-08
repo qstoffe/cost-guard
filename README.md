@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v80.209, 2026-11-08), the supported distribution.
+Use **current `main`** (v80.210, 2026-11-08), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -363,7 +363,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.209 (2026-11-08):** Recent activity or genuine use keeps reconstructible session history cached for at least 30 days. Small idle SQLite pruning starts no earlier than one hour into a Web host, preserves unknown dates and operational state, and never removes source history. See [cache behavior](#cache-and-concurrent-cost-guard-processes).
+**v80.210 (2026-11-08):** Full and Mini Watch show plain known-priced daily CCost subtotals without routine partial warnings. Zero, N/A, Loading and genuine failure states remain distinct; accounting and other partial markers are unchanged. See [daily figures](docs/web-mini-watch.md#what-the-figures-mean).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

@@ -364,22 +364,15 @@ const MiniWatch = (() => {
     drawDaily(view) {
       const value = view?.daily_usage, state = view?.daily_state;
       let label = 'CCost Today · Loading…';
-      const notes = [];
-      if (value) {
-        const cost = value.total.observed_requests && !value.total.priced_requests ? 'N/A' : ReportView.display(value.total, 'known_ccost');
-        label = `CCost Today ${cost} · ${value.prompt_count} prompts`;
-        if (!value.total.complete || !value.mix.cost_complete || value.mix.request_count && value.mix.totals.some(amount => amount == null))
-          notes.push('Partial pricing / token data');
-      }
-      else if (state === 'unavailable') label = 'CCost Today · Unavailable';
+      if (!value && state === 'unavailable') label = 'CCost Today · Unavailable';
       this.dailyValue = value;
-      const cost = value && (value.total.observed_requests && !value.total.priced_requests ? 'N/A' : ReportView.display(value.total, 'known_ccost'));
+      const cost = value && ReportView.display(value, 'daily_ccost');
       ReportView.text(this.dailyLead, value ? 'CCost Today ' : label);
       ReportView.text(this.dailyAmount, value ? cost : '');
       ReportView.text(this.dailyTail, value ? ` · ${value.prompt_count} prompts` : '');
       this.dailyAmount.className = cost === 'N/A' ? 'help-value' : '';
       this.dailyAmount.tabIndex = cost === 'N/A' ? 0 : -1;
-      ReportView.text(this.dailyNote, notes.join(' · '));
+      ReportView.text(this.dailyNote, '');
       this.daily.setAttribute('aria-description', `Daily source: ${state || 'loading'}`);
       this.daily.className = 'mini-daily';
     }

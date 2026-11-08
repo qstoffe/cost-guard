@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.210 — 2026-11-08
+
+- Full and Mini Watch show a plain known-priced CCost Today subtotal in Credits or USD, without daily partial-pricing/token markers or passive prompt-completeness notices. Missing evidence can still understate the full amount; canonical values, completeness, other partial markers and diagnostics remain unchanged.
+- Acquired empty usage stays zero, wholly unpriced usage stays N/A, and Loading, source failures and long-unavailable update health keep their existing meanings. No pricing, acquisition, accounting or layout policy changes.
+
 ## v80.209 — 2026-11-08
 
 - Opted-in reconstructible SQLite session entries carry explicit source-qualified root/revision and actual activity evidence, separate from coalesced meaningful-use timestamps. Recent activity or use protects at least 30 rolling days; missing/legacy timing remains ineligible. Visible Web/CLI demand counts, not passive warming or diagnostic API reads; old history rebuilds normally after eviction.

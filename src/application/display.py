@@ -25,6 +25,12 @@ def decimal(value):
 
 def amount_tokens(values):
     tokens = {}
+    if "day_start_ms" in values and "prompt_count_complete" in values:
+        # Web Today alone shows the known priced subtotal quietly. Keep the
+        # comparison's canonical facts and other scopes' partial tokens intact.
+        total = dict(values["total"].fields)
+        tokens["daily_ccost"] = ("N/A" if total["observed_requests"] and not total["priced_requests"]
+                                 else ccost_amount(decimal(total["known_ccost"])))
     for key in ("ccost", "total_ccost", "known_ccost", "run_ccost", "main_ccost", "subagent_ccost",
                 "total_main_ccost", "total_subagent_ccost", "incoming_context_ccost", "extra_ccost",
                 "next_context_cached_ccost", "next_context_fresh_ccost",

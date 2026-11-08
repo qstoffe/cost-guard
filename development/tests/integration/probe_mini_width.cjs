@@ -4,7 +4,14 @@ function inspect(view) {
   const w=view.doc.defaultView, header=view.root.firstElementChild, bounds=header.getBoundingClientRect();
   const parts=[view.summary.querySelector('.mini-brand'),view.earlierToggle,view.dailyText].map(node=>{
     const range=view.doc.createRange();range.selectNodeContents(node);
-    const lines=[...range.getClientRects()].filter(r=>r.width>0 && r.height>0);
+    // Split value/help spans can yield duplicate or adjacent rects on one line.
+    // Group their actual vertical bands; wrapping must still create another line.
+    const lines=[];
+    for(const rect of [...range.getClientRects()].filter(r=>r.width>0 && r.height>0)) {
+      const line=lines.find(r=>Math.abs(r.top-rect.top)<.5 && Math.abs(r.bottom-rect.bottom)<.5);
+      if(line){line.left=Math.min(line.left,rect.left);line.right=Math.max(line.right,rect.right);}
+      else lines.push({left:rect.left,right:rect.right,top:rect.top,bottom:rect.bottom});
+    }
     const r=node.getBoundingClientRect();
     return {text:node.textContent,box:{left:r.left,right:r.right,top:r.top,bottom:r.bottom},lines:lines.map(r=>({left:r.left,right:r.right,top:r.top,bottom:r.bottom})),
       overflow:node.scrollWidth>node.clientWidth+1 && w.getComputedStyle(node).overflowX==='hidden'};
@@ -78,7 +85,9 @@ async function probe({evaluate,command,sessionId,targetId,open,close,read,captur
         ['credits','',0,'loading'],['credits','',0,'unavailable']]) {
       await evaluate(`(()=>{ReportView.setUnit('${unit}');const p=structuredClone(liveValue);p.view.now_ms++;
         if('${state}'!=='observed')p.view.daily_usage=null;
-        else {p.view.daily_usage.prompt_count=${count};p.view.daily_usage.total.display_units={${unit}:{known_ccost:'${cost}'}};}
+        else {p.view.daily_usage.prompt_count=${count};p.view.daily_usage.display_units={${unit}:{daily_ccost:'${cost}'}};
+          p.view.daily_usage.total.complete=false;p.view.daily_usage.total.display_units={${unit}:{known_ccost:'?${cost}'}};
+          p.view.daily_usage.mix.cost_complete=false;p.view.daily_usage.prompt_count_complete=false;}
         p.view.daily_state='${state}';miniWatch.observations.view=null;miniWatch.update(p);})()`);
       await open();
       const pip=await pipSession({evaluate,command,targetId});
@@ -95,6 +104,8 @@ async function probe({evaluate,command,sessionId,targetId,open,close,read,captur
           gutter:w.innerWidth-d.documentElement.getBoundingClientRect().width,scale:(outerWidth-16)/innerWidth};h.remove();return result;})()`);
       const m=value.measurement;
       assert.equal(value.header.parts[2].text,m.real,'synthetic reserve must never replace actual UI data');
+      if(state==='observed')assert.equal(value.header.parts[2].text,`CCost Today ${cost} · ${count} prompts`);
+      assert.equal(await evaluate('miniWatch.view.dailyNote.textContent'),'');
       assert.equal(await evaluate('miniWatch.measure.view.earlier.hidden'),true);
       const slack=value.request.width/m.scale-m.horizontal-m.gutter-m.maximum;
       assert.ok(slack>=7 && slack<10,JSON.stringify({slack,value}));
@@ -111,13 +122,13 @@ async function probe({evaluate,command,sessionId,targetId,open,close,read,captur
       assert.equal(value.header.fits,true,JSON.stringify({theme,font,unit,state,value}));
       if(theme==='classic' && color==='light' && font==='system-ui' && cost==='90 000')await capture();
       // Lower real openings must also contain the reference without requesting a resize.
-      const reference=await evaluate(`(()=>{const v=miniWatch.view,old=v.dailyText.textContent;v.dailyText.textContent='CCost Today 90 000 · 999 prompts';
-        try{return (${inspectSource})(v);}finally{v.dailyText.textContent=old;}})()`);
+      const reference=await evaluate(`(()=>{const v=miniWatch.view,children=[...v.dailyText.childNodes];v.dailyText.textContent='CCost Today 90 000 · 999 prompts';
+        try{return (${inspectSource})(v);}finally{v.dailyText.replaceChildren(...children);}})()`);
       assert.equal(reference.fits,true,JSON.stringify({value,reference}));
       const narrower=await evaluate(`(()=>{const v=miniWatch.view,r=v.root,old=r.style.width;
         r.style.width=(${m.maximum}-2)+'px';
-        const daily=v.dailyText.textContent;if(${JSON.stringify(m.widths[2].width>=m.widths[0].width)})v.dailyText.textContent='CCost Today 90 000 · 999 prompts';
-        try{return (${inspectSource})(v);}finally{r.style.width=old;v.dailyText.textContent=daily;}})()`);
+        const children=[...v.dailyText.childNodes];if(${JSON.stringify(m.widths[2].width>=m.widths[0].width)})v.dailyText.textContent='CCost Today 90 000 · 999 prompts';
+        try{return (${inspectSource})(v);}finally{r.style.width=old;v.dailyText.replaceChildren(...children);}})()`);
       assert.equal(narrower.fits,false,JSON.stringify({value,narrower}));
       layouts.push({case:'intrinsic-width',theme,color,font,unit,state,...value,narrower});
       if(cost==='90 000')await disclosure({evaluate,command,pip,read,layouts,label:{theme,color,font},required:m.maximum});

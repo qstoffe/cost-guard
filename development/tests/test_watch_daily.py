@@ -57,6 +57,38 @@ def project(entries, mapping, *, now=1000, day=0):
 
 
 class WatchDailyTests(unittest.TestCase):
+    def test_quiet_daily_tokens_preserve_partial_facts_and_other_scope_markers(self):
+        frame = summary_watch()
+        daily = frame.daily_usage
+        cases = (
+            ('priced', daily, '34', '$0.34'),
+            ('partial pricing', replace(daily, total=replace(daily.total, priced_requests=99),
+                mix=replace(daily.mix, priced_requests=99)), '34', '$0.34'),
+            ('missing tokens', replace(daily, mix=replace(daily.mix,
+                totals=(5000, None, 1000, 1000))), '34', '$0.34'),
+            ('partial prompts', replace(daily, prompt_count_complete=False), '34', '$0.34'),
+            ('empty', replace(daily, total=replace(daily.total, known_ccost=D(0),
+                observed_requests=0, priced_requests=0), prompt_count=0), '0', '$0.00'),
+            ('unpriced', replace(daily, total=replace(daily.total, known_ccost=D(0),
+                priced_requests=0)), 'N/A', 'N/A'),
+        )
+        for name, usage, credits, usd in cases:
+            for unit, expected in (('credits', credits), ('usd', usd)):
+                with self.subTest(case=name, unit=unit):
+                    wire = project_live(replace(frame, daily_usage=usage),
+                        ccost_display_unit=unit).to_json()['daily_usage']
+
+                    self.assertEqual(expected, wire['display']['daily_ccost'])
+                    self.assertEqual(str(usage.total.known_ccost), wire['total']['known_ccost'])
+                    self.assertEqual((usage.total.observed_requests, usage.total.priced_requests, usage.total.complete),
+                        tuple(wire['total'][key] for key in ('observed_requests', 'priced_requests', 'complete')))
+                    self.assertEqual(list(usage.mix.totals), wire['mix']['totals'])
+                    self.assertEqual(usage.mix.cost_complete, wire['mix']['cost_complete'])
+                    self.assertEqual(usage.prompt_count_complete, wire['prompt_count_complete'])
+                    if name == 'partial pricing':
+                        self.assertEqual('?' + expected, wire['total']['display']['known_ccost'])
+                        self.assertTrue(wire['mix']['display']['costs'].startswith('?'))
+
     def test_today_cleanup_retains_canonical_mix_and_independent_completeness_for_other_surfaces(self):
         frame = summary_watch()
         usage = replace(frame.daily_usage, prompt_count_complete=False,

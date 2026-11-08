@@ -262,9 +262,18 @@ def main():
                     assert mix['priced_requests'] == total['priced_requests']
                     assert sum(Decimal(cost) for cost in mix['costs']) == Decimal(total['known_ccost'])
                     assert isinstance(daily['prompt_count'], int) and daily['prompt_count'] >= 0
+                    from src.numbers import ccost_amount, ccost_display
+                    for unit in ('credits', 'usd'):
+                        tokens = daily.get('display_units', {}).get(unit, {})
+                        shown = tokens.get('daily_ccost', daily['display']['daily_ccost'])
+                        with ccost_display(unit):
+                            expected = ('N/A' if total['observed_requests'] and not total['priced_requests']
+                                else ccost_amount(Decimal(total['known_ccost'])))
+                        assert shown == expected
                     print(json.dumps(dict(daily='ok', requests=mix['request_count'], prompts=daily['prompt_count'],
                         prompt_count_complete=daily['prompt_count_complete'], cost_complete=total['complete'],
-                        category_costs_reconcile=True, seconds=round(time.monotonic() - started, 3))))
+                        category_costs_reconcile=True, quiet_daily_units=True,
+                        seconds=round(time.monotonic() - started, 3))))
                     break
                 if live.get('state') in {'failed', 'internal_error'}:
                     raise RuntimeError('probe_daily_failed')

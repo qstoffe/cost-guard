@@ -1,11 +1,16 @@
 # Optional Web runtime
 
-Source revision: 50d88a4bcfba6c1f853607ce0ee84a5c9663c0a3
-Checked revision: 50d88a4bcfba6c1f853607ce0ee84a5c9663c0a3
-Last checked: 2026-11-07
+Source revision: 6230f00df0695c8364bf6bbff1e2432e7c4e4fe1
+Checked revision: 6230f00df0695c8364bf6bbff1e2432e7c4e4fe1
+Last checked: 2026-11-08
 Status: current
 
-FR 000617 adds a scoped v80.197 dispatcher delta to the baseline revisions above,
+FR 000627 checks only the daily presentation contract and its retained evidence,
+not every historical section. Full/validator, real V2 daily tokens and the repaired
+headless Mini probe passed; completion records prior harness failures and limits.
+Other sections retain their earlier scoped evidence.
+
+FR 000617 adds a scoped v80.197 dispatcher delta to the historical baseline,
 not a new audit of every historical section. Its deterministic, hidden-browser and
 read-only real-source evidence and limits are in the dispatcher journal.
 
@@ -307,9 +312,12 @@ per-card corrections; observed empty publications still evict. Earlier exports c
 `completed_at_ms` and local finished display tokens; the Windows Stockholm fallback
 preserves repeated-hour fold/offset identity. No source, accounting or lifecycle owner moves.
 
-The separate, non-navigating right header reuses `daily_usage.total`/`prompt_count`,
-the full Watch display tokens and daily pricing/source state. Observation times and
-retained/partial provenance are accessible, not prominent warning suffixes. Additive
+The separate, non-navigating right header reuses `daily_usage.total`/`prompt_count`.
+Full and Mini Watch select Python-prepared `daily_usage.display.daily_ccost` variants:
+plain known-priced subtotal, acquired empty zero or wholly unpriced N/A. Daily passive
+pricing/token/prompt-completeness notices are omitted; canonical comparison/mix/count
+flags, other scopes' partial display tokens, source health and diagnostics remain intact.
+No client-side stripping, valuation or new help cue is added. Additive
 `daily_usage.day_end_ms` uses configured timezone/DST so disconnected Mini clears the
 previous day without calculating any usage. Loading is not zero. The left title alone returns
 to Watch. Mini-only header alignment never changes full Watch tables. `OpeningMeasure`

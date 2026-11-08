@@ -145,25 +145,42 @@ function setup() {
   }
   parity();
   for (const [value,count,credit,usd] of [['6152',106,'6 152','$61.52'],['0',0,'0','$0.00']]) {
-    input.view.daily_usage = {...daily,prompt_count:count,total:{...daily.total,known_ccost:value,observed_requests:count,priced_requests:count,
+    input.view.daily_usage = {...daily,prompt_count:count,display:{daily_ccost:credit},
+      display_units:{credits:{daily_ccost:credit},usd:{daily_ccost:usd}},total:{...daily.total,known_ccost:value,observed_requests:count,priced_requests:count,
       display:{known_ccost:credit},display_units:{credits:{known_ccost:credit},usd:{known_ccost:usd}}}};
     parity(); assert.equal(view.daily.textContent,`CCost Today ${credit} · ${count} prompts`);
     vm.runInContext('ReportView.setUnit("usd")', context); controller.settings(); parity();
     assert.equal(view.daily.textContent,`CCost Today ${usd} · ${count} prompts`);
     vm.runInContext('ReportView.setUnit("credits")', context);
   }
-  input.view.daily_usage = {...daily,total:{...daily.total,priced_requests:0,complete:false}};
+  input.view.daily_usage = {...daily,display:{daily_ccost:'N/A'},display_units:{},
+    total:{...daily.total,known_ccost:'0',priced_requests:0,complete:false}};
   parity(); assert.equal(view.dailyText.textContent,'CCost Today N/A · 37 prompts');
-  assert.match(view.dailyNote.textContent,/Partial pricing/);
-  input.view.daily_usage = {...daily,total:{...daily.total,complete:false}};
-  parity(); assert.equal(view.dailyText.textContent,'CCost Today 34 · 37 prompts');
+  assert.equal(view.dailyNote.textContent,'');
+  for (const changes of [{}, {total:{...daily.total,priced_requests:99,complete:false,
+      display:{known_ccost:'?34'},display_units:{usd:{known_ccost:'?$0.34'}}},mix:{...daily.mix,cost_complete:false}},
+      {mix:{...daily.mix,totals:[5000,null,1000,1000]}}, {prompt_count_complete:false}]) {
+    input.view.daily_usage = {...daily,...changes};
+    const canonical = JSON.stringify(input.view.daily_usage);
+    for (const [unit,amount] of [['credits','34'],['usd','$0.34']]) {
+      vm.runInContext(`ReportView.setUnit('${unit}')`, context); controller.settings(); parity();
+      assert.equal(view.dailyText.textContent,`CCost Today ${amount} · 37 prompts`);
+      assert.equal(view.dailyNote.textContent,'');
+      assert.equal(view.daily.querySelectorAll('button').length,0);
+      assert.equal(JSON.stringify(input.view.daily_usage),canonical,'daily presentation preserves all backing evidence');
+    }
+  }
+  vm.runInContext('ReportView.setUnit("credits")', context);
+  input.view.daily_usage = {...daily,total:{...daily.total,priced_requests:99,complete:false}};
   for (const state of ['retrying','unavailable','loading','partial']) {
     input.view.daily_state=state; parity(); assert.equal(view.dailyText.textContent,'CCost Today 34 · 37 prompts');
     assert.equal(view.daily.className,'mini-daily'); assert.equal(view.health.hidden,true);
   }
   input.view.daily_usage=null; input.view.daily_state='unavailable'; controller.update(input); assert.equal(view.daily.textContent,'CCost Today · Unavailable');
   input.view.daily_state='loading'; controller.update(input); assert.equal(view.daily.textContent,'CCost Today · Loading…');
-  input.view.daily_usage={...daily,day_start_ms:daily.day_start_ms+86400000,day_end_ms:daily.day_end_ms+86400000,prompt_count:0,total:{...daily.total,observed_requests:0,priced_requests:0,display:{known_ccost:'0'},display_units:{credits:{known_ccost:'0'}}}};
+  input.view.daily_usage={...daily,day_start_ms:daily.day_start_ms+86400000,day_end_ms:daily.day_end_ms+86400000,prompt_count:0,
+    display:{daily_ccost:'0'},display_units:{credits:{daily_ccost:'0'},usd:{daily_ccost:'$0.00'}},
+    total:{...daily.total,known_ccost:'0',observed_requests:0,priced_requests:0,display:{known_ccost:'0'},display_units:{credits:{known_ccost:'0'}}}};
   input.view.daily_state='observed'; parity(); assert.equal(view.daily.textContent,'CCost Today 0 · 0 prompts','new canonical local day replaces the old daily observation');
   input.view.daily_usage=daily; parity(); assert.equal(view.daily.textContent,'CCost Today 34 · 37 prompts','later source corrections replace, never accumulate');
   assert.ok(!/Running prompts|Running CCost|Longest running|×/.test(view.root.textContent));

@@ -67,13 +67,11 @@ const WatchView = (() => {
   function daily(parent, value, state, waiting) {
     parent.replaceChildren(ContextHelp.value(el('strong', 'CCost Today'), 'Reference cost of today’s model activity in your configured local day.'));
     if (!value) { parent.append(el('span', state === 'unavailable' ? 'Daily activity unavailable' : waiting ? 'Daily updates delayed; check source availability.' : '—')); return; }
-    parent.append(ContextHelp.value(el('span', () => value.total.observed_requests && !value.total.priced_requests ? 'N/A' : display(value.total, 'known_ccost'), 'metric-value'),
+    parent.append(ContextHelp.value(el('span', () => display(value, 'daily_ccost'), 'metric-value'),
       () => ReportView.costHelp(value.total, 'known_ccost') ||
-        'Today’s reference CCost, including recorded activity before Watch opened.' + (!value.total.complete ? '\n? — Partial pricing.' : '')));
+        'Today’s reference CCost, including recorded activity before Watch opened.'));
     const count = ContextHelp.value(el('span', `${value.prompt_count} prompts`), 'Prompts with model requests today, including activity before Watch opened.');
     parent.append(count);
-    if (!value.total.complete) parent.append(el('span', 'Partial CCost pricing', 'warning'));
-    if (value.prompt_count_complete === false) parent.append(el('span', 'Prompt count incomplete', 'warning'));
     if (!value.total.observed_requests) parent.append(el('span', 'No recorded usage', 'detail'));
     if (waiting) parent.append(el('span', 'Updates delayed · showing last values', 'detail'));
     parent.setAttribute('aria-description', `Daily source: ${state || 'loading'}; observed: ${value.observed_at_ms ?? 'unknown'}`);
