@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v80.205, 2026-11-08), the supported distribution.
+Use **current `main`** (v80.206, 2026-11-08), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -310,7 +310,7 @@ Quota credentials stay memory-only: V2 precedes legacy, explicit `authJsonPath` 
 
 Useful settings include:
 
-- `ccostDisplayUnit`: CLI `credits` (default) / `usd`; override: `--ccost-unit usd`. Web uses independent `webSettings.ccostDisplayUnit` (Credits default), saved in Settings. 100 credits = $1.00 reference USD, not billing. Quotas/Billed/rates stay unchanged.
+- `ccostDisplayUnit`: CLI `credits` (default) / `usd`; override: `--ccost-unit usd`. Web uses independent `webSettings.ccostDisplayUnit` (USD default), saved in Settings. Default inherits USD; explicit Credits/USD choices stay pinned. 100 credits = $1.00 reference USD, not billing. Quotas/Billed/rates stay unchanged.
 - `runningPromptWarningCCost`: 1800 credits by default (0 disables), independent of display units.
 
 - `openCode.source`: `auto`, `v1` or `v2`.
@@ -361,7 +361,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.205 (2026-11-08):** Unfinished requests without positive execution evidence can be **Unverified**, rather than indefinitely Running. CLI, Sessions, Full Watch and Mini preserve usage but do not invent a stop time or execution duration. V2 active status is process-local; this is not proof that another server's request has stopped. See [Web Beta](docs/web-beta.md) and [lifecycle evidence](development/journal/web/watch-terminal-lifecycle.md).
+**v80.206 (2026-11-08):** Web and Mini Watch now default to **USD** CCost display. Settings shows **Default (USD)**; explicit saved Credits/USD choices remain unchanged without rewriting user configuration. CLI still defaults to Credits. Reference costs, billing, quotas and conversion factors are unchanged. See [Web Beta](docs/web-beta.md).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

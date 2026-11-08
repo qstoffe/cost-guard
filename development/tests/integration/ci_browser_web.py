@@ -142,7 +142,12 @@ def main():
                 assert json.loads(user_config.read_text()) == {"webSettings": {"theme": "web"}}
                 ccost = page.get_by_role("combobox", name="CCost display", exact=True)
                 expect(ccost).to_have_value("default")
-                assert ccost.locator("option").evaluate_all("items => items.map(item => item.getAttribute('aria-label') || item.label)") == ["Default (Credits)", "Credits", "USD"]
+                assert ccost.locator("option").evaluate_all("items => items.map(item => item.getAttribute('aria-label') || item.label)") == ["Default (USD)", "Credits", "USD"]
+                for choice in ("credits", "default"):
+                    ccost.select_option(choice)
+                    expect(page.locator("#settings-feedback")).to_have_text("CCost display saved.")
+                    expect(ccost).to_have_value(choice)
+                    assert json.loads(user_config.read_text()) == {"webSettings": {"theme": "web", "ccostDisplayUnit": choice}}
                 ccost.select_option("usd")
                 expect(page.locator("#settings-feedback")).to_have_text("CCost display saved.")
                 assert json.loads(user_config.read_text()) == {"webSettings": {"theme": "web", "ccostDisplayUnit": "usd"}}

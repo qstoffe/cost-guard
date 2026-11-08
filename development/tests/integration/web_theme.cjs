@@ -35,7 +35,7 @@ async function main() {
   }});
   vm.runInContext(fs.readFileSync('src/web/assets/settings.js', 'utf8'), context);
   const Settings = vm.runInContext('WebSettings', context);
-   const defaults = {theme: 'classic', ccostDisplayUnit: 'credits', miniWatchPlacement: 'remember-last', miniWatchSize: 'fit-on-open', quotaDisplayMode: 'used'};
+   const defaults = {theme: 'classic', ccostDisplayUnit: 'usd', miniWatchPlacement: 'remember-last', miniWatchSize: 'fit-on-open', quotaDisplayMode: 'used'};
    const inherited = {theme: 'default', ccostDisplayUnit: 'default', miniWatchPlacement: 'default', miniWatchSize: 'default', quotaDisplayMode: 'default'};
   const calls = []; let saved = {...inherited}, failure = null, release;
   const api = async (path, value) => {
@@ -63,7 +63,10 @@ async function main() {
   assert.deepEqual(theme.children.map(option => [option.value,option.textContent]),
     [['default','Default (Classic)'],['classic','Classic'],['web','Web']]);
   assert.deepEqual(ccost.children.map(option => [option.value,option.textContent]),
-    [['default','Default (Credits)'],['credits','Credits'],['usd','USD']]);
+    [['default','Default (USD)'],['credits','Credits'],['usd','USD']]);
+   assert.match(help.get(ccost)(), /Follow the shipped default, currently USD.*US dollars, not actual charges/);
+   assert.match(view.root.querySelector('#ccost-unit-default-help').textContent, /currently USD/);
+   assert.equal(documentState.unit, 'usd');
    assert.deepEqual(placement.children.map(option => [option.value,option.textContent]),
      [['default','Default (Remember last)'],['remember-last','Remember last'],['standard','Standard position']]);
    assert.deepEqual(size.children.map(option => [option.value,option.textContent]),
@@ -94,20 +97,25 @@ async function main() {
     assert.equal(theme.value, 'web'); assert.equal(html.dataset.theme, 'web');
     assert.equal(view.feedback.className, 'error'); assert.doesNotMatch(view.feedback.textContent, /Theme saved/);
     assert.equal(theme.disabled, false);
-    ccost.value = 'usd'; await save(ccost);
-    assert.equal(ccost.value, 'default'); assert.equal(documentState.unit, 'credits');
+    ccost.value = 'credits'; await save(ccost);
+    assert.equal(ccost.value, 'default'); assert.equal(documentState.unit, 'usd');
       placement.value = 'standard'; await save(placement); assert.equal(placement.value, 'default');
       size.value = 'remember-last'; await save(size); assert.equal(size.value, 'default');
      quota.value = 'remaining'; await save(quota); assert.equal(quota.value, 'default');
      assert.equal(documentState.quotaMode, 'used');
   }
   failure = null;
-  ccost.focus(); ccost.value = 'usd'; const ccostPending = save(ccost);
-  assert.equal(documentState.unit, 'credits', 'CCost applies only after confirmed success');
+  ccost.focus(); ccost.value = 'credits'; const ccostPending = save(ccost);
+  assert.equal(documentState.unit, 'usd', 'CCost applies only after confirmed success');
   release(); await ccostPending;
-  assert.equal(documentState.unit, 'usd'); assert.equal(html.dataset.theme, 'web');
+  assert.equal(documentState.unit, 'credits'); assert.equal(html.dataset.theme, 'web');
   assert.equal(documentState.activeElement, ccost);
   assert.equal(view.feedback.textContent, 'CCost display saved.');
+  for (const choice of ['usd', 'default', 'credits']) {
+    ccost.value = choice; const changed = save(ccost); release(); await changed;
+    assert.equal(ccost.value, choice);
+    assert.equal(documentState.unit, choice === 'default' ? 'usd' : choice);
+  }
   // Default does not pin today's value; an equal explicit choice stays explicit.
   theme.value = 'default'; const inheritTheme = save(theme); release(); await inheritTheme;
   assert.equal(theme.value, 'default'); assert.equal(html.dataset.theme, 'classic');

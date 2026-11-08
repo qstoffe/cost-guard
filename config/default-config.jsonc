@@ -14,7 +14,7 @@
   "webSettings": {
     // Classic is dark; Web follows the OS light/dark preference.
     "theme": "classic",
-    "ccostDisplayUnit": "credits",
+    "ccostDisplayUnit": "usd",
     // User overrides may select "default" for any Web preference to inherit.
     // Placement mode persists; browser-native window bounds never do.
     "miniWatchPlacement": "remember-last",

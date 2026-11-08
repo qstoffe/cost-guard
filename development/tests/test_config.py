@@ -31,7 +31,7 @@ class ConfigurationCompatibilityTests(unittest.TestCase):
         defaults = read_jsonc(Path(__file__).resolve().parents[2] / "config/default-config.jsonc")
         overrides = {"webTheme": "web", "webSettings": {
             "theme": "default", "ccostDisplayUnit": "default", "miniWatchPlacement": "default"}}
-        self.assertEqual({"theme": "classic", "ccostDisplayUnit": "credits", "miniWatchPlacement": "remember-last", "miniWatchSize": "fit-on-open", "quotaDisplayMode": "used"},
+        self.assertEqual({"theme": "classic", "ccostDisplayUnit": "usd", "miniWatchPlacement": "remember-last", "miniWatchSize": "fit-on-open", "quotaDisplayMode": "used"},
                          validated_values(defaults, overrides)["webSettings"])
         self.assertEqual("default", overrides["webSettings"]["theme"], "resolution must not mutate saved intent")
         for name in ("theme", "ccostDisplayUnit", "miniWatchPlacement", "miniWatchSize"):

@@ -430,8 +430,10 @@ typeahead, preview/commit and cancellation are not reimplemented. Confirmed-only
 keyboard focus recovery. `#/settings` reads on entry, never submits report jobs,
 restarts the host or polls. Other tabs converge on their next read, not a broadcast.
 Explicit nested theme, including inheriting `default`, overrides legacy user `webTheme`; normalization happens before
-shipped nested defaults merge. Web CCost never follows CLI `ccostDisplayUnit` after
-promotion. Only separately approved promotions get independent Web fields; other
+shipped nested defaults merge. Web CCost ships as USD for omitted or symbolic Default
+choices; explicit Credits/USD choices remain pinned. The independent CLI default stays
+Credits. Web CCost never follows CLI `ccostDisplayUnit` after promotion.
+Only separately approved promotions get independent Web fields; other
 settings remain shared. CLI/Watch settings and acquisition stay unchanged. Tests: `test_web_theme.py`,
 `integration/web_theme.cjs`, `integration/web_views.cjs` and real hidden Chrome/Edge
 `integration/probe_web_settings.cjs`; evidence/limits: [compact Settings](../governance/verification/web-settings-597.json),

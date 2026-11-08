@@ -1,5 +1,9 @@
 # Cost Guard version history
 
+## v80.206 — 2026-11-08
+
+- Web and Mini Watch CCost display now defaults to USD. Omitted and symbolic Default choices inherit USD, labeled **Default (USD)** in Settings; explicit saved Credits/USD preferences remain pinned without migrating user JSONC. CLI retains its independent Credits default and overrides. Reference valuation, billing, native quotas and the 100 credits = $1 reference USD factor are unchanged.
+
 ## v80.205 — 2026-11-08
 
 - Unfinished requests with a complete negative native status and no positive tool, child or background evidence are **Unverified**, not indefinitely confirmed Running. CLI, Sessions, Full Watch and Mini share the state, retain observed usage and leave end time/execution duration unknown. Native running activity and later terminal evidence resolve uncertainty normally; no inactivity timeout or session interruption is introduced.
