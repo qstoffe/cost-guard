@@ -96,7 +96,8 @@ const TokenMixView = (() => {
           if ((tokenHelp || partialCost) && !node.help.has(col)) {
             node.help.add(col);
             ContextHelp.value(span, () => col === 3 ?
-              `${node.row.mix.known_total_tokens ?? 'No known'} recorded tokens.${node.row.mix.exact_total_tokens == null ? ' Partial telemetry; a complete total and shares are unavailable.' : ''}` : costHelp(node.row.mix));
+              `${node.row.mix.known_total_tokens ?? 'No known'} recorded tokens.${node.row.mix.exact_total_tokens == null ? ' Partial telemetry; a complete total and shares are unavailable.' : ''}` :
+              ReportView.costHelp(node.row.mix, key) || costHelp(node.row.mix));
           }
           if (col >= 4 && col % 2 || col === 12) {
             span.classList.toggle('partial', !row.mix.cost_complete);
@@ -116,10 +117,17 @@ const TokenMixView = (() => {
       ContextHelp.value(this.title, () => `${this.result.view.token_mix.known_total_tokens ?? 'No known'} recorded tokens in the same available shown history as the CLI. Deleted history is not reconstructed.\nObserved ${new Date(this.result.observed_at_ms).toLocaleString()}.`);
       this.summary = e('div', undefined, 'token-mix-summary');
       this.metrics = categories.map((key, index) => {
-        const group = e('div'), label = e('span', names[index]), value = e('strong');
+        const group = e('div'), label = e('span', names[index]), value = e('strong'), share = e('span'), cost = e('span');
         ContextHelp.value(label, definitions[index]);
-        ReportView.text(value, () => this.result ? ReportView.display(this.result.view.token_mix, 'mix_' + key + '_share') +
-          ' · ' + ReportView.display(this.result.view.token_mix, 'mix_' + key + '_cost') : 'N/A');
+        const costKey = 'mix_' + key + '_cost';
+        ContextHelp.value(cost, () => this.result ? ReportView.costHelp(this.result.view.token_mix, costKey) : '');
+        ReportView.text(share, () => this.result ? ReportView.display(this.result.view.token_mix, 'mix_' + key + '_share') + ' · ' : 'N/A');
+        ReportView.text(cost, () => this.result ? ReportView.display(this.result.view.token_mix, costKey) : '');
+        ReportView.bind(cost, () => {
+          const unavailable = this.result && Boolean(ReportView.costHelp(this.result.view.token_mix, costKey));
+          cost.className = unavailable ? 'help-value' : ''; cost.tabIndex = unavailable ? 0 : -1;
+        });
+        value.append(share, cost);
         group.append(label, value); this.summary.append(group); return value;
       });
       this.status = e('p', '', 'token-mix-status'); this.status.setAttribute('role', 'status');

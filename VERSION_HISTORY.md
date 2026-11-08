@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.208 — 2026-11-08
+
+- Web and Mini Watch unavailable reference CCost values expose reason-specific shared help on the N/A text: verified available-list absence, unsafe model identity, missing rate/tier or usage, unverified/failed catalog and neutral fallback. Actual contributing requests, including children, determine bounded reasons; Mini prompt and parenthesized session costs remain independent targets with existing compact details preserved.
+- Diagnostic catalog state refreshes explanations without changing rate signatures or valuation. Metadata-only refresh cannot erase a failed price observation. Known/partial costs, zero, pending Loading, billing, quotas, defaults and upstream model selection remain unchanged; no alternative rates or inference are introduced.
+
 ## v80.207 — 2026-11-08
 
 - Full Web Watch Running rows use native, initially collapsed invocation disclosures with bounded source-proven parameters, preserved command quoting/newlines and explicit privacy/availability qualifications. Unique canonical background-job links can disclose the original input; aggregates and missing links never borrow another command. No expansion fetch, execution or persistent input storage is added.

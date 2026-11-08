@@ -285,6 +285,7 @@ class ReportService:
         return comparison_cost(
             (entry for entry in entries if start_ms <= entry.completed_at_ms < (end_ms or self.now_ms + 1)),
             self._load_comparison_catalog().reference_valuation,
+            diagnose=self._load_comparison_catalog().reference_issue,
         )
 
     def _session_rows(self, roots: Sequence[AnalyzedRoot]) -> tuple[SessionUsageRow, ...]:
@@ -317,6 +318,7 @@ class ReportService:
                 ccost=valuation.known_ccost,
                 prompt_count=prompt_count,
                 complete=valuation.complete,
+                ccost_unavailable=valuation.unavailable,
                 duration_ms=accumulated_duration(
                     [(record.prompt_time_ms, record.execution_duration_ms) for record in item.bundle.prompts]
                     + [(record.created_at_ms, record.duration_ms) for record in item.bundle.compactions]),
@@ -617,7 +619,8 @@ class ReportService:
         from src.analysis.daily_usage import daily_usage
         return daily_usage(self._watch_history.retained_entries(), self._watch_history.prompt_of,
             day_start_ms=local_day_start_ms(self.timezone_id, now_ms=self.now_ms), now_ms=self.now_ms,
-            valuation=self.token_reference_valuation(), category_valuation=self.token_category_valuation())
+            valuation=self.token_reference_valuation(), category_valuation=self.token_category_valuation(),
+            diagnose=self._load_comparison_catalog().reference_issue)
 
     def watch_period_history_due(self) -> bool:
         start = self._watch_history.scope_start_ms

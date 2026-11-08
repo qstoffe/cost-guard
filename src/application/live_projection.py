@@ -6,6 +6,7 @@ from .projection import account, comparison, fields, prompt, token_mix
 from .display import with_display
 from .watch_accounts import watch_account
 from .prompt_costs import cost_detail
+from .reference_cost import issue_records
 from src.analysis.timezones import local_date_range, resolve_timezone
 
 
@@ -15,6 +16,7 @@ def card_row(row, now_ms, invocation_verified=True):
         incoming_context_ccost_known extra_ccost_known
         calls token_mix_percent incoming_context_tokens in_progress execution_unverified is_compaction aborted abort_reason completed_successfully event_id duration_ms completed_at_ms has_additional_model""")
     projected = ObjectValue(projected.fields + (("has_error", row.prompt.watch_error),
+        ("comparison_cost", comparison(row.prompt.comparison_cost)),
         ("linked_agent_count", row.prompt.linked_agent_count), ("cost_detail", cost_detail(row.prompt))))
     return record(prompt=projected, model=row.prompt.watch_model or "N/A",
         effort=row.prompt.watch_effort or "N/A", marker=row.marker,
@@ -43,6 +45,7 @@ def card(value, now_ms):
             warning=fields(context, "owner_id text severity multiplier cached_ccost fresh_ccost guidance_state guidance_sample_at_ms")),
             cost=None if cost is None else record(known_ccost=cost.total.known_ccost,
                 observed_requests=cost.total.observed_requests, priced_requests=cost.total.priced_requests,
+                ccost_unavailable=issue_records(cost.total.unavailable),
                 complete=cost.total.complete and cost.source_complete),
             state=value.session_cost_state, cache_available=None if cost is None else cost.cache_available))
 

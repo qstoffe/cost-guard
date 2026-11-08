@@ -30,6 +30,7 @@ const ContextHelp = (() => {
       if (target && target !== active && !target.contains(active)) return;
       const content = entries.get(active).content;
       const value = String(typeof content === 'function' ? content() : content);
+      if (!value) { close(); return; }
       if (panel.textContent !== value) panel.textContent = value;
       position();
     }
@@ -50,6 +51,8 @@ const ContextHelp = (() => {
       cancel();
       cancelOpening();
       if (target === blocked || !target.isConnected) return;
+      const content = entries.get(target).content;
+      if (!(typeof content === 'function' ? content() : content)) return;
       if (active !== target) { close(); active = target; }
       // Hover must never take ownership from deliberate keyboard/touch help.
       if (origin !== 'pinned' && (source !== 'hover' || origin !== 'focus')) origin = source;

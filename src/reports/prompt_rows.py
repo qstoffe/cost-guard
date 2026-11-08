@@ -130,7 +130,7 @@ class PromptRowProjector:
         live_tokens = watch_state.next_tokens if not self.epochs.retired(record.session_id, watch_state.last_activity_ms) else None
         watch_warning = self.warning(live_tokens, watch_state.model_id)
         mix, ictx_ccost, extra_ccost = _prompt_metrics(catalog, record, self.snapshot_running_metrics)
-        valuation = comparison_cost(record.entries, catalog.reference_valuation)
+        valuation = comparison_cost(record.entries, catalog.reference_valuation, diagnose=catalog.reference_issue)
         main = comparison_cost(record.entries[:record.root_entry_count], catalog.reference_valuation)
         subagent = comparison_cost(record.entries[record.root_entry_count:], catalog.reference_valuation)
         model_label = effort_model_name(catalog, record.main_model_id, prompt_effort(record, self.snapshot, replies=self.replies))
@@ -206,7 +206,7 @@ class PromptRowProjector:
         catalog = self.catalog
         state = self.timeline.get(record.user_message_id)
         label = compaction_model_timeline_name(catalog, record.model_id, record.variant)
-        valuation = comparison_cost(record.entries, catalog.reference_valuation)
+        valuation = comparison_cost(record.entries, catalog.reference_valuation, diagnose=catalog.reference_issue)
         return PromptProjection(
             at_ms=record.created_at_ms,
             prompt_number=number,

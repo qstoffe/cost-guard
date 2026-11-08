@@ -194,7 +194,7 @@ class SessionCatalog:
 
     def tick(self, service):
         dependencies = dependency_signature((service._dependencies(service._load_catalog()),
-                                              service._load_comparison_catalog().analysis_signature))
+                                              service._load_comparison_catalog().diagnostic_signature))
         with self.lock:
             self.checked_at = self.clock()
             self.index_unavailable = False

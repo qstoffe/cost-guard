@@ -2,7 +2,7 @@
 
 Source revision: e4d715e170917f5ef2d69d31a68dbc3eb297ff8a
 Checked revision: e4d715e170917f5ef2d69d31a68dbc3eb297ff8a
-Last checked: 2026-11-06
+Last checked: 2026-11-08
 Status: current
 
 Owner: `src/web/assets/help.js`; shared styles: `app.css`. Applies to the main
@@ -90,6 +90,17 @@ at `50d88a4bcfba6c1f853607ce0ee84a5c9663c0a3`.
   visible outside hover help.
 
 ## Whole-application audit inventory
+
+FR000628 scoped delta (v80.208): actual reference-CCost N/A text is a shared help
+target, not a blanket rule for noncost N/A. Watch merges reasons into rich details;
+Mini retains stable independent prompt/session spans and compact prompt details.
+Only an N/A Mini daily amount has dynamic help; empty content closes an open panel
+without moving focus or reopening it. Sessions pending acquisition remains Loading.
+Token Mix uses neutral fallback when its aggregate lacks per-request causal proof.
+`domain/reference_cost.py` owns bounded typed facts; pricing diagnoses only existing
+failed valuations, application freezes allowlisted copy and browser never acquires
+or prices on hover. A separate diagnostic signature invalidates explanation caches
+without changing the rate signature. See [classification and evidence](../../journal/web/ccost-unavailable.md).
 
 | Surface / entry points | Disposition |
 | --- | --- |

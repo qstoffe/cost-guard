@@ -8,6 +8,7 @@ from typing import Iterable, Mapping
 
 from src.domain import CostDisposition
 from src.domain.ccost import ReferenceValuation
+from src.domain.reference_cost import ReferenceCostDiagnosis, ReferenceCostIssue, bounded_issues
 from .billing import billing_request_fingerprint
 from .models import TraceEntry
 
@@ -21,6 +22,7 @@ class ComparisonCost:
     priced_requests: int = 0
     by_model: Mapping[str, Decimal] = field(default_factory=dict)
     by_day_utc: Mapping[str, Decimal] = field(default_factory=dict)
+    unavailable: tuple[ReferenceCostIssue, ...] = ()
 
     @property
     def complete(self) -> bool:
@@ -46,16 +48,20 @@ def unique_usage(entries: Iterable[TraceEntry]) -> tuple[TraceEntry, ...]:
     return tuple(result)
 
 
-def comparison_cost(entries: Iterable[TraceEntry], reference_valuation: ReferenceValuation) -> ComparisonCost:
+def comparison_cost(entries: Iterable[TraceEntry], reference_valuation: ReferenceValuation, *,
+                    diagnose: ReferenceCostDiagnosis | None = None) -> ComparisonCost:
     total = Decimal(0)
     priced = observed = 0
     by_model: dict[str, Decimal] = {}
     by_day: dict[str, Decimal] = {}
     day_names: dict[int, str] = {}  # whole UTC days since the epoch -> "YYYY-MM-DD", formatted once
+    issues = set()
     for entry in entries:
         observed += 1
         value = reference_valuation(entry.model, entry.tokens) if entry.tokens.total else Decimal(0)
         if value is None:
+            if diagnose is not None:
+                issues.add(diagnose(entry.model, entry.tokens))
             continue
         value = Decimal(value)
         if not value.is_finite() or value < 0:
@@ -68,7 +74,7 @@ def comparison_cost(entries: Iterable[TraceEntry], reference_valuation: Referenc
         if day is None:
             day = day_names[day_index] = datetime.fromtimestamp(entry.completed_at_ms / 1000, timezone.utc).strftime("%Y-%m-%d")
         by_day[day] = by_day.get(day, Decimal(0)) + value
-    return ComparisonCost(total, observed, priced, by_model, by_day)
+    return ComparisonCost(total, observed, priced, by_model, by_day, bounded_issues(issues))
 
 
 def billed_spend(entries: Iterable[TraceEntry]) -> Decimal | None:

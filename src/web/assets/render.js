@@ -84,6 +84,16 @@ const ReportView = (() => {
   }
   const ccost = (row, key = 'ccost') => display(row, key) +
     (row?.cost_estimated && key === 'ccost' ? ' (estimated)' : '');
+  function costHelp(row, key = 'ccost') {
+    if (!row || display(row, key) !== 'N/A') return '';
+    if (row?.[key + '_known'] === false || row?.[key + '_usage_missing']) return 'CCost cannot be calculated: required usage information for this cost component is missing or unsupported. N/A does not mean zero cost.';
+    return row?.display?.ccost_unavailable_help || 'CCost cannot be calculated from the available model pricing and usage information. N/A does not mean zero cost.';
+  }
+  function costValue(row, key = 'ccost') {
+    const node = element('span', () => ccost(row, key));
+    if (costHelp(row, key)) ContextHelp.value(node, () => costHelp(row, key));
+    return node;
+  }
   function element(tag, content, className) {
     const node = document.createElement(tag);
     if (content !== undefined) text(node, content);
@@ -164,7 +174,9 @@ const ReportView = (() => {
     const body = element('tbody'); grid.append(body);
     if (totals) {
       const foot = element('tfoot'), row = element('tr');
-      for (let index = 0; index < totals().length; index++) row.append(element('td', () => totals()[index]));
+      totals().forEach((value, index) => {
+        const cell = element('td'); cell.append(typeof value === 'object' ? value : element('span', () => totals()[index])); row.append(cell);
+      });
       foot.append(row); grid.append(foot);
     }
     scroll.append(grid); section.append(scroll); parent.append(section);
@@ -495,7 +507,9 @@ const ReportView = (() => {
   }
   function prompts(parent, block, state, index) {
     const title = element('h3', block.title || 'Session'); parent.append(title, link(block.session_id));
-    parent.append(element('p', () => `Full-session CCost ${ccost(block, 'total_ccost')} · Billing ${display(block, 'billed_cost')} · Duration ${display(block, 'duration_ms')}`));
+    const totals = element('p', 'Full-session CCost ');
+    totals.append(costValue(block, 'total_ccost'), element('span', () => ` · Billing ${display(block, 'billed_cost')} · Duration ${display(block, 'duration_ms')}`));
+    parent.append(totals);
     if (block.active_hour) parent.append(element('p', () => hourlySummary(block.active_hour), 'detail'));
     if (block.total_has_cost_breakdown) parent.append(element('p',
       () => block.total_breakdown_known ? `Main CCost ${ccost(block, 'total_main_ccost')} · Linked child CCost ${ccost(block, 'total_subagent_ccost')}` : 'Linked child breakdown unavailable.'));
@@ -504,7 +518,7 @@ const ReportView = (() => {
     table(parent, 'Prompts · complete session totals, independent of page',
       ['Prompt', 'CCost', 'Calls', 'Duration', '~Ictx', '~Ictx CCost', '~Extra CCost', 'Token Mix %'], block.rows,
       row => detailCells(row),
-       () => ['Complete session', ccost(block, 'total_ccost'), known(block.total_calls),
+        () => ['Complete session', costValue(block, 'total_ccost'), known(block.total_calls),
          display(block, 'duration_ms'), '—', known(block.total_ictx_cost_text), known(block.total_extra_cost_text), known(block.total_mix_text)],
       state, 'prompts-' + index,
       row => [row.prompt_number, row.ccost, row.calls, row.duration_ms, row.incoming_context_tokens,
@@ -552,7 +566,7 @@ const ReportView = (() => {
       table(parent, 'Sessions', ['Session / name', 'Model / effort', 'CCost', 'Prompts', 'Duration'], view.session_usage,
         row => { const name = element('span'); name.append(link(row.session_id), element('span', row.title, 'detail'),
             element('span', [!row.complete && 'Incomplete pricing', row.archived && 'Archived', row.running && 'Running at snapshot'].filter(Boolean).join(' · '), 'detail'));
-          return [name, row.model + (row.multiple_models ? ' · multiple models' : ''), ccost(row), known(row.prompt_count), display(row, 'duration_ms')]; },
+          return [name, row.model + (row.multiple_models ? ' · multiple models' : ''), costValue(row), known(row.prompt_count), display(row, 'duration_ms')]; },
         null, state, 'sessions', row => [row.title + ' ' + row.session_id, row.model, row.ccost, row.prompt_count, row.duration_ms]);
     }
     view.prompt_blocks.forEach((block, index) => prompts(parent, block, state, index));
@@ -577,13 +591,13 @@ const ReportView = (() => {
   function detailCells(row, live = false) {
     const label = promptLabel(row, live);
     if (row.retained) label.append(element('span', `Last observed ${new Date(row.last_observed_at_ms).toLocaleString()}; source history omitted this row`, 'detail'));
-    return [label, ccost(row), row.display?.calls ?? known(row.calls),
-      display(row, 'duration_ms'), display(row, 'incoming_context_tokens'), ccost(row, 'incoming_context_ccost'),
-      ccost(row, 'extra_ccost'), display(row, 'token_mix_percent')];
+    return [label, costValue(row), row.display?.calls ?? known(row.calls),
+      display(row, 'duration_ms'), display(row, 'incoming_context_tokens'), costValue(row, 'incoming_context_ccost'),
+      costValue(row, 'extra_ccost'), display(row, 'token_mix_percent')];
   }
   function detailTotals(block) {
-    return ['Complete session', ccost(block, 'total_ccost'), known(block.total_calls),
+    return ['Complete session', costValue(block, 'total_ccost'), known(block.total_calls),
       display(block, 'duration_ms'), '—', known(block.total_ictx_cost_text), known(block.total_extra_cost_text), known(block.total_mix_text)];
   }
-  return {render, renderLive, element, detailCells, detailTotals, compare, overviewAccounts, display, contextSummary, text, setUnit, syncUnits, defaultUnit, mixLegend, hourlySummary, historyWarning, bind, setQuotaMode, quotaView, quotaHelp, LiveStatus};
+  return {render, renderLive, element, detailCells, detailTotals, compare, overviewAccounts, display, contextSummary, text, setUnit, syncUnits, defaultUnit, mixLegend, hourlySummary, historyWarning, bind, setQuotaMode, quotaView, quotaHelp, LiveStatus, costHelp, costValue};
 })();
