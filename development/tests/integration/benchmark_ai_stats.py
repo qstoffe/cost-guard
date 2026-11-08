@@ -46,18 +46,28 @@ def scenario(builder, size, scope, selected, sliced=False):
             before = source.load_count
             started, cpu = time.perf_counter(), time.process_time()
             slices = 0
+            first_usable = None
             while True:
                 service = fresh()
                 report = builder(service, scope)
                 slices += 1
-                if any(row.period == selected for row in report.ai_stats):
+                if first_usable is None and any(row.period == selected for row in report.ai_stats):
+                    first_usable = time.perf_counter() - started
+                work = report.ai_stats_work
+                ready = work.get('scopes', {}).get(selected, {}).get('ready') if work else None
+                if ready is None:
+                    ready = any(row.period == selected for row in report.ai_stats)
+                if ready:
                     break
                 assert sliced and slices < size // 256 + 10, 'Bounded benchmark made no progress'
             elapsed, used_cpu = time.perf_counter() - started, time.process_time() - cpu
             row = next(row for row in report.ai_stats if row.period == selected)
             signature = hashlib.sha256(json.dumps(asdict(row), default=str, sort_keys=True).encode()).hexdigest()
+            all_periods = hashlib.sha256(json.dumps([asdict(row) for row in report.ai_stats],
+                default=str, sort_keys=True).encode()).hexdigest()
             result = dict(roots=size, requests=size * 20, scope=scope, attempt=attempt,
                 seconds=round(elapsed, 4), cpu_seconds=round(used_cpu, 4), selected_sha256=signature,
+                all_periods_sha256=all_periods, first_usable_seconds=round(first_usable, 4),
                 hydrated=source.load_count - before, slices=slices, periods=len(report.ai_stats), metrics=service.metrics.snapshot())
             yield result
 
@@ -66,7 +76,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--baseline', help='Exact Git revision whose AI Stats builder is measured without checkout')
     parser.add_argument('--large-roots', type=int, default=2700)
-    parser.add_argument('--sliced', action='store_true', help='Current builder uses fresh services and production scan/256-root settings; no process startup or IPC')
+    parser.add_argument('--sliced', action='store_true', help='Both builders use fresh services and scan/256-root settings where supported; no process startup or IPC')
     args = parser.parse_args()
     builders = [('current', build_ai_stats)]
     if args.baseline:
@@ -93,7 +103,7 @@ def main():
                 # acquired 30-days for a 7-day selection; measure that actual path.
                 legacy_narrow = label == 'baseline' and scope == '7-days' and not hasattr(module, 'StatsAcquisition')
                 actual = '30-days' if legacy_narrow else scope
-                for result in scenario(builder, size, actual, scope, args.sliced and label == 'current'):
+                for result in scenario(builder, size, actual, scope, args.sliced):
                     identity = size, scope, result['attempt']
                     if label == 'baseline':
                         expected[identity] = result['selected_sha256']

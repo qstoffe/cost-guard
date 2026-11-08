@@ -25,7 +25,7 @@ module.exports = async ({command, evaluate, until, config, checks}) => {
     // The fixture's finite non-Stats page isn't part of this check.
     await evaluate(`location.hash='#/ai-stats'`, tab);
     await until(`current.section==='ai-stats' && current.loading && current.active &&
-      current.percent>30 && !current.result`, tab);
+      current.result?.view.ai_stats_work.remaining>0`, tab);
     const initial = await evaluate(`({id:current.active,percent:current.percent})`, tab);
     const peer = await open(launch.url.split('#')[0] + '#/ai-stats');
     await until(`current?.section==='ai-stats' && current.loading && !!current.active`, peer);
@@ -33,7 +33,7 @@ module.exports = async ({command, evaluate, until, config, checks}) => {
     await command('Page.bringToFront', {}, tab);
     await evaluate(`document.querySelectorAll('.ai-stats-periods button')[1].focus(); selectStats(current,'7-days')`, tab);
     assert.equal(await evaluate(`current.period==='7-days' && current.loading`, tab), true);
-    await until(`current.result?.view.ai_stats.some(r=>r.period==='7-days')`, tab);
+    await until(`current.result?.view.ai_stats_work.scopes['7-days'].ready`, tab);
     const narrow = await evaluate(`({id:current.active, work:current.result.view.ai_stats_work,
       focused:document.activeElement.textContent, period:current.period})`, tab);
     assert.ok(narrow.work.remaining > 0, 'narrow coherent result must precede wider missing work');

@@ -43,8 +43,7 @@ function scheduleCachedReport() {
 function enterCachedReport(state) {
   if (!historical(state)) return;
   const band = CachedReports.entry(state.result, state.section);
-  state.withheld = band === 'withhold' || !!(state.result && state.section === 'ai-stats' &&
-    !CachedReports.interval(state.result, state.period));
+  state.withheld = state.section === 'ai-stats' ? !!state.result && !AIStatsView.valid(state.result) : band === 'withhold';
   if (demand && !document.hidden && hostState.writable) { acquire(state, !!state.result && !state.withheld); return; }
   if (!document.hidden && hostState.writable && state.result && ['quiet', 'withhold'].includes(band))
     acquire(state, !state.withheld);
@@ -322,7 +321,7 @@ async function acquire(state, background = false, prices = false) {
           // Retained publication identity is independent of an active refresh.
           state.dispatchRefresh = admission.refresh;
           state.dispatchError = admission.terminal ? admission.error || 'report_unavailable' : null;
-          if (!admission.result && state.result) { state.withheld = true; show(state); }
+          if (!admission.result && state.result && state.section !== 'ai-stats') { state.withheld = true; show(state); }
           if (admission.result) publication = {status: 'complete', result: admission.result,
             publication_id: admission.result_id || admission.id};
           else if (admission.terminal || !admission.id) throw new Error(admission.error || 'report_unavailable');
@@ -331,6 +330,7 @@ async function acquire(state, background = false, prices = false) {
         return;
       } catch (error) {
         if (!ReportLoading.retryable(error)) throw error;
+        if (state.section === 'ai-stats' && attempt.retries >= 3) throw error;
         ReportLoading.waiting(state, error.message); show(state);
         await attempt.backoff(error);
       }
@@ -353,7 +353,8 @@ async function acquire(state, background = false, prices = false) {
          if (job.status !== 'complete' || !job.result || job.result.error) {
           const error = new Error(job.result?.error?.code || job.error || job.status);
           error.retryable = job.result?.error?.retryable === true;
-          if (!ReportLoading.retryable(error)) throw error;
+           if (!ReportLoading.retryable(error)) throw error;
+           if (state.section === 'ai-stats' && attempt.retries >= 3) throw error;
           state.active = null; ReportLoading.waiting(state, error.message); show(state);
           await attempt.backoff(error); await admit(); continue;
         }
@@ -382,8 +383,8 @@ async function acquire(state, background = false, prices = false) {
             if (initial && state === current && state.loader?.root.isConnected)
               await ReportLoading.paintCompletion(state, attempt.controller.signal);
           }
-        state.withheld = historical(state) && state.result && (CachedReports.entry(state.result, state.section) === 'withhold' ||
-          state.section === 'ai-stats' && !CachedReports.interval(state.result, state.period));
+        state.withheld = state.section !== 'ai-stats' && historical(state) && state.result &&
+          CachedReports.entry(state.result, state.section) === 'withhold';
         state.pages = {};
         state.message = historical(state) ? '' : 'Snapshot captured. Navigation and source activity do not update it.';
         break;
@@ -391,7 +392,7 @@ async function acquire(state, background = false, prices = false) {
           if (!statsProgress) ReportLoading.observe(state, job.progress);
         if (state.section === 'ai-stats' && (!state.result || state.withheld)) state.lastWork = reportWork(job.progress);
       // Do not redraw a retained report while polling: keep selection and scroll useful.
-        if (state === current && !background) show(state);
+         if (state === current && (!background || statsProgress)) show(state);
        await attempt.poll(state.active, 500);
     }
   } catch (error) {

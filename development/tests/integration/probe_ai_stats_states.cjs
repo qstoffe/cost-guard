@@ -60,7 +60,7 @@ module.exports = async function({command,evaluate,until,fixture,tab,contrasts,st
     await evaluate(`document.activeElement.blur(); document.dispatchEvent(new KeyboardEvent('keydown',{key:'Tab',bubbles:true}));
       document.querySelectorAll('.ai-stats-periods button')[${index}].focus();`);
     await until(`!document.getElementById('context-help').hidden`);
-    assert.match(await evaluate(`document.getElementById('context-help').textContent`),index===3?/calendar month/:/not guaranteed complete lifetime history/);
+    assert.match(await evaluate(`document.getElementById('context-help').textContent`),index===3?/calendar month/:/whole robot saga/);
     await escape(); await until(`document.getElementById('context-help').hidden`);
   }
   await evaluate(`document.activeElement.blur(); document.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));`);
@@ -73,7 +73,7 @@ module.exports = async function({command,evaluate,until,fixture,tab,contrasts,st
   await command('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[point]},tab);
   await command('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]},tab);
   await until(`!document.getElementById('context-help').hidden`);
-  assert.match(await evaluate(`document.getElementById('context-help').textContent`),/all available recorded history/i);
+  assert.match(await evaluate(`document.getElementById('context-help').textContent`),/whole robot saga/i);
   await escape(); await command('Emulation.setTouchEmulationEnabled',{enabled:false},tab);
   assert.equal(await evaluate(`document.querySelectorAll('.ai-stats-periods [title]').length`),0);
   await evaluate(`api=__statsApi`);
@@ -86,35 +86,27 @@ module.exports = async function({command,evaluate,until,fixture,tab,contrasts,st
       ReportView.setUnit(${JSON.stringify(unit)},output);`);
     const rendered=await evaluate(`[...document.querySelectorAll('.ai-stat')].map(card=>({
       value:card.querySelector('.ai-stat-value').textContent,trait:card.querySelector('.ai-stat-trait').textContent,
-      state:card.querySelector('.ai-stat-state').textContent}))`);
+      state:!!card.querySelector('.ai-stat-state')}))`);
     const expected=item.result.view.ai_stats[0].metrics;
     assert.equal(rendered.length,10);
     rendered.forEach((card,index)=>{
       assert.equal(card.value,expected[index].display_units?.[unit]?.value || expected[index].display.value);
       assert.equal(card.trait,expected[index].display.trait);
-      assert.equal(card.state,expected[index].display.state);
-      assert.doesNotMatch(JSON.stringify(card),/Loading|vault/);
+      assert.equal(card.state,false);
+      assert.doesNotMatch(JSON.stringify(card),/Unavailable|Partial|Provisional|No data|N\/A|Unknown|Observed|≥|NaN|Infinity|vault/i);
     });
-    const affected=expected.findIndex(metric=>metric.status!=='complete');
-    if(affected>=0) {
+    assert.equal(await evaluate(`document.querySelectorAll('.ai-stat-state,.ai-stats-status').length`),0);
+    const forbidden=/Unavailable|Partial|Provisional|No data|N\/A|Unknown|Observed|≥|Some executions|Historical source coverage|not a verified overall winner|missing reference-price evidence|snapshot interval|The evidence is still in the vault|estimated|approximate|lower bound/i;
+    assert.doesNotMatch(await evaluate(`output.textContent+document.getElementById('report-updating').textContent`),forbidden);
+    for (const affected of theme==='classic' && unit==='credits' ? expected.map((_,i)=>i) : [0]) {
       await evaluate(`document.activeElement.blur(); document.dispatchEvent(new KeyboardEvent('keydown',{key:'Tab',bubbles:true}));
         document.querySelectorAll('.ai-stat h4 button')[${affected}].focus();`);
       await until(`!document.getElementById('context-help').hidden`);
-      assert.ok((await evaluate(`document.getElementById('context-help').textContent`)).includes(expected[affected].display.explanation));
+      assert.doesNotMatch(await evaluate(`document.getElementById('context-help').textContent`),forbidden);
       await escape();
     }
-    if(item.name==='observed-time') {
-      assert.match(rendered[2].value,/^≥ /);
-      assert.equal(rendered[2].state,'Partial');
-      assert.match(rendered[5].value,/^Observed /);
-      assert.match(rendered[5].trait,/not a verified overall winner/);
-      for(const index of [0,7,8,9]) assert.equal(rendered[index].value,'Unavailable');
-      await evaluate(`document.activeElement.blur();document.dispatchEvent(new KeyboardEvent('keydown',{key:'Tab',bubbles:true}));
-        document.querySelectorAll('.ai-stat h4 button')[2].focus();`);
-      await until(`!document.getElementById('context-help').hidden`);
-      assert.match(await evaluate(`document.getElementById('context-help').textContent`),/Observed lower bound/);
-      await escape();
-    }
+    const ax=await command('Accessibility.getFullAXTree',{},tab);
+    assert.doesNotMatch(ax.nodes.filter(node=>!node.ignored).map(node=>[node.name?.value,node.description?.value].join(' ')).join('\n'),forbidden);
     states.push({case:item.name,theme,unit,rendered});
   }
   await evaluate(`current.result=${JSON.stringify(cases.find(item=>item.name==='source-gap').result)}; current.stats.update(current);
@@ -124,8 +116,8 @@ module.exports = async function({command,evaluate,until,fixture,tab,contrasts,st
   await evaluate(`current.result=${JSON.stringify(cases.find(item=>item.name==='unknown-duration').result)};
     current.stats.update(current); ReportView.setUnit('credits',output);`);
   assert.equal(await evaluate(`document.activeElement===__focusedStat`),true);
-  assert.match(await evaluate(`document.getElementById('context-help').textContent`),/unknown start or end times/);
+  assert.match(await evaluate(`document.getElementById('context-help').textContent`),/silicon crew burns per hour/);
   await escape();
   await evaluate(`current.result=${JSON.stringify(original)};current.period='30-days';current.stats.update(current);`);
-  checks.push('nine canonical evidence cases in both units and three themes, including observed lower bound/qualified leaders and unknown ratios/streak/peak; reason/help updates retain focused heading');
+  checks.push('nine canonical evidence cases: ten numbers and playful traits in both units/three themes; no state/reason DOM, caveats in values/help/AX/live text; focused heading retained');
 };

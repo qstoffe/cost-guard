@@ -208,8 +208,6 @@ section > label input { min-width: 0; }
 .ai-stat-value { margin: 0; font-size: 1.65rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .ai-stat-detail { margin: .25rem 0; }
 .ai-stat-trait { margin: .7rem 0 0; font-size: .85rem; color: var(--muted); }
-.ai-stat-state, .ai-stats-status { color: var(--muted); font-size: .85rem; }
-.ai-stats-status:empty { display: none; }
 .token-mix-summary { display: flex; flex-wrap: wrap; gap: .75rem 2rem; }
 .token-mix-summary > div { display: flex; flex-direction: column; font-variant-numeric: tabular-nums; }
 .token-mix-summary > div > span { color: var(--muted); width: fit-content; }

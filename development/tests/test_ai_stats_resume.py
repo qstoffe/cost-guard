@@ -41,15 +41,19 @@ class StatsResumeTests(unittest.TestCase):
     def build(self, limit=None, scope='30-days'):
         return self.service(limit).build(ReportRequest(ReportKind.AI_STATS, stats_scope=scope))
 
-    def test_cold_narrow_waits_for_unknown_roots_then_resumes_without_rehydration(self):
+    def test_cold_narrow_publishes_numbers_then_resumes_without_rehydration(self):
         first = self.build(2, 'today')
         second = self.build(2, '7-days')
         final = self.build(2)
         loads = self.source.load_count
         canonical = self.build()
 
-        self.assertEqual((), first.ai_stats)
-        self.assertEqual((), second.ai_stats)
+        for report in (first, second):
+            self.assertEqual(5, len(report.ai_stats))
+            self.assertTrue(all(len(row.metrics) == 10 and all(m.value is not None for m in row.metrics)
+                                for row in report.ai_stats))
+        self.assertFalse(first.ai_stats_work['scopes']['7-days']['ready'])
+        self.assertGreater(first.ai_stats[1].metrics[1].value, 0)
         self.assertEqual((2, 4, 5), tuple(r.ai_stats_work['completed'] for r in (first, second, final)))
         self.assertEqual(5, loads)
         self.assertEqual(loads, self.source.load_count)
@@ -168,7 +172,7 @@ class StatsResumeTests(unittest.TestCase):
         self.build()
         self.assertEqual(before + 9, self.source.load_count)
 
-    def test_membership_change_during_final_verification_withholds_all_periods(self):
+    def test_membership_change_retains_usable_observation_without_certifying_new_revision(self):
         original = self.source.list_sessions
         calls = []
 
@@ -182,8 +186,10 @@ class StatsResumeTests(unittest.TestCase):
         with patch.object(self.source, 'list_sessions', side_effect=mutate):
             result = self.build(5)
 
-        self.assertEqual((), result.ai_stats)
-        self.assertEqual(1, result.ai_stats_work['remaining'])
+        self.assertEqual(5, len(result.ai_stats))
+        self.assertEqual(0, result.ai_stats_work['remaining'])
+        self.assertEqual(1, len(result.source_warnings))
+        self.assertGreater(result.ai_stats[-1].metrics[1].value, 0)
         self.assertTrue(self.build(5).ai_stats_work['scopes']['all']['ready'])
 
     def test_cache_write_failure_can_finish_small_work_but_not_loop_large_scan(self):
@@ -191,10 +197,12 @@ class StatsResumeTests(unittest.TestCase):
         readonly.sqlite_errorcode = sqlite3.SQLITE_READONLY
         for error in (OSError('unavailable'), readonly, sqlite3.OperationalError('unknown')):
             with self.subTest(error=type(error).__name__), patch.object(self.original.cache_repository, 'put_many', side_effect=error):
-                with self.assertRaisesRegex(StatsCheckpointError, '^ai_stats_checkpoint_unavailable$'):
-                    self.build(1)
+                partial = self.build(1)
                 result = self.build()
 
+            self.assertEqual('ai_stats_checkpoint_unavailable', partial.ai_stats_work['checkpoint_error'])
+            self.assertGreater(partial.ai_stats[-1].metrics[1].value, 0)
+            self.assertFalse(partial.ai_stats_work['scopes']['all']['ready'])
             self.assertTrue(result.ai_stats_work['scopes']['all']['ready'])
 
     def test_real_transient_cache_writer_backs_off_then_dispatcher_automatically_finishes(self):
@@ -220,6 +228,9 @@ class StatsResumeTests(unittest.TestCase):
         jobs = ReportJobs(context=context)
         self.addCleanup(jobs.close)
         dispatch = DataDispatcher(jobs, clock=lambda:clock[0], wall_clock=lambda:NOW / 1000)
+        # This single-pipe process double models the requested scan, not parallel
+        # speculative report children (covered by dispatcher/process probes).
+        dispatch.next_background = float('inf')
         request = ReportRequest(ReportKind.AI_STATS)
         cache = self.original.cache_repository
         with tempfile.TemporaryDirectory() as directory:
@@ -232,31 +243,35 @@ class StatsResumeTests(unittest.TestCase):
                 jobs.tick()
                 jobs.tick()
                 dispatch.tick()
-                failed = applications[0]
+                partial = applications[0]
                 entry = dispatch.entries[request]
 
                 self.assertEqual(sqlite3.SQLITE_BUSY, failures[0]['sqlite_code'])
                 self.assertEqual(50, failures[0]['busy_timeout_ms'])
                 self.assertTrue(failures[0]['controlled_write_lock'])
-                self.assertEqual('ai_stats_checkpoint_busy', failed['error']['code'])
-                self.assertTrue(failed['error']['retryable'])
+                self.assertIsNone(partial['error'])
+                self.assertEqual('ai_stats_checkpoint_busy', partial['view']['ai_stats_work']['checkpoint_error'])
+                self.assertIsNotNone(entry['result'])
                 self.assertFalse(entry['terminal'])
-                self.assertEqual(2, entry['due'])
                 for _ in range(12):
-                    clock[0] = max(clock[0] + .1, entry['due'])
+                    clock[0] = max(clock[0] + .1, entry['due'],
+                                   jobs._jobs[entry['job']].get('not_before', 0) if entry['job'] else 0)
                     dispatch.tick()
                     jobs.tick()
                     jobs.tick()
                     dispatch.tick()
-                    if entry['result'] is not None:
+                    if entry['job'] is None:
                         break
 
         self.assertIsNotNone(entry['result'], dict(entry=entry, applications=[value.get('error') for value in applications],
             jobs=[(job['status'],job.get('error')) for job in jobs._jobs.values()]))
-        self.assertEqual(0, entry['failures'])
+        self.assertEqual(0, entry['failures'], dict(entry=entry,
+            errors=[value.get('error') for value in applications],
+            jobs=[(j['status'], j.get('error')) for j in jobs._jobs.values()]))
         self.assertFalse(entry['terminal'])
         self.assertIsNone(entry['result']['error'])
         self.assertTrue(any(row['period']=='30-days' for row in entry['result']['view']['ai_stats']))
+        self.assertTrue(entry['result']['view']['ai_stats_work']['scopes']['30-days']['ready'])
 
     def test_active_evidence_is_fresh_at_publication_and_not_shared_across_observations(self):
         source = SyntheticMonthSource(5, 3, month_start_ms=NOW - DAY, running_roots=1)
@@ -389,17 +404,17 @@ class StatsResumeTests(unittest.TestCase):
         self.assertTrue({2, 4, 6, 8, 9} <= seen)
         self.assertIsNone(jobs._active)
 
-    def test_revision_churn_backs_off_without_expiring_and_later_progress_completes(self):
+    def test_stalled_work_settles_boundedly_without_claiming_complete_coverage(self):
         from src.web.stats_jobs import accept
         job = dict(request=ReportRequest(ReportKind.AI_STATS), result=None)
         result = dict(error=None, view=dict(ai_stats=[], ai_stats_work=dict(completed=0)))
 
-        for _ in range(40):
+        for _ in range(7):
             accept(job, result)
 
-        self.assertEqual('queued', job['status'])
+        self.assertEqual('complete', job['status'])
         self.assertNotIn('error', job)
-        self.assertAlmostEqual(60, job['not_before'] - job['queued_at'])
+        self.assertEqual([], job['result']['view']['ai_stats'])
         accept(job, dict(error=None, view=dict(ai_stats=[dict(period='30-days')],
             ai_stats_work=dict(completed=1))))
         self.assertEqual('complete', job['status'])

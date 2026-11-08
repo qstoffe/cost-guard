@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v80.210, 2026-11-08), the supported distribution.
+Use **current `main`** (v80.211, 2026-11-09), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -363,7 +363,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.210 (2026-11-08):** Full and Mini Watch show plain known-priced daily CCost subtotals without routine partial warnings. Zero, N/A, Loading and genuine failure states remain distinct; accounting and other partial markers are unchanged. See [daily figures](docs/web-mini-watch.md#what-the-figures-mean).
+**v80.211 (2026-11-09):** AI Stats puts fun first: ten numbers and playful traits in every period, early results and retained cards during refresh, friendly help and cheerful empty-period zeros. Watch, Sessions, CLI and financial/history reports are unchanged. See [AI Stats](docs/web-beta.md#ai-stats).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

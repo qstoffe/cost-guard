@@ -1,5 +1,6 @@
 """Independent AI Stats accounting, calendar boundaries and incremental acquisition."""
 from dataclasses import asdict, replace
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 import shutil
@@ -12,7 +13,7 @@ from development.tests.fixtures.active_hour import epoch
 from development.tests.fixtures.compact_reports import report_service, START, NOW
 from development.tests.fixtures.synthetic_month import SyntheticMonthSource, make_root_snapshot
 from development.tests.fixtures.ai_stats_views import stats_report
-from src.analysis.ai_stats import StatsRoot, period_stats, windows, DAY_MS
+from src.analysis.ai_stats import StatsObservation, StatsRoot, calendar_activity, period_stats, windows, DAY_MS
 from src.analysis.active_hour import HOUR_MS
 from src.analysis.models import TraceEntry
 from src.application import ReportApplication
@@ -37,29 +38,30 @@ def metrics(roots, *, start=None, now=None, zone='UTC', valuation=None, complete
 
 
 class AIStatsAnalysisTests(unittest.TestCase):
-    def test_empty_period_distinguishes_true_zero_from_missing_denominators(self):
+    def test_empty_period_has_ten_playful_zeros_without_fabricated_records(self):
         result = metrics(())
 
-        for key in ('total-cost', 'working-time', 'streak', 'parallel'):
+        for key in result:
             self.assertEqual((0, 'complete', ()), (result[key].value, result[key].status, result[key].reasons))
-        for key in ('hourly-rate', 'average-cost', 'expensive-session', 'longest-session', 'busiest-day', 'night-owl'):
             item = result[key]
-            self.assertEqual((None, 'no-data'), (item.value, item.status))
             display = stat_tokens(asdict(item))
-            self.assertEqual('No data', display['value'])
-            self.assertIn('completely observed period', display['explanation'])
+            self.assertRegex(display['value'], r'0')
+            self.assertTrue(display['trait'])
+            self.assertEqual({'value', 'trait'}, set(display))
+            self.assertIsNone(item.session_id)
+            self.assertEqual('', item.detail)
 
     def test_evidence_reasons_are_metric_specific_and_never_loading(self):
         at = epoch('2026-11-01T10:00:00+00:00')
         root = StatsRoot('a', 'A', (request('a', at, 4),), ((at, HOUR_MS, False),))
         cases = (
-            (replace(root, intervals=((at, None, False),)), {}, 'working-time', 'unknown-duration', None, 'unavailable'),
+            (replace(root, intervals=((at, None, False),)), {}, 'working-time', 'unknown-duration', 60_000, 'partial'),
             (root, {'complete': False}, 'working-time', 'source-incomplete', HOUR_MS, 'partial'),
-            (replace(root, source_complete=False), {}, 'hourly-rate', 'source-incomplete', None, 'unavailable'),
-            (root, {'valuation': lambda *_: None}, 'average-cost', 'unpriced-requests', None, 'unavailable'),
+            (replace(root, source_complete=False), {}, 'hourly-rate', 'source-incomplete', 4, 'partial'),
+            (root, {'valuation': lambda *_: None}, 'average-cost', 'unpriced-requests', Decimal('.000012'), 'partial'),
             (replace(root, entries=(replace(root.entries[0], tokens=TokenUsage(input=4, known_fields=())),)),
-             {}, 'expensive-session', 'missing-token-usage', 4, 'partial'),
-            (replace(root, cost_pending=True), {}, 'hourly-rate', 'pending-usage', None, 'unavailable'),
+             {}, 'expensive-session', 'missing-token-usage', Decimal('4.003750'), 'partial'),
+            (replace(root, cost_pending=True), {}, 'hourly-rate', 'pending-usage', 4, 'partial'),
         )
 
         for evidence, options, key, reason, value, status in cases:
@@ -69,14 +71,14 @@ class AIStatsAnalysisTests(unittest.TestCase):
                 self.assertEqual((value, status), (item.value, item.status))
                 self.assertIn(reason, item.reasons)
                 display = stat_tokens(asdict(item))
-                self.assertEqual(status.capitalize(), display['state'])
-                self.assertTrue(display['explanation'])
+                self.assertEqual({'value', 'trait'}, set(display))
+                self.assertTrue(display['trait'])
                 self.assertNotIn('Loading', str(display))
                 self.assertNotIn('vault', str(display))
         self.assertEqual('complete', metrics((root,), valuation=lambda *_: None)['working-time'].status)
         self.assertEqual('complete', metrics((replace(root, intervals=((at, None, False),)),))['total-cost'].status)
 
-    def test_partial_subtotal_and_provisional_time_have_qualified_copy_in_both_units(self):
+    def test_internal_diagnostics_never_replace_playful_copy_in_either_unit(self):
         from src.numbers import ccost_display
         at = epoch('2026-11-01T10:00:00+00:00')
         root = StatsRoot('a', 'A', (request('a', at, 4),), ((at, HOUR_MS, True),), cost_pending=True)
@@ -90,9 +92,10 @@ class AIStatsAnalysisTests(unittest.TestCase):
             with ccost_display(unit):
                 cost = stat_tokens(asdict(result['total-cost']))
                 timing = stat_tokens(asdict(result['working-time']))
-            self.assertIn('Observed subtotal only', cost['trait'])
-            self.assertIn('not yet reported usage', cost['explanation'])
-            self.assertIn('still in progress', timing['trait'])
+            self.assertEqual('The ledger has a side quest.', cost['trait'])
+            self.assertEqual('A short shift for the silicon crew.', timing['trait'])
+            self.assertEqual({'value', 'trait'}, set(cost))
+            self.assertNotRegex(str((cost, timing)), r'Observed|Partial|Provisional|Unavailable|≥')
 
     def test_older_unpriced_requests_only_invalidate_cost_for_the_scope_that_contains_them(self):
         at = epoch('2026-11-01T10:00:00+00:00')
@@ -104,16 +107,16 @@ class AIStatsAnalysisTests(unittest.TestCase):
         all_time = metrics((recent, old), valuation=valuation)
 
         self.assertEqual((4, 'complete', ()), (short['hourly-rate'].value, short['hourly-rate'].status, short['hourly-rate'].reasons))
-        self.assertEqual((4, 'partial', ('unpriced-requests',)),
+        self.assertEqual((Decimal('4.099'), 'partial', ('unpriced-requests',)),
                          (all_time['total-cost'].value, all_time['total-cost'].status, all_time['total-cost'].reasons))
-        self.assertIsNone(all_time['hourly-rate'].value)
+        self.assertEqual(Decimal('2.0495'), all_time['hourly-rate'].value)
         self.assertEqual(2 * HOUR_MS, all_time['working-time'].value)
 
-    def test_unknown_explanation_is_explicit_and_unrecognized_codes_are_not_rendered(self):
+    def test_legacy_null_and_unrecognized_codes_have_no_presentation_surface(self):
         display = stat_tokens({'metric': 'working-time', 'value': None, 'status': 'unavailable',
                                'reasons': ('PRIVATE_SOURCE_TEXT',)})
 
-        self.assertIn('reason for missing evidence is unknown', display['trait'])
+        self.assertEqual({'value': '0s', 'trait': 'The silicon crew took a nap.'}, display)
         self.assertNotIn('PRIVATE_SOURCE_TEXT', str(display))
 
     def test_ten_metrics_use_period_cost_root_denominator_and_overlap_union(self):
@@ -163,6 +166,20 @@ class AIStatsAnalysisTests(unittest.TestCase):
         line = stat_tokens({'metric': 'night-owl', 'value': 0, 'status': 'complete'})['trait']
         self.assertIn('Day-shift', line)
 
+    def test_repeated_calendar_boundaries_preserve_disjoint_dst_and_next_day_activity(self):
+        intervals = tuple((epoch(left), epoch(right)) for left, right in (
+            ('2026-03-28T23:30:00+00:00', '2026-03-29T00:00:00+00:00'),
+            ('2026-03-29T00:30:00+00:00', '2026-03-29T01:30:00+00:00'),
+            ('2026-03-29T10:00:00+00:00', '2026-03-29T11:00:00+00:00'),
+            ('2026-03-29T20:30:00+00:00', '2026-03-29T21:30:00+00:00'),
+            ('2026-03-29T22:30:00+00:00', '2026-03-29T23:00:00+00:00')))
+
+        days, night = calendar_activity(intervals, 'Europe/Stockholm')
+
+        self.assertEqual({date(2026, 3, 29): 7 * HOUR_MS // 2,
+                          date(2026, 3, 30): HOUR_MS // 2}, days)
+        self.assertEqual(3 * HOUR_MS, night)
+
     def test_windows_31_day_month_timezone_and_rolling_edges(self):
         now = epoch('2026-10-31T22:30:00+00:00')
         local = dict(windows('Europe/Stockholm', now))
@@ -172,25 +189,46 @@ class AIStatsAnalysisTests(unittest.TestCase):
         self.assertEqual(7 * DAY_MS, now - local['7-days'])
         self.assertEqual(30 * DAY_MS, now - local['30-days'])
 
-    def test_zero_unknown_partial_and_provisional_never_invent_exact_rates(self):
+    def test_shared_observation_reuses_only_identical_populations_and_keeps_period_clipping(self):
+        from src.analysis.active_hour import deduplicated_requests
+        now = epoch('2026-11-10T12:00:00+00:00')
+        old, recent = now - 8 * DAY_MS, now - DAY_MS
+        roots = (StatsRoot('a', 'A', (request('a', old, 4),), ((old, HOUR_MS, False),)),
+                 StatsRoot('b', 'B', (request('b', recent, 6),), ((recent, HOUR_MS, False),)))
+        observation = StatsObservation(roots, lambda _model, tokens: Decimal(tokens.input), now=now, zone='UTC')
+
+        with patch('src.analysis.ai_stats.deduplicated_requests', wraps=deduplicated_requests) as dedup:
+            week = observation.period(period='7-days', start=now - 7 * DAY_MS)
+            entire = observation.period(period='all', start=None)
+            month = observation.period(period='30-days', start=now - 30 * DAY_MS, source_complete=False)
+            week_again = observation.period(period='7-days', start=now - 7 * DAY_MS)
+
+        self.assertEqual(2, dedup.call_count)
+        self.assertEqual(week, week_again)
+        self.assertEqual((Decimal(6), HOUR_MS), (week.metrics[1].value, week.metrics[2].value))
+        self.assertEqual((Decimal(10), 2 * HOUR_MS), (entire.metrics[1].value, entire.metrics[2].value))
+        self.assertEqual(Decimal(10), month.metrics[1].value)
+        self.assertIn('source-incomplete', month.metrics[1].reasons)
+
+    def test_zero_broken_and_running_activity_always_produce_finite_figures(self):
         empty = metrics(())
         self.assertEqual(0, empty['total-cost'].value)
         self.assertEqual(0, empty['working-time'].value)
-        self.assertIsNone(empty['hourly-rate'].value)
-        self.assertIsNone(empty['average-cost'].value)
-        self.assertIsNone(empty['night-owl'].value)
+        self.assertEqual(0, empty['hourly-rate'].value)
+        self.assertEqual(0, empty['average-cost'].value)
+        self.assertEqual(0, empty['night-owl'].value)
         self.assertEqual(0, empty['streak'].value)
         at = epoch('2026-11-01T10:00:00+00:00')
         root = StatsRoot('a', 'A', (request('a', at, 1),), ((at, None, False),))
         unknown = metrics((root,))
-        self.assertIsNone(unknown['working-time'].value)
-        self.assertIsNone(unknown['hourly-rate'].value)
+        self.assertEqual(60_000, unknown['working-time'].value)
+        self.assertEqual(60, unknown['hourly-rate'].value)
         priced = metrics((replace(root, intervals=((at, HOUR_MS, True),)),))
         self.assertEqual('provisional', priced['working-time'].status)
         self.assertEqual(1, priced['hourly-rate'].value)
         partial = metrics((root,), valuation=lambda *_: None)
         self.assertEqual('partial', partial['total-cost'].status)
-        self.assertIsNone(partial['expensive-session'].session_id)
+        self.assertEqual('a', partial['expensive-session'].session_id)
         missing = replace(root, entries=(replace(root.entries[0], tokens=TokenUsage(input=1, known_fields=())),))
         self.assertEqual('partial', metrics((missing,))['total-cost'].status)
 
@@ -223,7 +261,7 @@ class AIStatsAcquisitionTests(unittest.TestCase):
 
             self.assertEqual((900, 'partial', ['source-incomplete']),
                              (metric['value'], metric['status'], metric['reasons']))
-            self.assertIn('coverage is incomplete', metric['display']['trait'])
+            self.assertEqual('A short shift for the silicon crew.', metric['display']['trait'])
             self.assertNotIn('PRIVATE_SOURCE_DIAGNOSTIC', str(metric))
 
     def test_incomplete_snapshot_remains_incomplete_after_cached_reuse_and_dto_projection(self):
@@ -237,9 +275,9 @@ class AIStatsAcquisitionTests(unittest.TestCase):
 
         self.assertEqual(first, warm)
         metric = dto['ai_stats'][-1]['metrics'][2]
-        self.assertEqual(('unavailable', None, ['source-incomplete']),
+        self.assertEqual(('partial', 900, ['source-incomplete']),
                          (metric['status'], metric['value'], metric['reasons']))
-        self.assertIn('coverage is incomplete', metric['display']['explanation'])
+        self.assertEqual({'value', 'trait'}, set(metric['display']))
         self.assertIsNone(dto['ai_stats'][-1]['matched'])
 
     def test_actual_finite_process_returns_coherent_ai_stats(self):
@@ -297,7 +335,7 @@ class AIStatsAcquisitionTests(unittest.TestCase):
         source.snapshots[late.root.session_id] = late
         original = report_service(self, source, now_ms=now)
         initial = self.fresh(original, now=now).build(ReportRequest(ReportKind.AI_STATS))
-        self.assertEqual({'today', '7-days', '30-days'}, {row.period for row in initial.ai_stats})
+        self.assertEqual({'today', '7-days', '30-days', 'month', 'all'}, {row.period for row in initial.ai_stats})
         self.assertEqual(3, source.load_count)
         extended = self.fresh(original, now=now).build(ReportRequest(ReportKind.AI_STATS, stats_scope='month'))
         self.assertIn('month', {row.period for row in extended.ai_stats})

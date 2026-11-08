@@ -107,7 +107,7 @@ Schema version and application instance UUID are separate from per-request-view 
 | Session detail | SESSION / prompt_blocks, request_identities | Complete requested root/child tree, stable event/message/part references and opaque request key; no global Watch cap; inherited FR000200 running metrics |
 | Date/range | DATE / prompt_blocks | Configured-local inclusive date target mapped to exclusive end; DST, context and duration remain existing semantics |
 | Historical Token Mix | TOKEN_MIX / model_token_mix, publisher_token_mix and total | Separate deep all-available-history method, not build's dashboard fallback; existing availability fail-open behavior; no request rows or promise to recover pruned history |
-| Web AI Stats | AI_STATS / ai_stats periods plus ai_stats_work | Shared resumable acquisition, selected-scope priority and conditional coherent milestones; configured-local calendar/DST, event-time cost and overlap-safe root execution; no accounts/request rows or CLI mode change |
+| Web AI Stats | AI_STATS / ai_stats periods plus ai_stats_work | Shared resumable acquisition with early fun-first numeric snapshots independent of scan readiness; Stats-only bounded time/cost heuristics, configured-local calendar/DST and overlap-safe execution; no accounts/request rows or CLI change |
 
 The [Web route inventory](../../../docs/web-beta.md#navigation-and-static-reports) maps views; visual/native acceptance is separate. Application tests pin canonical V1/V2 lifecycle/child/compaction/partial, timezone/account-error, uncapped detail, deduplication, immutable export and typed-failure parity. Fresh ownership, cleanup and forbidden application/Web imports in CLI/Diagnostics remain covered. Focused workload/history tests cover revision/catalog invalidation, deletion and publisher totals; no new dependency or permanent gate.
 
@@ -136,44 +136,44 @@ browser proof retain their actual limits in the Token Mix journal.
 
 ## Web AI Stats acquisition and accounting
 
-`src/reports/ai_stats.py::StatsAcquisition` owns shared root coverage, active ancestry,
-bounded slices, fresh membership/revision verification and coherent period projection.
-`ai_stats_evidence.py` owns compact encoding/validation and pricing-independent scalar
-exclusion proofs. Canonical request/category facts reuse `token_mix_cache.py`; intervals,
-completeness and matched-run scalars add no raw prompts/session text. Stable evidence
-is source-/revision-/algorithm-/pricing-keyed. Volatile checkpoints use one fixed
-per-root transient namespace and pinned logical scan, and refresh before publication.
-Metadata orders work only; every unknown root may affect every period. Valid stable
-end bounds prioritize Today, then 7 days, then selected scope; only proved irrelevant
-missing roots permit earlier coherent short-period publication. Decision Delegate's
-FR000614 exception makes early completion conditional, not an unconditional latency claim.
+FR000633 scoped delta against `9b9fdf389d93d90a09bfa13e9b075b564d026961`,
+checked 2026-11-08; unrelated module provenance above remains unchanged.
+`src/reports/ai_stats.py::StatsAcquisition` owns bounded slices, root membership,
+revision checks and all-five-period snapshots from the usable evidence already
+collected. `ai_stats_work` tracks actual readiness separately: numbers no longer
+certify full coverage. A changed root's usable observation may remain in Stats but
+loses its revision proof; deleted roots are removed. Financial/history reports stay strict.
 
-Each Web slice acquires at most 256 missing roots in batches of at most 64, with at
-most four overlapping V2 reads. Direct canonical analysis avoids duplicate full-bundle
-cache writes; compact evidence/proofs persist in bulk. The final complete catalog and
-revision check invalidates changed/new/active evidence. Projection calculates only
-selected/contained ready rows, preserving warm performance; `ai_stats_work` separately
-exports all scope counts/readiness. Hard root/fact bounds and specific checkpoint
-failures prohibit unbounded memory or infinite failed persistence loops. Page reload
-and host restart reuse only valid derived evidence, never a durable history source.
+`ai_stats_evidence.py` retains compact canonical request/category facts and real
+interval/matched-run scalars, never prompts. Stats evidence algorithm
+`ai-stats-evidence-5-fun-1` invalidates old semantics without replacing shared base
+evidence; coverage proof format remains 2. Each slice keeps the 256-root/64-batch/
+maximum-four-read bounds, fixed transient namespace and source/revision/pricing
+keys. Checkpoint errors retain acquired figures; six nonadvancing slices or a
+nonbusy checkpoint failure settle a fun snapshot without falsifying coverage.
+BUSY/LOCKED retries use bounded backoff. Root/fact/memory and process ownership
+limits remain. Restart reuses valid disposable evidence, never a second source.
 
-`src/analysis/ai_stats.py` owns event-time deduplication, exact cost/root averages,
-clipped execution unions, root concurrency, local-date/night/DST splitting, longest
-streak and deterministic records. Each `Stat` carries source-derived reason codes:
-source coverage, unknown timing, unpriced requests, missing token telemetry, pending
-usage, provisional execution or an absent denominator. Complete-empty undefined
-metrics use `no-data`; real zero totals and qualified partial subtotals survive.
-Snapshot incompleteness, warnings and migration gaps cannot imply complete metrics.
-`src/application/ai_stats.py` allowlists plain-language explanations and prepares
-unit-aware values, status labels and complete-value traits. Projection carries the
-reason tuple; JS shows the explanation in-card and in current-period title help,
-without parsing errors or inventing causes. The shared loader consumes truthful scope
-coverage across finite workers; JS never revalues.
-Independent `active_hour.py` APIs and session-detail rate remain supported.
-Scoped source check: FR000614 delta on the base above, not revalidation
-of every contract above. `development/tests/test_ai_stats.py` and `test_ai_stats_resume.py`
-pin arithmetic, revisions, real spawned slices/coalescing and policy edges; browser and
-real-source probes/evidence are routed by [AI Stats findings](../../journal/web/ai-stats.md).
+`src/analysis/ai_stats.py` policy `fun-1` alone supplements missing time/cost with
+bounded deterministic heuristics; healthy formulas retain event-time deduplication,
+clipped unions, root concurrency, local-date/night/DST splitting and stable ties.
+All ten results are finite, including empty histories. Observation-local
+`StatsObservation` preparation sharing does not change each
+period's clipping, fallback-rate pooling or completeness calculation. Shared
+deduplication requires identical ordered root populations; no cross-slice cache.
+Private `Stat` reason codes
+and source completeness remain diagnostic facts, not display/admission gates.
+`src/application/ai_stats.py` emits unit-aware value/trait tokens only; projection
+marks `ai_stats_policy=fun-1`. `assets/ai-stats.js` validates that policy and retains
+usable period figures, renders playful loading/zero outcomes and removes state,
+explanation and technical-summary DOM. Shared historical summaries skip Stats only.
+JS never revalues. Canonical valuation/duration, Watch, Sessions, CLI, Token Mix,
+Comparisons and independent `active_hour.py` contracts remain unchanged.
+
+Focused tests are `development/tests/test_ai_stats.py`, `test_ai_stats_recovery.py`,
+`test_ai_stats_resume.py` and Stats-only branches in `test_web_dispatch.py`.
+Browser, fixed-history parity and read-only real-source evidence, heuristic constants
+and the scoped documentation-method exception are in [AI Stats findings](../../journal/web/ai-stats.md).
 
 ## Allowed dependencies
 

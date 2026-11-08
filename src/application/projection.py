@@ -7,6 +7,7 @@ import json
 
 from src.analysis.model_supersession import superseded_rows
 from src.analysis.active_hour import active_hour
+from src.analysis.ai_stats import POLICY as STATS_POLICY
 
 from .contracts import ObjectValue, record
 from .display import with_display
@@ -189,13 +190,14 @@ def project(report, timezone_id="UTC", ccost_display_unit="credits", *, prompt_d
         session_page=fields(report.session_page, "offset size total catalog_revision") if report.session_page else None,
         prompt_blocks=tuple(block(item, source_complete=not report.source_warnings, details=prompt_details) for item in report.prompt_blocks),
         active_hours=tuple(hourly(item) for item in report.active_hours),
+        ai_stats_policy=STATS_POLICY if report.kind.value == 'ai-stats' else None,
         ai_stats=tuple(record(period=item.period, start_ms=item.start_ms, end_ms=item.end_ms,
             metrics=tuple(fields(metric, 'metric value status session_id session_title detail reasons') for metric in item.metrics),
             matched=fields(item.matched, 'metric value status session_id session_title detail') if item.matched else None)
             for item in report.ai_stats),
         ai_stats_work=record(scopes=record(**{key: record(**value)
             for key, value in report.ai_stats_work.get('scopes', {}).items()}),
-            **{key: report.ai_stats_work[key] for key in ('completed', 'total', 'remaining')
+            **{key: report.ai_stats_work[key] for key in ('completed', 'total', 'remaining', 'checkpoint_error')
                if key in report.ai_stats_work}) if report.ai_stats_work else None,
         comparisons=comparisons_page(report.comparisons),
         accounts_quotas=accounts(report.accounts_quotas), notes=report.notes,

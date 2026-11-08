@@ -1,190 +1,191 @@
-# AI Stats: evidence recovery and resumable history
+# AI Stats: fun-first numbers and resumable history
 
-Source revision: 8a53900935402c97fe2dcefb0a729ce4f93b00dc
-Checked revision: 8a53900935402c97fe2dcefb0a729ce4f93b00dc
-Last checked: 2026-11-07
+Source revision: 9b9fdf389d93d90a09bfa13e9b075b564d026961
+Checked revision: 441b30a3aa6835a922598e32a5b9357bd062d8f7
+Last checked: 2026-11-09
 Status: current
 
 ## Summary
 
-FR000619/v80.199 implementation delta against the revision above, not a new audit
-of untouched history. Owners remain `src/analysis/ai_stats.py` (statistics),
-`src/analysis/compaction.py` (canonical compaction timing),
-`src/reports/ai_stats.py`/`ai_stats_evidence.py` (acquisition/checkpoints/proofs),
-`src/application/ai_stats.py` (prepared display), and `src/web/stats_jobs.py`/`jobs.py`
-(logical acquisition and finite processes). No architecture boundary changed;
-the CODE_MAP update is navigation-only.
+FR000633 implementation delta against the revision above, not a fresh audit of
+unchanged reports. The owner deliberately replaced conservative AI Stats-only
+calculation/presentation: ten finite numbers and playful traits in every period,
+with no evidence caveats, badges or hidden explanations. Canonical Watch, Sessions,
+CLI, Token Mix, Comparisons, valuation and execution-duration contracts stay strict.
+No source writes, paid inference, new service or persisted prompt text are added.
 
-An unknown execution must not erase valid unioned intervals. Working Time now
-retains a **Partial lower bound**; Longest Session/Busiest Day retain **Observed**
-subtotal leaders, not verified overall winners. Most Expensive Session can retain
-a positive observed cost leader. Full averages, hourly rates, Night Owl, Coding
-Streak and Peak Parallel Sessions still require their actual dependencies. No
-average or concurrency maximum is manufactured from a smaller known subset.
+Owners: `src/analysis/ai_stats.py` calculates Stats; `src/reports/ai_stats.py` and
+`ai_stats_evidence.py` acquire/checkpoint/project; `src/application/ai_stats.py`
+prepares both units; `src/web/stats_jobs.py` schedules bounded slices;
+`assets/ai-stats.js`, `app.js` and `cached-reports.js` retain/render fun results.
+Responsibilities/dependencies are unchanged; CODE_MAP changes are navigation-only.
 
-Cost and timing evidence stay independent. A complete, stable, non-running root
-with known execution ends, no pending usage and all requests before a boundary
-can be excluded. Incomplete snapshots, unknown ends, active roots and membership/
-migration gaps cannot be dismissed because catalog metadata looks old. Complete
-evidence retains exact original values, traits, root/child dedup, event-time cost,
-overlap union and local/DST calendar semantics. All time excludes no old root.
+### Stats-only heuristic rules
 
-Completed native compaction parts can supply an explicit `time.end` when the
-message-level completion is absent. Creation time, normalized updated-time
-fallbacks, completed status/summary presence and adjacent unrelated prompts do
-not prove an end. Analysis algorithm 17, compact evidence 4 and coverage 2 reject
-old interpretations; source revisions and price/config/identity remain required.
-No raw snapshots/prompts are newly persisted and no source writes are introduced.
+- `fun-1` unions reliable measured intervals first and clips to period/observation.
+  Broken known-start intervals use the next root-local timestamp, capped at four
+  hours, or one minute if absent. Running unknown ends use observation, capped at
+  four hours. Missing starts use a real request timestamp with a bounded supplied
+  duration or preceding one minute. No timestamp means no invented date.
+- Request-only activity gets one-minute preceding pulses. Broken histories may
+  fill uncovered request timestamps; complete measured histories do not gain time
+  from requests at their edge. Union/dedup, half-open concurrency, selected-local
+  calendar/DST splitting and stable record ties remain. Winners/links use real roots.
+- Valid finite nonnegative known cost up to $1e9/request wins. Missing prices use
+  pooled known same-model cost/token (capped $.001/token), otherwise $.000003/token.
+  Missing input/output assumes 250/1,000 tokens; cached/write assumes zero. Guessed
+  tokens cap at ten million and supplement at $10/request. Known cost is retained.
+  Pending time-only activity gets $.003/root; fully empty known tokens stay zero.
+- Zero denominators produce zero, not null. Rates cap at $1e9; prepared numeric
+  displays clamp to 1e12 and percentages to 100. These are fun-page rules, not a
+  change to canonical telemetry, CCost or global `None`/`source_complete` meaning.
+
+### Acquisition, cache and presentation
+
+All five rows publish from usable slices before complete coverage. Changed roots
+may retain this observation's usable Stats facts but lose newer-revision proof;
+deleted roots are removed. Actual `ai_stats_work` remaining/readiness stays truthful.
+No private progress of 100 means a partial scan finished. Six nonadvancing slices or
+nonbusy checkpoint failure settle a usable snapshot; BUSY retries back off. Existing
+256-root slices, 64-root batches, maximum-four V2 reads, 100,000-root/250,000-fact
+limits and finite-process/cancellation/security ownership remain.
+
+Stats compact algorithm is `ai-stats-evidence-5-fun-1`; coverage remains version 2.
+Projection/browser policy `fun-1` rejects old conservative retained results without
+invalidating unaffected shared evidence. Private reason/status/source diagnostic
+facts survive, but prepared display emits only value/trait. State, explanation,
+interval and technical-history-summary DOM are removed, not CSS-hidden. Warm
+updates retain cards; a never-successful cold failure gets ten playful zeros and no
+invented session links. Optional matched facts retain their independent eligibility.
 
 ## Evidence
 
-Before formulas changed, opt-in synthetic and authorized read-only V2 probes
-produced count-only per-card matrices. The local observation had **2,787 roots**,
-**zero incomplete snapshots**, no selected-source warning, **eight missing
-compaction durations**, no missing execution starts/negative durations, one running
-interval and no missing token categories. Ordinary prompt durations were known.
-Wire inspection counted ten native compactions (eight qualified completed records):
-all had creation time and none had a supported end/completion field. Missing
-prices affected **17 requests in one root**. This establishes a legitimate native
-time gap plus avoidable aggregate information loss; it does not identify the
-owner's exact earlier failing run or prove a hidden cache/normalizer incident.
-
-The final same-observation baseline/new formula comparison used current compact
-facts and exact baseline source, never a second mutable source read:
-
-| Scope | Baseline unavailable | Current unavailable | Current partial | Current exact cost cards |
-| --- | ---: | ---: | ---: | ---: |
-| Today / 7 days / This month | 7 | 4 | 3 | 3 |
-| 30 days / All time | 9 | 5 | 5 | 0 |
-
-The five partial values are total cost, working time and the three observed
-session/day leaders. Unknown full time/rate/share/streak/peak and incomplete
-average stay unknown. Bounds independently excluded 2,778 / 2,425 / 642 / 2,425
-roots from Today / 7 / 30 / month; the eight unknown compactions remained relevant
-to every scope. The source's migration comparison was **not inspected**, not a
-positive migration-completeness proof. The initial diagnostic's Boolean of the
-diagnostic object overstated this as a gap; the maintained probe now reports
-`inspected` and `has_gap` separately. No acquisition/price failure was established.
-
-Reproduction (isolated caches; aggregate output only):
+Reproduce on a local workstation with disposable own caches:
 
 ```text
-py -3 development/tests/integration/probe_ai_stats_evidence.py --synthetic
-py -3 development/tests/integration/probe_ai_stats_evidence.py --baseline 8a53900935402c97fe2dcefb0a729ce4f93b00dc
-py -3 development/tests/integration/benchmark_ai_stats.py --baseline 8a53900935402c97fe2dcefb0a729ce4f93b00dc
-py -3 development/tests/integration/probe_ai_stats.py --cold-and-warm
 py -3 development/tools/run_tests.py --suite full
 py -3 development/tools/validate_package.py --working-tree
-node development/tests/integration/probe_ai_stats.cjs <browser-executable> <output-json>
+node development/tests/integration/probe_ai_stats.cjs <headless-browser> <output-json>
+py -3 development/tests/integration/benchmark_ai_stats.py --baseline 9b9fdf389d93d90a09bfa13e9b075b564d026961 --sliced
+py -3 development/tests/integration/probe_ai_stats.py --cold-and-warm --budget-seconds 600
 ```
 
-Full: **155 files, zero failures, 97.8s**. Focused recovery cases cover a single
-unknown among known intervals, one incomplete snapshot among 2,700 roots,
-independent pricing/tokens/pending/time, old complete versus unknown/incomplete
-roots, explicit compaction ends versus absent/invalid ends, bound rounding and
-old algorithm/proof rejection. Existing source, DST, cache/revision, archived/
-deleted-root, process, loading and dispatcher checks remain in Full.
+Focused tests cover mixed missing starts/ends/tokens/prices, running/old/incomplete
+roots, all five periods/both units, empty/extreme inputs, healthy formulas, DST,
+ties/dedup, early slices, revision churn, bounded stalls and checkpoint recovery.
+`test_web_dispatch.py` preserves strict rejection/omission for Token Mix/Comparisons
+while asserting the deliberate Stats exception. Single-pipe mock dispatch disables
+speculative background admission; real process/production probes are separate.
 
-Hidden Edge: **15 checks, 54 canonical state/theme/unit cases, nine layouts,
-80 enlarged-text layouts, 1,350 contrast samples, zero runtime errors**. Actual
-HTTP/assets/CSP, help keyboard/hover/touch, focus/keyed cards, quiet refresh,
-30→7→All and finite-process/two-tab resumption were exercised. Production fixture:
-7 days ready at 2/24 roots; 12 children/exactly 24 hydrations; no surviving owned
-child/host failure. Integrated browser was disconnected, so no integrated PASS.
-Physical devices, real screen-reader speech and non-Chromium paint remain unproved.
+Initial read-only observation covered **2,980 roots**. Final post-sharing probe:
+four complete/error-free requests, five periods × ten values; cold30 **129.005s/12
+slices**, warm30 **6.774s/1 slice**, All reuse **0s** (not a new cold scan), fresh
+warmAll **6.216s/1 slice**. Private missing-duration/price/running reasons survived.
+These mutable-source timings overlapped other tests: acquisition/population proof,
+not paired speedup or browser paint. `scratch:/ai-stats-live-delivery.jsonl`.
 
-Fixed healthy **2,700 roots/54,000 requests**, small histories and cold/warm/1%
-changed states retained all ten metrics and optional matched fact: **18 selected-
-period baseline comparisons passed**. The benchmark now loads the old formulas
-as well as its builder; importing today's formula would make parity vacuous.
-Direct-builder large-history seconds (baseline/current):
+Final post-sharing Full: **174 files, zero failures, 124.1s**, four isolated workers.
+Validator: **11 passes, zero failures, seven existing warnings**, no raised budgets.
+Follow-up focused Stats/recovery/resume/Token Mix: **62 tests passed**; focused
+Stats/recovery/resume after sharing: **51 tests passed**.
 
-| Scope | Cold | Warm | 1% changed |
-| --- | ---: | ---: | ---: |
-| 7 days | 9.644 / 9.389 | 4.031 / 3.906 | 3.466 / 3.494 |
-| 30 days | 10.945 / 11.264 | 4.234 / 4.405 | 4.859 / 4.152 |
-| All time | 11.635 / 12.162 | 6.346 / 5.186 | 6.114 / 5.516 |
+Hidden Edge complete probe: **PASS, 16 checks, 54 canonical state/theme/unit cases,
+9 layouts, 80 enlarged-text layouts, 1,350 contrast samples, zero runtime errors**.
+Actual HTTP/assets, hover/focus/touch help, keyboard/session links, retained warm
+refresh, cold-failure zeros and all five periods/units were exercised. Production
+two-tab fixture: 7 days ready at 2/24 roots; 12 finite children/exactly 24 hydrations;
+original broad goal resumed without another selection. All owned host/browser/
+worker resources closed cleanly. Post-sharing rerun passed the same full probe:
+`scratch:/ai-stats-browser-delivery.json`.
 
-Cold/warm/changed hydrate **2,700/0/27** roots, with unchanged measured acquisition
-counts. This immediate baseline supports 7 days directly; only genuinely older
-builders fall back to acquiring 30 days. The comparator uses historical report/
-formula code with current shared dependencies, not a whole historical checkout.
-Direct timings exclude process/IPC and are not a universal speedup claim. Cold
-All adds about 0.53s/4.5%; its shared analysis stage adds 0.56s while Stats projection
-falls 0.17s. Variation is consistent with noise, not proof that it is noise.
-Final real count-only
-direct acquisition: **63.379s wall, 40.969s CPU, 291,098,624-byte peak working set**;
-initial pre-change direct probe 112.698s/44.094s/295,829,504 bytes was nonpaired and
-overlapped synthetic work, not causal latency proof. Actual production cold30
-**78.583s**, warm30 **4.261s**, All extension **5.190s**, warmAll **4.848s**, all
-complete without terminal errors. No new acquisition scan/lane, catalog policy,
-paid inference or Watch scheduling change was introduced.
+Profiling identified repeated local-day boundary construction as the largest
+Stats-local self-time consumer. Boundaries now reuse one calculation-local entry
+per calendar day, preserving timezone/DST behavior; a disjoint spring-transition/
+next-day regression pins actual night/day totals. Healthy costs skip unused rate
+pooling, and aligned request/value sequences avoid repeated rich-entry hashing.
+No persistent cache, new dependencies, canonical analysis change or heuristic
+change is involved. The benchmark now waits on explicit selected-scope readiness
+and applies the same sliced settings to both capable builders; earlier current-only
+sliced timings were not a like-for-like latency comparison.
 
-Own evidence: `scratch:/baseline-heavy-gap.json`, `scratch:/baseline-live-wire.json`,
-`scratch:/recovery-live.json`, `scratch:/benchmark-final.jsonl`, `scratch:/browser.json`,
-`scratch:/full-tests.txt`, `scratch:/live-cold-warm.jsonl`.
+The Delegate did not accept the initial residual cold CPU regression (about 68%
+for 30 days and 44% for All time). It directed one bounded preparation-sharing
+repair before reconsideration: `StatsObservation` now reuses unclipped intervals/
+flags and request deduplication only for exactly identical ordered root populations
+within one projection. Every period still clips timestamps, pools fallback rates,
+evaluates completeness and calculates matched facts independently. No persistent
+cache, cross-slice invalidation or reduced publication frequency was introduced.
 
-### Retained lifecycle and historical decisions
+Sharing diagnostic: **120 mixed-input five-period parity cases** and six fixed
+large-history all-period signatures match the saved pre-sharing fun implementation.
+30-day cold projection fell **24.19→18.11s**, CPU **49.58→43.77s**; 7-day warm
+projection **3.86→2.77s**, CPU **6.28→5.31s**. Workload overlap limits causal claims.
+`scratch:/sharing-diagnostic.jsonl` retains the bounded driver/results.
 
-FR000614 checkpoints share source/config/pricing/algorithm-keyed compact facts,
-256-root slices, 64-root batches, maximum-four V2 reads, complete membership/tree
-revision verification, volatile refresh, finite child watchdogs and bounded
-resource/storage/stall failures. Unknown old roots may delay even Today/7 days;
-earlier completion is conditional on independently verified stable coverage.
-FR000615 removed arbitrary logical interest expiry and user Cancel; up to five
-requested scopes persist without polling interest, narrow goals prioritize work
-and earlier goals resume. FR000617's host dispatcher owns retained demand and
-shared compact products; it does not turn partial evidence into exact results.
-Active-page retention versus one-hour re-entry withholding remains distinct.
+Final historical-builder/formula benchmark: **18 selected-period parity comparisons
+passed**, 12/2,700 roots × 20 requests, three scopes, cold/warm/1% changed. Both
+builders use fresh services/256-root slices; hydrations remain **2,700/0/27**, with
+11 cold slices. First numeric results: **1.10–1.44s vs 31.70–32.64s**. Large-history
+seconds below are baseline/current, not ceilings:
 
-**Historical Decision Delegate exceptions, not renewed FR000619 waivers:**
-FR000614 accepted conditional shorter-period completion where source capabilities
-cannot prove cold exclusion, and a residual warm/changed large-history slowdown
-after bounded investigation. Its sliced cold30 improved 50.980→27.023s, while
-warm30 regressed 5.010→5.560s; 18 parity comparisons passed. Neither correctness,
-freshness nor materially worse future evidence was waived. Mutable real history
-prevented paired speed claims. Its helper/schema exception covered contextual
-module/navigation edits and a bounded journal only. FR000611's CSS-only live-
-timeout exception likewise grants no present verification waiver.
+| Scope | Cold wall | Cold CPU | Warm wall | Changed wall |
+| --- | ---: | ---: | ---: | ---: |
+| 7 days | 32.27/39.89 | 30.41/38.94 | 4.83/4.27 | 4.67/4.44 |
+| 30 days | 31.70/35.85 | 30.80/35.28 | 5.56/4.61 | 5.60/5.06 |
+| All | 32.64/36.08 | 31.28/35.14 | 6.02/4.15 | 6.45/4.60 |
 
-**Current Decision Delegate documentation exception:** the knowledge helper read
-failed before writes with `KNOWLEDGE_LIMIT` because this legacy leaf exceeded
-12 KiB; inspected ancestors also have legacy routing debt. The delegate authorized
-this direct consolidation to ≤12,288 UTF-8 bytes and necessary AI Stats navigation
-edits only. No helper PASS, limit increase, blanket exception or architecture
-diagram rewrite is claimed. This exception waives no product acceptance/testing.
+`scratch:/ai-stats-benchmark-delivery.jsonl`. Historical builder/formulas use current
+shared dependencies, not a complete old runtime. Baseline partly overlapped other
+checks; exact causal percentages and real-source comparative overhead are unproved.
 
-**Current Decision Delegate performance-proof exception:** accept these mixed
-timings and bounded immediate-baseline/current-production measurements instead of
-strict frozen-corpus whole-stack latency/CPU/memory comparison against FR000614.
-The accepted residual increase includes cold All +0.53s/4.5%. Useful evidence
-recovery and unchanged measured acquisition counts justify this tradeoff, not a
-nonregression PASS or inherited historical waiver. No correctness, freshness,
-resource bound or actual Watch-regression requirement is waived. Comparative Watch
-responsiveness and aggregate logical-job memory are not proved by these probes.
+**Current Decision Delegate performance exception:** after the directed repair and
+parity proof, the foreground Delegate accepted criterion 6's measured residual cold
+completion CPU increase (**28%/14.6%/12.3%**) for earlier numeric publication, unchanged
+scanning and improved warm/changed measurements. This is not a blanket nonregression
+PASS or guaranteed ceiling. No extra scanning, warm regression, stall, retention/
+period leakage, other-report or future-change waiver; Full/validator/CI remain required.
+
+### Historical findings and scoped decisions
+
+FR000619's earlier 2,787-root observation recovered measured time but intentionally
+left 4–5 unavailable and 3–5 partial cards; FR000633 supersedes that accepted policy.
+Its native compaction finding remains valid: explicit completed-part `time.end` can
+recover canonical timing; creation time/status/summary alone cannot prove an end.
+Canonical compaction normalization is not changed here.
+
+Earlier FR000614/FR000615/FR000617 lifecycle and FR000619 performance/documentation
+exceptions grant no present waiver.
+
+**Current Decision Delegate documentation-method exception:** the legacy knowledge
+helper rejected the requested read with `KNOWLEDGE_LIMIT` before writes because
+existing leaves exceeded 12KiB. The foreground read-only Delegate authorized direct
+patching for this FR only: consolidate this leaf to <=12,288 UTF-8 bytes, surgically
+update the AI Stats section/table in `architecture/modules/reports.md`, and change
+only its CODE_MAP row/scoped provenance. Preserve unrelated provenance; no helper
+changes, raised limits, whole-module audit, diagram rewrite or helper PASS. No
+product/test waiver was granted by that documentation decision; the separate cold
+performance decision above is narrowly scoped. The FR separately owns user docs.
 
 ## Next investigations
 
-The owner's exact original private observation remains unverified. Native records
-without end timestamps cannot be made exact from status/summary alone. A future
-source capability could supply stronger per-field/temporal coverage, but old
-cached completeness is not such a capability. Full V1-versus-V2 scale benchmark,
-physical-device/accessibility speech and non-Chromium paint are not established
-by the canonical synthetic benchmark; Full retains adapter/parity regressions.
+Physical-device rendering, screen-reader speech, non-Chromium paint and aggregate
+job memory remain unproved. Integrated browser was disconnected; no integrated PASS.
+These are evidence limits, not new task gates.
 
 ## Rejected hypotheses
 
-- Finished acquisition/100% is not proof every metric is fully computable. Loading,
-  CSS or longer timeouts cannot repair unknown returned canonical values.
-- One missing end does not erase the measured union, but the union is not the full
-  denominator. Its partial display floors before rounding so `≥` never overclaims.
-- Old title/update metadata does not bound usage; missing events may hide overlap.
-- Completed compaction status, summary text and creation time do not prove duration.
-- Earlier probe `service.close()` cleanup failed after producing its aggregate
-  matrix; the maintained probe uses the actual `close_accounts()` owner. That
-  harness failure did not invalidate the observed counts and was not product PASS.
-- Earlier FR000614 Node/Python console fixtures stalled an unrelated Normal child;
-  verified hidden child startup and independent Stats process proof resolved that
-  harness assumption. A ready narrow row does not require an extra worker.
-- Prior FR000612 changed explanations, not null propagation. It cannot substitute
-  for current source diagnosis. Historical speedups and exceptions are not new evidence.
+- A CSS-hidden badge or replacing nulls with ten indiscriminate zeros is not the
+  requested repair: Stats must actually use available time/cost and compute ratios.
+- Complete scan coverage is not a prerequisite for entertaining numeric results;
+  conversely early rows are not proof of complete scanning. Benchmarks/probes must
+  wait on explicit scope readiness when measuring completed acquisition.
+- The retained-card browser test must keep its accepted result during a real warm
+  refresh, not delete that result before expecting it to remain visible.
+- The Token Mix browser fixture omitted `source.observed_at_ms`; the production
+  retention guard correctly withheld it. Supply the canonical observation in that
+  fixture, rather than weakening Token Mix admission to accommodate invalid data.
+- Importing today's formulas into the historical builder makes parity vacuous.
+  The fixed-history comparator loads both historical builder and historical analysis,
+  with current shared dependencies, not a whole historical runtime.
+- Canonical missing ends remain unknown. Stats-only guessed intervals cannot be
+  promoted into billing/history proof, invented dates, records or source mutations.
