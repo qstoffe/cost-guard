@@ -103,8 +103,12 @@ class OwnerCostTimelineTests(unittest.TestCase):
         profile = observer.summary()['function_profile']
         self.assertEqual([4950, 4950, 4950], results)
         self.assertEqual(1, profile['sampled_calls'])
-        self.assertTrue(any(row['function'] == 'call' for row in profile['functions']))
-        self.assertNotIn(str(Path(__file__).resolve().anchor), str(profile['functions']))
+        self.assertEqual(['development/tests/test_owner_cost_timeline.py'],
+            [row['module'] for row in profile['functions'] if row['function'] == 'call'])
+        self.assertNotIn(str(Path(__file__).resolve().parents[2]), str(profile['functions']))
+        for row in profile['functions']:
+            self.assertFalse(Path(row['module']).is_absolute())
+            self.assertNotIn('..', Path(row['module']).parts)
         self.assertNotIn('private payload', str(profile))
         observer.close()
         self.assertNotIn('call', vars(owner))
