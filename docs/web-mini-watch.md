@@ -63,9 +63,12 @@ Exact measurements and verification limits are in the [Mini journal](../developm
 - **CCost Today**, on the right, is the same global configured-local-day CCost and
   distinct initiating-prompt count as full Watch, including earlier pre-Watch activity
   across sessions/providers. It is not a sum of Mini rows or subscription periods.
-   Only the left title navigates; the daily summary is non-clickable. Loading and unknown
-   pricing remain explicit; pricing/token gaps stay visible without transient source captions. Genuine
-  observed zero is zero; the next canonical day/correction replaces the prior value.
+  Only the left title navigates; the daily summary is non-clickable. A plain daily
+  amount can be the known-priced subtotal when prices or tokens are missing, without
+  a partial marker or routine completeness notice. Acquired empty usage is zero;
+  wholly unpriced usage is **N/A**, not zero. Loading, genuine unavailability and
+  long-unavailable update health remain distinct. The next canonical day/correction
+  replaces the prior value.
 - **Session:** the name only (canonical session ID if unnamed). Only the title
   ellipsizes; its full text remains selectable and in the row’s accessible name.
   In **both tables**, Session hover, keyboard focus or touch exposes the full name and

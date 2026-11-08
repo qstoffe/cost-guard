@@ -93,7 +93,8 @@ module.exports = async function alignment({evaluate,until,fixture,command,sessio
         card.rows[0].prompt.display_units={credits:{ccost:'${prompt}'}};
         card.session_summary.cost.display_units={credits:{known_ccost:'${total}'}};
       }miniWatch.update(p);})()`);
-    assert.equal(await evaluate('costTarget.textContent'),expected);
+    assert.equal(await evaluate('costTarget.textContent'),prompt);
+    assert.equal(await evaluate('miniWatch.view.historyBody.rows[0].querySelector(".mini-cost-value").textContent'),expected);
     assert.equal(await evaluate(`miniWatch.view.body.rows[0].cells[1].textContent`),expected);
   }
   await evaluate(`(()=>{const p=structuredClone(miniWatch.publication);p.view.now_ms++;

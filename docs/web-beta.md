@@ -804,10 +804,12 @@ and the dedicated Token Mix page retain them unchanged.
 It includes pre-Watch history, running requests and unassigned-account usage, not just
 visible cards or subscription sums. Requests use completion/attribution dates; continuing
 prompts count once per relevant day, children under their initiator, compaction as usage
-only. The known integer displays **N prompts**, with an explicit incomplete-count
-warning when boundaries are missing, retaining all unassigned cost/tokens. Partial
-CCost pricing and accessible retained-source qualifications remain; empty differs from
-loading. Source changes/minute fallback update retained history and publish cost/count/mix
+only. The acquired integer displays **N prompts**. Full and Mini Watch show the plain
+known-priced daily subtotal without partial-cost markers or passive pricing/token/prompt
+completeness notices; missing prices/tokens can mean it understates the full amount.
+Underlying completeness and unassigned cost/tokens remain intact. Acquired empty usage
+is zero; wholly unpriced usage is **N/A**; neither is loading or source failure.
+Source changes/minute fallback update retained history and publish cost/count/mix
 coherently. Routine refresh silently retains figures; only a scope without valid data
 loads. Real failures remain visible. Midnight resets, rejecting yesterday's late results;
 CCost Today keeps its label before 03:00. Web Credits/USD and CLI scopes are unchanged.
