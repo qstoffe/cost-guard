@@ -1,4 +1,4 @@
-# Watch lifecycle and activity — v80.165
+# Watch lifecycle and activity — v80.207
 
 Watch derives prompt activity from already-hydrated normalized snapshots and existing causal prompt scope, including attributed task children. It does not run tools, scan skill files, mutate OpenCode data, or change usage, billing, token accounting or quota refresh.
 
@@ -51,10 +51,41 @@ Ordinary tool groups include **all** calls, including failures and cancellations
 
 Skills retain confirmed custom load identities and directly attributed **failure-only** counts. Tool cancellations are not allocated to a recently loaded skill; skill counts need not sum to overall outcomes. Canonical failure-only data and CLI presentation remain unchanged.
 
+## Full Web running invocation details
+
+The longest active native tool keeps the existing ten-second threshold. Its
+**Running: tool duration** row is an initially collapsed native disclosure,
+usable with keyboard, mouse or touch. Expansion shows available source input in
+selectable, wrapped monospaced key/value text; command quoting and newlines are
+preserved. This is observation only: opening it executes nothing and fetches no
+additional source data. Tool output and metadata are never displayed here.
+
+Only supported scalar parameters are eligible (including command, workdir,
+description, background, timeout and common search/read options). Environment,
+content/script bodies, unknown/nested parameters, oversized values and recognized
+secret-bearing strings are withheld. The disclosure explicitly labels unavailable
+or limited input; it never claims omitted arguments are known. Screening of
+freeform commands is conservative, not a guarantee that every private value can
+be recognized. Treat even eligible paths/commands as private local information.
+Details remain in process memory and the authenticated loopback Live publication,
+not Cost Guard caches, diagnostics, logs or telemetry. Each detail is bounded to
+roughly 4 KiB of formatted input; huge arguments are omitted, not silently cut off.
+
+Background jobs remain separate from foreground calls. A single source-confirmed
+job can show its original inputs only through an unambiguous canonical tool/call
+link in the same prompt scope. Aggregated jobs, missing links and unavailable
+registry evidence never borrow a foreground command. They show an honest
+input-unavailable disclosure instead.
+
+Duration-only updates preserve expansion, detail nodes, selection and focus.
+Different physical calls, source generations and corrected call revisions reset
+the disclosure. Terminal/unverified prompts and unavailable/retained observations
+clear the live input; existing status/count lifecycle and CLI/Mini are unchanged.
+
 ## Width and colors
 
 Tool totals and failures retain priority over category detail. Hidden tool calls aggregate into `other`, so the visible breakdown still sums to the total. The Skills row keeps distinct count, newest whole IDs and verified failure indicators before older names; omitted IDs use exact `+N more` and are never partially truncated.
 
 CLI tool-call, Skills and running-status prefixes/text use the same `watchToolActivity` styling. Verified failure totals and per-skill failure indicators remain red. The legacy `watchSkillActivity` color setting is retained for configuration compatibility but no longer styles a separate row; customize `watchToolActivity` for normal CLI activity text.
 
-In full Web Watch, only the active **Running: tool duration** line shares the prompt/session `--watch-running` foreground (yellow in Classic; theme-aware Web light/dark). It keeps the ten-second threshold and clears on authoritative completion, failure or cancellation. Ordinary groups and separate background/subagent lines keep their gold/brown activity color; outcome details stay red. No background highlight is added.
+In full Web Watch, both foreground and background/subagent **Running:** status lines share the prompt/session `--watch-running` foreground (yellow in Classic; theme-aware Web light/dark), even when inputs are unavailable. This supersedes only the older background-line gold/brown choice: thresholds, cadence and job meaning are unchanged. Ordinary Tool Calls/Skills groups remain gold/brown; outcome subsets stay red. No background highlight is added.

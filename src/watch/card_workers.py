@@ -147,7 +147,7 @@ class CardWorkers:
                 origins = active_skill_origins(service.source, snapshot, capture)
                 tools = tuple((row.event_id, observe_tools(snapshot, row.event_id,
                     is_compaction=False, now_ms=now_ms + RUNNING_VISIBLE_AFTER_MS,
-                    skill_origins_by_session=origins)) for row in capture.rows)
+                    skill_origins_by_session=origins, include_invocations=True)) for row in capture.rows)
                 self._publish(root, generation, "rows", (capture, tools, snapshot), now_ms)
         except (SourceError, PricingUnavailableError) as error:
             self._publish(root, generation, "unavailable", error, now_ms)
@@ -197,7 +197,7 @@ class CardWorkers:
                         origins = active_skill_origins(service.source, snapshot, capture)
                         tools = tuple((row.event_id, observe_tools(snapshot, row.event_id,
                             is_compaction=False, now_ms=now_ms + RUNNING_VISIBLE_AFTER_MS,
-                            skill_origins_by_session=origins)) for row in capture.rows)
+                            skill_origins_by_session=origins, include_invocations=True)) for row in capture.rows)
                         self._publish(root, generation, 'rows', (capture, tools, snapshot), now_ms)
                     except (SourceError, PricingUnavailableError) as error:
                         if self.readers is not None:

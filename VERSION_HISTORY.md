@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.207 — 2026-11-08
+
+- Full Web Watch Running rows use native, initially collapsed invocation disclosures with bounded source-proven parameters, preserved command quoting/newlines and explicit privacy/availability qualifications. Unique canonical background-job links can disclose the original input; aggregates and missing links never borrow another command. No expansion fetch, execution or persistent input storage is added.
+- Foreground and background Running lines now share `--watch-running`; ordinary activity remains gold/brown and failures/cancellations red. Duration-only updates preserve disclosure state, focus and selection; changed calls/corrections and lost live evidence clear stale input. CLI/Mini, thresholds, job lifecycle and accounting are unchanged.
+
 ## v80.206 — 2026-11-08
 
 - Web and Mini Watch CCost display now defaults to USD. Omitted and symbolic Default choices inherit USD, labeled **Default (USD)** in Settings; explicit saved Credits/USD preferences remain pinned without migrating user JSONC. CLI retains its independent Credits default and overrides. Reference valuation, billing, native quotas and the 100 credits = $1 reference USD factor are unchanged.

@@ -20,7 +20,7 @@ from src.watch.cards import WatchCards
 from src.watch.models import WatchProjection
 from src.watch.observers import CatalogObservation
 from src.watch.web_coordinator import WebWatchCoordinator
-from src.watch.models import ToolObservation
+from src.watch.models import ToolInvocation, ToolObservation
 from src.web.events import MAX_EVENT_BYTES
 from src.sources.errors import SourceUnavailableError, http_failure, transport_failure
 
@@ -192,6 +192,27 @@ class WatchCardTests(unittest.TestCase):
         self.assertEqual('observed', cards.project(1009)[0][0].state)
         cards.accept(CardResult(root.session_id, entry.generation, 'unavailable', http_failure(401, phase='capture')), 1010)
         self.assertEqual('unavailable', cards.project(1011)[0][0].state, 'authentication has no grace')
+
+    def test_invocation_clears_during_source_revision_reverification(self):
+        root = self.roots[0]
+        row = replace(self.capture.rows[-1], in_progress=True)
+        capture = replace(self.capture, rows=(row,), observed_ids=frozenset({row.event_id}), observed_at_ms=1000)
+        cards = WatchCards(ManualWorkers())
+        cards.catalog(self.catalog((root,), active=(root.session_id,)))
+        self.publish(cards, root, capture)
+        entry = cards.sessions[root.session_id]
+        detail = ToolInvocation("physical", "revision", "command:\ngit status", "Observed source input")
+        entry.tools[row.event_id] = ToolObservation(running_tool="shell", running_ms=30_000,
+            running_invocation=detail, background_invocation=detail)
+
+        first = cards.project(2000)[0][0].rows[0].tool
+        cards.catalog(self.catalog((root,), active=(root.session_id,), revision="changed"))
+        verifying = cards.project(2001)[0][0].rows[0].tool
+
+        self.assertEqual(detail, first.running_invocation)
+        self.assertIsNone(verifying.running_invocation)
+        self.assertIsNone(verifying.background_invocation)
+        self.assertEqual(first.tool_count, verifying.tool_count)
 
     def test_one_hundred_concurrent_cards_each_have_only_their_focal_row(self):
         root = self.roots[0]

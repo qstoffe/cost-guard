@@ -9,7 +9,7 @@ from .prompt_costs import cost_detail
 from src.analysis.timezones import local_date_range, resolve_timezone
 
 
-def card_row(row, now_ms):
+def card_row(row, now_ms, invocation_verified=True):
     tool = row.tool
     projected = fields(row.prompt, """at_ms prompt_number label preview ccost incoming_context_ccost extra_ccost cost_estimated unresolved_cost
         incoming_context_ccost_known extra_ccost_known
@@ -24,6 +24,10 @@ def card_row(row, now_ms):
             cancelled_count=tool.cancelled_count, failed_or_cancelled_count=tool.failed_or_cancelled_count,
             outcomes=tuple(fields(item, "tool_name outcome count") for item in tool.tool_outcomes),
             running_tool=tool.running_tool, running_ms=tool.running_ms,
+            running_invocation=(fields(tool.running_invocation, "identity revision text qualification")
+                if invocation_verified and tool.running_invocation and row.prompt.in_progress and not row.prompt.execution_unverified else None),
+            background_invocation=(fields(tool.background_invocation, "identity revision text qualification")
+                if invocation_verified and tool.background_invocation and row.prompt.in_progress and not row.prompt.execution_unverified else None),
             background_kinds=tool.background_kinds, background_ms=tool.background_ms,
             skills=tuple(fields(skill, "skill_id failed_count") for skill in tool.skills)))
 
@@ -32,7 +36,7 @@ def card(value, now_ms):
     context = value.session_context
     cost = value.session_cost
     return record(session_id=value.session_id, title=value.title, focal_id=value.focal_id,
-        rows=tuple(card_row(row, now_ms) for row in value.rows), state=value.state,
+        rows=tuple(card_row(row, now_ms, value.state == "observed") for row in value.rows), state=value.state,
         observed_at_ms=value.observed_at_ms,
         session_summary=record(context=None if context is None else record(
             watch_next_context_tokens=context.tokens,

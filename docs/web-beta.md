@@ -747,7 +747,17 @@ summaries with five named groups and truthful other totals; native disclosures
 expand every group and retain their state/focus across updates. The longest
 running tool appears at the shared ten-second threshold, in the same semantic yellow
 as the running prompt (theme-aware in Web light/dark). Separate background/subagent
-lines retain ordinary activity color. Both start **Running:** and clear on completion.
+**Running:** lines now share that same foreground; counts/Skills remain gold/brown.
+Running rows are initially collapsed native disclosures of available invocation
+input. Safe command text retains quoting/newlines and available options; other
+tools show named parameters, never an invented shell command. A single background
+job needs a verified original-call link; aggregates or missing links show details
+unavailable. Sensitive, unsupported and oversized fields are explicitly withheld,
+not presented as complete arguments. Freeform screening cannot guarantee detection
+of every private value. Details are bounded, memory-only and authenticated/local;
+expanding executes nothing and does not fetch source data. Duration updates retain
+expansion/selection; changed calls, corrections and lost live evidence clear stale
+input. See [activity and privacy details](watch-activity.md#full-web-running-invocation-details).
 The compact **N failed / cancelled** count includes only evidenced, distinct tool
 outcomes. Expanded Tool Calls shows red tool-name/outcome subsets, for example
 **2 × grep failed** and **1 × execute cancelled**, below the ordinary all-call groups.
