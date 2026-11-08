@@ -1,10 +1,10 @@
 // Real app/Attempt control flow with virtual time and transport; no browser/source.
 const assert = require('node:assert/strict'), fs = require('node:fs'), vm = require('node:vm');
-let now = 0, sequence = 0, busy = 0, sourceWait = 0;
-const timers = new Map(), jobs = new Map(), admissions = [], handlers = {}, ids = {};
+let now = 1000000000, sequence = 0, busy = 0, sourceWait = 0, managedResponse = null, liveUpdate = null;
+const timers = new Map(), jobs = new Map(), admissions = [], handlers = {}, ids = {}, jobFetches = {};
 const node = () => ({dataset:{}, attrs:{}, setAttribute(key,value){this.attrs[key]=value;}, removeAttribute(){}, addEventListener(){}, focus(){},
   replaceChildren(...children){this.firstChild=children[0];}, querySelector(){return null;}});
-for (const id of ['host-state','host-message','host-details','status','result','notice','refresh','heading','scope-controls','search','content','skip','product-version']) ids[id]=node();
+for (const id of ['host-state','host-message','host-details','status','result','notice','refresh','heading','scope-controls','search','content','skip','product-version','report-updating']) ids[id]=node();
 const document = {hidden:false, body:node(), getElementById:id=>ids[id] || null,
   querySelector:()=>null, querySelectorAll:()=>[], addEventListener:(key,fn)=>{handlers[key]=fn;}};
 const location = {hash:'#/watch'}, history = {replaceState(){}};
@@ -15,21 +15,22 @@ const context = vm.createContext({document, location, history, URLSearchParams, 
   ReportRoutes:{resolve(hash){const section=hash.slice(2);return {section,title:section,
     live:section==='watch',request:['models','token-mix','ai-stats','comparisons'].includes(section)?
       {kind:section==='models'?'normal':section}:null};},controls(){}},
-  ReportView:{element:node,text(){},defaultUnit(){},render(parent,result){parent.replaceChildren(result);}},
+  ReportView:{element:node,text(element,value){element.textContent=value;},defaultUnit(){},render(parent,result){parent.replaceChildren(result);}},
   WebSettings:{apply(){return {values:{}};}},
-  LiveConnection:{connect(api,update,status){status('connected',{kind:'connected',writable:true});return {resync(){}};}},
+  LiveConnection:{connect(api,update,status){liveUpdate=update;status('connected',{kind:'connected',writable:true});return {resync(){}};}},
   fetch:async (path,options)=>{
     let value;
     if(path==='/api/session') value={csrf:'synthetic'};
     else if(path==='/api/settings') value={};
     else if(path==='/api/status') value={session_detail:false};
-    else if(path==='/api/reports') {
-      const request=JSON.parse(options.body);admissions.push(request.kind);
+    else if(path==='/api/reports' || path==='/api/data') {
+      const body=JSON.parse(options.body),request=body.request || body;admissions.push(request.kind);
+      if(path==='/api/data' && managedResponse) return {ok:true,json:async()=>managedResponse};
       const error=busy-- > 0?'busy':sourceWait-- > 0?'source_starting':null;
       if(error)return {ok:false,status:429,json:async()=>({error})};
       const id='job-'+jobs.size; jobs.set(id,{status:'running',progress:{phase:'history'},result:null});value={id};
     } else if(path.endsWith('/cancel')) assert.fail('no navigation/UI cancellation request allowed');
-    else if(path.startsWith('/api/jobs/')) value=jobs.get(path.split('/').at(-1));
+    else if(path.startsWith('/api/jobs/')) {const id=path.split('/').at(-1);jobFetches[id]=(jobFetches[id]||0)+1;value=jobs.get(id);}
     else assert.fail('unexpected API '+path);
     return {ok:true,json:async()=>value};
   }});
@@ -68,8 +69,8 @@ async function main(){
     assert.equal(admissions.length,count,'return never duplicates in-flight work');
     await hide(true);await go('watch');
     if(section==='comparisons')now+=150000; // Hidden timers may be throttled past the client budget.
-    const result={view:{kind:section==='models'?'normal':section,ai_stats:[{period:'30-days'}]},
-      source:{status:'acquired'},observed_at_ms:now};
+    const result={view:{kind:section==='models'?'normal':section,ai_stats:[{period:'30-days',start_ms:0,end_ms:now}]},
+      scope:{timezone_id:'UTC'},source:{status:'acquired',observed_at_ms:now},observed_at_ms:now};
     jobs.get(active).status='complete';jobs.get(active).result=result;
     await tick();
     assert.equal(original.result,result,'completion belongs to inactive original view');
@@ -79,18 +80,101 @@ async function main(){
     await hide(false);await go(section);
     assert.equal(run('current.result'),result);assert.equal(admissions.length,count);
   }
-  // Exhausted pre-admission waits end with their real reason while inactive.
+  // Long healthy source startup never exhausts admission or requires Retry.
   await go('watch');run(`views.delete('#/comparisons')`);sourceWait=100;
-  const before=admissions.length;await go('comparisons');const failed=run('current');
+  const before=admissions.length;await go('comparisons');const pending=run('current');
   await go('watch');await hide(true);
-  for(let i=0;i<8;i++)await tick();
-  assert.equal(admissions.length,before+9);assert.equal(failed.loading,false);
-  assert.equal(failed.failed,true);assert.match(failed.message,/Source startup did not recover/);
-  assert.equal(failed.attempt,null);assert.ok(failed.percent<100);
+  for(let i=0;i<40;i++)await tick();
+  assert.equal(admissions.length,before+41);assert.equal(pending.loading,true);
+  assert.equal(pending.failed,false);assert.ok(pending.percent<100);
+  now+=2*86400000;sourceWait=0;await tick();
+  const active=pending.active;assert.ok(active);
+  assert.equal(pending.failed,false);
+  jobs.get(active).status='complete';jobs.get(active).result={view:{kind:'comparisons'},source:{status:'acquired',observed_at_ms:now}};
+  await tick();assert.equal(pending.loading,false);assert.equal(pending.failed,false);
   await hide(false);await go('comparisons');
-  assert.equal(admissions.length,before+9,'return retains error instead of a new hidden retry loop');
-  assert.equal(ids.refresh.hidden,false,'real failures retain Retry');
+  assert.equal(admissions.length,before+42,'return reuses automatic completion without new work');
   assert.equal(document.getElementById('cancel'),null);
+  // A visible terminal Live hint wakes only the matching status wait; the job fetch decides.
+  const polls=()=>[...timers.values()].filter(timer=>timer.ms===500).length;
+  await go('watch');run(`views.delete('#/token-mix')`);
+  await go('token-mix');const woken=run('current'),wakeJob=woken.active;
+  assert.ok(wakeJob);assert.equal(woken.loading,true);assert.equal(polls(),1);
+  const fetchedBefore=jobFetches[wakeJob];
+  liveUpdate(null,{jobs:[{id:'job-other',status:'complete'},{id:wakeJob,status:'running'}]});await settle();
+  assert.equal(woken.loading,true,'foreign or nonterminal jobs never wake the wait');
+  assert.equal(jobFetches[wakeJob],fetchedBefore);
+  jobs.get(wakeJob).status='complete';
+  jobs.get(wakeJob).result={view:{kind:'token-mix'},source:{status:'acquired',observed_at_ms:now}};
+  liveUpdate(null,{jobs:[{id:wakeJob,status:'complete'}]});await settle();
+  assert.equal(woken.loading,false,'terminal hint completes without waiting out the poll');
+  assert.equal(jobFetches[wakeJob],fetchedBefore+1,'one authoritative job fetch');assert.equal(polls(),0);
+  liveUpdate(null,{jobs:[{id:wakeJob,status:'complete'}]});await settle();
+  assert.equal(jobFetches[wakeJob],fetchedBefore+1,'replayed hints request nothing');
+  await go('watch');run(`views.delete('#/comparisons')`);
+  await go('comparisons');const quiet=run('current'),quietJob=quiet.active;
+  assert.ok(quietJob);await hide(true);
+  jobs.get(quietJob).status='complete';
+  jobs.get(quietJob).result={view:{kind:'comparisons'},source:{status:'acquired',observed_at_ms:now}};
+  const quietBefore=jobFetches[quietJob];
+  liveUpdate(null,{jobs:[{id:quietJob,status:'complete'}]});await settle();
+  assert.equal(quiet.loading,true,'hidden documents keep ordinary polling');
+  assert.equal(jobFetches[quietJob],quietBefore);
+  await tick();assert.equal(quiet.loading,false);assert.equal(jobFetches[quietJob],quietBefore+1);
+  await hide(false);
+  // One long acquire lifetime can replace failed jobs indefinitely without an ID ledger.
+  await go('watch');run(`views.delete('#/token-mix')`);
+  await go('token-mix');const recovering=run('current'),retryAttempt=recovering.attempt;
+  const beforeRetries=admissions.length;
+  for(let index=0;index<1000;index++) {
+    const failedJob=recovering.active;
+    jobs.get(failedJob).status='failed';
+    jobs.get(failedJob).result={error:{code:index%2?'ai_stats_checkpoint_busy':'concurrent_source_change',retryable:true}};
+    liveUpdate(null,{jobs:[{id:failedJob,status:'failed'}]});await settle();
+    assert.equal(recovering.attempt,retryAttempt,'recovery keeps the original acquire lifetime');
+    assert.equal(recovering.loading,true);assert.equal(recovering.failed,false);
+    assert.equal(recovering.active,null,'failed owner is released before throttled readmission');
+    const delayed=admissions.length;
+    liveUpdate(null,{jobs:[{id:failedJob,status:'failed'}]});await settle();
+    assert.equal(admissions.length,delayed,'replayed terminal events cannot shorten backoff');
+    await tick();
+    assert.ok(recovering.active);assert.notEqual(recovering.active,failedJob);
+  }
+  const recoveredJob=recovering.active;
+  const recovered={view:{kind:'token-mix'},source:{status:'acquired',observed_at_ms:now}};
+  jobs.get(recoveredJob).status='complete';jobs.get(recoveredJob).result=recovered;
+  liveUpdate(null,{jobs:[{id:recoveredJob,status:'complete'}]});await settle();
+  assert.equal(recovering.loading,false);assert.equal(recovering.failed,false);
+  assert.equal(recovering.result,recovered,'qualified success appears automatically without Retry');
+  assert.equal(admissions.length,beforeRetries+1000);
+  assert.equal(polls(),0,'completion releases the last poll timer');
+  assert.equal(typeof retryAttempt.woken,'string','wake state stores one identity, not a growing history');
+  assert.equal(retryAttempt.woken,recoveredJob,'wake state retains only the last identity, not retired jobs');
+  // Managed first completion preserves an actually old as-of, not only a shifted worker timer.
+  await go('watch');run(`views.delete('#/models');demand={update(){}};`);
+  const started=now;await go('models');const aged=run('current'),owned=aged.active;
+  now+=2*86400000;
+  const historical={view:{kind:'normal'},source:{status:'acquired',observed_at_ms:started}};
+  jobs.get(owned).status='complete';jobs.get(owned).result=historical;
+  await tick();
+  assert.equal(aged.result,historical);assert.equal(aged.withheld,false);assert.equal(aged.failed,false);
+  assert.equal(ids.result.firstChild,historical,'aged first completion is displayed');
+  assert.match(ids['report-updating'].textContent,/Historical snapshot as of/);
+  assert.ok(ids['report-updating'].textContent.includes(new Clock(started).toLocaleString()));
+  const revision=aged.dataRevision,content=ids.result.firstChild,ownedCount=jobs.size;
+  for(const refresh of ['running','queued','scheduled','delayed','stopped']) {
+    managedResponse={id:'distinct-refresh-job',result_id:owned,result:historical,refresh};
+    await run('acquire(current,true)');await settle();
+    assert.equal(aged.dataRevision,revision,'refresh job cannot manufacture a new publication');
+    assert.equal(ids.result.firstChild,content);assert.equal(aged.withheld,false);
+    assert.equal(historical.source.observed_at_ms,started);
+    assert.equal(jobs.size,ownedCount,'publication lookups do not acquire source work');
+    assert.match(ids['report-updating'].textContent,({running:/Updating/,queued:/queued/,
+      scheduled:/scheduled/,delayed:/automatic retry/,stopped:/Not updating/})[refresh]);
+  }
+  managedResponse={id:owned,result_id:owned,result:historical,refresh:'scheduled'};
+  await go('watch');await go('models');
+  assert.equal(aged.result,historical);assert.equal(aged.withheld,false);
   // Host owns source retries; only a previously observed live view earns quiet grace.
   run(`liveValue={view:{}}; connectionStatus('Retrying source read', {kind:'source_retrying',observedAt:null})`);
   assert.equal(ids['host-state'].hidden,false,'no successful observation cannot be disguised as retained success');
@@ -118,6 +202,6 @@ async function main(){
     run(`connectionStatus('Action required', {kind:failureKind})`);
     assert.equal(ids['host-state'].hidden,false,'actionable failures remain immediate');
   }
-  console.log('PASS: four routes preserve pending/admitted work, hidden completion, retained errors, bounded retries and no duplicate/new inactive scans');
+  console.log('PASS: retained intent, aged managed completion/display, stable publication identity, visible terminal wake, honest refresh and factual errors');
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

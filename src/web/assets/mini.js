@@ -236,6 +236,7 @@ const MiniWatch = (() => {
       this.earlierToggle.addEventListener('click', () => {
         this.disclosureSize.toggle(this.earlier);
         this.earlierToggle.setAttribute('aria-expanded', String(!this.earlier.hidden));
+        this.historyChanged?.();
       });
       const top = el('header', undefined, 'mini-header'); top.append(this.summary, this.earlierToggle, this.daily);
       this.health = el('p', '', 'mini-health'); this.health.setAttribute('role', 'status');
@@ -285,7 +286,9 @@ const MiniWatch = (() => {
       cell.append(value);
       const cost = this.el('span', '', 'mini-cost-value');
       ContextHelp.value(cost, () => row.costHelp);
-      row.children[historical ? 2 : 1].append(cost); return row;
+      row.children[historical ? 2 : 1].append(cost);
+      ContextHelp.value(row.children[3], () => row.contextHelp || 'Context estimate unavailable');
+      return row;
     }
     drawSession(cell, card) {
       const title = card.title || card.session_id;
@@ -297,6 +300,12 @@ const MiniWatch = (() => {
       row.sessionHelp = `${session}\n${number == null ? 'Prompt number unavailable' : 'Prompt #' + number + ' in this session'}`;
       const states = [card.state, card.session_summary?.state].filter(state => ['partial', 'retrying', 'unavailable'].includes(state));
       row.costHelp = this.promptDetails(item) + (states.length ? '\nSource evidence: ' + [...new Set(states)].join(' / ') : '');
+      const warning = card.session_summary?.context?.warning;
+      row.children[3].dataset.guidance = warning?.guidance_state || 'ready';
+      row.contextHelp = ['Estimated context for the next request. Not remaining model capacity.',
+        warning?.text?.replace(/^\[|\]$/g, ''),
+        warning && ReportView.display(warning, 'warning_cost').replace(/^\(|\)$/g, '')].filter(Boolean).join('\n');
+      ContextHelp.refresh(row.children[3]);
     }
     drawCost(cell, card, prompt) {
       const summary = card.session_summary, cost = summary?.cost;
@@ -498,8 +507,17 @@ const MiniWatch = (() => {
     release(win) {
       if (this.window !== win) return;
       win.clearInterval(this.timer);
+      this.demand?.close(); this.demand = null;
       this.appearance.removeEventListener('change', this.themeChanged);
       this.window = this.view = null;
+    }
+    setDemandFactory(factory) {
+      this.demand?.close(false); this.demand = null;
+      this.demandFactory = factory;
+      if (this.window && this.view && !this.ended) {
+        this.demand = factory(this.window);
+        this.demand.update();
+      }
     }
     close() {
       if (this.pending) this.pending.cancelled = true;
@@ -558,6 +576,8 @@ const MiniWatch = (() => {
           try { this.owner.focus(); }
           catch (_) { this.view.health.textContent = 'Use the browser’s native return-to-tab control.'; }
         }, doc.body, size);
+        this.view.historyChanged = () => { if (this.window === win) this.demand?.update(); };
+        if (this.demandFactory) { this.demand = this.demandFactory(win); this.demand.update(); }
         // A visible PiP document owns this freshness timer, not a hidden main rAF.
         this.timer = win.setInterval(() => { this.sync(); this.render(); }, 5000);
         this.render(); this.feedback.textContent = '';
@@ -582,9 +602,18 @@ const MiniWatch = (() => {
       this.observations.update(value, Date.now());
       this.publication = value; this.sync(); this.render();
     }
-    health(value) { this.healthState = value; this.sync(); this.render(); }
+    health(value) {
+      const wasWritable = this.healthState.writable;
+      this.healthState = value;
+      if (value.terminal) { this.demand?.close(false); this.demand = null; this.demandFactory = null; }
+      else if (wasWritable !== value.writable) this.demand?.update();
+      this.sync(); this.render();
+    }
     settings(values, instance) {
-      if (instance && instance !== this.instance) { this.instance = instance; this.opened = false; }
+      if (instance && instance !== this.instance) {
+        if (this.instance) { this.demand?.close(false); this.demand = null; this.demandFactory = null; }
+        this.instance = instance; this.opened = false;
+      }
       if (values) {
         this.placement = values.miniWatchPlacement;
         this.size = values.miniWatchSize || 'fit-on-open';

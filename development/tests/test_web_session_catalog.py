@@ -174,6 +174,42 @@ class SessionCatalogTests(unittest.TestCase):
         self.assertEqual(50, len(acquired))
         self.assertEqual(50, len(set(acquired)))
 
+    def test_visible_second_page_finishes_during_quiet_background_delay_without_retry(self):
+        self.catalog.enable_warm()
+        first = self.catalog.page()
+        self.catalog.interest(first['token'], True)
+        for _ in range(13):
+            self.catalog.tick(self.service)
+        self.assertEqual(50, self.catalog.page(token=first['token'])['page_ready'])
+        self.catalog.interest(first['token'], False)
+        self.catalog.tick(self.service)
+        quiet_due = self.catalog.background_due
+        self.assertEqual(900, quiet_due)
+
+        # A quick visit followed by navigation away is not completed warming.
+        second = self.catalog.page(token=first['token'], offset=50, epoch=first['epoch'])
+        self.catalog.interest(first['token'], False)
+        self.clock = 240
+        self.assertEqual(0, second['page_ready'])
+        self.assertFalse(self.catalog.needed())
+        self.assertEqual(quiet_due, self.catalog.background_due)
+        before = self.source.load_count
+
+        self.catalog.interest(first['token'], True)
+        for _ in range(13):
+            self.assertTrue(self.catalog.needed())
+            self.catalog.tick(self.service)
+        ready = self.catalog.page(token=first['token'], offset=50, epoch=first['epoch'])
+
+        self.assertEqual(50, ready['page_ready'])
+        self.assertTrue(all(row['metric_state'] == 'ready' for row in ready['view']['session_usage']))
+        self.assertEqual([row['session_id'] for row in second['view']['session_usage']],
+                         [row['session_id'] for row in ready['view']['session_usage']])
+        self.assertEqual(first['epoch'], ready['epoch'])
+        self.assertEqual(50, self.source.load_count - before)
+        self.assertEqual(100, len(self.catalog.valid), 'unvisited third page is not hydrated')
+        self.assertLess(self.clock, self.catalog.background_due, 'visible work bypasses the quiet delay')
+
     def test_failed_rows_are_unavailable_or_retained_not_endlessly_pending(self):
         first = self.catalog.page()
         self.assertTrue(all(row["metric_state"] == "pending" for row in first["view"]["session_usage"]))

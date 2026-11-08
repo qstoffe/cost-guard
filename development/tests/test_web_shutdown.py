@@ -44,13 +44,11 @@ class PendingSource(MutableSource):
 
 
 class WebShutdownTests(unittest.TestCase):
-    def test_watchdog_cleanup_failure_reaches_host_and_main_owner_retries_retained_child(self):
-        child = ReportProcess()
+    def test_invalid_ipc_cleanup_failure_reaches_host_and_main_owner_retries_retained_child(self):
+        child = ReportProcess(messages=[('unexpected', None)])
         jobs = ReportJobs(context=child.context)
         jobs.submit(ReportRequest())
-        # Monotonic clocks have an unspecified origin; backdating can cross zero.
-        with patch('src.web.jobs.time.monotonic', return_value=-121):
-            jobs.tick()  # Expired active worker before the real serving thread starts.
+        jobs.tick()  # Start the owned child; the serving turn encounters its invalid IPC.
 
         self.failed_report_owner(child, jobs)
 

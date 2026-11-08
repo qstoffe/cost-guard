@@ -57,19 +57,8 @@ def accept(job, result):
         return
     completed = work['completed']
     previous = job.get('covered', -1)
-    job['stalls'] = 0 if completed > previous else job.get('stalls', 0) + 1
+    job['stalls'] = 0 if completed > previous else min(6, job.get('stalls', 0) + 1)
     job['covered'] = completed
-    if job['stalls'] >= 8:
-        job.update(status='failed', error='ai_stats_revision_churn')
-    else:
-        job.update(status='queued', queued_at=time.monotonic())
-
-
-def timed_out(job):
-    """Only Stats may resume a watchdog failure, with a strictly smaller chunk."""
-    size = job.get('batch_size', BATCH_SIZE)
-    if is_stats(job) and size > 1:
-        job.update(status='queued', batch_size=16 if size > 16 else 1,
-                   queued_at=time.monotonic())
-    else:
-        job.update(status='failed', error='ai_stats_slice_timeout' if is_stats(job) else 'report_timeout')
+    now = time.monotonic()
+    delay = min(60, 2 ** min(6, job['stalls'])) if job['stalls'] else 0
+    job.update(status='queued', queued_at=now, not_before=now + delay)

@@ -33,7 +33,20 @@ def main():
     parser.add_argument("--daily", action="store_true", help="Wait for coherent full-day cost, initiating prompts and category prices.")
     parser.add_argument("--session-cost", action="store_true", help="Compare a stable real session total with independent full history and persisted reuse.")
     parser.add_argument("--report-timings", action="store_true", help="Print sanitized child-process acquisition timings.")
+    parser.add_argument('--history-oracle', type=Path, help='Owned new output directory for independent large-real-source history proof')
+    parser.add_argument('--browser', type=Path, help='Explicit hidden Chromium executable for history-oracle Full/Mini DOM')
+    parser.add_argument('--oracle-seconds', type=int, default=1800, help='Operational observation cap, never a product computation timeout')
+    parser.add_argument('--oracle-serial-first', action='store_true',
+        help='Time the first verified history certificate without competing reference refresh; validate that exact proof afterwards')
     args = parser.parse_args()
+    if args.history_oracle is not None:
+        if args.browser is None or not args.browser.is_file() or not 120 <= args.oracle_seconds <= 3600:
+            parser.error('history-oracle requires an explicit browser and 120..3600 observation seconds')
+        from development.tests.integration.real_history_oracle import run
+        if not run(ROOT, args.history_oracle, args.browser, seconds=args.oracle_seconds,
+                serial_first=args.oracle_serial_first):
+            raise SystemExit(1)
+        return
     owners = []
     csrf = None
 

@@ -243,7 +243,7 @@ class AIStatsAcquisitionTests(unittest.TestCase):
         self.assertIsNone(dto['ai_stats'][-1]['matched'])
 
     def test_actual_finite_process_returns_coherent_ai_stats(self):
-        jobs = ReportJobs(target=stats_report, deadline=10)
+        jobs = ReportJobs(target=stats_report)
         self.addCleanup(jobs.close)
         key = jobs.submit(ReportRequest(ReportKind.AI_STATS))
         end = time.monotonic() + 12

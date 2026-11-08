@@ -7,7 +7,7 @@ from threading import Event
 from typing import TYPE_CHECKING, Sequence
 
 from src.domain import SessionSnapshot
-from .errors import SourceConcurrentChangeError, SourceDataError
+from .errors import FailureCode, SourceConcurrentChangeError, SourceDataError, SourceError, SourceSnapshotMemberError
 from .opencode_v2_catalog import V2CatalogIndex
 from .opencode_v2_events import normalize_event
 from .opencode_v2_normalization import normalize_request_invocations
@@ -46,12 +46,26 @@ def _read_tree(source: OpenCodeV2Source, tree: Sequence[_NativeSession], root_id
     )
 
 
-def _read_trees(source, index, pending, revisions, *, workers, progress):
+def _read_trees(source, index, pending, revisions, *, workers, progress, failures=None, on_root=None, identify_members=False):
     """At most four submitted trees; join all owned reads, including failure paths."""
     snapshots = {}
-    if workers == 1 or len(pending) == 1:
+    def accept(root_id, read):
+        try:
+            snapshots[root_id] = read()
+        except SourceError as error:
+            if identify_members:
+                raise SourceSnapshotMemberError(root_id, error) from error
+            if failures is None or error.code in {
+                    FailureCode.AUTH, FailureCode.VERSION, FailureCode.REGISTRATION_INVALID,
+                    FailureCode.REGISTRATION_MISSING, FailureCode.REGISTRATION_UNREADABLE}:
+                raise
+            failures[root_id] = error
+        if on_root is not None:
+            on_root(root_id)
+
+    if failures is None and (workers == 1 or len(pending) == 1):
         for root_id in pending:
-            snapshots[root_id] = _read_tree(source, index.tree(root_id), root_id, revisions[root_id])
+            accept(root_id, lambda: _read_tree(source, index.tree(root_id), root_id, revisions[root_id]))
             progress('messages', len(snapshots), len(pending))
         return snapshots
     stopped = Event()
@@ -74,7 +88,7 @@ def _read_trees(source, index, pending, revisions, *, workers, progress):
                     progress('messages', len(snapshots), len(pending))
                 for future in finished:
                     root_id = active.pop(future)
-                    snapshots[root_id] = future.result()
+                    accept(root_id, future.result)
                     progress('messages', len(snapshots), len(pending))
                 for _ in finished:
                     submit()
@@ -85,8 +99,15 @@ def _read_trees(source, index, pending, revisions, *, workers, progress):
     return snapshots
 
 
+def global_bracket(source, root_ids, *, allow_reuse, failures=None):
+    """Return the exact complete-global index for this observation, explicitly."""
+    values, reused = source._catalog_before_messages(root_ids[0], allow_reuse=allow_reuse)
+    return source._catalog_index or V2CatalogIndex(values), reused
+
+
 def load_snapshots(source: OpenCodeV2Source, root_ids: Sequence[str], *, workers: int = 1,
-                   progress=None, available_only: bool = False) -> dict[str, SessionSnapshot]:
+                    progress=None, available_only: bool = False, failures=None, on_root=None,
+                    identify_members: bool = False, brackets=None) -> dict[str, SessionSnapshot]:
     """Share brackets, not weakened proofs: every returned tree is equal before/after its messages.
 
     Unstable trees alone retry; a reused bracket does not consume either fresh
@@ -95,26 +116,39 @@ def load_snapshots(source: OpenCodeV2Source, root_ids: Sequence[str], *, workers
     pending = tuple(dict.fromkeys(root_ids))
     progress = progress or (lambda _stage, _completed, _total: None)
     complete: dict[str, SessionSnapshot] = {}
+    bracket = brackets or (lambda roots, **options: global_bracket(source, roots, **options))
     reuse = True
     attempts = 0
     while pending and attempts < 2:
         source._diagnostics["last_snapshot_stage"] = "catalog_before"
         progress('catalog-before', 0, len(pending))
-        before, reused = source._catalog_before_messages(pending[0], allow_reuse=reuse)
-        index = source._catalog_index or V2CatalogIndex(before)
-        revisions = {root_id: index.revision(root_id, source._revision) for root_id in pending}
+        index, reused = bracket(pending, allow_reuse=reuse, failures=failures)
+        revisions = {}
+        for root_id in pending:
+            if failures is not None and root_id not in index.by_id:
+                failures.setdefault(root_id, SourceConcurrentChangeError('History root left the catalog', phase='snapshot'))
+            else:
+                revisions[root_id] = index.revision(root_id, source._revision)
+        pending = tuple(revisions)
+        if not pending:
+            break
         source._diagnostics["last_snapshot_stage"] = "messages"
         progress('messages', 0, len(pending))
         with source.metrics.measure("hydration"):
-            snapshots = _read_trees(source, index, pending, revisions, workers=workers, progress=progress)
-        source.metrics.add("hydrated_roots", len(pending))
+            snapshots = _read_trees(source, index, pending, revisions, workers=workers, progress=progress,
+                                    failures=failures, on_root=on_root, identify_members=identify_members)
+        source.metrics.add("hydrated_roots", len(snapshots))
         source._diagnostics["last_snapshot_stage"] = "catalog_after"
         progress('catalog-after', 0, len(pending))
-        after_values = source._list_native_sessions(refresh=True)
-        after = source._catalog_index or V2CatalogIndex(after_values)
+        after, _reused = bracket(pending, allow_reuse=False, failures=failures)
         unstable = []
         for root_id in pending:
+            if root_id not in snapshots:
+                continue  # Watch-only local failure: siblings still require this after-bracket.
             if root_id not in after.by_id:
+                if failures is not None:
+                    failures.setdefault(root_id, SourceConcurrentChangeError('History root left the catalog', phase='snapshot'))
+                    continue
                 raise SourceConcurrentChangeError("OpenCode V2 session changed while it was being read",
                                                   phase="snapshot", generation="v2")
             revision = after.revision(root_id, source._revision)
@@ -132,7 +166,13 @@ def load_snapshots(source: OpenCodeV2Source, root_ids: Sequence[str], *, workers
         reuse = False  # any mismatch requires fresh before AND after brackets
     if pending and not available_only:
         source._diagnostics["last_snapshot_stage"] = "revision_changed"
-        raise SourceConcurrentChangeError("OpenCode V2 session changed repeatedly while it was being read",
-                                          phase="snapshot", generation="v2")
+        failure = SourceConcurrentChangeError("OpenCode V2 session changed repeatedly while it was being read",
+                                              phase="snapshot", generation="v2")
+        if identify_members:
+            raise SourceSnapshotMemberError(pending[0], failure) from failure
+        raise failure
+    if failures is not None:
+        for root_id in pending:
+            failures[root_id] = SourceConcurrentChangeError('History revision changed repeatedly', phase='snapshot')
     source._diagnostics["last_snapshot_stage"] = "partial" if pending else "complete"
     return complete

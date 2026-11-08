@@ -51,6 +51,7 @@ def recent_sample_roots(
     roots: Sequence[NormalizedSession], root_activity: Mapping[str, int],
     analyze: Callable[[NormalizedSession], AnalyzedRoot], priceable: RequestFilter,
     *, progress: Callable[[int], None] | None = None,
+    prepare: Callable[[Sequence[NormalizedSession]], None] | None = None, batch_size: int = 1,
 ) -> tuple[AnalyzedRoot, ...]:
     """Hydrate roots in descending tree activity until BOTH sample cutoffs hold.
 
@@ -63,10 +64,20 @@ def recent_sample_roots(
     analyzed: list[AnalyzedRoot] = []
     sample: tuple[PromptRecord, ...] = ()
     mix_sample: tuple[PromptRecord, ...] = ()
-    for root in roots:
+    prepared_until = 0
+    if batch_size not in (1, 2, 4, 8):
+        raise ValueError('invalid_sampling_window')
+    for index, root in enumerate(roots):
         if (len(sample) == len(mix_sample) == SAMPLE_SIZE
                 and root_activity[root.session_id] < min(sample[-1].prompt_time_ms, mix_sample[-1].prompt_time_ms)):
             break
+        if prepare is not None and batch_size > 1 and index >= prepared_until:
+            cutoff = (min(sample[-1].prompt_time_ms, mix_sample[-1].prompt_time_ms)
+                if len(sample) == len(mix_sample) == SAMPLE_SIZE else None)
+            window = tuple(candidate for candidate in roots[index:index + batch_size]
+                if cutoff is None or root_activity[candidate.session_id] >= cutoff)
+            prepare(window)
+            prepared_until = index + len(window)
         item = analyze(root)
         analyzed.append(item)
         sample = tuple(sorted((*sample, *latest_prompts((item,), priceable)),

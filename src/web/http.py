@@ -370,6 +370,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 value = self.server.jobs.readiness()
                 value["product_version"] = DISPLAY_VERSION
                 value['data_dispatcher'] = getattr(self.server.lifecycle, 'dispatcher', None) is not None
+                value['history_demand'] = value['data_dispatcher']
                 if self.server.lifecycle:
                     value["lifecycle"] = self.server.lifecycle.public_status()
                     value["session_detail"] = self.server.lifecycle.live is not None

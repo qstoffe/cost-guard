@@ -173,16 +173,17 @@ async function main() {
       await until(`current.loading && typeof __release==='function'`);
       assert.equal(await evaluate(`__calls===__before+1 && !current.withheld && !output.querySelector('progress')`),true);
       await evaluate(`__hold=false; __release(); window.__release=null`); await until(`!current.loading`);
-      // >one-hour return must withhold, terminate failure and retain last success.
+      // An aged qualified report remains visible while a genuine failed refresh is reported.
       await evaluate(`current.result.observed_at_ms=Date.now()-3600001;
         if(current.result.source.observed_at_ms!=null) current.result.source.observed_at_ms=current.result.observed_at_ms;
         window.__old=CachedReports.observation(current.result); __hold=true; __fail=true; enterCachedReport(current);`);
       await until(`current.loading && typeof __release==='function'`);
-      assert.equal(await evaluate(`current.withheld && !!output.querySelector('progress') && !output.querySelector('.ai-stat') && !output.querySelector('.token-mix-table')`),true);
+      assert.equal(await evaluate(`!current.withheld && !output.querySelector('progress') &&
+        !!output.querySelector('.ai-stat,.token-mix-table') && document.getElementById('report-updating').textContent.includes('Historical snapshot as of')`),true);
       await evaluate(`__hold=false; __release(); window.__release=null`); await until(`!current.loading && current.failed`);
       assert.equal(await evaluate(`!output.querySelector('progress') && CachedReports.observation(current.result)===__old`),true);
       await evaluate(`__fail=false; acquire(current)`); await until(`!current.loading && !current.withheld && !current.failed`);
-      checks.push(section+': active >60m retains DOM; TTL re-entry quiet/single; >60m re-entry withholds; failure terminates and preserves provenance; retry restores');
+      checks.push(section+': aged completion/re-entry retains qualified content; refresh is quiet/single; genuine failure preserves original provenance; retry restores');
     }
     // Server-side coalescing is exercised from independent browser documents.
     const peerId=(await command('Target.createTarget',{url:launch.url.split('#')[0]+'#/ai-stats'})).targetId;

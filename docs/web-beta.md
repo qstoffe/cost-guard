@@ -7,7 +7,9 @@ On initial Models entry, source selection may finish before the first healthy Li
 observation. Models keeps its centered loading progress and **Waiting for source…**
 stage, then continues automatically; no manual Retry is needed for a healthy startup.
 Waiting uses bounded backoff. Genuine source/authentication/permission errors and
-exhausted waits still show actionable failure feedback and **Retry Models**.
+other genuine terminal failures still show actionable feedback and **Retry Models**.
+Healthy finite work has no elapsed-computation cutoff; pending work retains bounded
+resources and automatic recovery rather than requiring Retry just because it is old.
 
 ## Contextual help
 
@@ -244,7 +246,8 @@ and stage-only polite announcements avoid poll-by-poll jumping or announcement s
 
 Authenticated source/slot waits use bounded backoff; terminal failures remain
 actionable. **Retry** is recovery-only. Every actual report child retains its
-120-second active-work watchdog and 8 MiB result limit. Managed historical work
+8 MiB result limit, owned cancellation and parent-loss cleanup, not an elapsed-work
+abort. Managed historical work
 can resume only through bounded, verified checkpoints. No user-facing Cancel,
 Stop loading or Abort is added. One host dispatcher owns route priority, retained
 results and staggered inactive warming; browser hiding demotes interest without
@@ -358,12 +361,11 @@ Credits/USD changes formatting, not these states or the underlying evidence.
 AI Stats targets about **15 minutes** while foreground and **30 minutes** inactive. Compact
 revision-/pricing-keyed evidence reuses unchanged roots; changed roots use bounded
 historical batches. Ordinary updates retain every card/link, period, focus and scroll
-until one coherent result is ready. The shared one-hour re-entry policy below also
-applies. A logical AI Stats acquisition has **no arbitrary total 120-second expiry**:
+until one coherent result is ready. The historical snapshot/as-of policy below also
+applies. AI Stats computation has **no arbitrary elapsed-work expiry**:
 each fresh worker handles at most 256 missing roots, using batches of at most 64 and
-the existing maximum four overlapping V2 source reads. Each child still has a
-120-second watchdog; repeated timeouts reduce batches to 16, then one, and a repeated
-one-root stall fails specifically. Every slice rechecks complete catalog membership
+the existing maximum four overlapping V2 source reads. Nonadvancing coverage uses
+capped automatic backoff, not attempt exhaustion. Every slice rechecks complete catalog membership
 and revisions before publishing a coherent selected-period result. Progress counts
 verified roots; growing/changing coverage may hold its monotonic percentage while
 the displayed denominator changes. No fabricated ETA or partial-scan 100% is shown.
@@ -377,14 +379,16 @@ selection prioritizes its next slice without erasing an earlier 30-day/All time 
 after a coherent narrow milestone, remaining requested work resumes from checkpoints
 even without polling interest. Cards can show that narrow result while broader work
 finishes. No new periodic history daemon is installed. Internal authenticated
-cancellation, watchdogs and host shutdown still terminate owned children. This
+cancellation, parent loss and host shutdown still terminate owned children. This
 supersedes only FR000614's voluntary user-cancellation/inactivity behavior, not its
-resource safety. Checkpoint storage failure, repeated
-revision churn, source/authentication failure and resource exhaustion produce honest
+resource safety. Revision proof churn remains pending with controlled retry. Checkpoint
+storage contention (confirmed SQLite BUSY/LOCKED) keeps the requested acquisition
+pending with capped automatic backoff; no manual Retry is needed after the lock
+clears. Other checkpoint storage failures, actual source/authentication failure and resource exhaustion produce honest
 errors, never silently truncated totals. Limits remain four pending jobs, one active
 child, sixteen retained results and 8 MiB/result; AI Stats additionally bounds roots
 at 100,000 and retained request/interval facts at 250,000. Other report kinds retain
-their original total 120-second deadline. Security and source read-only ownership remain.
+the same no-computation-duration-fallback policy. Security and source read-only ownership remain.
 No new settings, account/provider calls, inference, external assets or browser-stored
 private history are added. [Verification and limits](../development/journal/web/ai-stats.md).
 
@@ -426,7 +430,7 @@ uses unrounded backend values; a zero baseline has no ratio. These are observed 
 with equal first input, **not controlled benchmarks or answer-quality rankings**:
 repository state, instructions, files, tools, environment and remote services can differ.
 
-Finite, read-only acquisition shares the existing 120-second/8 MiB job bounds,
+Finite, read-only acquisition shares the existing 8 MiB result/resource bounds,
 progress, cancellation, private session/CSRF boundary and low-priority queue. A compact
 source-/tree-/pricing-/identity-keyed index stores fingerprints and derived metrics,
 not raw prompts, previews or attachment bodies. Changed roots are batched; unchanged
@@ -437,7 +441,7 @@ analysis can be read, but matching does not create a new raw-prompt analysis cac
 The host targets quiet cache-first checks approximately every **five minutes**
 foreground and **twenty minutes** inactive, staggered behind Live/foreground demand.
 Retained DOM/focus, real observation
-times and the shared one-hour re-entry policy apply. Complete no-matches, excluded
+times and the shared historical snapshot/as-of policy apply. Complete no-matches, excluded
 inputs, changing/partial coverage, loading and unavailable results remain distinct.
 [Verification and limitations](../development/journal/web/comparisons.md).
 
@@ -531,9 +535,9 @@ successful source observation—not visits, timers, cache writes or failed attem
 | Retained scope age on visible re-entry | Behavior |
 | --- | --- |
 | Up to its normal cadence | Display immediately; no unnecessary scan |
-| Older than cadence, at most 60 minutes | Display immediately and start at most one quiet check |
-| More than 60 minutes | Keep last-good cache internally, withhold normal metrics and show bounded acquisition progress |
-| Acquisition fails, times out or is cancelled | End progress, show actionable failure/last-success provenance and allow retry; never fabricate zero/freshness |
+| Older than cadence, including hours/days-long completed work | Display the qualified historical snapshot with its original as-of; host-owned cadence/backoff controls quiet refresh |
+| Genuine acquisition/source failure or cancellation | Retain qualified data and original provenance with honest recovery feedback; never fabricate zero/freshness |
+| Proven source/dependency invalidation or malformed observation | Withhold invalid values until qualified evidence is available |
 
 The initial selected route wins before speculative heavy warming. Thereafter the
 host opportunistically warms Normal Models, Token Mix, default 30-day AI Stats and
@@ -542,10 +546,16 @@ or every session detail/page. Models' actual qualified sample controls cadence:
 under 100 completed priceable prompts targets 15 minutes foreground / 45 inactive;
 100 or more has an hourly floor. AI Stats targets 15/30 minutes; Token Mix and
 Comparisons 5/20. Due times are staggered and can be postponed by foreground/Live
-pressure, not promised at an exact second. A proven invalid dependency or expired
-result is withheld until coherent work completes. Failed attempts never renew age.
+pressure, not promised at an exact second. Successful completion schedules the next
+cadence; neither old observation age nor midnight causes immediate recomputation loops.
+The visible historical as-of label distinguishes updating, queued/scheduled refresh,
+delayed retry and not-updating. A successful publication lookup is not a new source
+observation. AI Stats shows each selected row's exact original configured-timezone
+interval: an earlier-day **Today** or earlier-month **This month** snapshot never
+pretends to cover the current interval. Missing interval evidence withholds that scope
+only. Failed attempts, completion and navigation never renew observation age.
 Sessions/details use their own source-backed age and bounded leases; Watch/Accounts
-remain Live rather than receiving a one-hour real-time allowance.
+remain Live rather than becoming real-time merely from a historical snapshot.
 
 Session-ID links open `/#/sessions/<id>`. Fragment routes support direct links, reload and browser Back/Forward without expanding the HTTP path allowlist. The one-use bootstrap fragment is removed before requests; ordinary session routes are preserved on reload. Names/prompts are text, never links or tooltips containing source paths. Navigation and paging never put prompt/history payloads in browser storage or history state.
 
@@ -554,8 +564,9 @@ Every finite result retains observation time, source status and per-root revisio
 A continuously changing root can remain unverifiable after bounded source retries.
 Managed historical reports may omit that root and display **Partial history**, with
 the omitted-root count; totals/groups then cover only verified evidence. Mixed
-snapshots are never used, and wholly unverifiable history fails rather than showing
-invented zeros. Cached price changes are checked without fetching upstream prices.
+snapshots are never used. Healthy unresolved proof remains pending with bounded
+retry; genuine source faults are reported rather than showing invented zeros.
+Cached price changes are checked without fetching upstream prices.
 Changing pinned runtime configuration (for example timezone/source settings) stops
 the old host and requires relaunch; ordinary hot Web preferences remain applicable.
 
@@ -588,7 +599,7 @@ Pending summary cells show **Loading…**, not unknown/zero. An acquired zero st
 
 Detail's **Ictx** is only the prompt's first-request incoming context, never a delta/next-context arrow; Watch and CLI retain their richer context displays. Prompt previews yield before metric columns, grow on roomy screens and retain complete text in help. One horizontal region handles genuine minimum-width overflow; the document owns vertical scrolling. Initial capture and pinned-chunk acquisition show an indeterminate **Loading session…** progress bar, never a fabricated percentage. Complete retained history stays usable during background checks; explicit source errors replace loading rather than looping forever.
 
-Visible Sessions reads about every five seconds. Page 1 follows arrivals; older pages retain epoch membership/order. The main Sessions nav restores the last viewed offset/sort/epoch (including page 10), not an implicit page 1. Back/Forward/direct pagination links remain authoritative. Expired or invalid positions say **Page position changed; return to latest sessions** instead of substituting rows. Activity/name work covers requested fifty-row pages only; global scalar indexing is admitted only for a requested metric sort. Hidden/navigation interest demotes that work; inactive warming covers only the first or last viewed page at a low cadence. Source failure and expired observation ages remain explicit; no cross-root atomic snapshot is claimed.
+Visible Sessions reads about every five seconds. Page 1 follows arrivals; older pages retain epoch membership/order. The main Sessions nav restores the last viewed offset/sort/epoch (including page 10), not an implicit page 1. Back/Forward/direct pagination links remain authoritative. Expired or invalid positions say **Page position changed; return to latest sessions** instead of substituting rows. Activity/name work covers requested fifty-row pages only; global scalar indexing is admitted only for a requested metric sort. Hidden/navigation interest demotes that work; inactive warming covers only the first or last viewed page. A background slice schedules another after 15 seconds while that page is incomplete, or a quiet 15-minute check when current; a briefly visited abandoned page can inherit that quiet delay. Returning to a visible page bypasses it and automatically completes missing summaries without Retry. Source failure and expired observation ages remain explicit; no cross-root atomic snapshot is claimed.
 
 ## Complete live session history
 
@@ -626,12 +637,27 @@ get separate cards, oldest focal first, with one row even during terminal grace.
 
 Earlier membership is published only after revision-matched complete evidence covers
 every potentially displacing root. Until then both Watch and Mini show **Loading
-earlier sessions…** with grounded coverage, not the provisional oldest candidates.
+earlier sessions…** with grounded coverage, not plausible catalog candidates.
 One source-scoped proof epoch carries the five/three population atomically; ordinary
-refresh retains qualified previously verified cards, while source failures say
-**Unable to verify latest sessions**. Removal/resumption invalidate affected entries.
-No metadata cutoff proves recency, and large/churning sources can remain unverified;
-active prompts, Today and subscriptions do not wait for history.
+refresh retains qualified previously verified cards. Computational duration never
+turns healthy pending proof into **Unable to verify latest sessions**: bounded work
+continues automatically, including after transient revision churn. Genuine sustained
+I/O failures or immediate authentication/schema errors remain typed and actionable;
+recoverable failures retry without a manual Retry. Removal/resumption invalidate
+affected entries. Metadata is only an admission hint, not a finish-time proof; a
+continuously changing source may remain meaningfully unverified until coherent
+coverage is possible. Active prompts, Today and subscriptions do not wait for history.
+
+Once membership is certified, supported names, finish times, model/effort and context
+appear without waiting for the independent whole-session **Total CCost** or shared
+numeric price-comparison sample. Missing cost says **Loading…**, not zero; the known
+context and threshold warning remain usable while price comparison is pending or
+retrying. Enrichment updates the same Full/Mini winners and preserves their original
+proof epoch/time. Existing qualified values remain visible during ordinary refresh.
+No cheap metadata-only global-winner certificate is assumed or speculative name list
+presented as final history. [Controlled and real-source evidence, tradeoffs and
+limits](../development/journal/web/foreground-recovery.md) distinguish correctness
+from cold, retained-cache, warm and promotion timings.
 
 Session title alone links to that canonical Sessions route. The footer keeps whole-session
 CCost separate from prompt-local costs; duration remains prompt-local. Canonical child/compaction/context evidence still feeds
@@ -641,8 +667,9 @@ values remain; after about 60 seconds without usable relevant evidence, a concis
 delay notice may appear. Initial loading keeps its existing 30-second guidance.
 Mini retains its separate ten-minute health owner. Replayed snapshots, another
 lane's progress and cost-only updates cannot prove source recovery. Pricing gaps,
-N/A and actionable provider/auth/host failures remain explicit; final cached-report
-coverage and one-hour historical staleness are not live retry captions.
+N/A and actionable provider/auth/host failures remain explicit. Finite historical
+results retain their original as-of time; positive age alone does not withhold
+qualified completed data, and their refresh cadence is not a live retry caption.
 The ten columns are **Started, Duration, Prompt, Model, Effort, CCost (I + E), Calls,
 Token Mix %, Ictx, Δ Ctx**. Ictx is the first request's effective incoming context;
 the footer's Context remains the estimated next incoming context.
@@ -911,7 +938,7 @@ Live uses one process-lifetime engine starting with the host, not a tab. Closing
 
 Each authorized tab owns one same-origin SSE connection for live, finite-job progress and terminal runtime updates. The HttpOnly session authenticates it; no control secret/query credential is used. Instance-bound ordered IDs and full coherent publications reject duplicates/older/foreign-instance updates. Replay is bounded to 32 events and 8 MiB (2 MiB per publication); overflow or an uncovered gap requires a fresh authenticated `/api/live` snapshot, never inferred continuation. Oversized publications fail visibly rather than displaying truncated totals. Four streams are admitted; excess tabs can retry after capacity is available.
 
-Stream writes retain a two-second timeout and ten-second heartbeats, without a forced healthy-stream lifetime. Authentication is checked on every stream turn; expiry, terminal shutdown and abandoned/failed writes release admission. A genuine disconnect uses ordinary EventSource retry at three seconds. Offline is visible with last known values retained. A received source-change/shutdown notification closes automatic retry and asks for a manual launcher run; an unknown disconnect never starts a server or assumes an update. A different instance requires a fresh authorized launcher link; expired sessions stop retry. Snapshot/job commands remain normal authenticated HTTP. Finite reports run in one isolated, deadline-bounded process while live acquisition, account publication, HTTP/control and source-change checks retain separate scheduling.
+Stream writes retain a two-second timeout and ten-second heartbeats, without a forced healthy-stream lifetime. Authentication is checked on every stream turn; expiry, terminal shutdown and abandoned/failed writes release admission. A genuine disconnect uses ordinary EventSource retry at three seconds. Offline is visible with last known values retained. A received source-change/shutdown notification closes automatic retry and asks for a manual launcher run; an unknown disconnect never starts a server or assumes an update. A different instance requires a fresh authorized launcher link; expired sessions stop retry. Snapshot/job commands remain normal authenticated HTTP. Finite reports use isolated, cooperatively scheduled processes with explicit cancellation and no elapsed-computation cutoff; live acquisition, account publication, HTTP/control and source-change checks retain separate scheduling.
 
 `test_web_live.py` covers canonical live/CLI parity, lifecycle/source recovery, hints/overflow, account-only publication, midnight/DST/partial pricing, detached exports, replay/gap/instance handling, actual HTTP stream admission/terminal delivery, fatal fault ownership and stop beside an occupied finite-report process. Its optional JavaScript VM checks safe presentation and ordering without automating a browser. `development/tests/integration/probe_web_live.py` is an opt-in, read-only real-source check (no UI/model calls): two streams, one acquisition owner, retained run origin and owned shutdown. Native visual/browser/macOS acceptance is not claimed by these probes.
 
@@ -1050,9 +1077,9 @@ Reports select `kind`: `normal` (Models, including report account DTOs), `all-mo
 - Twelve HTTP workers/admitted sockets, with at most four authenticated streams so eight ordinary/control slots remain; bounded listen backlog. Two-second socket timeouts and an absolute five-second ordinary request/header deadline, including dripping clients. Only fully authenticated SSE cancels that deadline and retains its slot until disconnect, expiry or terminal shutdown. Connections close after one request.
 - Request line <=2048 bytes, aggregate headers <=16 KiB, individual header lines <4096 bytes, JSON body <=4096 bytes. Duplicate headers/JSON keys, transfer encoding, non-JSON controls and unsupported methods are denied. No autoreload or directory listing.
 - At most four queued/running logical reports, one executing finite child and bounded parked stacks. Identical in-flight demand coalesces. Sixteen jobs and twelve host result entries are bounded; a missing ID is not empty success.
-- Every child owns fresh integrations, existing source-read deadlines, a 120-second active-work watchdog and exact-parent cleanup. Managed Token Mix/Comparisons may continue only after independently received durable progress, with bounded steps/churn; AI Stats keeps its scope/slice bounds. No immortal child or shared mutable Live scheduler is introduced. Cooperative reprioritization waits for a safe checkpoint; an in-flight source operation retains its own deadline.
+- Every child owns fresh integrations, per-I/O source-read deadlines and exact-parent cleanup, not a computation-age watchdog. Managed Token Mix/Comparisons may continue only after independently received durable progress; each slice bounds its work while repeated churn uses capped backoff. AI Stats keeps its scope/slice bounds. Cooperative reprioritization waits for a safe checkpoint; an in-flight source operation retains its own I/O deadline. Healthy expensive computation remains pending and can complete automatically without Retry.
 - Each finite report child monitors multiprocessing's exact parent kernel sentinel. A crashed/force-stopped Web parent or lost ownership proof exits that child nonzero, including a blocked scan; PID reuse is not a liveness signal. This child-only safety monitor stops/joins on ordinary completion.
-- Results are limited to 8 MiB per job. Oversize: `result_too_large`; scope the request. Long Token Mix may time out but never blocks shutdown. Progress exports only approved phase/stage/counts and a stale-safe job sequence, not source text. Child IPC coalesces at 100ms; host drains at most 64 messages/turn.
+- Results are limited to 8 MiB per job. Oversize: `result_too_large`; scope the request. Long Token Mix remains cancellable and never blocks shutdown. Progress exports only approved phase/stage/counts and a stale-safe job sequence, not source text. Child IPC coalesces at 100ms; host drains at most 64 messages/turn.
 
 The shell remains reachable with offline/loading sources. At host launch only,
 an eligible unavailable V2 service gets one hidden installed-CLI wake (five-second

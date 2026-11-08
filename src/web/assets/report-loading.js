@@ -1,5 +1,5 @@
 'use strict';
-// Finite-attempt presentation and admission only; never scans or clock-driven progress.
+// Pending-work presentation and admission only; never scans or clock-driven progress.
 const ReportLoading = (() => {
   const sections = ['models', 'token-mix', 'ai-stats', 'comparisons'];
   const phases = {authorizing: [0, 5, 'Authorizing browser session'], queued: [5, 10, 'Waiting for report slot…'],
@@ -111,7 +111,8 @@ const ReportLoading = (() => {
     });
   }
   const transient = ['registration_missing', 'endpoint_unresponsive', 'connection_refused',
-    'connection_reset', 'connection_disconnected', 'connection_timeout', 'http_status_failure'];
+    'connection_reset', 'connection_disconnected', 'connection_timeout', 'http_status_failure',
+    'concurrent_source_change', 'history_revision_churn', 'ai_stats_revision_churn', 'ai_stats_checkpoint_busy', 'session_catalog_changed'];
   function retryable(error) {
     return ['busy', 'source_starting'].includes(error.message) ||
       error.retryable === true && (error.message === 'source_unavailable' || transient.includes(error.message));
@@ -120,30 +121,51 @@ const ReportLoading = (() => {
     return host.terminal || ['offline', 'stopped', 'identity_changed', 'authorization_required'].includes(host.kind);
   }
   class Attempt {
-    constructor(clock = () => Date.now(), resumable = false) {
-      this.clock = clock; this.end = resumable ? Infinity : clock() + 120000; this.retries = 0;
+    constructor() {
+      this.retries = 0;
       this.controller = new AbortController(); this.reason = null;
+      this.waiting = null; this.hint = null; this.woken = null;
     }
     cancel(reason = 'cancelled') { this.reason = reason; this.controller.abort(); }
-    check(host, enforceDeadline = true) {
+    check(host) {
       if (this.reason) throw new Error(this.reason);
       // Stream reconnect is not failed HTTP/source readiness. Admission and typed
       // replies prove the finite source independently of the Live connection.
       if (interrupted(host)) throw new Error(host.kind);
-      if (enforceDeadline && this.clock() >= this.end) throw new Error('report_timeout');
     }
-    pause(milliseconds) {
+    pause(milliseconds, job) {
       return new Promise((resolve, reject) => {
         const signal = this.controller.signal;
-        const aborted = () => { clearTimeout(timer); reject(new Error(this.reason || 'cancelled')); };
-        const timer = setTimeout(() => { signal.removeEventListener('abort', aborted); resolve(); },
-          Math.max(0, Math.min(milliseconds, this.end - this.clock())));
-        if (signal.aborted) aborted(); else signal.addEventListener('abort', aborted, {once: true});
+        let waiter = null;
+        const settle = () => {
+          clearTimeout(timer); signal.removeEventListener('abort', aborted);
+          if (this.waiting === waiter) this.waiting = null;
+        };
+        const aborted = () => { settle(); reject(new Error(this.reason || 'cancelled')); };
+        const timer = setTimeout(() => { settle(); resolve(); }, Math.max(0, milliseconds));
+        if (signal.aborted) return aborted();
+        signal.addEventListener('abort', aborted, {once: true});
+        if (job !== undefined) this.waiting = waiter = {job, wake: () => { settle(); resolve(); }};
       });
+    }
+    // Only a status-poll wait may end early, once per job; the authenticated job
+    // fetch that follows stays authoritative and recovery backoff is never shortened.
+    poll(job, milliseconds) {
+      const hinted = this.hint === job; this.hint = null;
+      if (hinted && !this.reason && this.woken !== job) { this.woken = job; return Promise.resolve(); }
+      return this.pause(milliseconds, job);
+    }
+    notify(job) {
+      if (this.reason || this.woken === job) return;
+      if (!this.waiting) { this.hint = job; return; }
+      if (this.waiting.job !== job) return;
+      // The caller admits only its current active identity; retired jobs never
+      // return here. An unlimited recovery lifetime needs no retired-ID ledger.
+      this.woken = job; this.waiting.wake();
     }
     async backoff(error) {
       if (!retryable(error)) throw error;
-      if (++this.retries > 8) throw new Error(error.message === 'busy' ? 'report_slot_timeout' : 'source_wait_timeout');
+      this.retries = Math.min(4, this.retries + 1);
       await this.pause(Math.min(4000, 500 * 2 ** (this.retries - 1)));
     }
   }

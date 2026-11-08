@@ -505,31 +505,35 @@ class WebRuntimeTests(unittest.TestCase):
 
 
 class JobBoundaryTests(unittest.TestCase):
-    def test_valid_terminal_ipc_allows_natural_exit_without_termination(self):
+    def test_valid_terminal_ipc_publishes_before_natural_exit_without_termination(self):
         for message, expected in [
                 (('result', json.dumps(dict(error=None, source=dict(status='acquired'))).encode()), 'complete'),
                 (('error', 'report_unavailable'), 'failed')]:
             with self.subTest(message=message[0]):
-                child = ReportProcess(messages=[message], exit_after_join=1)
+                child = ReportProcess(messages=[message])
                 jobs = ReportJobs(context=child.context)
                 key = jobs.submit(ReportRequest())
                 jobs.tick()
 
                 jobs.tick()
+                published = jobs.snapshot(key)['status']
+                child.alive = False
+                jobs.tick()
 
-                self.assertEqual(expected, jobs.snapshot(key)['status'])
-                child.process.join.assert_called_once_with(timeout=1)
+                self.assertEqual(expected, published)
+                self.assertIsNone(jobs._active)
+                child.process.join.assert_not_called()
                 child.process.terminate.assert_not_called()
                 child.process.kill.assert_not_called()
                 child.receiver.close.assert_called_once()
                 child.process.close.assert_called_once()
-                self.assertIsNone(jobs._active)
+                self.assertEqual([], jobs._retiring)
                 jobs.close()
 
-    def test_completed_stats_slice_gets_grace_even_when_logical_job_requeues(self):
+    def test_completed_stats_slice_retires_while_logical_job_starts_its_fresh_child(self):
         result = dict(error=None, source=dict(status='acquired'),
             view=dict(ai_stats=[], ai_stats_work=dict(completed=1)))
-        child = ReportProcess(messages=[('result', json.dumps(result).encode())], exit_after_join=1)
+        child = ReportProcess(messages=[('result', json.dumps(result).encode())])
         next_child = ReportProcess(exit_after_join=1)
         child.context.Pipe.side_effect = [(child.receiver, child.sender), (next_child.receiver, next_child.sender)]
         child.context.Process.side_effect = [child.process, next_child.process]
@@ -539,41 +543,312 @@ class JobBoundaryTests(unittest.TestCase):
         jobs.tick()
 
         jobs.tick()
+        retiring = [owner['process'] for owner in jobs._retiring]
+        child.alive = False
+        jobs.tick()
 
+        self.assertEqual([child.process], retiring)
         self.assertEqual('running', jobs.snapshot(key)['status'])
         self.assertEqual(2, jobs.snapshot(key)['work']['slices'])
         self.assertIs(next_child.process, jobs._active[1])
-        child.process.join.assert_called_once_with(timeout=1)
         child.process.terminate.assert_not_called()
         child.process.close.assert_called_once()
+        next_child.process.close.assert_not_called()
+        next_child.receiver.close.assert_not_called()
 
-    def test_exhausted_natural_grace_falls_back_to_bounded_termination(self):
-        child = ReportProcess(messages=[('error', 'report_unavailable')], exit_after_join=2)
+    def test_history_continuation_retires_its_slice_while_a_fresh_child_keeps_the_observation(self):
+        from src.web.report_control import ManagedReport
+        proof = dict(signature='a' * 64, completed=256, total=550)
+        child = ReportProcess(messages=[('checkpoint', proof),
+            ('result', json.dumps(dict(error=dict(code='history_continue'))).encode())])
+        next_child = ReportProcess(exit_after_join=1)
+        child.context.Pipe.side_effect = [(child.receiver, child.sender), (next_child.receiver, next_child.sender)]
+        child.context.Process.side_effect = [child.process, next_child.process]
+        jobs = ReportJobs(context=child.context)
+        self.addCleanup(jobs.close)
+        key = jobs.submit(ManagedReport(ReportKind.TOKEN_MIX))
+        jobs.tick()
+
+        jobs.tick()
+        retiring = [owner['process'] for owner in jobs._retiring]
+        child.alive = False
+        jobs.tick()
+
+        first, second = (spawn.kwargs['args'][2] for spawn in child.context.Process.call_args_list)
+        self.assertEqual([child.process], retiring)
+        self.assertIs(next_child.process, jobs._active[1])
+        self.assertEqual(proof, jobs._jobs[key]['continued'])
+        self.assertEqual(2, jobs.snapshot(key)['work']['slices'])
+        self.assertEqual(first.observation_ms, second.observation_ms)
+        child.process.join.assert_not_called()
+        child.process.terminate.assert_not_called()
+        child.process.close.assert_called_once()
+        next_child.process.close.assert_not_called()
+
+    @staticmethod
+    def owned_children(count):
+        children = [ReportProcess(exit_after_join=1) for _ in range(count)]
+        context = children[0].context
+        context.Pipe.side_effect = [(child.receiver, child.sender) for child in children]
+        context.Process.side_effect = [child.process for child in children]
+        return context, children
+
+    def test_unadmitted_background_startup_yields_once_to_waiting_foreground_until_durable_progress(self):
+        from src.web.report_control import ManagedReport
+        context, (background, foreground, restarted) = self.owned_children(3)
+        jobs = ReportJobs(context=context)
+        self.addCleanup(jobs.close)
+        warm = jobs.submit(ManagedReport(ReportKind.TOKEN_MIX))
+        jobs.prioritize({warm: 2})
+        jobs.tick()
+        demand = jobs.submit(ManagedReport(ReportKind.COMPARISONS))
+        jobs.prioritize({warm: 2, demand: 0})
+
+        jobs.tick()
+        interrupted = jobs.snapshot(warm)['status']
+        foreground.messages.append(('result', json.dumps(dict(error=None, source=dict(status='acquired'))).encode()))
+        jobs.tick()
+        again = jobs.submit(ManagedReport(ReportKind.SESSIONS))
+        jobs.prioritize({warm: 2, again: 0})
+        jobs.tick()
+        restarted.messages.extend([('admit', None), ('checkpoint', dict(signature='b' * 64, completed=4, total=10))])
+        jobs.tick()
+
+        requests = [spawn.kwargs['args'][2] for spawn in context.Process.call_args_list]
+        self.assertEqual('queued', interrupted)
+        background.process.terminate.assert_called_once()
+        background.receiver.send.assert_not_called()
+        background.process.close.assert_called_once()
+        self.assertEqual([ReportKind.TOKEN_MIX, ReportKind.COMPARISONS, ReportKind.TOKEN_MIX],
+            [request.kind for request in requests])
+        self.assertEqual(requests[0].observation_ms, requests[2].observation_ms)
+        restarted.process.terminate.assert_not_called()
+        restarted.receiver.send.assert_called_once_with('run')
+        self.assertEqual(warm, jobs._active[0])
+        self.assertNotIn('startup_interrupted', jobs._jobs[warm])
+
+    def test_background_warming_advances_between_foreground_bursts_and_regains_one_interruption(self):
+        from src.web.report_control import ManagedReport
+        done = json.dumps(dict(error=None, source=dict(status='acquired'))).encode()
+        advanced = json.dumps(dict(error=None, source=dict(status='acquired'),
+            view=dict(ai_stats=[], ai_stats_work=dict(completed=1)))).encode()
+        context, (first, burst, resumed, next_slice, _) = self.owned_children(5)
+        jobs = ReportJobs(context=context)
+        self.addCleanup(jobs.close)
+        warm = jobs.submit(ManagedReport(ReportKind.AI_STATS))
+        jobs.prioritize({warm: 2})
+        jobs.tick()
+        demand = jobs.submit(ManagedReport(ReportKind.COMPARISONS))
+        jobs.prioritize({warm: 2, demand: 0})
+        jobs.tick()
+        burst.messages.append(('result', done))
+        jobs.tick()
+        burst.alive = False
+        resumed.messages.extend([('admit', None), ('result', advanced)])
+        jobs.tick()
+        again = jobs.submit(ManagedReport(ReportKind.SESSIONS))
+        jobs.prioritize({warm: 2, again: 0})
+
+        jobs.tick()
+
+        requests = [spawn.kwargs['args'][2] for spawn in context.Process.call_args_list]
+        self.assertEqual([ReportKind.AI_STATS, ReportKind.COMPARISONS, ReportKind.AI_STATS, ReportKind.AI_STATS,
+            ReportKind.SESSIONS], [request.kind for request in requests])
+        self.assertEqual(1, len({(request.observation_ms, request.scan) for request in requests if
+            request.kind is ReportKind.AI_STATS}))
+        first.process.terminate.assert_called_once()
+        resumed.process.terminate.assert_not_called()
+        next_slice.process.terminate.assert_called_once()
+        self.assertEqual(1, jobs._jobs[warm]['covered'])
+        self.assertEqual(2, jobs._jobs[warm]['startup_interruptions'])
+        self.assertEqual('queued', jobs.snapshot(warm)['status'])
+        self.assertEqual(again, jobs._active[0])
+
+    def test_admission_grant_and_startup_interruption_follow_the_host_decision_order(self):
+        from src.web.report_control import ManagedReport
+        for case in ('pending-admit', 'granted', 'promoted', 'requested-demand'):
+            with self.subTest(case=case):
+                context, (background, _) = self.owned_children(2)
+                jobs = ReportJobs(context=context)
+                warm = jobs.submit(ManagedReport(ReportKind.TOKEN_MIX))
+                jobs.prioritize({warm: 2})
+                jobs.tick()
+                background.messages.append(('admit', None))
+                if case == 'granted':
+                    jobs.tick()
+                demand = jobs.submit(ManagedReport(ReportKind.COMPARISONS))
+                jobs.prioritize({warm: 0 if case == 'promoted' else 2,
+                                 demand: 1 if case == 'requested-demand' else 0})
+
+                jobs.tick()
+
+                interrupted = case == 'pending-admit'
+                grant = [] if interrupted else [call('free' if case == 'promoted' else 'run')]
+                self.assertEqual(interrupted, background.process.terminate.called)
+                self.assertEqual(grant, background.receiver.send.call_args_list)
+                self.assertEqual(demand if interrupted else warm, jobs._active[0])
+                jobs.close()
+
+    def test_requested_managed_startup_is_admitted_at_spawn_without_a_second_grant(self):
+        from src.web.report_control import ManagedReport
+        child = ReportProcess(messages=[('admit', None)], exit_after_join=1)
+        jobs = ReportJobs(context=child.context)
+        self.addCleanup(jobs.close)
+        jobs.submit(ManagedReport(ReportKind.TOKEN_MIX))
+        jobs.tick()
+        granted = list(child.receiver.send.call_args_list)
+
+        jobs.tick()
+
+        self.assertEqual([call('free')], granted)
+        self.assertEqual([call('free')], child.receiver.send.call_args_list)
+
+    def test_uncontended_foreground_runs_unparked_until_equal_priority_work_requests_one_yield(self):
+        from src.web.report_control import ManagedReport
+        context, (child, rival) = self.owned_children(2)
+        jobs = ReportJobs(context=context)
+        self.addCleanup(jobs.close)
+        key = jobs.submit(ManagedReport(ReportKind.TOKEN_MIX))
+        jobs.prioritize({key: 0})
+        jobs.tick()
+        child.messages.append(('progress', dict(phase='history', completed=1, total=3)))
+        jobs.tick()
+        jobs.tick()
+        alone = list(child.receiver.send.call_args_list)
+        other = jobs.submit(ManagedReport(ReportKind.COMPARISONS))
+        jobs.prioritize({key: 0, other: 0})
+        jobs.tick()
+        jobs.tick()
+        requested = list(child.receiver.send.call_args_list)
+        child.messages.append(('yield', None))
+
+        jobs.tick()
+        jobs.tick()
+
+        self.assertEqual([call('free')], alone)
+        self.assertEqual([call('free'), call('yield')], requested)
+        self.assertIn(key, jobs._parked)
+        self.assertEqual(other, jobs._active[0])
+        self.assertEqual([call('free'), call('yield')], rival.receiver.send.call_args_list)
+
+    def test_resume_grant_follows_current_priority_and_demotion_requests_pacing(self):
+        from src.web.report_control import ManagedReport
+        context, (child,) = self.owned_children(1)
+        jobs = ReportJobs(context=context)
+        self.addCleanup(jobs.close)
+        key = jobs.submit(ManagedReport(ReportKind.TOKEN_MIX))
+        jobs.prioritize({key: 0})
+        with patch('src.web.jobs.time.monotonic', return_value=10):
+            jobs.tick()
+            jobs.prioritize({key: 2})
+            jobs.tick()
+            child.messages.append(('yield', None))
+            jobs.tick()
+            jobs.prioritize({key: 0})
+            child.messages.append(('yield', None))
+
+            jobs.tick()
+
+        self.assertEqual([call('free'), call('yield'), call('run'), call('free')],
+            child.receiver.send.call_args_list)
+        self.assertEqual(key, jobs._active[0])
+
+    def test_pending_yield_request_does_not_disturb_terminal_publication_or_the_next_grant(self):
+        from src.web.report_control import ManagedReport
+        context, (child, successor) = self.owned_children(2)
+        jobs = ReportJobs(context=context)
+        self.addCleanup(jobs.close)
+        key = jobs.submit(ManagedReport(ReportKind.TOKEN_MIX))
+        other = jobs.submit(ManagedReport(ReportKind.COMPARISONS))
+        jobs.prioritize({key: 0, other: 0})
+        jobs.tick()
+        jobs.tick()
+        child.messages.append(('result', json.dumps(dict(error=None, source=dict(status='acquired'))).encode()))
+
+        jobs.tick()
+        jobs.tick()
+
+        self.assertEqual('complete', jobs.snapshot(key)['status'])
+        self.assertEqual([call('free'), call('yield')], child.receiver.send.call_args_list)
+        self.assertEqual([call('free')], successor.receiver.send.call_args_list)
+        self.assertEqual(other, jobs._active[0])
+
+    def test_free_quantum_parks_only_on_request_while_paced_quantum_parks_every_slice(self):
+        from itertools import count
+        from src.web.report_control import Quantum
+        pending = ['free']
+        connection = Mock()
+        connection.poll.side_effect = lambda: bool(pending)
+        connection.recv.side_effect = lambda: pending.pop(0)
+        quantum = Quantum(connection, .5, clock=Mock(side_effect=count()))
+        quantum.admit()
+
+        quantum.checkpoint()
+        quantum.checkpoint()
+        unrequested = list(connection.send.call_args_list)
+        pending.extend(['yield', 'run'])
+        quantum.checkpoint()
+        pending.append('free')
+        quantum.checkpoint()
+        pending.append('invalid')
+
+        with self.assertRaisesRegex(RuntimeError, '^invalid_worker_control$'):
+            quantum.checkpoint()
+        self.assertEqual([call(('admit', None))], unrequested)
+        self.assertEqual([call(('admit', None)), call(('yield', None)), call(('yield', None))],
+            connection.send.call_args_list)
+
+    def test_managed_worker_waits_for_admission_before_acquisition(self):
+        from src.web.report_control import ManagedReport
+        for reply, admitted in (('run', True), ('stop', False)):
+            with self.subTest(reply=reply):
+                events = Mock()
+                events.sender.recv.return_value = reply
+                events.app.execute.return_value.to_json.return_value = dict(error=None)
+                with patch('src.web.composition.application', return_value=events.app):
+                    run_report(events.sender, ManagedReport(ReportKind.TOKEN_MIX))
+
+                self.assertEqual([call.sender.send(('admit', None)), call.sender.recv()], events.mock_calls[:2])
+                self.assertEqual(admitted, events.app.execute.called)
+                if not admitted:
+                    events.sender.send.assert_called_with(('error', 'report_unavailable'))
+
+    def test_exhausted_natural_grace_escalates_on_fixed_deadlines_without_blocking(self):
+        child = ReportProcess(messages=[('error', 'report_unavailable')])
         jobs = ReportJobs(context=child.context)
         jobs.submit(ReportRequest())
-        jobs.tick()
+        with patch('src.web.jobs.time.monotonic', return_value=10):
+            jobs.tick()
+            jobs.tick()
 
-        jobs.tick()
+        for now in (10.9, 11.0, 11.5, 11.9):
+            with patch('src.web.jobs.time.monotonic', return_value=now):
+                jobs.tick()
+        terminated = child.process.terminate.call_count
+        child.alive = False
+        with patch('src.web.jobs.time.monotonic', return_value=12.0):
+            jobs.tick()
 
-        self.assertEqual([call.join(timeout=1), call.is_alive(), call.terminate(), call.join(timeout=1),
-            call.is_alive(), call.is_alive(), call.close()], child.process.mock_calls[1:])
+        self.assertEqual(1, terminated)
+        child.process.join.assert_not_called()
         child.process.kill.assert_not_called()
-        self.assertIsNone(jobs._active)
+        child.process.close.assert_called_once()
+        self.assertEqual([], jobs._retiring)
 
-    def test_watchdog_cancel_shutdown_and_invalid_ipc_force_stop_without_grace(self):
-        for action in ('watchdog', 'cancel', 'shutdown', 'unknown', 'invalid-result', 'invalid-error', 'eof'):
+    def test_cancel_shutdown_and_invalid_ipc_force_stop_without_grace(self):
+        for action in ('cancel', 'shutdown', 'unknown', 'invalid-result', 'invalid-error', 'eof'):
             with self.subTest(action=action):
                 messages = {'unknown': [('other', 'not-terminal')], 'invalid-result': [('result', b'{}')],
                     'invalid-error': [('error', {})], 'eof': [('error', 'unused')]}.get(action, ())
                 child = ReportProcess(messages=messages, exit_after_join=1)
                 if action == 'eof':
                     child.receiver.recv.side_effect = EOFError
-                jobs = ReportJobs(context=child.context, deadline=1)
+                jobs = ReportJobs(context=child.context)
                 key = jobs.submit(ReportRequest())
                 with patch('src.web.jobs.time.monotonic', return_value=0):
                     jobs.tick()
 
-                with patch('src.web.jobs.time.monotonic', return_value=2 if action == 'watchdog' else 0):
+                with patch('src.web.jobs.time.monotonic', return_value=0):
                     if action == 'cancel':
                         jobs.cancel(key)
                     elif action == 'shutdown':
@@ -587,26 +862,30 @@ class JobBoundaryTests(unittest.TestCase):
                 child.process.close.assert_called_once()
                 self.assertIsNone(jobs._active)
 
-    def test_unconfirmed_exit_latches_failure_retains_owner_and_allows_bounded_cleanup_retry(self):
+    def test_unconfirmed_retirement_latches_failure_retains_owner_and_allows_bounded_cleanup_retry(self):
         child = ReportProcess(messages=[('result', json.dumps(dict(error=None,
             source=dict(status='acquired'))).encode())])
         jobs = ReportJobs(context=child.context)
         request = ReportRequest(ReportKind.COMPARISONS)
         key = jobs.submit(request)
-        queued = jobs.submit(ReportRequest(ReportKind.TOKEN_MIX))
         with patch('src.web.jobs.time.monotonic', return_value=10):
             jobs.tick()
-        owner = jobs._active
+            jobs.tick()  # Publishes and retires before the child exits.
+        published = jobs.snapshot(key)['status']
+        owner = jobs._retiring[0]
 
-        with patch('src.web.jobs.time.monotonic', return_value=12), \
+        for now in (11, 12):
+            with patch('src.web.jobs.time.monotonic', return_value=now):
+                jobs.tick()
+        with patch('src.web.jobs.time.monotonic', return_value=13), \
                 self.assertRaisesRegex(ReportWorkerStopError, '^report_worker_stop_timeout$') as caught:
             jobs.tick()
 
-        self.assertIs(owner, jobs._active)
-        self.assertEqual('failed', jobs._jobs[key]['status'])
-        self.assertEqual([call(timeout=1)] * 3, child.process.join.call_args_list)
+        self.assertEqual('complete', published)
+        self.assertEqual([owner], jobs._retiring)
         child.process.terminate.assert_called_once()
         child.process.kill.assert_called_once()
+        child.process.join.assert_not_called()
         child.receiver.close.assert_not_called()
         child.process.close.assert_not_called()
         for operation in (lambda: jobs.submit(request), lambda: jobs.snapshot(key), jobs.tick,
@@ -614,25 +893,48 @@ class JobBoundaryTests(unittest.TestCase):
             with self.assertRaises(ReportWorkerStopError) as latched:
                 operation()
             self.assertIs(caught.exception, latched.exception)
-        self.assertEqual(2, len(jobs._jobs))
-        self.assertEqual(1, child.context.Process.call_count)
         with self.assertRaises(ReportWorkerStopError):
             jobs.close()
-        self.assertIs(owner, jobs._active)
-        self.assertEqual([call(timeout=1)] * 5, child.process.join.call_args_list)
-        self.assertEqual('cancelled', jobs._jobs[queued]['status'])
+        self.assertEqual([owner], jobs._retiring)
+        self.assertEqual([call(timeout=1)] * 2, child.process.join.call_args_list)
 
         child.alive = False
-        with patch('src.web.jobs.time.monotonic', return_value=15):
-            jobs.close()
+        jobs.close()
         jobs.close()
 
-        self.assertIsNone(jobs._active)
-        self.assertEqual(5000, jobs._jobs[key]['worker_ms'])
+        self.assertEqual([], jobs._retiring)
         child.receiver.close.assert_called_once()
         child.process.close.assert_called_once()
         with self.assertRaises(ReportWorkerStopError):
-            jobs.snapshot(key)  # Even the retained valid report cannot conceal the fault.
+            jobs.snapshot(key)  # Even the already-published valid report cannot conceal the fault.
+
+    def test_retirees_count_as_resident_children_and_withhold_only_fresh_launches(self):
+        from src.web.report_control import ManagedReport
+        jobs = ReportJobs(context=ReportProcess().context)
+        parked = [jobs.submit(ManagedReport(kind)) for kind in (ReportKind.TOKEN_MIX, ReportKind.COMPARISONS)]
+        fresh = jobs.submit(ReportRequest(ReportKind.SESSIONS))
+        retirees = [dict(process=Mock(), receiver=Mock(), stage=0, deadline=float('inf')) for _ in range(2)]
+        for retiree in retirees:
+            retiree['process'].is_alive.return_value = True
+        for key in parked:
+            jobs._parked[key] = Mock(), Mock()
+        jobs._retiring.extend(retirees)
+        jobs.prioritize({fresh: 0, parked[0]: 1, parked[1]: 1})
+
+        jobs.tick()
+        resumed = jobs._active[0]
+        jobs._active = None
+        jobs._jobs[resumed]['status'] = 'paused-for-test'
+        jobs._parked[parked[1]] = Mock(), Mock()
+        jobs._jobs[parked[1]]['status'] = 'paused-for-test'
+        retirees[1]['process'].is_alive.return_value = False
+        jobs.tick()
+
+        self.assertIn(resumed, parked)
+        self.assertEqual('running', jobs.snapshot(fresh)['status'])
+        self.assertEqual([retirees[0]], jobs._retiring)
+        retirees[0]['receiver'].close.assert_not_called()
+        retirees[1]['receiver'].close.assert_called_once()
 
     def test_worker_compacts_json_without_dropping_provenance_or_raising_limit(self):
         values = {"rows": [{"a": 1, "b": 2}] * 4}
@@ -679,17 +981,30 @@ class JobBoundaryTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "stopping"):
             jobs.submit(ReportRequest(ReportKind.NORMAL))
 
-    def test_report_hard_deadline_and_close_stop_only_owned_work(self):
-        jobs = ReportJobs(target=finite_report, deadline=.1)
+    def test_slow_valid_report_survives_days_of_elapsed_work_and_completes_automatically(self):
+        jobs = ReportJobs(target=finite_report)
         self.addCleanup(jobs.close)
-        key = jobs.submit(ReportRequest(ReportKind.TOKEN_MIX))
+        key = jobs.submit(ReportRequest(ReportKind.SESSION, session_id='root'))
         jobs.tick()
-        process = jobs._active[1]
-        time.sleep(.15)
-        jobs.tick()
-        self.assertEqual("failed", jobs.snapshot(key)["status"])
-        self.assertEqual("report_timeout", jobs.snapshot(key)["error"])
+        owner, process, receiver, started = jobs._active
+        jobs._active = owner, process, receiver, started - 2 * 86400
+        end = time.monotonic() + 10
+
+        while time.monotonic() < end:
+            jobs.tick()
+            result = jobs.snapshot(key)
+            if result['status'] not in {'queued', 'running'}:
+                break
+            time.sleep(.01)
+
+        self.assertEqual('complete', result['status'], result['error'])
+        self.assertIsNone(result['result']['error'])
+        self.assertTrue(result['result']['view']['prompt_blocks'])
+        self.assertEqual(1, result['work']['slices'])
         self.assertIsNone(jobs._active)
+        while jobs._retiring and time.monotonic() < end:
+            jobs.tick()  # Published first; the owned child is then reaped without blocking.
+            time.sleep(.01)
         self.assertTrue(process._closed)
 
     def test_report_parser_allowlists_native_modes_and_parameters(self):

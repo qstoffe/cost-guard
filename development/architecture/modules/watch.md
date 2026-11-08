@@ -34,8 +34,13 @@ Source recovery retains the last projection and retries only the selected source
 Web-only `source_status.py` confirms retryable read failures with retained evidence
 after five monotonic seconds, without moving the first-failure origin on repeated
 failure/partial capture. Existing publications advance retrying to unavailable;
-successful relevant acquisition alone clears it. Initial/non-retryable failures
-are immediate. Cards freeze observed duration while retrying; daily uses the existing
+successful relevant acquisition alone clears it. Initial failures remain immediate
+except Earlier's explicit initial-confirmation option: retryable failures leave history
+loading for the same five seconds, without publishing cards or claiming coverage.
+Typed concurrent-change proof churn remains verifying, not an age-based unavailable
+state; actual I/O confirmation keeps its five-second rule. Web Live also continues
+automatic recovery from repeated concurrent-change observations without a failure-count
+termination. Non-retryable failures remain immediate. Cards freeze observed duration while retrying; daily uses the existing
 single history lane for a five-second retry. Browser HTTP/SSE health remains separate;
 no CLI recovery/cadence or source-acquisition limits change. Web history first selects
 the five sessions with the latest supported terminal times, then orders exact representative
@@ -67,6 +72,71 @@ DTO. Unchanged ticks never renew evidence; refreshes retain one qualified epoch.
 Removal/resumption invalidates affected entries; clients cannot restore independently
 retained rows. Cold sources without a safe finish-bound certificate still need full
 coverage; no new scanner, persistent raw ledger, worker lane or CLI change is added.
+
+The in-progress foreground-recovery candidate admits small isolated history batches
+within the same four logical card-root slots, reserving one from history for active
+singles. Occupancy is per root, not per future; undersized groups do not wait to fill.
+Only source hydration overlaps inside a batch; report/cache/pricing projection stays
+on its owning thread. `capture_rows` accepts the already-certified snapshot without
+rehydrating. A hydration-only watchdog cancels/joins an overrun before fair replay;
+unfinished members subsequently run as singles. Replay is a scheduling event, not
+a source outage or coverage. Epoch/generation/revision acceptance remains required.
+Batching is enabled only when the selected source exposes the explicit outcome seam;
+other sources retain independent single captures, not serial shared-future coupling.
+Watch-card selection alone omits unused migration-gap inspection. The retained
+candidate has matched three-way synthetic and independent real-global-oracle
+evidence, not blanket whole-Web acceptance; see
+[the active experiment ledger](../../journal/web/foreground-recovery.md).
+
+The explicit Web V2 composition now injects `card_readers.py`: at most one
+exclusively borrowed reader per existing card executor thread, four total.
+Construction is registered before health validation; each job still probes the
+selected source and builds fresh analysis/pricing/cache facades. Guidance and
+other lanes retain fresh sources. Same observed epoch and equal detached actor
+contents alone preserve the latest complete catalogue/index, without renewing its
+two-second before-bracket eligibility. Every capture keeps its after-bracket;
+singletons also reject an epoch change during hydration. Job metrics are replaced
+before validation, transport counters reset in place, and per-session diagnostics/
+skill lookups clear per borrow. Failures/replay retire readers; cancellation covers
+idle and active readers, and final close runs after executor join even on a fatal
+future. `test_watch_card_readers.py` covers reuse, invalidation and ownership. This
+is a measured candidate; the independent final real-source oracle in the ledger
+proves Earlier availability separately, not from reader reuse alone.
+
+The completion-refill experiment signals one coalesced wake per unique completed
+card/guidance future, after worker cleanup, with unchanged logical permit limits.
+The application owner services one bounded acceptance/admission turn without full
+projection/SSE, source/catalog polling, account refresh or population-wide numeric
+guidance work. Regular publication retains its independent deadline and wins when
+due. Result draining snapshots completed futures before reclaiming permits, so a
+racing completion cannot lose its rows before replacement admission. Fault/churn/
+replay-only bursts and failed roots wait for normal cadence; late empty wakes cannot
+restart them. Capture eviction remains part of every servicing turn, not publication.
+`test_watch_completion_service.py` covers the narrow seam, race and cleanup lifetime.
+This seam does not itself certify an earlier publication. Separate authenticated
+Full/Mini history leases promote the bounded completion-service demand, including
+a visible Mini with hidden opener; history already runs at its measured safe maximum
+from startup, so the recorded scoped no-acceleration exception remains explicit.
+
+The same in-progress candidate's `card_guidance.py` owns one completed numeric
+context-guidance observation and at most one sequential producer across scopes.
+It is charged against the existing total/historical card permits until exit;
+other cards never wait in occupied workers for the sample. Web captures explicitly
+defer the multiplier, not tokens or actual warning text/severity. The scheduler
+promotes existing active demand and preserves the historical ceiling/reserved
+active slot. Dependencies, observed nonsecret source epoch, attempt generation and
+calculation-start wall/monotonic freshness reject obsolete/rollback results. Expiry
+alone never cancels healthy computation: a completed old same-scope sample may display
+as `refreshing` with its original dated sample time while one fair replacement runs.
+Freshness is never renewed at completion/access. Targeted source
+cancellation keeps unrelated cards alive. Pure compact enrichment cannot advance
+Earlier proof or trigger rehydration. `test_watch_guidance.py` covers occupancy,
+admission, cancellation/setup, A→B→A, retry, TTL/rollback, empty success, pricing
+requalification and superseded hidden-compaction anchors. Certified names, supported
+finish/model/effort and context do not wait for independent session cost or numeric
+guidance. `test_watch_history_acquisition.py` verifies this progression without a
+new winner scan/proof epoch; Full/Mini staged DOM tests cover the shared display.
+Real/global proof and measured performance remain separate entries in the ledger.
 
 Web cards and Session detail share `reports/session_history.py::analyze_observed`:
 retained objects preserve usage, while a source-certified complete snapshot owns

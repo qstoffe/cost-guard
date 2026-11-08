@@ -5,6 +5,7 @@ from .models import WatchCard, WatchRow
 from .source_status import SourceStatus
 from .session_costs import SessionCostState
 from .history_publication import HistoryPublication
+from .card_workers import CardRequest
 from src.sources.errors import SourceConcurrentChangeError, SourceDataError
 from .tools import RUNNING_VISIBLE_AFTER_MS, without_live_activity
 
@@ -28,12 +29,15 @@ class CardSession:
     verified_generation: int = 0
     failure_code: str = ""
     history_status: SourceStatus = field(default_factory=SourceStatus)
+    batchable: bool = True
+    retry_on_tick: bool = False
 
 
 class WatchCards:
-    def __init__(self, workers, recent_seconds=30, on_duration=None, monotonic=None, costs=None):
+    def __init__(self, workers, recent_seconds=30, on_duration=None, monotonic=None, costs=None, guidance=None):
         self.workers = workers
         self.costs = costs
+        self.guidance = guidance
         self.recent_ms = int(recent_seconds * 1000)
         self.sessions = {}
         self.active_candidates = frozenset()
@@ -44,6 +48,7 @@ class WatchCards:
         self.history = HistoryPublication()
         self.catalog_revision = 0
         self.evidence_revision = 0
+        self.completion_paused = False
 
     def catalog(self, observation):
         previous = (self.active_candidates, {key: entry.revision for key, entry in self.sessions.items()})
@@ -82,6 +87,11 @@ class WatchCards:
         if (entry.capture is not None and result.captured_at_ms is not None
                 and result.captured_at_ms < entry.capture.observed_at_ms):
             return
+        if result.phase == 'replay':
+            entry.batchable = entry.batchable and not result.value
+            entry.refresh_requested = True
+            entry.retry_on_tick = True
+            return  # An acquisition scheduling cancellation is not a source failure.
         if result.phase == "rows":
             capture, tools, snapshot = result.value
             revision_matches = snapshot is None or snapshot.source_revision == entry.revision
@@ -135,12 +145,14 @@ class WatchCards:
                 entry.source_status.clear()
             if capture.authoritative and revision_matches:
                 entry.verified_generation = entry.generation
+                entry.retry_on_tick = False
                 self.evidence_revision += 1
                 entry.history_status.clear()
                 entry.failure_code = ""
             else:
                 entry.verified_generation = 0
                 entry.refresh_requested = True
+                entry.retry_on_tick = True
                 error = (SourceDataError("History tree is incomplete") if revision_matches else
                     SourceConcurrentChangeError("History revision changed during capture"))
                 entry.history_status.fail(error)
@@ -149,6 +161,7 @@ class WatchCards:
             entry.source_status.fail(result.value)
             entry.failure_code = str(getattr(result.value, "code", "unknown_source_failure"))
             entry.refresh_requested = True
+            entry.retry_on_tick = True
 
     def _focals(self, entry, now_ms):
         if entry.capture is None:
@@ -169,17 +182,22 @@ class WatchCards:
             if entry.latest_ms and not self._focals(entry, now_ms)]
         return tuple(key for _, key in sorted(eligible, key=lambda pair: (-pair[0], pair[1]))[:5])
 
-    def tick(self, now_ms):
-        for result in self.workers.drain():
+    def tick(self, now_ms, *, completed_only=False):
+        previous_evidence = self.evidence_revision
+        results = self.workers.drain()
+        for result in results:
             if result.phase == "timing":
                 if self.on_duration is not None:
                     self.on_duration(result.value)
             else:
                 self.accept(result, now_ms)
-        self._tick_costs(now_ms)
-        for entry in self.sessions.values():
-            entry.terminals = {key: seen for key, seen in entry.terminals.items()
-                if 0 <= now_ms - seen < self.recent_ms}
+        if not completed_only:
+            self._tick_costs(now_ms)
+            if self.guidance is not None:
+                self.guidance.tick(self, now_ms)
+            for entry in self.sessions.values():
+                entry.terminals = {key: seen for key, seen in entry.terminals.items()
+                    if 0 <= now_ms - seen < self.recent_ms}
         historical = set(self._ranked_ids(now_ms))
         active, history = [], []
         for key, entry in self.sessions.items():
@@ -188,22 +206,59 @@ class WatchCards:
             unverified = entry.verified_generation != entry.generation or entry.source_status.failed_at is not None
             due = entry.refresh_requested or (key in historical and entry.capture is None)
             needed = busy or unverified or key in historical
-            if due and needed and key not in self.workers.jobs:
+            if (due and needed and key not in self.workers.jobs
+                    and (not completed_only or not entry.retry_on_tick)):
                 (active if busy else history).append((entry.admission_order, key, entry))
         active.sort(key=lambda item: (item[0], item[1]))
         # Metadata is an admission hint only, never a finish bound/proof.
         history.sort(key=lambda item: (item[0], -(item[2].root.updated_at_ms or 0), item[1]))
-        while (active or history) and len(self.workers.jobs) < self.workers.limit:
+        planned = []
+        admission_turns = {}
+        history_limit = getattr(self.workers, 'history_limit', self.workers.limit)
+        history_slots = history_limit - len(getattr(self.workers, 'history_jobs', ()))
+        # A fault/churn/replay-only completion round waits for normal cadence.
+        # Healthy siblings may still refill, but failed roots never hot-retry.
+        if not completed_only:
+            self.completion_paused = False
+        elif any(result.phase != 'timing' for result in results):
+            self.completion_paused = self.evidence_revision == previous_evidence
+        admit = not self.completion_paused
+        while admit and (active or history or (self.guidance is not None and self.guidance.pending)) and len(self.workers.jobs) + len(planned) < self.workers.limit:
+            if history_slots <= 0 and not active:
+                break
             # Reserve recurring admission for history even with 100 busy roots.
-            candidates = history if history and (not active or self.turn % 4 == 3) else active
+            history_turn = not active or self.turn % 4 == 3
+            if (history_slots > 0 and self.guidance is not None and self.guidance.pending and
+                    (self.guidance.active_demand or (history_turn and
+                    (not history or self.guidance.admission_order <= history[0][0])))):
+                if self.guidance.admit(now_ms):
+                    self.turn += 1
+                    self.guidance.admission_order = self.turn
+                    history_slots -= 1
+                    continue
+            if not active and not history:
+                break
+            candidates = history if history and history_slots > 0 and (not active or self.turn % 4 == 3) else active
             _, _, entry = candidates.pop(0)
-            if self.workers.submit(entry.root, entry.generation, now_ms, entry.snapshot,
-                    tuple(row.event_id for row in self._focals(entry, now_ms))):
+            historical_request = candidates is history
+            planned.append(CardRequest(entry.root, entry.generation, entry.snapshot,
+                tuple(row.event_id for row in self._focals(entry, now_ms)), historical_request, entry.batchable))
+            history_slots -= historical_request
+            self.turn += 1
+            admission_turns[entry.root.session_id] = self.turn
+        submit_many = getattr(self.workers, 'submit_many', None)
+        accepted = ()
+        if planned:
+            accepted = (submit_many(planned, now_ms) if callable(submit_many) else
+                tuple(request.root.session_id for request in planned if self.workers.submit(request.root,
+                    request.generation, now_ms, request.previous, request.focal_ids)))
+        for request in planned:
+            if request.root.session_id in accepted:
+                entry = self.sessions[request.root.session_id]
                 entry.refresh_requested = False
-                self.turn += 1
                 # Revisions and rejected results must not reset queue position:
                 # otherwise changing early IDs can starve a stopped running card.
-                entry.admission_order = self.turn
+                entry.admission_order = admission_turns[request.root.session_id]
         # Retain full source captures only for cards that can currently appear.
         for key, entry in self.sessions.items():
             if key not in historical and not self._focals(entry, now_ms):

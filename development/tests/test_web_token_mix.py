@@ -156,6 +156,53 @@ class TokenMixCacheTests(unittest.TestCase):
         self.assertEqual(expected, report)
         self.assertEqual(2, report.token_mix.request_count)
 
+    def test_managed_partial_chunk_observes_derived_cache_in_bounded_windows(self):
+        source = SyntheticMonthSource(20, 2, month_start_ms=START)
+        source.snapshots = {sid: replace(value, complete=True) for sid, value in source.snapshots.items()}
+        original = report_service(self, source)
+        self.fresh(original, cached=False).build_token_mix_history()
+        for sid in ('root-0001', 'root-0002'):
+            source.snapshots[sid] = replace(source.snapshots[sid], source_revision='late-usage')
+        expected = report_service(self, source).build_token_mix_history()
+        managed = self.fresh(original)
+        managed.shared_web_evidence = managed.allow_partial_history = True
+        available = lambda ids, _progress: {sid: source.load_session_snapshot(sid) for sid in ids}
+        names = ('cache_bulk_reads', 'cache_repository_reads', 'cache_observation_hit_reuse',
+                 'cache_observation_miss_reuse', 'cache_observation_invalidations')
+        before = {name: source.metrics.counts.get(name, 0) for name in names}
+
+        with patch.object(source, 'load_session_snapshots_available', side_effect=available, create=True):
+            report = managed.build_token_mix_history()
+
+        counted = {name: source.metrics.counts.get(name, 0) - before[name] for name in names}
+        self.assertEqual(expected, report)
+        self.assertEqual(dict(cache_bulk_reads=3, cache_repository_reads=3, cache_observation_hit_reuse=18,
+            cache_observation_miss_reuse=2, cache_observation_invalidations=0), counted)
+
+    def test_root_changed_after_chunk_observation_falls_back_to_its_current_revision(self):
+        source = SyntheticMonthSource(3, 2, month_start_ms=START)
+        source.snapshots = {sid: replace(value, complete=True) for sid, value in source.snapshots.items()}
+        original = report_service(self, source)
+        self.fresh(original, cached=False).build_token_mix_history()
+        managed = self.fresh(original)
+        managed.shared_web_evidence = managed.allow_partial_history = True
+        observe = managed._acquisition.observe
+
+        def observed_then_changed(roots, versions):
+            observations = observe(roots, versions)
+            source.snapshots['root-0001'] = replace(source.snapshots['root-0001'], source_revision='changed')
+            return observations
+        available = lambda ids, _progress: {sid: source.load_session_snapshot(sid) for sid in ids}
+        before = source.metrics.counts.get('cache_observation_invalidations', 0)
+
+        with patch.object(managed._acquisition, 'observe', side_effect=observed_then_changed), \
+                patch.object(source, 'load_session_snapshots_available', side_effect=available, create=True):
+            report = managed.build_token_mix_history()
+
+        self.assertEqual(1, source.metrics.counts.get('cache_observation_invalidations', 0) - before)
+        self.assertEqual(1, report.history_omitted_roots)
+        self.assertEqual(4, report.token_mix.request_count)
+
     def test_exact_sort_fields_and_partial_display_do_not_change_legacy_tokens(self):
         source = SyntheticMonthSource(1, 1, month_start_ms=START)
         snapshot = source.snapshots['root-0000']

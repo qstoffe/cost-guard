@@ -44,6 +44,20 @@ class LiveInterruptionReasons:
             return tuple(sorted((message_id, at) for (owner, message_id), at in self._observed.items()
                                 if owner == session_id))
 
+    def copy(self) -> LiveInterruptionReasons:
+        """Detach bounded actor evidence, preserving eviction order and identity."""
+        duplicate = LiveInterruptionReasons()
+        with self._lock:
+            duplicate._observed = self._observed.copy()
+        return duplicate
+
+    def equivalent(self, other: LiveInterruptionReasons) -> bool:
+        """Compare all detached contents, including changed and evicted entries."""
+        with self._lock:
+            values = dict(self._observed)
+        with other._lock:
+            return values == dict(other._observed)
+
     def reason(self, item: Mapping[str, Any], session_id: str) -> str:
         if item.get("type") != "idle" or item.get("outcome") != "interrupted":
             return ""

@@ -12,11 +12,30 @@ from decimal import Decimal
 from enum import Enum
 from typing import Mapping
 
-from src.domain import ContextBoundary, MessageRole, NormalizedMessage, NormalizedPart, SessionSnapshot
+from src.domain import ContextBoundary, MessageRole, ModelRef, NormalizedMessage, NormalizedPart, SessionSnapshot
 from src.pricing.catalog import PricingCatalog
 
 from .models import CompactionRecord, PromptRecord, RootAnalysisBundle, TraceEntry
 from .context_history import CompactionContext, ContextHistory
+
+
+@dataclass(frozen=True, slots=True)
+class ContextPriceBasis:
+    """Compact canonical pricing inputs, not a retained request/analysis graph."""
+    model: ModelRef
+    tokens: int
+    cached_tokens: int
+    fresh_tokens: int
+
+    def costs(self, catalog):
+        if catalog.resolve(self.model.model) is None:
+            return None, None
+        cached = catalog.reference_input_context(self.model, input_tokens=max(0, self.fresh_tokens),
+            cache_read_tokens=max(0, self.cached_tokens), cache_write_tokens=0,
+            request_input_tokens=self.tokens)
+        fresh = catalog.reference_input_context(self.model, input_tokens=self.tokens,
+            cache_read_tokens=0, cache_write_tokens=0, request_input_tokens=self.tokens)
+        return cached, fresh
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,6 +44,7 @@ class NextContextEstimate:
     cached_ccost: Decimal | None = None
     fresh_ccost: Decimal | None = None
     complete: bool = False
+    price_basis: ContextPriceBasis | None = None
 
 
 class PriceWarningSeverity(str, Enum):
@@ -89,6 +109,7 @@ class WatchContextState:
     last_activity_ms: int = 0
     cached_ccost: Decimal | None = None
     fresh_ccost: Decimal | None = None
+    price_basis: ContextPriceBasis | None = None
 
 
 def estimate_text_tokens(text: str) -> int:
@@ -169,47 +190,23 @@ def _estimate_entry_next_context(entry: TraceEntry, catalog: PricingCatalog) -> 
     next_tokens = entry.tokens.total
     if next_tokens <= 0:
         return NextContextEstimate(None)
-    model = catalog.resolve(entry.model.model)
-    if model is None:
-        return NextContextEstimate(next_tokens)
     prior_context = entry.tokens.input + entry.tokens.cache_read + entry.tokens.cache_write
     new_fresh = entry.tokens.output + entry.tokens.reasoning
     # Next-Ictx pricing is a presentation-only range: one end assumes the
     # previously observed input context can be served at the model's cached-input
     # rate, the other prices the same next context as fresh input. Cost Guard does
     # not predict whether a future request receives a provider/runtime cache hit.
-    cached = catalog.reference_input_context(
-        entry.model,
-        input_tokens=new_fresh,
-        cache_read_tokens=prior_context,
-        cache_write_tokens=0,
-        request_input_tokens=next_tokens,
-    )
-    fresh = catalog.reference_input_context(
-        entry.model,
-        input_tokens=next_tokens,
-        cache_read_tokens=0,
-        cache_write_tokens=0,
-        request_input_tokens=next_tokens,
-    )
-    return NextContextEstimate(next_tokens, cached, fresh, cached is not None and fresh is not None)
+    return _estimate_context_size(next_tokens, entry, catalog,
+        cached_tokens=prior_context, fresh_tokens=new_fresh)
 
 
 def _estimate_context_size(tokens: int, entry: TraceEntry, catalog: PricingCatalog, *,
                            cached_tokens: int, fresh_tokens: int) -> NextContextEstimate:
     if tokens <= 0:
         return NextContextEstimate(None)
-    if catalog.resolve(entry.model.model) is None:
-        return NextContextEstimate(tokens)
-    cached = catalog.reference_input_context(
-        entry.model, input_tokens=max(0, fresh_tokens), cache_read_tokens=max(0, cached_tokens),
-        cache_write_tokens=0, request_input_tokens=tokens,
-    )
-    fresh = catalog.reference_input_context(
-        entry.model, input_tokens=tokens, cache_read_tokens=0, cache_write_tokens=0,
-        request_input_tokens=tokens,
-    )
-    return NextContextEstimate(tokens, cached, fresh, cached is not None and fresh is not None)
+    basis = ContextPriceBasis(entry.model, tokens, cached_tokens, fresh_tokens)
+    cached, fresh = basis.costs(catalog)
+    return NextContextEstimate(tokens, cached, fresh, cached is not None and fresh is not None, basis)
 
 
 class ContextEpochs:
@@ -598,6 +595,7 @@ def watch_context_state(
         current_tokens, delta, model_id, last_activity_ms,
         estimate.cached_ccost if estimate is not None else None,
         estimate.fresh_ccost if estimate is not None else None,
+        estimate.price_basis if estimate is not None else None,
     )
 
 
@@ -621,7 +619,8 @@ def session_watch_context(snapshot, bundle, record, catalog, epochs) -> WatchCon
             return WatchContextState(None, None)
         estimate = (_estimate_context_size(tokens, compacted.entries[-1], catalog,
             cached_tokens=tokens, fresh_tokens=0) if compacted.entries else NextContextEstimate(tokens))
-        return WatchContextState(tokens, None, compacted.model_id, at_ms, estimate.cached_ccost, estimate.fresh_ccost)
+        return WatchContextState(tokens, None, compacted.model_id, at_ms,
+            estimate.cached_ccost, estimate.fresh_ccost, estimate.price_basis)
     return WatchContextState(None, None) if epochs.retired(record.session_id, state.last_activity_ms) else state
 
 

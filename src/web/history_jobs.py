@@ -1,4 +1,4 @@
-"""Finite history continuation: durable coverage, bounded attempts, no watchdog waiver."""
+"""Finite history slices: durable coverage and quiet retries, no lifetime deadline."""
 import re
 import time
 
@@ -6,7 +6,6 @@ from src.reports import ReportKind
 from .report_control import ManagedReport
 
 KINDS = {ReportKind.TOKEN_MIX, ReportKind.COMPARISONS}
-MAX_STEPS = 32
 
 
 def managed(job):
@@ -25,20 +24,18 @@ def checkpoint(job, value):
     job['checkpoint'] = value
 
 
-def resume(job, *, timeout=False):
+def resume(job):
     proof = job.pop('checkpoint', None)
     previous = job.get('continued')
     steps = job.get('history_steps', 0)
-    changed = previous and proof and previous['signature'] != proof['signature']
     advancing = proof and (previous is None or proof['completed'] > previous['completed'])
-    churn = 0 if advancing else job.get('history_churn', 0) + bool(changed)
-    increased = proof and (previous is None or changed or proof['completed'] > previous['completed'])
-    if steps >= MAX_STEPS or churn >= 3 or not increased:
-        code = ('history_resource_limit' if steps >= MAX_STEPS else 'history_revision_churn' if churn >= 3 else
-                'history_slice_timeout' if timeout else 'history_no_progress')
-        job.update(status='failed', error=code)
+    stalls = 0 if advancing else min(6, job.get('history_stalls', 0) + 1)
+    if proof is None:
+        # A continuation without its promised durable receipt is a protocol
+        # defect, not a slow calculation. Never pretend evidence was saved.
+        job.update(status='failed', error='history_no_progress')
         return
+    delay = 0 if advancing else min(60, 2 ** stalls)
+    now = time.monotonic()
     job.update(status='queued', result=None, continued=proof, history_steps=steps + 1,
-               history_churn=churn, queued_at=time.monotonic())
-    if timeout:
-        job['history_batch_size'] = 16 if job.get('history_batch_size', 64) > 16 else 1
+               history_stalls=stalls, queued_at=now, not_before=now + delay)

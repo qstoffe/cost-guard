@@ -1,5 +1,12 @@
 # Cost Guard version history
 
+## v80.204 — 2026-11-08
+
+- Healthy Web computation/proof no longer expires into false unavailability: finite workers, source-readiness admission, resumable history and browser loading retain bounded work/recovery. Genuine I/O/auth/schema faults, cancellation, source identity and owned-process cleanup remain distinct.
+- V2 acquisition uses authoritative scoped tree brackets where supported, bounded batched canonical history and exclusively owned reusable readers. Shared canonical context sampling and revision-qualified compact/cache reuse reduce repeated work without substituting metadata for global Earlier proof or changing report populations.
+- Visible Full/Mini Earlier demand is independent of opener visibility; finite foreground promotion preserves original jobs/checkpoints. Host-owned all-view warming, protected Live/Accounts and quiet refresh remain. Certified winner identity/model/context can display while cost/guidance loads independently. Terminal SSE notifications wake authoritative report reads without replacing polling recovery.
+- Controlled three-way browser measurements and the independent large-real-source Full/Mini oracle are recorded in the foreground-recovery engineering journal, with measured misses, scoped tradeoffs and proof limitations kept explicit. These observations are not universal speed or native-desktop guarantees.
+
 ## v80.203 — 2026-11-07
 
 - Shared Watch/Mini Earlier history gates newest-five membership on complete revision-matched root coverage, publishes one coherent proof epoch and retains it with truthful refresh/failure qualification. Unknown/incomplete candidates cannot masquerade as newest sessions; active prompts, Today and accounts remain independent. Metadata guides bounded admission, never certifies finish bounds. Cold large/churning sources may remain loading/unavailable; no startup-speedup claim.

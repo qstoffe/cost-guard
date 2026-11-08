@@ -7,7 +7,7 @@ operations. Hints trigger authoritative reads, never usage or completion.
 from dataclasses import replace
 import time
 
-from src.sources.errors import SourceError
+from src.sources.errors import FailureCode, SourceError
 from src.sources.connectivity_events import record as record_recovery
 from .observation_diagnostics import record_source_error
 from .coordinator import SOURCE_RETRY_SECONDS, SOURCE_UNREADABLE_RETRIES, source_failure_kind
@@ -81,7 +81,7 @@ class LiveAcquisition:
                 if self.frame is None:
                     return None
                 self.frame = replace(owner.status_projection(),
-                    status="Source unavailable; last observation retained", status_active=True)
+                    status=self._recovery_status(), status_active=True)
             elif owner.today_ccost.history_pending:
                 self.frame = owner.acquire_cycle(enrich=True).projection
             else:
@@ -97,7 +97,8 @@ class LiveAcquisition:
             self.error = error
             self.source_status.fail(error)
             owner.last_source_recovery_kind = kind or "unsupported"
-            self.unreadable = self.unreadable + 1 if kind == "unreadable" else 0
+            self.unreadable = (self.unreadable + 1 if kind == "unreadable" and
+                error.code != FailureCode.CONCURRENT else 0)
             self.terminal = kind is None or self.unreadable > SOURCE_UNREADABLE_RETRIES
             if owner._event_pump is not None:
                 owner._event_pump.stop()
@@ -106,9 +107,13 @@ class LiveAcquisition:
                 owner._discard_initialization()
             self.deadline = self.monotonic() + SOURCE_RETRY_SECONDS
             if self.frame is not None:
-                self.frame = replace(self.frame, status="Source unavailable; last observation retained",
-                                     status_active=True)
+                self.frame = replace(self.frame, status=self._recovery_status(),
+                                      status_active=True)
         return self.frame
+
+    def _recovery_status(self):
+        return ('Verifying changed source; last observation retained' if self.error.code == FailureCode.CONCURRENT
+            else 'Source unavailable; last observation retained')
 
     def close(self):
         self.coordinator.close()

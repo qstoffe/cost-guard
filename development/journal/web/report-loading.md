@@ -139,6 +139,11 @@ the test's queued neighbor to background Token Mix respects existing priority.
 The affected runtime/Stats/shutdown/lifecycle (including parent-loss)/loader tests
 then passed **94 tests**.
 
+*Later change (FR000624):* the blocking one-second natural-exit join after valid
+terminal IPC was replaced by publish-before-exit nonblocking retirement with the same
+grace/terminate/kill escalation, resident-child accounting and latched failure; see
+[foreground recovery](foreground-recovery.md) and the current web module contract.
+
 Final product-source Full passed **154 file targets / 1,824 tests: 1,823 passed,
 one macOS zsh/PTY-unavailable skip, zero failures/errors**, in 147.0 seconds.
 Evidence: `scratch:/evidence/full-safe-stop.json` and `full-safe-stop.log`.

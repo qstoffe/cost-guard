@@ -18,7 +18,8 @@ def quantum_report(sender, request):
             time.sleep(.01)
             sender.send(('progress', dict(phase='history', completed=completed + 1, total=total)))
         sender.send(('result', json.dumps(dict(error=None, view=dict(kind=request.kind.value),
-            source=dict(status='acquired', observed_at_ms=int(time.time() * 1000)))).encode()))
+            source=dict(status='acquired', observed_at_ms=int(time.time() * 1000),
+                identity=getattr(request, 'source_identity', '')))).encode()))
     finally:
         sender.close()
 
@@ -26,7 +27,7 @@ def quantum_report(sender, request):
 @dataclass(frozen=True, slots=True)
 class HistoryFixture(ManagedReport):
     directory: str = ''
-    stall_once: bool = False
+    slow_once: bool = False
 
 
 def durable_history_report(sender, request):
@@ -54,10 +55,10 @@ def durable_history_report(sender, request):
 
     def checkpoint(value):
         sender.send(('checkpoint', value))
-        marker = Path(request.directory) / 'stalled-once'
-        if request.stall_once and not marker.exists():
+        marker = Path(request.directory) / 'slow-once'
+        if request.slow_once and not marker.exists():
             marker.touch()
-            time.sleep(30)  # Parent must terminate this child, not extend its watchdog.
+            time.sleep(.1)  # Slow, valid processing still returns its original result.
 
     service.history_checkpoint = checkpoint
     try:

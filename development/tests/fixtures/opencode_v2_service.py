@@ -231,6 +231,7 @@ class CurrentV2Service:
         self.context_messages: dict[str, list[dict]] = {}
         self.before_catalog = None
         self.before_message = None
+        self.scoped_snapshots = False
 
     def __enter__(self):
         owner = self
@@ -261,6 +262,12 @@ class CurrentV2Service:
                 if parsed.path == "/api/info":
                     self._json({"version": "2.1.0"})
                     return
+                if parsed.path == '/openapi.json' and owner.scoped_snapshots:
+                    self._json({'openapi':'3.1.0', 'paths': {
+                        '/api/session': {'get': {'parameters':[{'name':'parentID', 'in':'query'},
+                            {'name':'limit', 'in':'query'}, {'name':'cursor', 'in':'query'}]}},
+                        '/api/session/{sessionID}': {'get': {}}}})
+                    return
                 if parsed.path == "/api/event":
                     payload = "".join(f"data: {json.dumps(item)}\n\n" for item in owner.events).encode("utf-8")
                     self.send_response(200)
@@ -280,14 +287,25 @@ class CurrentV2Service:
                     if owner.before_catalog is not None:
                         owner.before_catalog(query)
                     cursor = query.get("cursor", [None])[0]
+                    parent = query.get('parentID', [None])[0]
+                    if cursor and '|parent=' in cursor:
+                        cursor, parent = cursor.split('|parent=', 1)
                     if cursor is None or cursor == "sessions:end" or (cursor.startswith("sessions:") and cursor[9:].isdigit()):
-                        offset = 0 if cursor is None else len(owner.sessions) if cursor == "sessions:end" else int(cursor[9:]) - 1
-                        page = owner.sessions[offset:offset + owner.session_page_size]
+                        values = (owner.sessions if parent is None else
+                            [value for value in owner.sessions if value.get('parentID') == parent])
+                        offset = 0 if cursor is None else len(values) if cursor == "sessions:end" else int(cursor[9:]) - 1
+                        page = values[offset:offset + owner.session_page_size]
                         next_offset = offset + len(page)
-                        next_cursor = f"sessions:{next_offset + 1}" if next_offset < len(owner.sessions) else "sessions:end"
+                        next_cursor = f"sessions:{next_offset + 1}" if next_offset < len(values) else "sessions:end"
+                        if parent is not None:
+                            next_cursor += '|parent=' + parent
                         self._json({"data": page, "cursor": {"next": next_cursor} if page else {}})
                     else:
                         self._json({"error": "bad cursor"}, 400)
+                    return
+                if owner.scoped_snapshots and parsed.path.startswith('/api/session/') and len(parsed.path.split('/')) == 4:
+                    value = next((value for value in owner.sessions if value['id'] == parsed.path.split('/')[3]), None)
+                    self._json({'data':value} if value is not None else {'error':'missing'}, 200 if value is not None else 404)
                     return
                 if parsed.path.startswith("/api/session/") and parsed.path.endswith("/context"):
                     session_id = parsed.path.split("/")[3]

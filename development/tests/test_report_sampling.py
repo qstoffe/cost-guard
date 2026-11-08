@@ -85,6 +85,37 @@ class ReportSamplingTests(unittest.TestCase):
 
         self.assertEqual((), recent_sample_roots((), {}, forbidden, priceable))
 
+    def test_preparation_never_changes_consumption_or_includes_excluded_roots(self):
+        items = (analyzed_root('first', 300), analyzed_root('tail', 200), analyzed_root('excluded', 100))
+        values = {item.session.session_id:item for item in items}
+        prepared, visited = [], []
+
+        def analyze(root):
+            visited.append(root.session_id)
+            return values[root.session_id]
+
+        result = recent_sample_roots(tuple(item.session for item in items),
+            {'first':300, 'tail':200, 'excluded':100}, analyze, priceable,
+            prepare=lambda roots: prepared.append([root.session_id for root in roots]), batch_size=2)
+
+        self.assertEqual([['first', 'tail']], prepared)
+        self.assertEqual(['first'], visited)
+        self.assertEqual((items[0],), result)
+
+    def test_preparation_honors_current_cutoff_at_each_window_and_both_populations(self):
+        items = (analyzed_root('running', 300, running=True), analyzed_root('finished', 200),
+            analyzed_root('equal', 200), analyzed_root('excluded', 199))
+        values = {item.session.session_id:item for item in items}
+        prepared = []
+
+        result = recent_sample_roots(tuple(item.session for item in items),
+            {'running':400, 'finished':300, 'equal':200, 'excluded':199},
+            lambda root: values[root.session_id], priceable,
+            prepare=lambda roots: prepared.append([root.session_id for root in roots]), batch_size=2)
+
+        self.assertEqual([['running', 'finished'], ['equal']], prepared)
+        self.assertEqual(items[:3], result)
+
 
 class PriceableSampleTests(unittest.TestCase):
     def test_latest_100_all_priceable_stop_like_before(self):

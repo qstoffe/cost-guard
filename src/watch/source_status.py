@@ -12,8 +12,10 @@ class SourceStatus:
         self.monotonic = monotonic
         self.failed_at = None
         self.retryable = False
+        self.verifying = False
 
     def fail(self, error):
+        self.verifying = isinstance(error, SourceError) and error.code == FailureCode.CONCURRENT
         retryable = isinstance(error, SourceError) and not error.terminal and (
             error.watch_retryable or error.code == FailureCode.CONCURRENT or
             isinstance(error, SourceUnavailableError) and error.code == FailureCode.UNKNOWN)
@@ -26,10 +28,15 @@ class SourceStatus:
     def clear(self):
         self.failed_at = None
         self.retryable = False
+        self.verifying = False
 
-    def state(self, *, retained=False):
+    def state(self, *, retained=False, confirming_initial=False):
         if self.failed_at is None:
             return None
-        if retained and self.retryable and self.monotonic() - self.failed_at < SOURCE_CONFIRM_SECONDS:
+        if self.verifying:
+            # Revision churn is incomplete proof, not an unreachable source.
+            # Keep retrying with the existing owner cadence regardless of age.
+            return 'retrying'
+        if (retained or confirming_initial) and self.retryable and self.monotonic() - self.failed_at < SOURCE_CONFIRM_SECONDS:
             return "retrying"
         return "unavailable"

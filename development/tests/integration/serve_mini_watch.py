@@ -68,6 +68,10 @@ def main():
             (root / 'pricing-mode.txt').write_text('unchanged')
             jobs = ModelsRefreshJobs(root)
         host = WebHost(root, jobs=jobs)
+        if sys.argv[2:] == ['--history-demand']:
+            from src.web.dispatch import DataDispatcher
+            # Real authenticated lease registry, but no source/provider or finite warming owner.
+            host.dispatcher = DataDispatcher(jobs)
         timer = Timer(420 if sys.argv[2:] == ['--token-mix'] else 300, host.stop)
         frame = summary_watch()
         now = int(time.time() * 1000)

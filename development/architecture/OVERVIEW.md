@@ -11,6 +11,14 @@ Milestone-60 source map, not an exhaustive correctness audit. Checked revision a
 
 Toolkit owns workflow/mirrored `development/README.md`; `development/repository.json` holds release facts; `development/applied-contract.json` records identity (revision 6). History is evidence, not instructions. Development-only work activates no product checks/budgets/version work. Shipped source retains functional release rules. Main is supported; packaged Releases remain paused.
 
+FR000624's scoped delta preserves these layers: bounded Web-card readers and scoped
+V2 brackets remain below canonical report capture; reports own compact sampling,
+Watch owns its shared guidance lifetime, and Web owns finite scheduling/browser demand.
+Healthy pending work has no elapsed-computation failure cutoff. The module pages and
+[foreground-recovery ledger](../journal/web/foreground-recovery.md) distinguish actual
+oracle/benchmark evidence, scoped exceptions and still-outstanding final gates; this
+delta does not claim a fresh audit of every unchanged module.
+
 ## System map
 
 ```mermaid
@@ -42,7 +50,7 @@ Arrows group calls and consumption, not literal Python imports or one linear pip
 
 | Boundary | Authority and transitions |
 | --- | --- |
-| Web host / finite reports | `src/web/host.py` owns HTTP/jobs and one `src/application/live.py` publisher. `src/web/jobs.py` owns fresh processes, deadlines, parent-loss cleanup/cancellation. `src/application/service.py` validates, allowlists progress and exports immutable values. Foreign/Live rejection must not close it; finite jobs never borrow its mutable service. |
+| Web host / finite reports | `src/web/host.py` owns HTTP/jobs and one `src/application/live.py` publisher. `src/web/jobs.py` owns fresh processes, bounded IPC, parent-loss cleanup/cancellation. `src/application/service.py` validates, allowlists progress and exports immutable values. Foreign/Live rejection must not close it; finite jobs never borrow its mutable service. |
 | Shared Live / Watch | `src/watch/acquisition.py` drives the coordinator's initialize/poll/enrich seam; CLI retains its blocking wait adapter. Hints trigger authoritative reads, never usage or completion. Source outage retains the last frame; retry stays in the selected generation, discards partial initialization and ends on terminal/unsupported evidence. Source-change stops rather than reloads. |
 | Independent background lanes | `src/watch/web_coordinator.py` owns four card workers, separate single-worker account-history, detail and scalar Sessions-index lanes, plus session-cost reconciliation. Fresh resources isolate blocking work and cancellation; late daily results are checked against the current day. HTTP/pages never tick acquisition. |
 | Source consistency | `src/sources/selection.py` chooses one healthy generation; histories never merge. V1 pins a read-only transaction; V2 brackets complete tree hydration with catalog revisions and bounded fresh attempts. Wire/schema adaptation stays below canonical snapshots. Loopback GET, SSE and cancellation have distinct resource lifetimes. |

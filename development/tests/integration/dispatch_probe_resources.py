@@ -1,6 +1,78 @@
 """Sample only the probe and its directly owned finite children; numeric Windows IO/RAM."""
 import os
 import sys
+import time
+from threading import Lock
+
+
+class FiniteTimeline:
+    """Opt-in scalar transitions; never changes priorities or acquires foreign locks."""
+    def __init__(self, jobs, dispatcher):
+        self.jobs, self.dispatcher = jobs, dispatcher
+        self.started = time.monotonic()
+        self.lock = Lock()
+        self.events, self.previous, self.ordinals, self.originals = [], {}, {}, []
+        self.dropped = 0
+        for owner, names, capture in ((jobs, ('submit', '_park', '_start_next', '_receive', 'prioritize'), self.capture_jobs),
+                (dispatcher, ('interest', '_collect'), self.capture_dispatcher)):
+            for name in names:
+                original = getattr(owner, name)
+
+                def observed(*args, _original=original, _name=name, _capture=capture, **kwargs):
+                    try:
+                        return _original(*args, **kwargs)
+                    finally:
+                        _capture(_name)
+
+                self.originals.append((owner, name, original))
+                setattr(owner, name, observed)
+
+    def record(self, key, trigger, fields):
+        signature = tuple(fields.items())
+        with self.lock:
+            if self.previous.get(key) == signature:
+                return
+            self.previous[key] = signature
+            if len(self.events) < 2500:
+                self.events.append(dict(seconds=time.monotonic() - self.started,
+                    wall_ms=int(time.time() * 1000), trigger=trigger, **fields))
+            else:
+                self.dropped += 1
+
+    def capture_jobs(self, trigger):
+        with self.jobs._lock:
+            for key, job in self.jobs._jobs.items():
+                ordinal = self.ordinals.setdefault(key, len(self.ordinals) + 1)
+                progress = job.get('progress') or {}
+                fields = dict(job=ordinal, kind=job['request'].kind.value, status=job['status'],
+                    priority=job.get('priority'), slices=job.get('slices', 0), history_steps=job.get('history_steps', 0),
+                    phase=progress.get('phase'), stage=progress.get('stage'), completed=progress.get('completed'),
+                    total=progress.get('total'), parked=key in self.jobs._parked,
+                    active=bool(self.jobs._active and self.jobs._active[0] == key),
+                     queue_ms=job.get('queue_ms', 0), worker_ms=job.get('worker_ms', 0),
+                     free=job.get('free'), yield_requested=job.get('yield_requested'),
+                     admitted=job.get('admitted'), observation_ms=job.get('observation_ms'), covered=job.get('covered'),
+                    not_before=job.get('not_before'), error=bool(job.get('error')))
+                self.record(('job', ordinal), trigger, fields)
+
+    def capture_dispatcher(self, trigger):
+        with self.dispatcher.lock:
+            interests = tuple(sorted({(tab['section'], tab['visible']) for tab in self.dispatcher.tabs.values()}))
+            self.record('interest', trigger, dict(interests=interests))
+            for request, entry in self.dispatcher.entries.items():
+                if request.kind.value == 'token-mix':
+                    self.record('token-mix-result', trigger, dict(kind='token-mix',
+                        collected=bool(entry.get('result')), requested=entry.get('requested'),
+                        job_present=bool(entry.get('job'))))
+
+    def close(self):
+        for owner, name, original in reversed(self.originals):
+            setattr(owner, name, original)
+
+    def summary(self):
+        return dict(events=self.events, dropped=self.dropped,
+            limitation='Opt-in wrapper transition times include observer overhead; job worker_ms is not CPU, '
+                'queue_ms omits some cooperative waits. No raw IDs, requests, result payloads or scheduling changes.')
 
 
 class Resources:
@@ -13,7 +85,8 @@ class Resources:
         if sys.platform != 'win32':
             return
         with jobs._lock:
-            children = [owner[0] for owner in jobs._parked.values()]
+            children = [owner[0] for owner in getattr(jobs, '_parked', {}).values()]
+            children += [owner['process'] for owner in getattr(jobs, '_retiring', ())]
             if jobs._active:
                 children.append(jobs._active[1])
             pids = {child.pid for child in children if child.pid}

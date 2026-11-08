@@ -181,6 +181,10 @@ class WebViewTests(unittest.TestCase):
             lifecycle = SimpleNamespace(root=settings_root, live=SimpleNamespace(catalog=catalog, details=details),
                 stopping=Event(), observations=WebObservations(), nonce="sessions-fixture", public_status=lambda: {})
             server = LoopbackServer(jobs, lifecycle, settings=WebSettings(settings_root))
+            # This fixture pumps the background catalog on the serving thread.
+            # A blocking HTTP wait must not make scalar indexing depend on the
+            # browser's five-second poll cadence; the product has its own lane.
+            server.timeout = .05
             stopped = Event()
 
             def serve():

@@ -95,6 +95,17 @@ class SourceResyncRequiredError(SourceUnavailableError):
     default_code = FailureCode.DISCONNECTED
 
 
+class SourceSnapshotMemberError(SourceError):
+    """Internal strict-window failure locator; evidence never exports the ID."""
+
+    def __init__(self, session_id: str, failure: SourceError):
+        super().__init__('A session snapshot in this batch could not be read', code=failure.code,
+            phase=failure.phase, exception_type=failure.exception_type,
+            http_status=failure.http_status, generation=failure.generation)
+        self.session_id = session_id
+        self.failure = failure
+
+
 def transport_failure(exc: BaseException, *, phase: str) -> SourceUnavailableError:
     if isinstance(exc, ConnectionRefusedError):
         code = FailureCode.REFUSED

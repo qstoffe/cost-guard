@@ -36,7 +36,7 @@ def card(value, now_ms):
         observed_at_ms=value.observed_at_ms,
         session_summary=record(context=None if context is None else record(
             watch_next_context_tokens=context.tokens,
-            warning=fields(context, "owner_id text severity multiplier cached_ccost fresh_ccost")),
+            warning=fields(context, "owner_id text severity multiplier cached_ccost fresh_ccost guidance_state guidance_sample_at_ms")),
             cost=None if cost is None else record(known_ccost=cost.total.known_ccost,
                 observed_requests=cost.total.observed_requests, priced_requests=cost.total.priced_requests,
                 complete=cost.total.complete and cost.source_complete),

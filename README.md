@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v80.203, 2026-11-07), the supported distribution.
+Use **current `main`** (v80.204, 2026-11-08), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -361,7 +361,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.203 (2026-11-07):** Watch and Mini publish Earlier Sessions only after source-revision coverage proves the latest eligible set. Initial history stays Loading (or meaningfully unavailable); refreshes retain one qualified verified set instead of mixing provisional winners. Mini names its historical finish clock **Finished**, with unchanged local date/offset help. Large/churning histories may still take substantial verification time. See [Mini Watch](docs/web-mini-watch.md#earlier-sessions).
+**v80.204 (2026-11-08):** Web loading keeps healthy expensive work pending with bounded automatic recovery instead of failing solely on elapsed computation time. Models and historical reports reuse qualified evidence efficiently; foreground demand promotes existing work while inactive views continue warming. Full/Mini Earlier retain independently certified winners and populate supported fields without waiting for pricing. See [Web Beta](docs/web-beta.md) and [Mini Watch](docs/web-mini-watch.md#earlier-sessions).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

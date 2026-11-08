@@ -35,7 +35,7 @@ class SessionCostSchedulerTests(unittest.TestCase):
     def test_four_minutes_republications_other_roots_generation_and_reentry_do_no_root_work(self):
         snapshot = self.snapshot
         root = snapshot.root
-        workers = Mock(jobs={}, limit=4)
+        workers = Mock(jobs={}, limit=4, history_limit=3, history_jobs=set())
         workers.drain.return_value = ()
         cards = WatchCards(workers, costs=self.costs)
         entry = CardSession(root, snapshot.source_revision, 1, refresh_requested=False)
@@ -72,6 +72,7 @@ class SessionCostSchedulerTests(unittest.TestCase):
         self.assertTrue(submissions.call_args_list, 'shared catalog identity is still checked')
         self.assertTrue(all(call.args[0] is None for call in submissions.call_args_list))
         workers.submit.assert_not_called()
+        workers.submit_many.assert_not_called()
 
     def test_running_continuation_only_values_new_request_and_restart_reuses_persisted_baseline(self):
         state = SessionCostState()

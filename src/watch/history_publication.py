@@ -26,8 +26,8 @@ class HistoryPublication:
         for entry in entries.values():
             if entry.source_status.failed_at is None and entry.history_status.failed_at is None:
                 self.checked += entry.verified_generation == entry.generation
-            elif (entry.source_status.state(retained=self.epoch > 0) == "unavailable"
-                    or entry.history_status.state(retained=self.epoch > 0) == "unavailable"):
+            elif (entry.source_status.state(retained=self.epoch > 0, confirming_initial=True) == "unavailable"
+                    or entry.history_status.state(retained=self.epoch > 0, confirming_initial=True) == "unavailable"):
                 failures.append(entry)
         self.cause = failures[0].failure_code if failures else ""
         ids = owner._ranked_ids(now_ms)

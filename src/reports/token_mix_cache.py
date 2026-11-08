@@ -77,6 +77,14 @@ def load(cached, revision):
     return None
 
 
+def observe(service, roots, versions):
+    """Optional bounded derived-cache windows; a failed read leaves scalar per-root reuse intact."""
+    try:
+        return service._acquisition.observe(roots, versions)
+    except (OSError, sqlite3.Error):
+        return {}
+
+
 def build_cached_token_mix(service, progress):
     progress(WorkProgress('Loading pricing catalog', 'pricing'), None)
     reference = service._load_comparison_catalog()
@@ -121,6 +129,7 @@ def build_cached_token_mix(service, progress):
         chunk = pending[start:start + batch_size]
         writes = []
         partial = getattr(service, 'allow_partial_history', False)
+        observations = observe(service, [root for root, _key in chunk], versions) if partial else {}
         snapshots = load_snapshots(service, [root for root, _key in chunk]) if partial else None
         if not partial:
             service.prepare_roots([root for root, _key in chunk], progress_scope='date')
@@ -128,7 +137,8 @@ def build_cached_token_mix(service, progress):
             if partial and root.session_id not in snapshots:
                 unavailable.add(root.session_id)
                 continue
-            item = service._analyze(root, snapshot=snapshots[root.session_id]) if partial else service._analyze(root)
+            item = (service._analyze(root, snapshot=snapshots[root.session_id],
+                observation=observations.get(root.session_id)) if partial else service._analyze(root))
             payload = encode(item.bundle, reference)
             service.metrics.add('token_mix_valued_requests', len(payload))
             include(root, decode(payload))

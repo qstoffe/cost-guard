@@ -110,6 +110,38 @@ module.exports = function sessionTables(vm, context, controller, view, input, he
   view.earlierToggle.fire('click'); controller.update(input);
   assert.equal(view.earlier.hidden,true);
   view.earlierToggle.fire('click'); assert.equal(view.historyBody.children[0],row,'toggle never reacquires or rebuilds');
+  const certified = structuredClone(input.view);
+  const winnerIds = certified.history_cards.map(card => card.session_id);
+  context.stagedParent = view.el('div'); context.stagedState = {connection:'Live connected.'};
+  for (const ready of [false, true]) {
+    input.view = structuredClone(certified);
+    for (const card of input.view.history_cards) {
+      card.session_summary = {...card.session_summary, state:ready?'observed':'loading',
+        cost:ready?summary.cost:null,
+        context:{...summary.context, warning:{...summary.context.warning,
+          guidance_state:ready?'ready':'pending', multiplier:ready?'2.4':null,
+          display:{warning_cost:ready?'(2.4x more expensive)':'(Price comparison pending)'}}}};
+    }
+    controller.update(input); context.stagedInput=input;
+    vm.runInContext('ReportView.renderLive(stagedParent, stagedInput, stagedState)', context);
+    const full = context.stagedState.watch;
+    assert.deepEqual(full.history.children.map(card=>card.dataset.session),winnerIds);
+    assert.deepEqual(view.historyBody.children.map(row=>row.dataset.id),winnerIds.slice(-3));
+    for (const card of full.cards.values()) {
+      if (!winnerIds.includes(card.value.session_id)) continue;
+      assert.equal(card.summary.dataset.guidance,ready?'ready':'pending');
+      assert.equal(card.costLabel.textContent,ready?'4583':'Loading…');
+      assert.equal(card.contextValue.textContent,'120k');
+      assert.equal(card.title.textContent,card.value.title);
+      assert.equal(card.body.children[0].children[0].textContent,
+        card.value.rows[0].prompt.display.finished_clock);
+    }
+    assert.ok(view.historyBody.children.every(row=>cost(row,true)==='2 ('+(ready?'4583':'Loading…')+')'));
+    assert.ok(view.historyBody.children.every(row=>row.children[3].textContent==='120k'));
+    assert.equal(view.historyBody.children[0],row,'enrichment preserves the certified Mini row');
+    assert.equal(input.view.history_epoch,certified.history_epoch,'field updates never invent a proof epoch');
+  }
+  input.view=certified; controller.update(input);
   vm.runInContext('ReportView.setUnit("usd")',context); controller.settings();
   assert.ok(view.body.children.every(row => cost(row).endsWith(' ($45.82)')));
   assert.ok(view.historyBody.children.every(row => cost(row, true)==='$0.01 ($45.82)'));

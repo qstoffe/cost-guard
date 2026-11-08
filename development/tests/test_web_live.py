@@ -209,6 +209,32 @@ class LiveTests(unittest.TestCase):
             self.assertTrue(driver.terminal)
             self.assertEqual('failed', driver.source_state)
 
+    def test_prolonged_revision_churn_keeps_live_pending_and_automatically_recovers(self):
+        from src.sources.errors import SourceConcurrentChangeError
+        with tempfile.TemporaryDirectory() as tmp:
+            source, owner = self.owner(tmp)
+            clock = [0]
+            driver = LiveAcquisition(owner, monotonic=lambda: clock[0])
+            initial = driver.tick()
+            original = source.list_sessions
+            source.list_sessions = Mock(side_effect=SourceConcurrentChangeError('controlled changing source'))
+
+            for attempt in range(40):
+                clock[0] += 86400
+                retained = driver.tick()
+                self.assertFalse(driver.terminal)
+                self.assertEqual('retrying', driver.source_state)
+                self.assertEqual(initial.rows, retained.rows)
+                self.assertIn('Verifying changed source', retained.status)
+            self.assertEqual(40, source.list_sessions.call_count, 'one bounded source attempt per turn')
+            source.list_sessions = original
+            clock[0] += 5
+            recovered = driver.tick()
+
+            self.assertEqual('running', driver.source_state)
+            self.assertIsNone(driver.error)
+            self.assertEqual(initial.watch_started_at_ms, recovered.watch_started_at_ms)
+
     def test_hint_overflow_is_bounded_and_requires_authoritative_resync(self):
         pump = LiveEventPump(Mock())
         for _ in range(5000):

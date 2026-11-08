@@ -32,7 +32,7 @@ All paths in this table are relative to the repository root. Test names live und
 
 | Change area | Read/edit first | Focused tests |
 | --- | --- | --- |
-| Host-owned Web dispatcher / shared compact evidence / warm Sessions restoration | `src/web/dispatch.py`, `dispatch_http.py`, `dispatch_dependencies.py`, `report_control.py`, `history_jobs.py`, `jobs.py`, `assets/data-demand.js`; `src/reports/shared_evidence.py`, `history_work.py`, `history_snapshots.py`; [boundaries](data-dispatch.md) | `test_web_dispatch.py`, `test_historical_reports.py`, `test_web_live.py`, `test_web_session_catalog.py`, `test_web_session_detail.py`, `test_web_views.py`; hidden `integration/probe_data_dispatch.cjs`, gated first-Live `probe_models_startup.cjs` / `serve_models_startup.py`, read-only `probe_data_dispatch.py`, synthetic `benchmark_data_dispatch.py`; [measurements/limits](../../journal/web/data-dispatch.md) |
+| Host-owned Web dispatcher / shared compact evidence / warm Sessions restoration | `src/web/dispatch.py`, `dispatch_http.py`, `dispatch_dependencies.py`, `report_control.py`, `history_jobs.py`, `jobs.py`, `assets/data-demand.js`; `src/reports/shared_evidence.py`, `history_work.py`, `history_snapshots.py`; [boundaries](data-dispatch.md) | `test_web_dispatch.py`, `test_web_runtime.py` (`JobBoundaryTests`: publish-before-exit retirement, resident bound, escalation), `test_historical_reports.py`, `test_web_live.py`, `test_web_session_catalog.py`, `test_web_session_detail.py`, `test_web_views.py`; hidden `integration/probe_data_dispatch.cjs`, gated first-Live `probe_models_startup.cjs` / `serve_models_startup.py`, read-only `probe_data_dispatch.py`, synthetic `benchmark_data_dispatch.py`; [measurements/limits](../../journal/web/data-dispatch.md) |
 | Entry/CLI/config/version | `cost-guard.py`, `src/bootstrap.py`, `src/cli.py`, `src/config.py`, `src/version.py` | `test_config.py`, `test_step7_reports_cli.py`, `test_zero_data_robustness.py` |
 | Canonical values/account identity/CCost | `src/domain/models.py`, `accounts.py`, `ccost.py`, `capabilities.py` | `test_domain.py`, `test_accounts_ccost.py`, `test_ccost_migration.py` |
 | Catalog ancestry and whole-tree metadata activity | `src/domain/session_tree.py`; call sites in `src/reports/service.py`, `src/watch/observers.py`, `coordinator.py` | `test_session_tree.py`, `test_compact_reports.py`, `test_watch_grouping.py` |
@@ -47,12 +47,13 @@ All paths in this table are relative to the repository root. Test names live und
 | Exact first-input Web Comparisons / optional period matched-run fact | `src/analysis/input_identity.py`, `matched_runs.py`; `src/reports/matched_inputs.py`, `matched_runs.py`; `src/application/comparisons.py`; `src/web/assets/comparisons.js` and shared cached-report lifecycle | `test_matched_inputs.py`, `test_ai_stats.py`, `integration/cached_reports.cjs`; hidden `integration/probe_comparisons.cjs`, read-only `integration/probe_comparisons.py`; [evidence/limits](../../journal/web/comparisons.md) |
 | Historical context vs current anchors, active history, deltas, effort, price thresholds | `src/analysis/context.py`, `context_history.py`, `effort.py`, `comparisons.py`; `src/reports/prompt_rows.py` projects rows, `prompts.py` assembles blocks | `test_context_history_projection.py`, `test_step6_context_comparisons.py`, `test_prompt_projection.py`, `test_effort_presentation.py`, `test_threshold_multiplier.py`, `test_session_move.py` |
 | Token telemetry/mix and quota Pace | `src/sources/opencode_tokens.py`, `src/analysis/token_mix.py`, `quota_pace.py` | `test_token_mix.py`, `test_token_mix_economics.py`, `test_priced_token_mix.py`, `test_quota_presentation.py` |
-| Independent report eligibility/sample cutoffs | `src/reports/sampling.py`; `service.py` owns acquisition/cache and dispatch | `test_report_sampling.py`, `test_compact_reports.py`, `test_report_definitions.py`, `test_token_mix.py` |
+| Independent report eligibility/sample cutoffs | `src/reports/sampling.py`; `acquisition.py` stages bounded strict snapshots without consuming them; `service.py` owns dispatch | `test_report_sampling.py`, `test_report_sample_acquisition.py`, `test_source_history_loading.py`, `test_compact_reports.py`, `test_report_definitions.py`, `test_token_mix.py` |
 | Global comparison mix / retained wire evidence | `src/analysis/comparisons.py`, `models.py`; `src/reports/service.py:_relative_usage/_threshold_multiplier`; no model/publisher profile cache engine | `test_workload_mix.py` (global counts/ratios, evidence export, historical publisher parity), `test_report_sampling.py` (eligibility/cutoffs) |
+| Bounded canonical context-guidance input | `src/reports/context_sample.py`, `acquisition.py::release`; `service.py::_threshold_multiplier` preserves the fifteen-minute observation | `test_context_sample.py`, `test_threshold_multiplier.py`; compact ordering/token volumes, both sample cutoffs, sampler-only heavyweight release and clock rollback; no Earlier membership proof |
 | Mode-specific root/day scopes, source batch/cache orchestration and numeric acquisition measurements | `src/reports/history.py`, `acquisition.py`, `accounts.py`; `src/domain/acquisition.py`; date-only observed V2 batches in `src/sources/opencode_v2_snapshot.py`; [history contracts/benchmarks](history-loading.md) | `test_history_loading.py`, `test_source_history_loading.py`, `test_historical_reports.py` (872-root scale cases in Full), `test_watch_today_ccost.py`, `test_diagnostics_ux.py` |
 | Report projections/detail/history/notices/account order | `src/reports/models.py`, `prompt_rows.py`, `prompts.py`, `accounts.py`, `token_mix_history.py`, `migration_notice.py`, `model_comparison.py`, `semantics.py` | `test_prompt_projection.py`, `test_account_ordering.py`, `test_step7_reports_cli.py`, `test_compact_reports.py`, `test_report_definitions.py`, `test_source_selection.py` |
 | Optional transport-neutral report application | `src/application/service.py`, `contracts.py`, `projection.py`; [ownership and mode parity inventory](reports.md#transport-neutral-application-boundary-and-parity-inventory) | `test_application_reports.py`; existing report/Watch tests retain semantic ownership |
-| CLI/Web numeric display contract | `src/display.py`, `src/numbers.py`, `src/application/display.py`, `src/web/assets/render.js`; [per-view baseline](../governance/verification/web-display-parity.md) | `test_web_display.py`, `test_ccost_display_unit.py`, `development/tests/integration/web_display.cjs`; exact raw values remain numeric sort inputs |
+| CLI/Web numeric display contract | `src/display.py`, `src/numbers.py`, `src/application/display.py`, `src/web/assets/render.js`; [per-view baseline](../governance/verification/web-display-parity.md) | `test_web_display.py`, `test_ccost_display_unit.py`, `development/tests/integration/web_display.cjs`; exact raw values remain numeric sort inputs; projection-local clock reuse preserves both units, token precedence, DST and advancing resets |
 | Unified Models / retained Normal presentation | `src/web/assets/render.js`, `app.js`, `reports.js`, `app.css`; `src/reports/model_comparison.py` freezes supplemental catalog, `src/application/projection.py` exports candidate-local supersession | `test_web_models.py`, `test_web_overview.py`, `integration/web_models.cjs`, `integration/web_overview.cjs`, `integration/web_views.cjs`; four-column uncapped document scrolling, independent filters, exact tier multi-sort, unknowns/notices, legacy routes, focus and heartbeat-stable DOM; integrated fixture `integration/serve_web_models.py`, explicit-browser `integration/probe_web_models.py` |
 | Shared finite-report auto-loading / retained request lifetime, observed progress and bounded waiting | `src/web/assets/report-loading.js`, `app.js`, `app.css`; `src/web/source_startup.py`, `http.py` expose existing typed readiness; `src/application/service.py` allowlists report-owned history stages | `test_web_loading.py`, `test_web_views.py`, `test_web_runtime.py`, `test_web_source_startup.py`; `integration/web_report_loading.cjs`, `web_report_lifetime.cjs`, hidden `integration/probe_report_loading.cjs` with `fixtures/report_loading.py`; [actual evidence and scoped exceptions](../../journal/web/report-loading.md) |
 | Explicit Models price refresh / true upstream observation | `src/pricing/github_copilot.py::refresh_catalog`, `src/web/jobs.py::ModelsPriceRefresh`, `composition.py`, `http.py`, `assets/app.js` / `render.js`; toolbar-only `app.css` styles; no account refresh or Watch catalog replacement | `test_web_price_refresh.py`, `test_web_runtime.py`; `integration/probe_models_refresh.cjs` uses canonical in-memory reports for UI and invokes `probe_models_toolbar.cjs` for computed fonts/responsive geometry, separate `probe_web_live.py --refresh-prices` proves real HTTP/spawn/provider flow; [proof limits](../../journal/web/models-pricing.md) |
@@ -63,7 +64,7 @@ All paths in this table are relative to the repository root. Test names live und
 | Web one-prompt cards, live per-prompt token mix/canonical CCost split, terminal lifecycle, compact layout and replenished session history | `src/watch/web_coordinator.py`, `card_workers.py`, `cards.py`, `src/reports/watch_capture.py`, `session_history.py`, `src/application/live_projection.py`, `src/web/assets/watch.js` | `test_watch_cards.py`, `test_watch_token_mix.py`, `test_watch_prompt_cost.py`, `test_watch_card_lifecycle.py`, `test_web_live.py`; headless `integration/probe_watch_cards.cjs`, read-only `integration/probe_web_live.py --watch-cards --prompt-token-mix --prompt-cost` |
 | Web Watch full-day summary, native monthly/period CCost, quota pace, aligned subscriptions and current-context footers | `src/analysis/daily_usage.py`, `period_ccost.py`, `src/reports/history.py`, `accounts.py`, `watch_context.py`, `src/application/watch_accounts.py`, `live_projection.py`, `src/watch/web_coordinator.py`, `src/web/assets/watch.js` | `test_watch_daily.py`, `test_web_daily_lifecycle.py` (modeled budget/fresh batch sharing), `test_quota_period_lifecycle.py`, `test_watch_context_footer.py`, `integration/web_watch_summary.cjs`; integrated-browser `integration/serve_watch_summary.py`, read-only `integration/probe_web_live.py --watch-cards --daily` |
 | Mini Watch / per-prompt tables, measured opening fit, click sizing and app-owned Document PiP | `src/watch/cards.py`, `running.py`, `src/application/live_projection.py`, `watch_accounts.py`, `src/web/assets/mini.js`, `mini.css`, `app.js` | `test_mini_watch.py`, `test_watch_cards.py`, `test_watch_card_lifecycle.py`; `integration/mini_watch.cjs` ownership/health/daily parity and rounding/clamp policy; current `integration/probe_mini_fit.cjs` + `serve_mini_watch.py` headless PiP/CSP/SSE, true zoom, opening/disclosure fit, document overflow and preferences. Older `probe_mini_watch.cjs` assumes pre-fit geometry/scroll policy. Explicit-authority-only `probe_mini_native.cjs` / `mini_native_geometry.py` measure own-PID physical frames; [limits](../../journal/web/mini-watch.md) |
-| Live Sessions catalog, exact global sort keys, bounded scalar indexing and stable older pages | `src/application/session_catalog.py`, `src/reports/session_summary.py`, `src/web/session_catalog.py`, `src/web/assets/sessions.js`, `src/watch/web_coordinator.py`; [ownership and limits](web.md) | `test_web_session_catalog.py`, `integration/probe_web_sessions.cjs`; read-only `integration/probe_web_live.py --sessions` |
+| Live Sessions catalog, exact global sort keys, bounded scalar indexing and stable older pages | `src/application/session_catalog.py`, `src/reports/session_summary.py`, `src/web/session_catalog.py`, `src/web/assets/sessions.js`, `src/watch/web_coordinator.py`; [ownership and limits](web.md) | `test_web_session_catalog.py` (including visible page-2 completion during an inherited quiet background delay), `integration/probe_web_sessions.cjs`; read-only `integration/probe_web_live.py --sessions` |
 | Complete live session history, observed retention and revision-pinned chunks | `src/application/session_detail.py`, `src/reports/session_history.py`, `src/analysis/prompt_index.py`, `src/web/assets/session.js`; [ownership and limits](web.md) | `test_web_session_detail.py`, `development/tests/integration/web_session.cjs`; read-only `development/tests/integration/probe_web_live.py --sessions` |
 | Historical Token Mix / shared session presentation; retired Reports bookmarks | `src/reports/token_mix_cache.py`, `token_mix_history.py`, `src/application/display.py`, `projection.py`, `src/web/assets/token-mix.js`, `render.js`, `reports.js`, `app.js`; [Web route contract](web.md) | `test_web_token_mix.py`, `test_web_remaining.py`, `integration/web_remaining.cjs`, `test_web_views.py`, `integration/probe_token_mix.cjs`, read-only `integration/probe_token_mix_baseline.py`; CLI date/shared API tests remain independent |
 | Optional Web security / private instance lifecycle / source-change stop | `src/web/http.py`, `security.py`, `host.py`, `lifecycle.py`, `instance_state.py`, `process_identity.py`, `change_guard.py`, `observations.py`; [Web contract](web.md) | `test_web_runtime.py`, `test_web_shutdown.py`, `test_web_lifecycle.py`, `test_web_diagnostics.py`; opt-in read-only `development/tests/integration/probe_web_lifecycle.py`, synthetic `probe_web_bounds.py` |
@@ -97,6 +98,131 @@ winners/coverage and cold/warm/changed reads. Current Mini Fit invokes
 `integration/probe_history_readiness.cjs` for actual Full/Mini DOM and AX state parity.
 [Measurements and the real-source exception](../../journal/web/history-readiness.md)
 separate correctness from unproven private cold-start speed.
+`test_watch_history_acquisition.py` adds isolated-reader live-evidence/epoch parity,
+initial retry confirmation and independent 2700-root automatic recovery using
+`fixtures/history_acquisition.py`. Its six-root deferred-enrichment case pins exact
+winner certification before session CCost/numeric guidance, available context/model/
+finish fields, and unchanged rows/proof/time/read counts after enrichment.
+`fixtures/mini_sessions.cjs` exercises simultaneous Full-five/Mini-three staged
+fields; `fixtures/watch_context_browser.cjs` checks initial pending-to-ready summary
+fields over actual Full DOM without mistaking retained-price refresh for first load.
+`integration/benchmark_v2_acquisition.py` compares
+reader lifetime and bracket sizes with numeric-only wire/source measurements;
+its `--capture` mode separates fresh whole-card selection/migration and projection
+from acquisition using pinned pricing/disposable caches. `test_watch_card_batches.py`
+covers Watch-only member outcomes, epoch rejection, reserved active capacity and
+transport-cancel/join/replay with independent winner recovery;
+`test_watch_card_readers.py` covers exclusive per-worker reader lifetime,
+before/after brackets, actor/epoch/expiry invalidation, per-job metrics and
+cancel/retire/fatal-close ownership in `src/watch/card_readers.py` and Web composition;
+`test_v2_tree_brackets.py` owns Web-card-only recursive scoped brackets in
+`src/sources/opencode_v2_tree.py`, per-epoch capability checks, complete-global
+isolation, active/location parity and mutation/failure/cancel cases.
+[FR000624's in-progress ledger](../../journal/web/foreground-recovery.md) retains
+the failed real baseline and outstanding whole-Web acceptance gates.
+`integration/benchmark_web_runtime.py` pins each complete historical default Web
+backend to `fixtures/historical_web_source.py` (raw current V2 HTTP) and
+`historical_web_inputs.py` (isolated discovery/config/cache and raw pricing/account
+inputs). Its optional explicit `--browser` invokes `probe_historical_web.cjs` for
+the selected tree's shipped reports, Sessions, Accounts and headless Document PiP
+Earlier DOM against the independent synthetic oracle. Single small smokes are not
+matched performance/large-real-source/native-desktop acceptance.
+The raw synthetic quota window is pinned to the source timestamp across versions
+and spawned observations while fetched timestamps remain real. Parent pre/post
+input checks censor quota expiry or a relevant local calendar boundary, not product
+computation. Historical-runtime tests cover stable raw periods, child-bootstrap
+propagation and input-invalid classification; older moving-window timings remain
+a distinct workload. Diagnostic-only `--report-timeline` adds the original Token Mix
+entrypoint/continuation observer (`historical_web_inputs.observe_build`) and scalar
+job/dispatcher transitions (`dispatch_probe_resources.FiniteTimeline`); its overhead is
+not a performance comparator. Managed Token Mix bulk derived-cache observation is owned
+by `src/reports/acquisition.py::RootAcquisition.observe` and covered in
+`test_web_token_mix.py`.
+`test_historical_web_runtime.py` checks the independent finish oracle, cross-model
+input groups, raw pagination past500, original HTTP202 admission and positive
+period/paged-membership requirements. `recent-metadata` is exhaustive-cutoff stress;
+`cutoff-effective` fixes ten percent recently touched old roots and otherwise
+canonical activity. This contrasting fixture is not an inferred real distribution.
+`integration/benchmark_retained_web_runtime.py` keeps one synthetic registration
+identity across normal preparation and two fresh-host/browser arms, restoring one
+WAL-consistent seed at the same cache path through `fixtures/historical_web_retention.py`.
+It separates preparation traffic from arm counters; optional `--sparse-stale` changes
+exactly three dispersed roots once before both arms, not concurrent update freshness.
+The same focused test file covers seed restoration, registration non-rewrite,
+counter deltas and preservation of ordering/finish through that fixed mutation.
+Optional `--card-timeline` uses `fixtures/card_service_timeline.py` to observe
+unique owned futures, cleanup completion, owner reap and conservative ready-backlog
+permit waiting, without source IDs or scheduling changes. `test_card_service_timeline.py`
+pins group counting, detached per-capture factory/acquisition/allowlisted transport
+observations and noninterference; diagnostic timings include observer overhead.
+The real read-only `probe_data_dispatch.py --card-timeline <owned-output>` reuses
+that opt-in observer and exports numeric history coverage without winner identities.
+The full-runtime harness's `--card-brackets global` changes only the new bracket
+seam, retaining reader lifetime and all normal source/host work. Optional
+`--live-updates 1|3` enables owned synthetic running prompts and serial source
+changes during normal browser/finite warming, then requires actual accepted active
+content and server publication, not heartbeats. `fixtures/live_update_timeline.py`
+records numeric owner stages and the actual loop-local publication deadline;
+account-history spans include actual calling-thread CPU (nested wall spans are
+not additive CPU), allowing the known-update comparison without a function,
+card or broad owner profiler.
+`test_live_update_timeline.py` pins rejection/active-marker handling, noninterference
+and source mutation/oracle semantics. Static trials and update diagnostics are
+different workloads; neither proves native geometry or the private source oracle.
+`--history-switch` exercises an unfinished Models/history switch with actual native
+Full disclosure keyboard input, certified paint and visible headless Document PiP
+while its opener is hidden; `--history-switch mini` instead switches at once to a
+visible Mini Earlier over a hidden opener while Models and proof are unfinished,
+recording first usable finite results. `--history-pacing off`
+(`historical_web_inputs.withhold_history_pacing`) is a historical-replay control
+for the rejected history-pending demotion; current production fails it explicitly.
+`--warm-idle SECONDS [--warm-settle SECONDS]` (browser only, not with
+`--live-updates`) appends two browser-owned Watch idle windows (Earlier expanded,
+then collapsed) measured by `integration/warm_idle_economy.py` (host CPU/IO/RAM,
+Live publications, busy jobs, unfinished Sessions scalar warming rows, fixture
+source requests, report starts), then same-tab and fresh-page warm re-entry
+of the four finite routes; `test_historical_web_runtime.py` pins its window summary.
+The rejected prospective2↔3 admission control and
+observer were removed after whole-host comparisons; evidence remains in the ledger.
+`history_demand.cjs`/`test_web_dispatch.py` cover capability/legacy shape, strict
+Watch-only demand, independent Full/Mini leases, PiP timers, expiry and late-close
+guards. `test_watch_completion_service.py` covers ordinary three-history admission,
+guidance and demand handling. Visible Earlier demand never demotes hidden
+requested reports (visible finite0, hidden requested1, background2); the rejected
+history-pending pacing was removed after paired runs. Real background park/resume
+completion on the same stack is covered by `test_web_dispatch.py`.
+`prepare_watch_account_history` requirements-only
+setup/final-projection equivalence is covered by `test_watch_daily.py`.
+`probe_web_live.py --history-oracle <new-owned-output> --browser <explicit-Chromium>`
+uses `integration/history_reference.py` and `real_history_oracle.py`: a separate
+normal global-bracketed reader, complete membership/revision reconciliation and
+canonical lifecycle scalar reduction without product cache/pricing or Watch ranking.
+The Live-owner observer supplies actual proof bindings only, never expectations.
+Changed roots/time-sensitive tool-continuation boundaries invalidate scalars;
+incomplete/churning roots are not exclusion evidence. Heavy preparation precedes
+the default host; reconciliation still contaminates timing, so this is correctness
+evidence, not a cold-performance arm. Private-mode shipped-browser Full/Mini checks
+include prompt/finish/order and actual hidden opener. After each browser check a fresh
+exact re-match must still have the rendered winners; changed live winners re-render
+(at most three cycles) or remain INCONCLUSIVE. Only numeric/equality/run-local
+opaque-digest evidence is exported. `test_history_reference.py` covers these
+reference contracts and verifies the global rather than optimized scoped path.
+`fixtures/owner_cost_timeline.py` adds opt-in nested inclusive/exclusive wall and
+thread-CPU aggregates by fixed host-thread role, plus a short owner function
+profile (turns starting5..8s), constructed/finalized on that owner thread with
+stdlib `profile.Profile`. `test_owner_cost_timeline.py` pins nesting,
+exception unwinding, foreign-thread exclusion, plausible timings, return/privacy
+and wrapper restoration. Coarse publication substages separate projection,
+top-level display, outer DTO conversion and EventHub JSON/copy work.
+Both harnesses support `--owner-profile` (real probe takes an owned output path).
+Use `--owner-functions off` for coarse-only comparisons. The full-host harness's
+explicit `--timezone UTC|Europe/Stockholm` changes only owned fixture configuration;
+UTC remains the default. Observer overhead and Windows CPU timer quantization
+remain limitations, not evidence that short-stage CPU exceeds possible work.
+Only the real probe's explicit `--extend-history-observation` can extend the same
+normal90s Watch observation in advancing30s slices, at most300s total. This is
+observation policy, never a product computation timeout or independent oracle.
+Unwrapped CPU remains unknown; nested/cross-thread inclusive spans are not additive.
 
 Mini's session totals/history presentation, canonical Finished clock and unknown-finish help are covered by `test_mini_watch.py`,
 `fixtures/mini_sessions.cjs`; `integration/probe_mini_session_alignment.cjs`, invoked

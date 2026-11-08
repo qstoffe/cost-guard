@@ -34,8 +34,9 @@ class WatchCapture:
             0 if row.completed_at_ms else row.at_ms, row.event_id), default=None)
 
 
-def capture_rows(service, root, previous=None, focal_ids=()):
-    fresh = service.source.load_session_snapshot(root.session_id)
+def capture_rows(service, root, previous=None, focal_ids=(), *, fresh=None, defer_guidance=False):
+    if fresh is None:
+        fresh = service.source.load_session_snapshot(root.session_id)
     snapshot, bundle, retained = analyze_observed(service, previous, fresh)
     item = AnalyzedRoot(root, bundle, False, snapshot)
     projector = PromptRowProjector(snapshot=snapshot, bundle=bundle, catalog=service._load_catalog(),
@@ -59,7 +60,14 @@ def capture_rows(service, root, previous=None, focal_ids=()):
         rows.append(row)
     rows = _coherent_watch_deltas(rows, epochs=projector.epochs, session_id=root.session_id,
         subtask_ids=frozenset(record.prompt_id for record in records if record.prompt_kind == "subtask"))
+    signature = ''
+    if defer_guidance:
+        from .context_guidance import guidance_semantics
+        signature = guidance_semantics(service, projector.catalog, service._load_comparison_catalog())
     return WatchCapture(root.session_id, root.title or root.session_id, tuple(rows),
         max((record.prompt_time_ms for record in records), default=0), service.now_ms, retained,
         frozenset(event.event_id for event in fresh.events),
-        card_context(projector, root.session_id, service._threshold_multiplier), fresh.complete, fresh), item
+        card_context(projector, root.session_id, service._threshold_multiplier,
+            defer_guidance=defer_guidance, guidance_signature=signature,
+            source_epoch=(getattr(service.source, 'observation_epoch', None) or '') if defer_guidance else ''),
+        fresh.complete, fresh), item

@@ -1,5 +1,6 @@
 """One process-lifetime acquisition owner, independent of HTTP/tab lifetimes."""
 from threading import Event, Thread
+import time
 
 from src.sources.errors import SourceError
 
@@ -43,7 +44,20 @@ class LiveRuntime:
             if driver is None:
                 return
             self.driver = driver
+            publication_due = time.monotonic()
             while not self.stopping.is_set():
+                now = time.monotonic()
+                if now < publication_due:
+                    ready = getattr(driver.coordinator, 'work_ready', self.stopping)
+                    if ready is not self.stopping and ready.is_set():
+                        # Clear BEFORE servicing: completion during the bounded
+                        # turn remains signalled. Callbacks never mutate owners.
+                        ready.clear()
+                        if driver.error is None:
+                            driver.coordinator.service_completed()
+                    else:
+                        ready.wait(publication_due - now)
+                    continue
                 frame = driver.tick()
                 if callable(getattr(type(driver.coordinator), "tick_catalog", None)):
                     driver.coordinator.tick_catalog(self.catalog, unavailable=driver.error is not None)
@@ -55,7 +69,7 @@ class LiveRuntime:
                 if driver.terminal:
                     break
                 # Yield between history slices and keep account-only updates timely.
-                self.stopping.wait(0.25 if driver.coordinator.today_ccost.history_pending else 1)
+                publication_due = time.monotonic() + (0.25 if driver.coordinator.today_ccost.history_pending else 1)
         except SourceError as error:
             self.source_failure = error
             self.publish("live", record(state="failed", error_code=error.code.value, view=None))
