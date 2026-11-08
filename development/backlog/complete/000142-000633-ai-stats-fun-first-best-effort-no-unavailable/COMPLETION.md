@@ -25,11 +25,17 @@ Product: v80.211 / 2026-11-09. Implementation base:
 
 ## Verification
 
-- Final post-sharing local Full: 174 files, zero failures, 124.1s (four isolated workers).
+- Final local Full after the CI harness repair: 174 files, zero failures, 125.6s
+  (four isolated workers); earlier post-sharing Full also passed in 124.1s.
 - Package validator: 11 passes, zero failures, seven existing advisory/design
   warnings; no budgets increased.
 - Focused dispatcher evidence tests: nine passed; only Stats expectations changed,
   preserving Token Mix/Comparisons rejection and provenance requirements.
+- Initial hosted common CI failed only the unrelated Sessions global-sort DOM wait:
+  its five-second limit raced the normal five-second refresh after a pending response.
+  The transport harness now explicitly refreshes through real HTTP while pending,
+  retaining the exact sort assertion and product polling/resource behavior. Focused
+  Web views and catalog checks: 27 passed, including bounded cold-indexing coverage.
 - Post-sharing hidden Edge: PASS, 16 checks, 54 state/theme/unit cases, nine layouts,
   80 enlarged-text layouts, 1,350 contrast samples, zero runtime errors. Includes
   retained refresh/cold-failure zeros and real production two-tab/12-child slices:
