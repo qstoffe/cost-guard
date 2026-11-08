@@ -96,7 +96,7 @@ remains visible below the grid.
 | Setting | Inherited choice (first) | Explicit choices |
 | --- | --- | --- |
 | Theme | Default (Classic) | Classic / Web |
-| CCost display | Default (Credits) | Credits / USD |
+| CCost display | Default (USD) | Credits / USD |
 | Mini Watch position | Default (Remember last) | Remember last / Standard position |
 | Mini Watch size | Default (Fit on open) | Fit on open / Remember last size |
 | Quota display | Default (Used) | Used / Remaining |
@@ -148,8 +148,10 @@ selected intent, not just the resolved value; opening Settings does not migrate 
 Theme precedence is nested user choice (including symbolic `default`), then legacy
 user `webTheme`, then the shipped theme. Old valid overrides still show as explicit.
 Selecting Default bypasses a retained legacy override without deleting/reformatting it.
-Web CCost independently defaults to
-Credits even if the original CLI `ccostDisplayUnit` is USD. The CLI key and its
+Web CCost independently defaults to **USD**, including Mini Watch and related Web views.
+Missing or symbolic `default` overrides inherit USD; Settings shows **Default (USD)**.
+Previously saved explicit Credits or USD choices remain untouched. The CLI still defaults
+to Credits. Its `ccostDisplayUnit` key and
 `--ccost-unit` override keep their behavior and cannot override a Web choice.
 
 Reload/new tabs/relaunch read confirmed file values. Theme is in the early HTML;

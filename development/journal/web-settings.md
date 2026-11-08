@@ -7,6 +7,31 @@ Status: current
 
 ## Summary
 
+### Web CCost default USD — 2026-11-08
+
+FR 000625 (v80.206) changes only the shipped nested Web CCost value to `usd`.
+Existing canonical inheritance already resolves omission/`default`; Settings derives
+**Default (USD)** and its help from that same value. Explicit saved Credits/USD and
+the separate CLI Credits default remain unchanged, with no user JSONC migration,
+new acquisition, repricing or conversion-factor change. No architecture boundary changed.
+
+Regression coverage exercises missing configuration, omitted/symbolic/explicit saved
+choices, byte-preserving reads, HTTP round trips/persistence, CLI isolation and the
+JavaScript selection/confirmation/rollback/default-label state machine. The focused
+Web Settings test failed on the old Credits default before the config change.
+
+Full passed all 170 files with zero failures (123.0 seconds). Working-tree validation
+passed 11 checks with seven existing advisory/design warnings.
+The short real V2 probe reached Live/SSE successfully but failed its final owned-worker
+assertion with one Claude quota worker awaiting SDK-control metadata. The source's
+existing 0.2-second shutdown join deliberately does not wait for bounded in-flight
+provider I/O; no shutdown implementation was changed for this display default.
+The account-aware probe then passed with one Live/account owner, two streams, three
+account cards, no finite jobs or model calls, and zero owned threads/processes after
+close. Shared OpenCode was untouched. These are real source/lifecycle checks, not
+browser painting, complete history or quota-freshness proof. No new browser/layout
+matrix or benchmark is needed for this unchanged presentation path.
+
 ### Compact Settings and native option help — 2026-11-06
 
 FR 000597 (v80.181) replaces the old framed Settings page with aligned compact
