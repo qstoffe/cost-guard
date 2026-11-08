@@ -15,7 +15,6 @@ from src.reports.sampling import latest_token_prompts
 from development.tests.fixtures.compact_reports import Availability, rendered, report_service
 from development.tests.fixtures.pricing_catalog import catalog
 from development.tests.fixtures.watch_runtime import MutableSource, make_service
-from development.tests.test_token_mix import observe
 from src.accounts.base import normalize_quota
 from src.accounts.github_copilot import (GitHubCopilotAccountProvider, JsonResponse,
                                         convert_entitlement_payload, convert_internal_user_payload)
@@ -119,7 +118,7 @@ class CategoryCostTests(unittest.TestCase):
     def test_watch_counts_unique_prompts_prices_requests_and_omits_total(self):
         snapshot = make_snapshot()
         tracker = WatchTokenMix(1000)
-        observe(tracker, snapshot)
+        tracker.observe(snapshot, analyze_snapshot(snapshot, now_ms=4000))
         mix = tracker.project(PRICES.reference_category_valuation)
         total = tracker.project_total(PRICES.reference_category_valuation)
         bundle = analyze_snapshot(snapshot, now_ms=4000)

@@ -102,6 +102,19 @@ def make_uncompacted_snapshot(*, running: bool = False) -> SessionSnapshot:
                    invocations=tuple(i for i in snapshot.invocations if i.invocation_id != "i_comp"))
 
 
+def one_request(*, running=True, usage=None):
+    snapshot = make_snapshot(running=running)
+    invocation = next(i for i in snapshot.invocations if i.invocation_id == "i_next")
+    if usage is not None:
+        invocation = replace(invocation, tokens=usage)
+    messages = tuple(replace(m, tokens=invocation.tokens) if m.message_id == "a_next" else m
+                     for m in snapshot.messages if m.message_id in {"u_next", "a_next"})
+    return replace(snapshot, sessions=(snapshot.root,), messages=messages,
+                   parts=tuple(p for m in messages for p in m.parts),
+                   events=tuple(e for e in snapshot.events if e.event_id == "u_next"),
+                   invocations=(invocation,))
+
+
 def moved_location(snapshot: SessionSnapshot, at_ms: int, revision: str = "moved") -> SessionSnapshot:
     """Same session ID, new location: only a non-billable context boundary is added."""
     return replace(snapshot, source_revision=revision,

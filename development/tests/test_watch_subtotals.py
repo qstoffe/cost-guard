@@ -8,10 +8,9 @@ import io
 import tempfile
 import unittest
 
-from development.tests.fixtures.session_snapshots import MODEL, make_snapshot, message, moved_location, prov
+from development.tests.fixtures.session_snapshots import MODEL, make_snapshot, message, moved_location, one_request, prov
+from development.tests.fixtures.watch_rows import inputs, prompt
 from development.tests.fixtures.watch_runtime import MutableSource, make_service
-from development.tests.test_token_mix import one_request
-from development.tests.test_watch_grouping import inputs, prompt
 from src.domain import MessageRole, ModelPricing, ModelRef, TokenUsage
 from src.presentation import WatchRenderer
 from src.pricing.catalog import PricingCatalog
