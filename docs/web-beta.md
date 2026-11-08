@@ -502,6 +502,21 @@ Run `python cost-guard-web.py --foreground` using already installed Python 3.11+
 
 ## Navigation and host-cached reports
 
+### Disposable historical cache
+
+SQLite is acceleration, not the source of session history. Opted-in session entries
+stay hot when actual root/child activity **or** meaningful use is within the last
+30 rolling days. Selected visible reports, Sessions/detail and Full/Mini Watch
+count as use; hidden polling and passive warming do not. Unknown/legacy clocks
+remain protected, without scanning all history at startup.
+
+The existing host loop may attempt a small idle cleanup only after **60 minutes
+of continuous host uptime**, at most daily. Active work, visible demand, source
+changes and contention defer/cancel it. Pruned old history rebuilds on demand;
+All time/history completeness, source sessions and operational JSON are unchanged.
+Freed SQLite pages can be reused without making the physical file smaller. There
+is no automatic VACUUM, database reset or user cleanup step.
+
 The Beta shell provides Models, global Watch, live Accounts, a Sessions catalog, Token Mix, AI Stats, Comparisons, Settings and live session detail. Global `/#/watch` is canonical; legacy `/#/live` links replace the same history entry. Accounts shares Watch's publication, not a finite report. Models and the three historical reports share host-owned caching, priority and freshness; their distinct report populations/totals remain independent.
 
 Sessions is the historical navigation entry point. The former `/#/reports` page is retired: old links, including date queries, replace that history entry with `/#/sessions` without starting a date report or applying a filter. Sessions has no date-range filter; sort on Last activity or its other catalog columns. CLI date/date-range reporting and the shared backend report APIs remain supported.

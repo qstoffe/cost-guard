@@ -119,6 +119,13 @@ async function api(path, value, signal) {
   const options = {credentials: 'same-origin', cache: 'no-store'};
   if (value !== undefined) Object.assign(options, {method: 'POST',
     headers: {'Content-Type': 'application/json', 'X-CG-CSRF': csrf || ''}, body: JSON.stringify(value)});
+  // Only a visible, actually selected view renews disposable history retention.
+  // Hidden polling, passive host warming and diagnostic API clients do not.
+  const viewed = path === '/api/interest' ? value?.visible === true : !document.hidden && (
+    path === '/api/data' && value?.request === current?.request ||
+    path === '/api/jobs/' + current?.active || path === '/api/sessions' && current?.section === 'sessions' ||
+    path === '/api/detail' && current?.detail);
+  if (viewed) options.headers = {...options.headers, 'X-CG-Viewed': '1'};
   const controller = new AbortController();
   options.signal = controller.signal;
   const aborted = () => controller.abort();

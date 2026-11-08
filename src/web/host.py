@@ -16,6 +16,7 @@ from .process_identity import process_identity
 from .observations import WebObservations
 from .security import BrowserLinkUnavailable
 from .dispatch import DataDispatcher, source_identity
+from .cache_housekeeping import CacheHousekeeping
 
 
 class WebHost:
@@ -48,6 +49,7 @@ class WebHost:
         self.live = LiveRuntime(live_factory, self.events.publish, self.runtime_failed) if live_factory else None
         self.server = None
         self.thread = None
+        self.cache_housekeeping = CacheHousekeeping(root)
 
     def runtime_failed(self, error):
         self.failure = self.failure or error
@@ -156,6 +158,7 @@ class WebHost:
                             if self.live:
                                 self.live.catalog.enable_warm(self.dispatcher.warm_allowed)
                         self.jobs.tick()
+                        self.cache_housekeeping.tick(self)
                     self.events.publish("progress", self.jobs.updates() if hasattr(self.jobs, "updates")
                                         else self.jobs.readiness())
         except BaseException as error:
@@ -178,6 +181,7 @@ class WebHost:
                 self.stopped.set()  # GUI must observe this even on cleanup failure.
 
     def start(self):
+        self.cache_housekeeping.start()
         self.server = LoopbackServer(self.jobs, self)
         if self.live:
             self.live.start()
@@ -202,6 +206,9 @@ class WebHost:
                 if not self.thread and self.live:
                     self.live.close()
             finally:
+                # Preserve actual use queued since the last host-loop flush. The
+                # finite drain fails soft on contention; never acquire source here.
+                self.cache_housekeeping.lifecycle.flush_pending()
                 if self.store:
                     self.observations.persist(self, final=True)
                     self.store.remove(self.nonce)

@@ -5,6 +5,7 @@ import sqlite3
 
 from src.analysis.cache import dependency_signature
 from src.domain.reference_cost import ReferenceCostIssue, REASONS
+from src.cache.session_scope import snapshot_scope
 from .models import SessionUsageRow
 
 ALGORITHM = "session-summary-2"
@@ -65,7 +66,8 @@ def session_summary(service, root, revision, *, active=False):
         values["ccost"] = str(row.ccost)
         try:
             service.cache_repository.put(NAMESPACE, key, values,
-                source_revision=actual, algorithm_version=ALGORITHM, busy_timeout_ms=50)
+                source_revision=actual, algorithm_version=ALGORITHM, busy_timeout_ms=50,
+                session_scope=snapshot_scope(item.snapshot))
         except (OSError, sqlite3.Error):
             pass
     return row, actual

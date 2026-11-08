@@ -7,17 +7,18 @@ import sqlite3
 
 from src.analysis.cache import dependency_signature
 from src.cache.repository import CacheEntry
+from src.cache.session_scope import snapshot_scope
 from . import ai_stats_evidence as stats
 from . import token_mix_cache as mix
 
 
-def entries(service, root, revision, value):
+def entries(service, root, revision, value, scope=None):
     from .matched_inputs import ALGORITHM, NAMESPACE
     key = mix.cache_key(service, root, service._load_comparison_catalog())
-    return [CacheEntry(mix.NAMESPACE, key, value['usage'], revision, mix.ALGORITHM),
-        CacheEntry(stats.NAMESPACE, dependency_signature((stats.ALGORITHM, key)), value, revision, stats.ALGORITHM),
-        CacheEntry(stats.COVERAGE, stats.coverage_key(root), stats.coverage(value), revision, stats.COVERAGE),
-        CacheEntry(NAMESPACE, dependency_signature((ALGORITHM, key)), value['matched'], revision, ALGORITHM)]
+    return [CacheEntry(mix.NAMESPACE, key, value['usage'], revision, mix.ALGORITHM, scope),
+        CacheEntry(stats.NAMESPACE, dependency_signature((stats.ALGORITHM, key)), value, revision, stats.ALGORITHM, scope),
+        CacheEntry(stats.COVERAGE, stats.coverage_key(root), stats.coverage(value), revision, stats.COVERAGE, scope),
+        CacheEntry(NAMESPACE, dependency_signature((ALGORITHM, key)), value['matched'], revision, ALGORITHM, scope)]
 
 
 def publish(service, snapshot, bundle):
@@ -30,7 +31,7 @@ def publish(service, snapshot, bundle):
     pending = getattr(service, '_shared_pending', None)
     if pending is None:
         pending = service._shared_pending = []
-    pending.extend(entries(service, snapshot.root, bundle.source_revision, value))
+    pending.extend(entries(service, snapshot.root, bundle.source_revision, value, snapshot_scope(snapshot)))
     if len(pending) >= 256:
         flush(service)
 

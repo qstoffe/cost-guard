@@ -102,6 +102,8 @@ QUICK_PATTERNS: tuple[str, ...] = (
     "test_watch_account_refresh.py",
     "test_prompt_projection.py",
     "test_cache.py",
+    "test_cache_lifecycle.py",
+    "test_web_cache_housekeeping.py",
     "test_opencode_v1.py",
     "test_opencode_v2.py",
     "test_connectivity_reliability.py",

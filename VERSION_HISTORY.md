@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.209 — 2026-11-08
+
+- Opted-in reconstructible SQLite session entries carry explicit source-qualified root/revision and actual activity evidence, separate from coalesced meaningful-use timestamps. Recent activity or use protects at least 30 rolling days; missing/legacy timing remains ineligible. Visible Web/CLI demand counts, not passive warming or diagnostic API reads; old history rebuilds normally after eviction.
+- The existing Web host loop waits at least 60 minutes of continuous uptime, then attempts one small idle transaction at most daily. Current revision/liveness, outstanding acquisition, visible demand, shutdown and contention defer/cancel work. Operational namespaces/JSON state and authoritative OpenCode data remain untouched; no automatic VACUUM or database rebuild is introduced.
+
 ## v80.208 — 2026-11-08
 
 - Web and Mini Watch unavailable reference CCost values expose reason-specific shared help on the N/A text: verified available-list absence, unsafe model identity, missing rate/tier or usage, unverified/failed catalog and neutral fallback. Actual contributing requests, including children, determine bounded reasons; Mini prompt and parenthesized session costs remain independent targets with existing compact details preserved.

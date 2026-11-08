@@ -21,6 +21,15 @@ from development.tests.integration.benchmark_web_runtime import backend_journey,
 
 
 class HistoricalWebRuntimeTests(unittest.TestCase):
+    def test_retention_mix_has_real_old_and_recent_execution_not_only_old_metadata(self):
+        now = 1_800_000_000_000
+        fixture = WireHistory(120, 2, now, 0, 'retention-mix')
+        finishes = [messages[-1]['time']['completed'] for messages in fixture.messages.values()]
+        cutoff = now - 30 * 86_400_000
+        self.assertEqual(60, sum(value < cutoff for value in finishes))
+        self.assertEqual(60, sum(value > cutoff for value in finishes))
+        self.assertTrue(all(fixture.messages[key][-1]['time']['completed'] > cutoff for key in fixture.winners))
+
     @unittest.skipUnless(shutil.which('node'), 'optional JS runtime unavailable')
     def test_accounts_paint_requires_visible_matching_fields_not_arbitrary_text_length(self):
         script = r"""

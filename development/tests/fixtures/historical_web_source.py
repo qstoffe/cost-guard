@@ -34,6 +34,8 @@ class WireHistory:
             # Deliberately not the same ordering as catalog activity.
             finish_rank = (index * 37) % roots
             finish = asof - 3_600_000 - finish_rank * 60_000
+            if activity_pattern == 'retention-mix' and index >= roots // 2:
+                finish -= 45 * 86_400_000
             values = []
             for prompt in range(prompts):
                 at = finish - (prompts - prompt) * 10_000
@@ -317,7 +319,7 @@ def main():
     parser.add_argument('--prompts', type=int, default=2)
     parser.add_argument('--asof', type=int, required=True)
     parser.add_argument('--latency-ms', type=float, default=0)
-    parser.add_argument('--activity-pattern', choices=('recent-metadata', 'cutoff-effective'), default='recent-metadata')
+    parser.add_argument('--activity-pattern', choices=('recent-metadata', 'cutoff-effective', 'retention-mix'), default='recent-metadata')
     parser.add_argument('--active-probe', action='store_true')
     args = parser.parse_args()
     if not 6 <= args.roots <= 3000 or not 1 <= args.prompts <= 100 or not 0 <= args.latency_ms <= 100:
