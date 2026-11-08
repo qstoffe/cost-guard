@@ -1,4 +1,4 @@
-"""Independent known-subtotal, non-inference and temporal-proof regressions."""
+"""Independent fun-first fallback rules and unchanged canonical timing regressions."""
 from dataclasses import asdict, replace
 from decimal import Decimal
 import unittest
@@ -7,12 +7,14 @@ from development.tests.fixtures.active_hour import epoch
 from development.tests.fixtures.session_snapshots import make_native_v2_compaction_snapshot
 from development.tests.fixtures.compact_reports import report_service
 from development.tests.fixtures.synthetic_month import SyntheticMonthSource
-from src.analysis.ai_stats import DAY_MS, StatsRoot, period_stats
+from src.analysis.ai_stats import DAY_MS, StatsRoot, period_stats, windows
 from src.analysis.compaction import completed_compactions
 from src.analysis.models import TraceEntry
 from src.application.ai_stats import stat_tokens
+from src.application.projection import project
 from src.domain import ModelRef, TokenUsage
 from src.reports import ReportKind, ReportRequest
+from src.reports.models import ReportProjection
 
 NOW = epoch('2026-11-07T12:00:00+00:00')
 HOUR = 3_600_000
@@ -45,25 +47,28 @@ class ObservedStatsTests(unittest.TestCase):
         self.assertEqual(('partial', ('source-incomplete',)),
                          (values['working-time'].status, values['working-time'].reasons))
         self.assertEqual(2700, source.load_count)
-        self.assertIsNone(values['hourly-rate'].value)
+        self.assertGreater(values['hourly-rate'].value, 0)
         self.assertIsNone(report.ai_stats[-1].matched)
 
-    def test_one_unknown_keeps_safe_subtotals_but_never_ratio_streak_or_peak(self):
+    def test_one_unknown_supplements_the_timeline_and_keeps_ratios_streak_and_peak(self):
         good = root('good', NOW - 2 * HOUR)
         bad = replace(root('bad', NOW - DAY_MS), intervals=((NOW - DAY_MS, None, False),))
 
         values = calculate((good, bad))
 
-        for key in ('working-time', 'longest-session', 'busiest-day'):
+        self.assertEqual(HOUR + 60_000, values['working-time'].value)
+        for key in ('longest-session', 'busiest-day'):
             self.assertEqual((HOUR, 'partial', ('unknown-duration',)),
                              (values[key].value, values[key].status, values[key].reasons))
         self.assertEqual('good', values['longest-session'].session_id)
         self.assertEqual(8, values['total-cost'].value)
         self.assertEqual(4, values['average-cost'].value)
-        for key in ('hourly-rate', 'night-owl', 'streak', 'parallel'):
-            self.assertEqual((None, 'unavailable'), (values[key].value, values[key].status))
+        self.assertEqual(Decimal(8) * HOUR / (HOUR + 60_000), values['hourly-rate'].value)
+        self.assertEqual(0, values['night-owl'].value)
+        self.assertEqual(2, values['streak'].value)
+        self.assertEqual(1, values['parallel'].value)
 
-    def test_missing_price_or_tokens_never_erases_time_or_fabricates_an_average(self):
+    def test_missing_price_or_tokens_supplements_cost_without_erasing_measured_time(self):
         good, bad = root('good', NOW - HOUR, 8), root('bad', NOW - 2 * HOUR, 99)
         for damaged, valuation, reason in (
             (bad, lambda _m, t: None if t.input == 99 else Decimal(t.input), 'unpriced-requests'),
@@ -74,13 +79,13 @@ class ObservedStatsTests(unittest.TestCase):
             values = calculate((good, damaged), valuation=valuation)
 
             self.assertEqual((2 * HOUR, 'complete'), (values['working-time'].value, values['working-time'].status))
-            self.assertIsNone(values['average-cost'].value)
-            self.assertIsNone(values['hourly-rate'].value)
+            self.assertGreater(values['average-cost'].value, 4)
+            self.assertEqual(values['average-cost'].value, values['hourly-rate'].value)
             winner = values['expensive-session']
             self.assertGreater(winner.value, 0)
             self.assertEqual('partial', winner.status)
             self.assertIn(reason, winner.reasons)
-            self.assertIn('not a verified overall winner', stat_tokens(asdict(winner))['explanation'])
+            self.assertEqual({'value', 'trait'}, set(stat_tokens(asdict(winner))))
 
     def test_incomplete_root_and_membership_gaps_keep_only_qualified_observations(self):
         good = root('good', NOW - HOUR)
@@ -89,8 +94,8 @@ class ObservedStatsTests(unittest.TestCase):
 
             self.assertEqual((HOUR, 'partial', ('source-incomplete',)),
                              (values['working-time'].value, values['working-time'].status, values['working-time'].reasons))
-            self.assertIsNone(values['parallel'].value)
-            self.assertIsNone(values['average-cost'].value)
+            self.assertEqual(1, values['parallel'].value)
+            self.assertEqual(4, values['average-cost'].value)
 
     def test_known_old_end_excludes_only_safe_roots_and_does_not_hide_global_gaps(self):
         old = root('old', NOW - 60 * DAY_MS)
@@ -109,13 +114,13 @@ class ObservedStatsTests(unittest.TestCase):
         gap = calculate((old, recent), start=NOW - 30 * DAY_MS, complete=False)
         self.assertEqual('partial', gap['working-time'].status)
 
-    def test_unknown_only_is_not_a_fake_zero_and_lower_bound_display_never_rounds_up(self):
+    def test_broken_only_activity_is_one_minute_and_measured_work_keeps_normal_rounding(self):
         missing = replace(root('bad', NOW - HOUR), intervals=((NOW - HOUR, None, False),))
         values = calculate((missing,))
-        self.assertIsNone(values['working-time'].value)
-        for duration, expected in ((999, '≥ 0s'), (1599, '≥ 1s'), (59999, '≥ 59s')):
+        self.assertEqual(60_000, values['working-time'].value)
+        for duration, expected in ((999, '1s'), (1599, '2s'), (59999, '1m')):
             good = replace(root('good', NOW - HOUR), intervals=((NOW - HOUR, duration, False),))
-            observed = calculate((missing, good))['working-time']
+            observed = calculate((good,), complete=False)['working-time']
             self.assertEqual(expected, stat_tokens(asdict(observed))['value'])
 
     def test_compaction_uses_explicit_part_end_but_never_creation_or_summary_as_end(self):
@@ -132,6 +137,65 @@ class ObservedStatsTests(unittest.TestCase):
             records = completed_compactions(changed)
 
             self.assertEqual(expected, records[0].duration_ms)
+
+    def test_mixed_damage_has_ten_finite_playful_values_in_every_period_and_unit(self):
+        good = root('good', NOW - HOUR, 8)
+        request_only = replace(root('requests', NOW - 2 * HOUR), intervals=())
+        missing_start = replace(root('start', NOW - HOUR), intervals=((0, None, False),))
+        invalid = replace(root('negative', NOW - HOUR), intervals=((NOW - HOUR, -1, False),))
+        running = replace(root('running', NOW - HOUR), entries=(),
+                          intervals=((NOW - HOUR, None, True),), cost_pending=True)
+        missing_tokens = replace(root('tokens', NOW - HOUR), source_complete=False,
+            entries=(replace(good.entries[0], session_id='tokens', tokens=TokenUsage(known_fields=())),))
+        damaged = (good, request_only, missing_start, invalid, running, missing_tokens)
+        forbidden = r'Unavailable|Partial|Provisional|No data|N/A|Unknown|Observed|≥|NaN|Infinity|estimated|approximate'
+
+        for period, start in windows('Europe/Stockholm', NOW):
+            stats = period_stats(damaged, lambda _m, t: Decimal(8) if t.input == 8 else None,
+                period=period, start=start, now=NOW, zone='Europe/Stockholm', source_complete=False)
+            dto = project(ReportProjection(ReportKind.AI_STATS, 'AI Stats', 'SYNTHETIC', ai_stats=(stats,))).to_json()
+
+            self.assertEqual('fun-1', dto['ai_stats_policy'])
+            self.assertEqual(10, len(stats.metrics))
+            for metric in dto['ai_stats'][0]['metrics']:
+                self.assertTrue(Decimal(metric['value']).is_finite())
+                self.assertGreaterEqual(Decimal(metric['value']), 0)
+                self.assertEqual({'value', 'trait'}, set(metric['display']))
+                for unit in ('usd', 'credits'):
+                    text = metric.get('display_units', {}).get(unit, metric['display'])['value']
+                    self.assertRegex(text, r'\d')
+                    self.assertNotRegex(text + metric['display']['trait'], forbidden)
+            self.assertGreater(stats.metrics[1].value, 8)
+            self.assertGreaterEqual(stats.metrics[2].value, HOUR)
+
+    def test_unanchored_or_extreme_history_never_invents_records_or_nonfinite_values(self):
+        unanchored = StatsRoot('real', 'Real record', (), ((0, None, False), (-1, -1, False)))
+        for roots in ((), (unanchored,)):
+            values = calculate(roots)
+            for metric in values.values():
+                self.assertEqual(0, metric.value)
+                self.assertIsNone(metric.session_id)
+                self.assertEqual('', metric.detail)
+        for price in (Decimal('NaN'), Decimal('Infinity'), Decimal('-1'), Decimal('1e1000')):
+            values = calculate((root('priced', NOW - HOUR),), valuation=lambda *_: price)
+            self.assertEqual(Decimal('.000012'), values['total-cost'].value)
+            self.assertEqual(1, values['parallel'].value)
+        for value in (None, Decimal('NaN'), Decimal('Infinity'), -10, Decimal('1e1000')):
+            for metric in ('night-owl', 'working-time', 'hourly-rate', 'parallel'):
+                self.assertNotRegex(str(stat_tokens(dict(metric=metric, value=value))), r'NaN|Infinity|Unavailable|Unknown')
+
+    def test_only_omitted_roots_publish_zero_cards_without_claiming_root_evidence(self):
+        from unittest.mock import patch
+        source = SyntheticMonthSource(3, 1, month_start_ms=NOW - DAY_MS)
+        service = report_service(self, source, now_ms=NOW)
+        service.allow_partial_history = True
+        with patch('src.reports.ai_stats.load_snapshots', return_value={}):
+            result = service.build(ReportRequest(ReportKind.AI_STATS, stats_scope='all'))
+
+        self.assertEqual(3, result.history_omitted_roots)
+        self.assertEqual(5, len(result.ai_stats))
+        self.assertTrue(all(m.value == 0 for row in result.ai_stats for m in row.metrics))
+        self.assertTrue(all(m.session_id is None for row in result.ai_stats for m in row.metrics))
 
 
 if __name__ == '__main__':

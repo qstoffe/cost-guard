@@ -9,10 +9,10 @@ async function main(){
     ai_stats_work:{scopes:{'7-days':{completed:done,total,ready}}}}}});
   S.observe(state,work(2,10)); const first=state.percent;
   S.observe(state,work(2,20)); assert.equal(state.percent,first,'growing denominator never rewinds progress');
-  assert.match(state.stage,/history grew, total revised/);
+  assert.equal(state.stage,'The robots are counting their adventures…');
   S.observe(state,work(10,20)); assert.ok(state.percent>first && state.percent<100);
   S.observe(state,work(20,20,true)); assert.ok(state.percent<100,'coverage alone is not an applied period result');
-  S.observe(state,work(20,20,true,[{period:'7-days'}])); assert.equal(state.percent,100);
+  S.observe(state,work(20,20,true,[{period:'7-days'}])); assert.ok(state.percent<100,'legacy rows are not fun-policy results');
   const calls=[],pending=[];
   const api=async(_path,value)=>{calls.push(value.stats_scope);await new Promise(resolve=>pending.push(resolve));};
   const priority=S.prioritize(state,api);

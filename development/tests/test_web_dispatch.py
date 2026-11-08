@@ -591,7 +591,7 @@ class SharedEvidenceTests(unittest.TestCase):
         self.assertEqual(expected.analysis_signature, actual.analysis_signature)
         fetch.assert_not_called()
 
-    def test_unstable_or_later_changed_roots_are_omitted_with_partial_provenance(self):
+    def test_unstable_roots_keep_partial_provenance_and_stats_retains_changed_activity(self):
         from src.application import ReportApplication
         for kind, later_changed in ((kind, changed) for kind in
                 (ReportKind.TOKEN_MIX, ReportKind.AI_STATS, ReportKind.COMPARISONS) for changed in (False, True)):
@@ -612,7 +612,8 @@ class SharedEvidenceTests(unittest.TestCase):
                     value = ReportApplication(lambda *_: service, clock=lambda: NOW).execute(ReportRequest(kind)).to_json()
                 self.assertIsNone(value['error'])
                 self.assertEqual('partial', value['source']['status'])
-                self.assertEqual(1, value['source']['omitted_roots'])
+                retained_stats = kind is ReportKind.AI_STATS and later_changed
+                self.assertEqual(0 if retained_stats else 1, value['source']['omitted_roots'])
                 self.assertNotIn('root-0000', [row['session_id'] for row in value['source']['revisions']])
                 if kind is ReportKind.TOKEN_MIX:
                     self.assertEqual(6, sum(row['calls'] for row in value['view']['model_token_mix']))
@@ -622,7 +623,7 @@ class SharedEvidenceTests(unittest.TestCase):
                 else:
                     self.assertFalse(value['view']['comparisons']['complete'])
 
-    def test_entirely_unverifiable_history_never_publishes_zero_totals_as_partial_success(self):
+    def test_unverifiable_history_rejects_precise_reports_but_stats_has_playful_zeros(self):
         from src.application import ReportApplication
         for kind in (ReportKind.TOKEN_MIX, ReportKind.AI_STATS, ReportKind.COMPARISONS):
             with self.subTest(kind=kind):
@@ -632,8 +633,19 @@ class SharedEvidenceTests(unittest.TestCase):
                 service.cache_token_mix_history = True
                 with patch.object(source, 'load_session_snapshots_available', return_value={}, create=True):
                     value = ReportApplication(lambda *_: service, clock=lambda: NOW).execute(ReportRequest(kind)).to_json()
-                self.assertIsNone(value['view'])
-                self.assertIn(value['error']['code'], ('history_revision_churn', 'ai_stats_revision_churn'))
+                if kind is ReportKind.AI_STATS:
+                    self.assertIsNone(value['error'])
+                    self.assertEqual('partial', value['source']['status'])
+                    self.assertEqual(1, value['source']['omitted_roots'])
+                    self.assertEqual(5, len(value['view']['ai_stats']))
+                    for row in value['view']['ai_stats']:
+                        self.assertEqual(10, len(row['metrics']))
+                        for metric in row['metrics']:
+                            self.assertEqual('0', str(metric['value']))
+                            self.assertFalse(metric.get('session_id'))
+                else:
+                    self.assertIsNone(value['view'])
+                    self.assertEqual('history_revision_churn', value['error']['code'])
 
     def test_partial_history_still_rejects_membership_archive_and_source_changes(self):
         from src.reports.history_work import HistoryWork, revisions

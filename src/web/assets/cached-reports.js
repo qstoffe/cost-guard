@@ -22,6 +22,7 @@ const CachedReports = (() => {
     } catch (_) { return null; }
   }
   function summary(state, writable, managed) {
+    if (state.section === 'ai-stats') return '';
     if (!state.result || state.withheld) return '';
     const observed = observation(state.result);
     if (entry(state.result, state.section) === 'withhold') return '';

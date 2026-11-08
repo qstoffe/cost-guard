@@ -36,7 +36,7 @@ let diagnostics = () => ({});
 async function until(condition) {
   const caller = new Error().stack.split('\n')[2].match(/web_views\.cjs:(\d+)/)?.[1];
   const started = Date.now();
-  for (let i = 0; i < 500; i++) { if (condition()) return; await delay(10); }
+  for (let i = 0; i < 500; i++) { if (await condition()) return; await delay(10); }
   assert.fail('bounded UI condition timed out (web_views.cjs:' + caller + '); ' +
     JSON.stringify({elapsed_ms: Date.now() - started, ...diagnostics()}));
 }
@@ -384,7 +384,13 @@ async function main() {
    const column = all(all(ids.result, 'th')[3], 'button')[0];
    column.click();
    await handlers.hashchange();
-   await until(() => vm.runInContext('current.catalog.data.sort', context) === 'ccost');
+   // Drive real HTTP refreshes rather than racing the normal five-second poll
+   // against this harness's five-second wait. Cold indexing has owner tests.
+   await until(async () => {
+     if (vm.runInContext('current.catalog.data.sort', context) === 'ccost') return true;
+     await vm.runInContext('current.catalog.load()', context);
+     return vm.runInContext('current.catalog.data.sort', context) === 'ccost';
+   });
    assert.equal(all(ids.result, 'th')[3].attrs['aria-sort'], 'ascending');
   // Actual canonical DTOs exercise compaction, linked-child, running and hostile text.
   for (const [index, result] of input.examples.entries()) {

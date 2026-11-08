@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.211 — 2026-11-09
+
+- AI Stats always supplies ten fun-first numeric results with playful traits across all five periods. Stats-only bounded time/cost heuristics use available activity; empty histories get friendly zeros, never invented records or session links.
+- Usable slices appear before full scanning; warm refresh and failed updates retain cards. Old evidence-state badges, caveats, technical summaries and hidden explanations are removed, with short playful help instead. Stats cache/display semantics are versioned; canonical Watch, Sessions, CLI, Token Mix, Comparisons and billing/history remain unchanged.
+
 ## v80.210 — 2026-11-08
 
 - Full and Mini Watch show a plain known-priced CCost Today subtotal in Credits or USD, without daily partial-pricing/token markers or passive prompt-completeness notices. Missing evidence can still understate the full amount; canonical values, completeness, other partial markers and diagnostics remain unchanged.
