@@ -20,7 +20,8 @@ module.exports = (card, helpText, document, select) => {
   assert.ok(card.tools.list.children.slice(0, 7).every(node => !node.children[0].className));
   assert.equal(card.tools.list.querySelectorAll('img').length, 0, 'tool names stay literal text');
   assert.equal(card.running.className, 'watch-running-tool');
-  assert.equal(card.running.textContent, 'Running: execute 12s');
+   assert.equal(card.runningDetail.summary.textContent, 'Running: execute 12s');
+   assert.match(card.runningDetail.note.textContent, /Invocation details unavailable/);
   assert.equal(card.running.hidden, false);
   assert.match(helpText(card.tools.summary), /subset, not extra calls/);
   assert.match(helpText(card.tools.summary), /missing evidence is not success/);

@@ -54,8 +54,10 @@ assert.match(helpText(row.children[6].children[0]), /Subagents â€” Child Model Â
 assert.equal(row.children[7].children[0].events.focus, undefined, 'Token Mix remains header-only help');
 assert.equal(card.title.className, 'watch-running-title');
 assert.ok(!/Session Total|provisional|Loading/.test(card.root.textContent));
-assert.equal(card.running.textContent, 'Running: shell 41s');
-assert.equal(card.background.textContent, 'Running: subagent 55s');
+assert.equal(card.runningDetail.summary.textContent, 'Running: shell 41s');
+assert.equal(card.backgroundDetail.summary.textContent, 'Running: subagent 55s');
+assert.match(card.runningDetail.note.textContent, /Invocation details unavailable/);
+assert.match(card.backgroundDetail.note.textContent, /Invocation details unavailable/);
 assert.equal(card.tools.summary.children.at(-1).className, 'watch-activity-error');
 assert.match(card.tools.summary.children.at(-1).textContent, /1 failed/);
 assert.equal(card.skills.summary.children.at(-1).className, 'watch-activity-error');

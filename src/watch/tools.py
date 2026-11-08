@@ -9,6 +9,7 @@ from src.analysis.child_links import ChildLinkIndex
 from src.domain import EventKind, MessageRole, NormalizedMessage, NormalizedPart, SessionSnapshot
 
 from .models import SkillObservation, ToolObservation, ToolOutcome
+from .invocation import background_invocation, invocation
 from .tool_contracts import (
     executed_skill_script, failure_skill, is_skill_tool, loaded_skill, skill_tool_id,
     structured_outcome, verified_skill_origin,
@@ -18,7 +19,8 @@ from .tool_contracts import (
 def without_live_activity(tool: ToolObservation) -> ToolObservation:
     """Keep final counts, removing every indicator of ongoing execution."""
     return replace(tool, running_tool="", running_ms=0, todo_completed=0, todo_total=0,
-        active_todo="", background_kinds=(), background_ms=0)
+        active_todo="", background_kinds=(), background_ms=0,
+        running_invocation=None, background_invocation=None)
 
 
 def _parent_ids(snapshot: SessionSnapshot, event_id: str, *, is_compaction: bool) -> set[str]:
@@ -140,6 +142,7 @@ def _physical_tools(messages: list[NormalizedMessage]) -> tuple[NormalizedPart, 
 def observe_tools(
     snapshot: SessionSnapshot, event_id: str, *, is_compaction: bool = False, now_ms: int = 0,
     skill_origins_by_session: Mapping[str, Mapping[str, str]] | None = None,
+    include_invocations: bool = False,
 ) -> ToolObservation:
     """Count physical calls and evidenced outcomes within the canonical prompt scope."""
     parents = _parent_ids(snapshot, event_id, is_compaction=is_compaction)
@@ -148,12 +151,14 @@ def observe_tools(
     counts: dict[str, int] = {}
     outcomes: dict[tuple[str, str], int] = {}
     running_tool, running_ms = "", 0
+    running_part = None
     order = 0
     messages = _prompt_messages(snapshot, parents, is_compaction)
     skills: dict[str, tuple[int, int]] = {}
     skill_failures: dict[str, int] = {}
     origins_by_session = skill_origins_by_session or {}
-    for part in _physical_tools(messages):
+    physical = _physical_tools(messages)
+    for part in physical:
         start = _part_start(part)
         if start <= 0:
             continue
@@ -185,6 +190,7 @@ def observe_tools(
                 skill_failures[owner] = skill_failures.get(owner, 0) + 1
         elif not outcome and status == "running" and now_ms - start >= RUNNING_VISIBLE_AFTER_MS and now_ms - start > running_ms:
             running_tool, running_ms = name, now_ms - start
+            running_part = part
         if _is_todo_tool(part):
             order += 1
             candidates.append((start, order, _todo_state(part)))
@@ -197,6 +203,8 @@ def observe_tools(
             outcomes.items(), key=lambda item: (item[0][1] != "failed", -item[1], item[0][0]))),
         failed_count=sum(count for (_, outcome), count in outcomes.items() if outcome == "failed"),
         running_tool=running_tool, running_ms=running_ms,
+        running_invocation=invocation(running_part) if include_invocations and running_part else None,
+        background_invocation=background_invocation(snapshot, messages, physical) if include_invocations else None,
         skills=tuple(SkillObservation(skill, skill_failures.get(skill, 0))
                      for skill in sorted(skills, key=lambda item: skills[item], reverse=True)),
     )

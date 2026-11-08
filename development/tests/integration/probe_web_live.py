@@ -30,6 +30,7 @@ def main():
         help="Watch-card observation cap, 90..300 seconds; no product deadline change.")
     parser.add_argument("--accounts", action="store_true", help="Observe shared account publications without finite reports or new owners.")
     parser.add_argument("--tool-outcomes", action="store_true", help="Check evidenced tool outcome subsets in the published cards.")
+    parser.add_argument("--tool-invocations", action="store_true", help="Observe active invocation DTOs without waiting for unrelated Earlier coverage; scalar evidence only.")
     parser.add_argument("--prompt-token-mix", action="store_true", help="Observe card token mix over twelve seconds; no inference or extra capture.")
     parser.add_argument("--prompt-cost", action="store_true", help="Compare an observed completed prompt's raw cost split with a CLI session report.")
     parser.add_argument("--daily", action="store_true", help="Wait for coherent full-day cost, initiating prompts and category prices.")
@@ -212,6 +213,34 @@ def main():
             print(json.dumps(dict(tool_outcomes='ok' if activities else 'unobserved', cards_with_activity=len(activities),
                 failed=sum(item['failed_count'] for item in activities),
                 cancelled=sum(item['cancelled_count'] for item in activities), model_calls_started_by_probe=0)))
+        if args.tool_invocations:
+            observations.stage = 'tool_invocations'
+            deadline = time.monotonic() + 60
+            observed = 0
+            while time.monotonic() < deadline:
+                state, _ = get('/api/live', cookie=cookie)
+                view = (state['values'].get('live') or {}).get('view') or {}
+                for card in view.get('active_cards', []):
+                    for row in card['rows']:
+                        activity = row.get('tool') or {}
+                        for key in ('running_invocation', 'background_invocation'):
+                            detail = activity.get(key)
+                            if detail is None:
+                                continue
+                            assert card['state'] == 'observed' and row['prompt']['in_progress']
+                            assert not row['prompt']['execution_unverified']
+                            assert set(detail) == {'identity', 'revision', 'text', 'qualification'}
+                            assert len(detail['identity']) == len(detail['revision']) == 64
+                            assert len(json.dumps(detail)) < 10_000
+                            assert detail['qualification']
+                            observed += 1
+                if observed:
+                    break
+                time.sleep(1)
+            print(json.dumps(dict(tool_invocations='observed' if observed else 'unobserved',
+                observed_details=observed, scalar_evidence_only=True, model_calls_started_by_probe=0)))
+            if not observed:
+                raise RuntimeError('probe_no_live_invocation_observed')
         if args.prompt_cost:
             from development.tests.integration.prompt_cost_observations import observe_prompt_cost
             observations.stage = 'prompt_cost'

@@ -28,6 +28,15 @@ class ToolOutcome:
 
 
 @dataclass(frozen=True, slots=True)
+class ToolInvocation:
+    """Bounded, privacy-filtered source input; never raw tool data or output."""
+    identity: str
+    revision: str
+    text: str
+    qualification: str
+
+
+@dataclass(frozen=True, slots=True)
 class ToolObservation:
     tool_count: int = 0
     todo_completed: int = 0
@@ -41,6 +50,8 @@ class ToolObservation:
     background_ms: int = 0
     skills: tuple[SkillObservation, ...] = ()
     tool_outcomes: tuple[ToolOutcome, ...] = ()
+    running_invocation: ToolInvocation | None = None
+    background_invocation: ToolInvocation | None = None
 
     @property
     def cancelled_count(self) -> int:

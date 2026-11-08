@@ -29,6 +29,24 @@ const WatchView = (() => {
     node.append(summary, list);
     return {node, summary, list};
   }
+  function invocationDisclosure() {
+    const target = disclosure(); target.node.className = 'watch-running-tool';
+    target.note = el('p', undefined, 'detail'); target.input = el('pre', undefined, 'watch-invocation');
+    target.list.append(target.note, target.input);
+    return target;
+  }
+  function drawInvocation(target, label, detail) {
+    const identity = label ? JSON.stringify([detail?.identity, detail?.revision]) : '';
+    const changed = identity !== target.identity;
+    // A changed/ended call invalidates old content even while it has focus.
+    if (changed) {
+      target.node.open = false; target.identity = identity;
+      text(target.input, detail?.text || '');
+      text(target.note, label ? detail?.qualification || 'Invocation details unavailable from the current source.' : '');
+    }
+    if (changed || !protectedNode(target.summary) || !label) text(target.summary, label);
+    target.node.hidden = !label;
+  }
   function fragments(target, parts) {
     const signature = JSON.stringify(parts);
     if (target.signature === signature || protectedNode(target)) return;
@@ -167,7 +185,9 @@ const WatchView = (() => {
         historical && index === 0 ? 'When this prompt ended, including stopped or failed work.\nHover or focus the clock for the full local date and UTC offset.\n— means the finish time is unknown.' : explanation));
       head.append(header); this.body = el('tbody'); table.append(head, this.body); scroll.append(table);
       this.activity = el('div', undefined, 'watch-activity');
-      this.tools = disclosure(); this.skills = disclosure(); this.running = el('p', undefined, 'watch-running-tool'); this.background = el('p');
+      this.tools = disclosure(); this.skills = disclosure();
+      this.runningDetail = invocationDisclosure(); this.backgroundDetail = invocationDisclosure();
+      this.running = this.runningDetail.node; this.background = this.backgroundDetail.node;
       ContextHelp.attach(this.tools.summary, '• Counts include failures and cancellations; red outcomes are a subset, not extra calls.\n• Only recorded errors or cancellations count; missing evidence is not success.');
       ContextHelp.attach(this.skills.summary, 'Confirmed custom skill loads only.\nFailure counts require direct skill attribution.');
       this.activity.append(this.tools.node, this.skills.node, this.running, this.background);
@@ -231,7 +251,11 @@ const WatchView = (() => {
         }));
       }
       this.activity.hidden = historical || !value.focal_id;
-      if (!historical) this.drawActivity(value.rows.find(row => row.prompt.event_id === value.focal_id)?.tool);
+      if (!historical) {
+        const row = value.rows.find(row => row.prompt.event_id === value.focal_id);
+        this.drawActivity(row?.tool, !sourceNotice && value.state === 'observed' &&
+          row?.prompt.in_progress && !row.prompt.execution_unverified);
+      }
       this.drawSummary(value.session_summary);
     }
     drawSummary(value) {
@@ -247,7 +271,7 @@ const WatchView = (() => {
       text(this.costStatus, !value?.cost && value?.state === 'unavailable' ? ' (unavailable)' : '');
       ContextHelp.refresh(this.costHelp);
     }
-    drawActivity(tool) {
+    drawActivity(tool, verified) {
       const groups = [...(tool?.counts || [])].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
       const total = groups.reduce((sum, pair) => sum + pair[1], 0);
       const omitted = groups.slice(5).reduce((sum, pair) => sum + pair[1], 0);
@@ -267,12 +291,12 @@ const WatchView = (() => {
       if (unidentified > 0) toolLines.push([[`${unidentified} × unidentified tool/outcome`, 'watch-activity-error']]);
       drawDisclosure(this.tools, toolParts, toolLines, 'No tool calls');
       drawDisclosure(this.skills, summary, skills.map(skillParts), 'No confirmed custom skills');
-      text(this.running, tool?.running_tool ? `Running: ${tool.running_tool} ${display(tool, 'running_ms')}` : '');
-      this.running.hidden = !tool?.running_tool;
+      drawInvocation(this.runningDetail, tool?.running_tool ? `Running: ${tool.running_tool} ${display(tool, 'running_ms')}` : '',
+        verified ? tool?.running_invocation : null);
       const kinds = tool?.background_kinds || [];
       const background = kinds.length === 1 ? kinds[0] : new Set(kinds).size === 1 ? `${kinds.length}× ${kinds[0]}` : `${kinds.length} jobs`;
-      text(this.background, kinds.length ? `Running: ${background} ${display(tool, 'background_ms')}` : '');
-      this.background.hidden = !kinds.length;
+      drawInvocation(this.backgroundDetail, kinds.length ? `Running: ${background} ${display(tool, 'background_ms')}` : '',
+        verified && kinds.length === 1 ? tool?.background_invocation : null);
     }
   }
   class View {
