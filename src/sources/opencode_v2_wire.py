@@ -95,6 +95,24 @@ def project_directory(value: Mapping[str, Any]) -> str | None:
     return None
 
 
+def fetch_active_ids(client: Any) -> set[str] | None:
+    """One interpretation for global and scoped Session.Info observations.
+
+    A validated absent drain is inactive; unavailable compatibility evidence is
+    unknown, not a fabricated empty running set. Genuine transport/auth fails.
+    """
+    try:
+        raw = client.json('/api/session/active')
+        data = raw.get('data') if isinstance(raw, Mapping) else None
+        if isinstance(data, Mapping):
+            return {str(key) for key, status in data.items()
+                if isinstance(status, Mapping) and str(status.get('type', '')).lower() == 'running'}
+    except (SourceUnavailableError, SourceDataError, SourceSchemaError) as error:
+        if not compatibility_failure(error):
+            raise
+    return None
+
+
 def fetch_global_sessions(client: Any) -> tuple[list[tuple[Mapping[str, Any], str]], str, int]:
     """Read every session from the current global cursor-paginated contract."""
     sessions: dict[str, tuple[Mapping[str, Any], str]] = {}
@@ -103,9 +121,9 @@ def fetch_global_sessions(client: Any) -> tuple[list[tuple[Mapping[str, Any], st
     pages = 0
     contract = "unknown"
     while True:
-        # OpenCode cursors are opaque and encode the original query. Current
-        # servers reject combining a continuation cursor with order/options.
-        query: dict[str, Any] = {"cursor": cursor} if cursor else {"limit": 500, "order": "desc"}
+        # The opaque cursor preserves filters/order, NOT the per-request limit.
+        # Omitting limit on continuation silently falls back to 50 rows.
+        query: dict[str, Any] = {"limit": 500, **({"cursor": cursor} if cursor else {"order": "desc"})}
         raw = client.json("/api/session", query=query)
         items, next_cursor, page_contract = parse_page(raw, label="session list")
         contract = "global-" + page_contract

@@ -3,9 +3,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+from contextlib import nullcontext
 from dataclasses import dataclass, fields
 from decimal import Decimal, InvalidOperation
-from typing import Any, Callable, Mapping, Protocol
+from typing import Any, Callable, Mapping, Protocol, Sequence
 
 from src.cache import CacheRepository
 from src.domain import AccountRef, CostDisposition, ModelRef, NormalizedSession, Provenance, SessionSnapshot, TokenUsage
@@ -29,6 +30,21 @@ class CachedAnalysisResult:
     bundle: RootAnalysisBundle
     cache_hit: bool
     snapshot: SessionSnapshot | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class CacheObservation:
+    root_session_id: str
+    provenance: Provenance
+    source_revision: str
+    dependencies: AnalysisDependencies
+    bundle: RootAnalysisBundle | None
+
+    def matches(self, root: NormalizedSession, revision: str, dependencies: AnalysisDependencies) -> bool:
+        return (self.root_session_id == root.session_id and self.provenance == root.provenance
+            and self.source_revision == revision and self.dependencies == dependencies
+            and (self.bundle is None or (self.bundle.root_session_id == root.session_id
+                and self.bundle.source_revision == revision)))
 
 
 def dependency_signature(value: Any) -> str:
@@ -192,8 +208,14 @@ class DerivedAnalysisCache:
         return bundle
 
     def _load(self, provenance: Provenance, root_session_id: str, source_revision: str,
-              dependencies: AnalysisDependencies) -> RootAnalysisBundle | None:
+               dependencies: AnalysisDependencies) -> RootAnalysisBundle | None:
+        if self.metrics is not None:
+            self.metrics.add('cache_repository_reads')
         entry = self.repository.get(_CACHE_NAMESPACE, _source_key(provenance, root_session_id))
+        return self._decode(entry, root_session_id, source_revision, dependencies)
+
+    def _decode(self, entry, root_session_id: str, source_revision: str,
+                dependencies: AnalysisDependencies) -> RootAnalysisBundle | None:
         if entry is None:
             return None
         if entry.source_revision != source_revision or entry.algorithm_version != dependencies.algorithm_version:
@@ -206,10 +228,35 @@ class DerivedAnalysisCache:
         if payload.get("pricing_signature") != dependencies.pricing_signature:
             return None
         try:
-            bundle = _bundle_from_dict(payload)
+            with self.metrics.measure('cache_decode') if self.metrics is not None else nullcontext():
+                bundle = _bundle_from_dict(payload)
         except (KeyError, TypeError, ValueError, InvalidOperation):
             return None
-        return bundle if bundle.cacheable else None
+        return (bundle if bundle.cacheable and bundle.root_session_id == root_session_id
+            and bundle.source_revision == source_revision else None)
+
+    def observe_many(self, requests: Sequence[tuple[NormalizedSession, str]],
+                     dependencies: AnalysisDependencies) -> dict[str, CacheObservation]:
+        """One small decoded cache observation; no retained read transaction."""
+        if len(requests) > 8:
+            raise ValueError('invalid_cache_observation_window')
+        if not requests:
+            return {}
+        if self.metrics is not None:
+            self.metrics.add('cache_reads', len(requests))
+            self.metrics.add('cache_repository_reads')
+            self.metrics.add('cache_bulk_reads')
+        with self.metrics.measure('cache_reads') if self.metrics is not None else nullcontext():
+            keys = [_source_key(root.provenance, root.session_id) for root, _revision in requests]
+            entries = self.repository.get_many(_CACHE_NAMESPACE, keys)
+            observations = {}
+            for (root, revision), key in zip(requests, keys):
+                bundle = self._decode(entries.get(key), root.session_id, revision, dependencies)
+                observations[root.session_id] = CacheObservation(root.session_id, root.provenance,
+                    revision, dependencies, bundle)
+                if self.metrics is not None:
+                    self.metrics.add('cache_hits' if bundle is not None else 'cache_misses')
+        return observations
 
     def store(
         self,
@@ -253,7 +300,7 @@ def analyze_with_cache(
     cache: DerivedAnalysisCache,
     dependencies: AnalysisDependencies,
     analyzer: Callable[[SessionSnapshot], RootAnalysisBundle],
-    *, snapshot: SessionSnapshot | None = None,
+    *, snapshot: SessionSnapshot | None = None, observation: CacheObservation | None = None,
 ) -> CachedAnalysisResult:
     """Reuse stable derived analysis or hydrate/analyze conservatively.
 
@@ -262,7 +309,23 @@ def analyze_with_cache(
     become durable cache hits.
     """
     root_session_id = root_session.session_id
-    revision, cached = cached_analysis(source, root_session, cache, dependencies)
+    revision = source.get_session_tree_revision(root_session_id)
+    if observation is not None and snapshot is not None and (snapshot.root.session_id != root_session_id
+            or snapshot.root.provenance != root_session.provenance):
+        snapshot = None  # Reject a staged value from another root/source entirely.
+    qualified = (observation is not None and observation.matches(root_session, revision, dependencies)
+        and (snapshot is None or snapshot.source_revision == revision)
+        and (observation.bundle is not None or (snapshot is not None and snapshot.complete)))
+    metrics = getattr(cache, 'metrics', None)
+    if qualified:
+        cached = observation.bundle
+        if metrics is not None:
+            metrics.add('cache_observation_hit_reuse' if cached is not None else 'cache_observation_miss_reuse')
+    else:
+        if observation is not None and metrics is not None:
+            metrics.add('cache_observation_invalidations')
+        cached = cache.load(provenance=root_session.provenance, root_session_id=root_session_id,
+            source_revision=revision, dependencies=dependencies)
     if cached is not None and (snapshot is None or snapshot.source_revision == revision):
         return CachedAnalysisResult(cached, True, snapshot)
 

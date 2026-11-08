@@ -103,7 +103,7 @@ async function main(){
       await evaluate(`window.__content=output.firstChild;window.__focus=output.querySelector('button,a');__focus?.focus();acquire(current,true);true`);
        await until(`current.loading && current.active`);
        await noCancel();
-      assert.equal(await evaluate(`output.firstChild===__content && !output.querySelector('progress') && (!__focus || document.activeElement===__focus) && document.getElementById('report-updating').textContent==='Updating…'`),true);
+      assert.equal(await evaluate(`output.firstChild===__content && !output.querySelector('progress') && (!__focus || document.activeElement===__focus) && document.getElementById('report-updating').textContent.includes('Updating…') && document.getElementById('report-updating').textContent.includes('Historical snapshot as of')`),true);
       await fixture('step');await fixture('complete');await until(`!current.loading`);
        facts.push(section+': quiet refresh retains data/focus without central loader');
        await fixture('failed');await evaluate(`acquire(current,true);true`);await until(`current.failed && !current.loading`);

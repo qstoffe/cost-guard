@@ -13,7 +13,7 @@ from src.reports import ReportKind, ReportRequest, ReportService
 from src.reports.service import ReportRequestError, SessionNotFoundError, SessionCatalogChangedError
 from src.pricing.base import PricingUnavailableError
 from src.runtime_errors import recoverable, recovered
-from src.sources.errors import SourceError
+from src.sources.errors import FailureCode, SourceError
 from src.domain.progress import WorkProgress
 from src.analysis.cache import dependency_signature
 
@@ -136,14 +136,16 @@ class ReportApplication:
                                 error=ReportError('history_continue'))
         except (StatsCheckpointError, HistoryCheckpointError) as exc:
             return ReportResult(self._instance_id, sequence, now, scope, unknown,
-                                error=ReportError(str(exc)))
+                                error=ReportError(str(exc), str(exc) in {
+                                    'history_revision_churn', 'ai_stats_revision_churn', 'ai_stats_checkpoint_busy'}))
         except SourceError as exc:
             permission = exc.exception_type == 'PermissionError'
             return ReportResult(self._instance_id, sequence, now, scope,
                                 record(status="error", observed_at_ms=now, revisions=(),
                                        atomicity="per_root_snapshot"),
                                 error=ReportError('source_permission_denied' if permission else exc.code.value,
-                                                  exc.readiness_retryable and not permission))
+                                                  (exc.readiness_retryable or exc.code == FailureCode.CONCURRENT)
+                                                  and not permission))
         except PricingUnavailableError:
             return ReportResult(self._instance_id, sequence, now, scope, unknown,
                                 error=ReportError("pricing_unavailable", True))

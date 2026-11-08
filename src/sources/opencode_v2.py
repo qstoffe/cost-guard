@@ -51,9 +51,11 @@ from .opencode_v2_events import normalize_event
 from .opencode_v2_interruptions import LiveInterruptionReasons
 from .opencode_v2_catalog import V2CatalogIndex
 from .opencode_v2_snapshot import load_snapshots
+from .opencode_v2_tree import CardTreeBrackets
 from .opencode_v2_transport import V2Endpoint, V2HttpClient, normalize_local_service_url
 from .opencode_v2_wire import (
     fetch_global_sessions,
+    fetch_active_ids,
     fetch_active_context,
     fetch_messages,
     fetch_project_sessions,
@@ -159,6 +161,8 @@ class OpenCodeV2Source:
         self._http: V2HttpClient | None = None
         self._instance_cache: tuple[str, str] | None = None
         self._interruptions = LiveInterruptionReasons()
+        self._evidence_epoch = None
+        self._card_trees: CardTreeBrackets | None = None
         self._diagnostics: dict[str, Any] = {
             "session_contract": None, "session_pages": 0, "raw_sessions": 0,
             "message_contracts": {}, "message_shapes": {}, "message_items": {}, "message_pages": {},
@@ -213,9 +217,79 @@ class OpenCodeV2Source:
             marker = None
         if self._endpoint is None or marker != self._endpoint_marker:
             endpoint = self._read_endpoint()
+            epoch = endpoint, marker
+            if epoch != self._evidence_epoch:
+                self._interruptions = LiveInterruptionReasons()
+                self._catalog_cache = None
+                self._catalog_index = None
+                self._evidence_epoch = epoch
             self._endpoint_marker = marker
-            return endpoint
         return self._endpoint
+
+    def new_card_reader(self) -> OpenCodeV2Source:
+        """Construct without I/O; retain selection/timeout, not mutable callbacks."""
+        return OpenCodeV2Source(candidate=self._candidate, timeout_seconds=self._timeout_seconds)
+
+    def begin_card_read(self, origin: OpenCodeV2Source) -> None:
+        """Fresh job state on an exclusively borrowed reader, before validation."""
+        self.metrics = AcquisitionMetrics(generation='v2')
+        self.metrics.add('card_reader_reuses', int(self._http is not None))
+        self._skill_origin_cache.clear()
+        if self._card_trees is None:
+            self._card_trees = CardTreeBrackets(self, reuse_seconds=_CATALOG_REUSE_SECONDS)
+        self._card_trees.reset_job()
+        for key, value in self._diagnostics.items():
+            if isinstance(value, dict):
+                if key == 'transport':
+                    # The existing HTTP client retains this exact numeric dict.
+                    for counter in value:
+                        value[counter] = 0
+                else:
+                    value.clear()
+            elif isinstance(value, int):
+                self._diagnostics[key] = 0
+        self.inherit_live_evidence(origin, reuse_catalog=True)
+
+    def inherit_live_evidence(self, origin: OpenCodeV2Source, *, reuse_catalog=False) -> bool:
+        """Copy actor evidence only between isolated readers of one service epoch.
+
+        The path-based source identity alone survives a restart. Compare both
+        registrations' observed epochs as well; never share a mutable registry.
+        """
+        if not isinstance(origin, OpenCodeV2Source) or origin is self:
+            return False
+        with origin._connection_lock:
+            origin._current_endpoint()
+            epoch = origin.observation_epoch
+            evidence = origin._interruptions.copy()
+        with self._connection_lock:
+            self._current_endpoint()
+            same = epoch is not None and self.observation_epoch == epoch
+            keep = reuse_catalog and same and self._interruptions.equivalent(evidence)
+            self._interruptions = evidence if same else LiveInterruptionReasons()
+            if not keep:
+                self._catalog_cache = None
+                self._catalog_index = None
+                self._catalog_listed_at = 0.0
+            return same
+
+    def refresh_observation_epoch(self) -> None:
+        """Refresh local registration only, not catalogs, health or transport."""
+        with self._connection_lock:
+            self._current_endpoint()
+
+    @property
+    def observation_epoch(self) -> str | None:
+        """Nonsecret observed registration identity; never serialize endpoint/auth."""
+        with self._connection_lock:
+            if self._evidence_epoch is None or self._endpoint is None:
+                return None
+            endpoint, marker = self._evidence_epoch
+            if marker is None or marker != self._endpoint_marker:
+                return None
+            values = (endpoint.url, endpoint.version, endpoint.pid, self.source_instance, marker)
+            payload = json.dumps(values, separators=(',', ':')).encode('utf-8')
+            return 'registration-v1:' + hashlib.sha256(payload).hexdigest()
 
     def _client(self) -> V2HttpClient:
         """One client (and keep-alive connection per thread) per registered endpoint."""
@@ -302,6 +376,8 @@ class OpenCodeV2Source:
         """Resolve a session's registered location and read its skill origins."""
         if not isinstance(session_id, str) or not session_id:
             return {}
+        if self._card_trees is not None and self._card_trees.supported:
+            return self.skill_origins(self._card_trees.directory(session_id))
         try:
             sessions = self._list_native_sessions(refresh=False)
         except SourceError:
@@ -359,19 +435,7 @@ class OpenCodeV2Source:
                     if legacy_values:
                         raw_values, contract, pages = legacy_values, legacy_contract, legacy_pages
 
-        active_ids: set[str] | None = None
-        try:
-            active_raw = client.json("/api/session/active")
-            active_data = active_raw.get("data") if isinstance(active_raw, Mapping) else None
-            if isinstance(active_data, Mapping):
-                active_ids = {
-                    str(session_id) for session_id, status in active_data.items()
-                    if isinstance(status, Mapping) and str(status.get("type", "")).lower() == "running"
-                }
-        except (SourceUnavailableError, SourceDataError, SourceSchemaError) as exc:
-            if not compatibility_failure(exc):
-                raise
-            active_ids = None
+        active_ids = fetch_active_ids(client)
         values = [
             _NativeSession(
                 data, directory,
@@ -577,16 +641,33 @@ class OpenCodeV2Source:
         if (allow_reuse and cached is not None and time.monotonic() - listed_at <= _CATALOG_REUSE_SECONDS
                 and any(str(item.data["id"]) == session_id for item in cached)):
             self._diagnostics["snapshot_catalog_reuses"] += 1
+            self.metrics.add('snapshot_catalog_reuses')
             return list(cached), True
         return self._list_native_sessions(refresh=True), False
 
     @observed("snapshot")
     def load_session_snapshot(self, session_id: str) -> SessionSnapshot:
-        return load_snapshots(self, (session_id,))[session_id]
+        with self._connection_lock:
+            self._client()
+            epoch = self._evidence_epoch
+        snapshot = load_snapshots(self, (session_id,),
+            brackets=self._card_trees.bracket if self._card_trees is not None else None)[session_id]
+        with self._connection_lock:
+            self._current_endpoint()
+            if epoch != self._evidence_epoch:
+                raise SourceConcurrentChangeError('Service epoch changed during snapshot acquisition', phase='snapshot')
+        return snapshot
 
     @observed("snapshot")
     def load_session_snapshots(self, session_ids: Sequence[str]) -> Mapping[str, SessionSnapshot]:
         return load_snapshots(self, session_ids)
+
+    @observed('snapshot')
+    def load_session_snapshots_for_sampling(self, session_ids: Sequence[str]) -> Mapping[str, SessionSnapshot]:
+        """Strict single-reader lookahead; identify a failing member, return no partials."""
+        if not 1 <= len(session_ids) <= 8:
+            raise ValueError('invalid_sampling_window')
+        return load_snapshots(self, session_ids, identify_members=True)
 
     @observed("snapshot")
     def load_session_snapshots_observed(self, session_ids: Sequence[str], progress) -> Mapping[str, SessionSnapshot]:
@@ -601,6 +682,24 @@ class OpenCodeV2Source:
         Callers must expose missing coverage; ordinary snapshots remain strict.
         """
         return load_snapshots(self, session_ids, workers=4, progress=progress, available_only=True)
+
+    @observed('snapshot')
+    def load_card_snapshots(self, session_ids: Sequence[str], *, progress=None, on_root=None):
+        """Watch-only small batches: typed member failures, no cross-epoch proof."""
+        if not 1 <= len(session_ids) <= 3:
+            raise ValueError('Card batches require one to three roots')
+        with self._connection_lock:
+            self._client()
+            epoch = self._evidence_epoch
+        failures = {}
+        snapshots = load_snapshots(self, session_ids, workers=len(session_ids), progress=progress,
+            available_only=True, failures=failures, on_root=on_root,
+            brackets=self._card_trees.bracket if self._card_trees is not None else None)
+        with self._connection_lock:
+            self._current_endpoint()
+            if epoch != self._evidence_epoch:
+                raise SourceConcurrentChangeError('Service epoch changed during card acquisition', phase='snapshot')
+        return snapshots, failures
 
     @staticmethod
     def _event_session_id(value: Mapping[str, Any]) -> str | None:
@@ -642,11 +741,13 @@ class OpenCodeV2Source:
         if stop_event is not None and stop_event.is_set():
             return
         try:
-            for value in self._client().sse("/api/event", stop_event=stop_event):
+            client = self._client()
+            evidence = self._interruptions
+            for value in client.sse("/api/event", stop_event=stop_event):
                 self._catalog_cache = None
                 self._catalog_index = None
                 payload = value.get("payload") if isinstance(value.get("payload"), Mapping) else value
-                self._interruptions.observe(payload)
+                evidence.observe(payload)
                 event_type = str(payload.get("type", "unknown")) if isinstance(payload, Mapping) else "unknown"
                 yield SourceChange(
                     source_id=self.source_id,

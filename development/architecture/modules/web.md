@@ -12,12 +12,19 @@ read-only real-source evidence and limits are in the dispatcher journal.
 ## Responsibility and ownership
 
 The host owns finite demand, priorities, warm results and staggered refresh:
-[dispatcher boundaries](data-dispatch.md), [measurements and unfinished proof](../../journal/web/data-dispatch.md).
+[dispatcher boundaries](data-dispatch.md), [original measurements](../../journal/web/data-dispatch.md)
+and [foreground recovery / scoped acceptance](../../journal/web/foreground-recovery.md).
 `assets/data-demand.js` sends bounded authenticated route/visibility leases;
 `app.js` reads shared publications, retaining unchanged quiet-refresh DOM.
-`report-loading.js` owns the common determinate loader and bounded source/slot waits.
+`report-loading.js` owns the common determinate loader and cancellable, backoff-aware source/slot waits.
+Its 500 ms job-status wait (never backoff) may end early once per job when the existing Live
+`progress` event reports that the visible current view's active job is terminal; the ordinary
+authenticated `/api/jobs/<id>` fetch still decides, and polling remains the fallback.
+One last-woken identity bounds bookkeeping through unlimited typed recovery; the
+visible exact-current-job gate excludes retired/foreign notifications. Recovery
+backoff is never shortened by a hint.
 AI Stats and safely checkpointed managed Token Mix/Comparisons can span finite
-children; every actual child retains its watchdog and exact-parent cleanup.
+children; every actual child retains exact-parent cleanup, not an elapsed-work deadline.
 The original `source_startup.py` owns typed readiness/wake, not tabs or children.
 Terminal failures remain actionable; no user Cancel is reintroduced. CLI and the
 protected Live/account owners retain their canonical semantics.
@@ -31,22 +38,48 @@ current reference; older per-cell/native-tooltip descriptions below are historic
 
 `src/web/http.py` owns bounded loopback HTTP, fixed assets and routing; `src/web/security.py` owns one-use bootstrap/HttpOnly sessions/CSRF; `src/web/jobs.py` owns finite admission, process isolation, progress, cancellation and retention; at most 64 progress messages drain per host turn to prevent scan backpressure without starving control/Live. `src/web/composition.py` creates fresh canonical ReportApplication integrations.
 
-Only validated terminal IPC grants up to one second for natural child teardown,
-including a completed Stats slice whose logical job requeues. Cancellation,
-watchdog, malformed/abandoned IPC and shutdown force termination promptly, retaining
-the existing one-second terminate and kill joins. Exit must be confirmed before
-closing handles or releasing the active slot. An unconfirmed exit latches
-`report_worker_stop_timeout`, blocks all result reuse/admission/polling and retains
-the exact owner for bounded cleanup retries. HTTP cancellation propagates this fault
-to the host rather than hiding it in a request future. Serving cleanup still closes
-Live/events/HTTP; main-owner close retries the retained child, without clearing the
-host failure or double-counting worker time. This is a safety repair, not proof of
-the rare Windows shutdown delay's cause; see the report-loading journal.
+Only validated terminal IPC (a result/error, a completed Stats slice whose logical
+job requeues, or a history continuation with its received durable checkpoint)
+retires its child without blocking: the outcome publishes and the analysis slot is
+released immediately, while the exact process/receiver stay owned in `_retiring`.
+Ordinary host ticks reap it nonblockingly with one second of natural grace, then
+terminate and kill on fixed one-second deadlines that never restart per tick.
+Retirees remain resident children: parked plus retiring stay within `MAX_PENDING`,
+and while more than one child is retiring only already-parked work may resume, never
+a fresh spawn. Continuations still use a fresh child. Managed children request a
+pre-acquisition admission grant (`Quantum.admit`) after composition and before
+`execute`; work that is priority 0-1 at spawn is granted up front. A background
+(priority >= 2) child that has not yet received its grant may be terminated (exit
+confirmed, no natural grace) and requeued only while runnable priority-0 work waits
+and can actually start. The logical job keeps its identity, observation time, goals
+and durable progress; it is interrupted at most once until a history checkpoint or
+advancing Stats slice proves new durable progress. Admitted, parked, requested and
+promoted work is never interrupted, and there is no navigation timer, age abort or
+startup deadline. Grants carry the pacing mode: background (priority >= 2) work
+receives `run` and still parks after every 0.1-second quantum (with the existing
+duty-cycle backoff and priority-3 suspension) even when nothing else is runnable;
+requested/foreground (priority 0-1) work receives `free`, keeps its cooperative
+checkpoints but parks only after the host sends one `yield` request because
+equal/higher-priority work can run or the job was demoted. At most one request is
+outstanding per grant; an unread request is harmless after terminal IPC, and each
+resume recomputes the mode from the current priority, so promotion takes effect at
+the next quantum. Cancellation, malformed or
+abandoned IPC and shutdown force termination promptly with the existing one-second
+terminate and kill joins. Handles close only after confirmed exit. An unconfirmed
+exit, including a retiree's, latches `report_worker_stop_timeout` even after its
+valid report was displayed, blocks all result reuse/admission/polling and retains
+the exact owner for bounded cleanup retries; `close()` attempts every active, parked
+and retiring owner and raises the first retained failure. HTTP cancellation
+propagates this fault to the host rather than hiding it in a request future. Serving
+cleanup still closes Live/events/HTTP. This is a safety mechanism, not proof of the
+rare Windows shutdown delay's cause; see the report-loading journal and
+[foreground recovery](../../journal/web/foreground-recovery.md) for the FR000624
+publish-before-exit decision.
 
 Models' explicit `POST /api/models/refresh` accepts only authenticated/CSRF-protected
 `{}` and submits the Web-only `ModelsPriceRefresh` request marker. Existing job equality
 coalesces concurrent actions separately from normal TTL captures; all finite-process,
-result, deadline and parent-loss bounds remain. Composition calls the concrete provider's
+result and parent-loss bounds remain. Composition calls the concrete provider's
 strict `refresh_catalog()` and pins that validated catalog on a fresh ReportService
 before canonical acquisition/projection. Unlike legacy fail-soft `get_catalog(force=True)`,
 strict refresh raises on upstream failure, never labeling cached prices/date as fresh.
@@ -75,23 +108,25 @@ selected 30-day scope through shared bounded slices; period changes immediately
 reprioritize missing work, while valid compact evidence is shared across scopes.
 Unknown old roots cannot be excluded by metadata, so earlier Today/7-day completion
 is conditional on validated coverage. `cached-reports.js`
-and `app.js` apply the host-owned one-hour validity gate, including Models;
-browser publication polling never schedules heavyweight due times. Proven invalid
-or over-hour data is withheld with bounded progress/recovery.
+and `app.js` distinguish qualified historical display from freshness, including Models;
+browser publication polling never schedules heavyweight due times. Positive age alone
+never withholds completed data. Original as-of and actual AI Stats row intervals remain
+visible; proven invalid observations/dependencies still withhold data. See the
+[FR000624 candidate and decision](../../journal/web/foreground-recovery.md).
 AI Stats logical work is host-owned, independent of polling interest. Its one job
 retains at most five validated requested scopes: the latest selection prioritizes
 the next slice, then earlier missing goals resume from the same observation/scan.
 Coherent narrow results can remain usable while wider goals finish. Internal cancel,
-shutdown and finite-child/no-progress/resource bounds remain. Other running
+shutdown and finite-child protocol/resource bounds remain. Other running
 finite reports keep their original lifecycle. Whole-result
 validation and synchronous retained-node updates preserve focus/scroll. Both
 historical kinds coalesce without relabeling observations. AI Stats shares one active
 job across all scopes/tabs; latest explicit selection owns the next finite slice.
 `stats_jobs.py` pins observation/scan identity, accepts coherent milestones, bounds
-no-progress retries and shrinks timed-out batches. `jobs.py` retains finite active-time
-watchdogs, cooperative private-stack parking, parent-loss termination, fair requeue
+nonadvancing coverage with capped backoff, not an age/attempt failure. `jobs.py` retains
+cooperative private-stack parking, parent-loss termination, fair requeue
 and bounded IPC. Managed history continuation requires strict durable receipts and
-bounded steps, never a timeout waiver.
+bounded per-slice work without total step/elapsed-work exhaustion.
 Compact report evidence belongs to reports, not Live. Scoped update:
 FR000614 delta on `d381d399f401c24302fa559eb62ec68e33aba4e7`; other
 contracts retain their original checks. [AI Stats findings](../../journal/web/ai-stats.md)
@@ -312,7 +347,8 @@ Neither app startup without a frame nor independent history/accounts/daily loadi
 creates an elapsed-time global Watch warning. Only observed prompt membership on a
 healthy running source/connection establishes “No running prompts”; partial, missing
 and retained observations do not. Initial placeholders never claim observed empty/zero.
-Cached reports' final evidence and one-hour stale/withheld policy remain unchanged.
+Cached reports retain their original as-of evidence; FR000624 separates deliverability
+from refresh cadence rather than withholding completed historical data by age alone.
 Source acquisition timings and lifecycle are unchanged. Historical Windows150%
 standard-frame measurements do not prove fresh physical Remember-last behavior;
 the Mini journal records hidden API proof and the scoped physical-verification exception.
@@ -410,7 +446,7 @@ Overlapping clicks coalesce; deliberate later launches restart. Private lifetime
 
 Private /control/status, /control/stop and /control/open require a separate secret header, exact Host, empty body and no Origin/Cookie. No control secret reaches browser storage or normal logs. Open issues a fresh one-use fragment without invalidating same-instance browser sessions; old-instance cookies/control fail against replacements. Browser-open failure is distinct from server failure and retryable via native Open.
 
-Twelve HTTP slots admit four streams; ordinary requests have five-second absolute deadlines. Healthy authenticated streams have no rotation timer; two-second writes, ten-second heartbeats, per-turn authorization and three-second native reconnect remain. HTTP health cannot mask an interrupted stream. Connected status is compact; actionable non-sticky notices retain expandable observation details. [FR 000532 evidence](../governance/verification/web-live-stability.md) records real-source soak and fault checks. Finite work: four outstanding jobs, one process, sixteen results, 8 MiB/result, 120 seconds per child. Only AI Stats resumes across finite children without a total logical deadline; bounded stalls/checkpoint faults/revision churn remain terminal. Detail admission: sixteen observed trees, thirty-two handles; abandoned handles expire after five minutes, never rows/history. Stop publishes terminal state and joins owned work; retained `/api/live` stays readable while stopping. DTOs retain decimal strings/null/provisional values, not raw errors. No same-user-malware boundary.
+Twelve HTTP slots admit four streams; ordinary requests have five-second absolute deadlines. Healthy authenticated streams have no rotation timer; two-second writes, ten-second heartbeats, per-turn authorization and three-second native reconnect remain. HTTP health cannot mask an interrupted stream. Connected status is compact; actionable non-sticky notices retain expandable observation details. [FR 000532 evidence](../governance/verification/web-live-stability.md) records real-source soak and fault checks. Finite work retains four outstanding jobs, one executing process, sixteen results and 8 MiB/result, not an elapsed-computation cutoff. AI Stats and managed Token Mix/Comparisons preserve durable progress across owned children. Nonadvancing coverage uses capped backoff; actual protocol/source faults remain distinct. Detail admission: sixteen observed trees, thirty-two handles; abandoned handles expire after five minutes, never rows/history. Stop publishes terminal state and joins owned work; retained `/api/live` stays readable while stopping. DTOs retain decimal strings/null/provisional values, not raw errors. No same-user-malware boundary.
 
 Guard membership/mtime_ns/size covers shipped Python/assets/Beta launchers/root entries/manifests, excluding development/docs/user config/cache/log/bytecode/environment. No links are followed; stat errors retry the original baseline. Proven change triggers terminal source_changed/shutdown without browser acknowledgement. Identical metadata can be missed; no atomic-update/file-lock guarantee. Changed code needs manual launch.
 

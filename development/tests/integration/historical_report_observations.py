@@ -32,7 +32,8 @@ def peak_memory():
     return dict(working_set_bytes=counters.PeakWorkingSetSize, commit_bytes=counters.PeakPagefileUsage)
 
 
-def measured_report(sender, request):
+def measured_report(sender, request, *, sample_window=None):
+    from src.reports.acquisition import RootAcquisition
     from src.reports.service import ReportService
     from src.sources.opencode_v2 import OpenCodeV2Source
     from src.web.jobs import ProgressRelay, run_report
@@ -79,6 +80,10 @@ def measured_report(sender, request):
         return operation
 
     with ExitStack() as stack:
+        if sample_window is not None:
+            if sample_window not in (1, 2, 4, 8):
+                raise ValueError('invalid_probe_sample_window')
+            stack.enter_context(patch.object(RootAcquisition, 'sample_window_size', sample_window))
         stack.enter_context(patch.object(ReportService, '__init__', initialize))
         stack.enter_context(patch.object(ProgressRelay, 'observe', observe))
         for owner, methods in ((OpenCodeV2Source, ('_list_native_sessions', '_load_messages')),

@@ -105,13 +105,34 @@ function setup() {
   contextItem.live_context = null; controller.update(input);
    assert.equal(view.body.children[0].children[3].textContent, 'N/A');
   contextItem.live_context = originalContext; controller.update(input);
+  const guidanceWarning=input.view.active_cards[0].session_summary.context.warning;
+  const originalWarning=structuredClone(guidanceWarning);
+  for(const [state,wording] of [['pending','Price comparison pending'],['unavailable','Price comparison unavailable; retrying'],['ready','2.4x more expensive']]) {
+    guidanceWarning.guidance_state=state;
+    guidanceWarning.multiplier=state==='ready'?'2.4':null;
+    guidanceWarning.display.warning_cost='('+wording+')';controller.update(input);
+    assert.equal(view.body.children[0].children[3].dataset.guidance,state);
+    assert.ok(helpText(view.body.children[0].children[3]).includes(wording));
+    assert.equal(view.body.children[0].children[3].textContent,originalContext.display.watch_next_context_tokens);
+  }
+  Object.assign(guidanceWarning,originalWarning);controller.update(input);
   assert.equal(view.daily.textContent, 'CCost Today 34 · 37 prompts', 'prior activity is not the two prompt rows or account-period costs');
   assert.equal(view.dailyNote.textContent,'');
   assert.notEqual(view.daily.parentNode, view.summary, 'daily metric is outside the navigation target');
   view.daily.fire('click'); view.daily.fire('keydown'); assert.equal(test.returned(),0);
    assert.equal(api.requests[0].height,500); assert.equal(api.requests[0].width,628);
   assert.equal(api.requests[0].preferInitialWindowPlacement,true);
-  require('../fixtures/mini_sessions.cjs')(vm,context,controller,view,input,helpText);
+   require('../fixtures/mini_sessions.cjs')(vm,context,controller,view,input,helpText);
+   const demandCalls = [];
+   controller.setDemandFactory(win => {
+     assert.equal(win, child, 'Mini demand belongs to the actual PiP document');
+     return {update: () => demandCalls.push(!controller.view.earlier.hidden), close: () => demandCalls.push('closed')};
+   });
+   const expanded = !view.earlier.hidden;
+   view.earlierToggle.fire('click'); assert.equal(demandCalls.at(-1), !expanded);
+   view.earlierToggle.fire('click'); assert.equal(demandCalls.at(-1), expanded);
+   controller.setDemandFactory(() => ({update() {}, close() {}}));
+   assert.equal(demandCalls.at(-1), 'closed');
   require('../fixtures/mini_disclosure.cjs')(view,child,controller,input);
   context.fullParent = new Node('div'); context.fullState = {connection:'Live connected.'};
   const daily = input.view.daily_usage;

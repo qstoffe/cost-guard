@@ -24,6 +24,35 @@ Immutable projections cover dashboard/catalog, lists and detail/date. Global lat
 
 `reports/sampling.py` owns both eligibility/cutoff rules; `history.py` owns explicit root/range/limit scopes and incremental Watch-day/rolling-window acquisition. `acquisition.py` coordinates source batches/exact cache proofs; `ReportService` dispatches modes and account/availability overlap. `prompt_rows.py`/`prompts.py` own shared timeline/epoch projection, range/order and totals. No second analyzer or worker.
 
+The foreground-recovery candidate prepares one bounded NORMAL/ALL_MODELS
+snapshot/cache-observation window of two roots on capable sources. The initial
+two-root trial was rejected; canonical bulk cache observations subsequently improved
+controlled cold and retained-cache/fresh-host latency, including sparse stale roots,
+and the scoped default decision was reconsidered. See the in-progress journal;
+candidate selection is not universal performance or whole-FR acceptance.
+Sampling still consumes roots one at a time
+with both strict cutoffs and ties. Staged hits are not report-owned analysis/provenance;
+consumption rechecks provenance, analysis dependencies and available source revision
+before reusing a decoded hit. Unused snapshots/hits are released.
+The follow-up experiment uses canonical `analysis/cache.py::CacheObservation` and
+one bounded bulk lookup on capable caches. An observed miss skips another lookup
+only with a matching authoritative staged snapshot; otherwise ordinary lookup can
+use a concurrently populated cache. Scalar/bulk decoded identity validation is shared.
+With a two-root window, at most one tail root may prove unnecessary; actual speculative source reads are
+counted separately. Strict member-local tail failure falls back once to ordinary
+required-root reads, never partial publication or suppressed source-wide failure.
+Account periods and Watch guidance keep their own scopes/readers. Size-one is the
+experiment control; larger comparators are not production-default approval.
+
+The in-progress foreground-recovery candidate adds `context_sample.py` for bounded
+canonical comparison/token sample reduction, and `context_guidance.py` for detached
+dependency identity and pure numeric-guidance enrichment. Compact context price
+bases retain canonical model/token-volume inputs, not analyses, for coherent repricing.
+Only the injected Web Watch owner defers/coalesces sampling; CLI/finite report paths
+stay synchronous. Guidance is never global Earlier coverage. See
+`test_context_sample.py`, `test_watch_guidance.py` and the
+[active, incomplete experiment ledger](../../journal/web/foreground-recovery.md).
+
 `prompt_rows.py` owns per-row Token Mix coverage for completed/running prompts and compactions: every attributed entry must know all I/C/W/O fields and pooled volume must be positive. Reasoning remains folded into Output; established integer half-up/Output-residual rounding is unchanged. Missing counters are normalization placeholders, never a complete denominator or an implicitly partial-known share. `watch_capture.py` consumes this projection without a Watch-only override. CLI/Web presentation retains `N/A` for unsupported completed shares and `running` for active ones. `test_watch_token_mix.py` covers same-source coverage/rounding, child calls, correction/retention and display/SSE parity; `test_prompt_projection.py` pins compaction coverage. Accounting, aggregate mix and acquisition are unchanged.
 
 `prompts.py` marks session-table Total mix unknown for incomplete contributing prompt/compaction coverage, rather than silently dropping the now-unknown completed rows. Completed incoming/extra CCost diagnostics remain independent of mix coverage. Dashboard/historical aggregate Token Mix scopes are unaffected.
@@ -94,7 +123,10 @@ tree revision, analysis dependencies and reference catalog. No prompt text or ra
 provider payload is cached. Unstable/active evidence is not persisted. Current root
 membership removes deleted usage; availability changes regroup without repricing.
 Changed roots use bounded 64-root observed batches; SQLite bulk get/put avoids one
-connection per root. The optional cache is disposable, not a second history source.
+connection per root. Managed partial-history chunks likewise observe the derived
+analysis cache in existing ≤8-root `observe_many` windows; per-root analysis rechecks
+revision/provenance/dependencies and falls back to its scalar read on any mismatch.
+The optional cache is disposable, not a second history source.
 Exact integer strings accompany existing numeric DTO fields; Web display tokens
 split shares/costs and replace only Web partial prefixes, preserving CLI semantics.
 

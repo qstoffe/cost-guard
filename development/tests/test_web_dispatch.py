@@ -4,6 +4,8 @@ import unittest
 import tempfile
 import subprocess
 import sys
+import shutil
+from pathlib import Path
 from threading import Timer
 from types import SimpleNamespace
 from dataclasses import replace
@@ -44,6 +46,12 @@ class RecordingJobs:
 
 
 class DispatcherTests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which('node'), 'node unavailable')
+    def test_full_and_mini_lease_document_visibility_and_closed_callbacks(self):
+        result = subprocess.run([shutil.which('node'), 'development/tests/integration/history_demand.cjs'],
+            cwd=Path(__file__).resolve().parents[2], capture_output=True, text=True, timeout=10)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+
     def setUp(self):
         self.now = 1000
         self.jobs = RecordingJobs()
@@ -79,6 +87,38 @@ class DispatcherTests(unittest.TestCase):
         self.assertEqual({}, self.dispatch.tabs)
         self.assertEqual('queued', self.jobs.values[key]['status'])
 
+    def test_visible_earlier_history_demand_does_not_demote_hidden_requested_reports(self):
+        self.dispatch.interest('models', 'models', True, self.models)
+        self.dispatch.tick()
+        key = self.dispatch.entries[self.models]['job']
+        self.dispatch.interest('mini', 'watch', True, history=True)
+        self.dispatch.tick()
+        self.assertEqual(0, self.jobs.priorities[key])
+        self.dispatch.interest('models', 'watch', False)
+        self.dispatch.tick()
+        self.assertEqual(1, self.jobs.priorities[key], 'visible Mini Earlier leaves the hidden request at 1')
+        self.dispatch.interest('full', 'watch', True, history=True)
+        self.dispatch.tick()
+        self.assertEqual(1, self.jobs.priorities[key])
+        self.dispatch.tick(ready=False)
+        self.assertEqual(3, self.jobs.priorities[key], 'existing source-outage suspension remains separate')
+        self.assertEqual('queued', self.jobs.values[key]['status'])
+
+    def test_interest_history_is_optional_strict_and_watch_only(self):
+        from src.web.dispatch_http import handle
+        replies = []
+        handler = SimpleNamespace(path='/api/interest', server=SimpleNamespace(lifecycle=SimpleNamespace(
+            dispatcher=self.dispatch)), reply=lambda status, value: replies.append((status, value)))
+        original = dict(tab='a' * 32, section='watch', visible=True, request=None)
+        for body in (original, dict(original, history=True), dict(original, history=False)):
+            handle(handler, body)
+            self.assertEqual(200, replies[-1][0])
+        for body in (dict(original, history=1), dict(original, history=None),
+                dict(original, history=True, section='models', request={'kind':'normal'}),
+                dict(original, history=False, section='settings'), dict(original, history=True, capacity=4)):
+            handle(handler, body)
+            self.assertEqual(400, replies[-1][0])
+
     def test_two_tabs_coalesce_and_cached_observation_is_not_renewed_on_failure(self):
         self.dispatch.interest('one', 'models', True, self.models)
         self.dispatch.interest('two', 'models', True, self.models)
@@ -103,11 +143,33 @@ class DispatcherTests(unittest.TestCase):
         self.assertEqual('cancelled', self.jobs.values['0']['status'])
         self.assertFalse(any(entry['result'] for entry in self.dispatch.entries.values()))
 
+    def test_repeated_transient_faults_back_off_without_a_three_attempt_terminal_cutoff(self):
+        for failure in range(10):
+            key = self.dispatch.lookup(self.models)['id']
+            self.jobs.values[key].update(status='failed', result=dict(
+                error=dict(code='concurrent_source_change', retryable=True)))
+            self.dispatch.tick()
+            lookup = self.dispatch.lookup(self.models)
+            self.assertFalse(lookup['terminal'])
+            self.assertIsNone(lookup['id'])
+            before = len(self.jobs.values)
+            self.dispatch.tick()
+            self.assertEqual(before, len(self.jobs.values), 'backoff never creates a tight retry loop')
+            self.now = self.dispatch.entries[self.models]['due']
+
+        key = self.dispatch.lookup(self.models)['id']
+        self.jobs.values[key].update(status='complete', result=result(int(self.now * 1000)))
+        self.dispatch.tick()
+
+        self.assertFalse(self.dispatch.lookup(self.models)['terminal'])
+        self.assertIsNotNone(self.dispatch.lookup(self.models)['result'])
+        self.assertEqual(0, self.dispatch.entries[self.models]['failures'])
+
     def test_age_boundary_and_qualified_sample_cadence(self):
         for kind in (ReportKind.NORMAL, ReportKind.TOKEN_MIX, ReportKind.AI_STATS, ReportKind.COMPARISONS):
             value = result(1_000_000)
             value['scope'] = dict(kind=kind.value, timezone_id='UTC', local_day_start_ms=0)
-            for minutes, expected in [(0, True), (15, True), (59, True), (60, True), (61, False)]:
+            for minutes, expected in [(0, True), (15, True), (59, True), (60, True), (61, True), (2880, True)]:
                 with self.subTest(kind=kind, minutes=minutes):
                     self.assertEqual(expected, usable(value, 1_000_000 + minutes * 60_000))
         self.assertFalse(usable(result(1_000_001), 1_000_000))
@@ -186,7 +248,7 @@ class DispatcherTests(unittest.TestCase):
         dispatch.tick(identity='verified')
         self.assertEqual('verified', self.jobs.values['0']['request'].source_identity)
 
-    def test_first_observation_wait_is_typed_bounded_and_coalesces_foreground_demand(self):
+    def test_first_observation_wait_never_expires_or_cancels_feasible_work(self):
         self.dispatch.tick(identity='source', ready=False)
         for tab in ('first', 'second'):
             self.dispatch.interest(tab, 'models', True, self.models)
@@ -195,7 +257,7 @@ class DispatcherTests(unittest.TestCase):
             self.assertEqual('source_starting', lookup['error'])
             self.assertFalse(lookup['terminal'])
         self.assertEqual({}, self.jobs.values)
-        self.now += 119
+        self.now += 2 * 86400
         self.dispatch.tick(ready=False)
         self.assertEqual('source_starting', self.dispatch.lookup(self.models)['error'])
         self.dispatch.interest('first', 'models', True, self.models)
@@ -207,12 +269,17 @@ class DispatcherTests(unittest.TestCase):
         self.assertIsNone(self.dispatch.lookup(self.models)['error'])
         self.assertFalse(self.dispatch.warm_allowed)
         self.dispatch.tick(ready=False)
-        self.now += 120
+        self.now += 2 * 86400
         self.dispatch.tick(ready=False)
         lookup = self.dispatch.lookup(self.models)
-        self.assertTrue(lookup['terminal'])
-        self.assertEqual('source_wait_timeout', lookup['error'])
-        self.assertEqual('cancelled', self.jobs.values['0']['status'])
+        self.assertFalse(lookup['terminal'])
+        self.assertEqual('source_starting', lookup['error'])
+        self.assertEqual('queued', self.jobs.values['0']['status'])
+        self.assertEqual(3, self.jobs.priorities['0'], 'waiting work holds no acquisition capacity')
+        self.dispatch.interest('first', 'models', True, self.models)
+        self.dispatch.tick(ready=True)
+        self.assertEqual('0', self.dispatch.lookup(self.models)['id'])
+        self.assertEqual(1, len(self.jobs.values), 'recovery resumes the original work')
 
     def test_http_handshake_matrix_preserves_temporary_and_terminal_source_evidence(self):
         from src.web.dispatch_http import handle
@@ -281,7 +348,7 @@ class DispatcherTests(unittest.TestCase):
         self.assertEqual(('30-days', '7-days'), jobs._jobs[key]['goals'])
         self.assertEqual(1, len(jobs._jobs))
 
-    def test_invalid_old_result_id_is_never_returned_during_retry_backoff(self):
+    def test_aged_completed_snapshot_survives_refresh_backoff_without_new_observation(self):
         key = self.dispatch.lookup(self.models)['id']
         self.jobs.values[key].update(status='complete', result=result(1_000_000))
         self.dispatch.tick()
@@ -289,15 +356,48 @@ class DispatcherTests(unittest.TestCase):
         self.now += 3660
         entry.update(failures=1, due=self.now + 120, error='http_timeout')
         lookup = self.dispatch.lookup(self.models)
-        self.assertIsNone(lookup['id'])
-        self.assertIsNone(lookup['result'])
-        self.assertTrue(lookup['stale'])
+        self.assertEqual(key, lookup['result_id'])
+        self.assertEqual(1_000_000, lookup['result']['source']['observed_at_ms'])
+        self.assertEqual('delayed', lookup['refresh'])
+        self.assertFalse(lookup['stale'])
+        self.assertEqual(entry['due'], self.now + 120)
 
-    def test_midnight_invalidates_stats_even_when_its_observation_is_young(self):
+    def test_midnight_does_not_discard_qualified_historical_stats(self):
         value = result(86_390_000)
         value['scope'] = dict(kind='ai-stats', timezone_id='UTC', local_day_start_ms=0)
         self.assertTrue(usable(value, 86_399_999))
-        self.assertFalse(usable(value, 86_400_000))
+        self.assertTrue(usable(value, 86_400_000))
+
+    def test_days_old_completion_is_delivered_once_and_refreshes_only_on_cadence(self):
+        self.dispatch.interest('one', 'models', True, self.models)
+        key = self.dispatch.lookup(self.models)['id']
+        self.now += 2 * 86400
+        value = result(1_000_000)
+        self.jobs.values[key].update(status='complete', result=value)
+        self.dispatch.tick()
+        entry = self.dispatch.entries[self.models]
+        due = entry['due']
+        before = len(self.jobs.values)
+
+        for _ in range(10):
+            self.dispatch.interest('one', 'models', True, self.models)
+            lookup = self.dispatch.lookup(self.models)
+            self.dispatch.tick()
+            self.assertIs(value, lookup['result'])
+            self.assertEqual(key, lookup['result_id'])
+            self.assertEqual('scheduled', lookup['refresh'])
+            self.assertEqual(1_000_000, value['source']['observed_at_ms'])
+        self.assertEqual(before, len(self.jobs.values), 'old as-of never forces an immediate recomputation loop')
+        self.assertGreater(due, self.now)
+
+        self.now = entry['due']
+        self.dispatch.interest('one', 'models', True, self.models)
+        self.dispatch.tick()
+        lookup = self.dispatch.lookup(self.models)
+        self.assertNotEqual(key, lookup['id'])
+        self.assertEqual(key, lookup['result_id'], 'refresh identity is not publication identity')
+        self.assertIs(value, lookup['result'])
+        self.assertEqual('queued', lookup['refresh'])
 
     def test_http_lookup_requires_explicit_boolean_and_rejects_nonfinite_scope(self):
         from src.web.dispatch_http import handle
@@ -353,6 +453,30 @@ class DispatcherTests(unittest.TestCase):
 
 
 class QuantumProcessTests(unittest.TestCase):
+    def test_background_paced_finite_work_really_parks_then_finishes_on_the_same_stack(self):
+        jobs = ReportJobs(target=quantum_report)
+        self.addCleanup(jobs.close)
+        dispatch = DataDispatcher(jobs)
+        dispatch.tick(identity='source')
+        request = ReportRequest(ReportKind.COMPARISONS)
+        dispatch.interest('opener', 'comparisons', True, request)
+        dispatch.tick()
+        key = dispatch.entries[request]['job']
+        jobs.prioritize({key: 2})
+        deadline = time.monotonic() + 12
+        parked_progress = []
+        while time.monotonic() < deadline and jobs.snapshot(key)['status'] != 'complete':
+            jobs.tick()
+            if key in jobs._parked:
+                job = jobs._jobs[key]
+                self.assertEqual(2, job['priority'])
+                self.assertGreater(job['not_before'], job['served_at'])
+                parked_progress.append(jobs.snapshot(key)['progress']['completed'])
+            time.sleep(.01)
+        self.assertEqual('complete', jobs.snapshot(key)['status'])
+        self.assertGreater(len(set(parked_progress)), 1)
+        self.assertEqual(1, jobs.snapshot(key)['work']['slices'], 'same private stack, not a restarted scan')
+
     def test_parked_job_respects_explicit_backoff_even_with_negative_clock_origin(self):
         from unittest.mock import Mock
         jobs = ReportJobs()
@@ -375,7 +499,7 @@ class QuantumProcessTests(unittest.TestCase):
 
         self.assertEqual('running', jobs.snapshot(key)['status'])
         self.assertIs(jobs._active[1], child)
-        connection.send.assert_called_once_with('run')
+        connection.send.assert_called_once_with('free')  # Requested (priority 1) work resumes unparked.
 
     def test_parent_loss_terminates_a_parked_private_stack(self):
         from src.web.process_identity import process_identity, terminate_owned
@@ -634,7 +758,7 @@ class SharedEvidenceTests(unittest.TestCase):
 
 
 class HistoryJobTests(unittest.TestCase):
-    def test_changing_catalog_does_not_discard_increasing_durable_coverage_but_churn_is_bounded(self):
+    def test_changing_catalog_keeps_durable_coverage_pending_with_backoff_then_recovers(self):
         from src.web.history_jobs import checkpoint, resume
         job = dict(request=ManagedReport(ReportKind.TOKEN_MIX), status='running')
         for count in range(1, 6):
@@ -644,19 +768,28 @@ class HistoryJobTests(unittest.TestCase):
         for signature in ('a', 'b', 'c'):
             checkpoint(job, dict(signature=signature * 64, completed=320, total=2700))
             resume(job)
-        self.assertEqual('failed', job['status'])
-        self.assertEqual('history_revision_churn', job['error'])
+        self.assertEqual('queued', job['status'])
+        self.assertGreater(job['not_before'], job['queued_at'])
+        self.assertNotIn('error', job)
+        checkpoint(job, dict(signature='c' * 64, completed=384, total=2700))
+        resume(job)
+        self.assertEqual(job['not_before'], job['queued_at'], 'verified progress removes churn backoff')
 
-    def test_real_children_resume_durable_roots_after_completion_and_watchdog(self):
-        for stall in (False, True):
-            with self.subTest(watchdog=stall), tempfile.TemporaryDirectory() as directory:
-                jobs = ReportJobs(target=durable_history_report, deadline=1.5 if stall else 120)
+    def test_real_children_resume_durable_roots_even_after_long_valid_analysis(self):
+        for slow in (False, True):
+            with self.subTest(slow=slow), tempfile.TemporaryDirectory() as directory:
+                jobs = ReportJobs(target=durable_history_report)
                 try:
                     key = jobs.submit(HistoryFixture(ReportKind.TOKEN_MIX, source_identity='source',
-                        directory=directory, stall_once=stall))
+                        directory=directory, slow_once=slow))
                     end = time.monotonic() + 12
+                    advanced = False
                     while time.monotonic() < end:
                         jobs.tick()
+                        if slow and not advanced and jobs._active:
+                            owner, process, receiver, started = jobs._active
+                            jobs._active = owner, process, receiver, started - 2 * 86400
+                            advanced = True
                         snapshot = jobs.snapshot(key)
                         if snapshot['status'] in {'complete', 'failed'}:
                             break
@@ -666,23 +799,22 @@ class HistoryJobTests(unittest.TestCase):
                     self.assertLessEqual(snapshot['result']['view']['roots_read'], 4)
                     self.assertEqual(10, jobs._jobs[key]['continued']['completed'] + snapshot['result']['view']['roots_read'],
                         'completed roots must not be hydrated again in the final child')
-                    if stall:
-                        self.assertEqual(16, jobs._jobs[key]['history_batch_size'])
+                    self.assertIsNone(jobs._jobs[key]['error'])
                 finally:
                     jobs.close()
 
-    def test_only_strict_durable_progress_can_resume_a_finite_watchdog(self):
+    def test_more_than_32_durable_slices_can_finish_without_a_work_count_deadline(self):
         from src.web.history_jobs import checkpoint, resume
         job = dict(request=ManagedReport(ReportKind.TOKEN_MIX), status='running')
-        proof = dict(signature='a' * 64, completed=64, total=2700)
-        checkpoint(job, proof)
-        resume(job, timeout=True)
-        self.assertEqual('queued', job['status'])
-        self.assertEqual(16, job['history_batch_size'])
-        checkpoint(job, proof)
-        resume(job, timeout=True)
-        self.assertEqual('failed', job['status'])
-        self.assertEqual('history_slice_timeout', job['error'])
+        for count in range(1, 65):
+            checkpoint(job, dict(signature='a' * 64, completed=count * 64, total=8192))
+            resume(job)
+            self.assertEqual('queued', job['status'])
+        self.assertEqual(4096, job['continued']['completed'])
+        self.assertEqual(64, job['history_steps'])
+        resume(job)
+        self.assertEqual('failed', job['status'], 'missing promised receipt is still a protocol error')
+        self.assertEqual('history_no_progress', job['error'])
 
     def test_broken_resume_pipe_retains_ownership_until_child_stop_is_confirmed(self):
         from unittest.mock import Mock

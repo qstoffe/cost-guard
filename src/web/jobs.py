@@ -117,6 +117,8 @@ def run_report(sender, request):
         relay = ProgressRelay(sender, quantum=quantum)
         app = application(request, read_admission=quantum.admit_read,
             history_checkpoint=lambda value: sender.send(('checkpoint', value))) if quantum else application(request)
+        if quantum:
+            quantum.admit()
         result = app.execute(request, progress=relay.observe).to_json()
         relay.flush()
         started = time.perf_counter()
@@ -168,17 +170,20 @@ class ReportJobs:
 
     Cancellation terminates only this owner's process (including a blocked scan).
     Each process owns one fresh ReportApplication; never share live account work.
-    The hard deadline also bounds providers whose normal request timeout fails.
+    Elapsed analysis time is not a source failure. Individual integrations own
+    I/O timeouts; cooperative quanta and explicit cancellation own scheduling.
     """
 
-    def __init__(self, *, target=run_report, deadline=120, context=None):
+    def __init__(self, *, target=run_report, context=None):
         self._context = context or multiprocessing.get_context("spawn")
         self._target = target
-        self._deadline = deadline
         self._lock = RLock()
         self._jobs = OrderedDict()
         self._active = None
         self._parked = {}
+        # Children that already delivered valid terminal IPC; reaped without
+        # delaying publication. Exact owners stay here until exit is confirmed.
+        self._retiring = []
         self._closed = False
         self._failure = None
         self.analysis = "not_requested"
@@ -271,22 +276,16 @@ class ReportJobs:
         job = self._jobs[key]
         elapsed = max(0, time.monotonic() - started)
         job['worker_ms'] = job.get('worker_ms', 0) + elapsed * 1000
-        job['quantum_elapsed'] = job.get('quantum_elapsed', 0) + elapsed
         job['served_at'] = time.monotonic()
         job['not_before'] = time.monotonic() + (min(1, elapsed * 4) if job['priority'] >= 2 else 0)
         job['status'] = 'queued'
+        job['admitted'] = True  # Parked work is never a startup interruption candidate.
         self._parked[key] = process, receiver
         self._active = None
 
-    def _stop(self, *, finished=False, owner=None):
-        owner = owner or self._active
-        if owner is None:
-            return
-        key, process, receiver, started = owner
-        job = self._jobs[key]
-        if finished:
-            # Valid terminal IPC means the child can finish its own pipe/parent
-            # monitor teardown. Watchdog/cancel/shutdown never take this grace.
+    def _confirm_exit(self, process, *, grace):
+        """Bounded natural/terminate/kill escalation; True only after confirmed exit."""
+        if grace:
             process.join(timeout=1)
         if process.is_alive():
             process.terminate()
@@ -294,7 +293,16 @@ class ReportJobs:
         if process.is_alive():
             process.kill()
             process.join(timeout=1)
-        if process.is_alive():
+        return not process.is_alive()
+
+    def _stop(self, *, owner=None):
+        owner = owner or self._active
+        if owner is None:
+            return
+        key, process, receiver, started = owner
+        job = self._jobs[key]
+        # Cancel/shutdown/invalid IPC never take the natural-exit grace.
+        if not self._confirm_exit(process, grace=False):
             self._failure = self._failure or ReportWorkerStopError('report_worker_stop_timeout')
             job.update(status='failed', error='report_worker_stop_timeout')
             self.analysis = 'failed'
@@ -304,6 +312,42 @@ class ReportJobs:
         job['worker_ms'] = job.get('worker_ms', 0) + max(0, time.monotonic() - started) * 1000
         if self._active is owner:
             self._active = None
+
+    def _retire(self):
+        """Publish before teardown; the exact finished owner keeps bounded exit escalation."""
+        key, process, receiver, started = self._active
+        now = time.monotonic()
+        job = self._jobs[key]
+        job['worker_ms'] = job.get('worker_ms', 0) + max(0, now - started) * 1000
+        self._retiring.append(dict(process=process, receiver=receiver, stage=0, deadline=now + 1))
+        self._active = None
+
+    def _reap(self):
+        """Nonblocking: 1s natural grace, then terminate, kill and a latched failure."""
+        now = time.monotonic()
+        for owner in tuple(self._retiring):
+            process = owner['process']
+            if not process.is_alive():
+                owner['receiver'].close()
+                process.close()
+                self._retiring.remove(owner)
+            elif now >= owner['deadline']:
+                if owner['stage'] == 2:
+                    self._failure = self._failure or ReportWorkerStopError('report_worker_stop_timeout')
+                    self.analysis = 'failed'
+                    raise self._failure  # Owner remains retained for close().
+                (process.terminate if owner['stage'] == 0 else process.kill)()
+                owner.update(stage=owner['stage'] + 1, deadline=now + 1)
+
+    def _close_retiree(self, owner):
+        process = owner['process']
+        if not self._confirm_exit(process, grace=owner['stage'] == 0):
+            self._failure = self._failure or ReportWorkerStopError('report_worker_stop_timeout')
+            self.analysis = 'failed'
+            raise self._failure
+        owner['receiver'].close()
+        process.close()
+        self._retiring.remove(owner)
 
     def cancel(self, key):
         with self._lock:
@@ -329,20 +373,56 @@ class ReportJobs:
                 return
             if self._active:
                 self._tick_active()
+            self._reap()
             if self._active is None:
                 self._start_next()
 
+    def _can_spawn(self):
+        # Retirees stay resident: beyond one retiring child only parked work may resume.
+        return len(self._retiring) <= 1 and len(self._parked) + len(self._retiring) < MAX_PENDING
+
+    def _interrupt_startup(self):
+        """A never-admitted background startup yields once to runnable foreground work.
+
+        Admitted, parked, requested or promoted work is never interrupted. The
+        logical job keeps its identity, observation time, goals and durable
+        progress; another interruption needs subsequent durable progress.
+        """
+        key, process, receiver, started = self._active
+        job = self._jobs[key]
+        if job.get('admitted', True) or job.get('priority', 1) < 2 or job.get('startup_interrupted'):
+            return False
+        if not self._runnable_waiting(key, 0):
+            return False
+        self._stop()  # Confirmed exit before replacement; no natural grace.
+        job.update(status='queued', queued_at=time.monotonic(), startup_interrupted=True,
+                   startup_interruptions=job.get('startup_interruptions', 0) + 1)
+        return True
+
+    def _runnable_waiting(self, active, priority):
+        now = time.monotonic()
+        return any(key != active and job['status'] == 'queued' and job.get('priority', 1) <= priority
+                   and now >= job.get('not_before', 0) and (key in self._parked or self._can_spawn())
+                   for key, job in self._jobs.items())
+
+    def _grant(self, job, receiver):
+        """Requested work runs unparked until contention; background stays paced every quantum."""
+        free = job.get('priority', 1) < 2
+        receiver.send('free' if free else 'run')
+        job.update(admitted=True, free=free, yield_requested=False)
+
     def _tick_active(self):
+        if self._interrupt_startup():
+            return
         key, process, receiver, started = self._active
         job = self._jobs[key]
         finished = False
         try:
-            if time.monotonic() - started + job.get('quantum_elapsed', 0) > self._deadline:
-                if history_jobs.managed(job):
-                    history_jobs.resume(job, timeout=True)
-                else:
-                    stats_jobs.timed_out(job)
-            elif receiver.poll():
+            if job.get('free') and not job.get('yield_requested') and (
+                    job.get('priority', 1) >= 2 or self._runnable_waiting(key, job.get('priority', 1))):
+                receiver.send('yield')  # At most one outstanding request; honored at the next quantum.
+                job['yield_requested'] = True
+            if receiver.poll():
                 if not self._receive(job, receiver):
                     return
                 if self._active is None:
@@ -355,7 +435,10 @@ class ReportJobs:
         except (EOFError, OSError, ValueError, KeyError, TypeError):
             job.update(status='failed', error='report_unavailable')
         self.analysis = job['status']
-        self._stop(finished=finished)
+        if finished:
+            self._retire()
+        else:
+            self._stop()
 
     def _receive(self, job, receiver):
         # Bounded bursts preserve host/control turns and avoid IPC backpressure.
@@ -367,11 +450,15 @@ class ReportJobs:
             elif kind == 'yield' and payload is None and isinstance(job['request'], ManagedReport):
                 self._park()
                 return True
+            elif kind == 'admit' and payload is None and isinstance(job['request'], ManagedReport):
+                if not job.get('admitted', True):
+                    self._grant(job, receiver)
             elif kind == 'metrics':
                 for name in ('serialization_ms', 'result_bytes'):
                     job[name] = job.get(name, 0) + payload[name]
             elif kind == 'checkpoint':
                 history_jobs.checkpoint(job, payload)
+                job.pop('startup_interrupted', None)
             elif kind == 'result':
                 result = json.loads(payload)
                 if history_jobs.managed(job) and (result.get('error') or {}).get('code') == 'history_continue':
@@ -382,6 +469,8 @@ class ReportJobs:
                     job.update(status='failed', error='source_identity_changed', result=None)
                     return True
                 stats_jobs.accept(job, result)
+                if not job.get('stalls'):
+                    job.pop('startup_interrupted', None)  # An advancing slice is durable progress.
                 if job['status'] in {'failed', 'complete'}:
                     job['finished_at'] = time.monotonic()
                 self.source = result['source']['status']
@@ -413,13 +502,15 @@ class ReportJobs:
                 self._active = key, process, receiver, time.monotonic()
                 del self._parked[key]
                 try:
-                    receiver.send('run')
+                    self._grant(job, receiver)
                 except (EOFError, OSError, ValueError):
                     job.update(status='failed', error='report_unavailable')
                     self._stop()
                     return
                 job['status'] = 'running'
                 break
+            if not self._can_spawn():
+                continue
             receiver, sender = self._context.Pipe(duplex=isinstance(job['request'], ManagedReport))
             request = stats_jobs.request(job, key)
             if isinstance(request, ManagedReport) and request.kind is not ReportKind.AI_STATS:
@@ -441,21 +532,42 @@ class ReportJobs:
             now = time.monotonic()
             job['queue_ms'] = job.get('queue_ms', 0) + max(0, now - job['queued_at']) * 1000
             job['slices'] = job.get('slices', 0) + 1
-            job['quantum_elapsed'] = 0
             self._active = key, process, receiver, now
             job['status'] = 'running'
             self.analysis = 'loading'
+            # Requested work is admitted up front; only background startup awaits its grant.
+            job.update(admitted=not isinstance(request, ManagedReport), free=False, yield_requested=False)
+            if isinstance(request, ManagedReport) and job.get('priority', 1) < 2:
+                try:
+                    self._grant(job, receiver)
+                except (EOFError, OSError, ValueError):
+                    job.update(status='failed', error='report_unavailable')
+                    self._stop()
             break
 
     def close(self):
         with self._lock:
             self._closed = True
+            failures = []
+
+            def attempt(stop):
+                try:
+                    stop()
+                except ReportWorkerStopError as exc:
+                    failures.append(exc)  # Retain that owner; still try every other one.
+
+            def parked(key):
+                process, receiver = self._parked[key]
+                self._stop(owner=(key, process, receiver, time.monotonic()))
+                del self._parked[key]
             try:
-                self._stop()
+                attempt(self._stop)
                 for key in tuple(self._parked):
-                    process, receiver = self._parked[key]
-                    self._stop(owner=(key, process, receiver, time.monotonic()))
-                    del self._parked[key]
+                    attempt(lambda key=key: parked(key))
+                for owner in tuple(self._retiring):
+                    attempt(lambda owner=owner: self._close_retiree(owner))
+                if failures:
+                    raise failures[0]
             finally:
                 for job in self._jobs.values():
                     if job["status"] in {"queued", "running"}:

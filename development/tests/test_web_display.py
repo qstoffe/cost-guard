@@ -1,11 +1,13 @@
 """CLI-derived Web display goldens, exact raw retention and scope inventory."""
 from dataclasses import replace
+from datetime import datetime, timezone
 from decimal import Decimal
 import json
 from pathlib import Path
 import shutil
 import subprocess
 import unittest
+from unittest.mock import patch
 
 from development.tests.fixtures.compact_reports import rendered, report_service
 from development.tests.fixtures.warning_projections import warning_prompt, warning_watch_projection
@@ -26,6 +28,41 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class WebDisplayTests(unittest.TestCase):
+    def test_dual_units_format_unit_independent_clocks_once_with_dst_and_token_order_preserved(self):
+        from src.application import display
+        start = int(datetime(2026, 10, 25, 0, 30, tzinfo=timezone.utc).timestamp() * 1000)
+        finish = int(datetime(2026, 10, 25, 1, 30, tzinfo=timezone.utc).timestamp() * 1000)
+        value = record(at_ms=start, completed_at_ms=finish, observed_at_ms=finish, now_ms=finish,
+            ccost=Decimal(395), complete=False)
+        for unit, amount in (('credits', '?395'), ('usd', '?$3.95')):
+            with self.subTest(unit=unit), patch.object(display, 'format_local_timestamp',
+                    wraps=display.format_local_timestamp) as stamp:
+                dto = with_display(value, 'Europe/Stockholm', ccost_display_unit=unit).to_json()
+
+            self.assertEqual(6, stamp.call_count)
+            self.assertEqual({'ccost':amount, 'observed_at_ms':'2026-10-25 02:30',
+                'now_ms':'2026-10-25 02:30', 'clock':'02:30', 'date_time':'2026-10-25 02:30',
+                'finished_clock':'02:30', 'finished_date_time':'2026-10-25 02:30 +0100'}, dto['display'])
+            self.assertEqual(['ccost', 'observed_at_ms', 'now_ms', 'clock', 'date_time',
+                'finished_clock', 'finished_date_time'], list(dto['display']))
+            self.assertEqual({'credits':{'ccost':'?395'}, 'usd':{'ccost':'?$3.95'}}, dto['display_units'])
+            self.assertEqual((start, finish), (dto['at_ms'], dto['completed_at_ms']))
+
+    def test_dual_unit_reset_work_is_once_per_projection_and_never_reused_across_clock_ticks(self):
+        from src.application import display
+        now = 1_793_052_000_000
+        deadline = now + 60_000
+        resets = []
+        for current in (now, now + 30_000):
+            with patch.object(display, 'format_reset', wraps=display.format_reset) as reset:
+                dto = with_display(record(now_ms=current, quota=record(reset_at_ms=deadline)),
+                    'Europe/Stockholm').to_json()
+
+            self.assertEqual(1, reset.call_count)
+            self.assertEqual(deadline, dto['quota']['reset_at_ms'])
+            resets.append(dto['quota']['display']['reset'])
+        self.assertNotEqual(resets[0], resets[1])
+
     def test_first_request_context_token_is_independent_of_rich_transition(self):
         dto = with_display(record(incoming_context_tokens=17_000,
             delta_context_tokens=2_000, next_context_tokens=19_000)).to_json()

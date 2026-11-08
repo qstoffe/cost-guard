@@ -43,7 +43,8 @@ function scheduleCachedReport() {
 function enterCachedReport(state) {
   if (!historical(state)) return;
   const band = CachedReports.entry(state.result, state.section);
-  state.withheld = band === 'withhold';
+  state.withheld = band === 'withhold' || !!(state.result && state.section === 'ai-stats' &&
+    !CachedReports.interval(state.result, state.period));
   if (demand && !document.hidden && hostState.writable) { acquire(state, !!state.result && !state.withheld); return; }
   if (!document.hidden && hostState.writable && state.result && ['quiet', 'withhold'].includes(band))
     acquire(state, !state.withheld);
@@ -81,7 +82,10 @@ function applySettings(value) {
 const connectionGrace = new ReportView.LiveStatus();
 function connectionStatus(message, state = {}) {
   if (hostState.terminal && state.kind !== hostState.kind) return;
+  const wasWritable = hostState.writable;
   hostState = {...hostState, ...state};
+  if (hostState.terminal) demand?.close?.(false);
+  else if (wasWritable !== hostState.writable) demand?.update();
   liveStatus = message;
   miniWatch?.health(hostState);
   const late = connectionGrace.update(hostState.kind === 'connected', hostState.observedAt);
@@ -154,8 +158,7 @@ function show(state) {
   state.interrupted = ReportLoading.interrupted(hostState) ?
     'Report interrupted. Check the connection notice; use a fresh launcher link if authorization or host identity changed.' : null;
   const updating = document.getElementById('report-updating');
-  if (updating) ReportView.text(updating, finite && state.result && !state.withheld ?
-    state.loading ? 'Updating…' : state.failed ? 'Update delayed; last completed report retained.' : '' : '');
+  if (updating) ReportView.text(updating, finite ? CachedReports.summary(state, hostState.writable, !!demand) : '');
   if (finite && hostState.writable) notice.textContent = state.result && !state.withheld && state.section === 'models' ? state.message : '';
   if (state.section === 'token-mix') {
     refresh.textContent = 'Retry Token Mix';
@@ -253,17 +256,13 @@ function reportWork(progress) {
 function failure(code) {
   const errors = {session_not_found: 'No matching session. It may have been removed or is unavailable in this source.',
     result_too_large: 'Report exceeds the finite result size limit; no truncated totals are shown. Use a specific session or the CLI.',
-    report_timeout: 'Report reached its 120-second limit; no empty result was substituted. Live continues. The CLI can scan without the Web job deadline.', cancelled: 'Report cancelled.',
+    cancelled: 'Report cancelled.',
     invalid_request: 'Invalid report scope or limits; no alternate scope was substituted.',
     session_catalog_changed: 'Session catalog changed. Use Latest sessions / restart browsing to avoid skipped or duplicate rows.',
      pricing_unavailable: 'Reference pricing unavailable.', busy: 'Report service busy. Retry when a slot is available.',
-     source_wait_timeout: 'Source startup did not recover within the bounded retry window. Check OpenCode, then Retry.',
-     report_slot_timeout: 'Report slots remained busy through the bounded retry window. Wait for another report to finish, then Retry.',
-     ai_stats_slice_timeout: 'An AI Stats work slice repeatedly stalled, even at one root. Saved stable work is retained; check the source and Retry.',
      ai_stats_revision_churn: 'History kept changing without verified forward progress. Saved stable work is retained; Retry when the source settles.',
      ai_stats_checkpoint_unavailable: 'AI Stats could not save resumable evidence. Check local cache access or disk space, then Retry.',
       ai_stats_resource_limit: 'AI Stats reached its bounded history/live-root resource limit. No truncated totals are shown.',
-      history_slice_timeout: 'A history work slice stalled without new saved evidence. Check the source and Retry.',
       history_no_progress: 'History made no verified forward progress. Saved stable work is retained; check the source and Retry.',
       history_revision_churn: 'History kept changing. Saved stable work is retained; Retry when the source settles.',
       history_checkpoint_unavailable: 'History could not save resumable evidence. Check local cache access or disk space, then Retry.',
@@ -293,7 +292,7 @@ async function acquire(state, background = false, prices = false) {
   let publication = null;
   let retry = !!state.failed && !background;
   state.loading = true;
-   const attempt = state.attempt = new ReportLoading.Attempt(undefined, state.section === 'ai-stats' || !!demand);
+  const attempt = state.attempt = new ReportLoading.Attempt();
   state.priceRefreshing = prices; state.priceMessage = '';
   state.failed = false;
   state.dispatchError = null;
@@ -311,13 +310,14 @@ async function acquire(state, background = false, prices = false) {
         retry = false; // Only the explicit user attempt may clear host backoff.
         const admission = await api(prices ? '/api/models/refresh' : demand ? '/api/data' : '/api/reports', prices ? {} :
           demand ? {request: scope, retry: retryOnce} : scope, attempt.controller.signal);
-         state.active = admission.id;
-          if (demand && !prices) {
-             // Only a current terminal source fault may accompany a usable
-             // retained result. Temporary admission errors cannot poison success.
-             state.dispatchError = admission.terminal ? admission.error || 'report_unavailable' : null;
-            if (!admission.result && state.result) { state.withheld = true; show(state); }
-            if (admission.result) publication = {status: 'complete', result: admission.result};
+        state.active = admission.id;
+        if (demand && !prices) {
+          // Retained publication identity is independent of an active refresh.
+          state.dispatchRefresh = admission.refresh;
+          state.dispatchError = admission.terminal ? admission.error || 'report_unavailable' : null;
+          if (!admission.result && state.result) { state.withheld = true; show(state); }
+          if (admission.result) publication = {status: 'complete', result: admission.result,
+            publication_id: admission.result_id || admission.id};
           else if (admission.terminal || !admission.id) throw new Error(admission.error || 'report_unavailable');
         }
         state.progressSequence = 0;
@@ -335,12 +335,11 @@ async function acquire(state, background = false, prices = false) {
       AIStatsView.prioritize(state, api, !!demand);
     show(state);
     while (true) {
-      // A throttled/hidden tab may return after the client budget, while the
-      // server already completed. Read that outcome before declaring a timeout.
-      attempt.check(hostState, false);
+      // Poll the same logical work even after a long hidden/background period.
+      attempt.check(hostState);
        const job = publication || await api('/api/jobs/' + state.active, undefined, attempt.controller.signal);
        publication = null;
-      attempt.check(hostState, ['queued', 'running'].includes(job.status));
+      attempt.check(hostState);
       const statsProgress = state.section === 'ai-stats' && AIStatsView.observe(state, job);
       if (job.progress?.stage?.startsWith('date-')) state.lastWork = reportWork(job.progress);
       if (!['queued', 'running'].includes(job.status)) {
@@ -360,21 +359,24 @@ async function acquire(state, background = false, prices = false) {
            await admit(); continue; // A simultaneous scope change finished a different period.
          }
           const initial = !state.result || state.withheld;
-          if (demand && !prices && state.result && state.dataRevision ===
-              state.active + ':' + CachedReports.observation(job.result)) break;
+          const revision = [job.publication_id || state.active, job.result.instance_id,
+            job.result.sequence, CachedReports.observation(job.result)].join(':');
+          if (demand && !prices && state.result && state.dataRevision === revision) break;
          if (state.section === 'models' && (!job.result.view || job.result.view.kind !== 'normal' ||
              !['acquired', 'partial'].includes(job.result.source?.status))) throw new Error('report_unavailable');
          if (state.section === 'ai-stats') {
            AIStatsView.remember(state, job.result);
           } else state.result = job.result;
-          state.dataRevision = state.active + ':' + CachedReports.observation(job.result);
+          state.dataRevision = revision;
+          if (demand && !prices && !job.publication_id) state.dispatchRefresh = 'scheduled';
          // A usable partial response finishes this attempt, not source coverage.
           if (state.result) {
             state.percent = 100; state.stage = state.stageLabel = 'Report ready';
             if (initial && state === current && state.loader?.root.isConnected)
               await ReportLoading.paintCompletion(state, attempt.controller.signal);
           }
-        state.withheld = historical(state) && state.result && CachedReports.entry(state.result, state.section) === 'withhold';
+        state.withheld = historical(state) && state.result && (CachedReports.entry(state.result, state.section) === 'withhold' ||
+          state.section === 'ai-stats' && !CachedReports.interval(state.result, state.period));
         state.pages = {};
         state.message = historical(state) ? '' : 'Snapshot captured. Navigation and source activity do not update it.';
         break;
@@ -383,7 +385,7 @@ async function acquire(state, background = false, prices = false) {
         if (state.section === 'ai-stats' && (!state.result || state.withheld)) state.lastWork = reportWork(job.progress);
       // Do not redraw a retained report while polling: keep selection and scroll useful.
         if (state === current && !background) show(state);
-       await attempt.pause(500);
+       await attempt.poll(state.active, 500);
     }
   } catch (error) {
     if (attempt.reason) error = new Error(attempt.reason);
@@ -393,12 +395,8 @@ async function acquire(state, background = false, prices = false) {
     }
     state.message = prices ? 'Price list refresh failed; previous prices retained' : background ? 'Update delayed; last completed report retained.' :
       `${state.result ? 'STALE — last known snapshot retained. ' : ''}${failure(error.message)}`;
-    if (error.message === 'report_timeout' && state.lastWork) state.message += ` Last observed work: ${state.lastWork}.`;
     if (prices) state.priceMessage = state.message;
     state.failed = true;
-    if (error.message === 'report_timeout' && state.active) {
-      try { await api('/api/jobs/' + state.active + '/cancel', {}); } catch (_) { /* Host owns its hard deadline too. */ }
-    }
   } finally {
      if (state.dispatchError && !prices) { state.failed = true; state.message = failure(state.dispatchError); }
      state.loading = false; state.priceRefreshing = false; state.active = null; state.attempt = null; state.checkedAt = Date.now();
@@ -491,8 +489,15 @@ async function connect() {
     try { applySettings(await api('/api/settings')); }
     catch (_) { notice.textContent = 'Unable to read saved Web settings. Open Settings for details.'; }
      const state = await api('/api/status');
-     if (state.data_dispatcher && typeof DataDemand !== 'undefined')
-       demand = new DataDemand.Controller(api, () => current, () => !!csrf && hostState.writable);
+     if (state.data_dispatcher && typeof DataDemand !== 'undefined') {
+       const writable = () => !!csrf && hostState.writable && !hostState.terminal;
+       demand = new DataDemand.Controller(api, () => current && {...current,
+         history: current.section === 'watch' && current.watch?.earlier.open === true}, writable,
+         {history: state.history_demand === true});
+       if (state.history_demand === true) miniWatch?.setDemandFactory(win => new DataDemand.Controller(api,
+         () => ({section: 'watch', history: miniWatch.window === win && miniWatch.view?.earlier.hidden === false}),
+         writable, {owner: win, history: true}));
+     }
     if (typeof state.product_version === 'string') document.getElementById('product-version').textContent = ' ' + state.product_version;
     sessionDetailAvailable = state.session_detail === true && typeof SessionDetail !== 'undefined';
     statusLine.textContent = `HTTP ${state.http}; analysis ${state.analysis}; source ${state.source}; accounts ${state.accounts}. Snapshot health is shown below.`;
@@ -511,6 +516,9 @@ async function connect() {
               if (current.section !== 'ai-stats') ReportLoading.observe(current, job.progress || {});
               show(current);
             }
+            // A terminal Live hint only wakes the visible view's status wait; its fetch decides.
+            if (current?.active === job.id && current.attempt && !document.hidden &&
+                !['queued', 'running'].includes(job.status)) current.attempt.notify(job.id);
         }
          firstReport();
       }, connectionStatus);
@@ -550,7 +558,6 @@ for (const link of document.querySelectorAll('nav a')) {
 window.addEventListener('offline', () => connectionStatus('OFFLINE — last observation retained, not live. Check the connection and reload to retry.', {kind: 'offline', writable: false}));
 window.addEventListener('online', () => liveConnection?.resync());
 document.addEventListener('visibilitychange', () => {
-  demand?.update();
   current?.catalog?.interest();
   // Keep existing acquisitions, but never schedule new hidden-route refreshes.
   if (!document.hidden) liveConnection?.resync();
@@ -561,6 +568,9 @@ document.addEventListener('visibilitychange', () => {
   }
   scheduleCachedReport();
 });
+document.addEventListener('toggle', event => {
+  if (event.target === current?.watch?.earlier) demand?.update();
+}, true);
 document.getElementById('search').addEventListener('input', event => {
   if (current) { current.search = event.target.value; current.pages = {}; show(current); }
 });

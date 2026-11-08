@@ -10,9 +10,9 @@ import subprocess
 import tempfile
 from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
-from development.tests.fixtures.synthetic_month import SyntheticMonthSource
+from development.tests.fixtures.synthetic_month import SyntheticMonthSource, make_root_snapshot
 from development.tests.fixtures.watch_runtime import make_service
 from development.tests.fixtures.watch_summary import summary_watch
 from src.accounts.base import normalize_quota
@@ -24,6 +24,7 @@ from src.application.live_projection import project_live
 from src.application.watch_accounts import primary_quota, watch_account, watch_quota
 from src.domain import AccountRef, ModelRef, QuotaComponent, TokenUsage
 from src.reports.history import WatchHistoryAcquisition
+from src.reports.accounts import PeriodCCostIndex
 from src.presentation.accounts import account_capacity_parts
 from src.sources.errors import transport_failure, http_failure
 from src.watch.web_coordinator import WebWatchCoordinator
@@ -154,6 +155,68 @@ class WatchDailyTests(unittest.TestCase):
             self.assertEqual(first[1].total, second[1].total)
             self.assertEqual(first[1].mix, second[1].mix)
             self.assertEqual(first[1].prompt_count, second[1].prompt_count)
+
+    def test_account_requirement_setup_does_not_project_value_or_certify_history(self):
+        now = int(datetime(2026, 10, 25, 12, tzinfo=timezone.utc).timestamp() * 1000)
+        month = int(datetime(2026, 10, 1, tzinfo=timezone.utc).timestamp() * 1000)
+        native = replace(summary_watch().quota.accounts[0].account, quotas=(QuotaComponent(
+            'Monthly', 'fixed', remaining=D(100),
+            reset_at_ms=int(datetime(2026, 11, 1, tzinfo=timezone.utc).timestamp() * 1000)),))
+        with tempfile.TemporaryDirectory() as tmp:
+            source = SyntheticMonthSource(0, 1, month_start_ms=month)
+            _, _, service, _ = make_service(tmp, source, now_ms=now)
+            self.addCleanup(service.close_accounts)
+            service.config['timezone'] = 'Europe/Stockholm'
+            with patch.object(service, '_load_comparison_catalog', side_effect=AssertionError('pricing')), patch(
+                    'src.reports.accounts.WatchAccountProjection.project', side_effect=AssertionError('projection')):
+                day = service.prepare_watch_account_history((native,))
+
+            self.assertEqual(int(datetime(2026, 10, 24, 22, tzinfo=timezone.utc).timestamp() * 1000), day)
+            self.assertEqual(month, service._watch_period_start_ms)
+            self.assertIsNone(service._watch_history.published_start_ms)
+            self.assertIsNone(service.watch_account_history())
+            self.assertEqual((0, 0), (source.catalog_count, source.load_count))
+
+    def test_account_lane_projects_final_history_once_with_changed_and_unchanged_indexes(self):
+        now = 80_000_000
+        native = replace(summary_watch().quota.accounts[0].account,
+            quotas=(QuotaComponent('Monthly', 'fixed', remaining=D(100), reset_at_ms=2_678_400_000),))
+        with tempfile.TemporaryDirectory() as tmp:
+            source = SyntheticMonthSource(2, 2, month_start_ms=1000)
+            config, selection, service, _ = make_service(tmp, source, now_ms=now)
+            jobs = []
+
+            def factory(clock):
+                job = make_service(tmp, source, now_ms=clock)[2]
+                job.project_watch_accounts = Mock(wraps=job.project_watch_accounts)
+                jobs.append(job)
+                return job
+
+            owner = WebWatchCoordinator(selection=selection, report_service=service, config=config, service_factory=factory)
+            self.addCleanup(owner.close)
+            results, indexes = [], []
+            for phase in ('initial', 'unchanged', 'changed'):
+                if phase == 'changed':
+                    source.snapshots['root-0000'] = replace(make_root_snapshot(0, 3, month_start_ms=1000),
+                        source_revision='changed')
+                with patch('src.reports.accounts.PeriodCCostIndex', wraps=PeriodCCostIndex) as index:
+                    results.append(owner._account_history(source.list_sessions(), (native,), now))
+                indexes.append(index.call_count)
+
+            self.assertEqual([1, 1, 1], [job.project_watch_accounts.call_count for job in jobs])
+            # The unchanged old path already reuses its initial index. Only a
+            # changed population eliminates a second construction, not every job.
+            self.assertEqual([2, 2, 2], indexes)
+            first, unchanged, changed = (result[1] for result in results)
+            self.assertEqual(first, unchanged)
+            self.assertEqual((4, 4, 5), tuple(result[1].mix.request_count for result in results))
+            self.assertEqual((5, True), (changed.prompt_count, changed.prompt_count_complete))
+            rows = [result[0].project((native,), now_ms=now, today_start_ms=0, month_start_ms=0,
+                timezone_id='UTC', workday_calendar='')[0] for result in results]
+            self.assertEqual(rows[0], rows[1])
+            self.assertEqual((4, 4, 5), tuple(row.quota_periods[0].cost.observed_requests for row in rows))
+            self.assertTrue(rows[2].quota_periods[0].cost.complete)
+            self.assertEqual(3, source.load_count)
 
     def test_watch_quota_primary_stability_accuracy_and_unlimited(self):
         native = summary_watch().quota.accounts[1].account

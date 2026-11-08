@@ -22,13 +22,21 @@ from .source_reads import SourceReads, cancel_source
 
 
 class WebWatchCoordinator(WatchCoordinator):
-    def __init__(self, *, service_factory, session_cost_factory=None, **kwargs):
+    def __init__(self, *, service_factory, session_cost_factory=None, guidance_binding=None,
+                 card_readers=None, **kwargs):
         super().__init__(**kwargs)
-        self.card_workers = CardWorkers(service_factory)
+        self.card_workers = CardWorkers(service_factory,
+            batch_size=2 if callable(getattr(self.source, 'load_card_snapshots', None)) else 1,
+            readers=card_readers)
         self.card_timing_observed = False
         self.session_costs = SessionCosts(service_factory, session_cost_factory)
+        self.guidance = None
+        if guidance_binding is not None:
+            from .card_guidance import CardGuidance
+            self.guidance = CardGuidance(self.card_workers, self.report_service,
+                binding=guidance_binding, monotonic=self._monotonic)
         self.cards = WatchCards(self.card_workers, self.recent_seconds, self._record_card_duration, self._monotonic,
-            costs=self.session_costs)
+            costs=self.session_costs, guidance=self.guidance)
         self.history_factory = service_factory
         self.history_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cost-guard-account-history")
         self.history_job = None
@@ -127,7 +135,7 @@ class WebWatchCoordinator(WatchCoordinator):
             service = self.history_factory(now_ms)
             with self.reads.using(service.source):
                 service.enable_watch_accounts(record_evidence=False, history=self.daily_history)
-                service.project_watch_accounts(snapshots)  # Establish provider period requirements before admission.
+                service.prepare_watch_account_history(snapshots)
                 today = WatchTodayCCost(service.timezone_id)
                 today.schedule_history(service, sessions, now_ms, active_root_ids=active_roots, live_root_ids=active_roots)
                 while today.history_pending and not self._closed:
@@ -173,6 +181,15 @@ class WebWatchCoordinator(WatchCoordinator):
     def enrich_once(self):
         return WatchCycle(self.status_projection(), (), ())
 
+    @property
+    def work_ready(self):
+        return self.card_workers.completed
+
+    def service_completed(self):
+        """Owner-thread refill only; no source polling, accounts or publication."""
+        if not self._closed:
+            self.cards.tick(int(self.clock_ms()), completed_only=True)
+
     def _build_projection(self, *, now_ms, status="", status_active=False, scanned=False):
         self.cards.tick(now_ms)
         day = local_day_start_ms(self.report_service.timezone_id, now_ms=now_ms)
@@ -209,6 +226,8 @@ class WebWatchCoordinator(WatchCoordinator):
         self._closed = True
         cancel_source(self.source)
         self.reads.cancel()
+        if self.guidance is not None:
+            self.guidance.cancel()
         self.card_workers.cancel()
 
     def close(self):

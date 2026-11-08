@@ -19,14 +19,17 @@ def handle(handler, value):
         return True
     try:
         if handler.path == '/api/interest':
-            if (set(value) != {'tab', 'section', 'visible', 'request'}
+            if (set(value) not in ({'tab', 'section', 'visible', 'request'}, {'tab', 'section', 'visible', 'request', 'history'})
                     or not isinstance(value['tab'], str) or not re.fullmatch(r'[a-f0-9-]{32,36}', value['tab'])
                     or value['section'] not in SECTIONS or type(value['visible']) is not bool):
                 raise ValueError('invalid_interest')
             request = parse_report(value['request']) if value['request'] is not None else None
             if request is not None and SECTION_KIND.get(value['section']) is not request.kind:
                 raise ValueError('invalid_interest')
-            handler.reply(200, dispatcher.interest(value['tab'], value['section'], value['visible'], request))
+            if 'history' in value and (type(value['history']) is not bool or value['section'] != 'watch' or request is not None):
+                raise ValueError('invalid_interest')
+            handler.reply(200, dispatcher.interest(value['tab'], value['section'], value['visible'], request,
+                history=value.get('history', False)))
         else:
             if set(value) != {'request', 'retry'} or type(value['retry']) is not bool:
                 raise ValueError('invalid_request')

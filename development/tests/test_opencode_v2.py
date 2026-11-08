@@ -342,7 +342,33 @@ class OpenCodeV2SourceTests(unittest.TestCase):
             self.assertTrue(session_continuations)
             for parsed in session_continuations:
                 query = parse_qs(parsed.query)
-                self.assertEqual({"cursor"}, set(query))
+                self.assertEqual({"cursor", "limit"}, set(query))
+                self.assertEqual(['500'], query['limit'])
+
+    def test_session_page_limit_is_per_request_and_does_not_belong_to_the_opaque_cursor(self):
+        from src.sources.opencode_v2_wire import fetch_global_sessions
+        sessions = [dict(id=f'ses_{index:04d}', directory='/synthetic') for index in range(1200)]
+
+        class Client:
+            def __init__(self):
+                self.queries = []
+
+            def json(self, path, *, query):
+                self.queries.append(dict(query))
+                offset = int(query.get('cursor', '0'))
+                limit = int(query.get('limit', 50))
+                page = sessions[offset:offset + limit]
+                return dict(data=page, cursor={'next': str(offset + len(page))} if page else {})
+
+        client = Client()
+        actual, contract, pages = fetch_global_sessions(client)
+
+        self.assertEqual([value['id'] for value in sessions], [value['id'] for value, _directory in actual])
+        self.assertEqual('global-paged-data', contract)
+        self.assertEqual(4, pages, '500 + 500 + 200 + empty, not default-50 continuation pages')
+        self.assertEqual({'limit':500, 'order':'desc'}, client.queries[0])
+        self.assertEqual([{'cursor':'500', 'limit':500}, {'cursor':'1000', 'limit':500},
+            {'cursor':'1200', 'limit':500}], client.queries[1:])
 
     def test_current_v2_normalizes_active_session_tool_name_time_and_compaction_tokens(self) -> None:
         with source_with_current_service() as (source, service, _):

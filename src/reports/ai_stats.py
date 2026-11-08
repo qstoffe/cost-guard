@@ -66,6 +66,7 @@ class StatsAcquisition:
         self.fresh = set()
         self.unavailable = set()
         self.pending = []
+        self.checkpoint_busy = True
         self.scan = getattr(service, 'stats_scan', None)
         with service.metrics.measure('ai_stats_restore'):
             self._restore()
@@ -173,7 +174,9 @@ class StatsAcquisition:
             with service.metrics.measure('ai_stats_cache_write'):
                 service.cache_repository.put_many(writes, busy_timeout_ms=50)
             service.metrics.add('ai_stats_compact_writes', len(writes))
-        except (OSError, sqlite3.Error):
+        except (OSError, sqlite3.Error) as error:
+            code = getattr(error, 'sqlite_errorcode', None)
+            self.checkpoint_busy &= (type(code) is int and code & 255 in (sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED))
             return False
         return True
 
@@ -189,7 +192,7 @@ class StatsAcquisition:
                 len(self.evidence), len(self.roots), stage='history-load'))
         self.pending = self.pending[count:]
         if self.pending and limit and not persisted:
-            raise StatsCheckpointError('ai_stats_checkpoint_unavailable')
+            raise StatsCheckpointError('ai_stats_checkpoint_busy' if self.checkpoint_busy else 'ai_stats_checkpoint_unavailable')
         # Changed/active roots cannot silently reuse a prior slice's timing. Wait
         # until stable coverage is ready, then refresh all volatile evidence once.
         volatile = [r for r in self.roots if r.session_id in self.evidence and self.evidence[r.session_id][1]

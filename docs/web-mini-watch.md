@@ -129,11 +129,20 @@ roots have revision-matched complete evidence, **Loading earlier sessions…** r
 grounded checked/total root counts, not provisional cards or a false empty result.
 Active prompts, Today and subscriptions remain available independently. After proof,
 ordinary refreshes retain the same coherent set with **Previously verified sessions;
-checking for changes** until atomic replacement. Source failure/incomplete evidence
-shows **Unable to verify latest sessions**, retaining only safe previously verified
-cards. Source switching, removal and resumption cannot resurrect stale history.
-Large/churning installations may remain loading/unavailable; metadata is only an
-admission hint, not a safe finish-time bound or a promise of instant cold startup.
+checking for changes** until atomic replacement. Unresolved healthy proof and
+transient revision churn remain meaningfully pending with bounded automatic retry,
+never failure solely because computation is old. Genuine sustained source I/O,
+authentication or schema faults show **Unable to verify latest sessions**, retaining
+only safe previously verified cards. Source switching, removal and resumption cannot
+resurrect stale history. Metadata is only an admission hint, not a safe finish-time
+bound or a promise of instant cold startup.
+
+An expanded visible Mini sends its own bounded history-interest lease even when
+the opener is hidden; collapsing/closing withdraws that interest. It shares the
+host's acquisition, proof and Live publication, never another scanner or stream.
+Certified identity/finish/model and supported context can appear before independent
+whole-session cost and numeric price guidance finish. Later enrichment preserves
+the same winner population and proof epoch; unknown/pending fields are not zeros.
 
 Earlier cost cells show the **latest actual canonical prompt’s cost (whole-session
 cost)**. Hover, focus or tap that value for the same prompt’s **Prompt #, main Model**

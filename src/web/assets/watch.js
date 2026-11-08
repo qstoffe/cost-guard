@@ -128,6 +128,7 @@ const WatchView = (() => {
   }
   function drawContext(target, context) {
     const warning = context?.warning;
+    target.summary.dataset.guidance = warning?.guidance_state || 'ready';
     const visible = context?.watch_next_context_tokens != null && ['approaching', 'exceeded'].includes(warning?.severity);
     target.summary.dataset.severity = visible ? warning.severity : 'none';
     text(target.contextValue, context ? display(context, 'watch_next_context_tokens') : 'N/A');

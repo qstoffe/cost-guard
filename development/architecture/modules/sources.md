@@ -20,15 +20,54 @@ Hydration reads a root and its recursive descendants in one pinned read transact
 
 `opencode_v2_transport.py` owns stdlib HTTP/SSE (pooled keep-alive JSON GETs, one retry on a service-closed idle socket, privacy-safe counters), `opencode_v2_wire.py` wire compatibility, `opencode_v2_normalization.py` pure message/part/request mapping with injected provenance, and `opencode_v2.py` acquisition/revision/snapshot assembly. Discovery reads standard registration, validates loopback, ignores proxies and probes `/api/info`. No auth logging, V2 SQLite or CLI/subprocess.
 
-Global discovery uses cursor-paginated sessions, falling back to project enumeration/de-duplication. Current and transitional message APIs share canonical V1/V2 session/message/part/event/invocation contracts; synthetic histories verify semantic parity.
+Global discovery uses cursor-paginated sessions, falling back to project enumeration/de-duplication. The current session-list limit500 is repeated on every opaque-cursor page; order is first-page-only. Omitting a continuation limit falls back to the service default50. Current and transitional message APIs share canonical V1/V2 session/message/part/event/invocation contracts; synthetic histories verify semantic parity.
 
 Invocations are model requests, not assistant records. Current V2 can split one response's tool calls into explicit-zero, tool-only records; `normalize_request_invocations` drops only such a record's invocation (the message stays canonical history) when it directly follows a usage-bearing `tool-calls` record of the same session/prompt/model and either shares its provider response id or, without ids on both sides, began streaming within 500 ms of creation. Differing or one-sided ids, latency, own text/reasoning, absent counters, errors, model switches and user/compaction boundaries keep it a request.
 
 The adapter caches a complete catalog and one shared child/tree index with memoized revisions. Discovery/resync replaces it; events invalidate it. Required snapshot batches share before/after catalogs, but every tree must match around its message reads; only unstable trees retry. A complete catalog at most 2s old may be the before bracket, followed by two fresh attempts on mismatch. Repeated instability fails; hints never become durable truth.
 
+`load_session_snapshots_for_sampling()` is a strict, single-reader bounded-window
+capability for report lookahead, not the four-reader observed-date or partial-Watch
+path. It returns only fully bracketed batches or a typed failure. An internal
+`SourceSnapshotMemberError` identifies a member fault for the consuming report;
+the member locator is absent from exported error evidence. Shared catalog faults
+remain unwrapped. Ordinary single/batch snapshot semantics are unchanged.
+
 `opencode_v2_wire.py` binds qualified persisted `idle` outcomes to the preceding attempt as neutral `TerminalEvidence`. A failed/interrupted run with no assistant binds to its initiating user/synthetic message, never an earlier assistant; system notices are transparent, while compaction and ambiguous timestamps block attribution. Status/inactivity/transport failure alone proves no end. Native completion/usage/billing stays unchanged; Diagnostics counts terminal evidence separately. Path-free `location-switched`, `agent-switched`, and `model-switched` items become non-billable context boundaries. When supported, the documented session-context route contributes only path-free active message IDs; unsupported evidence stays absent. `opencode_v2_background.py` maps background jobs/completion notices to neutral `BackgroundActivity`/`BACKGROUND_COMPLETION`; a job without notice runs until its location's shell registry drops it.
 
 `/api/event` decodes current JSON-string and legacy object events. Hints invalidate snapshots; explicit live actors supplement only a matching persisted cancellation. End/disconnect/failure requires authoritative resync; older history and a fresh source never invent actors.
+
+Web's isolated card-service factory may explicitly inherit a detached copy of the
+coordinator's bounded actor evidence. `inherit_live_evidence()` checks the observed
+registration/service epoch, not only the path-derived `source_instance`; an epoch
+change clears old evidence and revision hints. Old streams retain their old registry,
+so buffered retired events cannot contaminate a new epoch. Every returned snapshot
+still requires its ordinary catalog brackets and matching persisted idle identity/time.
+`test_watch_history_acquisition.py` covers this cross-reader proof contract.
+
+Web cards alone may use `load_card_snapshots()` for one to three roots. Root-local
+read failures remain typed outcomes while successful siblings still require their
+after-catalog revision proof; auth/registration and shared catalog failures are
+group-wide. An observed service-epoch change rejects the entire group, including
+identical metadata. Ordinary strict and available-history report APIs retain their
+existing failure semantics. Caller cancellation must reach transport and join all
+owned hydration readers before replay; no partial bracket is publishable.
+
+Exclusively borrowed Web-card readers additionally use `opencode_v2_tree.py`'s
+`CardTreeBrackets`. One compact capability result per known observed epoch checks
+the registered OpenAPI for session GET and parentID/limit/cursor. Valid absence or
+explicitly unsupported specification routes use the original global path; auth,
+transport and malformed specifications fail with their actual types. Scoped reads
+recursively exhaust direct-child pages, including leaves, with identity/parent/
+cycle checks and no tree-size or computation-duration limit. A qualified complete
+global catalog may supply before only when all requested roots are present, using
+a separate local index so its revision memo is untouched. After begins after all
+group hydration and is always fresh. No partial tree renews or replaces global
+membership, catalog time or revision hints. Active interpretation is shared with
+global acquisition. Current-job tree locations feed skill lookup (including moved
+sessions) without silently fetching a global catalog; the next borrow clears them.
+Ordinary CLI, finite reports and the other Web lanes retain global brackets.
+`test_v2_tree_brackets.py` covers this explicit local-index seam and typed failures.
 
 Watch classifies V2 skill-call origin only from the location-scoped `/api/skill` registry: `/builtin` paths are built-in, other absolute source paths are custom, and unsupported/ambiguous paths remain unknown. Registry reads are cached per location and service connection; Cost Guard does not write OpenCode data.
 

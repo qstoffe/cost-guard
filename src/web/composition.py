@@ -91,10 +91,16 @@ def live_acquisition(*, selection=None):
         account_provider=accounts[0] if accounts else None, account_providers=accounts,
         model_availability_source=_model_availability_source(selection),
         cache_repository=cache, config=config, now_ms=int(time.time() * 1000))
-    def card_service(now_ms):
+    def card_service(now_ms, *, reader=None):
         # Construct on the worker: no mutable integration/SQLite connection is
         # shared with Live, detail transport, or another card's acquisition.
-        card_selection = SourceSelector().select(selection.selected)
+        if reader is not None:
+            reader.begin_card_read(selection.source)
+        card_selection = SourceSelector(inspect_migration_gap=False,
+            **({'v2_factory': lambda: reader} if reader is not None else {})).select(selection.selected)
+        inherit = getattr(card_selection.source, 'inherit_live_evidence', None)
+        if reader is None and callable(inherit):
+            inherit(selection.source)
         card_database = CacheDatabase(root)
         card_database.initialize()
         card_cache = CacheRepository(card_database)
@@ -111,5 +117,13 @@ def live_acquisition(*, selection=None):
             max_age_hours=float(config.get("pricingMaxAgeHours", 1)))
         return repository, provider.get_catalog()
 
+    from src.reports.context_guidance import cached_guidance_binding
+    from src.watch.card_readers import CardReaders
+    from src.sources.opencode_v2 import OpenCodeV2Source
+    card_readers = (CardReaders(selection.source.new_card_reader)
+        if selection.selected == 'v2' and isinstance(selection.source, OpenCodeV2Source) else None)
     return LiveAcquisition(WebWatchCoordinator(selection=selection, report_service=service,
-        config=config, service_factory=card_service, session_cost_factory=session_cost_resources))
+        config=config, service_factory=card_service, session_cost_factory=session_cost_resources,
+        card_readers=card_readers,
+        guidance_binding=cached_guidance_binding
+            if callable(getattr(selection.source, 'refresh_observation_epoch', None)) else None))

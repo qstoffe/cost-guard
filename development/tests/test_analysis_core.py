@@ -211,6 +211,95 @@ class FakeSource:
 
 
 class DerivedCacheTests(unittest.TestCase):
+    def test_bulk_observed_miss_reuses_only_a_matching_authoritative_snapshot(self):
+        snapshot = replace(make_snapshot(), complete=True)
+        source, deps = FakeSource(snapshot), AnalysisDependencies('config', 'prices')
+        with tempfile.TemporaryDirectory() as directory:
+            database = CacheDatabase(Path(directory))
+            database.initialize()
+            cache = DerivedAnalysisCache(CacheRepository(database))
+            observation = cache.observe_many(((snapshot.root, snapshot.source_revision),), deps)[snapshot.root.session_id]
+            expected = analyze_snapshot(snapshot, now_ms=4000)
+            cache.store(expected, provenance=snapshot.root.provenance, dependencies=deps)
+
+            with mock.patch.object(cache, 'load', side_effect=AssertionError('duplicate cache read')):
+                acquired = analyze_with_cache(source, snapshot.root, cache, deps, lambda _snapshot: expected,
+                    snapshot=snapshot, observation=observation)
+            reused = analyze_with_cache(source, snapshot.root, cache, deps,
+                mock.Mock(side_effect=AssertionError('valid concurrent cache hit must win without a staged snapshot')),
+                observation=observation)
+
+            self.assertFalse(acquired.cache_hit, 'an observed miss cannot become a claimed cache hit')
+            self.assertEqual(expected, acquired.bundle)
+            self.assertTrue(reused.cache_hit)
+            self.assertEqual(0, source.load_count)
+
+    def test_scalar_and_bulk_reject_decoded_root_or_revision_mismatch(self):
+        snapshot, deps = make_snapshot(), AnalysisDependencies('config', 'prices')
+        with tempfile.TemporaryDirectory() as directory:
+            database = CacheDatabase(Path(directory))
+            database.initialize()
+            repository = CacheRepository(database)
+            cache = DerivedAnalysisCache(repository)
+            bundle = analyze_snapshot(snapshot, now_ms=4000)
+            for field, value in (('root_session_id', 'other-root'), ('source_revision', 'other-revision')):
+                with self.subTest(field=field):
+                    cache.store(bundle, provenance=snapshot.root.provenance, dependencies=deps)
+                    with database.connect() as connection:
+                        import json
+                        payload = json.loads(connection.execute(
+                            "SELECT payload_json FROM cache_entries WHERE namespace='derived-analysis'").fetchone()[0])
+                        payload[field] = value
+                        connection.execute("UPDATE cache_entries SET payload_json=? WHERE namespace='derived-analysis'",
+                            (json.dumps(payload),))
+
+                    self.assertIsNone(cache.load(provenance=snapshot.root.provenance,
+                        root_session_id=snapshot.root.session_id, source_revision=snapshot.source_revision, dependencies=deps))
+                    observed = cache.observe_many(((snapshot.root, snapshot.source_revision),), deps)
+                    self.assertIsNone(observed[snapshot.root.session_id].bundle)
+
+    def test_bulk_read_failure_is_not_a_negative_cache_observation(self):
+        import sqlite3
+        snapshot, deps = make_snapshot(), AnalysisDependencies('config', 'prices')
+        repository = mock.Mock()
+        failure = sqlite3.OperationalError('Synthetic read failure')
+        repository.get_many.side_effect = failure
+        cache = DerivedAnalysisCache(repository)
+
+        with self.assertRaises(sqlite3.OperationalError) as raised:
+            cache.observe_many(((snapshot.root, snapshot.source_revision),), deps)
+
+        self.assertIs(failure, raised.exception)
+
+    def test_observed_miss_rejects_changed_identity_dependencies_or_unproved_snapshot(self):
+        snapshot = replace(make_snapshot(), complete=True)
+        source, deps = FakeSource(snapshot), AnalysisDependencies('config', 'prices')
+        expected = analyze_snapshot(snapshot, now_ms=4000)
+        with tempfile.TemporaryDirectory() as directory:
+            database = CacheDatabase(Path(directory))
+            database.initialize()
+            cache = DerivedAnalysisCache(CacheRepository(database))
+            cache.write_enabled = False
+            observed = cache.observe_many(((snapshot.root, snapshot.source_revision),), deps)[snapshot.root.session_id]
+            cases = (
+                (replace(observed, root_session_id='different'), snapshot),
+                (replace(observed, provenance=replace(observed.provenance, source_instance='different')), snapshot),
+                (replace(observed, source_revision='different'), snapshot),
+                (replace(observed, dependencies=replace(deps, config_signature='different')), snapshot),
+                (replace(observed, dependencies=replace(deps, pricing_signature='different')), snapshot),
+                (replace(observed, dependencies=replace(deps, algorithm_version='different')), snapshot),
+                (observed, replace(snapshot, complete=False)),
+                (observed, replace(snapshot, root=replace(snapshot.root, session_id='different'))),
+            )
+            for observation, staged in cases:
+                with self.subTest(observation=observation, complete=staged.complete):
+                    with mock.patch.object(cache, 'load', return_value=None) as ordinary:
+                        result = analyze_with_cache(source, snapshot.root, cache, deps,
+                            lambda _snapshot: expected, snapshot=staged, observation=observation)
+                    ordinary.assert_called_once()
+                    self.assertFalse(result.cache_hit)
+            self.assertEqual(1, source.load_count, 'a wrong-identity staged snapshot must be replaced, not analyzed')
+
     def test_pre_abort_fix_algorithm_cache_is_rebuilt_without_source_revision_change(self) -> None:
         snapshot = make_snapshot()
         old_snapshot = replace(snapshot, messages=tuple(

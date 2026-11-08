@@ -78,6 +78,54 @@ class V1HistoryDiscoveryTests(unittest.TestCase):
 
 
 class V2HistoryBatchTests(unittest.TestCase):
+    def test_default_models_window_batches_two_without_changing_whole_sequential_projection(self):
+        from src.reports import ReportKind, ReportRequest
+        with tempfile.TemporaryDirectory() as directory, source_with_current_service() as (source, wire, _):
+            wire.sessions[1].pop('parentID')
+            for kind in (ReportKind.NORMAL, ReportKind.ALL_MODELS):
+                reports, catalogs = [], []
+                for size in (1, None):
+                    _, _, service, _ = make_service(str(Path(directory) / f'{kind.value}-{size}'), source, now_ms=10000)
+                    if size is not None:
+                        service._acquisition.sample_window_size = size
+                    else:
+                        self.assertEqual(2, service._acquisition.sample_window_size)
+                    before = source.metrics.counts.get('full_catalog_fetches', 0)
+
+                    reports.append(service.build(ReportRequest(kind)))
+
+                    catalogs.append(source.metrics.counts['full_catalog_fetches'] - before)
+                    self.assertEqual(set(service._analyzed), set(service._acquisition.revisions))
+                self.assertEqual(reports[0], reports[1])
+                self.assertLess(catalogs[1], catalogs[0])
+
+    def test_sampling_window_identifies_member_fault_without_partial_results_or_extra_readers(self):
+        from threading import get_ident
+        from src.sources.errors import SourceDataError, SourceSnapshotMemberError
+        with source_with_current_service() as (source, service, _):
+            service.sessions[1].pop('parentID')
+            roots = [value.session_id for value in source.list_sessions()]
+            original = source._load_messages
+            threads = []
+            failure = SourceDataError('Synthetic malformed tail')
+
+            def read(native):
+                threads.append(get_ident())
+                if native.data['id'] == roots[1]:
+                    raise failure
+                return original(native)
+
+            with patch.object(source, '_load_messages', side_effect=read):
+                with self.assertRaises(SourceSnapshotMemberError) as raised:
+                    source.load_session_snapshots_for_sampling(roots)
+                self.assertEqual(roots[1], raised.exception.session_id)
+                self.assertIs(failure, raised.exception.failure)
+                self.assertNotIn(roots[1], json.dumps(raised.exception.evidence()))
+                with self.assertRaises(SourceDataError) as ordinary:
+                    source.load_session_snapshot(roots[1])
+                self.assertIs(failure, ordinary.exception)
+            self.assertEqual({get_ident()}, set(threads))
+
     def test_watch_selection_skips_unrendered_migration_gap_and_report_reuses_fresh_catalog(self):
         with source_with_current_service() as (source, service, _):
             def unavailable_legacy():

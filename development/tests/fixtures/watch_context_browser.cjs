@@ -2,7 +2,7 @@
 const assert = require('node:assert/strict');
 module.exports = async function checkContext(evaluate) {
   const result = await evaluate(`(() => {
-    const original=structuredClone(INPUT.view.active_cards);
+    const original=structuredClone(INPUT.view.active_cards), originalHistory=structuredClone(INPUT.view.history_cards);
     const card=INPUT.view.active_cards[0], item=card.rows[0], value=card.session_summary;
     const root=()=>document.querySelector('.watch-active .watch-card');
     const summary=()=>root().querySelector('.watch-session-summary');
@@ -56,14 +56,49 @@ module.exports = async function checkContext(evaluate) {
       const range=color(impact())===ordinaryColor && summary().firstChild.textContent.endsWith('; Next Ictx CCost 0.3–3)');
       value.context.warning.display.warning_cost='';redraw();
       const noImpact=summary().firstChild.textContent.endsWith('(Price threshold >100.0K exceeded)') && !impact().textContent;
+      const guidance=[];
+      for(const [state,wording] of [['pending','Price comparison pending'],['unavailable','Price comparison unavailable; retrying'],['ready','2.4x more expensive']]) {
+        value.context.warning.guidance_state=state;
+        value.context.warning.multiplier=state==='ready'?'2.4':null;
+        value.context.warning.display.warning_cost='('+wording+')';redraw();
+        guidance.push(summary().dataset.guidance===state && summary().firstChild.textContent.includes(wording) &&
+          summary().dataset.severity==='exceeded' && context().textContent==='120k' && !icon().hidden);
+      }
       summary().firstChild.children[1].focus();
       const help=document.getElementById('context-help').textContent.includes('not a session spending limit');
-      return {both,undecorated,transitions,ordinaryColor,invalidated,plain,usd,credits,range,noImpact,help};
+      document.activeElement?.blur();
+      const historyIds=originalHistory.map(card=>card.session_id), staged=[];
+      // Start without a previously priced card: ordinary revalidation correctly
+      // retains a known cost instead of replacing it with a loading placeholder.
+      INPUT.view.history_cards=[];redraw();INPUT.view.history_cards=structuredClone(originalHistory);
+      let historyRoot;
+      const epoch=INPUT.view.history_epoch;
+      for(const ready of [false,true]) {
+        for(const card of INPUT.view.history_cards) {
+          const previous=originalHistory.find(value=>value.session_id===card.session_id).session_summary;
+          card.session_summary={...previous,state:ready?'observed':'loading',cost:ready?previous.cost:null,
+            context:{...previous.context,warning:{...previous.context.warning,guidance_state:ready?'ready':'pending',
+              multiplier:ready?'2.4':null,display:{warning_cost:ready?'(2.4x more expensive)':'(Price comparison pending)'}}}};
+        }
+        redraw();
+        const cards=[...document.querySelectorAll('.watch-history .watch-card')];
+        historyRoot ||= cards[0];
+        staged.push(cards.length===5 && JSON.stringify(cards.map(card=>card.dataset.session))===JSON.stringify(historyIds) &&
+          cards[0]===historyRoot && INPUT.view.history_epoch===epoch && cards.every(card=>
+            card.getBoundingClientRect().height>0 && card.querySelector('h3').textContent &&
+            card.querySelector('tbody td:first-child').textContent && card.querySelector('tbody td:nth-child(4)').textContent &&
+            card.querySelector('.watch-session-summary').dataset.guidance===(ready?'ready':'pending') &&
+            card.querySelector('.watch-session-context').textContent==='120k' &&
+            card.querySelector('.watch-session-summary').lastChild.textContent===('Total CCost: '+(ready?'4583':'Loading…'))));
+      }
+      return {both,undecorated,transitions,ordinaryColor,invalidated,plain,usd,credits,range,noImpact,help,guidance,staged};
     } finally {
-      document.activeElement?.blur();INPUT.view.active_cards=original;redraw();
+      document.activeElement?.blur();INPUT.view.active_cards=original;INPUT.view.history_cards=originalHistory;redraw();
     }
   })()`);
   for (const key of ['both','undecorated','invalidated','plain','usd','credits','range','noImpact','help']) assert.equal(result[key],true,key);
+  assert.deepEqual(result.guidance,[true,true,true]);
+  assert.deepEqual(result.staged,[true,true]);
   for (const sample of result.transitions) {
     assert.equal(sample.actual,sample.severity);assert.equal(sample.visible,sample.severity!=='none');
     assert.equal(sample.stable,true);assert.equal(sample.accessible,true);assert.equal(sample.placement,true);

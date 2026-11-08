@@ -106,7 +106,23 @@ def watch_reset(quota, timezone_id, now_ms):
     return f"Reset in {duration_text(deadline - now_ms)}, {format_local_timestamp(deadline, timezone_id, '%H:%M')}"
 
 
-def metric_tokens(values, timezone_id, now_ms=None):
+def metric_time_tokens(values, timezone_id, now_ms):
+    """Unit-independent clocks for one frozen record in this projection only."""
+    tokens = {}
+    for key in ("pricing_retrieved_at_ms", "observed_at_ms", "now_ms", "started_at_ms", "reset_at_ms", "start_ms", "end_ms"):
+        if key in values:
+            tokens[key] = "unknown" if values[key] is None else format_local_timestamp(values[key], timezone_id)
+    if "reset_at_ms" in values and now_ms is not None:
+        tokens["reset"] = ("Window not started" if values.get("window_active") is False and values["reset_at_ms"] is None
+                           else format_reset(values["reset_at_ms"], timezone_id, now_ms=now_ms))
+    if "used_percent" in values and "quota" in values and now_ms is not None:
+        tokens["watch_reset"] = watch_reset(values["quota"], timezone_id, now_ms)
+    if "duration_seconds" in values:
+        tokens["window"] = "" if values["duration_seconds"] is None else duration_text(values["duration_seconds"] * 1000)
+    return tokens
+
+
+def metric_tokens(values, timezone_id, now_ms=None, *, times=None):
     tokens = {}
     if "source_label" in values or "token_mix_percent" in values or ("totals" in values and "shares" in values):
         tokens["token_categories"] = record(**dict(TOKEN_CATEGORIES))
@@ -120,16 +136,7 @@ def metric_tokens(values, timezone_id, now_ms=None):
     for key in ("delta_context_tokens", "watch_delta_context_tokens"):
         if key in values:
             tokens[key] = context_delta(values[key])
-    for key in ("pricing_retrieved_at_ms", "observed_at_ms", "now_ms", "started_at_ms", "reset_at_ms", "start_ms", "end_ms"):
-        if key in values:
-            tokens[key] = "unknown" if values[key] is None else format_local_timestamp(values[key], timezone_id)
-    if "reset_at_ms" in values and now_ms is not None:
-        tokens["reset"] = ("Window not started" if values.get("window_active") is False and values["reset_at_ms"] is None
-                           else format_reset(values["reset_at_ms"], timezone_id, now_ms=now_ms))
-    if "used_percent" in values and "quota" in values and now_ms is not None:
-        tokens["watch_reset"] = watch_reset(values["quota"], timezone_id, now_ms)
-    if "duration_seconds" in values:
-        tokens["window"] = "" if values["duration_seconds"] is None else duration_text(values["duration_seconds"] * 1000)
+    tokens.update(metric_time_tokens(values, timezone_id, now_ms) if times is None else times)
     if "relative_cost" in values:
         if "evidence" in values:
             evidence = dict(values["evidence"].fields)
@@ -181,19 +188,9 @@ def roles(values):
     return tuple(result)
 
 
-def history_tokens(values, timezone_id):
-    """CLI prompt clocks/context guidance and historical mix cells from frozen facts."""
+def history_time_tokens(values, timezone_id):
+    """Canonical start/finish/abort labels are identical in both CCost units."""
     tokens = {}
-    if "severity" in values and "multiplier" in values:
-        multiplier = decimal(values["multiplier"])
-        if multiplier is not None:
-            ratio = f"{multiplier.quantize(Decimal('0.1'), rounding=ROUND_HALF_UP):f}".removesuffix(".0")
-            tokens["warning_cost"] = f"({ratio}x more expensive)"
-        elif values.get("cached_ccost") is not None and values.get("fresh_ccost") is not None:
-            tokens["warning_cost"] = "(Next Ictx CCost " + ccost_range(
-                decimal(values["cached_ccost"]), decimal(values["fresh_ccost"])) + ")"
-        else:
-            tokens["warning_cost"] = ""
     if "at_ms" in values:
         tokens["clock"] = format_local_timestamp(values["at_ms"], timezone_id, "%H:%M")
         tokens["date_time"] = format_local_timestamp(values["at_ms"], timezone_id, "%Y-%m-%d %H:%M")
@@ -203,6 +200,31 @@ def history_tokens(values, timezone_id):
         tokens["finished_date_time"] = "Unknown finish time" if finished is None else format_local_timestamp(finished, timezone_id, "%Y-%m-%d %H:%M %z")
     if values.get("aborted") and values.get("abort_at_ms"):
         tokens["abort_clock"] = format_local_timestamp(values["abort_at_ms"], timezone_id, "%H:%M")
+    return tokens
+
+
+def history_tokens(values, timezone_id, *, times=None):
+    """CLI prompt clocks/context guidance and historical mix cells from frozen facts."""
+    tokens = {}
+    if "severity" in values and "multiplier" in values:
+        multiplier = decimal(values["multiplier"])
+        if values.get('guidance_state') == 'pending':
+            tokens['warning_cost'] = '(Price comparison pending)'
+        elif values.get('guidance_state') == 'unavailable':
+            tokens['warning_cost'] = '(Price comparison unavailable; retrying)'
+        elif multiplier is not None:
+            ratio = f"{multiplier.quantize(Decimal('0.1'), rounding=ROUND_HALF_UP):f}".removesuffix(".0")
+            tokens["warning_cost"] = f"({ratio}x more expensive)"
+        elif values.get("cached_ccost") is not None and values.get("fresh_ccost") is not None:
+            tokens["warning_cost"] = "(Next Ictx CCost " + ccost_range(
+                decimal(values["cached_ccost"]), decimal(values["fresh_ccost"])) + ")"
+        else:
+            tokens["warning_cost"] = ""
+        if values.get('guidance_state') == 'refreshing':
+            at = values.get('guidance_sample_at_ms')
+            sample = format_local_timestamp(at, timezone_id, '%Y-%m-%d %H:%M') if at is not None else 'earlier'
+            tokens['warning_cost'] += f' (Price sample {sample}; updating)'
+    tokens.update(history_time_tokens(values, timezone_id) if times is None else times)
     if "next_context_tokens" in values:
         context = values["next_context_tokens"]
         tokens["next_context"] = "Next Ictx: N/A" if context is None else "Next Ictx: ~" + context_tokens(context)
@@ -251,11 +273,13 @@ def _with_display(value, timezone_id, now_ms):
     # Only differing CCost tokens need a second wire representation. Native
     # amounts and canonical sort/analysis values never participate in switching.
     variants = {}
+    metric_times = metric_time_tokens(values, timezone_id, now_ms)
+    history_times = history_time_tokens(values, timezone_id)
     for unit in ("credits", "usd"):
         with ccost_display(unit):
             alternate = amount_tokens(values)
-            alternate.update(metric_tokens(values, timezone_id, now_ms))
-            alternate.update(history_tokens(values, timezone_id))
+            alternate.update(metric_tokens(values, timezone_id, now_ms, times=metric_times))
+            alternate.update(history_tokens(values, timezone_id, times=history_times))
             alternate.update(quota_ccost_tokens(values, now_ms))
             alternate.update(detail_tokens(values))
             alternate.update(stat_tokens(values))

@@ -318,7 +318,7 @@ class MatchedInputsTests(unittest.TestCase):
                 parse_report(value)
 
     def test_actual_finite_job_coalesces_returns_all_rows_and_can_be_cancelled(self):
-        jobs = ReportJobs(target=finite_comparisons, deadline=10)
+        jobs = ReportJobs(target=finite_comparisons)
         self.addCleanup(jobs.close)
         request = ReportRequest(ReportKind.COMPARISONS)
         key = jobs.submit(request)

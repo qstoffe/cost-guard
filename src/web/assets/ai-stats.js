@@ -120,14 +120,17 @@ const AIStatsView = (() => {
       const e = ReportView.element;
       for (const [id, button] of this.buttons) button.setAttribute('aria-pressed', String(id === state.period));
       const row = state.result?.view.ai_stats.find(item => item.period === state.period);
-      if (!row || state.withheld) {
+      const interval = CachedReports.interval(state.result, state.period);
+      if (!row || state.withheld || !interval) {
         if (this.content.contains(this.grid)) this.grid.remove();
         ReportView.text(this.status, state.withheld ?
-          `Retained data are stale and withheld. Last successful observation: ${new Date(CachedReports.observation(state.result)).toLocaleString()}.` : '');
+          'Retained scope lacks valid observation or interval evidence; waiting for a qualified report.' : '');
         ReportLoading.show(this.content, state);
         return;
       }
-      ReportView.text(this.status, [state.failed && state.message, ReportView.historyWarning(state.result)].filter(Boolean).join(' '));
+      const period = periods.find(([id]) => id === state.period)[1];
+      ReportView.text(this.status, [`${period} snapshot interval: ${interval}.`,
+        state.failed && state.message, ReportView.historyWarning(state.result)].filter(Boolean).join(' '));
       // Mutate the ten retained cards in one synchronous commit; never touch focus/scroll.
       for (const metric of row.metrics) {
         const card = this.cards.get(metric.metric);

@@ -1,6 +1,7 @@
 """Deep date reports retain every eligible V2 root and canonical range result."""
 from decimal import Decimal
 from math import ceil
+import multiprocessing
 from pathlib import Path
 import shutil
 import subprocess
@@ -12,7 +13,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-from development.tests.fixtures.historical_reports import DAY, HistoricalWire, blocked_date_report
+from development.tests.fixtures.historical_reports import DAY, HeldDateReport, HistoricalWire, blocked_date_report
 from development.tests.fixtures.opencode_v2_service import source_with_current_service
 from development.tests.fixtures.watch_runtime import make_service
 from src.reports import ReportKind, ReportRequest
@@ -28,9 +29,10 @@ class HistoricalReportTests(unittest.TestCase):
         self.assertEqual(0, result['owned_processes'])
         self.assertEqual(2, result['streams'])
 
-    def test_deadline_retains_actual_pending_read_phase_not_an_empty_result(self):
+    def test_long_valid_read_keeps_progress_and_automatically_returns_complete_data(self):
         jobs = ReportJobs(target=blocked_date_report)
-        key = jobs.submit(ReportRequest(ReportKind.DATE, date_text='2026-10-25'))
+        release = multiprocessing.get_context('spawn').Event()
+        key = jobs.submit(HeldDateReport(ReportKind.DATE, date_text='2026-10-25', release=release))
         try:
             until = time.monotonic() + 5
             while time.monotonic() < until:
@@ -42,17 +44,28 @@ class HistoricalReportTests(unittest.TestCase):
             self.assertEqual('running', state['status'])
             self.assertEqual('date-messages', state['progress'].get('stage'))
             self.assertEqual(4, state['progress']['completed'])
-            # Once actual HTTP reads are pending, trigger the existing deadline
-            # deterministically instead of adding a 120-second test sleep.
-            jobs._deadline = 0
+            owner, process, receiver, started = jobs._active
+            jobs._active = owner, process, receiver, started - 2 * 86400
             jobs.tick()
-            failed = jobs.snapshot(key)
-            self.assertEqual('failed', failed['status'])
-            self.assertEqual('report_timeout', failed['error'])
-            self.assertIsNone(failed['result'])
-            self.assertEqual(state['progress'], failed['progress'])
+            pending = jobs.snapshot(key)
+            self.assertEqual('running', pending['status'])
+            self.assertIsNone(pending['error'])
+            self.assertIsNone(pending['result'])
+            self.assertEqual(state['progress'], pending['progress'])
+            release.set()
+            until = time.monotonic() + 5
+            while time.monotonic() < until:
+                jobs.tick()
+                result = jobs.snapshot(key)
+                if result['status'] not in {'queued', 'running'}:
+                    break
+                time.sleep(.01)
+            self.assertEqual('complete', result['status'], result['error'])
+            self.assertIsNone(result['result']['error'])
+            self.assertEqual(8, len(result['result']['view']['prompt_blocks']))
             self.assertIsNone(jobs._active)
         finally:
+            release.set()
             jobs.close()
 
     def test_application_exports_date_phases_without_private_labels(self):

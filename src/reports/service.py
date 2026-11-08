@@ -19,6 +19,7 @@ from src.analysis import (
     local_report_range,
     local_month_start_ms,
 )
+from src.analysis.cache import CacheObservation
 from src.analysis.comparisons import model_comparison_rows, threshold_cost_multiplier
 from src.analysis.models import PromptRecord, RootAnalysisBundle, TraceEntry
 from src.analysis.duration import accumulated_duration
@@ -202,9 +203,10 @@ class ReportService:
 
     def _analyze(
         self, root: NormalizedSession, *, detail: bool = False, force_fresh: bool = False,
-        snapshot: SessionSnapshot | None = None,
+        snapshot: SessionSnapshot | None = None, observation: CacheObservation | None = None,
     ) -> AnalyzedRoot:
-        return self._acquisition.analyze(root, now_ms=self.now_ms, detail=detail, force_fresh=force_fresh, snapshot=snapshot)
+        return self._acquisition.analyze(root, now_ms=self.now_ms, detail=detail, force_fresh=force_fresh,
+                                         snapshot=snapshot, observation=observation)
 
     def _analyze_snapshot(self, snapshot: SessionSnapshot) -> RootAnalysisBundle:
         with self.metrics.measure("analysis"):
@@ -370,13 +372,11 @@ class ReportService:
 
     def _threshold_multiplier(self, model_id: str, threshold: int) -> Decimal | None:
         """Warning multiplier from the normal report's Relative CCost sample (refreshed every 15 min)."""
-        if self._comparison_mix is None or self.now_ms - self._comparison_mix[1] >= 900_000:
+        if self._comparison_mix is None or not 0 <= self.now_ms - self._comparison_mix[1] < 900_000:
+            from .context_sample import collect_context_sample
             roots, activity = self._ordered_roots(self.session_catalog())
-            priceable = self._priceable()
-            sampled = recent_sample_roots(roots, activity, self._analyze, priceable)
-            self.metrics.add("context_warning_sample_roots", len(sampled))
-            sample = latest_prompts(sampled, priceable)
-            self._comparison_mix = (normalized_average_token_mix(self._relative_usage(sample)), self.now_ms)
+            sampled = collect_context_sample(self, roots, activity)
+            self._comparison_mix = (sampled.mix, self.now_ms)
         catalog = self._load_comparison_catalog()
         return threshold_cost_multiplier(catalog, model_id, threshold, self._comparison_mix[0])
 
@@ -623,11 +623,16 @@ class ReportService:
         start = self._watch_history.scope_start_ms
         return start is not None and start > getattr(self, "_watch_period_start_ms", start)
 
-    def project_watch_accounts(self, quotas: Sequence[AccountSnapshot]) -> tuple[AccountsQuotasProjection, tuple[TraceEntry, ...]]:
-        """Publish new quota evidence over cached local usage, without source I/O."""
+    def prepare_watch_account_history(self, quotas: Sequence[AccountSnapshot]) -> int:
+        """Establish period admission requirements without valuation or publication."""
         from src.analysis.period_ccost import history_start
         day = local_day_start_ms(self.timezone_id, now_ms=self.now_ms)
         self._watch_period_start_ms = history_start(quotas, day, self.now_ms, include_native_month=True)
+        return day
+
+    def project_watch_accounts(self, quotas: Sequence[AccountSnapshot]) -> tuple[AccountsQuotasProjection, tuple[TraceEntry, ...]]:
+        """Publish new quota evidence over cached local usage, without source I/O."""
+        day = self.prepare_watch_account_history(quotas)
         projection, today = self._watch_account_projection.project(
             quotas, self._watch_quota_entries, self._load_comparison_catalog(), now_ms=self.now_ms,
             day_start_ms=day,
@@ -793,8 +798,12 @@ class ReportService:
                           root_activity: Mapping[str, int], *, include_model_catalog: bool = False) -> ReportProjection:
         priceable = self._priceable()
         self.progress(WorkProgress("Sampling recent sessions", "history", stage="sampling"))
-        analyzed = recent_sample_roots(roots, root_activity, self._analyze, priceable,
-            progress=lambda done: self.progress(WorkProgress("Sampling recent sessions", "history", done, stage="sampling")))
+        try:
+            analyzed = recent_sample_roots(roots, root_activity, self._analyze, priceable,
+                prepare=self._acquisition.prepare_sample, batch_size=self._acquisition.sample_window_size,
+                progress=lambda done: self.progress(WorkProgress("Sampling recent sessions", "history", done, stage="sampling")))
+        finally:
+            self._acquisition.clear_sample()
         self.progress(WorkProgress("Comparing model prices", "projection"))
         comparisons, sample, promo_notes, recent, recent_highlight_spans, availability_warnings, web_catalog = self._model_comparison(
             analyzed, all_models=request.kind is ReportKind.ALL_MODELS, include_model_catalog=include_model_catalog,

@@ -114,15 +114,20 @@ async function main() {
     await until(`current.section==='sessions' && current.catalog?.data?.offset===450`);
     assert.deepEqual(await evaluate(`current.catalog.data.view.session_usage.map(row=>row.session_id)`),await evaluate(`__rows`));
     facts.push('Sessions main navigation restores page 10 and its stable fifty rows');
+    // Earlier dependency invalidation cleared every product; first qualify this scope again.
+    await evaluate(`location.hash='#/token-mix'`);
+    await until(`current.section==='token-mix' && !!current.result && !current.loading && !current.withheld`);
     await fixture('age');
     const peer=await command('Target.createTarget',{url:'about:blank'});
     tab=(await command('Target.attachToTarget',{targetId:peer.targetId,flatten:true})).sessionId;
     await command('Runtime.enable');await command('Page.enable');
     await command('Page.navigate',{url:launch.url.split('#')[0]+'#/token-mix'});
-    await until(`typeof current!=='undefined' && current.section==='token-mix' && current.loading && !!document.querySelector('.report-loading')`);
-    assert.equal(await evaluate(`!!current.result`),false,'61-minute data is withheld');
-    await fixture('complete'); await until(`!!current.result && !current.loading && !current.withheld`);
-    facts.push('expired host result uses the shared loader and a coherent new publication');
+    await until(`typeof current!=='undefined' && current.section==='token-mix' && !!current.result && !current.loading && !current.withheld`);
+    assert.equal(await evaluate(`!document.querySelector('.report-loading') && document.getElementById('report-updating').textContent.includes('Historical snapshot as of')`),true,
+      'aged qualified data remain visible with the original historical observation');
+    const aged=await evaluate(`CachedReports.observation(current.result)`);
+    await fixture('complete'); await until(`CachedReports.observation(current.result)>${aged} && !current.loading && !current.withheld`);
+    facts.push('aged host result remains visible during refresh and is replaced by a coherent newer publication');
      assert.ok(retryTypes.length>0); assert.ok(retryTypes.every(value=>value==='boolean'),'every managed admission includes its strict retry boolean');
      assert.deepEqual(errors,[]); outcome='PASS'; console.log(JSON.stringify({outcome,facts}));
   } finally {

@@ -2,16 +2,18 @@
 // Explicit browser/output, no package installs, personal profiles or desktop input.
 const assert = require('node:assert/strict'), fs = require('node:fs/promises'), path = require('node:path');
 const {spawn} = require('node:child_process'), readline = require('node:readline');
-const [browser, output, scale = '1'] = process.argv.slice(2);
+const [browser, output, scale = '1', scope = 'all'] = process.argv.slice(2);
 async function main() {
   assert.ok(path.isAbsolute(browser) && path.isAbsolute(output));
   assert.ok(['1','1.5','2'].includes(scale));
+  assert.ok(['all','--history-demand-only'].includes(scope));
   await fs.stat(browser); await fs.stat(path.dirname(output));
   const profile = await fs.mkdtemp(path.join(path.dirname(output), 'mini-browser-'));
   const configRoot = await fs.mkdtemp(path.join(path.dirname(output), 'mini-config-'));
   let server, lines;
   const startServer = () => {
-    server = spawn('py', ['-3', 'development/tests/integration/serve_mini_watch.py', configRoot], {windowsHide:true, stdio:['pipe','pipe','pipe']});
+    server = spawn('py', ['-3', 'development/tests/integration/serve_mini_watch.py', configRoot,
+      ...(scope === '--history-demand-only' ? ['--history-demand'] : [])], {windowsHide:true, stdio:['pipe','pipe','pipe']});
     lines = readline.createInterface({input:server.stdout})[Symbol.asyncIterator]();
   };
   startServer();
@@ -24,7 +26,7 @@ async function main() {
    const child = spawn(browser, ['--headless=new', `--screen-info={${1920*Number(scale)}x${1080*Number(scale)}}`, '--force-device-scale-factor='+scale, '--no-first-run', '--no-default-browser-check',
     '--disable-extensions', '--disable-background-networking', '--remote-debugging-pipe',
     '--user-data-dir=' + profile, 'about:blank'], {windowsHide:true, stdio:['ignore','ignore','ignore','pipe','pipe']});
-  const pending = new Map(); let sequence = 0, buffer = '', errors = [];
+  const pending = new Map(), interest = []; let sequence = 0, buffer = '', errors = [];
   child.stdio[4].on('data', chunk => {
     buffer += chunk.toString(); let index;
     while ((index = buffer.indexOf('\0')) >= 0) {
@@ -33,6 +35,17 @@ async function main() {
         const entry = pending.get(value.id); pending.delete(value.id);
         if (entry) { clearTimeout(entry.timer); value.error ? entry.reject(new Error(JSON.stringify(value.error))) : entry.resolve(value.result); }
       } else if (value.method === 'Runtime.exceptionThrown') errors.push(value.params.exceptionDetails.text);
+      else if (scope === '--history-demand-only') {
+        if (value.method === 'Network.requestWillBeSent' && value.params.request.url.endsWith('/api/interest')) {
+          const payload = JSON.parse(value.params.request.postData);
+          interest.push({requestId:value.params.requestId, session:value.sessionId,
+            tab:payload.tab, visible:payload.visible, history:payload.history, section:payload.section});
+        } else {
+          const row = interest.find(row => row.requestId === value.params?.requestId && row.session === value.sessionId);
+          if (row && value.method === 'Network.responseReceived') row.status = value.params.response.status;
+          if (row && value.method === 'Network.loadingFinished') row.finished = true;
+        }
+      }
     }
   });
   const command = (method, params = {}, sessionId) => new Promise((resolve,reject) => {
@@ -48,6 +61,7 @@ async function main() {
     const {targetId} = await command('Target.createTarget', {url:'about:blank'});
     const {sessionId} = await command('Target.attachToTarget', {targetId,flatten:true});
     await command('Page.enable', {}, sessionId); await command('Runtime.enable', {}, sessionId);
+    if (scope === '--history-demand-only') await command('Network.enable', {}, sessionId);
     const evaluate = async (expression, userGesture=false) => {
       const value = await command('Runtime.evaluate', {expression,returnByValue:true,awaitPromise:true,userGesture}, sessionId);
       if (value.exceptionDetails) throw new Error(value.exceptionDetails.text);
@@ -70,6 +84,11 @@ async function main() {
     await evaluate(`miniWatch.toggle()`,true);
     const open = await evaluate(`({on:!!miniWatch.window,reason:miniWatch.feedback.textContent})`);
     assert.equal(open.on,true,open.reason);
+    if (scope === '--history-demand-only') {
+      evidence = await require('./probe_mini_history_demand.cjs')({command,evaluate,until,sessionId,targetId,
+        interest,errors,browser:version.product});
+      return;
+    }
     await require('./probe_mini_placement.cjs')({evaluate,until,command,sessionId,targetId,
       restart:async () => { launch = await restart(); return launch; },checks,layouts,output,screenshots});
     const checkIcon = async () => {

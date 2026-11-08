@@ -9,7 +9,6 @@ from threading import RLock
 import time
 
 from src.analysis.cache import dependency_signature
-from src.analysis import local_day_start_ms
 from src.reports import ReportKind, ReportRequest
 from .report_control import ManagedReport
 
@@ -17,7 +16,6 @@ FINITE = (ReportKind.NORMAL, ReportKind.AI_STATS, ReportKind.TOKEN_MIX, ReportKi
 SECTIONS = {'models', 'watch', 'accounts', 'sessions', 'session', 'token-mix', 'ai-stats', 'comparisons', 'settings'}
 MAX_ENTRIES = 12
 LEASE_SECONDS = 90
-MAX_AGE_MS = 3_600_000
 
 
 def source_identity(selection):
@@ -25,14 +23,11 @@ def source_identity(selection):
 
 
 def usable(result, now_ms):
+    """Qualified historical data remain deliverable; cadence owns refresh age."""
     if not result or result.get('error') or not result.get('view'):
         return False
     observed = result.get('source', {}).get('observed_at_ms')
-    scope = result.get('scope', {})
-    if scope.get('kind') == 'ai-stats' and scope.get('local_day_start_ms') != local_day_start_ms(
-            scope.get('timezone_id', 'UTC'), now_ms=now_ms):
-        return False
-    return (type(observed) is int and 0 <= now_ms - observed <= MAX_AGE_MS
+    return (type(observed) is int and 0 <= observed <= now_ms
             and result['source'].get('status') in {'acquired', 'partial'})
 
 
@@ -54,7 +49,6 @@ class DataDispatcher:
         self.initialized = False
         self.identity = ''
         self.next_background = 0
-        self.blocked_since = None
         self.source_error = None
         self.source_terminal = False
         self.price_actions = set()
@@ -95,12 +89,12 @@ class DataDispatcher:
         self.entries.move_to_end(request)
         return self.entries[request]
 
-    def interest(self, tab, section, visible, request=None):
+    def interest(self, tab, section, visible, request=None, *, history=False):
         with self.lock:
             self._expire()
             if tab not in self.tabs and len(self.tabs) >= 16:
                 raise RuntimeError('busy')
-            self.tabs[tab] = dict(section=section, visible=visible, request=request, touched=self.clock())
+            self.tabs[tab] = dict(section=section, visible=visible, request=request, history=history, touched=self.clock())
             if request:
                 entry = self._entry(request)
                 entry['requested'] = not bool(entry['result'])
@@ -137,7 +131,12 @@ class DataDispatcher:
             result = entry['result']
             valid = usable(result, int(self.wall_clock() * 1000))
             blocked = self.source_error
+            active = self.jobs.snapshot(entry['job']) if entry['job'] else None
+            refresh = ('stopped' if self.source_terminal or entry['terminal'] else
+                'waiting' if not self.ready else active['status'] if active else
+                'delayed' if entry['failures'] else 'scheduled')
             return dict(id=entry['job'] or (entry['result_id'] if valid else None), result=result if valid else None,
+                result_id=entry['result_id'] if valid else None, refresh=refresh,
                 stale=bool(result and not valid), error=blocked or entry['error'],
                 terminal=self.source_terminal or entry['terminal'])
 
@@ -174,10 +173,13 @@ class DataDispatcher:
                 entry['error'] = error.get('code') or snapshot.get('error') or 'report_unavailable'
                 if entry['error'] == 'source_identity_changed':
                     entry['result'] = None
-                entry['failures'] += 1
+                entry['failures'] = min(12, entry['failures'] + 1)
                 retryable = error.get('retryable') is True
-                entry['terminal'] = not retryable or entry['failures'] >= 3
-                entry['due'] = self.clock() + min(3600, 60 * 2 ** entry['failures'])
+                entry['terminal'] = not retryable
+                pending = entry['error'] in {'concurrent_source_change', 'history_revision_churn',
+                    'ai_stats_revision_churn', 'ai_stats_checkpoint_busy', 'session_catalog_changed'}
+                entry['due'] = self.clock() + (min(60, 2 ** entry['failures']) if pending else
+                    min(3600, 60 * 2 ** entry['failures']))
 
     def tick(self, *, identity=None, ready=True, error=None, terminal=False):
         with self.lock:
@@ -195,19 +197,17 @@ class DataDispatcher:
             self._prices()
             self._collect()
             if not ready:
-                if self.blocked_since is None:
-                    self.blocked_since = self.clock()
-                self.source_terminal = terminal or self.clock() - self.blocked_since >= 120
+                self.source_terminal = terminal
                 # A selected source can still be waiting for its first healthy
                 # Live observation. Identity alone is not report readiness.
-                self.source_error = error or ('source_wait_timeout' if self.source_terminal else 'source_starting')
+                self.source_error = error or 'source_starting'
                 if self.source_terminal:
                     for entry in self.entries.values():
                         if entry['job']:
                             self.jobs.cancel(entry['job'])
                             entry['job'] = None
             else:
-                self.blocked_since = self.source_error = None
+                self.source_error = None
                 self.source_terminal = False
             foreground = self._foreground()
             if not ready:
