@@ -4,7 +4,7 @@
   "completed": {
     "architecture": 60,
     "test-health": 75,
-    "performance": 40,
+    "performance": 80,
     "session-learning": 0
   },
   "deferred": {
