@@ -381,7 +381,7 @@ const MiniWatch = (() => {
           row = this.sessionRow(); row.dataset.id = key;
           this.promptRows.set(key, row);
         }
-        const outcome = prompt.in_progress ? 'Running' : prompt.aborted ? 'Aborted' : prompt.has_error ? 'Error' : prompt.completed_successfully ? 'Completed' : 'Ended';
+        const outcome = prompt.execution_unverified ? 'Unverified' : prompt.in_progress ? 'Running' : prompt.aborted ? 'Aborted' : prompt.has_error ? 'Error' : prompt.completed_successfully ? 'Completed' : 'Ended';
         const reason = !prompt.in_progress && prompt.abort_reason ? ' · ' + prompt.abort_reason.replaceAll('_', ' ') : '';
         const state = ['partial', 'retrying', 'unavailable'].includes(card.state) ? ' · ' + card.state + ' source evidence' : '';
         const session = this.drawSession(row.children[0], card);
@@ -390,7 +390,7 @@ const MiniWatch = (() => {
         row.className = prompt.in_progress ? 'mini-running' : prompt.aborted || prompt.has_error ? 'mini-error' : prompt.completed_successfully ? 'mini-success' : '';
         const context = display(item.live_context, 'watch_next_context_tokens');
         this.drawCost(row.children[1], card, prompt);
-        text(row.children[2], display(item, 'watch_duration_ms'));
+        text(row.children[2], prompt.execution_unverified ? 'Unverified' : display(item, 'watch_duration_ms'));
         text(row.children[3], context); wanted.push(row);
       }
       text(this.emptyPrompts.children[0].children[0], view?.cards_state === 'observed' ? 'No running or recently ended prompts' : 'Loading…');

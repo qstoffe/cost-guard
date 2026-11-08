@@ -24,7 +24,7 @@ const SessionDetail = (() => {
     const clock = ContextHelp.value(el('span', value.display?.clock || '—'), value.display?.date_time || 'Start time unavailable');
     const preview = el('span', value.preview || value.label || 'Prompt', 'session-preview');
     ContextHelp.value(preview, value.preview || value.label || 'Prompt');
-    label.append(clock, el('span', `${value.in_progress ? '[RUNNING] ' : ''}#${value.prompt_number ?? '—'}`), preview);
+    label.append(clock, el('span', `${value.execution_unverified ? '[UNVERIFIED] ' : value.in_progress ? '[RUNNING] ' : ''}#${value.prompt_number ?? '—'}`), preview);
     const cost = ContextHelp.value(el('span', () => ReportView.display(value, 'ccost')),
       () => ReportView.display(value, 'cost_detail_help') + (value.retained ? '\nRetained source evidence.' : ''));
     return [label, value.watch_model || 'N/A', value.watch_effort || 'N/A', cost,

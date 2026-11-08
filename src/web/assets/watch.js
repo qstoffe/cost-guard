@@ -206,13 +206,14 @@ const WatchView = (() => {
             const focal = !historical && prompt.event_id === value.focal_id;
             const role = focal ? promptRole(prompt) : '';
             row.className = role ? `watch-${role}` : '';
-            const outcome = prompt.in_progress ? 'Running' : prompt.aborted ? 'Aborted' : prompt.has_error ? 'Error' : prompt.completed_successfully ? 'Completed' : 'Ended';
+            const outcome = prompt.execution_unverified ? 'Unverified' : prompt.in_progress ? 'Running' : prompt.aborted ? 'Aborted' : prompt.has_error ? 'Error' : prompt.completed_successfully ? 'Completed' : 'Ended';
             const reason = !prompt.in_progress && {quota_limit: 'quota limit', rate_limit: 'rate limit',
               tool_call_limit: 'tool-call limit', step_limit: 'step limit', user: 'by user'}[prompt.abort_reason];
             row.setAttribute('aria-label', `Prompt ${prompt.prompt_number} · ${outcome}${reason ? ' · ' + reason : ''}`);
             const label = el('span', undefined, 'watch-prompt-label');
             const preview = el('span', prompt.preview || '', 'watch-prompt-preview');
-            label.append(el('span', '#' + prompt.prompt_number, 'watch-prompt-number'), preview);
+            label.append(el('span', '#' + prompt.prompt_number + (prompt.execution_unverified ? ' · Unverified' : ''), 'watch-prompt-number'), preview);
+            if (prompt.execution_unverified) ContextHelp.value(label, 'Unfinished request; this OpenCode process reports no active execution. Another server may own it. End time and execution duration are unknown.');
             const started = el('span', display(prompt, historical ? 'finished_clock' : 'clock'));
             if (!historical || prompt.completed_at_ms != null) ContextHelp.value(started, display(prompt, historical ? 'finished_date_time' : 'date_time'));
              const model = metricValue(row, 3, item.model + (prompt.linked_agent_count ? '*' : ''), display(prompt, 'model_detail_help'));
@@ -312,7 +313,8 @@ const WatchView = (() => {
       // history/accounts/daily acquisition and elapsed time say nothing about it.
       const noRunning = this.state.connection === 'Live connected.' && view.cards_state === 'observed' &&
         !active.some(card => card.rows.some(row => row.prompt.in_progress));
-      text(this.empty, sourceState || (!connected ? 'Live connection interrupted; last observation retained, not live.' : view.cards_state === 'unavailable' && !active.length ? 'Some prompt sources are unavailable.' : noRunning ? 'No running prompts' : ''));
+      const unverified = active.some(card => card.rows.some(row => row.prompt.execution_unverified));
+      text(this.empty, sourceState || (!connected ? 'Live connection interrupted; last observation retained, not live.' : view.cards_state === 'unavailable' && !active.length ? 'Some prompt sources are unavailable.' : unverified ? 'Some prompt execution is unverified' : noRunning ? 'No running prompts' : ''));
       this.empty.hidden = !this.empty.textContent;
       const keep = new Set();
       for (const [parent, values, historical] of [[this.active, active, false], [this.history, history, true]]) {

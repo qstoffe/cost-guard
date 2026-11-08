@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.205 — 2026-11-08
+
+- Unfinished requests with a complete negative native status and no positive tool, child or background evidence are **Unverified**, not indefinitely confirmed Running. CLI, Sessions, Full Watch and Mini share the state, retain observed usage and leave end time/execution duration unknown. Native running activity and later terminal evidence resolve uncertainty normally; no inactivity timeout or session interruption is introduced.
+- Native active maps reject unsupported/partial shapes instead of fabricating inactivity. OpenCode V2 active drains are process-local: absence cannot establish another server's stop time. The reported zero-assistant screenshot mechanism remains unproven; this repairs a separately reproduced unfinished-assistant certainty defect, not a claim that the historical incident is fully solved.
+
 ## v80.204 — 2026-11-08
 
 - Healthy Web computation/proof no longer expires into false unavailability: finite workers, source-readiness admission, resumable history and browser loading retain bounded work/recovery. Genuine I/O/auth/schema faults, cancellation, source identity and owned-process cleanup remain distinct.

@@ -53,7 +53,7 @@ def prompt(value, *, details=False):
         in_progress aborted is_compaction delta_context_tokens next_context_tokens next_context_cached_ccost
         next_context_fresh_ccost next_context_warning event_id duration_ms main_ccost subagent_ccost
         breakdown_known has_cost_breakdown main_estimated subagent_estimated has_additional_model
-        abort_at_ms running_cost_warning ictx_price_threshold billed_cost completed_successfully
+        abort_at_ms running_cost_warning ictx_price_threshold billed_cost completed_successfully execution_unverified
         next_context_warning_severity next_context_cost_multiplier background_kinds background_started_ms
         background_only abort_reason ended_after_tool_calls completed_at_ms watch_model watch_effort""")
     return ObjectValue(base.fields + (("comparison_cost", comparison(value.comparison_cost)),

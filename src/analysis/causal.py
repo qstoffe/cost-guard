@@ -404,8 +404,17 @@ def build_prompt_record(
         )
 
     in_progress = running(foreground_work or bool(background))
+    # A negative native observation is process-local, not a persisted end or
+    # proof that another server is executing this unfinished request. Do not
+    # turn that contradiction into either a live clock or a successful result.
+    unverified = bool(in_progress and snapshot.complete and snapshot.root.active is False
+        and not superseded and not foreground_work and not background and latest
+        and latest.role is MessageRole.ASSISTANT and latest.completed_at_ms is None
+        and not latest.termination and not latest.error_name)
+    in_progress = in_progress and not unverified
     background_only = in_progress and not running(foreground_work)
     background_fields = dict(
+        execution_unverified=unverified,
         background_kinds=tuple(item.kind for item in background) if in_progress else (),
         background_started_ms=min((item.started_at_ms for item in background), default=0) if in_progress else 0,
         background_only=background_only,
@@ -424,7 +433,7 @@ def build_prompt_record(
     prompt_context_approx = _message_approx_context_tokens(prompt_message) or math.ceil(len(ref.prompt_text) / 4)
     previous_before_prompt = timeline.index.before_prompt(ref.prompt_time_ms)
 
-    zero_usage_abort = bool(root_entries) and not in_progress and ref.prompt_kind != "subtask" and not any(
+    zero_usage_abort = bool(root_entries) and not in_progress and not unverified and ref.prompt_kind != "subtask" and not any(
         entry.tokens.total > 0 or entry.reported_cost > 0 for entry in root_entries
     )
     evidence = evidence if not in_progress else None
@@ -441,12 +450,12 @@ def build_prompt_record(
     ) if aborted else 0
     if aborted and evidence:
         abort_time = evidence.completed_at_ms
-    terminal_time = 0 if in_progress else _prompt_activity_end(
+    terminal_time = 0 if in_progress or unverified else _prompt_activity_end(
         snapshot, (*attempt_messages, *child_messages), fallback=ref.prompt_time_ms
     )
 
     if not root_entries and not child_entries:
-        if not aborted and not in_progress and not watch_error and not evidence:
+        if not aborted and not in_progress and not unverified and not watch_error and not evidence:
             return None
         # Before its first completed request a running prompt may already have a
         # request-bound in-flight assistant; never borrow mutable session selection.
@@ -458,7 +467,7 @@ def build_prompt_record(
             prompt_number=ref.prompt_number, prompt_kind=ref.prompt_kind, prompt_text=ref.prompt_text,
             session_title=snapshot.root.title, main_model_id=main_model, main_provider_id=main_provider,
             main_variant=ref.variant, first_request_time_ms=0, last_request_time_ms=ref.prompt_time_ms,
-            terminal_time_ms=abort_time or terminal_time or ref.prompt_time_ms, entries=(), root_entry_count=0,
+            terminal_time_ms=0 if unverified else abort_time or terminal_time or ref.prompt_time_ms, entries=(), root_entry_count=0,
             cost=0, main_cost=0, subagent_cost=0, breakdown_known=True, has_cost_breakdown=False,
             main_estimated=False, subagent_estimated=False, fallback_requests=0,
             estimated_fallback_requests=0, unresolved_fallback_requests=0, input_tokens=0,
@@ -470,7 +479,7 @@ def build_prompt_record(
             in_progress=in_progress,
             completed_successfully=successful_final,
             duration_ms=max(0, terminal_time - ref.prompt_time_ms) if evidence else 0,
-            execution_duration_ms=prompt_duration(ref, attempt_messages, latest, (), timeline.messages,
+            execution_duration_ms=None if unverified else prompt_duration(ref, attempt_messages, latest, (), timeline.messages,
                                                   in_progress=in_progress, now_ms=now_ms, background=snapshot.background),
             linked_session_ids=tuple(sorted(child_ids)),
             **background_fields,
@@ -481,7 +490,7 @@ def build_prompt_record(
 
     prompt_start = ref.prompt_time_ms
     prompt_end = last.completed_at_ms
-    if not in_progress and terminal_time <= 0:
+    if not in_progress and not unverified and terminal_time <= 0:
         terminal_time = abort_time or prompt_end
     causal_end = now_ms if in_progress else max(prompt_end, terminal_time)
     local_intervals = _local_intervals(attempt_messages, prompt_start, causal_end)
@@ -528,7 +537,7 @@ def build_prompt_record(
         output_tokens=output_total, cache_read_tokens=billed.cache_read_tokens,
         cache_write_tokens=billed.cache_write_tokens, input_context_tokens=meaningful_first.request_input_approx,
         total_token_volume=total_volume, model_costs=billed.model_costs, duration_ms=duration,
-        execution_duration_ms=prompt_duration(ref, attempt_messages, latest, entries, timeline.messages,
+        execution_duration_ms=None if unverified else prompt_duration(ref, attempt_messages, latest, entries, timeline.messages,
                                               in_progress=in_progress, now_ms=now_ms, background=snapshot.background),
         local_duration_ms=local_ms, model_wait_ms=max(0, duration - local_ms),
         prompt_context_tokens_approx=prompt_context_approx, previous_entry=previous,

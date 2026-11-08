@@ -1,5 +1,91 @@
 # Web Watch terminal reconciliation
 
+## Follow-up: process-local native activity and unfinished requests
+
+2026-11-08 · FR 000630 · v80.205
+
+The owner's export has two successful runs, then a user checkpoint prompt with no
+assistant or later terminal. The primary synthetic equivalent did **not** expose
+a new false-Running defect: valid native running includes the zero-call row; valid
+inactive omits it on cold analysis and retires previously observed Watch history
+without success or a fabricated source end. Unavailable status stays unknown. An
+old session-level succeeded outcome cannot end the newer prompt. Age/zero calls
+do not prove a stop; an upstream still-owned drain remains a competing explanation.
+
+The current V2 2.2.6 OpenAPI describes `/api/session/active` as foreground drains
+owned by **this process**, with absent sessions inactive. Its exact success wrapper
+is `data`, whose entries have only `type: running`. A shared database does not make
+one server's drain map authoritative about a private server. Unsupported, partial,
+missing or malformed mappings now remain unknown rather than silently becoming
+an empty running set; global and scoped acquisition share this interpretation.
+
+A distinct RED regression reproduced indefinite Running in canonical analysis,
+SessionHistory detail and actual Watch export: the same timeline with one unfinished
+assistant, valid negative native status, no terminal/error and no supported scoped
+tool/child/background activity. Missing and positive usage variants both failed.
+Canonical `execution_unverified` now preserves usage without asserting execution,
+success, failure, cancellation, terminal time or finite execution duration. CLI,
+Sessions, Full Watch and Mini consume it; no checkmark, advancing live clock,
+terminal cache or unqualified zero-running claim is allowed. Completed comparison
+sampling excludes uncertainty; observed Token Mix does not discard its usage.
+
+Observed-history retention keeps uncertainty through omitted/unchanged unavailable
+evidence. New activity must still reach canonical analysis: focused regressions
+also exposed suppression of new tool/background work in partial captures and CLI
+resurrection after unavailable status. Those transitions are tested separately
+from the original unfinished-assistant RED. Native positive activity, later clean
+response/failure/interruption and newer attempts remain recoverable. No inactivity
+timeout, forced abort, real model prompt, live-session mutation or shared-service
+restart is part of this repair.
+
+Fresh read-only shared-source metadata found one timestamp-matching candidate,
+**not owner-confirmed**. Unlike the earlier export, it now has an unfinished
+assistant shortly after the last user and a much later synthetic continuation
+with a persisted failed terminal. Current baseline analysis already yields Error
+through FR000559, not Running. That later terminal does not establish the original
+stop time or prove hours of execution. Ordinary-checkout Web diagnostics were
+`not_observed`, not proof of the historical host revision or browser state.
+
+**Foreground Decision Delegate exception, FR000630 only:** bounded delivery of the
+distinct proven unfinished-assistant repair may proceed without owner-confirmed
+candidate identity, historical Web host revision/browser state, other-session
+private-run artifacts or exact stop time. This is the delegate's decision, not
+owner approval, original-incident resolution or a future waiver. No tests were
+waived; unavailable historical evidence remains unavailable, not PASS. Further
+private-artifact/installation searches solely for identity are not warranted.
+
+The source-derived hidden Edge 156.0.4314.58 probe passed shipped Full Watch,
+Sessions detail and Mini presenters: Running → Unverified → unchanged Unverified
+→ later Error, unknown duration/total, unchanged calls, uncertain running count,
+no false empty-running banner, page reload, actual SSE reconnect and stale-event
+rejection. Mini was rendered in an owned test div, not native PiP geometry. This
+is synthetic source/export/DOM evidence, not the owner's browser incident or
+physical desktop proof. Integrated browsing was disconnected; hidden owned-profile
+fallback did not use the personal browser.
+
+The earlier real-installation probe failed with a connection reset while source
+files were being edited. The host guard intentionally stops on runtime-file changes,
+but no actual historical stop reason was retained, so that cause remains a
+hypothesis. A stable-source run avoided the reset but failed its 90-second Watch
+observation limit with history still progressing (1,363/2,968 checked); detail was
+not reached. Cleanup reported no failures/owned processes, but two quota threads
+remained at its snapshot, so that run is not clean-zero-thread proof or PASS.
+The foreground delegate authorized only an explicit 90..300-second **test-harness
+observation allowance**, retaining default90 and all completion/card/latency/cleanup
+assertions. It changes no product deadline or performance requirement and grants
+no test waiver. Final verification results belong in the task completion.
+
+The extended real V2 probe subsequently passed: first rows1.106s, complete
+2,968/2,968 history coverage at126.134s, one owner/two streams, one row/card,
+five supported historical finishes, detail/freeze and zero owned threads/processes
+after shutdown. This demonstrates bounded completion, not a90s performance PASS.
+After the CLI-only retention delta, final Full passed169 files (2,085 passed,
+one platform skip) and a separate final-tree detail/streams probe passed with
+zero owned workers. Validation passed11 checks with seven advisory warnings,
+unchanged caps. The fresh source candidate still classifies Error, not proof of
+the original stop mechanism. See the [completion](../../backlog/complete/000136-000630-web-stopped-or-orphaned-prompts-still-running/COMPLETION.md)
+for precise check scopes and retained failed observations.
+
 ## Follow-up: failed continuation before an assistant response
 
 2026-11-03 · FR 000559 · v80.139

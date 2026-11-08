@@ -14,7 +14,7 @@ from src.domain.acquisition import AcquisitionMetrics
 
 from .models import CompactionRecord, PromptRecord, RootAnalysisBundle, TraceEntry
 
-ANALYSIS_ALGORITHM_VERSION = "v78-analysis-18-logical-prompt-boundaries"
+ANALYSIS_ALGORITHM_VERSION = "v78-analysis-19-execution-unverified"
 _CACHE_NAMESPACE = "derived-analysis"
 
 

@@ -88,6 +88,10 @@ Exact measurements and verification limits are in the [Mini journal](../developm
   Running uses its focal prompt; Earlier uses its latest actual historical representative.
   This is not Full Watch's detailed I/C/W/O cost breakdown.
 - **Duration:** that prompt's canonical elapsed execution time, frozen when ended.
+  **Unverified** replaces the clock when an unfinished assistant has contradictory
+  native activity evidence. Known usage remains; this is not a successful ending
+  or a confirmed zero-running count. Mini shares Full Watch's classification and
+  later activity/terminal recovery, not an elapsed-time cutoff.
 - **Ctx:** estimated next incoming context for the prompt, shown as a formatted number
   without an added `~`. The header tooltip explains the estimate; N/A means unavailable.
   This next-context estimate is distinct from full Watch's first-request **Ictx** and

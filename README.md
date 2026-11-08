@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v80.204, 2026-11-08), the supported distribution.
+Use **current `main`** (v80.205, 2026-11-08), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -219,7 +219,7 @@ Shows only a session table and legend, newest causal-tree activity first (not co
 
 ## Session and date detail reports
 
-Passing a session ID prints one snapshot and exits, even with active work; use `--watch` for tracking. `[RUNNING]` metrics are provisional observed usage; unsupported values stay unknown. Date/date-range modes use the same table against their selected scope. Neither fetches model availability or account quotas.
+Passing a session ID prints one snapshot and exits, even with active work; use `--watch` for tracking. `[RUNNING]` metrics are provisional observed usage; unsupported values stay unknown. `[UNVERIFIED]` means an unfinished request has no positive activity evidence and a complete native observation reports it inactive in this process; another server may own it. Its end time and execution duration remain unknown, not successful or aborted. Date/date-range modes use the same table against their selected scope. Neither fetches model availability or account quotas.
 
 | Column | Meaning |
 | --- | --- |
@@ -361,7 +361,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.204 (2026-11-08):** Web loading keeps healthy expensive work pending with bounded automatic recovery instead of failing solely on elapsed computation time. Models and historical reports reuse qualified evidence efficiently; foreground demand promotes existing work while inactive views continue warming. Full/Mini Earlier retain independently certified winners and populate supported fields without waiting for pricing. See [Web Beta](docs/web-beta.md) and [Mini Watch](docs/web-mini-watch.md#earlier-sessions).
+**v80.205 (2026-11-08):** Unfinished requests without positive execution evidence can be **Unverified**, rather than indefinitely Running. CLI, Sessions, Full Watch and Mini preserve usage but do not invent a stop time or execution duration. V2 active status is process-local; this is not proof that another server's request has stopped. See [Web Beta](docs/web-beta.md) and [lifecycle evidence](development/journal/web/watch-terminal-lifecycle.md).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

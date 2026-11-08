@@ -53,6 +53,7 @@ class PromptProjection:
     extra_ccost: Decimal | None
     token_mix_percent: tuple[int, int, int, int] | None
     in_progress: bool = False
+    execution_unverified: bool = False
     aborted: bool = False
     is_compaction: bool = False
     delta_context_tokens: int | None = None

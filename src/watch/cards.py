@@ -7,6 +7,7 @@ from .session_costs import SessionCostState
 from .history_publication import HistoryPublication
 from .card_workers import CardRequest
 from src.sources.errors import SourceConcurrentChangeError, SourceDataError
+from src.reports.session_history import retain_unverified_row, unverified_refresh
 from .tools import RUNNING_VISIBLE_AFTER_MS, without_live_activity
 
 
@@ -77,7 +78,7 @@ class WatchCards:
                     if entry.capture is None:
                         entry.latest_ms = None
                     entry.refresh_requested = True
-                elif (entry.capture is not None and any(row.in_progress for row in entry.capture.rows)) or entry.source_status.failed_at is not None or entry.history_status.failed_at is not None:
+                elif (entry.capture is not None and any(row.in_progress or row.execution_unverified for row in entry.capture.rows)) or entry.source_status.failed_at is not None or entry.history_status.failed_at is not None:
                     entry.refresh_requested = True
 
     def accept(self, result, now_ms):
@@ -98,6 +99,9 @@ class WatchCards:
             if entry.capture is not None and capture.observed_at_ms < entry.capture.observed_at_ms:
                 return
             previous = {row.event_id: row for row in entry.capture.rows} if entry.capture else {}
+            if unverified_refresh(entry.snapshot, snapshot):
+                capture = replace(capture, rows=tuple(retain_unverified_row(previous.get(row.event_id), row)
+                    for row in capture.rows))
             if capture.retained and not capture.authoritative:
                 current_rows = {row.event_id: row for row in capture.rows}
                 current_rows.update((key, row) for key, row in previous.items() if key not in capture.observed_ids)
@@ -116,7 +120,7 @@ class WatchCards:
                             abort_at_ms=0, ended_after_tool_calls=False, running_cost_warning=False,
                             background_kinds=(), background_started_ms=0, background_only=False)
                             if old.in_progress else old)
-                    elif row is not None and not row.in_progress and row.completed_at_ms is None and not old.in_progress:
+                    elif row is not None and not row.in_progress and not row.execution_unverified and row.completed_at_ms is None and not old.in_progress:
                         current_rows[key] = replace(row, duration_ms=old.duration_ms)
                 capture = replace(capture, rows=tuple(sorted(current_rows.values(), key=lambda row: (row.at_ms, row.event_id))),
                     latest_ms=capture.latest_ms or entry.latest_ms or 0)
@@ -166,8 +170,8 @@ class WatchCards:
     def _focals(self, entry, now_ms):
         if entry.capture is None:
             return ()
-        running = [row for row in entry.capture.rows if row.in_progress]
-        recent = [row for row in entry.capture.rows if not row.in_progress and
+        running = [row for row in entry.capture.rows if row.in_progress or row.execution_unverified]
+        recent = [row for row in entry.capture.rows if not row.in_progress and not row.execution_unverified and
             row.event_id in entry.terminals and
             0 <= now_ms - entry.terminals[row.event_id] < self.recent_ms]
         return tuple(running + recent)
@@ -289,7 +293,7 @@ class WatchCards:
                 if row.in_progress and row.event_id in capture.observed_ids else row.duration_ms)
             row = replace(row, duration_ms=duration)
             is_focal = focal is not None and row.event_id == focal.event_id
-            marker = ("▶" if row.in_progress else "!" if row.aborted or row.watch_error else "✓") if is_focal else ""
+            marker = ("?" if row.execution_unverified else "▶" if row.in_progress else "!" if row.aborted or row.watch_error else "✓") if is_focal else ""
             tool = entry.tools.get(row.event_id) if is_focal else None
             if tool is not None:
                 if not row.in_progress:

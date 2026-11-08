@@ -119,6 +119,7 @@ class PromptRecord:
     watch_error: bool = False
     abort_time_ms: int = 0
     in_progress: bool = False
+    execution_unverified: bool = False
     completed_successfully: bool = False
     # Outstanding background work keeping a running prompt active (kinds only).
     background_kinds: tuple[str, ...] = ()

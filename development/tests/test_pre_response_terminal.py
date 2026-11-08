@@ -86,6 +86,7 @@ class PreResponseTerminalTests(unittest.TestCase):
             newer = copy.deepcopy(original)
             newer.update(id="new_attempt", time={"created": 7000})
             native.messages["ses_current"].append(newer)
+            native.active = {"ses_current": {"type": "running"}}
 
             resumed, = build_prompt_records(source.load_session_snapshot("ses_current"),
                 tracked_provider=None, now_ms=8000)
