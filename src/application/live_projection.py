@@ -13,7 +13,7 @@ def card_row(row, now_ms):
     tool = row.tool
     projected = fields(row.prompt, """at_ms prompt_number label preview ccost incoming_context_ccost extra_ccost cost_estimated unresolved_cost
         incoming_context_ccost_known extra_ccost_known
-        calls token_mix_percent incoming_context_tokens in_progress is_compaction aborted abort_reason completed_successfully event_id duration_ms completed_at_ms has_additional_model""")
+        calls token_mix_percent incoming_context_tokens in_progress execution_unverified is_compaction aborted abort_reason completed_successfully event_id duration_ms completed_at_ms has_additional_model""")
     projected = ObjectValue(projected.fields + (("has_error", row.prompt.watch_error),
         ("linked_agent_count", row.prompt.linked_agent_count), ("cost_detail", cost_detail(row.prompt))))
     return record(prompt=projected, model=row.prompt.watch_model or "N/A",

@@ -18,6 +18,42 @@ def union(previous, current, key):
     return tuple(values.values())
 
 
+def unverified_refresh(previous, current):
+    """Missing/unchanged evidence cannot undo an observed contradiction.
+
+    New or changed execution records must reach canonical analysis, even when
+    other records are missing. In particular, do not hide a newly running tool
+    or background job just because the refresh is incomplete.
+    """
+    if previous is None or current is None or current.root.active is True:
+        return False
+    if current.complete and current.root.active is not None:
+        return False
+    if ({item.session_id for item in current.sessions if item.active is True}
+            - {item.session_id for item in previous.sessions if item.active is True}):
+        return False
+    for field, identity in (('messages', 'message_id'), ('parts', 'part_id'),
+                            ('background', 'activity_id')):
+        old = {(item.session_id, getattr(item, identity)): item for item in getattr(previous, field)}
+        if any(old.get((item.session_id, getattr(item, identity))) != item
+               for item in getattr(current, field)):
+            return False
+    return True
+
+
+def retain_unverified_row(previous, current):
+    """Partial evidence cannot restore certainty previously contradicted by source.
+
+    Call only for unverified_refresh. Usage remains current; a complete later
+    attempt/terminal or positive status resolves it.
+    """
+    if previous is not None and previous.execution_unverified and current.in_progress:
+        return replace(current, in_progress=False, execution_unverified=True,
+            duration_ms=None, completed_at_ms=None, running_cost_warning=False,
+            background_kinds=(), background_started_ms=0, background_only=False)
+    return current
+
+
 def retain_snapshot(previous, current):
     if previous is None:
         return current, False
@@ -52,7 +88,7 @@ def retain_snapshot(previous, current):
 
 
 _LIFECYCLE_FIELDS = (
-    "in_progress", "aborted", "watch_error", "completed_successfully", "abort_reason",
+    "in_progress", "execution_unverified", "aborted", "watch_error", "completed_successfully", "abort_reason",
     "abort_time_ms", "terminal_time_ms", "duration_ms", "execution_duration_ms",
     "background_kinds", "background_started_ms", "background_only", "ended_after_tool_calls",
 )
@@ -144,17 +180,21 @@ class SessionHistory:
         observed = {event.event_id for event in fresh.events}
         previous = {row.event_id: row for row in self.report.prompt_blocks[0].rows} if self.report else {}
         row_observations = dict(self.row_observations)
+        uncertain_refresh = unverified_refresh(self.snapshot, fresh)
         rows = []
         for row in block.rows:
+            if uncertain_refresh:
+                row = retain_unverified_row(previous.get(row.event_id), row)
             if row.event_id in observed:
                 row_observations[row.event_id] = service.now_ms
             elif row.event_id in previous and not fresh.complete:
                 old = previous[row.event_id]
                 # Omitted evidence cannot advance execution time or prove an end.
                 row = replace(row, duration_ms=old.duration_ms, in_progress=old.in_progress,
+                               execution_unverified=old.execution_unverified,
                               completed_at_ms=old.completed_at_ms, aborted=old.aborted,
                                completed_successfully=old.completed_successfully, watch_error=old.watch_error)
-            if row.event_id in previous and not row.in_progress and row.completed_at_ms is None:
+            if row.event_id in previous and not row.in_progress and not row.execution_unverified and row.completed_at_ms is None:
                 old = previous[row.event_id]
                 row = replace(row, duration_ms=(max(old.duration_ms or 0, service.now_ms - old.at_ms)
                     if old.in_progress else old.duration_ms))
@@ -171,7 +211,7 @@ class SessionHistory:
         self.omitted_ids = frozenset(row.event_id for row in rows if row.event_id not in observed)
         self.revision = revision
         self.retained = missing
-        self.running = any(row.in_progress and row.event_id in observed for row in block.rows)
+        self.running = any((row.in_progress or row.execution_unverified) and row.event_id in observed for row in block.rows)
         self.report = service.session_detail_projection(session_id, root, block)
         return self.report, ("archived" if root.archived_at_ms is not None else
                              "history_retained" if missing else "observed")

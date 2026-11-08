@@ -307,7 +307,9 @@ class WatchRenderer:
         reason = {"user": "user", "quota_limit": "quota limit", "tool_call_limit": "tool call limit",
                   "step_limit": "step limit", "rate_limit": "rate limit"}.get(prompt.abort_reason)
         prefix = ""
-        if prompt.aborted:
+        if prompt.execution_unverified:
+            prefix = "[UNVERIFIED] "
+        elif prompt.aborted:
             prefix = f"[ABORTED by {reason}] " if reason else "[ABORTED] "
         elif prompt.watch_error:
             prefix = "[ERROR] "

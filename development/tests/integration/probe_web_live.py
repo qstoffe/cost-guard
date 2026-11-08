@@ -26,6 +26,8 @@ def main():
     parser.add_argument("--models", action="store_true", help="Capture only task-focused Normal/full Models snapshots beside Live.")
     parser.add_argument("--refresh-prices", action="store_true", help="Force one upstream pricing fetch/rebuild beside pinned Live; no account refresh.")
     parser.add_argument("--watch-cards", action="store_true", help="Wait for independently published real one-row Watch cards.")
+    parser.add_argument("--watch-seconds", type=int, default=90,
+        help="Watch-card observation cap, 90..300 seconds; no product deadline change.")
     parser.add_argument("--accounts", action="store_true", help="Observe shared account publications without finite reports or new owners.")
     parser.add_argument("--tool-outcomes", action="store_true", help="Check evidenced tool outcome subsets in the published cards.")
     parser.add_argument("--prompt-token-mix", action="store_true", help="Observe card token mix over twelve seconds; no inference or extra capture.")
@@ -39,6 +41,8 @@ def main():
     parser.add_argument('--oracle-serial-first', action='store_true',
         help='Time the first verified history certificate without competing reference refresh; validate that exact proof afterwards')
     args = parser.parse_args()
+    if not 90 <= args.watch_seconds <= 300:
+        parser.error('--watch-seconds requires 90..300 observation seconds')
     if args.history_oracle is not None:
         if args.browser is None or not args.browser.is_file() or not 120 <= args.oracle_seconds <= 3600:
             parser.error('history-oracle requires an explicit browser and 120..3600 observation seconds')
@@ -140,7 +144,7 @@ def main():
             observations.stage = 'watch_cards'
             first_rows = None
             publications = []
-            deadline = time.monotonic() + 90
+            deadline = time.monotonic() + args.watch_seconds
             while time.monotonic() < deadline:
                 state, _ = get('/api/live', cookie=cookie)
                 live = state['values'].get('live', {})
@@ -190,7 +194,7 @@ def main():
             else:
                 print(json.dumps(dict(history_verification='inconclusive', history_state=view.get('history_state'),
                     checked=view.get('history_checked'), total=view.get('history_total'),
-                    cause=view.get('history_cause'), deadline_seconds=90)))
+                    cause=view.get('history_cause'), deadline_seconds=args.watch_seconds)))
                 raise RuntimeError('probe_watch_cards_timeout')
         if args.tool_outcomes:
             activities = [row['tool'] for card in cards for row in card['rows'] if row.get('tool')]

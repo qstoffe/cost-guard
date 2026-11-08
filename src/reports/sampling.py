@@ -34,7 +34,7 @@ def latest_prompts(roots: Sequence[AnalyzedRoot], priceable: RequestFilter) -> t
     """Relative CCost uses completed, non-aborted prompts with priceable usage."""
     return tuple(nlargest(SAMPLE_SIZE,
         (p for item in roots for p in item.bundle.prompts
-         if not p.in_progress and not p.aborted and any(map(priceable, p.entries))),
+         if not p.in_progress and not p.execution_unverified and not p.aborted and any(map(priceable, p.entries))),
         key=_newest_first,
     ))
 

@@ -607,6 +607,8 @@ Both normal and legacy `/live` links open the same live page; the legacy URL rep
 
 Every observed prompt appears oldest to newest, with no 50-row cap or user-facing pagination. Prompt alone flexes/ellipsizes; other columns keep intrinsic widths. The document scrolls vertically. Clock, actual **[RUNNING]**, number and preview share one line; running ink is yellow across all cells, reverting to theme foreground after canonical completion. Model/Effort use structured main-prompt evidence. Shared heading help covers all ten columns; prompt clock and CCost expose useful conditional detail. **Complete session** remains the aligned canonical whole-session footer, not a sum of fetched rows.
 
+**[UNVERIFIED]** distinguishes an unfinished assistant whose complete source observation has no native running drain or supported tool/child/background activity. It is not success, failure or proof that another OpenCode process stopped. Known calls/usage remain, but Duration and affected session-duration totals are **N/A**, without an invented finish time. Later authoritative activity or terminal evidence updates the same prompt.
+
 Stable keyed rows preserve document anchors, focus and text selection. Large new suffixes are built detached and batch-appended. Source omissions retain canonical evidence and frozen lifecycle/time until observed again; deleted-before-observation history cannot be recovered. Missing, archived, partial and unavailable remain distinguishable from observed empty. Silence/connection loss never proves completion.
 
 Authenticated, CSRF-protected `/api/detail` uses `open`, `begin`, revision-pinned `chunk`, and `close`. Internal rich chunks contain at most 25 rows with full-session totals; a captured revision stays coherent even while acquisition advances. Compatibility `page`/`freeze` actions remain internal APIs, not a UI experience. Five-second polling is independent of SSE. The existing isolated round-robin detail lane owns acquisition; the catalog index has a separate single-worker lane, so a slow root cannot occupy the detail worker. Neither HTTP nor browser code acquires source history.
@@ -729,6 +731,10 @@ Running focal rows and linked titles are yellow. Confirmed successful focal rows
 and their titles share the same semantic success green during existing terminal grace;
 Earlier titles return to neutral heading ink. Unknown outcomes never imply success,
 and resumed/concurrent prompts keep each card's own focal state.
+An **Unverified** focal remains visible for refresh, without yellow running ink,
+a success checkmark or an advancing Duration. The running summary stays uncertain
+instead of asserting that nothing is executing. Missing/partial native status alone
+cannot establish this state; a later unavailable refresh does not prove a restart.
 Normal activity is gold/brown, failures independently red,
 and context guidance severity-specific (gold/orange triangle, ordinary foreground
 approaching text; gold/orange triangle and text once exceeded). Observed success is lime, abort/error red, for

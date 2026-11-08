@@ -158,6 +158,7 @@ class PromptRowProjector:
             extra_ccost_known=mix_known(record),
             token_mix_percent=mix,
             in_progress=record.in_progress,
+            execution_unverified=record.execution_unverified,
             aborted=record.aborted,
             abort_reason=record.abort_reason,
             ended_after_tool_calls=record.ended_after_tool_calls,
@@ -168,7 +169,8 @@ class PromptRowProjector:
             next_context_warning=warning.text,
             next_context_warning_severity=warning.price_severity,
             event_id=record.prompt_id,
-            duration_ms=record.duration_ms if self.watch_duration else record.execution_duration_ms,
+            duration_ms=None if record.execution_unverified else
+                record.duration_ms if self.watch_duration else record.execution_duration_ms,
             completed_at_ms=(record.terminal_time_ms or None) if not record.in_progress else None,
             watch_error=record.watch_error,
             main_ccost=main.known_ccost,

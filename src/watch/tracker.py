@@ -6,6 +6,7 @@ from typing import Mapping
 
 from src.domain import EventKind, SessionSnapshot
 from src.reports.models import PromptProjection, SessionPromptBlock
+from src.reports.session_history import retain_unverified_row, unverified_refresh
 
 from .models import ToolObservation, WatchRow
 from .session_retention import select_rows, session_order
@@ -18,6 +19,8 @@ def _event_key(prompt: PromptProjection) -> str:
 
 
 def _marker(prompt: PromptProjection, *, recent_completion: bool) -> str:
+    if prompt.execution_unverified:
+        return "?"
     if prompt.aborted or prompt.watch_error:
         return "!" if recent_completion else ""
     if prompt.in_progress:
@@ -62,6 +65,7 @@ class WatchRowTracker:
         self.max_rows = max(1, int(max_rows))
         self.session_scope = bool(session_scope)
         self._observed: dict[tuple[str, str], _Observed] = {}
+        self._unverified_snapshots: dict[str, SessionSnapshot] = {}
         # Startup Earlier session -> its one historical representative ("" until resolved).
         self._earlier: dict[str, str] = {}
 
@@ -161,7 +165,7 @@ class WatchRowTracker:
             # Incomplete refresh reconstruction cannot downgrade an observed
             # final response to an abort for the same event identity.
             prompt = observed.last_prompt
-        eligible = prompt.in_progress or prompt.at_ms >= self.started_at_ms or observed is not None
+        eligible = prompt.in_progress or prompt.execution_unverified or prompt.at_ms >= self.started_at_ms or observed is not None
         if not eligible and not self.session_scope:
             return None
         if observed is None:
@@ -320,7 +324,7 @@ class WatchRowTracker:
 
     def _protected(self, row: WatchRow, now_ms: int) -> bool:
         """Running rows and rows whose existing green/red marker is still active."""
-        if row.prompt.in_progress:
+        if row.prompt.in_progress or row.prompt.execution_unverified:
             return True
         observed = self._observed.get((row.session_id, _event_key(row.prompt)))
         return observed is not None and self._recent_completion(observed, now_ms)
@@ -343,6 +347,22 @@ class WatchRowTracker:
             return True, max(prompt.at_ms for prompt in prompts.values())
         return False, max(prompt.completed_at_ms or prompt.at_ms for prompt in prompts.values())
 
+    def _retain_uncertainty(self, block: SessionPromptBlock, snapshot: SessionSnapshot) -> SessionPromptBlock:
+        previous = self._unverified_snapshots.get(block.session_id)
+        uncertain_refresh = unverified_refresh(previous, snapshot)
+        if uncertain_refresh:
+            rows = []
+            for prompt in block.rows:
+                observed = self._observed.get((block.session_id, _event_key(prompt)))
+                rows.append(retain_unverified_row(observed.last_prompt if observed else None, prompt))
+            block = replace(block, rows=tuple(rows))
+        if any(row.execution_unverified for row in block.rows):
+            # Keep the last informative baseline through partial omissions.
+            self._unverified_snapshots[block.session_id] = previous if uncertain_refresh else snapshot
+        else:
+            self._unverified_snapshots.pop(block.session_id, None)
+        return block
+
     def project(
         self,
         blocks: Mapping[str, SessionPromptBlock],
@@ -358,6 +378,7 @@ class WatchRowTracker:
             snapshot = snapshots.get(session_id)
             if snapshot is None:
                 continue
+            block = self._retain_uncertainty(block, snapshot)
             sequence_by_event = self._event_sequences(snapshot)
             session_rows = self._session_rows(block, snapshot, now_ms, sequence_by_event)
             if session_rows:

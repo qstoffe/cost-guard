@@ -5,6 +5,8 @@ from .models import RunningPrompts, WatchCard
 
 
 def running_prompts(cards: tuple[WatchCard, ...], state: str) -> RunningPrompts:
+    if any(row.prompt.execution_unverified for card in cards for row in card.rows):
+        return RunningPrompts(state="unverified")
     prompts = {(card.session_id, row.prompt.event_id): row.prompt
         for card in cards for row in card.rows
         if row.prompt.event_id == card.focal_id and row.prompt.in_progress and not row.prompt.is_compaction}

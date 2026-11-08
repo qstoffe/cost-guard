@@ -57,6 +57,18 @@ Dates use `zoneinfo`; clean Windows Python may lack IANA data, so dependency-fre
 
 The latest assistant's `termination` ends running/duration and distinguishes success/failure/cancellation, even without usage. Actual root/child or newer tool activity stays live; stale tool flags do not. Reports/Watch/resync share this truth. Running background work keeps the newest prompt active without usage; resumes stay on it. Incomplete inference stays uncached; older algorithm keys are invalidated.
 
+FR000630 adds canonical `execution_unverified`: a complete snapshot with a valid
+negative native observation, latest unfinished assistant and no positive scoped
+tool/child/background activity does not assert execution or completion. The native
+drain map is process-local, not a cross-server end. Usage remains; terminal time is
+absent and projected execution duration is unknown. Positive activity, later attempts
+and supported terminal evidence recover normally. Reports exclude uncertainty from
+completed comparison samples, not observed Token Mix. Shared observed-history
+retention prevents missing/unchanged unavailable evidence from reviving a live clock;
+Watch and all presenters consume the same flag. Algorithm 19 invalidates prior
+classification; unfinished results stay uncached. See the [lifecycle evidence and
+scoped historical-source exception](../../journal/web/watch-terminal-lifecycle.md).
+
 `analysis/duration.py` qualifies retrospective execution boundaries from normalized assistant/tool/background evidence, never session metadata or report time for terminated work. `PromptRecord.execution_duration_ms` and compaction timing survive derived caching; the legacy prompt `duration_ms` remains unchanged for Watch. Reports project qualified timing into `PromptProjection.duration_ms`; listings union the cached bundle directly, without detail hydration. A sorted interval union excludes idle gaps/overlap and propagates unknown timing to `N/A`; date totals union only selected events. Presentation shares Watch's compact formatter, not timing calculations.
 
 `src/analysis/active_hour.py` owns reference cost per active hour. It reuses canonical

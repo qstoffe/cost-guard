@@ -239,8 +239,9 @@ class WatchCoordinator:
 
     def _steady_status(self, active_count: int, seconds_until_check: int, rows: Sequence[WatchRow] | None = None) -> str:
         countdown = self._countdown_text(seconds_until_check)
+        visible = rows if rows is not None else (self._last_projection.rows if self._last_projection else ())
+        uncertain = " · Execution unverified" if any(row.prompt.execution_unverified for row in visible) else ""
         if active_count:
-            visible = rows if rows is not None else (self._last_projection.rows if self._last_projection else ())
             active_rows = [row for row in visible if row.prompt.in_progress]
             only_compactions = len(active_rows) == active_count and all(row.prompt.is_compaction for row in active_rows)
             noun = ("compaction" if active_count == 1 else "compactions") if only_compactions else ("prompt" if active_count == 1 else "prompts")
@@ -249,8 +250,8 @@ class WatchCoordinator:
             background = ""
             if waiting:
                 background = f" · background {waiting[0]}" if len(waiting) == 1 else f" · {len(waiting)} background jobs"
-            return f"{active_count} {noun} running{background} · Next refresh: {countdown}"
-        return f"Idle · Next prompt check: {countdown}"
+            return f"{active_count} {noun} running{background}{uncertain} · Next refresh: {countdown}"
+        return f"{'Execution unverified' if uncertain else 'Idle'} · Next prompt check: {countdown}"
 
     _visible_signature = staticmethod(visible_signature)
     _transient_signature = staticmethod(transient_signature)

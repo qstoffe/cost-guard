@@ -44,6 +44,7 @@ class WebTerminalLifecycleTests(unittest.TestCase):
         return make_service(str(Path(self.temp.name) / str(self.counter)), source, now_ms=now)[2]
 
     def unfinished(self, usage="positive"):
+        self.native.active = {"ses_current": {"type": "running"}}
         assistant = self.native.messages["ses_current"][1]
         assistant.pop("finish", None)
         assistant["time"].pop("completed", None)
@@ -285,6 +286,7 @@ class WebTerminalLifecycleTests(unittest.TestCase):
         newer = copy.deepcopy(self.native.messages["ses_current"][1])
         newer.update(id="msg_new_attempt", time={"created": 21_000})
         self.native.messages["ses_current"].append(newer)
+        self.native.active = {"ses_current": {"type": "running"}}
         self.capture(22_000)
         self.assertTrue(self.row(22_000).in_progress)
 

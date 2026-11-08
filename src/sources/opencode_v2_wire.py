@@ -98,15 +98,18 @@ def project_directory(value: Mapping[str, Any]) -> str | None:
 def fetch_active_ids(client: Any) -> set[str] | None:
     """One interpretation for global and scoped Session.Info observations.
 
-    A validated absent drain is inactive; unavailable compatibility evidence is
-    unknown, not a fabricated empty running set. Genuine transport/auth fails.
+    A validated absent drain is inactive in this process, not proof of a durable
+    end across shared-database servers. Unsupported evidence stays unknown.
     """
     try:
         raw = client.json('/api/session/active')
         data = raw.get('data') if isinstance(raw, Mapping) else None
-        if isinstance(data, Mapping):
-            return {str(key) for key, status in data.items()
-                if isinstance(status, Mapping) and str(status.get('type', '')).lower() == 'running'}
+        if isinstance(data, Mapping) and set(raw) == {'data'}:
+            if any(not isinstance(key, str) or not key or not isinstance(status, Mapping)
+                   or set(status) != {'type'} or status.get('type') != 'running'
+                   for key, status in data.items()):
+                return None  # Never convert an unrecognized status into absence.
+            return set(data)
     except (SourceUnavailableError, SourceDataError, SourceSchemaError) as error:
         if not compatibility_failure(error):
             raise

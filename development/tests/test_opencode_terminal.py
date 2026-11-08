@@ -110,12 +110,16 @@ class TerminalLifecycleTests(unittest.TestCase):
                 snapshot = source.load_session_snapshot("ses_current")
                 snapshot = replace(snapshot, root=replace(snapshot.root, active=active))
                 record, = build_prompt_records(snapshot, tracked_provider=None, now_ms=10_000)
-                self.assertTrue(record.in_progress)
-                self.assertEqual(7000, record.duration_ms)
+                self.assertEqual(active is None, record.in_progress)
+                self.assertEqual(active is False, record.execution_unverified)
+                self.assertFalse(record.completed_successfully or record.aborted or record.watch_error)
+                if active is False:
+                    self.assertIsNone(record.execution_duration_ms)
 
     def test_unqualified_status_and_invalid_terminal_rows_are_not_evidence(self):
         with source_with_current_service() as (source, native, _):
             unfinished(native)
+            native.active = {"ses_current": {"type": "running"}}
             for row in ({"type": "idle"}, idle(outcome="unknown"), idle(at=0),
                         {**idle(), "id": ""}, {**idle(), "sessionID": "different"},
                         {**idle(), "type": "session.status"}, idle(at=3100),
@@ -132,7 +136,8 @@ class TerminalLifecycleTests(unittest.TestCase):
             newer.update(id="msg_resumed", time={"created": 6000})
             native.messages["ses_current"].extend([idle(), newer])
             record, = records(source)
-            self.assertTrue(record.in_progress)
+            self.assertFalse(record.in_progress)
+            self.assertTrue(record.execution_unverified)
             self.assertFalse(record.watch_error)
             self.assertFalse(record.aborted)
             newer.update(finish="stop", time={"created": 6000, "completed": 7000})

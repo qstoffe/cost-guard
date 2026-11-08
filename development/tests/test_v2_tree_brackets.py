@@ -115,7 +115,7 @@ class V2TreeBracketTests(unittest.TestCase):
             reader.list_sessions()
             global_cache, global_index, global_at = reader._catalog_cache, reader._catalog_index, reader._catalog_listed_at
             global_memo = dict(global_index.revisions)
-            server.active = {'ses_current': {'type':'running'}, 'ses_current_child': {'type':'idle'}}
+            server.active = {'ses_current': {'type':'running'}}  # inactive drains are absent
             server.sessions[0]['location'] = {'directory':'/synthetic/moved'}
 
             actual = reader.load_session_snapshot('ses_current')
@@ -287,7 +287,7 @@ class V2TreeBracketTests(unittest.TestCase):
                 reader = self.reader(origin, server)
                 actual = reader.load_session_snapshot('ses_current')
                 self.assertEqual(expected, actual)
-                self.assertIs(actual.root.active, None if active is None else bool(active and active['ses_current']['type'] == 'running'))
+                self.assertIs(actual.root.active, None if active is None or active == {'ses_current': {'type': 'idle'}} else bool(active))
 
     def test_group_after_begins_after_all_hydration_and_cancel_never_publishes_partial(self):
         with source_with_current_service() as (origin, server, _registration):
