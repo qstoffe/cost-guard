@@ -115,6 +115,7 @@ class BootstrapQuickTests(unittest.TestCase):
         self.assertEqual("", output.getvalue(), "Only the report renderer owns report output")
         runtime.ReportRenderer.return_value.render.assert_called_once_with(
             runtime.ReportService.return_value.build.return_value)
+        runtime.CacheRepository.return_value.lifecycle.flush_pending.assert_called_once()
         self.assertIs(runtime._select_or_wait.return_value,
                       runtime.ReportService.call_args.kwargs["selection"])
         runtime.WatchRenderer.assert_not_called()

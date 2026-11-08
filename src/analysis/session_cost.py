@@ -12,6 +12,7 @@ from .cache import ANALYSIS_ALGORITHM_VERSION, dependency_signature
 from .causal import trace_entries
 from .valuation import ComparisonCost, comparison_cost, unique_usage
 from src.domain.reference_cost import bounded_issues
+from src.cache.session_scope import snapshot_scope
 
 NAMESPACE = "session-ccost-v1"
 ALGORITHM = ANALYSIS_ALGORITHM_VERSION + "/root-tree-reference-1"
@@ -106,7 +107,7 @@ def reconcile_session_cost(repository, snapshot, catalog):
         try:
             repository.put(NAMESPACE, key, {"contributions": current, "known_ccost": str(total),
                 "priced_requests": priced}, source_revision=snapshot.source_revision,
-                algorithm_version=ALGORITHM, busy_timeout_ms=50)
+                algorithm_version=ALGORITHM, busy_timeout_ms=50, session_scope=snapshot_scope(snapshot))
             written = True
         except (sqlite3.Error, OSError):
             available = False

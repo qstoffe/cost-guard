@@ -275,6 +275,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         progress.stop(complete=True)
         context(phase="report presentation")
         ReportRenderer(config).render(projection)
+        # Explicit CLI demand only: probes and passive service.build calls do not
+        # renew cache use. Consume already-known catalog metadata, never messages.
+        from .cache.session_scope import root_key
+        consumed = dict(service.report_source_revisions())
+        try:
+            repository.lifecycle.note_use(root_key(root.provenance, root.session_id)
+                for root in service.session_catalog() if root.session_id in consumed)
+            repository.lifecycle.flush_pending()
+        except SourceError:
+            pass  # Optional use bookkeeping cannot reclassify an already rendered report.
         return 0
     except KeyboardInterrupt:
         check_pending()

@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v80.208, 2026-11-08), the supported distribution.
+Use **current `main`** (v80.209, 2026-11-08), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -343,6 +343,8 @@ The cache is disposable. Stop Cost Guard before deleting `cache/`; the next run 
 
 SQLite WAL, short transactions and bounded waits support concurrent report/global/session Watch.
 
+Web can reclaim opted-in session-cache entries only when both proven root/child activity and meaningful use are over 30 days old. Visible requested reports/history and CLI reports count as use; passive warming and diagnostic API reads do not. Unknown/legacy dates stay protected. Housekeeping waits at least one hour of current host uptime, then attempts a small idle batch at most daily; busy/active/selected work defers it. History still comes from read-only OpenCode sources and rebuilds on demand. Reusable SQLite pages need not shrink the file; no automatic full VACUUM, source deletion or JSON-state migration occurs.
+
 ## Diagnostics for environment-specific problems
 
 For troubleshooting, use `development/user-tools/diagnostics/windows/Cost-Guard-Diagnostics.cmd` (macOS: `macos/Cost-Guard-Diagnostics.command` in the same diagnostics folder), or run:
@@ -361,7 +363,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.208 (2026-11-08):** Unavailable reference CCost values explain the supported reason directly on their N/A text in Web and Mini Watch. Missing model prices, uncertain identities, missing rates/usage and unverified catalogs stay distinct; prompt and session amounts retain independent help. Known costs, partial subtotals, zero, Loading, billing and model selection are unchanged. See [contextual help](docs/web-beta.md#contextual-help).
+**v80.209 (2026-11-08):** Recent activity or genuine use keeps reconstructible session history cached for at least 30 days. Small idle SQLite pruning starts no earlier than one hour into a Web host, preserves unknown dates and operational state, and never removes source history. See [cache behavior](#cache-and-concurrent-cost-guard-processes).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

@@ -7,6 +7,7 @@ from src.analysis.ai_stats import period_stats, windows
 from src.analysis.cache import dependency_signature
 from src.analysis.matched_runs import period_fact
 from src.cache.repository import CacheEntry
+from src.cache.session_scope import snapshot_scope
 from src.domain.progress import WorkProgress
 from src.domain.session_tree import root_by_session
 from .ai_stats_evidence import (ALGORITHM, NAMESPACE, COVERAGE, INVALID, coverage, coverage_key,
@@ -157,18 +158,19 @@ class StatsAcquisition:
             self.revisions[root.session_id] = snapshot.source_revision
             service.metrics.add('ai_stats_valued_requests', len(bundle.trace_entries))
             namespace = TRANSIENT if volatile and self.scan else NAMESPACE if not volatile else None
+            scope = snapshot_scope(snapshot)
             if namespace:
                 saved = dict(scan=self.scan, evidence=value) if volatile else value
-                writes.append(CacheEntry(namespace, self.keys[root.session_id], saved, snapshot.source_revision, ALGORITHM))
+                writes.append(CacheEntry(namespace, self.keys[root.session_id], saved, snapshot.source_revision, ALGORITHM, scope))
             if not volatile:
                 proof = coverage(value)
-                self.bounds[coverage_key(root)] = CacheEntry(COVERAGE, coverage_key(root), proof, snapshot.source_revision, COVERAGE)
+                self.bounds[coverage_key(root)] = CacheEntry(COVERAGE, coverage_key(root), proof, snapshot.source_revision, COVERAGE, scope)
                 writes.append(self.bounds[coverage_key(root)])
                 if getattr(service, 'shared_web_evidence', False) and snapshot.complete:
                     from .shared_evidence import entries
                     # Stats and coverage are already in this batch. Publish only
                     # the other compatible products, without duplicate writes.
-                    writes.extend(entry for entry in entries(service, root, snapshot.source_revision, value)
+                    writes.extend(entry for entry in entries(service, root, snapshot.source_revision, value, scope)
                                   if entry.namespace not in (NAMESPACE, COVERAGE))
         try:
             with service.metrics.measure('ai_stats_cache_write'):

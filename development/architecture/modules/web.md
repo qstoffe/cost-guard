@@ -38,6 +38,14 @@ current reference; older per-cell/native-tooltip descriptions below are historic
 
 `src/web/http.py` owns bounded loopback HTTP, fixed assets and routing; `src/web/security.py` owns one-use bootstrap/HttpOnly sessions/CSRF; `src/web/jobs.py` owns finite admission, process isolation, progress, cancellation and retention; at most 64 progress messages drain per host turn to prevent scan backpressure without starving control/Live. `src/web/composition.py` creates fresh canonical ReportApplication integrations.
 
+FR 000626 adds `cache_housekeeping.py` to that existing host loop: no independent
+worker/timer. Protected selected-visible delivery/interest queues coalesced root use;
+headerless polling and passive warming do not. Fresh ordinary catalog evidence and
+all foreground/Live/provider/lease protections gate the post-hour, at-most-daily
+bounded SQLite attempt. Lifecycle SQL belongs to cache, never HTTP or acquisition.
+See [cache ownership](analysis.md#session-cache-lifecycle-fr-000626) and
+[measured evidence/limits](../../journal/cache-lifecycle.md).
+
 Only validated terminal IPC (a result/error, a completed Stats slice whose logical
 job requeues, or a history continuation with its received durable checkpoint)
 retires its child without blocking: the outcome publishes and the analysis slot is
