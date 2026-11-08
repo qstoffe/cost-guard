@@ -178,6 +178,7 @@ const SessionsCatalog = (() => {
               const freshness = state === 'pending' ? 'Session summary acquisition is pending.' :
                 state === 'retained' ? 'Last observed summary retained; awaiting a valid current source observation.' :
                 state === 'unavailable' ? 'Session summary unavailable after source acquisition trouble.' : '';
+              if (key === 'ccost' && ReportView.costHelp(current)) return [ReportView.costHelp(current), freshness].filter(Boolean).join('\n');
               if (key !== 'model' || !current.multiple_models) return freshness || 'Current observed session ' + key + '.';
               const models = current.contributor_models || [];
               return ['Models used in this session' + (current.contributor_models_complete && state === 'ready' ? '' : ' (observed so far)'),

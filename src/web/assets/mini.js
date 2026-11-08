@@ -226,7 +226,10 @@ const MiniWatch = (() => {
       ContextHelp.attach(this.summary, 'Return to Watch in the existing tab.\nIf the window stays minimized, use the browser’s return-to-tab control.');
       this.summary.addEventListener('click', returnToWatch);
       this.summary.append(el('span', 'Cost Guard · Watch', 'mini-brand'));
-      this.daily = el('p', undefined, 'mini-daily'); this.dailyText = el('span', 'CCost Today · Loading…');
+      this.daily = el('p', undefined, 'mini-daily'); this.dailyText = el('span');
+      this.dailyLead = el('span'); this.dailyAmount = ContextHelp.value(el('span'), () =>
+        this.dailyValue ? ReportView.costHelp(this.dailyValue.total, 'known_ccost') : '');
+      this.dailyTail = el('span'); this.dailyText.append(this.dailyLead, this.dailyAmount, this.dailyTail);
       this.daily.append(this.dailyText);
       this.dailyNote = el('span', '', 'mini-daily-note'); this.daily.append(this.dailyNote);
       this.earlierToggle = el('button', 'Earlier Sessions', 'mini-earlier-toggle'); this.earlierToggle.type = 'button';
@@ -285,7 +288,10 @@ const MiniWatch = (() => {
       value.append(title);
       cell.append(value);
       const cost = this.el('span', '', 'mini-cost-value');
-      ContextHelp.value(cost, () => row.costHelp);
+      const promptCost = this.el('span'), sessionCost = this.el('span');
+      ContextHelp.value(promptCost, () => row.costHelp);
+      ContextHelp.value(sessionCost, () => row.totalCostHelp);
+      cost.append(promptCost, this.el('span', ' ('), sessionCost, this.el('span', ')'));
       row.children[historical ? 2 : 1].append(cost);
       ContextHelp.value(row.children[3], () => row.contextHelp || 'Context estimate unavailable');
       return row;
@@ -299,7 +305,11 @@ const MiniWatch = (() => {
       const number = item?.prompt?.prompt_number;
       row.sessionHelp = `${session}\n${number == null ? 'Prompt number unavailable' : 'Prompt #' + number + ' in this session'}`;
       const states = [card.state, card.session_summary?.state].filter(state => ['partial', 'retrying', 'unavailable'].includes(state));
-      row.costHelp = this.promptDetails(item) + (states.length ? '\nSource evidence: ' + [...new Set(states)].join(' / ') : '');
+      const sourceHelp = states.length ? '\nSource evidence: ' + [...new Set(states)].join(' / ') : '';
+      row.costHelp = [ReportView.costHelp(item?.prompt), this.promptDetails(item)].filter(Boolean).join('\n\n') + sourceHelp;
+      row.totalCostHelp = ['Whole-session reference CCost, including linked subagents.',
+        ReportView.costHelp(card.session_summary?.cost || (card.session_summary?.state === 'unavailable' ? {} : null), 'known_ccost'),
+        this.promptDetails(item)].filter(Boolean).join('\n\n') + sourceHelp;
       const warning = card.session_summary?.context?.warning;
       row.children[3].dataset.guidance = warning?.guidance_state || 'ready';
       row.contextHelp = ['Estimated context for the next request. Not remaining model capacity.',
@@ -312,7 +322,8 @@ const MiniWatch = (() => {
       const total = cost ? cost.observed_requests && !cost.priced_requests ? 'N/A' : ReportView.display(cost, 'known_ccost') :
         summary?.state === 'unavailable' ? 'N/A' : 'Loading…';
       const amount = ReportView.display(prompt, 'ccost');
-      ReportView.text(cell.children[0], `${amount} (${total})`);
+      ReportView.text(cell.children[0].children[0], amount);
+      ReportView.text(cell.children[0].children[2], total);
       cell.children[0].setAttribute('aria-label', `Prompt reference CCost: ${amount}; whole-session reference CCost: ${total}`);
     }
     promptDetails(item) {
@@ -361,7 +372,13 @@ const MiniWatch = (() => {
           notes.push('Partial pricing / token data');
       }
       else if (state === 'unavailable') label = 'CCost Today · Unavailable';
-      ReportView.text(this.dailyText, label);
+      this.dailyValue = value;
+      const cost = value && (value.total.observed_requests && !value.total.priced_requests ? 'N/A' : ReportView.display(value.total, 'known_ccost'));
+      ReportView.text(this.dailyLead, value ? 'CCost Today ' : label);
+      ReportView.text(this.dailyAmount, value ? cost : '');
+      ReportView.text(this.dailyTail, value ? ` · ${value.prompt_count} prompts` : '');
+      this.dailyAmount.className = cost === 'N/A' ? 'help-value' : '';
+      this.dailyAmount.tabIndex = cost === 'N/A' ? 0 : -1;
       ReportView.text(this.dailyNote, notes.join(' · '));
       this.daily.setAttribute('aria-description', `Daily source: ${state || 'loading'}`);
       this.daily.className = 'mini-daily';

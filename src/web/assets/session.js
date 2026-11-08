@@ -26,11 +26,11 @@ const SessionDetail = (() => {
     ContextHelp.value(preview, value.preview || value.label || 'Prompt');
     label.append(clock, el('span', `${value.execution_unverified ? '[UNVERIFIED] ' : value.in_progress ? '[RUNNING] ' : ''}#${value.prompt_number ?? '—'}`), preview);
     const cost = ContextHelp.value(el('span', () => ReportView.display(value, 'ccost')),
-      () => ReportView.display(value, 'cost_detail_help') + (value.retained ? '\nRetained source evidence.' : ''));
+      () => [ReportView.costHelp(value), ReportView.display(value, 'cost_detail_help')].filter(text => text && text !== 'N/A').join('\n\n') + (value.retained ? '\nRetained source evidence.' : ''));
     return [label, value.watch_model || 'N/A', value.watch_effort || 'N/A', cost,
       value.display?.calls ?? String(value.calls ?? 'N/A'), ReportView.display(value, 'duration_ms'),
-      firstContext(value), ReportView.display(value, 'incoming_context_ccost'),
-      ReportView.display(value, 'extra_ccost'), ReportView.display(value, 'token_mix_percent')];
+      firstContext(value), ReportView.costValue(value, 'incoming_context_ccost'),
+      ReportView.costValue(value, 'extra_ccost'), ReportView.display(value, 'token_mix_percent')];
   }
   class View {
     constructor(api, id) {
@@ -167,7 +167,9 @@ const SessionDetail = (() => {
       });
       for (let offset = 0; offset < append.length; offset += 200) this.body.append(...append.slice(offset, offset + 200));
       const totals = () => { const values = ReportView.detailTotals(block); return [values[0], '', '', ...values.slice(1)]; };
-      if (!protectedNode(this.footer)) this.footer.replaceChildren(...totals().map((_, index) => el('td', () => totals()[index])));
+      if (!protectedNode(this.footer)) this.footer.replaceChildren(...totals().map(value => {
+        const cell = el('td'); cell.append(typeof value === 'object' ? value : el('span', value)); return cell;
+      }));
       else this.pendingRender = true;
       if (anchor?.isConnected && top != null) {
         const delta = anchor.getBoundingClientRect().top - top;

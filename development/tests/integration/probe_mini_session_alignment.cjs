@@ -31,7 +31,7 @@ module.exports = async function alignment({evaluate,until,fixture,command,sessio
     p.view.history_cards[1].rows[0].prompt.prompt_number=20;
     p.view.history_cards[2].rows[0].prompt.prompt_number=null;
     ReportView.setUnit('credits');miniWatch.update(p);miniWatch.view.earlier.hidden=false;
-    window.costRow=miniWatch.view.historyBody.rows[0];window.costTarget=costRow.querySelector('.mini-cost-value');
+    window.costRow=miniWatch.view.historyBody.rows[0];window.costTarget=costRow.querySelector('.mini-cost-value > span:first-child');
     window.nameTarget=miniWatch.view.body.rows[0].querySelector('.mini-session');})()`);
   assert.deepEqual(await evaluate(`[...miniWatch.view.body.parentNode.querySelectorAll('th')].map(n=>n.textContent)`),
     ['Session','CCost (Total)','Duration','Ctx']);
@@ -40,7 +40,7 @@ module.exports = async function alignment({evaluate,until,fixture,command,sessio
   assert.deepEqual(await evaluate(`[...miniWatch.view.body.rows].map(row=>row.cells[1].textContent)`),['49 (562)','173 (562)']);
   assert.deepEqual(await evaluate(`[...miniWatch.view.historyBody.rows].map(row=>row.cells[2].textContent)`),Array(3).fill('49 (562)'));
   for (const [table, numbers] of [['body',[7,11]],['historyBody',[7,20,null]]]) {
-    for (const [index, number] of numbers.entries()) for (const target of ['mini-session','mini-cost-value']) {
+    for (const [index, number] of numbers.entries()) for (const target of ['mini-session','mini-cost-value > span:first-child']) {
       await key('Tab');
       await evaluate(`miniWatch.view.${table}.rows[${index}].querySelector('.${target}').focus()`);
       await until(`${help}?.matches(':popover-open')`);
@@ -59,13 +59,13 @@ module.exports = async function alignment({evaluate,until,fixture,command,sessio
   await evaluate(`(()=>{const p=structuredClone(miniWatch.publication);p.view.now_ms++;
     const item=p.view.history_cards[0].rows[0];item.prompt.prompt_number=8;item.model='Corrected model';
     item.prompt.display_units.credits.ccost='?59';miniWatch.update(p);})()`);
-  assert.equal(await evaluate(`miniWatch.view.historyBody.rows[0]===costRow && costRow.querySelector('.mini-cost-value')===costTarget && miniWatch.view.doc.activeElement===costTarget`),true);
-  assert.equal(await evaluate('costTarget.textContent'),'?59 (562)');
+  assert.equal(await evaluate(`miniWatch.view.historyBody.rows[0]===costRow && costRow.querySelector('.mini-cost-value > span:first-child')===costTarget && miniWatch.view.doc.activeElement===costTarget`),true);
+  assert.equal(await evaluate('costTarget.textContent'),'?59');
   assert.match(await evaluate(`${help}.textContent`),/Prompt #8\nMain model: Corrected model/);
   await key('Escape'); await evaluate('miniWatch.settings()');
   assert.equal(await evaluate(`${help}.matches(':popover-open')`),false,'Live refresh cannot reopen dismissed help');
   await evaluate('costTarget.blur()');
-  for(const target of ['nameTarget','costTarget',`miniWatch.view.body.rows[0].querySelector('.mini-cost-value')`,
+  for(const target of ['nameTarget','costTarget',`miniWatch.view.body.rows[0].querySelector('.mini-cost-value > span:first-child')`,
     `miniWatch.view.historyBody.rows[0].querySelector('.mini-session')`]) {
     await evaluate(`${target}.scrollIntoView({block:'center'});miniWatch.window.scrollTo(0,0)`);
     await input('Input.dispatchMouseEvent',{type:'mouseMoved',x:0,y:0});
@@ -129,7 +129,7 @@ module.exports = async function alignment({evaluate,until,fixture,command,sessio
                 costs.push(value.textContent);
               }
             }
-            if(v.historyBody.rows[0]!==costRow||costRow.querySelector('.mini-cost-value')!==costTarget) errors.push('rerender reset');
+            if(v.historyBody.rows[0]!==costRow||costRow.querySelector('.mini-cost-value > span:first-child')!==costTarget) errors.push('rerender reset');
             return {errors,costs,width:w.innerWidth,font:style(d.documentElement).fontSize,
               scroll:v.prompts.scrollWidth>v.prompts.clientWidth,
               pageOverflow:d.documentElement.scrollWidth>w.innerWidth+1,

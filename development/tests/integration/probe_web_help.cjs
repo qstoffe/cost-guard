@@ -4,7 +4,7 @@ const {spawn} = require('node:child_process'), readline = require('node:readline
 const [browser, output, scope] = process.argv.slice(2);
 async function main() {
   assert.ok(path.isAbsolute(browser) && path.isAbsolute(output));
-  assert.ok(scope === undefined || ['--watch-only','--live-status'].includes(scope));
+   assert.ok(scope === undefined || ['--watch-only','--live-status','--ccost-unavailable'].includes(scope));
   await fs.stat(browser); await fs.stat(path.dirname(output));
   const profile = await fs.mkdtemp(path.join(path.dirname(output), 'help-browser-'));
   const config = await fs.mkdtemp(path.join(path.dirname(output), 'help-config-'));
@@ -36,7 +36,7 @@ async function main() {
   const until=async (id,expression)=>{
     const end=Date.now()+15000;
     while(Date.now()<end) {if(await evaluate(id,expression))return;await new Promise(resolve=>setTimeout(resolve,30));}
-    const state=await evaluate(id,`(async () => {const state=typeof current==='undefined'?null:current;const job=state?.active ? await api('/api/jobs/'+state.active) : null;return {section:document.body.dataset.section,notice:document.getElementById('notice')?.textContent,text:document.getElementById('result')?.textContent.slice(0,300),loading:state?.loading,job:job&&{status:job.status,error:job.error,result:!!job.result},visibility:document.visibilityState,focus:document.hasFocus(),events:window.helpEvents};})()`);
+     const state=await evaluate(id,`(async () => {const state=typeof current==='undefined'?null:current;const job=state?.active ? await api('/api/jobs/'+state.active) : null;return {section:document.body.dataset.section,notice:document.getElementById('notice')?.textContent,text:document.getElementById('result')?.textContent.slice(0,300),loading:state?.loading,job:job&&{status:job.status,error:job.error,result:!!job.result},visibility:document.visibilityState,focus:document.hasFocus(),active:document.activeElement?.outerHTML.slice(0,500),panel:document.querySelector('#context-help')?.outerHTML.slice(0,700),events:window.helpEvents};})()`);
     throw new Error('Condition not reached: '+expression+' '+JSON.stringify({state,errors})+'\n'+serverErrors);
   };
   const key=async (id,key)=>{
@@ -68,7 +68,15 @@ async function main() {
     await command('Runtime.enable',{},mini);await command('Page.enable',{},mini);
      await until(mini,`document.querySelector('.mini-prompt-table .help-trigger') && document.styleSheets.length===2`);
      const headerHelp=require('./probe_help_headers.cjs')({command,evaluate,until,owner,mini,checks,layouts});
-     await headerHelp.matrix();
+      if(scope === '--ccost-unavailable') {
+         await require('./probe_ccost_unavailable.cjs')({command,evaluate,until,owner,mini,checks,layouts});
+         assert.deepEqual(errors,[]);
+         evidence={outcome:'PASS',browser:version.product,checks,layouts,errors,
+           limitations:['Synthetic canonical snapshots; not the historical owner incident.','Headless Chromium with real Document PiP; CDP focus emulation for opener Sessions checks after PiP closes. No physical desktop, screen-reader or other-engine proof.']};
+        await fs.writeFile(output,JSON.stringify(evidence,null,2));
+        console.log(JSON.stringify({outcome:evidence.outcome,checks,errors}));return;
+      }
+      await headerHelp.matrix();
      await require('./probe_help_lifecycle.cjs')({command,evaluate,until,owner,mini,checks});
       await require('./probe_help_values.cjs')({command,evaluate,until,owner,mini,checks,layouts});
       await require('./probe_cost_groups.cjs')({command,evaluate,until,owner,mini,checks,layouts});
@@ -164,7 +172,7 @@ async function main() {
     const title=await evaluate(mini,`document.querySelector('.mini-prompts > table .mini-session').textContent`);
     assert.ok(title.startsWith('<script>Exact title</script> '));
     assert.equal(await evaluate(mini,`document.querySelector('.mini-source-note')`),null);
-    assert.match(await focus(mini,'.mini-prompts > table .mini-cost-value'),/Prompt #[\s\S]*Main model:[\s\S]*Source evidence: retrying \/ unavailable/);
+    assert.match(await focus(mini,'.mini-prompts > table .mini-cost-value > span:first-child'),/Prompt #[\s\S]*Main model:[\s\S]*Source evidence: retrying \/ unavailable/);
     assert.match(await focus(mini,'.mini-prompts > table .mini-session'),/^<script>Exact title<\/script>[\s\S]*Prompt #\d+ in this session$/);
     assert.equal(await evaluate(mini,`document.querySelectorAll('tbody .help-trigger,.mini-header .help-cue').length`),0);
     const heading=await focus(mini,'.mini-prompts > table th:first-child button');

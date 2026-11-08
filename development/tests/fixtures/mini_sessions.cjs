@@ -43,10 +43,10 @@ module.exports = function sessionTables(vm, context, controller, view, input, he
   const title = view.body.children[0].children[0].children[0].children[0];
   assert.equal(title.tabIndex, 0); assert.equal(title.title, undefined);
   assert.equal(helpText(title), 'Concurrent\nPrompt #23 in this session');
-  const activeCost = view.body.children[0].children[1].children[0];
+  const activeCost = view.body.children[0].children[1].children[0].children[0];
   assert.equal(activeCost.tabIndex, 0);
   assert.match(helpText(activeCost), /Prompt #23\nMain model:[\s\S]*Effort:[\s\S]*Duration: 10m/);
-  assert.match(helpText(view.body.children[1].children[1].children[0]), /Prompt #24[\s\S]*Duration: 20m/);
+  assert.match(helpText(view.body.children[1].children[1].children[0].children[0]), /Prompt #24[\s\S]*Duration: 20m/);
   assert.equal(view.body.children[0].children[0].textContent, 'Concurrent', 'Session contains no cost');
   const history = index => ({...active, session_id:'history-'+index, title:'Earlier '+index, focal_id:'',
     session_summary:{...summary, context:{display:{watch_next_context_tokens:String(900+index)}}},
@@ -64,7 +64,7 @@ module.exports = function sessionTables(vm, context, controller, view, input, he
   const row = view.historyBody.children[0];
   assert.equal(row.querySelectorAll('button').length,0,'history values have no duplicate cues');
   assert.match(row.attributes['aria-label'], /Earlier session · Earlier 2/);
-  const detail = row.children[2].children[0];
+  const detail = row.children[2].children[0].children[0];
   const historicalTitle = row.children[1].children[0].children[0];
   assert.equal(historicalTitle.tabIndex, 0);
   assert.equal(helpText(historicalTitle), 'Earlier 2\nPrompt #23 in this session');
@@ -84,7 +84,7 @@ module.exports = function sessionTables(vm, context, controller, view, input, he
   Object.assign(historicalItem.prompt, {prompt_number:null, calls:null, linked_agent_count:0, has_additional_model:false,
     unresolved_cost:false, aborted:false, abort_reason:'', cost_detail:null});
   controller.update(input);
-  assert.equal(row.children[2].children[0], detail, 'detail target is stable across corrections');
+  assert.equal(row.children[2].children[0].children[0], detail, 'detail target is stable across corrections');
   assert.equal(helpText(detail), 'Prompt number unavailable\nMain model: N/A\nEffort: N/A\nDuration: N/A');
   assert.equal(helpText(historicalTitle), 'Earlier 2\nPrompt number unavailable');
   Object.assign(historicalItem, originalItem); controller.update(input);
@@ -158,7 +158,7 @@ module.exports = function sessionTables(vm, context, controller, view, input, he
     assert.ok(view.body.children.every(row=>cost(row).endsWith(' ('+expected+')')));
     assert.equal(cost(view.historyBody.children[0], true), '2 ('+expected+')');
     assert.equal(view.body.children[0].children[0].textContent, 'Concurrent', 'source captions never change Session row height');
-    if (['partial','unavailable'].includes(value.state)) assert.match(helpText(view.body.children[0].children[1].children[0]), /Source evidence:/);
+    if (['partial','unavailable'].includes(value.state)) assert.match(helpText(view.body.children[0].children[1].children[0].children[0]), /Source evidence:/);
   }
   const resumed = {...history(3),focal_id:active.focal_id};
   input.view = {...saved, active_cards:[...saved.active_cards,resumed],history_cards:[history(3),history(4)]};

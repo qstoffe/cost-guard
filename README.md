@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v80.207, 2026-11-08), the supported distribution.
+Use **current `main`** (v80.208, 2026-11-08), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -361,7 +361,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.207 (2026-11-08):** Full Web Watch Running rows expand to show bounded, privacy-filtered source invocation inputs. Foreground and background Running statuses share the same semantic yellow. Missing links, redacted/unsupported fields and oversized inputs are labeled honestly; duration updates preserve disclosure interaction. CLI/Mini and accounting are unchanged. See [Watch activity](docs/watch-activity.md).
+**v80.208 (2026-11-08):** Unavailable reference CCost values explain the supported reason directly on their N/A text in Web and Mini Watch. Missing model prices, uncertain identities, missing rates/usage and unverified catalogs stay distinct; prompt and session amounts retain independent help. Known costs, partial subtotals, zero, Loading, billing and model selection are unchanged. See [contextual help](docs/web-beta.md#contextual-help).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

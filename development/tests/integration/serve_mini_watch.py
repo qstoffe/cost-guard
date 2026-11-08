@@ -21,6 +21,7 @@ sys.path.insert(0, str(ROOT))
 from development.tests.fixtures.watch_summary import summary_watch, many_cost_groups, same_model_groups
 from development.tests.fixtures.web_reports import finite_report
 from development.tests.fixtures.web_help_reports import HelpAuditJobs
+from development.tests.fixtures.ccost_unavailable import unavailable_frames
 from development.tests.fixtures.token_mix_views import TokenMixJobs
 from development.tests.fixtures.models_refresh import ModelsRefreshJobs
 from development.tests.fixtures.ai_stats_views import AIStatsJobs, evidence_views
@@ -97,6 +98,7 @@ def main():
             if sys.argv[2:] == ["--help-audit"] else None)
         same_model = (project_live(same_model_groups(frame)).to_json()['active_cards'][0]['rows'][0]['prompt']
             if sys.argv[2:] == ["--help-audit"] else None)
+        ccost_frames = unavailable_frames(frame) if sys.argv[2:] == ["--help-audit"] else None
 
         def publish(state="running", value=frame, timezone_name="UTC"):
             current = int(time.time() * 1000)
@@ -105,6 +107,7 @@ def main():
                 "view": project_live(value, timezone_name).to_json(),
                 "probe_cost_groups": cost_groups,
                 "probe_same_model": same_model,
+                "probe_ccost_unavailable": ccost_frames,
                 "probe_accounts": with_display(project_accounts(value.quota), now_ms=value.now_ms).to_json()})
 
         try:

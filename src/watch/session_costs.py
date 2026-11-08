@@ -71,10 +71,10 @@ class SessionCosts:
         try:
             if self.resources_factory is not None:
                 repository, catalog = self.resources_factory()
-                return catalog.analysis_signature if snapshot is None else reconcile_session_cost(repository, snapshot, catalog)
+                return catalog.diagnostic_signature if snapshot is None else reconcile_session_cost(repository, snapshot, catalog)
             service = self.factory(now_ms)
             catalog = service._load_comparison_catalog()
-            return catalog.analysis_signature if snapshot is None else reconcile_session_cost(service.cache_repository, snapshot, catalog)
+            return catalog.diagnostic_signature if snapshot is None else reconcile_session_cost(service.cache_repository, snapshot, catalog)
         except (SourceError, PricingUnavailableError, sqlite3.Error, OSError):
             return None
         finally:

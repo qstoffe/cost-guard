@@ -16,6 +16,7 @@ from .quota_ccost import quota_ccost_tokens
 from .prompt_costs import detail_tokens
 from .ai_stats import stat_tokens
 from .comparisons import display_tokens as comparison_tokens
+from .reference_cost import cost_help_tokens
 
 
 def decimal(value):
@@ -286,6 +287,7 @@ def _with_display(value, timezone_id, now_ms):
             alternate.update(comparison_tokens(values, timezone_id))
         variants[unit] = alternate
     tokens = dict(variants[ccost_unit()])
+    tokens.update(cost_help_tokens(values))
     tokens.update(quota_tokens(values))
     differing = {key for key in variants["credits"] if variants["credits"][key] != variants["usd"][key]}
     unit_tokens = record(**{unit: record(**{key: items[key] for key in tokens if key in differing})

@@ -9,6 +9,7 @@ from src.analysis.context import ContextEpochs, context_composition, estimate_ne
 from src.analysis.models import RootAnalysisBundle
 from src.analysis.duration import accumulated_duration
 from src.domain import EventKind, SessionSnapshot
+from src.domain.reference_cost import bounded_issues
 from src.pricing.catalog import PricingCatalog
 
 from .models import PromptProjection, SessionPromptBlock
@@ -110,6 +111,8 @@ def _session_block(*, session_id: str, title: str, rows: list[PromptProjection],
                              or any(row.is_compaction and row.unresolved_cost for row in rows),
         total_subagent_estimated=any(row.subagent_estimated for row in prompt_rows),
         comparison_cost_complete=all(not row.unresolved_cost for row in rows),
+        ccost_unavailable=bounded_issues(issue for row in rows if row.comparison_cost
+            for issue in row.comparison_cost.unavailable),
         rate_usage_complete=all({"input", "cache_read", "cache_write", "output"} <= set(entry.tokens.known_fields)
                                 for entry in projector.bundle.trace_entries)
                             and not any(row.in_progress and not row.calls for row in rows),

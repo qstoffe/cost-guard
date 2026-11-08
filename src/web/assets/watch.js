@@ -68,7 +68,8 @@ const WatchView = (() => {
     parent.replaceChildren(ContextHelp.value(el('strong', 'CCost Today'), 'Reference cost of today’s model activity in your configured local day.'));
     if (!value) { parent.append(el('span', state === 'unavailable' ? 'Daily activity unavailable' : waiting ? 'Daily updates delayed; check source availability.' : '—')); return; }
     parent.append(ContextHelp.value(el('span', () => value.total.observed_requests && !value.total.priced_requests ? 'N/A' : display(value.total, 'known_ccost'), 'metric-value'),
-      'Today’s reference CCost, including recorded activity before Watch opened.' + (!value.total.complete ? '\n? — Partial pricing.' : '')));
+      () => ReportView.costHelp(value.total, 'known_ccost') ||
+        'Today’s reference CCost, including recorded activity before Watch opened.' + (!value.total.complete ? '\n? — Partial pricing.' : '')));
     const count = ContextHelp.value(el('span', `${value.prompt_count} prompts`), 'Prompts with model requests today, including activity before Watch opened.');
     parent.append(count);
     if (!value.total.complete) parent.append(el('span', 'Partial CCost pricing', 'warning'));
@@ -194,11 +195,12 @@ const WatchView = (() => {
       this.summary = el('div', undefined, 'watch-session-summary');
       const contextLine = contextParts(this);
       this.costLabel = el('span'); this.costStatus = el('span');
-      this.costHelp = ContextHelp.value(el('span'), () => 'Reference cost of the entire session, including earlier prompts, linked subagents and provisional work.' +
+      this.costHelp = ContextHelp.value(this.costLabel, () => (ReportView.costHelp(this.summaryValue?.cost ||
+        (this.summaryValue?.state === 'unavailable' ? {} : null), 'known_ccost') ||
+        'Reference cost of the entire session, including earlier prompts, linked subagents and provisional work.') +
         (this.summaryValue?.cost && !this.summaryValue.cost.complete ? '\n? — Partial pricing or source data.' : '') +
         `\nSource evidence: ${this.summaryValue?.state || 'loading'}`);
-      this.costHelp.append(el('span', 'Total CCost: '), this.costLabel);
-      const costLine = el('div'); costLine.append(this.costHelp, this.costStatus);
+      const costLine = el('div'); costLine.append(el('span', 'Total CCost: '), this.costHelp, this.costStatus);
       this.summary.append(contextLine, costLine);
       this.root.append(heading, this.message, scroll, this.summary, this.activity);
     }
@@ -239,7 +241,8 @@ const WatchView = (() => {
              const model = metricValue(row, 3, item.model + (prompt.linked_agent_count ? '*' : ''), display(prompt, 'model_detail_help'));
              if (prompt.linked_agent_count) model.setAttribute('aria-label', `${item.model} · Linked subagents participated (${prompt.linked_agent_count})`);
              else model.removeAttribute('aria-label');
-             const cost = metricValue(row, 5, () => promptCost(prompt), () => display(prompt, 'cost_detail_help'));
+              const cost = metricValue(row, 5, () => promptCost(prompt), () =>
+                [ReportView.costHelp(prompt), display(prompt, 'cost_detail_help')].filter(value => value && value !== 'N/A').join('\n\n'));
              const calls = metricValue(row, 6, String(prompt.calls), display(prompt, 'calls_help'));
             const cells = [started, display(item, 'watch_duration_ms'), label, model, item.effort,
               cost, calls, display(prompt, 'token_mix_percent'),

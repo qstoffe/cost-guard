@@ -34,6 +34,21 @@ shares, not prices. **Model** names the main model even when other linked models
 contribute to totals. **N/A** means unavailable, not zero; **?** marks partial
 pricing/data. CCost is an estimated reference cost, not your bill or native quota.
 
+When an actual reference **CCost N/A** is shown, hover/focus/tap that text for the
+supported reason. An acquired, verified catalog can establish that a recognized
+model (including Claude Sonnet 4) has no listed reference price in the available
+GitHub Copilot list. An uncertain identity, missing required rate/tier, missing
+usage or unavailable/unverified price catalog gets a different explanation; without
+enough evidence the help stays neutral. Contributing child models are included,
+not blamed on the visible main model. This explains unavailable valuation; it does
+not fix model selection, invent rates or reprice historical work.
+Full Watch, Mini, Sessions list/detail and other reference-cost cells reuse the
+same help. Mini's prompt and parenthesized session amounts are separate targets,
+retaining useful prompt details. Reasons update with the displayed snapshot and
+unit changes. Positive partial subtotals, true zero and genuinely pending Loading
+remain unchanged. An N/A daily amount can explain itself; ordinary positive partial
+daily amounts gain no new help or warning.
+
 Hover/focus the **CCost value** in either Watch table for Input, Cached input,
 Cache write, Output and Subtotal, grouped into **Main prompt** and **Subagents**
 by provider/model, actual effort and price tier (tier names/boundaries are not shown).

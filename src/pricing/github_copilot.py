@@ -394,6 +394,7 @@ def _apply_expired_promotions(catalog: PricingCatalog, now_ms: int) -> PricingCa
         models=tuple(models),
         retrieved_at_ms=catalog.retrieved_at_ms,
         source_revision=catalog.source_revision,
+        reference_stale=catalog.reference_stale,
         refresh_not_after_ms=catalog.refresh_not_after_ms,
     )
 
@@ -523,7 +524,7 @@ class GitHubCopilotPricingProvider:
         """Read validated disposable prices only; never fetch prices or metadata."""
         entry = self.cache.get(CACHE_NAMESPACE, CACHE_KEY, busy_timeout_ms=50)
         catalog = _catalog_from_payload(entry.payload) if entry else None
-        return _apply_expired_promotions(catalog, self.now_ms()) if catalog else None
+        return _apply_expired_promotions(replace(catalog, reference_stale=self._expired(catalog)), self.now_ms()) if catalog else None
 
     def _load_or_fetch(self, force: bool, *, allow_cached_fallback: bool = True) -> PricingCatalog:
         if self._catalog is not None and not force and not self._expired(self._catalog):
@@ -538,7 +539,7 @@ class GitHubCopilotPricingProvider:
             catalog = self._fetch_catalog(cached)
         except PricingUnavailableError:
             if cached is not None and allow_cached_fallback:
-                safe_cached = _apply_expired_promotions(cached, self.now_ms())
+                safe_cached = _apply_expired_promotions(replace(cached, reference_stale=True), self.now_ms())
                 self._catalog = safe_cached
                 return safe_cached
             raise
@@ -596,9 +597,13 @@ class GitHubCopilotPricingProvider:
                 # Merge into the CURRENT catalog; a concurrent price refresh wins for prices.
                 entry = self.cache.get(CACHE_NAMESPACE, CACHE_KEY)
                 current = (_catalog_from_payload(entry.payload) if entry else None) or base
+                observed = self._catalog
+                failed_observation = bool(observed and observed.reference_stale
+                    and (observed.source_revision, observed.retrieved_at_ms) == (current.source_revision, current.retrieved_at_ms))
                 models, _ = merge_release_dates(current.models, enriched)
                 updated = PricingCatalog(models=models, retrieved_at_ms=current.retrieved_at_ms,
                                          source_revision=current.source_revision,
+                                         reference_stale=self._expired(current) or failed_observation,
                                          refresh_not_after_ms=current.refresh_not_after_ms)
                 self.cache.put(CACHE_NAMESPACE, CACHE_KEY, _catalog_payload(updated),
                                algorithm_version=f"pricing-{CACHE_FORMAT_VERSION}")

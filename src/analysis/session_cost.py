@@ -11,6 +11,7 @@ import sqlite3
 from .cache import ANALYSIS_ALGORITHM_VERSION, dependency_signature
 from .causal import trace_entries
 from .valuation import ComparisonCost, comparison_cost, unique_usage
+from src.domain.reference_cost import bounded_issues
 
 NAMESPACE = "session-ccost-v1"
 ALGORITHM = ANALYSIS_ALGORITHM_VERSION + "/root-tree-reference-1"
@@ -71,6 +72,7 @@ def reconcile_session_cost(repository, snapshot, catalog):
     old, previous = checkpoint if checkpoint is not None else ({}, ComparisonCost())
     total, observed, priced = previous.known_ccost, previous.observed_requests, previous.priced_requests
     current, valued = {}, 0
+    issues = set()
     entries = unique_usage(trace_entries(snapshot))
     for entry in entries:
         invocation = snapshot.invocations[entry.sort_order]
@@ -91,11 +93,13 @@ def reconcile_session_cost(repository, snapshot, catalog):
             priced += cost.priced_requests
             current[identity] = {"fingerprint": fingerprint,
                 "amount": str(cost.known_ccost) if cost.complete else None}
+        if current[identity]["amount"] is None:
+            issues.add(catalog.reference_issue(entry.model, entry.tokens))
     for identity in old.keys() - current.keys():
         total -= _known_amount(old[identity])
         observed -= 1
         priced -= old[identity]["amount"] is not None
-    coverage = ComparisonCost(total, observed, priced)
+    coverage = ComparisonCost(total, observed, priced, unavailable=bounded_issues(issues))
     written = False
     # Partial source brackets cannot replace an authoritative persisted checkpoint.
     if snapshot.complete and (current != old or checkpoint is None or cached.source_revision != snapshot.source_revision):
@@ -107,4 +111,4 @@ def reconcile_session_cost(repository, snapshot, catalog):
         except (sqlite3.Error, OSError):
             available = False
     return SessionCost(coverage, snapshot.complete, available, len(entries), valued, written,
-        snapshot.source_revision, catalog.analysis_signature)
+        snapshot.source_revision, catalog.diagnostic_signature)
