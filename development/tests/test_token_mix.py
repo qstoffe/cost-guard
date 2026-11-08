@@ -8,7 +8,7 @@ import unittest
 from unittest.mock import patch
 
 from development.tests.fixtures.synthetic_month import SyntheticMonthSource
-from development.tests.fixtures.session_snapshots import make_snapshot
+from development.tests.fixtures.session_snapshots import make_snapshot, one_request
 from src.reports.sampling import latest_token_prompts
 from development.tests.fixtures.compact_reports import START, rendered, report_service
 from development.tests.fixtures.quota_rendering import quotas, rolling
@@ -28,19 +28,6 @@ from src.sources.opencode_v2_normalization import normalize_token_usage as v2_us
 from src.watch import WatchCoordinator
 from src.watch.models import WatchProjection
 from src.watch.token_mix import WatchTokenMix
-
-
-def one_request(*, running=True, usage=None):
-    snapshot = make_snapshot(running=running)
-    invocation = next(i for i in snapshot.invocations if i.invocation_id == "i_next")
-    if usage is not None:
-        invocation = replace(invocation, tokens=usage)
-    messages = tuple(replace(m, tokens=invocation.tokens) if m.message_id == "a_next" else m
-                     for m in snapshot.messages if m.message_id in {"u_next", "a_next"})
-    return replace(snapshot, sessions=(snapshot.root,), messages=messages,
-                   parts=tuple(p for m in messages for p in m.parts),
-                   events=tuple(e for e in snapshot.events if e.event_id == "u_next"),
-                   invocations=(invocation,))
 
 
 def observe(tracker, snapshot):

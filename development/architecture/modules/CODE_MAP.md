@@ -9,6 +9,10 @@ Scoped v80.200 update: canonical subagent prompt counts and shared subscription 
 responsive alignment; earlier dispatcher/evidence/partial-history and Sessions restoration
 owners and tests. Baseline revisions above retain the other module checks.
 
+Test Health 75 scoped check on `d9d39caf05f4b68f15a38a2006d398f34e036334`
+(2026-11-08): direct snapshot/row fixture routes, three remaining sibling-test
+edges, and restored AI Stats recovery runner admission; no runtime boundary change.
+
 Navigation, not another architecture authority: [OVERVIEW.md](../OVERVIEW.md) owns the source contracts; installed OpenCode Toolkit skills own the workflow. This map routes implementation and tests without importing the application or loading historical releases.
 
 ## Start here
@@ -264,7 +268,7 @@ and cache/lifecycle tests retain valuation and history eligibility ownership.
 
 Quota Used display is shared by `src/display.py`, `src/presentation/accounts.py` and `src/application/display.py`; `test_quota_used.py` covers parity and the temporary `src/presentation/quota_migration.py` visible-Watch state owner. Web Watch's native Used/Total versus independent inline period CCost is covered by `test_web_watch_quota.py`, `integration/web_watch_summary.cjs` and the headless `integration/probe_watch_cards.cjs` layout/currency matrix. `test_watch_context_footer.py` and `fixtures/watch_context_browser.cjs` pin Full Watch's two-row Context/Total CCost summary, one Context warning, targeted severity colors/SVG shapes, theme contrast, compaction, stale captures and focus-safe invalidation; Mini keeps the original live-context fields. Remove only the temporary notice per the [cleanup note](../../backlog/quota-used-warning-cleanup.md), never the permanent Used conversion.
 
-- `development/tests/fixtures/session_snapshots.py`: canonical root/child/task/continuation/compaction/running snapshots (also without the /compact work, or after a location move), explicit start/end `history` snapshots and message/part/provenance builders.
+- `development/tests/fixtures/session_snapshots.py`: canonical root/child/task/continuation/compaction/running snapshots (also without the /compact work, or after a location move), shared single `one_request`, explicit start/end `history` snapshots and message/part/provenance builders.
 - `development/tests/fixtures/active_hour.py`: finite hourly-cost service/capture setup shared by rate tests and the synthetic browser probe, without importing test modules.
 - `development/tests/fixtures/pricing_catalog.py`: the small deterministic two-model reference catalog and a two-tier 100K-threshold catalog.
 - `development/tests/fixtures/warning_projections.py`: single-prompt report/Watch projections carrying one Next-Ictx warning severity.
@@ -278,7 +282,7 @@ Quota Used display is shared by `src/display.py`, `src/presentation/accounts.py`
 - `development/tests/fixtures/report_process.py`: controlled process exit and IPC for deterministic natural/forced termination, retained ownership and host/HTTP cleanup-failure propagation; no OS child or timing assumptions.
 - `development/tests/fixtures/account_workers.py`: finite gated provider calls, virtual-latency quota observations and bounded worker synchronization.
 - `development/tests/fixtures/openai-tls/`: disposable localhost chain/key reproducing expired cached-intermediate shadowing and rejecting expired leaves, untrusted chains and hostname mismatch; no workstation/provider certificates or credentials.
-- `development/tests/fixtures/watch_rows.py`: synthetic neutral prompt blocks/canonical snapshots for global grouping, chronological lifecycle order and divider regression tests (`test_watch_session_groups.py`).
+- `development/tests/fixtures/watch_rows.py`: synthetic neutral prompt blocks/canonical snapshots shared directly by grouping, visible-row subtotal, chronological lifecycle and divider tests (`test_watch_session_groups.py`).
 - `development/tests/fixtures/opencode_v2_service.py`: fake loopback V2 services (transitional and current wire) that drop keep-alive sockets on stop like a real process.
 - `development/tests/fixtures/opencode_v1_database.py`: the synthetic V1 SQLite history used for generation parity.
 - `development/tests/fixtures/package_copy.py`: disposable distributable and config-only package copies and tool subprocesses for validator/config tests.
@@ -314,7 +318,7 @@ Before adding a feature, identify its **one semantic owner** and a protected nei
 1. Read the relevant table row and focused tests; characterize the behavior before moving code. Preserve the exact working tree, not an older Git/package version.
 2. Use explicit typed inputs and named projection fields. Keep side-effect orchestration separate from normalized transformation; prefer cohesive functions/state owners, not mixins, dynamic forwarding or generic helpers.
 3. Run focused product tests and applicable source validation only for product-code changes; development-only workflow comes from installed Toolkit skills.
-4. Named legacy routine limits and the remaining 6 test-import edges are **bounded debt**, not a feature budget. Growth, new edges and stale declarations fail. Split the owner or extract a fixture and remove its resolved debt entry; never auto-generate/accept a replacement baseline to silence the gate. A genuine limit change requires an explicit architectural decision, not a passing-test justification.
+4. Named legacy routine limits and the remaining 3 test-import edges are **bounded debt**, not a feature budget. Growth, new edges and stale declarations fail. Split the owner or extract a fixture and remove its resolved debt entry; never auto-generate/accept a replacement baseline to silence the gate. A genuine limit change requires an explicit architectural decision, not a passing-test justification.
 5. Every runtime/fixture module describes its responsibility in a module docstring; local Markdown/table routes are regression-tested. Update this map and current contracts in place, not by accumulating version-specific copies. File caps remain unchanged.
 6. Routine product-release ZIP generation is not supported. UI, commits and remote publishing retain independent authorization; development-only verification comes from installed Toolkit.
 
