@@ -110,6 +110,31 @@ protected merge. Final results belong in the PR/run evidence, not another report
 commit. Any missing job/failure blocks merge and returns to the same Delegate;
 there is no further automatic rerun or old-head substitution.
 
+## Causal preflight repair
+
+The normal completion-head run42675782564 exposed all four jobs: common, Windows
+and ARM64 passed; Intel's wrapper failed again with `tray_unavailable`, while its
+21 focused tests and adapter/fault/cache checks passed. Decision Delegate directed
+attempt-correlated observation of the exact production subprocess boundary and
+sparse import/native/progress stages, replacing per-selector disk writes. No native
+call, deadline, job or handoff allowance changed.
+
+Diagnostic run42677099931 again passed common/Windows/ARM64 and failed Intel.
+Shell-1 preflight returned zero in 1.608s. Shell-2 actually raised `TimeoutExpired`
+after 10.336s: host import completed at 5.582s, imports at 5.851s, native installation
+began at 6.022s but did not return before termination. This measures elapsed time,
+not CPU cost or a complete explanation of the native installation stall.
+
+Decision Delegate selected a bounded dependency repair rather than more diagnostic
+repetition: production `main.py` defers `WebHost` to managed/foreground composition.
+The hosted preflight branch likewise omits unused host/acquisition/state mocks but
+still calls actual production `main()` and all native checks. Offline/hosted guards,
+configuration-before-restart, sanitized managed faults, GUI validation, ownership,
+readiness, cleanup and the 10s preflight/15s startup deadlines remain. A fresh-
+interpreter import guard rejects `WebHost` during successful/failing preflight
+dispatch. Subsequent actual timings and final-head CI belong in PR251/run evidence;
+the recurring core failure is not covered by the physical-only exception.
+
 Integrated browser was unavailable (`browser.disconnected`); hidden Chromium was used
 without changing identity, security or desktop permissions. The workstation native UI
 probe is NOT RUN. Physical Windows appearance/input, macOS Finder/Gatekeeper, quarantine,

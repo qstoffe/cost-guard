@@ -1,4 +1,4 @@
-"""Explicit developer host and private native-launcher child entry."""
+"""Developer/native dispatch; timed preflight excludes report-host composition."""
 import importlib
 from pathlib import Path
 import re
@@ -6,7 +6,6 @@ import sys
 
 from src.config import ConfigError, load_configuration
 from src.runtime_errors import RuntimeErrors
-from .host import WebHost
 from .instance_state import InstanceStore
 from .lifecycle import GUI_MODULES
 from .process_identity import InstanceConflict
@@ -21,6 +20,7 @@ def managed(root, nonce, module):
             def run():
                 # Missing native host fails before HTTP startup. No icon-free fallback.
                 try:
+                    from .host import WebHost
                     gui = importlib.import_module(module).create_host()
                     owner = WebHost(root, store=store, nonce=nonce)
                     owner.run_gui(gui)
@@ -76,6 +76,7 @@ def main():
         return 1
     if is_managed:
         return managed(root, arguments[1], arguments[2])
+    from .host import WebHost
     owner = WebHost(root)
     try:
         owner.start()

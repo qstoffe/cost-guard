@@ -466,7 +466,14 @@ port, dependency, source or accounting owner changes.
 
 `src/web/startup.py` owns fixed, flushed, elapsed-time launcher stage text shared by Windows/macOS. Lifecycle's optional progress sink reports arbitration/restart/host/browser boundaries without receiving secrets. PowerShell drains stages privately and prints one `Starting CostGuard web...` label, updating only a spinner cell at 120ms intervals through discovery and handoff. Progress panels are suppressed; redirected/noninteractive output stays plain. A finally block clears the cell before errors or exit. Browser startup is static branded HTML until authorization; initial report activity remains separate from HTTP/source/account readiness. No new supervisor, auth route, acquisition owner or dependency boundary is introduced.
 
-`src/web/native_macos.py`, `macos_status.py` and `objc_bridge.py` own the experimental main-thread NSStatusItem, typed 64-bit callbacks/default-tracking pump, host-loss dismissal and asynchronous `/usr/bin/open`. `macos_launch.py` preflights in a bounded child; `macos_app.py` uses in-box osacompile for the optional fingerprinted/cache-verified Finder app. No new dependency/server owner. Native acceptance remains pending; exact limitations are in `docs/web-beta.md`.
+`src/web/native_macos.py`, `macos_status.py` and `objc_bridge.py` own the main-thread NSStatusItem, typed 64-bit callbacks/default-tracking pump, host-loss dismissal and asynchronous `/usr/bin/open`. `macos_launch.py` preflights in a bounded child; `macos_app.py` uses in-box osacompile for the optional fingerprinted/cache-verified Finder app. No new dependency/server owner. Physical consumer-desktop acceptance remains pending; exact limitations are in `docs/web-beta.md`.
+
+FR000650 keeps `main.py` preflight dispatch independent of `WebHost`/report-engine
+imports; only managed/foreground composition imports the host. The real native
+install/poll/cleanup and ten-second preflight deadline are unchanged. A fresh-
+interpreter import guard covers dispatch; hosted case-scoped observations separate
+import/native time, subprocess return/timeout and subsequent owned restart. This
+removes irrelevant work from the short native budget, not native validation.
 
 ## Public contract
 

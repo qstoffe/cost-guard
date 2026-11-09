@@ -7,6 +7,7 @@ from pathlib import Path
 import select
 import shutil
 import subprocess
+import sys
 import tempfile
 from threading import Event, Thread
 import unittest
@@ -167,6 +168,35 @@ class MacWebTests(unittest.TestCase):
             with self.assertRaises(InstanceConflict):
                 native_macos.preflight()
         tray.close.assert_called_once()
+
+    def test_fresh_preflight_dispatch_does_not_import_web_host(self):
+        script = '''import importlib.abc, sys
+class RejectHost(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname == 'src.web.host':
+            raise AssertionError('preflight imported the report-host composition')
+sys.meta_path.insert(0, RejectHost())
+from src.web.main import main
+from src.web import native_macos
+calls = []
+def ready():
+    calls.append('ready')
+def failed():
+    calls.append('failed')
+    raise RuntimeError('synthetic native failure')
+sys.argv = ['cost-guard-web.py', '--preflight-macos']
+native_macos.preflight = ready
+assert main() == 0
+native_macos.preflight = failed
+assert main() == 3
+assert calls == ['ready', 'failed']
+assert 'src.web.host' not in sys.modules
+print('PASS isolated production preflight dispatch')
+'''
+        result = subprocess.run([sys.executable, '-c', script], cwd=ROOT,
+                                capture_output=True, text=True, timeout=10)
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual('PASS isolated production preflight dispatch\n', result.stdout)
 
     def test_readiness_after_first_native_poll_and_host_loss_returns(self):
         owner = Mock(stopping=Event(), stopped=Event())

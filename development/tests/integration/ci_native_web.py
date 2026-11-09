@@ -43,18 +43,10 @@ def mark(stage):
     marks.append(dict(stage=stage, seconds=elapsed))
     trace.write_text(json.dumps(dict(stage=stage, seconds=elapsed, events=marks[-24:])))
 mark('imports')
-from unittest.mock import patch
-mark('mock_imported')
-from src.web.host import WebHost
-mark('host_imported')
-from src.web.jobs import ReportJobs
-from src.web.instance_state import InstanceStore
-from src.web.lifecycle import launch
-mark('core_imported')
 from src.web.main import main
 mark('main_imported')
 from development.tools.ci_web_beta import hosted_only, observe_preflight
-mark('imports_complete')
+hosted_only()
 if sys.platform == 'darwin':
     from src.web.macos_status import StatusItem
     def native_boundary(method, phase):
@@ -95,6 +87,19 @@ def offline_connect(stream, address):
         raise OSError('offline_ci_probe')
     return real_connect(stream, address)
 socket.socket.connect = offline_connect
+if mode == 'preflight':
+    # Production main owns native preflight; no host/acquisition/state is used.
+    mark('imports_complete')
+    raise SystemExit(main())
+from unittest.mock import patch
+mark('mock_imported')
+from src.web.host import WebHost
+mark('host_imported')
+from src.web.jobs import ReportJobs
+from src.web.instance_state import InstanceStore
+from src.web.lifecycle import launch
+mark('core_imported')
+mark('imports_complete')
 original = WebHost.__init__
 def isolated(self, *args, **kwargs):
     kwargs['jobs'] = ReportJobs()

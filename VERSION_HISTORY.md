@@ -5,6 +5,7 @@
 - Promote the existing secured Web application to the normal Windows/macOS entry: top-level `Cost-Guard-Web` launchers and no-argument `cost-guard.py`. Dynamic header/tab/tray/menu branding is Cost Guard; optional locally generated Finder app is `Cost Guard.app` with canonical version metadata.
 - Preserve independent terminal report/Watch under platform `Legacy/` and explicit `cost-guard-cli.py`. Explicit legacy arguments to the root entry forward unchanged; help/version stay GUI-free and unsupported desktop defaults give guidance.
 - Update launcher root resolution, source guarding, source inventory, CI and migration docs. No account/history/settings/cache migration, Legacy retirement, dependency installation, tag, ZIP or GitHub Release. Physical macOS Finder/Gatekeeper acceptance remains unverified.
+- Keep the bounded macOS native preflight independent of report-host imports; native checks, cleanup and startup deadlines remain unchanged.
 
 ## v80.229 — 2026-11-09
 
