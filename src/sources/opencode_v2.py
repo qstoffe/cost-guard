@@ -230,6 +230,10 @@ class OpenCodeV2Source:
         """Construct without I/O; retain selection/timeout, not mutable callbacks."""
         return OpenCodeV2Source(candidate=self._candidate, timeout_seconds=self._timeout_seconds)
 
+    def export_session(self, session_id, epoch, cancelled):
+        from .opencode_v2_export import native_export
+        return native_export(self, session_id, epoch, cancelled)
+
     def begin_card_read(self, origin: OpenCodeV2Source) -> None:
         """Fresh job state on an exclusively borrowed reader, before validation."""
         self.metrics = AcquisitionMetrics(generation='v2')

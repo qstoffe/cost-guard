@@ -17,6 +17,7 @@ from .instance_state import checkout_identity
 from .settings import SettingsError, WebSettings
 from .session_catalog import catalog_page
 from .dispatch_http import handle as handle_dispatch
+from .session_export import SessionExports
 
 ASSETS = {"/": ("index.html", "text/html; charset=utf-8"),
            "/favicon.ico": ("favicon.ico", "image/x-icon"),
@@ -28,7 +29,8 @@ ASSETS = {"/": ("index.html", "text/html; charset=utf-8"),
             "/watch.js": ("watch.js", "text/javascript; charset=utf-8"),
             "/reports.js": ("reports.js", "text/javascript; charset=utf-8"),
             "/live.js": ("live.js", "text/javascript; charset=utf-8"),
-             "/session.js": ("session.js", "text/javascript; charset=utf-8"),
+              "/session.js": ("session.js", "text/javascript; charset=utf-8"),
+              "/session-export.js": ("session-export.js", "text/javascript; charset=utf-8"),
              "/sessions.js": ("sessions.js", "text/javascript; charset=utf-8"),
              "/token-mix.js": ("token-mix.js", "text/javascript; charset=utf-8"),
              "/ai-stats.js": ("ai-stats.js", "text/javascript; charset=utf-8"),
@@ -89,6 +91,7 @@ class LoopbackServer(HTTPServer):
 
     def __init__(self, jobs, lifecycle=None, *, settings=None):
         self.jobs = jobs
+        self.exports = SessionExports()
         self.lifecycle = lifecycle
         self.settings = settings or WebSettings(lifecycle.root if lifecycle else Path(__file__).resolve().parents[2])
         self.session = BrowserSession(checkout_identity(lifecycle.root)[:32] if lifecycle else None)
@@ -202,7 +205,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         except (ValueError, TimeoutError, ConnectionError, OSError):
             return
 
-    def reply(self, status, value, *, content_type="application/json; charset=utf-8", cookie=None):
+    def reply(self, status, value, *, content_type="application/json; charset=utf-8", cookie=None, disposition=None):
         if self.server.lifecycle:
             self.server.lifecycle.observations.response(status)
         data = value if isinstance(value, bytes) else json.dumps(value, allow_nan=False).encode("utf-8")
@@ -219,6 +222,8 @@ class RequestHandler(BaseHTTPRequestHandler):
         if cookie:
             name = self.server.session.cookie_name
             self.send_header("Set-Cookie", f"{name}={cookie}; HttpOnly; SameSite=Strict; Path=/; Max-Age={COOKIE_SECONDS}")
+        if disposition:
+            self.send_header('Content-Disposition', disposition)
         if (getattr(self, 'path', '').startswith('/api/') and self.server.lifecycle and
                 (cookie or self.server.session.authenticated(self.headers.get('Cookie')))):
             self.send_header('X-CG-Instance', self.server.lifecycle.nonce)
@@ -317,6 +322,9 @@ class RequestHandler(BaseHTTPRequestHandler):
                     self.reply(200, {"csrf": session[1]}, cookie=session[0])
                 return
             if handle_dispatch(self, value):
+                return
+            if self.path == '/api/detail/export':
+                self.server.exports.handle(self, value)
                 return
             if self.path in {"/api/reports", "/api/models/refresh"}:
                 try:

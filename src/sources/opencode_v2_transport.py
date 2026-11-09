@@ -22,7 +22,7 @@ from collections.abc import Iterator, Mapping
 from typing import Any
 from urllib.parse import urlencode, urlsplit, urlunsplit
 
-from .errors import (FailureCode, SourceDataError, SourceError, SourceResyncRequiredError,
+from .errors import (FailureCode, SessionExportError, SourceDataError, SourceError, SourceResyncRequiredError,
                      SourceUnavailableError, http_failure, transport_failure)
 
 _LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1", "0.0.0.0", "::"}
@@ -257,6 +257,60 @@ class V2HttpClient:
         except (UnicodeError, json.JSONDecodeError) as exc:
             raise SourceDataError("OpenCode V2 API returned malformed JSON", phase=phase,
                                   exception_type=type(exc).__name__, generation="v2") from exc
+
+    def bounded_json(self, path, *, max_bytes, deadline, cancelled, query=None):
+        """One complete bounded read; absolute deadline also bounds slow drips.
+
+        Used only for native transfer, not ordinary analytical GETs. The reading
+        thread owns response/connection cleanup even for an HTTP/1.0 body.
+        """
+        connection = self._new_connection(max(0.01, deadline - time.monotonic()))
+        connection.cancelled = lambda: self._cancelled or cancelled() or time.monotonic() >= deadline
+        try:
+            if connection.cancelled():
+                raise SessionExportError('export_cancelled')
+            connection.request('GET', self._target(path, query), headers=self._headers())
+            response = connection.getresponse()
+            if response.status != 200:
+                raise http_failure(response.status, phase='session_export')
+            if response.getheader('Content-Type', '').split(';')[0].strip() != 'application/json':
+                raise SessionExportError('export_invalid_response')
+            length = response.getheader('Content-Length')
+            if length is not None and (not length.isascii() or not length.isdecimal()):
+                raise SessionExportError('export_invalid_response')
+            if length is not None and int(length) > max_bytes:
+                raise SessionExportError('export_too_large')
+            body = bytearray()
+            while True:
+                if connection.cancelled():
+                    raise SessionExportError('export_cancelled')
+                chunk = response.read1(min(65536, max_bytes + 1 - len(body)))
+                if not chunk:
+                    break
+                body.extend(chunk)
+                if len(body) > max_bytes:
+                    raise SessionExportError('export_too_large')
+            if length is not None and len(body) != int(length):
+                raise SessionExportError('export_invalid_response')
+            def unique(pairs):
+                value = {}
+                for key, item in pairs:
+                    if key in value:
+                        raise ValueError()
+                    value[key] = item
+                return value
+            def invalid_constant(_):
+                raise ValueError()
+            value = json.loads(body.decode('utf-8'), object_pairs_hook=unique, parse_constant=invalid_constant)
+            if not isinstance(value, dict):
+                raise ValueError()
+            return value
+        except (OSError, http.client.HTTPException) as error:
+            raise transport_failure(error, phase='session_export') from None
+        except (ValueError, UnicodeError, RecursionError):
+            raise SessionExportError('export_invalid_response') from None
+        finally:
+            connection.close()
 
     def sse(self, path: str, *, stop_event: threading.Event | None = None) -> Iterator[Mapping[str, Any]]:
         stopped = stop_event if stop_event is not None else threading.Event()

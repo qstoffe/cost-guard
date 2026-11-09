@@ -110,12 +110,13 @@ function connectionStatus(message, state = {}) {
   if (current) show(current);
   scheduleCachedReport();
 }
-async function api(path, value, signal) {
+async function api(path, value, signal, attachment = false) {
   if (hostState.terminal) throw new Error(hostState.kind === 'authorization_required' ? 'authentication_required' :
     hostState.kind === 'identity_changed' ? 'host_identity_changed' : 'instance_stopping');
   const options = {credentials: 'same-origin', cache: 'no-store'};
   if (value !== undefined) Object.assign(options, {method: 'POST',
     headers: {'Content-Type': 'application/json', 'X-CG-CSRF': csrf || ''}, body: JSON.stringify(value)});
+  if (attachment) options.headers['X-CG-Instance'] = hostInstance || '';
   // Only a visible, actually selected view renews disposable history retention.
   // Hidden polling, passive host warming and diagnostic API clients do not.
   const viewed = path === '/api/interest' ? value?.visible === true : !document.hidden && (
@@ -131,7 +132,7 @@ async function api(path, value, signal) {
   const timeout = setTimeout(() => controller.abort(), 5000);
   try {
     const response = await fetch(path, options);
-    const data = await response.json();
+    const data = response.ok && attachment ? null : await response.json();
     const identity = response.headers?.get('X-CG-Instance');
     if (identity && hostInstance && identity !== hostInstance) {
       connectionStatus('HOST IDENTITY CHANGED — NOT LIVE. Use a fresh authorized launcher link.',
@@ -149,6 +150,16 @@ async function api(path, value, signal) {
       throw error;
     }
     if (hostState.terminal) throw new Error('instance_stopping');
+    if (attachment) {
+      const disposition = response.headers.get('Content-Disposition') || '';
+      const filename = /^attachment; filename="(opencode-ses_[A-Za-z0-9_-]+-sanitized\.json)"$/.exec(disposition)?.[1];
+      const length = Number(response.headers.get('Content-Length'));
+      if (!identity || !filename || !Number.isInteger(length) || length <= 0 || length > 16 * 1024 * 1024 ||
+          response.headers.get('Content-Type') !== 'application/json; charset=utf-8') throw new Error('export_invalid_response');
+      const blob = await response.blob();
+      if (blob.size !== length || controller.signal.aborted || hostState.terminal) throw new Error('export_invalid_response');
+      return {blob, filename};
+    }
     return data;
   } finally { clearTimeout(timeout); signal?.removeEventListener('abort', aborted); }
 }

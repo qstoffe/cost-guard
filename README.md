@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v80.212, 2026-11-09), the supported distribution.
+Use **current `main`** (v80.213, 2026-11-09), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -363,7 +363,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.212 (2026-11-09):** Loaded Web views refresh silently. Models has row-specific promotion help and one postfix star; Full/Mini CCost Today is plain, Earlier stays stable, and Sessions recovers expired pages without a banner or bottom loader. CLI and accounting are unchanged. See the [Web guide](docs/web-beta.md).
+**v80.213 (2026-11-09):** Session detail offers full native sanitized JSON export, with click-time Save As in supported browsers and a standard download fallback. Transfers are source-pinned, authenticated and bounded, with no transcript staging or OpenCode process launch. Real native Save As disk writing remains explicitly unverified under the owner's limited evidence exception. See the [Web guide](docs/web-beta.md#export-a-session-as-json).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

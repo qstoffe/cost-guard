@@ -6,6 +6,10 @@ import socket
 from enum import StrEnum
 
 
+class SessionExportError(Exception):
+    """Fixed, content-free transfer failure; never a transcript or raw error."""
+
+
 class FailureCode(StrEnum):
     UNKNOWN = "unknown_source_failure"
     REGISTRATION_MISSING = "registration_missing"

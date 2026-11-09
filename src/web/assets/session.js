@@ -38,6 +38,7 @@ const SessionDetail = (() => {
       this.root = el('div', undefined, 'session-detail'); this.root.setAttribute('aria-label', 'Session detail');
       const back = el('a', 'Show all sessions'); back.href = '#/sessions';
       this.heading = el('h1');
+      this.exporter = typeof SessionExport === 'undefined' ? null : new SessionExport.Action(api, id);
       this.status = el('p', 'Loading session…', 'warning'); this.status.setAttribute('role', 'status');
       this.loading();
       this.context = new WatchView.ContextLine();
@@ -50,6 +51,7 @@ const SessionDetail = (() => {
       head.append(header); this.body = el('tbody'); this.footer = el('tr');
       const foot = el('tfoot'); foot.append(this.footer); table.append(head, this.body, foot); scroll.append(table);
       this.root.append(back, this.heading, el('p', 'Session ID: ' + id), this.context.root, this.status, scroll);
+      if (this.exporter) this.heading.after(this.exporter.root);
     }
     attach(parent) {
       this.freshness();
@@ -58,6 +60,7 @@ const SessionDetail = (() => {
       this.attached = true; this.poll();
     }
     detach() {
+      this.exporter?.close();
       this.attached = false; this.generation++; clearTimeout(this.timer);
       const token = this.token; this.token = null;
       if (token) this.api('/api/detail', {action: 'close', token}).catch(() => {});
@@ -82,6 +85,7 @@ const SessionDetail = (() => {
         }
         let data = await this.api('/api/detail', {action: 'begin', token: this.token, offset: 0});
         if (!this.attached || generation !== this.generation) return;
+        this.exporter?.update(this.token, data.export_available === true);
         if (!data.result) {
           this.sourceStatus(data);
           return;

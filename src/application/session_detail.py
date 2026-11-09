@@ -11,7 +11,7 @@ from uuid import uuid4
 
 from src.pricing.base import PricingUnavailableError
 from src.reports.session_history import SessionHistory
-from src.sources.errors import SourceError
+from src.sources.errors import SourceError, SessionExportError
 
 from .projection import identity, project
 
@@ -68,6 +68,35 @@ class SessionDetails:
         with self.lock:
             self.leases.pop(token, None)
 
+    def export_identity(self, token):
+        """Only a freshly observed canonical selection may authorize transfer."""
+        with self.lock:
+            lease = self.leases.get(token)
+            if lease is None or self.clock() - lease['touched'] > 300:
+                raise KeyError('detail_expired')
+            entry = self.histories[lease['session_id']]
+            if self.clock() - entry.get('validated', -float('inf')) > 3600:
+                return None
+            return entry.get('export_identity')
+
+    def export(self, token, source, cancelled):
+        identity = self.export_identity(token)
+        capability = getattr(source, 'export_session', None)
+        if not identity or not callable(capability):
+            raise SessionExportError('export_unavailable')
+        source_id, instance, epoch, session_id = identity
+        if (source_id, instance) != (source.source_id, source.source_instance):
+            raise SessionExportError('export_source_changed')
+        def retired():
+            try:
+                return cancelled() or self.export_identity(token) != identity
+            except KeyError:
+                return True
+        payload = capability(session_id, epoch, retired)
+        if retired():
+            raise SessionExportError('export_cancelled')
+        return payload, f'opencode-{session_id}-sanitized.json'
+
     @staticmethod
     def _capture(entry):
         return {name: entry[name] for name in ("result", "revision", "state", "observed_at_ms",
@@ -112,6 +141,7 @@ class SessionDetails:
             row["retained"] = row["event_id"] in capture["omitted_ids"]
         return dict(state=capture["state"], revision=capture["revision"], stale_cursor=stale,
             offset=offset, total=len(rows), pending=False, mode=lease["mode"],
+            export_available=bool(entry.get('export_identity')),
             result=dict(observed_at_ms=capture["observed_at_ms"], view=view,
                         source=dict(status="partial" if capture["state"] != "observed" else "acquired",
                                     atomicity="per_root_snapshot")))
@@ -146,5 +176,10 @@ class SessionDetails:
                 entry["row_observations"] = entry["history"].row_observations
                 entry["omitted_ids"] = entry["history"].omitted_ids
                 entry['validated'] = self.clock()
+            source = service.source
+            entry['export_identity'] = ((source.source_id, source.source_instance,
+                getattr(source, 'observation_epoch', None), report.prompt_blocks[0].session_id)
+                if report is not None and state == 'observed' and
+                callable(getattr(source, 'export_session', None)) else None)
             entry["state"] = state
             entry["generation"] += 1
