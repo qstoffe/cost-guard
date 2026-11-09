@@ -126,7 +126,43 @@ provenance, background-call linkage or memory-only lifetime contracts.
   threads/processes. Total 15.9758s, initial source view 1.348s; not a benchmark.
   Shared OpenCode untouched. No private command/source payload exported.
 
-No acceptance exception or deferred product work. Live background correlation and
+No product functionality deferred. One CI verification exception is recorded below.
+Live background correlation and
 physical desktop/OS or non-Chromium platforms were not newly exercised; background
 identity is covered deterministically and in synthetic rendered disclosures. The
 broader Earlier/history assessment above is not re-certified by this focused check.
+
+### Hosted ARM acquisition gap and scoped decision
+
+Passing feature/local/real-source evidence above applies to the shipped code and
+tests at PR head `11e3c96b2c198487fa7d1f37e95a9c2c34562760` (final reason wording
+included). [CI run 42656395049](https://github.com/qstoffe/cost-guard/actions/runs/42656395049)
+passed common/Linux Full regression/package/browser checks, Windows native phases
+and Intel macOS native phases. ARM macOS is **not equivalent to Intel proof**.
+
+ARM [job 129295901492](https://github.com/qstoffe/cost-guard/actions/runs/42656395049/job/129295901492)
+never acquired a runner (16:35:56–16:50:57Z). Decision Delegate directed one focused
+retry while keeping the tested head frozen. Exact-head run discovery returned only
+this run, with no successful alternative ARM evidence. The authorized normal job
+rerun produced [job 129306833341](https://github.com/qstoffe/cost-guard/actions/runs/42656395049/job/129306833341),
+also unassigned for its full 16:54:48–17:09:48Z window. Both jobs ended CANCELLED,
+runner ID 0, no steps. Both fresh annotation inventories explicitly report:
+“The job was not acquired by Runner of type hosted even after multiple attempts”
+and macOS arm64 hosted capacity constraints. No executed product-test failure was
+observed. Successful jobs were preserved, not deliberately rerun.
+
+**Decision Delegate authorized a minor scoped CI verification exception for this
+delivery:** both ARM **focused native Web-launch regressions** and **native
+API/launcher smoke** are **NOT RUN**, not PASS. The native launcher surface is
+unchanged; the presentation/filtering correction has successful local, rendered,
+real-source, Linux, Windows and Intel evidence. Further identical acquisition
+retries are not proportionate. ARM-specific behavior remains unverified. No
+product functionality is deferred, no workflow/test/runner labels are weakened,
+and there is no future ARM exemption or waiver of later launcher work.
+
+The Delegate also permitted this journal/completion-only reporting commit without
+waiting for every duplicate CI retrigger: unchanged shipped-code/test/workflow
+provenance retains prior evidence, while new-head pending/cancelled checks must
+not be called green. Newly observed executed test failures still require causal
+investigation. Only a normal squash merge is authorized if actual protections
+permit; no force/admin bypass, false conclusion or check cancellation.

@@ -18,7 +18,14 @@ Verified: Full suite 179/179 files; focused final wording regression; package va
 11 passes/0 failures (7 advisory warnings); hidden Chromium six-theme/width cases;
 real V2 Live source command/timeout comparison and two advancing streams. No model
 calls or shared-service stop. No new live background/physical-OS/non-Chromium proof
-is claimed. No acceptance waivers or product deferrals.
+is claimed. No product functionality deferred; **one Decision Delegate-approved CI
+verification exception**: ARM macOS focused native Web-launch regressions and native
+API/launcher smoke did **not run**. Both hosted attempts were cancelled after no
+runner assignment; Linux/common, Windows and Intel macOS checks passed on unchanged
+product/test/workflow head `11e3c96b2c198487fa7d1f37e95a9c2c34562760`. ARM behavior
+remains unverified, never PASS. See the linked journal's hosted-ARM decision for
+job evidence, rationale and reporting-only-head allowance; normal Git protections
+remain mandatory.
 
 Details, initial failed test/runner attempts and evidence limitations:
 [Watch invocation journal](../../../journal/web/watch-invocation.md#native-command-parity-and-timeout-correction--fr-000648).
