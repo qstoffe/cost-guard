@@ -1,347 +1,161 @@
 # Mini Watch
 
 On **Watch**, click **Mini Watch: Off** to request a compact Document
-Picture-in-Picture window. The whole control is highlighted **On** only while it is open.
-Click On again or the browser's native close control to close it; Mini has no custom ×.
-It never opens automatically on minimization or reload and has no saved On preference.
+Picture-in-Picture window. The whole control is highlighted **On** only while open.
+Click On again or the browser's native close control to close it. Mini never opens
+automatically, has no custom × and does not save an On preference.
 
-Mini stays open across in-app navigation. Its left **Cost Guard · Watch** title is a keyboard-accessible action
-that selects Watch and requests focus of the **existing** owning Cost Guard tab; it
-does not open a new tab or deliberately close Mini. Focus/restoring a minimized
-window depends on the browser/OS. If that request cannot restore it, use the native
-return-to-tab control, which may close PiP. Closing/reloading the owning document ends
-Mini; a fresh page starts Off. Browser PiP replacement may also close it.
+Mini stays open across in-app navigation. **Cost Guard · Watch** selects Watch and
+requests focus of the **existing** owning tab without deliberately closing Mini.
+Restoring a minimized window depends on the browser/OS; the native return-to-tab
+control is the fallback. Closing/reloading the owner ends Mini. A fresh page starts Off.
 
-## Position and size preferences
+## One session activity table
 
-**Settings** separates **Mini Watch position** (Default / Remember
-last / Standard position) and **Mini Watch size** (Default / Fit on open / Remember
-last size). Defaults resolve to **Remember last** and **Fit on open**. Existing
-`miniWatchPlacement` intent is retained; `miniWatchSize` is the only new enum.
-Symbolic Default follows shipped defaults; explicit choices stay pinned. Missing
-preferences inherit without creating a user file.
+The always-visible table has exactly four columns:
 
-Fit on open measures the themed header before requesting PiP: **Cost Guard · Watch,
-Earlier Sessions, the ↕ Fit Height action and the complete CCost Today cost/prompt count fit on one row in
-both disclosure states**, where browser/native limits permit. It reserves at least
-the formatted reference **CCost Today 90 000 · 999 prompts**, or wider real opening
-text, plus **8 CSS pixels** for focus/rounding and a measured stable scrollbar gutter.
-The reference exists only in inert measurement clones: real displayed totals are
-never changed. The stable-width toggle and scrollbar gutter prevent a
-toggle or capped-height scrollbar from stealing header space. Each opening uses
-actual fonts, gaps and padding, not a fixed pixel width or table minimum.
-Height is measured at the resulting available content width,
-with current content, every account and warning, and capacity for **two complete
-running-prompt rows**. This is empty height
-capacity, not fabricated prompt entries. More than two rows use their actual height.
-The initial request uses a conservative native-frame estimate because no pre-open
-frame query exists. Actual native bounds are inspected, not inferred from API success.
-Content is mounted only after styles load, avoiding a premature scrollbar that
-would steal header width. The browser may clamp; then responsive header wrapping
-and scrolling keep all content reachable, with a limitation notice in the owning tab.
-Later longer Live text stays accessible without passive resizing. The total outer
-height request never exceeds **1,000 DIPs** or the known available work area.
+**Activity | Session | CCost (Total) | Ctx**
 
-Remember last size permits the browser's manually chosen dimensions within the same
-live opener/host; it does **not force the minimal Fit opening width** and is
-intentionally exempt from the initial two-row fit guarantee.
-The native placement option couples position and dimensions: **Fit on open wins
-over remembered position**, and **Standard position can reset remembered size**.
-These are best-effort intentions, not four independent native geometry controls.
-Reload, a new opener or a changed host starts fresh. Standard asks for initial
-browser placement, not absolute coordinates or a guaranteed bottom-right corner.
-Changing a preference affects only the next opening. Manual window controls remain
-browser-owned. No geometry is saved in config, SQLite, browser storage, cookies or URLs.
+There is no Earlier Sessions button, separate history section or Duration column.
 
-Fresh headless Chrome/Edge tests exercise real PiP, pointer/keyboard activation,
-native clamps, browser zoom and emulated device scales. These are not physical
-Windows-frame, manual-drag, monitor-transition, macOS or screen-reader proof.
-Exact measurements and verification limits are in the [Mini journal](../development/journal/web/mini-watch.md).
+- **Activity:** configured-local **HH:mm**, using the representative prompt's real
+  **start** while running or execution-unverified, and its supported **finish** when
+  ended. Hover, keyboard focus or touch the time for the full local date/time and UTC
+  offset, distinguishing repeated daylight-saving hours. Unknown finish is **—** with
+  **Unknown finish time** help, never source-refresh time or an inferred ending.
+- **Session:** the flexible, left-aligned name, or canonical session ID if unnamed.
+  Only the title ellipsizes. It remains selectable; its help includes the full name
+  and represented **Prompt #**, or **Prompt number unavailable**.
+- **CCost (Total):** the representative prompt's own reference cost, followed by the
+  **entire canonical root/session cost** in parentheses, including supported linked
+  subagents and pre-Watch history. Neither amount substitutes for the other. Credits/
+  USD, zero, **N/A**, unknown **Loading…** and partial **?** retain their meanings.
+  Each amount has independent help with model, effort, **Duration**, calls and relevant
+  linked/mixed/pricing/outcome details. Completed duration is frozen. These are reference
+  costs, not verified billing. Raw prompt text is not exposed.
+- **Ctx:** the running/recent representative's supported next-incoming estimate; a
+  historical-only row uses the last valid **session-level next-request context**, not
+  stale historical prompt context or a sum. Warning/help, token formatting and N/A
+  remain. This differs from full Watch's first-request Ictx and per-prompt Δ Ctx.
 
-## Fit the current height
+Every canonical session appears **once**, even with several concurrent prompts or
+identical display names. If several prompts run in one session, the latest genuinely
+running prompt represents it (stable event-ID tie break). Its cost is not a sum of all
+simultaneous focal prompts; the parenthesized whole-session total is independent.
+Execution-unverified unfinished work remains conservative, not a healthy completion.
 
-The small **↕** button next to Earlier Sessions is a one-shot **Fit Mini Watch height**
-action. Click, tap, or focus it with Tab and press Enter/Space to shrink or grow Mini
-to its **currently visible** header, messages, prompt rows and subscriptions. Expanded
-Earlier rows count; collapsed history, help overlays and the opening's artificial
-two-row reserve do not. Hover or new keyboard focus explains the action. Activating
-it by click, touch, Enter or Space immediately dismisses visible/pending help,
-including when sizing is already snug, clamped or refused. Stationary pointer/focus
-does not reopen it; a new deliberate hover/focus interaction can show it again.
+All distinct running sessions are included without a data limit. Recent terminal-grace
+and verified historical sessions compete by supported finish time for **max(0, 5 − R)**
+remaining slots, where R is the number of distinct running sessions. Thus 0/1/3/4 running
+sessions allow up to 5/4/2/1 finished fillers; 5 or more allow none. Fewer eligible
+sessions produce fewer real rows, never duplicates or fabricated entries.
 
-It works with either size preference and a manually resized window. It uses the
-current width, requests height only, and neither toggles Earlier nor refreshes data,
-repositions the window or changes settings. Another click fits later content changes;
-ordinary publications never resize. A browser/native minimum, maximum, zoom or work-area
-clamp may prevent a snug fit: normal vertical scrolling remains available. This cannot
-remove the prompt tables' legitimate horizontal panning at a narrow width. Native
-rounding/clamps can affect achieved bounds despite a height-only request.
+The selected rows are ordered by **Activity ascending**, oldest at the top, newest at
+the bottom, with deterministic identity ties and a conservative unknown-time fallback.
+Resumed sessions promote the same keyed row and move with their actual new start.
+Running is yellow, successful ending green, abort/error red; accessible outcome text
+does not rely on color. Full Watch keeps its separate per-prompt cards and Earlier list.
 
-## What the figures mean
+The shared server still certifies five eligible historical winners **after excluding
+active/grace sessions**. Provisional candidates are not presented as the newest set.
+Initial loading/unavailability is explicit; active rows, Today and subscriptions work
+independently. Certified rows and empty history remain quiet during normal refresh.
+Removal, resumption and source corrections retain the existing lifecycle guarantees.
+Whole-session costs/guidance can finish enriching after certified membership without
+inventing zero values or changing the proof epoch.
 
-- **CCost Today**, on the right, is the same global configured-local-day CCost and
-  distinct initiating-prompt count as full Watch, including earlier pre-Watch activity
-  across sessions/providers. It is not a sum of Mini rows or subscription periods.
-  Only the left title navigates; the daily summary is non-clickable and has no
-  tooltip on its label, amount or prompt count (including N/A). A plain daily
-  amount can be the known-priced subtotal when prices or tokens are missing, without
-  a partial marker or routine completeness notice. Acquired empty usage is zero;
-  wholly unpriced usage is **N/A**, not zero. Loading, genuine unavailability and
-  host failure remain distinct. The next canonical day/correction
-  replaces the prior value.
-- **Session:** the name only (canonical session ID if unnamed). Only the title
-  ellipsizes; its full text remains selectable and in the row’s accessible name.
-  In **both tables**, Session hover, keyboard focus or touch exposes the full name and
-  the represented canonical **Prompt #** in that session (or **Prompt number unavailable**), without a separate visible ordinal column.
-  Concurrent prompts remain separate rows ordered by actual start.
-- **CCost (Total):** one nonwrapping, right-aligned cell, **prompt cost (whole-session
-  cost)**, e.g. **49 (562)**. The first amount belongs to the row’s focal running/recent
-  prompt; the parenthesized amount covers the entire available root/session tree:
-  pre-Watch history, compactions, causal children and provisional running usage.
-  It is not a visible-row sum, this Watch run or Today. Concurrent rows in one session
-  share the same full total, not necessarily the same prompt cost. Both amounts use
-  canonical Credits/USD formatting, independently retaining zero, **N/A** and partial
-  **?** conventions. An unknown session total shows **Loading…**, never prompt cost
-  or fabricated zero. Both cost headings explain the scopes and that these are
-  reference costs, not provider billing. Complete unchanged totals remain quiet
-  through Earlier re-entry and normal checks; corrections reuse the existing shared
-  incremental valuation cache, also used by full Watch.
-  In both tables, hover/focus/tap the cost text for that prompt's compact model,
-  effort, duration, known calls and relevant linked/mixed/pricing/outcome details.
-  Running uses its focal prompt; Earlier uses its latest actual historical representative.
-  This is not Full Watch's detailed I/C/W/O cost breakdown.
-- **Duration:** that prompt's canonical elapsed execution time, frozen when ended.
-  **Unverified** replaces the clock when an unfinished assistant has contradictory
-  native activity evidence. Known usage remains; this is not a successful ending
-  or a confirmed zero-running count. Mini shares Full Watch's classification and
-  later activity/terminal recovery, not an elapsed-time cutoff.
-- **Ctx:** estimated next incoming context for the prompt, shown as a formatted number
-  without an added `~`. The header tooltip explains the estimate; N/A means unavailable.
-  This next-context estimate is distinct from full Watch's first-request **Ictx** and
-  its per-prompt **Δ Ctx**.
+An open, visible Mini requests its own bounded history-interest lease when fewer than
+five distinct running sessions need fillers, including while the opener is hidden.
+Five-plus running sessions, closing Mini or a host change withdraw unnecessary interest.
+It shares the existing acquisition/proof and **one EventSource**, never another scanner.
 
-Running rows use Watch's yellow tone, successful endings green, abort/error red;
-outcome and known stop cause remain accessible without color. Ended rows retain
-their final prompt-local metrics for Watch's existing ~30-second grace, then leave.
-An acquired empty set shows a compact empty message, never dummy zero-cost rows.
-Initial/partial/unavailable acquisition is not an empty success.
-Brief delays and reconnects quietly retain the last usable figures without retry banners.
-Intrinsic partial pricing stays in accessible values and targeted help, not
-an extra caption below the session name. Pricing gaps, N/A, unknown usage and genuine
-provider/authentication restrictions remain meaningful; internal timestamps are not default help.
-Retention is **not** a new live observation. Valid empty publications still remove rows after the shared
-grace policy. No browser timer invents cost, completion or growing elapsed time.
+## Position, opening size and Fit Height
 
-### Earlier Sessions
+**Settings** separates **Mini Watch position** (Default / Remember last / Standard
+position) and **Mini Watch size** (Default / Fit on open / Remember last size). Defaults
+resolve to **Remember last** and **Fit on open**. Symbolic Default follows shipped
+defaults; explicit choices stay pinned. Missing preferences create no user file.
 
-The **Earlier Sessions** header button is outlined when collapsed and filled when
-expanded. Its text never changes and has no arrow. The title action, toggle, ↕ and
-Today readout share one font size, line height and vertical rhythm. When width is
-constrained, the title and toggle stay together and the complete readout moves to
-a deliberate secondary row; exceptionally narrow widths can wrap the actions too.
-The pressed state remains visible without hover and is exposed to assistive technology.
-The button expands a separate four-column table
-**above** the running prompts: **Finished | Session | CCost (Total) | Ctx**.
-Finished shows only the canonical representative prompt's supported finish in configured
-local **HH:mm** (24-hour, no seconds). Focus, hover or tap the time for the server-prepared
-full **YYYY-MM-DD HH:mm +offset**; DST repeated hours remain distinguishable.
-Unknown finish times show **—** with **Unknown finish time** help, never a source-update
-or current-time substitute. Finished is narrow and nonwrapping; Session keeps the remaining
-elastic title width. The running/recent table is exactly
-**Session | CCost (Total) | Duration | Ctx**. Earlier starts collapsed
-every time a fresh Mini window opens; keyboard/click/touch works, and ordinary Live
-updates preserve the choice. The newest **up to three distinct eligible finished
-sessions** come from full Watch's canonical Earlier Sessions selection, displayed
-oldest-to-newest within that subset, including its unknown-finish fallback ordering.
-Running/recently ended sessions never appear in both tables. After the shared terminal
-grace a session may enter history; resuming moves it back out coherently.
+Fit on open measures styled content before one PiP request. Width is the larger of:
 
-Both views use one server-owned verified population: five eligible distinct sessions in
-Full Watch and the newest three of those in Mini. Before all potentially displacing
-roots have revision-matched complete evidence, **Loading earlier sessions…** may
-appear only before the first usable set, not provisional cards or a false empty result.
-Active prompts, Today and subscriptions remain available independently. After proof,
-ordinary refreshes retain the same coherent set silently until atomic replacement.
-No status/footer row is appended below populated history. Verified empty history
-stays **No earlier sessions**, not a new loading loop. Unresolved healthy proof and
-transient revision churn remain meaningfully pending with bounded automatic retry,
-never failure solely because computation is old. Genuine sustained source I/O,
-authentication or schema faults retain only safe previously verified cards; actionable
-host/authentication failures use the single host recovery surface. Source switching, removal and resumption cannot
-resurrect stale history. Metadata is only an admission hint, not a safe finish-time
-bound or a promise of instant cold startup.
+- The table's compact Activity, CCost and Ctx column need **N**, with a generous Session
+  target of about **1.6 × N** (about **2.6 × N** for the table), plus stable table scrollbar
+  gutter, padding and small focus/rounding allowance.
+- The complete intrinsic header: **Cost Guard · Watch**, **↕**, and the actual/reference
+  **CCost Today 90 000 · 999 prompts**, or wider real text.
 
-An expanded visible Mini sends its own bounded history-interest lease even when
-the opener is hidden; collapsing/closing withdraws that interest. It shares the
-host's acquisition, proof and Live publication, never another scanner or stream.
-Certified identity/finish/model and supported context can appear before independent
-whole-session cost and numeric price guidance finish. Later enrichment preserves
-the same winner population and proof epoch; unknown/pending fields are not zeros.
+This is a responsive visual target, not an exact pixel invariant. Extra available width
+goes to Session, not the compact metric columns. Long titles do not determine opening
+width. Real fonts/styles, native zoom and available screen bounds remain relevant.
 
-Earlier cost cells show the **latest actual canonical prompt’s cost (whole-session
-cost)**. Hover, focus or tap that value for the same prompt’s **Prompt #, main Model**
-(provider-qualified where available), **Effort, finished Duration and known Calls**.
-Linked subagents, multiple contributing models, partial pricing/attribution and
-failed/aborted work are noted when relevant; unknown facts remain N/A or unavailable,
-never borrowed from another prompt. No raw prompt text is exposed.
-The **latest valid session/current-next Ctx** remains distinct from historical prompt
-context or a sum of contexts. Ctx keeps N/A and accessible heading help, without an
-added `~`. No ordinal, model, effort, duration or calls column is added.
-Initial empty, loading and unavailable history are
-explicit; loaded history and certified empty history refresh silently. Intrinsic partial
-pricing stays qualified in cost values/help, without source-refresh prose. Collapsing
-does not revalue or reacquire history.
+Height fits the current header, genuine messages, **table header plus five styled body
+rows**, and **all currently displayed subscriptions**. Missing rows reserve empty space,
+not fake data. With six or more running sessions, all remain in the same table with an
+internal vertical scrollbar and sticky column heading. Header/Today/subscriptions stay
+outside that scroll area. A sixth row never passively resizes the native window.
+At narrow widths the table can also pan horizontally without clipping metrics.
 
-Earlier Sessions has no tooltip. Both tables use their actual headings for help;
-Session explains the name, and CCost (Total) explains prompt versus whole-session cost.
-Both Session values and both cost values supply their separate targeted details above,
-not a second row-wide tooltip or native browser title. Hover opens after **600 ms**;
-the passive help cursor is immediate, as are deliberate keyboard-focus/tap requests.
-There is no table-level `?`, row cue or daily/header help icon. The return-to-Watch
-action retains concise help, dismissed immediately on activation by mouse, touch,
-Enter or Space. Hover help closes within a short exit grace when leaving its target
-or the PiP document; keyboard-focus and intentionally pinned quota/header help have
-separate ownership. Stationary focus and Live rerenders cannot reopen dismissed help.
+The small **↕ Fit Mini Watch height** action deliberately fits this **bounded five-row
+viewport plus header/messages/subscriptions**, not offscreen sixth-plus rows. Mouse,
+touch, Enter and Space activation immediately dismiss visible/pending help, including
+no-op/refused fits. It requests height only at the current width, without fetching,
+changing settings or periodically autosizing. Another deliberate click can fit changes.
 
-Pointer, Enter or Space activation measures collapsed and expanded layouts in one
-inert, invisible clone at the same current width. In **both size modes**, expansion
-adds only the difference, including Earlier's real table/empty state, margins and
-layout reflow. It does not globally fit the window or reinstate the opening-only
-two-row reserve. Stable collapse removes the achieved expansion contribution and
-returns to the preceding fitted, remembered or manually chosen height, without drift.
-Changed content, width or intervening manual sizing invalidates stale restoration;
-collapse then subtracts the current measured delta rather than fitting unrelated content.
-Refused/zero growth does not authorize an unrelated collapse shrink. Each eligible
-activation makes at most one height-only native request, with no width correction,
-move, correction loop or passive repair. Native zoom/rounding/clamps can change
-achieved bounds or prevent exact restoration; normal document scrolling remains.
+Remember last size respects browser-owned manual dimensions rather than forcing the
+default opening fit. Fit on open wins over remembered position; Standard position may
+reset remembered size. These are best-effort native intentions, not independent absolute
+coordinates. Preference changes affect the next opening. No geometry is persisted in
+config, SQLite, browser storage, cookies or URLs.
 
-No passive Live/SSE update, timer, prompt/account change or settings read resizes the
-window. Later content exceeding its opening reserve scrolls normally. Missing activation,
-refusal and clamps preserve disclosure and accessible document scrolling. There is no
-activation spoofing, retry loop, automatic reopen, programmatic move or vertical lock.
+The initial native-frame estimate is conservative; no pre-open frame query exists.
+Native minimum/maximum, work-area and zoom clamps can prevent a snug fit. Normal document
+scrolling preserves access to accounts/messages in a too-short window, while table-only
+overflow handles extra running rows. Header controls reflow instead of clipping at narrow
+widths. No passive Live/SSE publication, timer or quota change resizes the window.
 
-Ordinary refresh/retry retains usable values silently even through long delays.
-Observation clocks remain internal; no timer adds a retained-data disclaimer. Definitive host
-stop, expired authorization or changed host identity instead show concise action guidance
-immediately. Before first usable data, Mini shows neutral Loading/empty states, not
-invented numbers. At configured-local midnight, Yesterday's total is cleared even if
-the connection is down; Mini waits for the new canonical day. Its day-end metadata
-respects configured timezone/DST, not the browser's calendar or a fixed 24-hour guess.
+## Today and subscriptions
 
-Each subscription appears once as **name · N% used (reference quota amount)**. The
-provider-declared stable primary wins; a missing primary never promotes a more
-depleted secondary. Names retain account distinctions. Unlimited and exhausted
-values retain native semantics. Each text row has a thin full-width primary Used
-bar below it: cyan/teal below exhaustion, red only for authoritative finite 100%.
-Unlimited/unknown quota has no fabricated bar. Routine retained/partial refresh copy
-stays quiet; authentication problems and genuine provider restrictions
-remain visible; exhausted finite quota stays red. There are no reset/secondary-window paragraphs.
-The visible subscription text, not a `?` or progress track, exposes its primary
-**Capacity** and **Next reset** first, with applicable primary unrounded-estimate help
-following those two compact facts. Rich native/secondary
-quota explanations remain on full Watch and Accounts.
-No `Last quota update` or raw source enums appear. Unavailable cost
-shows **(?)** without hiding a known percentage. Partial observed subtotals are
-disclosed in help; the compact cost has no visible estimate decoration.
+**CCost Today** is the same global configured-local-day reference cost and distinct
+initiating-prompt count as full Watch, including pre-Watch activity. It is not a sum of
+Mini rows or account periods. This readout is non-clickable and has no tooltip. Known
+priced subtotals remain plain; wholly unpriced usage is N/A, acquired empty usage zero.
+At configured-local midnight the old day clears even disconnected, using server DST-aware
+day boundaries rather than browser time. Corrections replace values, never accumulate.
 
-**Settings → Quota display** offers **Default (Used) / Used / Remaining**.
-Remaining switches this already-open window along with Accounts and full Watch, without
-quota refresh, restart or another stream. Verified convertible finite allowances use
-provider-reported Used, Remaining and Capacity, never independently observed OpenCode
-cost. For example, a synthetic Copilot allowance of 10,000 Credits with 3,000 used
-and 7,000 remaining shows **30% used (3000)** or **70% remaining (7000)**;
-USD shows **($30.00)** or **($70.00)** with Capacity **$100.00** in help.
-These are reference equivalents (100 Credits = $1.00), not provider cash or bills.
-OpenCode-observed CCost Today and prompt/session costs stay independent.
-Other eligible percentage-only windows extrapolate Capacity
-from observed CCost divided by the unrounded fraction Used, then subtract observed
-CCost for Remaining. These are reference proxies, not guaranteed allocation or bills.
-Capacity stays in help, not an extra visible Mini row. Numeric ratio-derived Capacity
-includes **(guesstimate)**; verified comparable native limits and unknown figures do not.
-Only these quota guesstimates round to the nearest one significant digit when within
-10% of raw Credits, otherwise two (decimal half up), before USD conversion. For example,
-613 Credits → **600 / $6.00**, while 250 → **250 / $2.50**. USD keeps two decimals;
-fractional Credits keep needed precision and tiny positive USD uses **<$0.01**.
-Hover, keyboard focus or touch the subscription text for the original calculated
-Capacity and, in Remaining mode, Remaining estimate in full retained Decimal Credits.
-USD mode also supplies ordinary USD in help and explains any two-decimal display limit.
-These are unrounded calculations, not exact provider balances. Help follows the current
-primary account/window, mode, units and Live values without a new request; observed
-Used, provider-confirmed amounts, Today and prompt/session costs are not rounded this way.
-Full remaining
-bars are healthy; empty, truly exhausted bars retain a red text warning and accessible
-exhaustion description. Tiny positive capacity is not marked exhausted by rounding.
-Unlimited keeps Used with no bar, and missing capacity/usage stays unknown rather than
-inventing Remaining. A provider-confirmed idle window still shows **100% remaining**
-with a full healthy bar, but unknown reference Remaining **(?)** and Capacity **?**;
-Used preserves independently proven **(0)**. Credits/USD updates all reference figures.
-Default follows the shipped Used orientation; explicit Used pins it. Full Watch/Accounts
-remaining pace uses that same accepted reference Remaining. CLI, period attribution
-and native money are unaffected.
+Each subscription appears once as **name · N% used (reference quota amount)** and a
+thin primary-window bar. A missing primary never promotes a more depleted secondary.
+Unknown/unlimited quota has no invented bar; finite authoritative exhaustion is red.
+Text help starts with **Capacity** and **Next reset**, with relevant unrounded-estimate
+details. Richer secondary-window/native details remain on Accounts/full Watch.
+Authentication/provider restrictions stay meaningful; ordinary refreshes stay quiet.
 
-Cost uses verified native boundaries and acquired history **before Watch/Mini
-opened**, including earlier days of a supported fixed UTC calendar month.
-Five-hour native windows use their actual start/reset; unknown boundaries,
-arbitrary billing dates or ambiguous accounts remain unavailable. No Today,
-trailing-30-day, configured-local-month or percentage-times-budget substitution
-is made. Cached history is rebound to the **current** quota period on publication,
-so a reset percentage never inherits the old period's cost.
+**Quota display → Remaining** updates open Mini together with Accounts/Watch, without
+another stream. Verified convertible native allowances supply matching Used, Remaining
+and Capacity reference equivalents (100 Credits = $1), not cash or billing. Other
+eligible percentage-only plans retain disclosed OpenCode-observed period-cost estimates;
+inferred Capacity includes **(guesstimate)**. Only those estimates use the existing
+one/two-significant-digit display rounding, with original Decimal values in subscription
+help. Observed costs, Today and prompt/session costs are unchanged. Missing/invalid/
+stale/unlimited facts remain unknown, not fabricated Remaining. Idle provider-confirmed
+windows can show 100% remaining with unknown reference Remaining/Capacity; Used can
+retain independently proven zero. Native windows retain their actual boundaries and
+history from before Mini opened; there is no Today or arbitrary-calendar substitution.
 
-## Support, appearance and privacy
+## Appearance, support and privacy
 
-Runtime feature detection checks secure/top-level context and Document PiP support;
-loopback HTTP is a browser-trusted context. Unsupported, policy-disabled or rejected
-requests stay Off with a reason. There is no popup fallback advertised as always-on-top,
-extension, flag, notification permission, native helper or second sign-in flow.
+Classic/Web light/dark and Credits/USD update the existing keyed rows. The PiP document
+inherits the owner's resolved Web semantic roles, not a second palette. Hover help is
+delayed 600 ms; deliberate focus/touch is immediate. No duplicate `?`, row-wide tooltip
+or native-title help is added. Source disconnection retains usable figures without
+pretending retention is fresh evidence. Host stop, expired authorization and changed
+identity expose concise recovery guidance.
 
-The unframed compact tables follow **Classic / Web light/dark** and live
-**Credits / USD**. **Default (Classic)** and explicit **Classic** retain the existing
-dark presentation. **Web** matches the owning Web page's effective system appearance:
-light content canvas and coordinated surfaces in light mode, the Web blue-dark palette
-in dark mode, never Classic as a fallback. The application inherits the owner's resolved
-semantic colors because the separate PiP document can report a different light/dark
-preference. Header actions, daily summary, both tables/sticky headings, status text,
-quota tracks/fills, empty states, scrollbars and accessible help use those shared roles.
-Changes in Settings and the owner's system appearance update an already-open Mini
-without reopening, report refresh, server restart, another live stream or browser storage.
-This styles application content only; browser-native frame/security/return/close controls
-remain browser-owned. Healthy Live text and transient operational warnings are omitted.
-Opening requests use **screen DIPs**, not physical pixels or zoomed CSS document
-pixels. Measured layout is converted to those units before opening; native chrome
-and browser clamps can change actual outer/inner dimensions. Earlier fixed-height
-Windows measurements are historical, not the new fit target or a physical-height cap.
-Metric headings are centered; Session titles are left-aligned. Numeric metric values
-remain right-aligned with tabular numerals. Metric columns fit their full heading or
-longest displayed value, without wrapping, clipping or ellipses. Session takes all
-remaining width and ellipsizes only the title; neither cost amount shrinks or ellipsizes.
-The complete Session-column heading stays readable. Widths adapt to live values/units;
-an empty message does not expand metric columns. If a manually narrowed window cannot
-fit every heading/metric, the prompt region scrolls horizontally instead of clipping.
-There are no premature vertical max-height caps on prompts, accounts or warnings.
-Content uses its natural height and the document scrolls only when the current native
-window is insufficient. Horizontal table panning remains available at narrow widths;
-all rows and headings remain readable, without a Mini-specific running-row limit.
-Resize with browser controls; narrow widths wrap the header instead of overlapping it.
-The browser
-owns outer chrome, origin/security indication, positioning, native return controls
-and final geometry; this is not a frameless, arbitrarily positioned tooltip.
+Secure top-level Document PiP support is detected; loopback HTTP qualifies. Unsupported,
+disabled or refused requests remain Off with a reason. There is no popup fallback,
+extension, login flow, CSP relaxation or credential exposure in URLs/storage/markup.
+The shared CG favicon remains; browser/OS owns frame/security/return/close/taskbar UI.
 
-Mini supplies the same CG favicon as the normal tab. Native window-icon adoption
-was verified in Windows Chrome 156.0.8078.80 at 150% display scaling. Actual
-taskbar-preview/Alt+Tab rendering and grouping remain unverified; the browser/OS
-owns those surfaces and may cache or present icons differently. Native Edge and
-macOS appearance are also unverified. Chrome's normal application icon and the
-Windows tray are unchanged.
-
-Mini has independent DOM but shares the owning tab's one authenticated live connection
-and the process's bounded account-history/session-cost lanes. Opening/closing Mini or
-toggling Earlier Sessions never starts new history scans, EventSources or provider
-polling. Whole-session figures reuse the persisted incremental SQLite-derived projection;
-the browser never sums or values usage. Updates apply directly from publications,
-not a hidden-main-document animation frame; a visible PiP timer only checks freshness.
-No credentials enter Mini URLs/storage/markup and no CSP relaxation is used.
-
-Tested browsers and explicit OS/native-proof limits are recorded in
-[Mini Watch verification](../development/journal/web/mini-watch.md). Availability
-still depends on the actual desktop browser/version, platform and policy, not its name.
+Owned headless Edge tests exercise actual Document PiP, themes/fonts, native zoom/DPR,
+screenshots, help, Fit and scrolling. They do **not** prove physical Windows frames,
+manual OS dragging, monitor transitions, macOS or screen-reader behavior. Current evidence
+and explicit limits: [Mini Watch journal](../development/journal/web/mini-watch.md).

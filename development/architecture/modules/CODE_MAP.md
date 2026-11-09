@@ -21,6 +21,18 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000642: `mini.js::sessions` selects one canonical session representative and
+chronological five-slot finished fillers without changing Full Watch or the verified
+server history population. `boundTable` measures a five-row internal viewport;
+`tableWidth` / `OpeningMeasure` measure table/header opening needs; `FitSize` owns only
+explicit height requests. `app.js` leases history automatically below five active
+sessions; `display.py` prepares start-offset help. Tests: `mini_sessions.cjs`,
+`mini_opening.cjs`, `mini_fit.cjs`, `mini_watch.cjs`, `test_mini_watch.py`,
+`test_watch_cards.py`, `test_web_display.py`; current headless `probe_mini_fit.cjs`
+(width/activity/AX) and `probe_mini_watch.cjs --history-demand-only` (authenticated
+leases). Obsolete two-table/disclosure probe branches are retired, not acceptance
+for current Mini. [Current evidence](../../journal/web/mini-watch.md).
+
 FR000641: `application/quota_estimates.py` owns pure Decimal estimate-only display
 rounding/help. `quota_ccost.py` retains raw `ccost_reference` and pace provenance;
 `display.py` prepares both units. Shared cards, legacy Accounts and Mini consume those
@@ -43,12 +55,9 @@ ID, API/subscription distinctions, hostile labels/IDs and stable refresh/redraws
 `probe_account_links.cjs` runs through the shipped Accounts/Watch browser probe.
 No projection, acquisition, authentication or accounting boundary changes.
 
-FR000637: Mini's ↕ manual actual-content fit stays in `mini.js` / `mini.css` and
-the existing `DisclosureSize` owner. `fixtures/mini_opening.cjs` pins reserve-free
-measurement/frame/zoom; `mini_disclosure.cjs` pins bounded explicit-fit races/guards.
-`probe_mini_fit.cjs` invokes `probe_mini_disclosure.cjs::fit` for native grow/shrink,
-idempotence, help, bounds and passive-publication invariants in both sizing modes;
-`probe_mini_width.cjs` measures all four header components. No acquisition boundary changes.
+FR000637's explicit ↕ Fit action survives FR000642 in `FitSize`; its obsolete
+disclosure/delta tests are replaced by the unified viewport probes above. No acquisition
+boundary changes; earlier [Fit evidence](../../journal/web/mini-fit-height.md) is historical.
 
 FR000638: Web-only reference-CCost remaining pace is owned by
 `application/quota_ccost.py`, `display.py`, identity-bound `projection.py` /
@@ -64,13 +73,12 @@ the shared Accounts/Watch/open-Mini tokens and independent native mappings.
 `probe_web_live.py --accounts` adds a count-only real native-fact oracle.
 [Evidence and limitations](../../journal/web/quota-reference-amounts.md).
 
-FR000635 scoped navigation: `mini.js`/`mini.css` own the grouped measured header
-and pressed disclosure; `settings.js`/`app.css` own native sibling help panes and
+FR000635 scoped navigation: `mini.js`/`mini.css` retain the grouped measured header
+(disclosure removed by FR000642); `settings.js`/`app.css` own native sibling help panes and
 wheel delegation. `fixtures/settings_wheel.cjs` covers units/guards/preview;
 `integration/probe_settings_wheel.cjs` covers trusted native wheel/scrollbar input;
-`probe_mini_width.cjs` captures typography/pressed contrast and `probe_mini_clamp.cjs`
-covers both sizing modes under compounded zoom/DPR clamps. Existing full probes
-remain the lifecycle owners. [Evidence and exceptions](../../journal/web/header-picker.md).
+Current Mini probes above replace the old pressed/disclosure matrix. Settings tests
+remain independent. [Historical evidence and exceptions](../../journal/web/header-picker.md).
 
 1. Use the installed OpenCode Toolkit `/repo-backlog` command and currently loaded skills for development workflow; the current filesystem, including unrelated uncommitted work, remains authoritative.
 2. Find the responsibility below, read its boundary types and focused tests, then the affected implementation. Do not put integration details into analysis or presentation.
@@ -124,7 +132,7 @@ All paths in this table are relative to the repository root. Test names live und
 | Once-per-Web-host service wake / queued initial reports | `src/web/source_startup.py`, `host.py`, `composition.py`; shared trusted wake `src/opencode_service.py`, called also by CLI bootstrap | `test_web_source_startup.py`, `test_connectivity_reliability.py`, `test_v7814_regressions.py`; synthetic hidden browser `integration/probe_web_source_startup.cjs` / `serve_web_source_startup.py` |
 | Web one-prompt cards, live per-prompt token mix/canonical CCost split, terminal lifecycle, compact layout and replenished session history | `src/watch/web_coordinator.py`, `card_workers.py`, `cards.py`, `src/reports/watch_capture.py`, `session_history.py`, `src/application/live_projection.py`, `src/web/assets/watch.js` | `test_watch_cards.py`, `test_watch_token_mix.py`, `test_watch_prompt_cost.py`, `test_watch_card_lifecycle.py`, `test_web_live.py`; headless `integration/probe_watch_cards.cjs`, read-only `integration/probe_web_live.py --watch-cards --prompt-token-mix --prompt-cost` |
 | Web Watch full-day summary, native monthly/period CCost, quota pace, aligned subscriptions and current-context footers | `src/analysis/daily_usage.py`, `period_ccost.py`, `src/reports/history.py`, `accounts.py`, `watch_context.py`, `src/application/watch_accounts.py`, `live_projection.py`, `src/watch/web_coordinator.py`, `src/web/assets/watch.js` | `test_watch_daily.py`, `test_web_daily_lifecycle.py` (modeled budget/fresh batch sharing), `test_quota_period_lifecycle.py`, `test_watch_context_footer.py`, `integration/web_watch_summary.cjs`; integrated-browser `integration/serve_watch_summary.py`, read-only `integration/probe_web_live.py --watch-cards --daily` |
-| Mini Watch / per-prompt tables, measured opening fit, click sizing and app-owned Document PiP | `src/watch/cards.py`, `running.py`, `src/application/live_projection.py`, `watch_accounts.py`, `src/web/assets/mini.js`, `mini.css`, `app.js` | `test_mini_watch.py`, `test_watch_cards.py`, `test_watch_card_lifecycle.py`; `integration/mini_watch.cjs` ownership/health/daily parity and rounding/clamp policy; current `integration/probe_mini_fit.cjs` + `serve_mini_watch.py` headless PiP/CSP/SSE, true zoom, opening/disclosure fit, document overflow and preferences. Older `probe_mini_watch.cjs` assumes pre-fit geometry/scroll policy. Explicit-authority-only `probe_mini_native.cjs` / `mini_native_geometry.py` measure own-PID physical frames; [limits](../../journal/web/mini-watch.md) |
+| Mini Watch / session-keyed Activity table, five-row viewport, measured opening and explicit Fit | `src/watch/cards.py`, `src/application/display.py`, `src/web/assets/mini.js`, `mini.css`, `app.js` | `test_mini_watch.py`, `test_watch_cards.py`, `test_web_display.py`; `integration/mini_watch.cjs` ownership/health/daily parity; `probe_mini_fit.cjs` + `serve_mini_watch.py` real headless PiP/CSP/SSE, width/activity/help/AX, zoom/DPR, bounded scroll and preferences. `probe_mini_watch.cjs --history-demand-only` tests authenticated automatic filler leases. Physical/native helpers require separate authority; [limits](../../journal/web/mini-watch.md). |
 | Live Sessions catalog, exact global sort keys, bounded scalar indexing and stable older pages | `src/application/session_catalog.py`, `src/reports/session_summary.py`, `src/web/session_catalog.py`, `src/web/assets/sessions.js`, `src/watch/web_coordinator.py`; [ownership and limits](web.md) | `test_web_session_catalog.py` (including visible page-2 completion during an inherited quiet background delay), `integration/probe_web_sessions.cjs`; read-only `integration/probe_web_live.py --sessions` |
 | Complete live session history, observed retention and revision-pinned chunks | `src/application/session_detail.py`, `src/reports/session_history.py`, `src/analysis/prompt_index.py`, `src/web/assets/session.js`; [ownership and limits](web.md) | `test_web_session_detail.py`, `development/tests/integration/web_session.cjs`; read-only `development/tests/integration/probe_web_live.py --sessions` |
 | Selected full native sanitized session JSON / Save As and browser fallback | `src/sources/opencode_v2_export.py`, `opencode_v2_transport.py`, `src/application/session_detail.py`, `src/web/session_export.py`, `http.py`, `assets/session-export.js`, `app.js`; [ownership](web.md#native-session-export-fr-000631) | `test_session_export.py`, `fixtures/session_export.py`, `integration/web_session_export.cjs`; hidden `integration/probe_session_export.cjs` / `serve_session_export.py`; [compatibility, measurements and native-save exception](../../journal/web/session-export.md) |
@@ -167,7 +175,7 @@ initial retry confirmation and independent 2700-root automatic recovery using
 `fixtures/history_acquisition.py`. Its six-root deferred-enrichment case pins exact
 winner certification before session CCost/numeric guidance, available context/model/
 finish fields, and unchanged rows/proof/time/read counts after enrichment.
-`fixtures/mini_sessions.cjs` exercises simultaneous Full-five/Mini-three staged
+`fixtures/mini_sessions.cjs` exercises Full-five/Mini-five-slot session selection and staged
 fields; `fixtures/watch_context_browser.cjs` checks initial pending-to-ready summary
 fields over actual Full DOM without mistaking retained-price refresh for first load.
 `integration/benchmark_v2_acquisition.py` compares

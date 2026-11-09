@@ -84,20 +84,18 @@ function setup() {
   let view = controller.view;
   assert.equal(view.doc.documentElement.dataset.theme, 'classic');
   assert.equal(view.body.children.length, 2);
-   assert.equal(view.body.children[0].children[1].textContent, '2 (4583)');
-   assert.equal(view.body.children[1].children[1].textContent, '3 (4583)');
-   assert.equal(view.body.children[1].children[2].textContent, '20m');
+   assert.equal(view.body.children[0].children[2].textContent, '2 (4583)');
+   assert.equal(view.body.children[1].children[2].textContent, '3 (4583)');
+   assert.match(helpText(view.body.children[1].children[2].children[0].children[0]), /Duration: 20m/);
   assert.equal(view.health.textContent, ''); assert.equal(view.health.hidden, true);
   const table = view.body.parentNode, headers = table.querySelectorAll('th');
    assert.equal(headers[3].textContent, 'Ctx');
    assert.match(helpText(headers[3].children[0]), /Estimated context for this prompt’s next request[\s\S]*N\/A means unavailable, not zero/);
   assert.match(table.attributes['aria-label'], /estimated next incoming context \(Ctx\)/);
   assert.equal(view.body.querySelectorAll('button').length,0,'ordinary values have no duplicate help controls');
-   assert.equal(view.earlierToggle.events.focus,undefined,'disclosure has no tooltip');
-   assert.equal(view.earlierToggle.attributes['aria-pressed'],'false');
-    assert.equal(view.prompts.dataset.expanded,'false');
+   assert.equal(view.earlierToggle,undefined,'obsolete disclosure removed');
    assert.equal(view.fitButton.textContent,'↕');assert.equal(view.fitButton.attributes['aria-label'],'Fit Mini Watch height');
-   assert.match(helpText(view.fitButton),/currently visible content\. Width stays unchanged/);
+   assert.match(helpText(view.fitButton),/five-row session viewport and subscriptions\. Width stays unchanged/);
   assert.equal(view.daily.querySelectorAll('button').length,0,'daily has no help cue');
   assert.match(view.body.children[0].attributes['aria-label'], /Prompt 23 · Running/);
   const contextItem = input.view.active_cards[0].rows[0], originalContext = contextItem.live_context;
@@ -130,14 +128,12 @@ function setup() {
    const demandCalls = [];
    controller.setDemandFactory(win => {
      assert.equal(win, child, 'Mini demand belongs to the actual PiP document');
-     return {update: () => demandCalls.push(!controller.view.earlier.hidden), close: () => demandCalls.push('closed')};
+     return {update: () => demandCalls.push(controller.view.needsHistory), close: () => demandCalls.push('closed')};
    });
-   const expanded = !view.earlier.hidden;
-   view.earlierToggle.fire('click'); assert.equal(demandCalls.at(-1), !expanded);
-   view.earlierToggle.fire('click'); assert.equal(demandCalls.at(-1), expanded);
+   assert.equal(demandCalls.at(-1),true,'open Mini requests historical fillers automatically');
    controller.setDemandFactory(() => ({update() {}, close() {}}));
    assert.equal(demandCalls.at(-1), 'closed');
-  require('../fixtures/mini_disclosure.cjs')(view,child,controller,input);
+  require('../fixtures/mini_fit.cjs')(view,child,controller,input);
   context.fullParent = new Node('div'); context.fullState = {connection:'Live connected.'};
   const daily = input.view.daily_usage;
   function parity() {
@@ -253,13 +249,13 @@ function setup() {
     [{in_progress:false,completed_successfully:false,aborted:false,has_error:true},'mini-error','Error'],
     [{in_progress:false,completed_successfully:false,aborted:false,has_error:false},'','Ended']]) {
     const saved = {...prompt}; Object.assign(prompt, outcome); controller.update(input);
-    const terminal = view.body.children[1];
+    const terminal = view.promptRows.get(originals[1].session_id);
     assert.equal(terminal.className,className); assert.ok(terminal.attributes['aria-label'].includes(label));
     assert.equal(terminal.querySelectorAll('button').length,0,'status has no popover');
-     assert.equal(terminal.children[2].textContent,'20m'); Object.assign(prompt,saved);
+     assert.match(helpText(terminal.children[2].children[0].children[0]),/Duration: 20m/); Object.assign(prompt,saved);
   }
   input.view.active_cards = []; controller.update(input);
-  assert.match(view.body.textContent,/No running or recently ended prompts/);
+  assert.match(view.body.textContent,/No earlier sessions/);
   input.view.active_cards = originals; controller.update(input);
   const accountItems = input.view.accounts.accounts;
   input.view.accounts.accounts = [...accountItems].reverse(); controller.update(input);
@@ -289,7 +285,7 @@ function setup() {
   controller.update(input); assert.match(retained.textContent,/8.4% used \(\?\)/,'known percentage survives unknown pricing');
   primary.estimated = false; primary.cost = savedCost; primary.quota = savedQuota; controller.update(input);
   vm.runInContext('ReportView.setUnit("usd")', context); owner.document.documentElement.dataset.theme = 'web'; controller.settings();
-   assert.equal(view.body.children[0].children[1].textContent, '$0.01 ($45.82)'); assert.match(retained.textContent, /\(\$20.88\)/);
+   assert.equal(view.body.children[0].children[2].textContent, '$0.01 ($45.82)'); assert.match(retained.textContent, /\(\$20.88\)/);
   assert.equal(child.document.documentElement.dataset.theme, 'web');
   const themeStyle = child.document.documentElement.style;
   assert.equal(themeStyle.getPropertyValue('--bg'),'#eef2f8','PiP uses owner-resolved Web tokens');
@@ -309,7 +305,7 @@ function setup() {
     controller.health({kind});
     assert.equal(view.health.hidden, ['reconnecting','source_unavailable'].includes(kind));
     if (!view.health.hidden) assert.match(view.health.textContent,/return to|reopen|restart/);
-     assert.equal(view.body.children[1].children[2].textContent, '20m');
+     assert.match(helpText(view.body.children[1].children[2].children[0].children[0]), /Duration: 20m/);
     assert.equal(view.daily.textContent,'CCost Today $0.34 · 37 prompts');
   }
   controller.health({kind: 'connected'}); now += 16000;
@@ -339,7 +335,7 @@ function setup() {
       ({...item,observation:{...item.observation,observed_at_ms:item.observation.observed_at_ms+1}}))}};
   controller.update(input); assert.equal(view.health.hidden,true,'genuinely usable recovery clears the one status');
   input.view = {...input.view,active_cards:[],cards_state:'observed',now_ms:input.view.now_ms+1};
-  controller.update(input); assert.match(view.body.textContent,/No running or recently ended prompts/,'valid empty evicts retained rows');
+  controller.update(input); assert.match(view.body.textContent,/No earlier sessions/,'valid empty evicts retained rows');
   input.view = {...input.view,active_cards:originals,daily_usage:{...daily,day_end_ms:now+1}};
   controller.update(input); assert.equal(view.daily.textContent,beforeDaily);
   now++; [...child.timers][0](); assert.equal(view.daily.textContent,'CCost Today · Loading…','no yesterday total after configured midnight, even disconnected');
@@ -360,7 +356,7 @@ function setup() {
    assert.equal(owner.media.events.change.length,1,'reopen has exactly one appearance listener');
    assert.equal(second.document.head.children[0].href, 'http://127.0.0.1:1234/favicon-cg1.ico');
     assert.notEqual(second.document.head.children[0], child.document.head.children[0], 'each PiP document owns its link');
-   assert.equal(controller.view.earlier.hidden,true,'fresh Mini always opens Earlier Sessions collapsed');
+   assert.equal(controller.view.earlier,undefined,'fresh Mini has one always-visible table');
   child.fire('pagehide'); assert.equal(button.textContent, 'Mini Watch: On', 'late old pagehide cannot retire a new window');
   second.close(); second.fire('pagehide'); assert.equal(button.textContent, 'Mini Watch: Off', 'native close');
   controller.settings({miniWatchPlacement:'standard'},'same-host');

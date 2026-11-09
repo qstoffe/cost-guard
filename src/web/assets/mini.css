@@ -1,6 +1,5 @@
 /* Shared semantic colors; PiP chrome is browser-owned, not another inner card. */
 html, body { min-height: 100%; overflow: auto; }
-html[data-mini-size="fit-on-open"] { scrollbar-gutter: stable; }
 body { padding: .5rem; max-width: none; }
 .mini-watch { padding: 0; min-width: 0; display: flex; flex-direction: column; gap: .4rem; }
 .mini-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .35rem .75rem;
@@ -10,26 +9,16 @@ body { padding: .5rem; max-width: none; }
 .mini-header button { font: inherit; font-weight: 600; min-height: 2rem; padding: .2rem .4rem;
   border-radius: .4rem; transition: none; }
 .mini-summary { color: var(--accent); border-color: transparent; background: none; }
-.mini-earlier-toggle { color: var(--ink); border-color: var(--control-line); background: none; }
 .mini-header .mini-fit-height { display: inline-flex; align-items: center; justify-content: center;
   flex: 0 0 auto; width: 1.75rem; padding: .2rem; color: var(--ink); border-color: var(--control-line); background: none; }
-.mini-header .mini-earlier-toggle[aria-pressed="true"],
-.mini-header button.mini-earlier-toggle[aria-pressed="true"]:not(:disabled):hover {
-  color: var(--accent-ink); background: var(--accent); border-color: var(--accent);
-  box-shadow: none; }
 .mini-header :focus-visible { outline-offset: 1px; }
-@media (forced-colors: active) {
-  .mini-header .mini-earlier-toggle[aria-pressed="true"] { border: 1px solid Highlight; outline: 2px solid Highlight; }
-}
-.mini-prompts section[hidden] { display: none; }
-.mini-prompts section { margin: 0 0 .4rem; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
 /* Reflow the whole readout, never strand the middle action between independent rows. */
 .mini-daily { flex: 1 1 max-content; margin: 0; min-width: 0; max-width: 100%; text-align: right;
   font: inherit; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; color: var(--ink); }
 .mini-health { flex: 0 0 auto; min-height: 0;
   font-size: .75rem; color: var(--muted); margin: 0; }
 .mini-health[hidden] { display: none; }
-.mini-prompts { min-height: 0; overflow-x: auto; flex: 0 0 auto; }
+.mini-prompts { min-height: 0; overflow: auto; scrollbar-gutter: stable; flex: 0 0 auto; }
 .mini-prompt-table { table-layout: auto; border-collapse: separate; border-spacing: 0; width: 100%;
   margin: 0; font-size: .9rem; line-height: 1.5; background: var(--panel); }
 .mini-prompt-table th, .mini-prompt-table td { padding: .15rem .25rem; border: 0;
@@ -41,6 +30,7 @@ body { padding: .5rem; max-width: none; }
 /* Both cost scopes and the other metrics set intrinsic minima. Only the title flexes. */
 .mini-prompt-table th:not(.mini-session-cell) { width: 1%; }
 .mini-session-value { display: grid; grid-template-columns: minmax(0, 1fr); }
+.mini-session-cell { min-width: 4rem !important; }
 .mini-daily-note { display: block; font-size: .7rem; color: var(--warn); }
 .mini-session, .mini-empty { display: block; width: 0; min-width: 100%; }
 .mini-session { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -67,6 +57,7 @@ body { padding: .5rem; max-width: none; }
 .mini-accounts li.mini-exhausted { color: var(--error); }
 .mini-prompt-table :focus-visible { outline-offset: -3px; }
 .mini-measuring { position: fixed; left: 0; top: 0; visibility: hidden; height: auto; }
+.mini-table-measuring { position: fixed; visibility: hidden; width: max-content; }
 .mini-header-measuring { position: fixed; visibility: hidden; width: max-content; flex-wrap: nowrap; }
 .mini-header-measuring > * { flex: none; max-width: none; white-space: nowrap; overflow-wrap: normal; }
 .mini-header-measuring .mini-actions { flex-wrap: nowrap; }

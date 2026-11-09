@@ -117,7 +117,7 @@ class MiniWatchTests(unittest.TestCase):
             ccost_display_unit="usd").to_json()["running"]["display"]["ccost"])
 
     @unittest.skipUnless(shutil.which("node"), "optional JS VM unavailable")
-    def test_opening_reserve_measures_real_and_reference_in_both_disclosure_states(self):
+    def test_opening_reserve_measures_real_and_reference_header(self):
         result = subprocess.run([shutil.which("node"), "development/tests/fixtures/mini_opening.cjs"],
             cwd=ROOT, text=True, encoding="utf-8", capture_output=True, timeout=15)
 
@@ -126,7 +126,8 @@ class MiniWatchTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which("node"), "optional JS VM unavailable")
     def test_app_owned_window_races_health_settings_and_independent_dom(self):
         payload = {"state": "running", "view": project_live(replace(self.frame,
-            active_cards=self.cards, running=running_prompts(self.cards, "observed"))).to_json()}
+            active_cards=tuple(replace(card, session_id=f"session-{index}") for index, card in enumerate(self.cards)),
+            history_cards=(), running=running_prompts(self.cards, "observed"))).to_json()}
         result = subprocess.run([shutil.which("node"), "development/tests/integration/mini_watch.cjs"],
             cwd=ROOT, input=json.dumps(payload), text=True, encoding="utf-8", capture_output=True, timeout=15)
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
@@ -150,6 +151,10 @@ class MiniWatchTests(unittest.TestCase):
                     prompt['display']['finished_clock'], prompt['display']['finished_date_time']))
                 self.assertEqual(600_000, prompt['duration_ms'])
                 self.assertFalse(prompt['completed_successfully'])
+                started = project_live(replace(self.frame, active_cards=(replace(card,
+                    rows=(WatchRow('same-session', 'Concurrent', replace(row, at_ms=finished, in_progress=True)),)),)),
+                    'Europe/Stockholm').to_json()['active_cards'][0]['rows'][0]['prompt']
+                self.assertEqual(full, started['display']['start_date_time'])
         unknown = replace(row, completed_at_ms=None)
         card = replace(card, rows=(WatchRow('same-session', 'Concurrent', unknown),))
         prompt = project_live(replace(self.frame, history_cards=(card,))).to_json()['history_cards'][0]['rows'][0]['prompt']

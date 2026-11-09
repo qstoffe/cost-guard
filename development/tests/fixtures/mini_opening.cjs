@@ -2,7 +2,7 @@
 const assert = require('node:assert/strict'), fs = require('node:fs'), vm = require('node:vm');
 const source = fs.readFileSync('src/web/assets/mini.js','utf8');
 const context = vm.createContext({});
-vm.runInContext(source.replace('return {Controller};','return {headerWidth, contentHeight, targetHeight, disclosureLayout};'),context);
+vm.runInContext(source.replace('return {Controller};','return {headerWidth, contentHeight, targetHeight};'),context);
 const measure = vm.runInContext('MiniWatch.headerWidth',context);
 function fixture(real, widths) {
   const reads=[], original={text:real,expanded:'false'}, daily={textContent:real};
@@ -18,16 +18,16 @@ function fixture(real, widths) {
 }
 const reference='CCost Today 90 000 · 999 prompts', lower='CCost Today 1 · 2 prompts';
 const low=fixture(lower,{[lower]:[300,310],[reference]:[400,420]});
-assert.equal(measure(low.view,true),420);
-assert.deepEqual(low.reads,[[lower,'false'],[lower,'true'],[reference,'false'],[reference,'true']]);
+assert.equal(measure(low.view,true),400);
+assert.deepEqual(low.reads,[[lower,'false'],[reference,'false']]);
 assert.deepEqual(low.original,{text:lower,expanded:'false'});
 assert.equal(low.removed(),true);
 const larger='CCost Today 9 000 000 000 · 99999999 prompts';
 const high=fixture(larger,{[larger]:[530,520],[reference]:[400,420]});
 assert.equal(measure(high.view,true),530,'larger real text, including its wider collapsed state, wins');
 const actual=fixture(lower,{[lower]:[300,310]});
-assert.equal(measure(actual.view),310,'non-reserving measurement still covers both disclosure states');
-assert.equal(actual.reads.length,2);
+assert.equal(measure(actual.view),300,'non-reserving measurement uses actual header text');
+assert.equal(actual.reads.length,1);
 const failed=fixture(lower,null);
 assert.throws(()=>measure(failed.view,true),/layout failed/);
 assert.equal(failed.removed(),true,'failed measurements must not leave clones');
@@ -51,14 +51,3 @@ Object.assign(visible.doc.defaultView,{outerHeight:850,innerHeight:808});
 assert.equal(targetHeight(visible,false),185,'old tall bounds must not distort native frame/zoom');
 visible.root.currentCSSZoom=2;visible.doc.body.currentCSSZoom=2;
 assert.equal(targetHeight(visible,false),200);assert.equal(copy.style.width,'208.5px','measure CSS width, not twice-zoomed viewport width');
-const disclosureLayout=vm.runInContext('MiniWatch.disclosureLayout',context), states=[];
-const section={hidden:true},prompts={dataset:{}},toggle={setAttribute:(key,value)=>states.push([key,value])};
-copy.querySelector=selector=>selector==='#mini-earlier-sessions'?section:selector==='.mini-prompts'?prompts:toggle;
-copy.getBoundingClientRect=()=>({height:section.hidden?123.25:191.875});removed=false;
-const measured=disclosureLayout(visible);
-assert.equal(measured.expanded-measured.collapsed,68.625,'subtract fractional rendered states before native rounding');
-assert.equal(measured.scale,1);assert.equal(measured.width,417);assert.equal(copy.style.width,'208.5px');
-assert.ok(copy.inert && removed);assert.equal(prompts.dataset.expanded,'true');
-assert.deepEqual(states,[['aria-pressed','false'],['aria-expanded','false'],['aria-pressed','true'],['aria-expanded','true']]);
-copy.getBoundingClientRect=()=>{throw new Error('delta layout failed');};removed=false;
-assert.throws(()=>disclosureLayout(visible),/delta layout failed/);assert.equal(removed,true);
