@@ -97,7 +97,7 @@ for (const table of [card, earlier]) {
   const headers = table.root.querySelectorAll('th');
   assert.match(helpText(headers[3].children[0]),/• Main prompt[\s\S]*• Linked subagents[\s\S]*hover, focus or tap the Model value/);
   assert.doesNotMatch(helpText(headers[5].children[0]),/displayed zero|N\/A|Part of the cost|Input token share/);
-  assert.match(helpText(headers[5].children[0]),/Total = I \+ E/);
+  assert.match(helpText(headers[5].children[0]),/value for Incoming\/Extra CCost and model\/subagent details/);
 }
 assert.equal(watch.root.children.at(-2), watch.daily);
 assert.match(watch.accounts.textContent, /5-hour · 25% used/);

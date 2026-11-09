@@ -66,7 +66,7 @@ module.exports = async function costGroups({command,evaluate,until,owner,mini,ch
       unknown.view.active_cards[0].session_summary={cost:null,context:null,state:'loading'};
       current.watch.update(unknown);miniWatch.update(unknown);
       const loading={full:[...current.watch.cards.values()].find(c=>c.value.session_id==='unknown-total').costLabel.textContent,
-        mini:miniWatch.view.body.querySelector('.mini-cost-value').textContent};
+        mini:miniWatch.view.body.querySelector('tr[data-id="unknown-total"] .mini-cost-value').textContent};
       return {amounts,loading};
     } finally {Date.now=real;document.activeElement?.blur();current.watch.earlier.open=true;current.watch.update(liveValue);miniWatch.update(liveValue);}
   })()`);

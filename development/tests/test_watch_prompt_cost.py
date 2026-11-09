@@ -16,6 +16,7 @@ from src.application.projection import prompt as report_prompt
 from src.domain import ModelRef, TokenUsage
 from src.reports import ReportKind, ReportRequest
 from src.reports.watch_capture import capture_rows
+from src.reports.prompt_costs import PromptCostPart
 from src.watch.models import WatchCard, WatchProjection, WatchRow
 
 
@@ -127,7 +128,15 @@ class WatchPromptCostTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which("node"), "optional JavaScript VM unavailable")
     def test_both_tables_display_independent_unknown_zero_partial_and_unit_tokens(self):
         rows, _ = self.capture(make_uncompacted_snapshot())
-        base = rows[-1]
+        base = replace(rows[-1], linked_agent_count=2, cost_parts=(
+            PromptCostPart("root", 0, "fixture", "main", "high", "Main", "High",
+                1, Decimal(800), 1, True, tuple(map(Decimal, (500, 100, 50, 150)))),
+            PromptCostPart("child-a", 1, "fixture", "child-a", "low", "Child A", "Low",
+                1, Decimal(300), 1, True, tuple(map(Decimal, (100, 100, 50, 50))),
+                prompt_ids=(("fixture", "child-a", "first"),), prompts_complete=True),
+            PromptCostPart("child-b", 2, "fixture", "child-b", "medium", "Child B", "Medium",
+                1, Decimal(150), 1, False, (Decimal(100), None, Decimal(0), Decimal(50)),
+                prompt_ids=(("fixture", "child-b", "second"),), prompts_complete=False)))
         cases = (("1250", "900", "350", False), ("12", "5", None, True),
             ("100", None, None, False), ("0", "0", "0", False),
             ("0", None, None, True), ("1.1", "1.05", ".05", False),
@@ -142,7 +151,13 @@ class WatchPromptCostTests(unittest.TestCase):
         rows += (replace(base, event_id="zero-requests", calls=0, ccost=Decimal(0),
             incoming_context_ccost=None, extra_ccost=None),
             replace(base, event_id="unknown", ccost=None),
-            replace(base, event_id="sparse", is_compaction=True, calls=0, ccost=Decimal(0)))
+            replace(base, event_id="sparse", is_compaction=True, calls=0, ccost=Decimal(0)),
+            replace(base, event_id="unsupported-zero", ccost=Decimal(0),
+                incoming_context_ccost=Decimal(0), extra_ccost=Decimal(0),
+                incoming_context_ccost_known=False, extra_ccost_known=False),
+            replace(base, event_id="unsupported-rounded-zero", ccost=Decimal(".01"),
+                incoming_context_ccost=Decimal(".01"), extra_ccost=Decimal(0),
+                incoming_context_ccost_known=True, extra_ccost_known=False))
         result = subprocess.run([shutil.which("node"),
             "development/tests/integration/web_watch_prompt_cost.cjs"],
             input=json.dumps(dict(state="running", view=self.wire(rows))),

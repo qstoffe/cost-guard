@@ -251,8 +251,11 @@ remaining owned worker, not just a live serving/publisher thread.
 
 `src/web/events.py` publishes immutable full live/progress/terminal state with instance-bound IDs, 32-event/8 MiB replay and 2 MiB publications. `src/application/live_projection.py` allowlists Watch/tool/skill/context, subtotals and run/Today (not normal month/billing). `src/web/assets/live.js` owns one cookie-authenticated EventSource per tab. Gaps require HTTP resync; duplicates/older events cannot reset values; old instances require authorization. Terminal notices stop retry across gaps; offline retains evidence, never invents completion or launches servers.
 
-Full Watch's prompt **CCost (I + E)** cell concatenates the existing immutable
-`ccost`, `incoming_context_ccost` and `extra_ccost` display tokens. Both card types
+Full Watch's prompt **CCost** cell shows only the existing immutable `ccost`
+display token. Its intrinsic value tooltip prepends independently prepared
+`incoming_context_ccost` / `extra_ccost` tokens to the unchanged rich grouped detail
+and unavailable-cost reasons. Blank sparse compactions have no help target; N/A does.
+No zero-component override or browser arithmetic is used. Both card types
 reuse `PromptRowProjector`'s first-attributed-request incoming valuation and remaining
 usage, including supported provisional/child observations. No acquisition, valuation
 or lifecycle owner changes. Additive report-owned `incoming_context_ccost_known` and
@@ -602,7 +605,7 @@ subscription subgrid aligns title/Today/primary label/bar tracks; complete prima
 reset/pace precedes any secondary-only divider. Title bands use theme tokens while
 body values stay left aligned; Accounts now shares this exact subscription component.
 `watch.js` shares ten columns across active/history cards: local HH:mm Started/Finished,
-Duration, canonical #N Prompt, Model, Effort, CCost (I + E), Calls, Token Mix %, Ictx, Δ Ctx.
+Duration, canonical #N Prompt, Model, Effort, CCost, Calls, Token Mix %, Ictx, Δ Ctx.
 The number does not ellipsize; only the preview flexes. Intrinsic non-Prompt subgrid
 tracks pan horizontally. All headers provide native top-layer explanations on
 hover/focus/click, outside table clipping; time cells retain accessible full dates.

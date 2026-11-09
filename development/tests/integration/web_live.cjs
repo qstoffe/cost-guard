@@ -58,7 +58,7 @@ function lifecycle(context, input) {
   assert.equal(reloaded.body.children[0].children[1].textContent, frozenDuration);
   console.log('web lifecycle passed');
 }
-async function tokenMix(context, frames) {
+async function tokenMix(context, frames, helpText) {
   context.parent = new Node('div'); context.state = {connection:'Live connected.'};
   let snapshot = {instance_id:'mix', sequence:0, values:{live:frames[0]}}, stream;
   context.api = async () => JSON.parse(JSON.stringify(snapshot));
@@ -72,13 +72,16 @@ async function tokenMix(context, frames) {
   const card = [...context.state.watch.cards.values()].at(-1), row = card.body.children[0];
   const mix = () => row.children[7].textContent;
   const cost = () => row.children[5].textContent;
-  const costText = prompt => {
-    const d = prompt.display;
-    if (d.ccost === '0') return '0 (0 + 0)';
-    return !d.ccost || d.ccost === 'N/A' ? d.ccost : `${d.ccost} (${d.incoming_context_ccost} + ${d.extra_ccost})`;
+  const costText = prompt => prompt.display.ccost;
+  const checkCostHelp = prompt => {
+    const target = row.children[5].children[0], help = helpText(target), d = prompt.display;
+    assert.ok(help.startsWith(`Incoming Context CCost (I): ${d.incoming_context_ccost}\nExtra CCost (E): ${d.extra_ccost}\n`));
+    assert.ok(help.includes(d.cost_detail_help), 'rich cost detail follows the accepted split');
+    return help;
   };
   assert.equal(mix(), '100/0/0/0');
   assert.equal(cost(), costText(frames[0].view.active_cards.at(-1).rows[0].prompt));
+  checkCostHelp(frames[0].view.active_cards.at(-1).rows[0].prompt);
   for (let index=1; index<frames.length; index++) {
     snapshot = {instance_id:'mix', sequence:index, values:{live:frames[index]}};
     stream.emit(index, frames[index]);
@@ -86,8 +89,10 @@ async function tokenMix(context, frames) {
     assert.equal(card.body.children[0], row, 'same keyed row updates without reload');
     const acceptedCost = costText(frames[index].view.active_cards.at(-1).rows[0].prompt);
     assert.equal(cost(), acceptedCost);
+    const acceptedHelp = checkCostHelp(frames[index].view.active_cards.at(-1).rows[0].prompt);
     stream.emit(index-1, frames[0]);
     assert.equal(cost(), acceptedCost, 'stale event cannot roll back cost components');
+    assert.equal(helpText(row.children[5].children[0]), acceptedHelp, 'stale event cannot roll back paired help');
     assert.notEqual(mix(), '100/0/0/0', 'stale event cannot roll back usage');
   }
   stream.onerror();
@@ -141,7 +146,7 @@ async function main() {
      }});
   const helpText = require('../fixtures/web_help_vm.cjs')(vm, context);
   if (input.lifecycle) { lifecycle(context, input); return; }
-  if (input.tokenMixFrames) { await tokenMix(context, input.tokenMixFrames); return; }
+  if (input.tokenMixFrames) { await tokenMix(context, input.tokenMixFrames, helpText); return; }
   vm.runInContext(fs.readFileSync('src/web/assets/live.js', 'utf8'), context);
   vm.runInContext('LiveConnection.connect(api, update, status, sourceFactory)', context);
   await turns();
@@ -196,12 +201,7 @@ async function main() {
   const promptRows = () => firstCard.body.children;
   const firstRow = promptRows()[0];
   const firstCell = firstRow.children[0];
-  const costText = (prompt, unit) => {
-    const d = {...prompt.display, ...prompt.display_units?.[unit]};
-    if (d.ccost === '0') return '0 (0 + 0)';
-    if (d.ccost === '$0.00') return '$0.00 ($0.00 + $0.00)';
-    return !d.ccost || d.ccost === 'N/A' ? d.ccost : `${d.ccost} (${d.incoming_context_ccost} + ${d.extra_ccost})`;
-  };
+   const costText = (prompt, unit) => prompt.display_units?.[unit]?.ccost ?? prompt.display.ccost;
   const canonical = input.view.active_cards[0].rows.map(r => costText(r.prompt, 'credits'));
   assert.deepEqual(promptRows().map(r => r.children[5].textContent), canonical);
   const credits = context.parent.textContent, beforeUnits = calls;
@@ -217,7 +217,7 @@ async function main() {
   assert.equal(calls, beforeUnits, 'switching is not acquisition');
   assert.ok(!firstCard.body.textContent.includes('Running at snapshot'));
   assert.deepEqual(firstCard.root.querySelectorAll('th').map(node => node.children[0].textContent),
-    ['Started', 'Duration', 'Prompt', 'Model', 'Effort', 'CCost (I + E)', 'Calls', 'Token Mix %', 'Ictx', 'Δ Ctx']);
+    ['Started', 'Duration', 'Prompt', 'Model', 'Effort', 'CCost', 'Calls', 'Token Mix %', 'Ictx', 'Δ Ctx']);
   assert.match(helpText(firstCard.contextLabel.parentNode), /Estimated context for the next request/);
   for (const header of firstCard.root.querySelectorAll('th')) {
     const [button] = header.children;

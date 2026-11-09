@@ -1,5 +1,54 @@
 # Watch prompt tables and observed token mix — FR 000558
 
+## Compact prompt CCost — FR 000647, 2026-11-09
+
+v80.227 supersedes only the older visible I/E presentation below and FR000586's
+displayed-zero override. Running and Earlier use the existing total token under
+**CCost**. The same intrinsic value help begins with independent Incoming Context
+CCost (I) and Extra CCost (E) tokens, then keeps all prepared main/subagent groups,
+category costs, supported prompt counts, partial/unavailable/omitted facts and one
+grand total. A displayed zero never establishes component evidence. Sparse empty
+compactions remain empty/nonfocusable; actual N/A retains its useful reason help.
+
+Only `watch.js` changes product behavior. Existing max-content metric tracks release
+the removed width to Prompt; no CSS, projection, pricing, acquisition, cadence,
+Mini, CLI or whole-session/day behavior changes. Units refresh total and help
+together through their existing bindings. Existing focus/text-selection protection
+retains a coherent row observation until the next unprotected redraw.
+
+Verification: all 179 Full file targets pass (four isolated workers, 123.0s).
+Working-tree validation passes all 11 checks with seven advisory existing budget
+warnings. VM regressions cover independent unsupported zero/tiny USD/partial/unknown
+components, three model/effort groups with partial child/category/boundary evidence,
+unchanged rich help, one total and accepted/stale SSE updates. Hidden Chrome
+156.0.8078.80 passes six Classic/Web-light/Web-dark × 1366/360 cases, both tables,
+both units, focus, intrinsic targets and 100/150/200% text/layout checks.
+The broader shipped-HTTP/SSE help probe passes in Chrome 156.0.8078.80 and
+Edge 157.0.4341.42: actual headless Document PiP, 600ms hover/flyover cancellation,
+keyboard, touch, Escape, intrinsic hitboxes, live hovered-target identity, both-table
+rich detail/unit switching, 30-group scrolling/bounds, 360/1280 widths and 150% zoom.
+The light-theme Watch screenshot was visually inspected. These are hidden-browser
+and synthetic-publication checks, not physical OS input or screen-reader proof;
+natural real-source correction/transition timing was not induced.
+
+The integrated browser was disconnected. Two 90s real-source attempts timed out
+before any cost comparison (global Earlier selection still pending), not at a
+numeric mismatch. The first checked 754/3022 roots; both closed the host without
+cleanup exceptions but reported two remaining quota threads. This is not real
+cost-parity PASS or proof that every owned helper closed. Decision Delegate
+`ses_e3ef4f486ffe4sANpmH9sLGTfA` directed one serial supported 300s attempt after
+Full finished. That attempt passed in 111.83s: verified all 3022 roots in 111.32s,
+one active/five historical cards with supported finishes, one row/card, canonical
+CLI/raw I+E reconciliation, two rich groups, one linked agent and 94 calls. One
+Live owner and two sequence-advancing verified SSE streams passed. Final close
+took 0.0893s, with zero tracked threads/processes and no cleanup failures. No
+inference or shared OpenCode stop occurred. No acceptance waiver was needed;
+the suggested active-card fallback was not run.
+
+Browser-probe upkeep fixes stale selectors for Mini's already-shipped session-keyed
+chronological table and its existing guesstimate/preview help; these are test-only,
+not Mini product changes. Historical evidence below remains dated and unchanged.
+
 ## Full-Watch prompt cost split — FR 000575, 2026-11-04
 
 v80.155 exports the existing canonical prompt `ccost`, `incoming_context_ccost`
