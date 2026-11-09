@@ -9,8 +9,8 @@
   },
   "deferred": {
     "session-learning": {
-      "milestone": 50,
-      "reason": "Decision Delegate authorized deferral: supported exports succeeded but bounded fitting discarded causal windows; the one permitted identity-recovery request did not locate its original target. Prerequisite: usable supported authority/candidate/recovery/outcome windows within existing privacy, sample and context bounds. Historical assessment remains INCONCLUSIVE, not completed/PASS."
+      "milestone": 100,
+      "reason": "Decision Delegate authorized deferral: all eight supported projections remained INCONCLUSIVE after truncation/context fitting, without usable causal sequences. Existing Toolkit FR000463 covers this limitation; no further private retrieval or duplicate proposal. Prerequisite: supported authority/attempt/response/recovery/outcome sequences within existing privacy, identity, sample, size, time and context limits. Completed learning remains 0; this assessment is deferred, not completed/PASS."
     }
   },
   "lastOrdinaryId": "fr/000650"
