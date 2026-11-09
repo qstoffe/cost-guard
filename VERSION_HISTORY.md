@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.221 — 2026-11-09
+
+- Web quota guesstimates use the nearest one significant digit when within 10% of raw reference Credits, otherwise two. Remaining, inferred Capacity, theoretical Monthly Capacity and estimated daily/workday pace round independently before Credits/USD formatting; verified provider allowances and observed costs are unchanged.
+- Intrinsic hover/focus/touch help exposes the unrounded calculation across Watch, Accounts and Mini, following live values and unit/mode changes. Fractional Credits retain needed precision; tiny USD uses honest notation and discloses the two-decimal display limit rather than implying a zero balance or unsupported accuracy.
+
 ## v80.220 — 2026-11-09
 
 - Web Watch, Accounts and Mini Watch pair quota Used/Remaining percentages with matching provider-reported amounts for verified convertible finite allowances, including Copilot's monthly AI credits. Capacity and remaining pace use that same snapshot; Credits/USD formats reference equivalents, never provider cash.

@@ -26,6 +26,16 @@ const ReportView = (() => {
       fraction: watch?.used_fraction, percent: watch?.used_percent, exhausted: watch?.exhausted, note: ''};
   }
   const display = (row, key) => row?.display_units?.[unit]?.[key] ?? row?.display?.[key] ?? 'N/A';
+  function estimateValue(target, row, key) {
+    const help = () => { const text = display(row(), key() + '_help'); return text === 'N/A' ? '' : text; };
+    ContextHelp.value(target, help);
+    bind(target, () => {
+      const available = Boolean(help());
+      target.tabIndex = available ? 0 : -1;
+      target.className = target.className.replace(/\s?help-value/g, '') + (available ? ' help-value' : '');
+    });
+    return target;
+  }
   function quotaHelp(quota, compact = false) {
     const view = quotaView(quota), native = quota.quota_display;
     const scope = [quota.label, quota.period !== 'unknown' && quota.period,
@@ -33,6 +43,7 @@ const ReportView = (() => {
       quota.scope !== 'account' && quota.scope, quota.model_id].filter(Boolean).join(' · ');
     const monthly = display(quota, 'monthly_capacity');
     return (compact ? '' : `${display(quota, 'ccost_help')}\n${display(quota, 'capacity_label')}: ${display(quota, 'ccost_capacity')}\n` +
+      (quota.display?.ccost_capacity_help ? display(quota, 'ccost_capacity_help') + '\n' : '') +
       (monthly ? `Monthly Capacity: ${monthly}\n${display(quota, 'monthly_capacity_help')}\n` : '') + '\n') + scope + '\n' +
       `Native Used: ${native?.used.native || view.native}\nNative Remaining: ${native?.remaining.mode === 'remaining' ? native.remaining.native : 'unknown / inapplicable'}\n` +
       (quota.limit_money != null || quota.remaining_money != null ? `Native money ${view.mode}: ${view.money} / ${display(quota, 'limit_money')}\n` : '') +
@@ -438,7 +449,11 @@ const ReportView = (() => {
     const summary = () => quota.unlimited ? 'Unlimited' : view().account_percent === 'N/A' ? 'Used percentage unavailable' :
       view().account_percent + ' ' + view().mode;
     const hasCost = quota.period_ccost?.cost != null;
-    const label = element('span', () => summary() + (hasCost ? ` (${display(quota, 'ccost_' + view().mode)})` : ''), 'metric-value'); row.append(label);
+    const label = element('span', undefined, 'metric-value');
+    label.append(element('span', summary));
+    if (hasCost) label.append(estimateValue(element('span', () => ` (${display(quota, 'ccost_' + view().mode)})`),
+      () => quota, () => 'ccost_' + view().mode));
+    row.append(label);
     if (hasCost) {
       const capacity = element('span', () => 'Capacity: ' + display(quota, 'ccost_capacity'), 'metric-value');
       ContextHelp.value(capacity, () => quotaHelp(quota));
@@ -507,7 +522,14 @@ const ReportView = (() => {
       for (const quota of obs.quotas) {
         accountQuota(card, quota, compact);
         const pace = quota.ccost_pace;
-        if (pace) card.append(element('p', () => `${quota.label} Remaining: ${display(pace, 'ccost_per_day')}/day · ${pace.days} days · ${pace.workdays === 0 ? 'no workdays left' : display(pace, 'ccost_per_workday') + '/workday'}`, 'detail'));
+        if (pace) {
+          const line = element('p', undefined, 'detail');
+          line.append(estimateValue(element('span', () => `${quota.label} Remaining: ${display(pace, 'ccost_per_day')}/day`),
+            () => pace, () => 'ccost_per_day'), element('span', ` · ${pace.days} days · `),
+            estimateValue(element('span', () => pace.workdays === 0 ? 'no workdays left' : display(pace, 'ccost_per_workday') + '/workday'),
+              () => pace, () => 'ccost_per_workday'));
+          card.append(line);
+        }
       }
       if (!watch && (['github-copilot', 'github-copilot-enterprise'].includes(obs.provider_id) || account.unaccounted_usage != null)) card.append(element('p', 'Unaccounted usage (estimate): ' + display(account, 'unaccounted_usage')));
       if (!detailed && (obs.has_error || obs.has_warning || ['stale', 'unavailable', 'error', 'paused', 'blocked'].includes(obs.status))) card.append(element('p', `${obs.availability} · ${obs.status} · ${obs.error_code || 'Account warning'}`, 'warning'));
@@ -635,5 +657,5 @@ const ReportView = (() => {
     return ['Complete session', costValue(block, 'total_ccost'), known(block.total_calls),
       display(block, 'duration_ms'), '—', known(block.total_ictx_cost_text), known(block.total_extra_cost_text), known(block.total_mix_text)];
   }
-  return {render, renderLive, element, detailCells, detailTotals, compare, overviewAccounts, display, contextSummary, text, setUnit, syncUnits, defaultUnit, mixLegend, hourlySummary, historyWarning, bind, setQuotaMode, quotaView, quotaHelp, LiveStatus, costHelp, costValue, accountHeading};
+  return {render, renderLive, element, detailCells, detailTotals, compare, overviewAccounts, display, contextSummary, text, setUnit, syncUnits, defaultUnit, mixLegend, hourlySummary, historyWarning, bind, setQuotaMode, quotaView, quotaHelp, estimateValue, LiveStatus, costHelp, costValue, accountHeading};
 })();

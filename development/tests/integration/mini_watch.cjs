@@ -209,8 +209,12 @@ function setup() {
   assert.equal(retainedBar.value, '0.91648'); assert.match(retainedBar.attributes['aria-label'], /remaining/);
   for (const [index, line] of [...view.accounts.children].entries()) {
     const primary = input.view.accounts.accounts[index].primary;
-    assert.equal(line.helpText, `Capacity: ${primary.quota.display.ccost_capacity}\nNext reset: ${primary.display.watch_reset}`);
-    assert.equal(line.helpText.split('\n').length, 2);
+    const extra = [primary.quota.display.ccost_capacity_help, primary.quota.display.ccost_remaining_help].filter(Boolean);
+    assert.equal(line.helpText, [`Capacity: ${primary.quota.display.ccost_capacity}\nNext reset: ${primary.display.watch_reset}`, ...extra].join('\n'));
+    if (primary.quota.display.capacity_basis === 'ratio') {
+      assert.match(line.helpText,/Guesstimate before display rounding:/);
+      assert.match(line.helpText,/not verified provider usage/);
+    } else assert.equal(line.helpText.split('\n').length, 2);
   }
   assert.equal(retained.querySelectorAll('button').length,0,'subscription text owns help without a cue');
   assert.equal(retained.children[0].children[0].tabIndex,0);

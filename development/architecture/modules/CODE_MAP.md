@@ -21,6 +21,13 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000641: `application/quota_estimates.py` owns pure Decimal estimate-only display
+rounding/help. `quota_ccost.py` retains raw `ccost_reference` and pace provenance;
+`display.py` prepares both units. Shared cards, legacy Accounts and Mini consume those
+tokens without browser arithmetic. Coverage: `test_web_quota_estimates.py`, existing
+quota/pace tests, both Watch/Mini VM suites and `probe_quota_estimates.cjs` through
+`probe_quota_display.cjs`. [Decision/evidence](../../journal/web/quota-estimates.md).
+
 FR000629: `pricing/identities.py` and `catalog.py` share conservative alias labels
 and valuation gates. `analysis/cache.py`, `session_cost.py`, `reports/session_summary.py`,
 `token_mix_cache.py` and `matched_runs.py` repair affected historical projections lazily;

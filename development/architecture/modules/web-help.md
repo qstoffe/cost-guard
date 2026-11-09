@@ -114,7 +114,7 @@ without changing the rate signature. See [classification and evidence](../../jou
 | Mini: both tables’ headings | Session names only; CCost (Total) explains prompt versus whole-session reference cost, not billing. Active-next versus historical-last-valid-next context remains distinct |
 | Mini: session title/cost and prompt/history status | Both tables' Session text reveals the full title and represented canonical Prompt # (unknown stays unavailable). Both paired-cost values use the same compact prompt model/effort/duration/known-calls renderer, with linked/mixed/pricing/outcome facts. Running uses its focal; history its actual representative. No row-wide popup, native title, cue, detailed I/C/W/O breakdown, passive source-refresh flags or raw prompt text |
 | Mini: Today, freshness, Earlier Sessions, quota bars, return-to-tab | No global Today or Earlier Sessions help, table-level replacement or progress-bar popup. Loaded rows and certified empty history refresh silently, with no timed refresh warning. Keep useful return action help with immediate activation dismissal. Critical host/auth/source failures stay actionable, not observation logs |
-| Mini: subscriptions | Exactly two primary-window facts on the visible text: Capacity, then Next reset. Select canonical unit/provenance and reset tokens; no secondary or CCost prose. Warnings remain visible; Full Watch/Accounts retain richer help |
+| Mini: subscriptions | Primary-window Capacity, then Next reset; applicable raw Capacity/current Remaining estimate help follows. Select canonical unit/provenance and reset tokens; no secondary or unrelated CCost prose. Warnings remain visible; Full Watch/Accounts retain richer help |
 | Models: checkboxes and multi-sort | Four semantic label-only definitions preserve full sorting click/keyboard/Shift actions and accessible action names; Relative CCost groups ratio, actual global completed sample, token categories, hidden fallback and source thresholds |
 | Models: price refresh and promotion help | Explicit price action and genuine fetch time precede the table. One highlighted postfix star follows the complete relative tier chain; the row's structured offer supplies multiline Price Promotion/model/discount/end/resume help. No numbered footer, native duplicate title or routine catalog/source caveat. Unitless ratios distinguish the Copilot-credit basis from Credits/reference USD and billing/native quotas |
 | Sessions/detail, Token Mix, active-hour | Shared sort and intrinsic metric help remain. No retained-source/as-of/refresh caveat or finite progress footer on the loaded Sessions catalog. The retired Reports date form has no help surface |
@@ -140,6 +140,13 @@ Mini probes retain selection, sticky headers, narrow/zoom/theme/unit/disclosure
 coverage. Headless evidence does not prove physical OS pointer/window transitions.
 
 ## Server-owned detail boundary
+
+FR000641 scoped delta: ratio Capacity/Remaining, theoretical Monthly Capacity and
+estimated Web pace expose their unrounded Decimal calculation in intrinsic value help.
+Mini appends only its primary Capacity/current Remaining estimate to the existing
+Capacity/reset facts. Provider-confirmed figures do not get a before-rounding claim.
+Server-prepared help follows live identity, mode and unit; `quota-estimates.md` in the
+Web journal records the precise rounding rule, exception and verification limits.
 
 Analysis retains canonical linked-session evidence (including links without requests) in
 the revisioned analysis cache. Shared `prompt_index.prompt_windows` resolves own-session

@@ -22,11 +22,13 @@ const AccountCards = (() => {
     const summary = () => quota().unlimited ? 'Unlimited' : view().percent === '—' ? '—' : view().percent + ' ' + view().mode;
     const label = el('div'); label.append(el('span', () => `${quota().label} · ${summary()}`));
     ReportView.bind(label, () => label.className = 'watch-quota-summary metric-value' + (view().exhausted ? ' watch-quota-exhausted' : ''));
-    label.append(el('span', () => ` (${display(quota(), 'ccost_' + view().mode)})`, 'watch-period-cost'));
+    label.append(ReportView.estimateValue(el('span', () => ` (${display(quota(), 'ccost_' + view().mode)})`, 'watch-period-cost'),
+      quota, () => 'ccost_' + view().mode));
     const capacity = el('div', undefined, 'watch-quota-capacity metric-value');
     capacity.append(ContextHelp.value(el('span', () => display(quota(), 'capacity_label') + ': ' + display(quota(), 'ccost_capacity')), () => ReportView.quotaHelp(quota())));
-    const monthly = display(quota(), 'monthly_capacity') ? el('div',
-      () => 'Monthly Capacity: ' + display(quota(), 'monthly_capacity'), 'watch-monthly-capacity metric-value') : null;
+    const monthly = display(quota(), 'monthly_capacity') ? el('div', undefined, 'watch-monthly-capacity metric-value') : null;
+    if (monthly) monthly.append(ContextHelp.value(el('span', () => 'Monthly Capacity: ' + display(quota(), 'monthly_capacity')),
+      () => display(quota(), 'monthly_capacity_help')));
     if (quota().quota_display?.used.note || quota().quota_display?.remaining.note)
       label.append(el('span', () => view().note ? ' · ' + view().note : '', 'warning'));
     const track = el('div', undefined, 'watch-quota-track');
@@ -47,9 +49,11 @@ const AccountCards = (() => {
     if (value().quota.reset_at_ms != null) ContextHelp.value(clock, () => display(value().quota, 'reset_at_ms'));
     parent.append(reset);
     const pace = () => value().quota.ccost_pace;
-    const day = el('p', () => `Remaining: ${display(pace(), 'ccost_per_day')}/day`, 'detail');
-    const workday = el('p', () => pace()?.workdays === 0 ? 'Remaining: no workdays left' :
-      `Remaining: ${display(pace(), 'ccost_per_workday')}/workday`, 'detail');
+    const day = el('p', undefined, 'detail'), workday = el('p', undefined, 'detail');
+    day.append(ReportView.estimateValue(el('span', () => `Remaining: ${display(pace(), 'ccost_per_day')}/day`),
+      pace, () => 'ccost_per_day'));
+    workday.append(ReportView.estimateValue(el('span', () => pace()?.workdays === 0 ? 'Remaining: no workdays left' :
+      `Remaining: ${display(pace(), 'ccost_per_workday')}/workday`), pace, () => 'ccost_per_workday'));
     ReportView.bind(parent, () => {
       if (pace() && day.parentNode !== parent) {
         parent.insertBefore(day, parent.children[1] || null); parent.insertBefore(workday, parent.children[2] || null);

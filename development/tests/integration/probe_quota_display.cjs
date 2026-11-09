@@ -137,7 +137,7 @@ module.exports = async ({evaluate,until,command,sessionId,pipSession,checks,layo
    await until(`liveValue.view.accounts.accounts[0].primary.quota.remaining_fraction==='0.9'`);
    await until(`document.querySelector('.watch-quota-summary')?.textContent==='5-hour · 10% used (100)'`);
    assert.equal(await evaluate(`document.querySelector('.watch-quota-capacity').textContent`),'5-hour Capacity: 1000 (guesstimate)');
-   assert.equal(await evaluate(`document.querySelector('.watch-monthly-capacity').textContent`),'Monthly Capacity: 144000 (guesstimate)');
+    assert.equal(await evaluate(`document.querySelector('.watch-monthly-capacity').textContent`),'Monthly Capacity: 140000 (guesstimate)');
    assert.match(await evaluate(`miniWatch.view.accounts.children[0].helpText`),/Capacity: 1000 \(guesstimate\)/);
    await change('quota-display','remaining');
    assert.match(await evaluate(`miniWatch.view.accounts.children[0].textContent`),/90% remaining \(900\)/);
@@ -150,7 +150,8 @@ module.exports = async ({evaluate,until,command,sessionId,pipSession,checks,layo
      window.ratioAccountText=account.textContent;})()`);
    assert.match(await evaluate('ratioAccountText'),/90% remaining \(\$9.00\)Capacity: \$10.00 \(guesstimate\)/);
     await change('ccost-unit','credits');
-   await fixture('running'); await until(`liveValue.view.accounts.accounts.length===6`);
+    await require('./probe_quota_estimates.cjs')({evaluate,until,command,sessionId,pipSession,checks,fixture,route,change});
+    await fixture('running'); await until(`liveValue.view.accounts.accounts.length===6`);
    await change('quota-display','default');
    await route('watch'); await until(`document.querySelector('.watch-account-grid')!==null`);
    checks.push('Quota CCost/Capacity: provider-based native Used/Remaining, immediate Remaining/USD in Accounts/Watch/open PiP, healthy provider-confirmed idle primary/secondary 100% bars with unknown estimates, reset label and Used zero preserved; light/dark narrow/zoom and one SSE');

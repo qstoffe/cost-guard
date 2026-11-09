@@ -55,6 +55,35 @@ def check_reference_quotas(accounts):
     return counts
 
 
+def check_estimate_quotas(accounts):
+    """Count raw/display bound checks without exporting private quantities or identities."""
+    count = 0
+    for item in accounts['accounts']:
+        for slot in (item['primary'], *item['secondary']):
+            quota = slot['quota']
+            raw = quota.get('ccost_reference', {})
+            tokens = {**quota.get('display', {}), **quota.get('display_units', {}).get('credits', {})}
+            fields = [('monthly_capacity', raw.get('monthly_capacity'))]
+            if raw.get('basis') == 'ratio':
+                fields += [('ccost_' + key, raw.get(key)) for key in ('capacity', 'remaining')]
+            pace = quota.get('ccost_pace')
+            records = [(tokens, fields)]
+            if pace and pace.get('capacity_basis') == 'ratio':
+                records.append(({**pace.get('display', {}), **pace.get('display_units', {}).get('credits', {})},
+                    [(key, pace[key]) for key in ('ccost_per_day', 'ccost_per_workday')]))
+            for display, estimates in records:
+                for key, value in estimates:
+                    if value is None:
+                        continue
+                    original = Decimal(value)
+                    rendered = Decimal(display[key].removesuffix(' (guesstimate)'))
+                    assert abs(rendered - original) <= original / 10, 'estimate display tolerance'
+                    assert original == 0 or rendered > 0, 'positive estimate display'
+                    assert 'not verified provider usage' in display[key + '_help'], 'estimate provenance help'
+                    count += 1
+    return dict(checked_amounts=count)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--detail", action="store_true", help="Also probe complete session capture/pages/freeze.")
@@ -173,6 +202,7 @@ def main():
             print(json.dumps(dict(accounts='ok', account_cards=len(current['accounts']['accounts']),
                 account_refresh_owners=1, live_owners=len(owners), publication_advanced=True,
                 reference_quotas=check_reference_quotas(current['accounts']),
+                estimate_quotas=check_estimate_quotas(current['accounts']),
                 finite_jobs_started=0, model_calls_started_by_probe=0)))
         if args.sessions:
             from development.tests.integration.session_catalog_observations import observe_sessions

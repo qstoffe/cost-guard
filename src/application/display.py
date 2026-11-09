@@ -12,7 +12,8 @@ from src.numbers import balanced_share_percents, ccost_amount, ccost_display, cc
 
 from .contracts import ObjectValue, record
 from .quota_display import quota_displays
-from .quota_ccost import quota_ccost_pace, quota_ccost_tokens
+from .quota_ccost import quota_ccost_pace, quota_ccost_tokens, quota_ccost_values
+from .quota_estimates import estimate_amount, estimate_help
 from .prompt_costs import detail_tokens
 from .ai_stats import stat_tokens
 from .comparisons import display_tokens as comparison_tokens
@@ -70,8 +71,11 @@ def amount_tokens(values):
     for key in ("ccost_per_day", "ccost_per_workday"):
         if key in values:
             amount = decimal(values[key])
-            tokens[key] = ("N/A" if amount is None else ccost_amount(amount) if ccost_unit() == "usd"
-                           else remaining_capacity(amount))
+            estimated = values.get("capacity_basis") == "ratio"
+            tokens[key] = ("N/A" if amount is None else estimate_amount(amount) if estimated else
+                           ccost_amount(amount) if ccost_unit() == "usd" else remaining_capacity(amount))
+            tokens[key + "_help"] = ("Remaining/" + ("workday" if key.endswith("workday") else "day") + " — " +
+                                    estimate_help(amount)) if estimated and amount is not None else ""
     if "unaccounted_usage" in values:
         tokens["unaccounted_usage"] = unaccounted_usage(decimal(values["unaccounted_usage"]))
     if "remaining_fraction" in values:
@@ -282,8 +286,12 @@ def _with_display(value, timezone_id, now_ms):
         return value
     values = dict(value.fields)
     now_ms = values.get("now_ms", now_ms)
+    reference = quota_ccost_values(values, now_ms) if "period_ccost" in values else {}
+    if reference:
+        value = ObjectValue(value.fields + (("ccost_reference", record(**{key: reference[key] for key in
+            ("used", "capacity", "remaining", "basis", "monthly_capacity")})),))
     if "native_pace" in values:
-        value = ObjectValue(value.fields + (("ccost_pace", quota_ccost_pace(values, now_ms)),))
+        value = ObjectValue(value.fields + (("ccost_pace", quota_ccost_pace(values, now_ms, reference)),))
     # Only differing CCost tokens need a second wire representation. Native
     # amounts and canonical sort/analysis values never participate in switching.
     variants = {}
@@ -294,7 +302,7 @@ def _with_display(value, timezone_id, now_ms):
             alternate = amount_tokens(values)
             alternate.update(metric_tokens(values, timezone_id, now_ms, times=metric_times))
             alternate.update(history_tokens(values, timezone_id, times=history_times))
-            alternate.update(quota_ccost_tokens(values, now_ms))
+            alternate.update(quota_ccost_tokens(values, now_ms, reference))
             alternate.update(detail_tokens(values))
             alternate.update(stat_tokens(values))
             alternate.update(comparison_tokens(values, timezone_id))
@@ -305,8 +313,8 @@ def _with_display(value, timezone_id, now_ms):
     differing = {key for key in variants["credits"] if variants["credits"][key] != variants["usd"][key]}
     unit_tokens = record(**{unit: record(**{key: items[key] for key in tokens if key in differing})
                             for unit, items in variants.items()}) if differing else None
-    # These are opaque maps keyed by external model/source labels, not DTO schemas.
-    opaque = {"by_model", "by_day_utc", "current_context_sources"}
+    # Opaque keyed maps and canonical quota reference values need no display recursion.
+    opaque = {"by_model", "by_day_utc", "current_context_sources", "ccost_reference"}
     fields = tuple((key, item if key in opaque else _with_display(item, timezone_id, now_ms)) for key, item in value.fields)
     role_tokens = roles(values)
     quota_variants = (("quota_display", quota_displays(values)),) if "remaining_fraction" in values else ()
