@@ -774,11 +774,17 @@ running tool appears at the shared ten-second threshold, in the same semantic ye
 as the running prompt (theme-aware in Web light/dark). Separate background/subagent
 **Running:** lines now share that same foreground; counts/Skills remain gold/brown.
 Running rows are initially collapsed native disclosures of available invocation
-input. Safe command text retains quoting/newlines and available options; other
+input, starting with the actual recorded command when available. Safe command text
+retains quoting/newlines, Windows paths, `--mode=fast` and harmless assignments; other
 tools show named parameters, never an invented shell command. A single background
 job needs a verified original-call link; aggregates or missing links show details
-unavailable. Sensitive, unsupported and oversized fields are explicitly withheld,
-not presented as complete arguments. Freeform screening cannot guarantee detection
+unavailable. Recognized sensitive values are individually redacted when safe;
+ambiguous credentials/headers, unsupported/structured/content fields and oversized
+values have distinct omission reasons, not a blanket sensitive-input warning.
+Normal safe input has no warning. Supplied positive numeric shell/bash timeouts
+show milliseconds (for example `120000 ms (2 min)`), the configured limit rather
+than elapsed/remaining time; absent values never imply a default. Other schemas
+and special values get no invented units. Freeform screening cannot guarantee detection
 of every private value. Details are bounded, memory-only and authenticated/local;
 expanding executes nothing and does not fetch source data. Duration updates retain
 expansion/selection; changed calls, corrections and lost live evidence clear stale

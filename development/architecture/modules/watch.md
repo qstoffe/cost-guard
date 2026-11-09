@@ -64,9 +64,12 @@ Watch tool observations use canonical prompt/task scope and one physical-call id
 `ToolObservation.tool_outcomes` aggregates distinct evidenced calls by tool name and failed/cancelled outcome inside the same observation pass; cancellation takes precedence. `failed_count` remains failure-only for CLI/skills, while derived cancellation/combined counts and explicit outcome DTOs serve Web. All-call groups stay inclusive, and terminal retention preserves the outcome tuples without extra acquisition. Full Watch renders those ordered subsets as red text; foreground and background Running lines both use `--watch-running`. Browser code never classifies source output.
 
 FR000632 adds `watch/invocation.py`, a Web-card-only opt-in boundary over the same
-canonical physical calls. It copies a bounded allowlist of scalar inputs, withholding
-recognized sensitive/freeform credential patterns, nested/content-bearing and oversized
-fields with explicit qualifications. No raw output/metadata/environment crosses the
+canonical physical calls. FR000648 refines this allowlist: ordinary commands retain
+their literal text, while `invocation_redaction.py` masks recognized credential value
+spans or withholds ambiguous credential/header syntax. Structured/content-bearing,
+unsupported, oversized and absent input have separate qualifications; safe commands
+have no warning. Positive finite native shell/bash timeout numbers are presented in
+milliseconds with a compact duration, never an inferred default/countdown. No raw output/metadata/environment crosses the
 DTO. `BackgroundActivity` carries optional source-proven original part/call identities;
 one current registry-confirmed job must match exactly one scoped physical tool before
 its input is eligible. Unknown/aggregate jobs cannot borrow another command. Derived
@@ -74,7 +77,7 @@ details are retained with capture results, not recomputed on duration ticks or p
 Unverified/retained captures, catalog generations awaiting re-verification and terminal
 prompts clear live detail. Opaque source-generation/physical-call identity and call-input
 revision drive native disclosure reconciliation; body nodes remain stable on duration
-updates. Freeform screening remains conservative, not guaranteed secret detection.
+updates. Freeform screening remains bounded, not guaranteed secret detection.
 
 
 Rolling account history extends the daily plan only to usable native/trailing-window starts, never a Watch calendar-month comparison. `src/reports/history.py` retains observed requests in that process-local scope and publishes after a finite plan completes. `src/analysis/period_ccost.py` indexes shared request valuation; source-free account queries advance on idle wakes/midnight without quota-driven history scans. Timestamp-only projection changes do not trigger redraws.

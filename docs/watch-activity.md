@@ -61,15 +61,27 @@ preserved. This is observation only: opening it executes nothing and fetches no
 additional source data. Tool output and metadata are never displayed here.
 
 Only supported scalar parameters are eligible (including command, workdir,
-description, background, timeout and common search/read options). Environment,
-content/script bodies, unknown/nested parameters, oversized values and recognized
-secret-bearing strings are withheld. The disclosure explicitly labels unavailable
-or limited input; it never claims omitted arguments are known. Screening of
-freeform commands is conservative, not a guarantee that every private value can
-be recognized. Treat even eligible paths/commands as private local information.
+description, background, timeout and common search/read options). Ordinary Python
+commands, Windows/Unicode paths, `tokenizer.py`, `--mode=fast` and harmless
+`NAME=development` assignments retain their original argument order and text, with
+no extra warning. Recognized credential values are specifically replaced with
+`[redacted]` when their boundaries are safe; ambiguous credential syntax, headers
+and private keys are withheld. Environment blocks, content/script bodies,
+unsupported/structured fields and oversized values have separate omission reasons.
+Missing source input/command is identified as absent, not called sensitive or
+reconstructed from a description. Limited/redacted text is never labeled complete.
+Screening cannot guarantee recognition of every private value. Treat even eligible
+paths/commands as private local information.
 Details remain in process memory and the authenticated loopback Live publication,
 not Cost Guard caches, diagnostics, logs or telemetry. Each detail is bounded to
 roughly 4 KiB of formatted input; huge arguments are omitted, not silently cut off.
+
+For recognized OpenCode shell/bash inputs, a supplied positive finite numeric
+timeout is labeled in **milliseconds**, for example `timeout: 120000 ms (2 min)`
+or `1500 ms (1.5 s)`. This is the requested tool limit, not elapsed/remaining time
+or proof of eventual termination. Running duration remains separate. No supplied
+timeout means no invented default; zero, negative, string and other-tool timeout
+values retain their raw meaning without invented units or an “unlimited” claim.
 
 Background jobs remain separate from foreground calls. A single source-confirmed
 job can show its original inputs only through an unambiguous canonical tool/call

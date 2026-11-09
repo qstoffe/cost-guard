@@ -113,6 +113,11 @@ class LiveTests(unittest.TestCase):
                               {'tool_name': 'execute', 'outcome': 'cancelled', 'count': 1}], activity['outcomes'])
             self.assertEqual(12, sum(count for _name, count in activity['counts']))
             self.assertEqual([{'skill_id': 'custom-skill', 'failed_count': 1}], activity['skills'])
+        detail = card['running_invocation']
+        self.assertIn('"C:\\Python313\\python.exe" "D:\\dev\\scripts\\tokenizer.py" --mode=fast --limit=25', detail['text'])
+        self.assertIn('timeout:\n120000 ms (2 min)', detail['text'])
+        self.assertEqual('', detail['qualification'], 'safe source command has no warning')
+        self.assertNotEqual(detail['identity'], card['background_invocation']['identity'])
 
     def owner(self, root, snapshot=None, clock=None):
         source = MutableSource(snapshot or make_snapshot())

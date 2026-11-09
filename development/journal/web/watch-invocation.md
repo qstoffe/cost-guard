@@ -74,3 +74,95 @@ a scope decision, not exhaustion or proven history health.
 Live background correlation, complete Earlier history, physical desktop,
 screen-reader, Firefox/Safari and macOS observations remain unproved. No unrelated
 history-performance repair or On Hold was justified solely by that ancillary cap.
+
+## Native command parity and timeout correction — FR 000648
+
+2026-11-09 · v80.228 · base `a80ff6bd10361c9c36e0135bb26b1d17d285a98c`.
+This scoped update supersedes the old broad freeform rejection above, not its
+provenance, background-call linkage or memory-only lifetime contracts.
+
+- `invocation_redaction.py` preserves literal source text outside recognized
+  credential-value spans. Supported literal option/assignment values, URL userinfo
+  and recognizable token formats can be masked individually. Headers, private-key
+  blocks, ambiguous quoting/interpolation and unresolved credential labels withhold
+  the affected field with a specific explanation. This is bounded screening, not
+  a shell parser or a guarantee of detecting arbitrary unlabelled private text.
+- Ordinary Windows/Unicode Python paths, `tokenizer.py`, CLI equals options,
+  harmless environment assignments, quoting and multiline input are retained.
+  No description reconstruction, output/metadata/environment-block forwarding,
+  source access, polling, expansion fetch, model invocation or persistence added.
+- The complete displayed text is ASCII-escape-budgeted to 4096 characters before
+  Live publication. Omitted unsupported, structured/content, oversized and absent
+  input have different reasons. Safe input starts with command text and no warning.
+- Positive finite numeric native shell/bash timeouts retain their raw value with
+  `ms` and a deterministic compact equivalent. Zero/negative/string/unknown schemas
+  get no inferred units/default/unlimited meaning. The official Tools page retrieved
+  during work explicitly documents shell timeout milliseconds and background's
+  distinct default behavior: <https://opencode.ai/docs/tools/>.
+
+### Verification
+
+- `run_tests.py --suite full`: 179/179 files passed, zero failures, 118.0s.
+  Follow-up focused invocation regression covers the final cause-specific wording
+  refinement. New cases cover real-value masking/fallback, false positives, timeout
+  special values, exact source preservation and redacted 100-card/replay budgets.
+  Existing scope, linked-child, physical-call/background, terminal and reverification
+  tests remain. An initial new test used `__dict__` on a slots dataclass; corrected
+  to `asdict`, then passed. Two malformed focused-runner invocations were not tests
+  passing; the clean Full covered all intended files.
+- `validate_package.py --working-tree`: 11 passes, zero failures, seven existing
+  advisory budget warnings. No hard budget raised or baseline changed.
+- Integrated browser disconnected; permitted hidden Edge 157.0.4341.42 ran the
+  existing outcome/invocation probe against the synthetic fixture: Classic/Web
+  light/Web dark × 1366/360px, six cases. Windows paths, command-first/no-warning,
+  labeled timeout, Enter/Space/mouse/touch, literal HTML, wrapping, stable selection/
+  focus/scroll/nodes over eight duration updates, changed identity/revision,
+  unavailable/aggregate and terminal clearing passed. Desktop/dark and 360px/Classic
+  screenshots inspected. Images/results retained at `scratch:/browser/`.
+- Real `probe_web_live.py --tool-invocations`: V2, one live detail, one unchanged
+  already-acquired native command and one labeled native timeout; only counts and
+  opaque comparison identities retained by the probe. One owner, two verified
+  advancing streams, zero model calls, no cleanup failures, no remaining owned
+  threads/processes. Total 15.9758s, initial source view 1.348s; not a benchmark.
+  Shared OpenCode untouched. No private command/source payload exported.
+
+No product functionality deferred. One CI verification exception is recorded below.
+Live background correlation and
+physical desktop/OS or non-Chromium platforms were not newly exercised; background
+identity is covered deterministically and in synthetic rendered disclosures. The
+broader Earlier/history assessment above is not re-certified by this focused check.
+
+### Hosted ARM acquisition gap and scoped decision
+
+Passing feature/local/real-source evidence above applies to the shipped code and
+tests at PR head `11e3c96b2c198487fa7d1f37e95a9c2c34562760` (final reason wording
+included). [CI run 42656395049](https://github.com/qstoffe/cost-guard/actions/runs/42656395049)
+passed common/Linux Full regression/package/browser checks, Windows native phases
+and Intel macOS native phases. ARM macOS is **not equivalent to Intel proof**.
+
+ARM [job 129295901492](https://github.com/qstoffe/cost-guard/actions/runs/42656395049/job/129295901492)
+never acquired a runner (16:35:56–16:50:57Z). Decision Delegate directed one focused
+retry while keeping the tested head frozen. Exact-head run discovery returned only
+this run, with no successful alternative ARM evidence. The authorized normal job
+rerun produced [job 129306833341](https://github.com/qstoffe/cost-guard/actions/runs/42656395049/job/129306833341),
+also unassigned for its full 16:54:48–17:09:48Z window. Both jobs ended CANCELLED,
+runner ID 0, no steps. Both fresh annotation inventories explicitly report:
+“The job was not acquired by Runner of type hosted even after multiple attempts”
+and macOS arm64 hosted capacity constraints. No executed product-test failure was
+observed. Successful jobs were preserved, not deliberately rerun.
+
+**Decision Delegate authorized a minor scoped CI verification exception for this
+delivery:** both ARM **focused native Web-launch regressions** and **native
+API/launcher smoke** are **NOT RUN**, not PASS. The native launcher surface is
+unchanged; the presentation/filtering correction has successful local, rendered,
+real-source, Linux, Windows and Intel evidence. Further identical acquisition
+retries are not proportionate. ARM-specific behavior remains unverified. No
+product functionality is deferred, no workflow/test/runner labels are weakened,
+and there is no future ARM exemption or waiver of later launcher work.
+
+The Delegate also permitted this journal/completion-only reporting commit without
+waiting for every duplicate CI retrigger: unchanged shipped-code/test/workflow
+provenance retains prior evidence, while new-head pending/cancelled checks must
+not be called green. Newly observed executed test failures still require causal
+investigation. Only a normal squash merge is authorized if actual protections
+permit; no force/admin bypass, false conclusion or check cancellation.

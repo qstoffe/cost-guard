@@ -21,6 +21,13 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000648: `watch/invocation.py` owns bounded scalar eligibility and native shell/bash
+timeout presentation; `invocation_redaction.py` owns literal credential value spans
+and ambiguous-syntax withholding. `watch.js` keeps stable native disclosures with
+command-first text and no safe-input warning. Coverage: `test_watch_invocation.py`,
+`test_watch_cards.py`, `test_web_live.py`, `probe_watch_invocation.cjs`; the real Live
+probe compares already-acquired native commands in memory and exports counts only.
+
 FR000644: `analysis/ai_stats_rates.py` owns nominal configured-local date/workday
 normalization and fictional robot shifts over existing period totals/durations.
 `ai_stats.py` retains the original active-hour value; reports thread the configured

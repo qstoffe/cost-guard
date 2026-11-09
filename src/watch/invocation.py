@@ -1,35 +1,37 @@
 """Bounded Web-only invocation disclosure from already-owned canonical evidence.
 
 No output, metadata, environment, content-bearing arguments or unknown fields
-cross this boundary. Freeform allowlisted strings are screened, not guaranteed
-secret-free; the UI explicitly describes omissions and this qualification.
+cross this boundary. Normal commands retain their source text; recognized secrets
+are redacted or withheld with cause-specific qualifications.
 """
-from collections.abc import Mapping
 import hashlib
 import json
 import math
-import re
+from decimal import Decimal
 
 from .models import ToolInvocation
+from .invocation_redaction import redact
 from .tool_contracts import tool_input
 
-MAX_INPUT_TEXT = 4096  # ASCII JSON characters; wire escaping is bounded to 2x.
+MAX_INPUT_TEXT = 4096  # ASCII-escaped formatted text; wire escaping is bounded.
 _FIELDS = (
     "command", "code", "workdir", "cwd", "description", "background", "timeout",
     "pattern", "path", "include", "glob", "filePath", "offset", "limit",
     "literal", "caseSensitive", "hidden", "recursive", "maxResults",
 )
-# Do not forward arbitrary script bodies as `code`; only an observed shell command
-# is displayable. Structured/nested parameters remain unavailable, not stringified.
-_SENSITIVE = re.compile(
-    r"password|passwd|secret|token|api[_-]?key|authorization|cookie|credential|"
-    r"private[ _-]?key|-----BEGIN|\bbearer\s|\bredacted\b|\bmasked\b|"
-    r"\b(?:sk-|gh[pousr]_|github_pat_|AKIA|ASIA|gsk_)[\w-]+|"
-    r"\beyJ[\w-]+\.[\w-]+\.[\w-]+|(?:^|\s)(?:-u|--user)\s|"
-    r"\b[A-Za-z_][\w:]*\s*=|https?://[^\s/]+:[^\s/]+@|"
-    r"(?:--?env\b|\$env:|\bsetenv\b|\bexport\b)", re.I,
-)
-_UNAVAILABLE = "Invocation details unavailable from the current source."
+_SHELL = frozenset({'shell', 'bash', 'functions.shell', 'functions.bash'})
+_SECRET_FIELDS = frozenset({'env', 'environment', 'headers', 'authorization', 'cookie',
+                            'password', 'secret', 'token', 'api_key', 'apiKey', 'credentials'})
+
+
+def _timeout(value, shell):
+    if (not shell or isinstance(value, bool) or not isinstance(value, (int, float))
+            or value <= 0):
+        return str(value) if isinstance(value, str) else json.dumps(value)
+    duration = Decimal(str(value))
+    divisor, unit = (3600000, 'h') if duration >= 3600000 else (60000, 'min') if duration >= 60000 else (1000, 's')
+    friendly = format(duration / divisor, '.6f').rstrip('0').rstrip('.')
+    return f'{value} ms' + (f' ({friendly} {unit})' if Decimal(friendly) > 0 else '')
 
 
 def _digest(value):
@@ -39,31 +41,54 @@ def _digest(value):
 def invocation(part) -> ToolInvocation:
     """Copy only small, supported scalar input fields; never inspect huge values."""
     inputs = tool_input(part.data)
-    safe = {}
-    omitted = len(inputs) > len(_FIELDS) or any(key not in _FIELDS for key in inputs)
+    lines, reasons = [], []
+    shell = str(part.data.get('tool') or part.data.get('name') or '').lower() in _SHELL
+    if any(key in _SECRET_FIELDS for key in inputs):
+        reasons.append('Environment/credential fields omitted.')
+    if any(key not in _FIELDS and key not in _SECRET_FIELDS for key in inputs):
+        reasons.append('Unsupported fields omitted.')
+    if not inputs:
+        reasons.append('No source input available.')
+    elif shell and (not isinstance(inputs.get('command'), str) or not inputs['command']):
+        reasons.append('No source command available.')
     for key in _FIELDS:
         if key not in inputs:
             continue
         value = inputs[key]
         supported = value is None or isinstance(value, (str, bool, int, float))
-        if (key == "code" or not supported or
-                isinstance(value, str) and (len(value) > MAX_INPUT_TEXT or _SENSITIVE.search(value)) or
-                isinstance(value, int) and value.bit_length() > 64 or
+        if key == 'command' and (not isinstance(value, str) or not value):
+            reasons.append('No source command available.')
+            continue
+        if key == 'code':
+            reasons.append('Content/script body omitted.')
+            continue
+        if not supported:
+            reasons.append('Structured input omitted.')
+            continue
+        if (isinstance(value, int) and value.bit_length() > 64 or
                 isinstance(value, float) and not math.isfinite(value)):
-            omitted = True
+            reasons.append('Unsupported numeric input omitted.')
             continue
-        candidate = {**safe, key: value}
-        if len(json.dumps(candidate, indent=2, ensure_ascii=True)) > MAX_INPUT_TEXT:
-            omitted = True
+        if isinstance(value, str):
+            if len(value) > MAX_INPUT_TEXT:
+                reasons.append('Oversized field omitted.')
+                continue
+            value, reason = redact(value)
+            if reason:
+                reasons.append(reason)
+            if value is None:
+                continue
+        rendered = (_timeout(value, shell) if key == 'timeout' else
+                    value if isinstance(value, str) else json.dumps(value))
+        line = f'{key}:\n{rendered}'
+        if len(json.dumps('\n\n'.join([*lines, line]), ensure_ascii=True)) > MAX_INPUT_TEXT:
+            reasons.append('Oversized field omitted (display budget).')
             continue
-        safe = candidate
-    text = "\n\n".join(f"{key}:\n{value if isinstance(value, str) else json.dumps(value)}"
-                         for key, value in safe.items())
-    qualification = (_UNAVAILABLE if not inputs else
-        "Limited source input: sensitive, unsupported or oversized fields omitted. Not the complete invocation."
-        if omitted else "Observed source input (key/value formatting only).")
-    if inputs and not safe:
-        qualification = _UNAVAILABLE + " Sensitive, unsupported or oversized input withheld."
+        lines.append(line)
+    text = '\n\n'.join(lines)
+    qualification = ' '.join(dict.fromkeys(reasons))
+    if reasons and inputs:
+        qualification += ' Not the complete invocation.'
     origin = part.provenance
     call_id = part.data.get("callID")
     has_call = isinstance(call_id, str) and bool(call_id)

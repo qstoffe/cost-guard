@@ -1,5 +1,5 @@
 """Invocation scope, privacy, source links and bounded immutable Web publication."""
-from dataclasses import replace
+from dataclasses import asdict, replace
 import json
 import unittest
 from unittest.mock import patch
@@ -35,35 +35,90 @@ class InvocationTests(unittest.TestCase):
         detail = invocation(value)
         self.assertIn(command, detail.text)
         self.assertIn("background:\ntrue", detail.text)
-        self.assertIn("timeout:\n1200", detail.text)
-        self.assertIn("Observed source input", detail.qualification)
+        self.assertIn("timeout:\n1200 ms (1.2 s)", detail.text)
+        self.assertEqual('', detail.qualification)
         legacy = replace(value, data={"input": {"pattern": "hello", "path": "src"},
                                      "output": "DO NOT EXPOSE", "state": {"status": "running"}})
         self.assertEqual("pattern:\nhello\n\npath:\nsrc", invocation(legacy).text)
         self.assertNotIn("DO NOT EXPOSE", invocation(legacy).text)
 
-    def test_sensitive_freeform_and_unknown_or_nested_fields_are_withheld(self):
-        for command in ["curl --token abc", "FOO=private git status", "$env:FOO='private'",
-                        "curl -H 'Authorization: Bearer private'", "echo sk-test_secret",
-                        "https://user:private@example.com", "echo -----BEGIN PRIVATE KEY-----"]:
-            with self.subTest(command=command):
+    def test_sensitive_values_redacted_without_losing_safe_command_portion(self):
+        for command, expected in [
+                ('python tokenizer.py --api-key=synthetic-value --mode=fast',
+                 'python tokenizer.py --api-key=[redacted] --mode=fast'),
+                ('python task.py --token "synthetic value" --limit=25',
+                 'python task.py --token [redacted] --limit=25'),
+                ("$env:API_KEY='synthetic-value'; python task.py", "$env:API_KEY=[redacted]; python task.py"),
+                ('AWS_SECRET_ACCESS_KEY=synthetic-value python task.py',
+                 'AWS_SECRET_ACCESS_KEY=[redacted] python task.py'),
+                ('curl https://user:synthetic-value@example.com --silent',
+                 'curl https://[redacted]@example.com --silent'),
+                ('python task.py ghp_synthetic', 'python task.py [redacted]')]:
+            with self.subTest(expected=expected):
+                detail = invocation(tool(inputs={'command': command}))
+                self.assertEqual('command:\n' + expected, detail.text)
+                self.assertIn('Sensitive argument/value redacted.', detail.qualification)
+                self.assertNotIn('synthetic-value', json.dumps(asdict(detail)))
+
+    def test_ambiguous_credentials_headers_and_private_keys_withheld(self):
+        for command in ["curl --token 'synthetic'\"continuation\"", 'curl --token "synthetic\\\"tail"',
+                        'python task.py --token=$variable', 'curl -u user:synthetic',
+                        "curl -H 'Authorization: Bearer synthetic'", "curl -H 'Cookie: name=synthetic'",
+                        'echo -----BEGIN PRIVATE KEY-----\nsynthetic', 'python --token',
+                        "curl https://user:'synthetic value'@example.com"]:
+            with self.subTest():
                 detail = invocation(tool(inputs={"command": command, "workdir": "src", "env": {"X": "private"},
-                                                "password": "private", "content": "private"}))
+                                                 "password": "private", "content": "private"}))
                 self.assertEqual("workdir:\nsrc", detail.text)
+                self.assertIn('withheld', detail.qualification)
+                self.assertIn('Environment/credential fields omitted.', detail.qualification)
                 self.assertIn("Not the complete invocation", detail.qualification)
         detail = invocation(tool(inputs={"pattern": {"nested": "private"}, "code": "private"}))
         self.assertEqual("", detail.text)
-        self.assertIn("withheld", detail.qualification)
+        self.assertIn('Structured input omitted.', detail.qualification)
+        self.assertIn('Content/script body omitted.', detail.qualification)
+
+    def test_benign_windows_unicode_powershell_and_assignments_preserve_source_exactly(self):
+        commands = [r'"C:\Python313\python.exe" "D:\dev\scripts\report.py" --mode=fast --limit=25 --verbose',
+                    'NAME=development python tokenizer.py --mode=fast',
+                    'FOO=private git status', "$env:FOO='development'; python tokenizer.py",
+                    ' & "C:\\Python 313\\python.exe" "D:\\café\\tokenizer.py" --name="hello world"\nWrite-Output \'done\'']
+        for command in commands:
+            with self.subTest():
+                detail = invocation(tool(inputs={'command': command, 'workdir': 'D:\\dev',
+                                                 'timeout': 120000, 'background': False}))
+                self.assertEqual('command:\n' + command, detail.text.split('\n\n')[0])
+                self.assertIn('timeout:\n120000 ms (2 min)', detail.text)
+                self.assertIn('background:\nfalse', detail.text)
+                self.assertEqual('', detail.qualification)
 
     def test_missing_empty_oversized_and_unsupported_input_are_honest_and_bounded(self):
-        for inputs in [None, {}, "invalid", {"command": "x" * 10_000_000},
-                       {"limit": 1 << 1000}, {"limit": float("inf")}]:
+        for inputs, reason in [(None, 'No source input'), ({}, 'No source input'),
+                               ('invalid', 'No source input'),
+                               ({'command': 'x' * 10_000_000}, 'Oversized field omitted'),
+                               ({'limit': 1 << 1000}, 'Unsupported numeric'),
+                               ({'limit': float('inf')}, 'Unsupported numeric'),
+                               ({'unknown': 'private'}, 'Unsupported fields')]:
             detail = invocation(tool(inputs=inputs))
             self.assertEqual("", detail.text)
-            self.assertIn("unavailable", detail.qualification)
+            self.assertIn(reason, detail.qualification)
         detail = invocation(tool(inputs={"command": "\u2603" * 2000, "path": "src"}))
         self.assertLessEqual(len(detail.text.encode()), MAX_INPUT_TEXT)
         self.assertNotIn("\u2603", detail.text)
+
+    def test_timeout_units_only_for_positive_finite_native_shell_numbers(self):
+        for value, text in [(1500, '1500 ms (1.5 s)'), (3600000, '3600000 ms (1 h)'),
+                            (1.25, '1.25 ms (0.00125 s)'), (0, '0'), (-1, '-1'),
+                            ('120s', '120s'), (True, 'true')]:
+            self.assertEqual('command:\npython task.py\n\ntimeout:\n' + text,
+                             invocation(tool(inputs={'command': 'python task.py', 'timeout': value})).text)
+        for name in ['shell', 'bash', 'functions.shell', 'execute', 'grep']:
+            value = tool(inputs={'timeout': 120000})
+            value = replace(value, data={**value.data, 'tool': name})
+            self.assertEqual(name in {'shell', 'bash', 'functions.shell'}, '120000 ms' in invocation(value).text)
+        self.assertNotIn('timeout', invocation(tool(inputs={'command': 'python task.py'})).text)
+        for value in [float('inf'), float('-inf'), float('nan')]:
+            self.assertEqual('', invocation(tool(inputs={'timeout': value})).text)
 
     def test_threshold_canonical_copy_longest_and_revision_identity(self):
         first = tool(inputs={"command": "git status"})
@@ -124,7 +179,7 @@ class InvocationTests(unittest.TestCase):
 
     def test_dto_retained_unverified_terminal_and_100_card_replay_budget(self):
         frame = summary_watch()
-        detail = invocation(tool(inputs={"command": "x" * 3500}))
+        detail = invocation(tool(inputs={"command": "x" * 3500 + ' --api-key=synthetic-private --mode=fast'}))
         observation = replace(observe_tools(snapshot_with(tool()), "u_next", now_ms=20_000),
             running_invocation=detail, background_invocation=detail, background_kinds=("shell",))
         card = frame.active_cards[0]
@@ -142,6 +197,8 @@ class InvocationTests(unittest.TestCase):
             for tick in range(5):
                 payload = project_live(replace(frame, now_ms=frame.now_ms + tick * 1000)).to_json()
                 encoded = json.dumps(payload).encode()
+                self.assertNotIn(b'synthetic-private', encoded)
+                self.assertIn(b'--api-key=[redacted] --mode=fast', encoded)
                 self.assertLess(len(encoded), MAX_EVENT_BYTES)
                 hub.publish("live", payload)
         self.assertLessEqual(hub.bytes, MAX_REPLAY_BYTES)

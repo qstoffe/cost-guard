@@ -219,11 +219,12 @@ class WatchCardTests(unittest.TestCase):
         cards.catalog(self.catalog((root,), active=(root.session_id,)))
         self.publish(cards, root, capture)
         entry = cards.sessions[root.session_id]
-        detail = ToolInvocation("physical", "revision", "command:\ngit status", "Observed source input")
+        detail = ToolInvocation("physical", "revision", 'command:\npython tokenizer.py --mode=fast\n\ntimeout:\n120000 ms (2 min)', '')
         entry.tools[row.event_id] = ToolObservation(running_tool="shell", running_ms=30_000,
             running_invocation=detail, background_invocation=detail)
 
         first = cards.project(2000)[0][0].rows[0].tool
+        self.assertEqual(detail, cards.project(2001)[0][0].rows[0].tool.running_invocation)
         cards.catalog(self.catalog((root,), active=(root.session_id,), revision="changed"))
         verifying = cards.project(2001)[0][0].rows[0].tool
 
