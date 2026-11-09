@@ -37,7 +37,12 @@ integration or a whole-runtime architecture reassessment.
 
 - Initial Full: all 181 groups executed; 180 passed. One lifetime VM mock lacked
   the new timestamp interface. It now uses the real presentation implementation;
-  focused `test_web_loading.py` passes. Final Full result is recorded in completion.
+  focused `test_web_loading.py` passes. The next background Full result was not
+  recoverable across the context rotation and remains unverified, not PASS. No
+  live process referencing this owned clone was found on continuation. After
+  merging the latest main (unrelated backlog additions only), a fresh foreground
+  Full completed: **181/181 groups PASS**, zero failures, 131.0 seconds. Its bounded
+  per-file receipt is `scratch:/full-final.json`; no competing owned test was found.
 - Focused display, remaining/report DOM, Models, Settings and session-detail tests
   pass, including quiet partial/unknown/empty values, dual units, raw preservation,
   observed help refresh, exact sorting and numeric Web versus unchanged CLI reset.
