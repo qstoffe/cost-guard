@@ -44,3 +44,9 @@ Cost Guard already has an authenticated, loopback-only Web Beta HTTP server (`sr
 - Record verified native interface/CLI version compatibility, bounded load/resource measurements, and limitations. Run relevant tests and existing package validation as normal implementation work; this authoring task runs no product tests.
 
 **Non-goals:** importing sessions, deleting/archiving them, rendering a full transcript in the web page, rewriting the native OpenCode export format, automatic recurring exports, arbitrary filesystem access or making Toolkit LIVE sessions appear in OpenCode Desktop.
+
+## Owner-approved limited native Save As verification exception — 2026-11-09
+
+**Status: Ready for Development (queue 000540), released by explicit owner approval.** See [UNBLOCK.md](UNBLOCK.md) for the precise decision and [HOLD_HISTORY.md](HOLD_HISTORY.md) for the preserved reason the task was held. The implementation preserved on `fr-000631` is WIP, not merged or delivered.
+
+**Only one original acceptance proof is waived:** successful *real* native Windows/Edge/Chrome Save As destination selection and completed disk write were not safely verifiable in the isolated desktop. The owner approves completion without that specific demonstration when all other relevant checks pass. **Keep implementing native Save As normally** and keep cancellation, output integrity, complete sanitized JSON, source identity, CSRF/authentication, bounded resources, browser download fallback and normal test/release gates mandatory. Existing real native picker + Cancel evidence, deterministic write/close tests and real standard-browser-download evidence may support delivery but **must not be described as a passed real native Save As save test**. Record that unperformed step explicitly as **UNVERIFIED**, not PASS, in any eventual completion report. Do not use this exception to suppress an actual discovered defect or authorize shared desktop control.
