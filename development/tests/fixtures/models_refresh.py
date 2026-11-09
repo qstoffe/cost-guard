@@ -3,6 +3,7 @@
 This fixture deliberately does not establish process-startup/lifecycle evidence.
 """
 import json
+import time
 from threading import RLock
 from unittest.mock import patch
 from uuid import uuid4
@@ -16,6 +17,39 @@ from src.sources.selection import SourceSelection
 from src.web.jobs import ModelsPriceRefresh, run_report
 
 from .report_runtime import FakeSource
+from .benchmark import payload
+
+
+def benchmark_payload():
+    value = payload()
+    value['fetched_at_ms'] = int(time.time() * 1000)
+    for row in value['pages'][0]['rows'][:4]:
+        row['metadata'].update(model_display=dict(label='GPT-Test', url='https://openai.com/gpt-test'),
+            model_org=dict(label='OpenAI', url='https://openai.com'))
+    return value
+
+
+class BenchmarkRefreshJobs:
+    """Controlled public-read outcomes; the production lane still owns coalescing/cache."""
+    def __init__(self):
+        self.fetches, self.hold, self.offline = 0, False, False
+
+    def submit(self, request):
+        self.fetches += 1
+        return str(self.fetches)
+
+    def snapshot(self, key):
+        return dict(status='running' if self.hold else 'failed' if self.offline else 'complete',
+            result=dict(benchmark=benchmark_payload()))
+
+    def tick(self):
+        pass
+
+    def cancel(self, key):
+        pass
+
+    def close(self):
+        pass
 
 
 def models_refresh_report(root, sender, request):
@@ -95,6 +129,13 @@ class ModelsRefreshJobs:
 
     def readiness(self):
         return dict(http='ready', analysis='synthetic', source='synthetic', accounts='not_acquired')
+
+    def references(self):
+        with self.lock:
+            for job in reversed(list(self.jobs.values())):
+                if job['status'] == 'complete':
+                    return (job['result']['view'].get('model_catalog') or {}).get('rows', ())
+        return ()
 
     def updates(self):
         return dict(readiness=self.readiness(), jobs=[])

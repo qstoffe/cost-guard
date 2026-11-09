@@ -5,11 +5,12 @@ import http.client
 import json
 import tempfile
 from threading import Event, Thread
+from types import SimpleNamespace
 import time
 import unittest
 from unittest.mock import Mock, patch
 
-from development.tests.fixtures.benchmark import finite_benchmark, page, payload, row
+from development.tests.fixtures.benchmark import finite_benchmark, page, payload, references, row
 from src.benchmarks import MAX_BYTES, fetch_snapshot, parse_pages, read_page
 from src.application.projection import benchmark_view
 from src.cache.benchmark import BenchmarkCache
@@ -31,7 +32,7 @@ class BenchmarkTests(unittest.TestCase):
 
         value = fetch_snapshot(reader=reader, clock=lambda: NOW / 1000)
         snapshot = parse_pages(value['pages'], value['fetched_at_ms'])
-        result = benchmark_view(snapshot, now_ms=NOW)
+        result = benchmark_view(snapshot, references(), now_ms=NOW)
 
         self.assertEqual([(1, MAX_BYTES), (2, MAX_BYTES - 100)], calls)
         self.assertEqual(['medium', 'high', 'max'], [item['effort'] for item in result['rows']])
@@ -74,7 +75,7 @@ class BenchmarkTests(unittest.TestCase):
         missing_effort['metadata'].pop('reasoning_effort')
         snapshot = parse_pages([page([row(1, cost=0), partial, missing_effort])], NOW)
 
-        result = benchmark_view(snapshot, now_ms=NOW)['rows']
+        result = benchmark_view(snapshot, references(), now_ms=NOW)['rows']
 
         self.assertEqual([None, None, '1'], [item['relative_cost'] for item in result])
         self.assertEqual(['$0.00', 'N/A', '<$0.0001'], [item['usd_text'] for item in result])
@@ -114,7 +115,7 @@ class BenchmarkTests(unittest.TestCase):
 
             result = benchmark_view(snapshot, references, now_ms=NOW)['rows']
 
-            self.assertEqual([expected] * 4 + [False], [item['recent'] for item in result])
+            self.assertEqual([expected] * 4, [item['recent'] for item in result])
             self.assertTrue(all('promotion' not in item for item in result))
         for references in [[], [dict(publisher='Anthropic', model='Claude Opus 5', release_date='2026-11-09')],
                 [dict(publisher='Anthropic', model='Claude Opus 5.5', release_date=None)],
@@ -180,7 +181,7 @@ class BenchmarkTests(unittest.TestCase):
                     lane.tick()
                     time.sleep(0.01)
                 self.assertIsNotNone(lane.snapshot)
-                self.assertEqual(5, len(lane.view()['rows']))
+                self.assertEqual(4, len(lane.view(references())['rows']))
                 deadline = time.monotonic() + 3
                 while jobs._retiring and time.monotonic() < deadline:
                     lane.tick()
@@ -214,6 +215,76 @@ class BenchmarkTests(unittest.TestCase):
             self.assertEqual(200, response.status)
             self.assertEqual([], json.loads(response.read())['rows'])
             connection.close()
+            server.jobs.submit.assert_not_called()
+        finally:
+            stopped.set(); thread.join(3); server.server_close()
+
+    def test_intersection_is_exact_canonical_unique_and_keeps_full_dataset_efforts_and_denominator(self):
+        unmatched = row(9, model='Not in GitHub', effort='unmatched-effort', cost=33)
+        missing = row(10, effort=''); missing['metadata'].pop('reasoning_effort')
+        hostile = row(11); hostile['metadata']['model_org']['url'] = 'https://example.com'
+        snapshot = parse_pages([page([row(), unmatched, missing, hostile])], NOW)
+        reference = dict(publisher='Anthropic', model='Claude Opus 5.5', release_date='2026-11-09',
+            selectable=False, superseded=True, superseded_selectable=False)
+
+        value = benchmark_view(snapshot, [reference], now_ms=NOW, timezone_id='Europe/Stockholm')
+
+        self.assertEqual(['', 'max', 'unmatched-effort'], value['efforts'])
+        self.assertEqual(2, len(value['rows']))
+        self.assertEqual(['Claude Opus 5.5'] * 2, [item['model'] for item in value['rows']])
+        self.assertTrue(all(item['publisher'] == 'Anthropic' and not item['selectable'] and item['superseded']
+            and not item['superseded_selectable'] and Decimal(item['relative_cost']) == 10 for item in value['rows']))
+        self.assertEqual('2026-11-09 01:00', value['fetched_text'])
+        self.assertIn('Coding Client: Claude Code', value['rows'][0]['configuration_help'])
+        self.assertIn('USD/Task: $1 per attempted task (failures included)', value['rows'][0]['task_help'])
+        for candidates in ([], [reference, reference], [dict(reference, model='Claude Opus 5')],
+                [dict(reference, publisher='Other')]):
+            self.assertEqual([], benchmark_view(snapshot, candidates, now_ms=NOW)['rows'])
+
+    def test_manual_refresh_bypasses_freshness_coalesces_and_retains_last_success_after_failure(self):
+        with tempfile.TemporaryDirectory() as root:
+            BenchmarkCache(root).put(payload())
+            jobs = Mock(); jobs.submit.return_value = 'one'
+            jobs.snapshot.return_value = dict(status='running')
+            lane = BenchmarkLane(root, jobs=jobs, wall_clock=lambda: NOW / 1000 + 60)
+            lane.view(); lane.tick(); jobs.submit.assert_not_called()
+
+            lane.refresh(); lane.refresh(); self.assertTrue(lane.view()['refreshing'])
+            lane.tick(); lane.refresh(); lane.tick()
+
+            jobs.submit.assert_called_once()
+            jobs.snapshot.return_value = dict(status='failed')
+            lane.tick()
+            self.assertFalse(lane.view()['refreshing'])
+            self.assertTrue(lane.view()['unavailable'])
+            self.assertEqual(NOW, lane.view()['fetched_at_ms'])
+            lane.refresh(); lane.tick()
+            self.assertEqual(2, jobs.submit.call_count)
+            updated = payload(); updated['fetched_at_ms'] = NOW + 60000
+            jobs.snapshot.return_value = dict(status='complete', result=dict(benchmark=updated))
+            lane.tick()
+            self.assertEqual(NOW + 60000, lane.view()['fetched_at_ms'])
+            self.assertFalse(lane.view()['unavailable'])
+            lane.close()
+
+    def test_manual_http_refresh_requires_cookie_csrf_origin_and_empty_body(self):
+        lane = Mock()
+        server = LoopbackServer(Mock())
+        server.lifecycle = SimpleNamespace(benchmark=lane, stopping=Event(), dispatcher=None,
+            observations=Mock(), nonce='benchmark-test')
+        stopped = Event(); thread = Thread(target=lambda: self._serve(server, stopped)); thread.start()
+        try:
+            cookie, csrf = server.session.exchange(server.session.bootstrap())
+            origin = f'http://127.0.0.1:{server.server_port}'
+            headers = {'Content-Type': 'application/json', 'Origin': origin,
+                'Cookie': f'{server.session.cookie_name}={cookie}', 'X-CG-CSRF': csrf}
+            for changes, body, expected in [({'Cookie': ''}, {}, 401), ({'X-CG-CSRF': ''}, {}, 403),
+                    ({'Origin': 'http://example.com'}, {}, 403), ({}, {'force': True}, 400), ({}, {}, 202)]:
+                connection = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=3)
+                connection.request('POST', '/api/models/benchmark/refresh', json.dumps(body), headers | changes)
+                response = connection.getresponse(); response.read(); connection.close()
+                self.assertEqual(expected, response.status)
+            lane.refresh.assert_called_once_with()
             server.jobs.submit.assert_not_called()
         finally:
             stopped.set(); thread.join(3); server.server_close()

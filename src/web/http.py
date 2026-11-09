@@ -327,6 +327,16 @@ class RequestHandler(BaseHTTPRequestHandler):
             if self.path == '/api/detail/export':
                 self.server.exports.handle(self, value)
                 return
+            if self.path == '/api/models/benchmark/refresh':
+                lane = getattr(self.server.lifecycle, 'benchmark', None)
+                if value:
+                    self.reply(400, {'error': 'invalid_request'})
+                elif lane is None:
+                    self.reply(503, {'error': 'benchmark_unavailable'})
+                else:
+                    lane.refresh()
+                    self.reply(202, {'status': 'refreshing'})
+                return
             if self.path in {"/api/reports", "/api/models/refresh"}:
                 try:
                     if self.path == "/api/models/refresh":
@@ -375,14 +385,17 @@ class RequestHandler(BaseHTTPRequestHandler):
             if self.path == '/api/models/benchmark':
                 lane = getattr(self.server.lifecycle, 'benchmark', None)
                 references = ()
+                timezone_id = 'UTC'
                 dispatcher = getattr(self.server.lifecycle, 'dispatcher', None)
                 if dispatcher:
                     with dispatcher.lock:
                         for request, entry in dispatcher.entries.items():
                             if request.kind.value == 'normal' and entry['result']:
-                                references = (entry['result']['view'].get('model_catalog') or {}).get('rows', ())
+                                view = entry['result']['view']
+                                references = (view.get('model_catalog') or {}).get('rows', ())
+                                timezone_id = view.get('timezone_id', 'UTC')
                                 break
-                self.reply(200, lane.view(references) if lane else dict(rows=[], fetched_at_ms=None))
+                self.reply(200, lane.view(references, timezone_id=timezone_id) if lane else dict(rows=[], fetched_at_ms=None))
                 return
             if self.path == "/api/settings":
                 self.web_settings()

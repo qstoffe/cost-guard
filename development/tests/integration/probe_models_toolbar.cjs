@@ -3,13 +3,13 @@ const assert = require('node:assert/strict');
 
 async function probeToolbar({command, evaluate, id}) {
   const layouts = [];
-  const original = await evaluate(id, `(()=>{const p=document.querySelector('.model-price-controls');return {date:p.children[1].textContent,status:p.children[2].textContent,labels:[...document.querySelectorAll('.model-filters label span')].map(n=>n.textContent)};})()`);
+    const original = await evaluate(id, `(()=>{const p=document.querySelector('.model-price-controls');return {date:p.children[3].textContent,status:p.children[4].textContent,labels:[...document.querySelectorAll('.model-tools:not(.benchmark-tools) .model-filters label span')].map(n=>n.textContent)};})()`);
   const measure = () => evaluate(id, `(()=>{
     const price=document.querySelector('.model-price-controls'), button=price.querySelector('button');
-    const filters=document.querySelector('.model-filters'), date=price.children[1], status=price.children[2];
+    const filters=document.querySelector('.model-filters'), date=price.children[3], status=price.children[4];
     const rect=node=>{const r=node.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,height:r.height,center:r.top+r.height/2};};
     const style=node=>{const s=getComputedStyle(node);return {font:s.fontFamily,size:s.fontSize,padding:s.padding,minHeight:s.minHeight};};
-    const nodes=[button,date,...(status.textContent?[status]:[]),...filters.children];
+    const nodes=[...price.children].filter(n=>n.textContent).concat([...filters.children]);
     const boxes=nodes.map(rect);
     const fits=boxes.every(r=>r.left>=0&&r.right<=innerWidth+.5&&r.height>0);
     const overlap=boxes.some((a,i)=>boxes.slice(i+1).some(b=>Math.min(a.right,b.right)-Math.max(a.left,b.left)>1&&Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top)>1));
@@ -26,12 +26,12 @@ async function probeToolbar({command, evaluate, id}) {
         {name:'prefers-reduced-motion',value:'reduce'}]},id);
       await evaluate(id,`document.documentElement.dataset.theme=${JSON.stringify(theme==='classic'?'classic':'web')};document.documentElement.style.fontSize='${15*scale}px'`);
       for (const state of ['normal','refreshing','failure','unavailable']) {
-        const date=state==='unavailable'?'Prices last fetched: Unavailable':state==='failure'?
-          'Prices last fetched: Wednesday, 30 September 2026 at 23:59:59 Central European Summer Time':original.date;
+        const date=state==='unavailable'?'Last fetched: Unavailable':state==='failure'?
+          'Last fetched: Wednesday, 30 September 2026 at 23:59:59 Central European Summer Time':original.date;
         const status=state==='refreshing'?'Refreshing…':state==='failure'?
           'Price list refresh failed; previous prices retained. '+ 'upstream-unavailable-'.repeat(18):'';
-        await evaluate(id,`(()=>{const p=document.querySelector('.model-price-controls');p.children[1].textContent=${JSON.stringify(date)};p.children[2].textContent=${JSON.stringify(status)};})()`);
-        await evaluate(id,`document.querySelectorAll('.model-filters label span').forEach((n,i)=>n.textContent=${JSON.stringify(original.labels)}[i]+${JSON.stringify(state==='failure'?' — extended localized filter label':'')})`);
+        await evaluate(id,`(()=>{const p=document.querySelector('.model-price-controls');p.children[3].textContent=${JSON.stringify(date)};p.children[4].textContent=${JSON.stringify(status)};})()`);
+        await evaluate(id,`document.querySelectorAll('.model-tools:not(.benchmark-tools) .model-filters label span').forEach((n,i)=>n.textContent=${JSON.stringify(original.labels)}[i]+${JSON.stringify(state==='failure'?' — extended localized filter label':'')})`);
         const layout=await measure(), context=JSON.stringify({width,theme,scale,state,layout});
         assert.equal(layout.button.font,layout.ui,context);
         assert.equal(layout.date.font,layout.ui,context); assert.equal(layout.status.font,layout.ui,context);
@@ -53,14 +53,14 @@ async function probeToolbar({command, evaluate, id}) {
     await evaluate(id,`document.documentElement.style.fontSize='15px'`);
     await command('Emulation.setDeviceMetricsOverride',{width:360,height:1100,deviceScaleFactor:1,mobile:false},id);
     await command('Emulation.setTouchEmulationEnabled',{enabled:true},id);
-    const coarse=await evaluate(id,`({coarse:matchMedia('(pointer: coarse)').matches,height:document.querySelector('.model-price-controls button').getBoundingClientRect().height,labels:[...document.querySelectorAll('.model-filters label')].map(n=>n.getBoundingClientRect().height)})`);
+    const coarse=await evaluate(id,`({coarse:matchMedia('(pointer: coarse)').matches,height:document.querySelector('.model-price-controls button').getBoundingClientRect().height,labels:[...document.querySelectorAll('.model-tools:not(.benchmark-tools) .model-filters label')].map(n=>n.getBoundingClientRect().height)})`);
     assert.equal(coarse.coarse,true); assert.ok(coarse.height>=44);
     assert.ok(coarse.labels.every(height=>height>=44)); layouts.push({coarse});
   } finally {
     await command('Emulation.setTouchEmulationEnabled',{enabled:false},id);
     await command('Emulation.setDeviceMetricsOverride',{width:1280,height:900,deviceScaleFactor:1,mobile:false},id);
-    await evaluate(id,`(()=>{document.documentElement.style.removeProperty('font-size');const p=document.querySelector('.model-price-controls');p.children[1].textContent=${JSON.stringify(original.date)};p.children[2].textContent=${JSON.stringify(original.status)};})()`);
-    await evaluate(id,`document.querySelectorAll('.model-filters label span').forEach((n,i)=>n.textContent=${JSON.stringify(original.labels)}[i])`);
+    await evaluate(id,`(()=>{document.documentElement.style.removeProperty('font-size');const p=document.querySelector('.model-price-controls');p.children[3].textContent=${JSON.stringify(original.date)};p.children[4].textContent=${JSON.stringify(original.status)};})()`);
+    await evaluate(id,`document.querySelectorAll('.model-tools:not(.benchmark-tools) .model-filters label span').forEach((n,i)=>n.textContent=${JSON.stringify(original.labels)}[i])`);
   }
   return layouts;
 }

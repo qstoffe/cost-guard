@@ -9,19 +9,50 @@ import unittest
 
 from development.tests.fixtures.compact_reports import Availability, rendered, report_service
 from development.tests.fixtures.model_views import model_report
-from development.tests.fixtures.benchmark import payload
+from development.tests.fixtures.benchmark import payload, references
 from src.benchmarks import parse_pages
 from src.application.projection import benchmark_view
 from src.application.projection import project
 from src.domain import ModelPricing, ModelRef, PricingTier
 from src.pricing.catalog import PricingCatalog
-from src.reports.model_comparison import web_model_catalog
+from src.reports.model_comparison import price_help, web_model_catalog
 from src.reports import ReportRequest
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
 class ModelsTests(unittest.TestCase):
+    def test_value_help_keeps_exact_native_rates_missing_fields_and_real_tier_boundaries(self):
+        tier = PricingTier(max_input_tokens=200000, per_million_input=Decimal('0.000000000123456789'),
+            per_million_cache_read=Decimal('0'), per_million_output=Decimal('15.1234567890123456789'))
+        higher = replace(tier, min_input_tokens=200001, max_input_tokens=None, input_threshold_operator='>',
+            per_million_input=Decimal('3.75'), per_million_cache_write=Decimal('0.00000001'))
+        model = ModelPricing(ModelRef('github-copilot', 'Precise', 'Precise'), 'USD', tiers=(tier, higher))
+        catalog = PricingCatalog((model,))
+
+        text = price_help(catalog, 'Precise')
+
+        self.assertEqual('GitHub Copilot · USD / 1M tokens\nBase context tier (≤200000 tokens):\n'
+            'Input $0.000000000123456789 · Cached input $0\nCache write N/A · Output $15.1234567890123456789\n'
+            'Input context >200000 tokens:\nInput $3.75 · Cached input $0\n'
+            'Cache write $0.00000001 · Output $15.1234567890123456789', text)
+        single = PricingCatalog((replace(model, tiers=(tier,)),))
+        self.assertNotIn('context', price_help(single, 'Precise'))
+        self.assertIn('Published rates unavailable', price_help(catalog, 'Missing'))
+        changed = PricingCatalog((replace(model, tiers=(replace(tier, per_million_input=Decimal('7')),)),))
+        self.assertIn('Input $7', price_help(changed, 'Precise'))
+        self.assertEqual(text, price_help(catalog, 'Precise'), 'frozen prior snapshot is unchanged')
+
+    def test_missing_mix_never_presents_an_unestablished_distribution_as_observed_usage(self):
+        report = replace(model_report(), model_comparison_mix=None, model_comparison_sample_size=3)
+
+        dto = project(report).to_json()
+
+        self.assertEqual('Token Mix unavailable · comparison percentages not established',
+            dto['display']['model_comparison_mix_help'])
+        self.assertEqual(3, dto['model_comparison_sample_size'])
+        self.assertIsNone(dto['model_comparison_mix'])
+
     def test_supersession_uses_selected_candidates_not_newer_unselectable_rows(self):
         report = model_report(include_model_catalog=True)
         catalog = report.model_catalog
@@ -116,7 +147,7 @@ class ModelsTests(unittest.TestCase):
                     if shutil.which("node"):
                         result = subprocess.run(["node", "development/tests/integration/web_models.cjs"],
                             input=json.dumps(dict(view=dto, order=full_names, fallback=fallback,
-                                benchmark=benchmark_view(parse_pages(payload()['pages'], 1794182400000), now_ms=1794182400000))),
+                                benchmark=benchmark_view(parse_pages(payload()['pages'], 1794182400000), references(), now_ms=1794182400000))),
                             cwd=ROOT, capture_output=True, text=True, timeout=10)
                         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
 

@@ -25,14 +25,23 @@ never depend on it. `web/benchmark.py` uses its own existing `ReportJobs` instan
 ticked and closed by `WebHost`, with one coalesced child, 24-hour freshness and
 bounded failure backoff. HTTP records demand and returns prepared retained data;
 network acquisition never runs on an HTTP caller or browser.
+FR000656 adds an empty-body cookie/Origin/CSRF-protected manual refresh action on
+that same lane. A forced-demand flag bypasses automatic freshness/backoff, coalesces
+queued/running requests and leaves prior rows/date untouched after failure.
 
 `application/benchmark.py` owns precise per-attempt USD and full-snapshot positive
 normalization; source-qualified partial cost is unknown, zero is not a denominator.
-Only unique exact publisher/model joins to the retained reference catalog can reuse
-`model_is_recent` for lime labels. Run/fetch dates, efforts and clients cannot make
-New; offers remain reference-only. `assets/benchmark.js` retains independent
-six-column sort/DOM state below Models Reference Pricing. [Source contract, tests,
-failed attempts and real-installation proof](../../journal/web/models-benchmark.md).
+Only unique exact publisher/model joins to the retained reference catalog are
+eligible, using canonical GitHub names and selectable/supersession flags;
+`model_is_recent` alone supplies lime labels. Run/fetch dates, efforts and clients
+cannot make New; offers remain reference-only. `assets/benchmark.js` retains an
+unboxed five-column table below GitHub Reference Pricing, independent Copilot/effort
+choices and per-configuration value help. Effort options use the complete source,
+not filtered rows; normalization also remains full-source. The report snapshot
+exports exact native USD tier help and its actual comparison shares/count for
+reference value help; browser code does not reprice or infer a history mix.
+[Source contract](../../journal/web/models-benchmark.md) and
+[FR000656 verification](../../journal/web/models-controls.md).
 
 The host owns finite demand, priorities, warm results and staggered refresh:
 [dispatcher boundaries](data-dispatch.md), [original measurements](../../journal/web/data-dispatch.md)

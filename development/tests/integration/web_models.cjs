@@ -28,23 +28,26 @@ const button = name => all(output, 'button').find(n => n.textContent.startsWith(
 const click = (name, event = {}) => button(name).events.click(event);
 const check = (index, value) => { const input = all(output, 'input')[index]; input.checked = value; input.events.change(); };
 draw();
-assert.equal(all(output, 'th').length, 10);
-assert.equal(all(output, 'input').length, 2);
+assert.equal(all(output, 'th').length, 9);
+assert.equal(all(output, 'input').length, 4);
 assert.equal(all(output, 'button').length, 11);
-assert.deepEqual(all(output, 'h2').map(n => n.textContent), ['Models Reference Pricing', 'Coding Benchmark – Cost per Task']);
+assert.deepEqual(all(output, 'h2').map(n => n.textContent), ['GitHub Reference Pricing', 'Coding Benchmark – Cost per Task']);
 assert.equal(button('Refresh price list').attrs['data-model-control'], 'refresh');
-assert.equal(all(output, 'div').filter(n => n.className === 'model-price-controls').length, 1);
+assert.equal(all(output, 'div').filter(n => n.className === 'model-price-controls').length, 2);
 assert.ok(!all(output, 'div').some(n => n.className === 'model-prices'), 'toolbar must not inherit price-cell typography');
 assert.equal(button('Refresh price list').attrs['aria-pressed'], undefined);
-assert.ok(output.textContent.includes('Prices last fetched:'));
+assert.ok(output.textContent.includes('Last fetched:'));
 assert.ok(!output.textContent.includes('More information'));
-assert.equal(all(output, 'details').length, 0);
+assert.equal(all(output, 'details').length, 1);
 const explanations = all(output, 'th').slice(0, 4).map(th => helpText(th.children[0]));
 assert.equal(new Set(explanations).size, 4);
 assert.match(explanations[0], /developer\/manufacturer.*not your subscription/);
 assert.match(explanations[1], /published catalog/);
 assert.match(explanations[3], /published\/verified.*N\/A/);
-assert.equal(explanations[2], 'Reference-price ratio to the cheapest comparable model (1.0x).\n\nUses the same recent token mix for every model and price tier; not task performance.');
+assert.equal(explanations[2], 'Reference-price ratio to the cheapest comparable model (1.0x).\n\nUses the same recent token mix for every model and price tier; not task performance.\n\nToken Mix is the percentage split of Input, Cached input, Cache write and Output tokens. It is pooled from your latest up to 100 completed, priceable prompts.');
+assert.equal(explanations[2].split('\n\n').length, 3);
+assert.ok(rows().every(r => helpText(r.children[2].children[0]).startsWith('GitHub Copilot · USD / 1M tokens')));
+assert.equal(all(output, 'a')[0].href, 'https://docs.github.com/en/copilot/reference/copilot-billing/models-and-pricing');
 let refreshes = 0; state.refreshPrices = () => refreshes++;
 state.priceControls(true); click('Refresh price list'); assert.equal(refreshes, 1);
 state.loading = state.priceRefreshing = true; state.priceControls(true);
@@ -65,10 +68,24 @@ const old = rows().find(row => row.children[1].textContent === 'GPT-5.1');
 assert.ok(!old.className.includes('superseded'));
 assert.equal(old.children[2].textContent, fallback ? ' *' : '8.0x → 16.0x (>200K) → 32.0x (≥1M) *');
 assert.ok(!output.textContent.includes('*1 Fixture promotional terms'));
-assert.equal(helpText(old.children[2].children[0]), 'Price Promotion\nGPT-5.1\n50% off standard GitHub Copilot rates\nPromotion ends: 2026-11-10\nStandard prices resume: 2026-11-11');
+const priceHelp = helpText(old.children[2].children[0]);
+assert.ok(priceHelp.includes('Price Promotion\nGPT-5.1\n50% off standard GitHub Copilot rates\nPromotion ends: 2026-11-10\nStandard prices resume: 2026-11-11'));
+assert.ok(priceHelp.includes('Input context >200000 tokens:\nInput $16 · Cached input $16\nCache write $16 · Output $16'));
+assert.ok(priceHelp.endsWith(fallback ? 'Token Mix unavailable · no completed priceable sample' :
+  'Token Mix · 1 completed priced prompts\nInput 20% · Cached input 60%\nCache write 10% · Output 10%'));
 assert.equal(old.children[2].children[0].attrs.title, undefined);
 assert.ok(!output.textContent.includes('8.040000'));
-assert.ok(explanations[2].length < 200, 'technical derivation must not fill the header tooltip');
+assert.ok(explanations[2].length < 400, 'technical derivation must not fill the header tooltip');
+const originalModels = view.model_comparison;
+view.model_comparison = view.model_comparison.map(r => r.model === 'GPT-5.1' ? {...r,
+  price_help:'GitHub Copilot · USD / 1M tokens\nInput $0.0000000001 · Cached input N/A\nCache write N/A · Output $7',
+  promotion:{...r.promotion,description:'Updated exact-source promotion'}} : r);
+draw();
+const revisedHelp=helpText(rows().find(r=>r.children[1].textContent==='GPT-5.1').children[2].children[0]);
+assert.ok(revisedHelp.includes('Input $0.0000000001') && revisedHelp.includes('Updated exact-source promotion'));
+assert.ok(!revisedHelp.includes('50% off standard'));
+assert.equal(revisedHelp.split('\n\n')[1],priceHelp.split('\n\n')[1],'shared mix stays bound to same report');
+view.model_comparison=originalModels;draw();
 
 // Four filter states use table-local conservative flags exported by Python.
 const base = view.model_comparison[0];
@@ -147,17 +164,21 @@ for (const hash of ['', '#/overview', '#/models/all', '#/models']) {
 vm.runInContext('ReportRoutes.controls(controls, {section: "models"})', context);
 assert.equal(controls.children.length, 0);
 
-// The benchmark retains its own six sortable headers, rows and choices.
+// The benchmark retains five sortable headers, row-specific help and independent choices.
 state.benchmark.data = benchmark; state.benchmark.draw();
 const benchmarkRows = () => state.benchmark.body.children;
 assert.deepEqual([...state.benchmark.headers].map(([th]) => th.textContent),
-  ['Model ↕', 'Coding Client ↕', 'Effort ↕', 'Relative Task Cost ↓', 'USD/Task ↕', 'Solved ↕']);
-assert.deepEqual(benchmarkRows().map(r => r.children[3].textContent), ['4.0x', '3.0x', '2.0x', '1.0x', 'N/A']);
-assert.equal(benchmarkRows().length, 5);
+  ['Publisher ↕', 'Model ↕', 'Effort ↕', 'Relative Task Cost ↓', 'Solved ↕']);
+assert.deepEqual(benchmarkRows().map(r => r.children[3].textContent), ['4.0x', '3.0x', '2.0x', '1.0x']);
+assert.equal(benchmarkRows().length, 4);
+assert.ok(benchmarkRows().every(r => r.children[0].textContent === 'Anthropic' && r.children[1].textContent === 'Claude Opus 5.5'));
+assert.ok(helpText(benchmarkRows()[0].children[1].children[0]).startsWith('Coding Client: Other client'));
+assert.ok(helpText(benchmarkRows()[0].children[3].children[0]).includes('USD/Task: $4 per attempted task'));
 assert.ok(benchmarkRows().every(r => !r.className?.includes('promotion')));
 const referenceOrder = names(), referenceSort = JSON.stringify(state.models);
 state.benchmark.headers[0][1].events.click();
-assert.deepEqual(benchmarkRows().map(r => r.children[1].textContent).slice(0, 4), ['Claude Code', 'Claude Code', 'Claude Code', 'Other client']);
+assert.deepEqual(benchmarkRows().map(r => helpText(r.children[1].children[0]).split('\n')[0]),
+  ['Coding Client: Claude Code', 'Coding Client: Claude Code', 'Coding Client: Claude Code', 'Coding Client: Other client']);
 state.benchmark.headers[4][1].events.click();
 assert.deepEqual(names(), referenceOrder);
 assert.equal(JSON.stringify(state.models), referenceSort);
@@ -169,3 +190,33 @@ state.benchmark.data = {...benchmark, rows: [benchmark.rows[0], benchmark.rows[1
   relative_cost: i ? '1.00000000000000000002' : '1.00000000000000000001', relative_text: '1.0x'}))};
 state.benchmark.sort = {index:3, direction:-1}; state.benchmark.draw();
 assert.equal(benchmarkRows()[0].children[2].textContent, 'high', 'sort uses exact raw values, not identical displayed ratios');
+
+const bv = state.benchmark;
+bv.data = {...benchmark, efforts: ['', 'high', 'medium', 'max', 'unmatched-only'], rows: benchmark.rows.map((r, i) => ({...r,
+  effort: i === 3 ? null : r.effort, selectable: i !== 1, superseded: i === 0, superseded_selectable: i === 2}))};
+bv.draw();
+const bcheck = (key, value) => {const input=all(bv.root,'input').find(n=>n.attrs['data-benchmark-control']===key);input.checked=value;input.events.change();};
+for (const [allModels, latest, count] of [[false,true,2],[true,true,3],[true,false,4],[false,false,3]]) {
+  bcheck('all',allModels);bcheck('latest',latest);assert.equal(benchmarkRows().length,count);
+  assert.equal(bv.effortInputs.length,5,'source options never depend on Copilot visibility');
+}
+const effort = (key, value) => {const input=bv.effortInputs.find(([k])=>k===key)[1];input.checked=value;input.events.change();};
+for (const [key] of bv.effortInputs) effort(key,false);
+assert.equal(benchmarkRows().length,0);assert.equal(bv.empty.textContent,'No matching benchmark rows');
+effort('high',true);bcheck('all',true);
+assert.deepEqual(benchmarkRows().map(r=>r.children[2].textContent),['high']);
+bv.data = {...bv.data, efforts: [...bv.data.efforts,'new-source-level']};bv.draw();
+assert.equal(bv.effortInputs.find(([k])=>k==='new-source-level')[1].checked,false,'subset excludes new source options');
+bv.choice.efforts=null;bv.draw();
+assert.ok(bv.effortInputs.every(([,n])=>n.checked),'default All includes new source levels');
+bv.choice.efforts=new Set(['']);bv.draw();assert.equal(benchmarkRows()[0].children[2].textContent,'N/A');
+assert.ok(all(bv.root,'label').some(n=>n.textContent==='Not specified'));
+
+(async()=>{
+  let calls=[];bv.controls(true,async(path,value)=>{calls.push([path,value]);return path.endsWith('/refresh')?{status:'refreshing'}:{...benchmark,refreshing:true};});
+  await bv.refreshSource();assert.deepEqual(calls.map(([p])=>p),['/api/models/benchmark/refresh','/api/models/benchmark']);
+  assert.equal(bv.refresh.disabled,true);await bv.refreshSource();assert.equal(calls.length,2);
+  await bv.load(async()=>({...benchmark,refreshing:false,unavailable:true}),true);
+  assert.equal(bv.refresh.disabled,false);assert.ok(bv.status.textContent.includes('failed'));
+  const retained=bv.data;await bv.load(async()=>{throw Error('offline');},true);assert.equal(bv.data,retained);
+})().catch(error=>{console.error(error);process.exitCode=1;});

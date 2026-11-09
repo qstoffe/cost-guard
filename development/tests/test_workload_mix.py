@@ -116,6 +116,9 @@ class ComparisonHistoryTests(unittest.TestCase):
                 rows = {row.model: row for row in report.model_comparison}
                 if not count:
                     self.assertTrue(all(row.relative_cost is None for row in rows.values()))
+                    dto = project(report).to_json()
+                    self.assertIsNone(dto['model_comparison_mix'])
+                    self.assertEqual('Token Mix unavailable · no completed priceable sample', dto['display']['model_comparison_mix_help'])
                     continue
                 cached = min(count // 2, 50) * 90
                 output = min((count + 1) // 2, 50) * 10
@@ -130,6 +133,13 @@ class ComparisonHistoryTests(unittest.TestCase):
                 expected = (D(cached) * D('.1') + D(output) * 15) / (D(cached) * D('.1') + D(output) * 5)
                 self.assertAlmostEqual(expected, service._threshold_multiplier('gpt-test', 100), places=25)
                 dto = export(project(report))
+                self.assertEqual([D(0), D(cached) / total, D(0), D(output) / total],
+                    list(map(D, dto['model_comparison_mix'])))
+                help_text = dto['display']['model_comparison_mix_help']
+                self.assertIn(f'Token Mix · {min(count, 100)} completed priced prompts', help_text)
+                if count == 100:
+                    self.assertIn('Input 0% · Cached input 90%\nCache write 0% · Output 10%', help_text)
+                self.assertNotIn('tokens', help_text)
                 self.assertEqual(min(count, 100), dto['model_comparison_sample_size'])
                 for row in dto['model_comparison']:
                     self.assertEqual({'model_prompts': 0, 'publisher_prompts': 0,

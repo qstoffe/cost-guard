@@ -75,6 +75,15 @@ def main():
         from src.benchmarks import parse_pages
         host.benchmark.snapshot = parse_pages(payload()['pages'], int(time.time() * 1000))
         host.benchmark.next_due = float('inf')
+        if sys.argv[2:] == ['--models-refresh']:
+            from development.tests.fixtures.models_refresh import BenchmarkRefreshJobs, benchmark_payload
+            host.benchmark.jobs.close()
+            host.benchmark.jobs = BenchmarkRefreshJobs()
+            host.benchmark.snapshot = parse_pages(benchmark_payload()['pages'], int(time.time() * 1000))
+            prepared_benchmark = host.benchmark.view
+            # This controlled host uses manual report jobs, not a production dispatcher.
+            host.benchmark.view = lambda references=(), timezone_id='UTC': prepared_benchmark(
+                jobs.references(), timezone_id=timezone_id)
         if sys.argv[2:] == ['--history-demand']:
             from src.web.dispatch import DataDispatcher
             # Real authenticated lease registry, but no source/provider or finite warming owner.
@@ -193,6 +202,20 @@ def main():
                         prompt=replace(cards[1].rows[0].prompt, in_progress=False, completed_successfully=True)),))
                     current = (cards[0], ended)
                     publish(value=replace(frame, active_cards=current, running=running_prompts(current, "observed")))
+                elif command.startswith('benchmark-') and sys.argv[2:] == ['--models-refresh']:
+                    mode = command.removeprefix('benchmark-')
+                    lane_jobs = host.benchmark.jobs
+                    if mode == 'status':
+                        print(json.dumps(dict(fetches=lane_jobs.fetches)), flush=True)
+                        continue
+                    if mode in {'hold', 'release'}:
+                        lane_jobs.hold = mode == 'hold'
+                    elif mode in {'offline', 'online'}:
+                        lane_jobs.offline = mode == 'offline'
+                    else:
+                        raise ValueError('unknown_benchmark_fixture_action')
+                    print('{"ok":true}', flush=True)
+                    continue
                 elif command.startswith('models-'):
                     mode = command.removeprefix('models-')
                     assert mode in {'unchanged', 'changed', 'offline', 'invalid', 'status', 'hold', 'release'}

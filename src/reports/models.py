@@ -191,6 +191,7 @@ class ModelComparisonProjection:
     relative_levels: tuple[RelativePriceLevel, ...] = ()
     evidence: MixEvidence = MixEvidence()
     promotion: ModelPromotion | None = None
+    price_help: str = ''
 
 
 @dataclass(frozen=True, slots=True)
@@ -283,3 +284,4 @@ class ReportProjection:
     ai_stats_work: Mapping[str, object] = field(default_factory=dict)
     comparisons: MatchesPage | None = None
     history_omitted_roots: int = 0
+    model_comparison_mix: tuple[Decimal, Decimal, Decimal, Decimal] | None = None

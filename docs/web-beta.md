@@ -271,7 +271,7 @@ races. Defaults, OpenCode, credentials, accounts, prices and reports remain read
 v80.118 replaces Overview and the old separate Models view with **Models** at
 `/#/models`. Legacy `/#/overview` and `/#/models/all` bookmarks replace their current
 history entry with Models. Bootstrap credentials are still erased before requests.
-**Models Reference Pricing** spans the available content width: **Publisher | Model |
+**GitHub Reference Pricing** spans the available content width: **Publisher | Model |
 Relative Price List Cost | Release date**. All matching rows scroll with the **document**, never
 an independently scrolling/fixed-height table body. Narrow screens can pan the table
 horizontally; long names wrap without truncation. There is no model search, pager,
@@ -324,7 +324,7 @@ Reloads and other authenticated tabs reuse valid host results, but no fresh resu
 is promised across host restart. Background refresh is silent once useful content
 exists, retaining sort, selection, scroll and focus. Navigation/heartbeats never renew observation age.
 
-Above the table, **Refresh price list** precedes **Prices last fetched: YYYY-MM-DD HH:mm**
+Above the table, **GitHub Copilot**, an official **View source** link and **Refresh price list** precede **Last fetched: YYYY-MM-DD HH:mm**
 in the configured timezone (or **Unavailable**). This is the last successful upstream
 GitHub pricing observation, not page load or release-metadata enrichment. Explicit
 refresh bypasses even a fresh cache, then rebuilds one coherent Models report on the
@@ -345,7 +345,15 @@ display units on a Copilot AI-credit-equivalent reference basis, not native quot
 Sorting arrows, click/keyboard/Shift actions and accessible names remain separate.
 Active promotions retain their highlight and one unnumbered postfix star after the
 complete Relative Price List Cost tier chain. Hover, keyboard focus or touch opens multiline
-**Price Promotion** help for that model's actual offer, discount and end/resume dates.
+help showing exact published **USD / 1M tokens**, labeled **Input, Cached input, Cache write,
+Output**, with real context-tier boundaries and unavailable markers for unpublished rates.
+Promotion description and end/resume dates remain alongside the price information.
+After a blank line, every value shows the same server-prepared pooled **Token Mix** and
+actual eligible prompt count used for its ratios, not the separate Token Mix report.
+Percentages sum to 100%; no eligible sample gives unavailable help, never the hidden
+sorting fallback. No hover fetch, history rescan or browser repricing is involved.
+The header retains its two short price/performance paragraphs, followed by two
+sentences defining Token Mix and its latest **up to 100 completed, priceable prompts**.
 There are no numbered promotion footnotes below the table. **New Models** notices sit
 above it, with the two filters grouped at the right (wrapping on mobile).
 Routine source/catalog-verification caveats are not displayed. **Accounts** retains full supported quota,
@@ -353,13 +361,28 @@ billing, subscription and attribution details and its canonical acquisition beha
 
 ### Coding Benchmark – Cost per Task
 
-Directly below reference pricing, an independent table shows **Model | Coding Client |
-Effort | Relative Task Cost | USD/Task | Solved** for the official **Terminal-Bench 4.0 ·
-Harbor Hub** board. Its source link and last successful fetch time remain visible.
-Model/client/effort rows, including distinct official runs, are never averaged or
-collapsed to Max. Client help retains the official row ID, source date and version
-when published; missing versions/effort stay unknown. The board's score is already
-0–100, so 0.61 means 0.61%, not 61%.
+After clear vertical space, an unboxed independent table shows **Publisher | Model |
+Effort | Relative Task Cost | Solved** for the official **Terminal-Bench 4.0 · Harbor Hub**
+board. Its matching source toolbar has the official **View source**, **Refresh benchmark**
+and configured-local last-successful-fetch time. The first four columns fit their
+content; Solved alone fills remaining width. Narrow layouts may scroll horizontally.
+Distinct model/client/effort configurations are never averaged or collapsed to Max.
+Model-name hover/focus/touch help identifies that row's actual **Coding Client**, source
+row/date and any published version. Relative Task Cost value help shows its **USD/Task**
+per attempted task, failures included. Missing versions/effort remain unknown. The
+board's score is already 0–100, so 0.61 means 0.61%, not 61%.
+
+Controls appear as **Effort levels** multiselect, **Show all Copilot-priced models**
+(off) and **Latest versions only** (on). The two checkboxes use the reference table's
+availability/supersession policy but retain independent choices. Every combination
+stays within exact **Harbor ∩ GitHub-priced models**; ambiguous/unmatched models are
+excluded, and names/publishers come from GitHub. Unverified availability fails open
+only within that intersection. The effort choices come from the full current Harbor
+edition, even for levels hidden by Copilot filters. Missing effort adds **Not specified**
+while its row displays N/A. All start checked; zero selection shows **No matching
+benchmark rows**. Changes are immediate/local. Source refresh preserves a chosen
+subset; default All includes new source levels. Keyboard, touch, Escape and outside
+click work without a modal.
 
 USD/Task divides the published total USD by all task attempts, including failures.
 Relative Task Cost divides by the cheapest **strictly positive, complete-cost** run
@@ -367,14 +390,14 @@ across the entire paginated edition. Zero-cost rows show $0.00 with no ratio; so
 declared partial costs show N/A. Tiny positive amounts never display as exact zero.
 Default sorting is **Relative Task Cost descending**, most expensive first.
 Sorting uses raw decimal keys, unknowns last, with stable model/client/effort/row-ID
-tie-breaks. All six headers sort independently of the reference table and preserve
+tie-breaks. All five headers sort independently of the reference table and preserve
 their state through navigation. USD stays USD regardless of Credits/USD settings.
 
 Only matching GitHub reference-catalog **release_date** can make a benchmark model
 label New/lime, using the same seven-day window (ages 0–6 UTC calendar days). The
 join requires exact publisher/model identity, with only Anthropic's documented
-Claude brand-prefix difference admitted; ambiguous, missing or unmatched models
-stay visible without New. Source dates, fetch times, new efforts/clients and first
+Claude brand-prefix difference admitted; ambiguous or unmatched identities are
+excluded. Missing release dates cannot mark New. Source dates, fetch times, new efforts/clients and first
 appearance never start a clock. Copilot promotions belong only to reference pricing.
 
 The authenticated local host reads Harbor's documented unauthenticated public API
@@ -386,6 +409,14 @@ off from 10 minutes up to 6 hours. Stale last-good data keep their real fetch ti
 without data, a small unavailable message replaces only the benchmark table. Neither
 sorting nor hover fetches anything. Reference-price refresh, Watch, other reports
 and CLI do not acquire or depend on Harbor.
+
+**Refresh benchmark** is an authenticated, CSRF-protected manual action on that same
+host-owned lane. It bypasses automatic freshness/backoff, actually rereads Harbor
+even with a fresh cache, and coalesces while queued/running. Refreshing disables
+duplicate actions. Failure retains prior rows and their successful timestamp, with
+quiet feedback; GitHub prices and their report sample are independent. Filtering
+never changes the full-edition cost denominator, so the cheapest visible row may
+correctly be above 1.0x. Source task USD never becomes Cost Guard CCost or billing.
 
 [Harbor documents public leaderboard display on other websites](https://github.com/harbor-framework/harbor/blob/main/docs-mintlify/harbor-hub/leaderboards.mdx#display-a-leaderboard-on-your-own-website).
 Cost Guard attributes/links the official board and caches public aggregates only;
@@ -1214,6 +1245,7 @@ The historical synthetic parity and bounded integration inventory is [Beta stabi
 | `/api/data` | POST | Strict `{request,retry}` boolean lookup/admission; shared valid result, progress ID or typed error |
 | `/api/models/refresh` | POST | CSRF-protected `{}`; strict upstream pricing fetch then isolated coherent Models rebuild, coalesced in flight; no account refresh |
 | `/api/models/benchmark` | GET | Authenticated prepared public aggregate snapshot; coalesced optional host-owned acquisition, independent of reference pricing |
+| `/api/models/benchmark/refresh` | POST | Cookie/Origin/CSRF-protected empty-body forced Harbor read; coalesces queued/running work and retains last-good rows/date on failure |
 | `/api/sessions` | POST | Read shared catalog; validated token, offset/epoch, sort and direction; at most 50 rows, no source acquisition |
 | `/api/detail` | POST | Shared complete session capture, pinned begin/chunk history and handle release; compatibility page/freeze |
 | `/api/jobs/<id>` | GET | Authenticated status/progress/result |

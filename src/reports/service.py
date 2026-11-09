@@ -44,7 +44,7 @@ from .semantics import (
     recent_model_notice_details,
 )
 
-from .model_comparison import AvailabilityPrefetch, price_summary, selectable_catalog, web_model_catalog
+from .model_comparison import AvailabilityPrefetch, price_help, price_summary, selectable_catalog, web_model_catalog
 from .prompts import build_prompt_block
 from .accounts import accounts_quota_projection, WatchAccountProjection
 from .migration_notice import migration_gap_notes
@@ -406,6 +406,7 @@ class ReportService:
                 row.relative_levels,
                 row.evidence,
                 active_model_promotion(comparison_catalog.resolve_reference(row.model_name), self.now_ms),
+                price_help(comparison_catalog, row.model_name),
             ))
             self.progress(WorkProgress("Comparing model prices", "projection", index + 1, len(candidates), stage="comparison"))
         self._comparison_mix = (normalized_average_token_mix(usage), self.now_ms)
@@ -811,6 +812,7 @@ class ReportService:
         comparisons, sample, promo_notes, recent, recent_highlight_spans, availability_warnings, web_catalog = self._model_comparison(
             analyzed, all_models=request.kind is ReportKind.ALL_MODELS, include_model_catalog=include_model_catalog,
         )
+        comparison_mix = self._comparison_mix[0][:4] if sample else None
         # Account periods have their own history scope, never the comparison sample.
         quota_projection = None
         if request.kind is ReportKind.NORMAL:
@@ -833,6 +835,7 @@ class ReportService:
             model_comparison=comparisons,
             model_catalog=web_catalog,
             model_comparison_sample_size=sample,
+            model_comparison_mix=comparison_mix,
             pricing_retrieved_at_ms=catalog.retrieved_at_ms,
             model_comparison_promotion_notes=promo_notes,
             accounts_quotas=quota_projection,

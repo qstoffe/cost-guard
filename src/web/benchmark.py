@@ -29,6 +29,7 @@ class BenchmarkLane:
         self.snapshot = None
         self.job = None
         self.requested = False
+        self.forced = False
         self.next_due = 0
         self.started = 0
         self.failures = 0
@@ -45,11 +46,19 @@ class BenchmarkLane:
             raise ValueError('benchmark_cache_identity')
         return parse_pages(value['pages'], value['fetched_at_ms'])
 
-    def view(self, references=()):
+    def view(self, references=(), *, timezone_id='UTC'):
         with self.lock:
             self.requested = True
-            value = benchmark_view(self.snapshot, references, now_ms=int(self.wall_clock() * 1000))
-            return dict(**value, source_url=SOURCE_URL, unavailable=self.error is not None)
+            value = benchmark_view(self.snapshot, references, now_ms=int(self.wall_clock() * 1000), timezone_id=timezone_id)
+            return dict(**value, source_url=SOURCE_URL, unavailable=self.error is not None,
+                refreshing=self.forced or self.job is not None)
+
+    def refresh(self):
+        """Coalesce manual demand, bypassing only automatic freshness/backoff."""
+        with self.lock:
+            self.requested = True
+            if self.job is None:
+                self.forced = True
 
     def tick(self):
         with self.lock:
@@ -76,8 +85,9 @@ class BenchmarkLane:
                     self.jobs.cancel(self.job)
                     self.job = None
             fresh = self.snapshot and 0 <= int(self.wall_clock() * 1000) - self.snapshot.fetched_at_ms < 86400000
-            if self.requested and not fresh and now >= self.next_due:
+            if self.forced or self.requested and not fresh and now >= self.next_due:
                 self.job = self.jobs.submit(ReportRequest())
+                self.forced = False
                 self.started = now
                 self.jobs.tick()
 

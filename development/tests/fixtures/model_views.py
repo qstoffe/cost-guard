@@ -7,8 +7,8 @@ from development.tests.fixtures.compact_reports import Availability
 from src.analysis.comparisons import model_comparison_rows
 from src.analysis.token_mix import TokenMix
 from src.domain import ModelPricing, ModelRef, PricingTier
-from src.pricing.catalog import PricingCatalog
-from src.reports.model_comparison import price_summary, selectable_catalog, web_model_catalog
+from src.pricing.catalog import PricingCatalog, normalized_average_token_mix
+from src.reports.model_comparison import price_help, price_summary, selectable_catalog, web_model_catalog
 from src.reports.models import ModelComparisonProjection, ModelPromotion, ReportKind, ReportProjection
 
 
@@ -42,7 +42,7 @@ def model_report(*, all_models=False, fallback=False, availability="verified", i
         price_summary(catalog, row.model_name), row.release_date,
         promotional=row.model_name == "GPT-5.1", promotion_marker=1 if row.model_name == "GPT-5.1" else None,
         recent=row.model_name == "Z", relative_levels=row.relative_levels,
-        promotion=offer if row.model_name == 'GPT-5.1' else None) for row in rows)
+        promotion=offer if row.model_name == 'GPT-5.1' else None, price_help=price_help(catalog, row.model_name)) for row in rows)
     web_catalog = None
     if include_model_catalog:
         web_catalog = web_model_catalog(sample, full_catalog, catalog, now_ms=1793491200000, cache_repository=None)
@@ -53,5 +53,6 @@ def model_report(*, all_models=False, fallback=False, availability="verified", i
     return ReportProjection(ReportKind.ALL_MODELS if all_models else ReportKind.NORMAL,
         "Models", "V2 fixture", model_comparison=items, model_comparison_sample_size=0 if fallback else 1,
         model_catalog=web_catalog,
+        model_comparison_mix=None if fallback else normalized_average_token_mix(sample)[:4],
         token_mix=TokenMix(), source_warnings=warnings,
         model_comparison_promotion_notes=("*1 Fixture promotional terms",), recent_model_notice="Recent models: Z")

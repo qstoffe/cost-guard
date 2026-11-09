@@ -140,7 +140,7 @@ def main():
     if args.report_timings:
         from development.tests.integration.historical_report_observations import measured_report
         jobs = ReportJobs(target=measured_report)
-    host = WebHost(ROOT, jobs=jobs, live_factory=factory)
+    host = WebHost(ROOT, jobs=None if args.benchmark else jobs, live_factory=factory)
     if args.benchmark_cold:
         host.benchmark.snapshot = host.benchmark.cached = None
     streams = []
@@ -189,21 +189,9 @@ def main():
         start = live['view']['started_at_ms']
         source_seconds = time.monotonic() - started
         if args.benchmark:
-            deadline = time.monotonic() + 30
-            while time.monotonic() < deadline:
-                benchmark, _ = get('/api/models/benchmark', cookie=cookie)
-                if benchmark['rows']:
-                    break
-                time.sleep(.1)
-            else:
-                print(json.dumps(dict(benchmark='unavailable', error=host.benchmark.error,
-                    jobs=[dict(status=job['status'], error=job['error']) for job in host.benchmark.jobs._jobs.values()])))
-                raise RuntimeError('probe_benchmark_unavailable')
-            assert benchmark['fetched_at_ms'] <= int(time.time() * 1000)
-            assert min(Decimal(row['relative_cost']) for row in benchmark['rows'] if row['relative_cost']) == 1
+            from development.tests.integration.models_source_observations import observe_benchmark
+            print(json.dumps(observe_benchmark(get, cookie, host)))
             assert len(owners) == 1 and owners[0].coordinator.report_service is not None
-            print(json.dumps(dict(benchmark='complete', rows=len(benchmark['rows']),
-                fetched_at_ms=benchmark['fetched_at_ms'], live_owner_preserved=True, model_calls_started_by_probe=0)))
         if args.accounts:
             observations.stage = 'accounts'
             deadline = time.monotonic() + 90
