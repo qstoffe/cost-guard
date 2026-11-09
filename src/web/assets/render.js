@@ -5,6 +5,18 @@ const ReportView = (() => {
   // Missing tokens are not a license to expose raw Decimal strings or calculate in JS.
   let unit = null;
   let quotaMode = 'used';
+  let timezone = null;
+  function setTimezone(value) { timezone = value; }
+  function timestamp(value, zone = timezone) {
+    if (!Number.isSafeInteger(value) || value < 0 || typeof zone !== 'string') return 'N/A';
+    try {
+      const parts = new Intl.DateTimeFormat('sv-SE', {timeZone: zone, calendar: 'gregory', numberingSystem: 'latn',
+        year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'})
+        .formatToParts(value);
+      const fields = Object.fromEntries(parts.map(part => [part.type, part.value]));
+      return `${fields.year}-${fields.month}-${fields.day} ${fields.hour}:${fields.minute}`;
+    } catch (_) { return 'N/A'; } // Never substitute the browser's timezone for missing configuration.
+  }
   const bindings = new WeakMap();
   const effects = new WeakMap();
   // Live presentation grace only: a repeated snapshot or another lane's progress
@@ -47,7 +59,7 @@ const ReportView = (() => {
       `Native Used: ${native?.used.native || view.native}\nNative Remaining: ${native?.remaining.mode === 'remaining' ? native.remaining.native : 'unknown / inapplicable'}\n` +
       (quota.limit_money != null || quota.remaining_money != null ? `Native money ${view.mode}: ${view.money} / ${display(quota, 'limit_money')}\n` : '') +
       (compact ? `CCost Used: ${display(quota, 'ccost_used')} · Capacity: ${display(quota, 'ccost_capacity')}\n${display(quota, 'ccost_brief')}\n` : '') +
-      (quota.unlimited ? 'Unlimited\n' : '') + display(quota, 'reset') +
+      (quota.unlimited ? 'Unlimited\n' : '') + display(quota, 'web_reset') +
       (quota.status === 'blocked' ? '\nProvider restriction reported.' : '') +
       ({partial: '\nPartial quota data.', unavailable: '\nQuota unavailable.'}[quota.availability] || '') +
       (view.note ? '\n' + view.note : '');
@@ -419,6 +431,13 @@ const ReportView = (() => {
     if (typeof BenchmarkView !== 'undefined') {
       state.benchmark ||= new BenchmarkView.View(); state.benchmark.attach(parent);
     }
+    const more = element('div', undefined, 'more-benchmarks'), comparison = element('a',
+      'Artificial Analysis – Coding Agent Index (performance vs cost)');
+    comparison.href = 'https://artificialanalysis.ai/agents/coding-agents/';
+    comparison.target = '_blank'; comparison.rel = 'noopener noreferrer';
+    more.append(element('h2', 'More Coding Benchmarks'), comparison, element('p',
+      'Compare coding agents and effort settings by benchmark performance versus average USD cost per task.'));
+    parent.append(more);
   }
   function modelRelative(row, sampled, mixHelp) {
     const cell = element('span', undefined, 'model-relative' + (row.promotional ? ' promotion' : ''));
@@ -485,7 +504,7 @@ const ReportView = (() => {
       () => view().money !== 'N/A' ? `Native money ${view().mode} ${view().money} / ${display(quota, 'limit_money')}` :
         `Native money remaining ${display(quota, 'remaining_money')} / ${display(quota, 'limit_money')}`, 'detail'));
     if (view().note) row.append(element('span', view().note, 'warning'));
-    row.append(element('span', display(quota, 'reset'), 'detail'));
+    row.append(element('span', display(quota, 'web_reset'), 'detail'));
     const window = [quota.period !== 'unknown' && quota.period,
       quota.duration_seconds && display(quota, 'window') + ' window',
       quota.scope && quota.scope !== 'account' && quota.scope, quota.model_id].filter(Boolean);
@@ -569,7 +588,7 @@ const ReportView = (() => {
       () => `Main CCost ${ccost(row, 'main_ccost')} · Linked child CCost ${ccost(row, 'subagent_ccost')}`, 'detail'));
     return node;
   }
-  function prompts(parent, block, state, index) {
+  function prompts(parent, block, state, index, zone) {
     const title = element('h3', block.title || 'Session'); parent.append(title, link(block.session_id));
     const totals = element('p', 'Full-session CCost ');
     totals.append(costValue(block, 'total_ccost'), element('span', () => ` · Billing ${display(block, 'billed_cost')} · Duration ${display(block, 'duration_ms')}`));
@@ -581,7 +600,7 @@ const ReportView = (() => {
     if (!block.rows.length) parent.append(element('p', 'This session exists but has no prompt rows.'));
     table(parent, 'Prompts · complete session totals, independent of page',
       ['Prompt', 'CCost', 'Calls', 'Duration', '~Ictx', '~Ictx CCost', '~Extra CCost', 'Token Mix %'], block.rows,
-      row => detailCells(row),
+       row => detailCells(row, false, zone),
         () => ['Complete session', costValue(block, 'total_ccost'), known(block.total_calls),
          display(block, 'duration_ms'), '—', known(block.total_ictx_cost_text), known(block.total_extra_cost_text), known(block.total_mix_text)],
       state, 'prompts-' + index,
@@ -613,7 +632,7 @@ const ReportView = (() => {
       if (view.model_availability_empty) parent.append(element('p', 'No available OpenCode models match the pricing catalog.', 'warning'));
       return;
     }
-    parent.append(element('p', `Snapshot: ${new Date(result.observed_at_ms).toLocaleString()} · ${view.source_label} · ${result.source.status} · ${result.source.atomicity}. Frozen; Refresh explicitly to reacquire.`, 'snapshot'));
+    parent.append(element('p', `Snapshot: ${timestamp(result.observed_at_ms, view.timezone_id)} · ${view.source_label} · ${result.source.status} · ${result.source.atomicity}. Frozen; Refresh explicitly to reacquire.`, 'snapshot'));
     if (result.source.status === 'partial') parent.append(element('p', Number.isSafeInteger(result.source.omitted_roots) && result.source.omitted_roots > 0 ?
       historyWarning(result) : `Partial source data (${view.source_warning_count} warnings). Values may be incomplete.`, 'warning'));
     if (view.model_availability_unverified) parent.append(element('p', 'Model availability unverified: showing the full catalog or all historically used models, not a verified selectable list.', 'warning'));
@@ -630,7 +649,7 @@ const ReportView = (() => {
           return [name, row.model + (row.multiple_models ? ' · multiple models' : ''), costValue(row), known(row.prompt_count), display(row, 'duration_ms')]; },
         null, state, 'sessions', row => [row.title + ' ' + row.session_id, row.model, row.ccost, row.prompt_count, row.duration_ms]);
     }
-    view.prompt_blocks.forEach((block, index) => prompts(parent, block, state, index));
+    view.prompt_blocks.forEach((block, index) => prompts(parent, block, state, index, view.timezone_id));
     const accounts = view.accounts_quotas;
     if (overview) overviewAccounts(parent, accounts, 'Accounts Overview', true);
     if (view.kind === 'normal' && section === 'accounts') {
@@ -649,9 +668,9 @@ const ReportView = (() => {
     state.watch.attach(parent);
     state.watch.update(result);
   }
-  function detailCells(row, live = false) {
+  function detailCells(row, live = false, zone = timezone) {
     const label = promptLabel(row, live);
-    if (row.retained) label.append(element('span', `Last observed ${new Date(row.last_observed_at_ms).toLocaleString()}; source history omitted this row`, 'detail'));
+    if (row.retained) label.append(element('span', `Last observed ${timestamp(row.last_observed_at_ms, zone)}; source history omitted this row`, 'detail'));
     return [label, costValue(row), row.display?.calls ?? known(row.calls),
       display(row, 'duration_ms'), display(row, 'incoming_context_tokens'), costValue(row, 'incoming_context_ccost'),
       costValue(row, 'extra_ccost'), display(row, 'token_mix_percent')];
@@ -660,5 +679,5 @@ const ReportView = (() => {
     return ['Complete session', costValue(block, 'total_ccost'), known(block.total_calls),
       display(block, 'duration_ms'), '—', known(block.total_ictx_cost_text), known(block.total_extra_cost_text), known(block.total_mix_text)];
   }
-  return {render, renderLive, element, detailCells, detailTotals, compare, sortedCompare, overviewAccounts, display, contextSummary, text, setUnit, syncUnits, defaultUnit, mixLegend, hourlySummary, historyWarning, bind, setQuotaMode, quotaView, quotaHelp, quotaLabel, capacityKnown, estimateValue, LiveStatus, costHelp, costValue, accountHeading};
+  return {render, renderLive, element, detailCells, detailTotals, compare, sortedCompare, overviewAccounts, display, contextSummary, text, setUnit, syncUnits, defaultUnit, mixLegend, hourlySummary, historyWarning, bind, setQuotaMode, quotaView, quotaHelp, quotaLabel, capacityKnown, estimateValue, LiveStatus, costHelp, costValue, accountHeading, timestamp, setTimezone};
 })();

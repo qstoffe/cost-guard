@@ -1,6 +1,7 @@
 // Deterministic freshness boundaries, independent of wall-clock timers and live views.
 const assert = require('node:assert/strict'), fs = require('node:fs'), vm = require('node:vm');
 const context = vm.createContext({Date});
+vm.runInContext(fs.readFileSync('src/web/assets/render.js','utf8'),context);
 vm.runInContext(fs.readFileSync('src/web/assets/cached-reports.js','utf8'),context);
 const now = 900000000;
 for(const [section, ttl] of [['models',3600000],['ai-stats',900000],['token-mix',300000],['comparisons',300000]]) {
@@ -36,7 +37,6 @@ for(const [start,end,expected] of [
   assert.equal(vm.runInContext(`CachedReports.interval(result,'today')`,context),null);
   assert.ok(vm.runInContext(`CachedReports.interval(result,'all')`,context),'one malformed scope never hides unrelated rows');
 }
-vm.runInContext(fs.readFileSync('src/web/assets/render.js','utf8'),context);
 for(const count of [null,-1,0,1.5,'3',Number.MAX_SAFE_INTEGER+1]) {
   context.result={source:{status:'partial',omitted_roots:count}};
   assert.equal(vm.runInContext('ReportView.historyWarning(result)',context),'Partial source history. Values may be incomplete.');

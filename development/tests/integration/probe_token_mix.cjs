@@ -75,6 +75,7 @@ async function main() {
       layouts.push({theme,width,...layout});
     }
     checks.push('three themes, three widths, 65 uncapped single-line rows, 13 columns, horizontal-only panning, text help');
+    await evaluate(`ReportView.setUnit('credits',current.tokenMix.root)`);
     const publishers=await evaluate(`document.querySelectorAll('tbody')[1].textContent`);
     const total=await evaluate(`current.tokenMix.title.textContent`);
     function fraction(value) {
@@ -145,6 +146,7 @@ async function main() {
     assert.ok(retained.root && retained.rows && retained.focus && retained.x===retained.expectedX &&
       retained.y===retained.expectedY && retained.changed,'quiet coherent replacement '+JSON.stringify(retained));
     checks.push(cadence==='--wall-clock'?'real approximately-five-minute check and slow coherent replacement':'virtual overdue check and slow coherent replacement');
+    await require('./probe_token_mix_help.cjs')({evaluate,until,command,tab,checks});
     assert.deepEqual(errors,[]);
     evidence={outcome:'PASS',checks,layouts,cadence_ms:startedAt-loadedAt,
       limitations:['Synthetic browser history; real installation performance is measured by the separate read-only process probe.','No physical OS input or screen-reader proof.']};

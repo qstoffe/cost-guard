@@ -137,7 +137,7 @@ class WebSettings:
         overrides = jsonc_document(raw)[2] if raw is not None else {}
         effective = validated_values(defaults, overrides)
         web = normalize_legacy_settings(overrides).get("webSettings", {})
-        return {"webSettings": effective["webSettings"],
+        return {"timezone_id": effective["timezone"], "webSettings": effective["webSettings"],
                 "webSettingsChoices": {name: web.get(name, "default") for name in WEB_FIELDS},
                 "webSettingsDefaults": defaults["webSettings"]}
 

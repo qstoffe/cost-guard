@@ -20,12 +20,6 @@ const SessionsCatalog = (() => {
     if (offset) { params.set('offset', String(offset)); params.set('epoch', epoch); }
     return '#/sessions?' + params;
   }
-  function localTimestamp(milliseconds) {
-    if (milliseconds == null) return 'N/A';
-    const date = new Date(milliseconds), pad = value => String(value).padStart(2, '0');
-    if (!Number.isFinite(date.getTime())) return 'N/A';
-    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
-  }
   class View {
     constructor(api) {
       Object.assign(this, {api, token: null, data: null, attached: false, busy: false, generation: 0});
@@ -186,7 +180,7 @@ const SessionsCatalog = (() => {
           row.replaceChildren(...cells.map(content => { const td = el('td'); td.append(typeof content === 'object' ? content : el('span', content)); return td; }));
         }
         row.className = value.running ? 'session-running' : '';
-        ReportView.text(row.activity, localTimestamp(value.last_activity_ms));
+        ReportView.text(row.activity, ReportView.timestamp(value.last_activity_ms, this.data.view.timezone_id));
         ReportView.text(row.titleNode, value.title);
         ReportView.text(row.runningMarker, value.running ? '[RUNNING] ' : '');
         const texts = [value.multiple_models ? 'Multiple models' : value.model || 'N/A',
@@ -208,5 +202,5 @@ const SessionsCatalog = (() => {
       });
     }
   }
-  return {View, localTimestamp};
+  return {View};
 })();

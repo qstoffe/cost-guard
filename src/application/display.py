@@ -131,6 +131,10 @@ def metric_time_tokens(values, timezone_id, now_ms):
     if "reset_at_ms" in values and now_ms is not None:
         tokens["reset"] = ("Window not started" if values.get("window_active") is False and values["reset_at_ms"] is None
                            else format_reset(values["reset_at_ms"], timezone_id, now_ms=now_ms))
+        tokens["web_reset"] = tokens["reset"]
+        deadline = values["reset_at_ms"]
+        if isinstance(deadline, (int, float)) and 86_400_000 <= deadline - now_ms < 604_800_000:
+            tokens["web_reset"] = f"Reset in {int((deadline - now_ms) // 3_600_000)}h, {format_local_timestamp(deadline, timezone_id)}"
     if "used_percent" in values and "quota" in values and now_ms is not None:
         tokens["watch_reset"] = watch_reset(values["quota"], timezone_id, now_ms)
     if "duration_seconds" in values:

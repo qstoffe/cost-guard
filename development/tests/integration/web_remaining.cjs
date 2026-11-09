@@ -16,7 +16,7 @@ const all = (node, tag) => [...(node.tag === tag ? [node] : []), ...node.childre
 const input = JSON.parse(fs.readFileSync(0, 'utf8'));
 const output = new Node('main');
 const context = vm.createContext({document: {createElement: tag => new Node(tag)}, output, Date});
-require('../fixtures/web_help_vm.cjs')(vm, context);
+const helpText = require('../fixtures/web_help_vm.cjs')(vm, context);
 vm.runInContext(fs.readFileSync('src/web/assets/render.js', 'utf8'), context);
 vm.runInContext(fs.readFileSync('src/web/assets/token-mix.js', 'utf8'), context);
 for (const [kind, result] of Object.entries(input)) {
@@ -120,3 +120,32 @@ for (const mutate of [
   assert.equal(vm.runInContext('TokenMixView.valid(result)', context), false, 'reject whole malformed refresh before commit');
 }
 console.log('PASS complete payload validation rejects malformed overview or either table');
+
+// Token Mix alone suppresses noisy qualifiers; wire facts and CLI tokens remain unchanged.
+const partial = JSON.parse(JSON.stringify(input['token-mix']));
+const partialMix = mix => ({...mix, cost_complete: false, priced_requests: 1, request_count: 3,
+  exact_total_tokens: null, known_total_tokens: '842000',
+  display: {...mix.display, mix_total_tokens: 'Partial 842K', mix_input_cost: 'Partial 12.34'},
+  display_units: {usd: {mix_input_cost: 'Partial $0.12'}}});
+partial.view.token_mix = partialMix(partial.view.token_mix);
+for (const key of ['model_token_mix', 'publisher_token_mix'])
+  partial.view[key] = partial.view[key].map(row => ({...row, mix: partialMix(row.mix)}));
+partial.view.timezone_id = 'Europe/Stockholm'; partial.observed_at_ms = Date.parse('2026-03-29T01:30Z');
+context.result = partial;
+vm.runInContext('globalThis.mixView = new TokenMixView.View(); mixView.update(result); mixView.attach(output)', context);
+const title = all(output, 'h2')[0];
+assert.doesNotMatch(output.textContent, /Partial|\?|Incomplete token telemetry/);
+assert.ok(output.textContent.includes('842K'));
+assert.equal(context.mixView.status.hidden, true);
+assert.match(helpText(title), /Observed 2026-03-29 03:30\.\n\nPartial pricing:.*Missing cost is not zero\.\n\nToken telemetry is incomplete/);
+vm.runInContext('ReportView.setUnit("usd", output)', context);
+assert.ok(output.textContent.includes('$0.12')); assert.doesNotMatch(output.textContent, /Partial|\?/);
+assert.equal(partial.view.token_mix.display.mix_total_tokens, 'Partial 842K', 'not a canonical token rewrite');
+context.result = input['token-mix'];
+vm.runInContext('mixView.update(result)', context);
+assert.doesNotMatch(helpText(title), /Partial pricing:/, 'complete aggregate omits partial-pricing paragraph');
+context.result = {...partial, view: {...partial.view, token_mix: {...partial.view.token_mix, request_count: 0}, model_token_mix: [], publisher_token_mix: []}};
+vm.runInContext('mixView.update(result)', context);
+assert.match(output.textContent, /No available historical usage/);
+assert.doesNotMatch(helpText(title), /Partial pricing:/, 'empty usage never claims partial costs');
+console.log('PASS quiet Token Mix both units/tables, partial-pricing and telemetry help, live refresh and empty history');

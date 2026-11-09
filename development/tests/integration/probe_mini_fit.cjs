@@ -60,6 +60,10 @@ async function main() {
     const capture=async label=>{const image=await command('Page.captureScreenshot',{format:'png'},await pipSession());
       await fs.writeFile(output.replace(/\.json$/,`-${label}.png`),Buffer.from(image.data,'base64'));};
     const settings=(field,endpoint,value)=>evaluate(`(async()=>applySettings(await api('/api/settings/${endpoint}',{${field}:'${value}'})))()`);
+    if(scope==='dates-only') {
+      await open();await require('./probe_mini_activity.cjs')({evaluate,until,fixture,command,pip:await pipSession(),ownerSession:sessionId,layouts:evidence.layouts,checks:evidence.checks});
+      evidence.outcome='PASS';return;
+    }
     if(scope==='help-only') {
       await open();await require('./probe_mini_help.cjs')({evaluate,until,fixture,command,pip:await pipSession(),checks:evidence.checks});
       await require('./probe_mini_duration.cjs')({evaluate,until,command,pip:await pipSession(),ownerSession:sessionId,checks:evidence.checks});

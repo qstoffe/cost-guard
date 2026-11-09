@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v81.6, 2026-11-09), the supported distribution.
+Use **current `main`** (v81.7, 2026-11-10), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -357,7 +357,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v81.6 (2026-11-09):** Claude Agent historical aliases use the same exact location catalog label as OpenCode Desktop, with matching estimated reference CCost where precisely priceable. Recorded concrete models retain precedence; inferred cache values refresh automatically without replaying prompts. [Identity and cost provenance](docs/usage-and-cost.md).
+**v81.7 (2026-11-10):** Models links to Artificial Analysis for independent coding-agent comparisons. Token Mix shows known figures quietly, with incomplete pricing explained in its total-title help. Web dates/times consistently use configured-local Swedish numeric dates and 24-hour clocks, independent of browser locale/timezone. [Web guide](docs/web-beta.md).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 
