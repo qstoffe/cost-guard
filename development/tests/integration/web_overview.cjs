@@ -24,13 +24,14 @@ const names = () => all(output, 'tbody')[0].children.map(row => row.children[1].
 const click = title => all(output, 'button').find(n => n.textContent.startsWith(title)).events.click({});
 draw();
 const relativeHelp = helpText(all(output, 'th')[2].children[0]);
-assert.ok(relativeHelp.includes('Input (new) / Cached input (reused) / Cache write (stored) / Output (generated, including reasoning)'));
+assert.ok(relativeHelp.includes('same recent token mix'));
 assert.ok(!/\b(?:Cache|Write):/.test(output.textContent));
 assert.deepEqual(names(), order, 'default exact descending tier ranking');
-assert.deepEqual(all(output, 'th').map(n => n.textContent), ['Publisher ↕', 'Model ↕', 'Relative CCost ↓', 'Release date ↕']);
+assert.deepEqual(all(output, 'th').map(n => n.textContent), ['Publisher ↕', 'Model ↕', 'Relative Price List Cost ↓', 'Release date ↕']);
 assert.equal(all(output, 'h3').length, 0, 'definitions belong to heading help, not cards');
-assert.equal(output.children[0].className, 'model-tools', 'notices/filters precede table');
-assert.equal(output.children[2].className, 'overview-models');
+assert.equal(output.children[0].textContent, 'Models Reference Pricing');
+assert.equal(output.children[1].className, 'model-tools', 'notices/filters precede table');
+assert.equal(output.children[3].className, 'overview-models');
 assert.equal(all(output, 'details').length, 0, 'no Models explanations disclosure');
 for (const text of ['Pricing/cache metadata', 'Snapshot:', 'Shared global comparison sample', 'full-report rows']) assert.ok(!output.textContent.includes(text));
 assert.equal(all(output, 'input').length, 2);
@@ -45,10 +46,10 @@ assert.ok(!warnings.includes('Attribution incomplete'));
 const relatives = all(output, 'tbody')[0].children.map(row => row.children[2].textContent);
 if (fallback) {
   assert.deepEqual(relatives, ['', '', '', ' *', '']);
-  assert.ok(relativeHelp.includes('hidden fixed 2/96/1/1'));
+  assert.ok(relativeHelp.includes('not task performance'));
 } else {
   assert.deepEqual(relatives, ['8.0x', '8.0x', '8.0x → 20.0x (>1M)', '8.0x → 16.0x (>200K) *', '1.0x']);
-  assert.ok(relativeHelp.includes(`latest ${view.model_comparison_sample_size} qualifying completed`));
+  assert.ok(relativeHelp.includes('1.0x'));
 }
 // Both names resolve to one presentation; header clicks toggle without a third state.
 context.state.section = 'models'; draw(); click('Model');
@@ -61,9 +62,9 @@ assert.deepEqual(names(), ['A', 'Reference', 'TierHigh', 'TierLow', 'Z']);
 const base = view.model_comparison[0];
 view.model_comparison = [['Higher', '1.00000000000000000002'], ['Lower', '1.00000000000000000001'],
   ['Equal', '1.00000000000000000001'], ['Unknown', null]].map(([model, relative_cost]) => ({...base, model, relative_cost, relative_levels: []}));
-draw(); click('Relative CCost'); click('Relative CCost');
+draw(); click('Relative Price List Cost'); click('Relative Price List Cost');
 assert.deepEqual(names(), ['Lower', 'Equal', 'Higher', 'Unknown']);
-click('Relative CCost');
+click('Relative Price List Cost');
 assert.deepEqual(names(), ['Higher', 'Lower', 'Equal', 'Unknown']);
 // Passive source caveats do not accompany usable Models; account failures belong to Accounts.
 context.state.section = 'overview';

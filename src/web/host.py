@@ -50,6 +50,8 @@ class WebHost:
         self.server = None
         self.thread = None
         self.cache_housekeeping = CacheHousekeeping(root)
+        from .benchmark import BenchmarkLane
+        self.benchmark = BenchmarkLane(root)
 
     def runtime_failed(self, error):
         self.failure = self.failure or error
@@ -135,6 +137,7 @@ class WebHost:
                 elif status == "source_check_unavailable" and previous != status and self.store:
                     self.store.log(status)
                 self.observations.persist(self)
+                self.benchmark.tick()
                 if self.dependencies and self.live and self.live.observed.is_set():
                     baseline = self.live.driver.coordinator.report_service.config
                     if not self.dependencies.check(self.dispatcher, baseline=baseline):
@@ -167,7 +170,10 @@ class WebHost:
             self.stopping.set()
             try:
                 try:
-                    self.jobs.close()
+                    try:
+                        self.benchmark.close()
+                    finally:
+                        self.jobs.close()
                 finally:
                     try:
                         if self.live:
@@ -198,6 +204,7 @@ class WebHost:
             # The serving thread's bounded attempt may have retained a child
             # whose exit was not yet confirmed. Main remains its cleanup owner.
             self.jobs.close()
+            self.benchmark.close()
         except BaseException as error:
             self.runtime_failed(error)
             raise

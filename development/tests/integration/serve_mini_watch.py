@@ -70,6 +70,11 @@ def main():
             (root / 'pricing-mode.txt').write_text('unchanged')
             jobs = ModelsRefreshJobs(root)
         host = WebHost(root, jobs=jobs)
+        # All browser-fixture modes are offline/synthetic, including the optional lane.
+        from development.tests.fixtures.benchmark import payload
+        from src.benchmarks import parse_pages
+        host.benchmark.snapshot = parse_pages(payload()['pages'], int(time.time() * 1000))
+        host.benchmark.next_due = float('inf')
         if sys.argv[2:] == ['--history-demand']:
             from src.web.dispatch import DataDispatcher
             # Real authenticated lease registry, but no source/provider or finite warming owner.

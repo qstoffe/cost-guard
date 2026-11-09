@@ -1,5 +1,11 @@
 # Cost Guard version history
 
+## v81.1 — 2026-11-09
+
+- Models separates unchanged GitHub reference-price analysis, now titled **Models Reference Pricing**, from an optional **Coding Benchmark – Cost per Task** table. Each has independent expensive-first sorting; benchmark USD/attempt and Solved describe published model/client/effort configurations, not bills or CCost.
+- Read the fixed official Terminal-Bench 4.0 Harbor board through one bounded, independently owned finite lane and separate last-good cache. Partial costs and zero costs never become a relative-cost baseline; failures leave reference pricing and existing benchmark observation dates intact.
+- Benchmark New labels use only a proven exact reference-catalog release-date join and the existing seven-day window. No benchmark promotions, first-seen clock, history upload, credentials, model calls or added dependency. Header help is compact; distinct concepts use blank-line-separated paragraphs.
+
 ## v81.0 — 2026-11-09
 
 - Promote the existing secured Web application to the normal Windows/macOS entry: top-level `Cost-Guard-Web` launchers and no-argument `cost-guard.py`. Dynamic header/tab/tray/menu branding is Cost Guard; optional locally generated Finder app is `Cost Guard.app` with canonical version metadata.

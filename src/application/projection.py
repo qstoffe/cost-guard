@@ -14,6 +14,7 @@ from .display import with_display
 from .prompt_costs import cost_detail
 from .comparisons import page as comparisons_page
 from .reference_cost import issue_records
+from .benchmark import benchmark_view
 
 
 def identity(parts) -> str:

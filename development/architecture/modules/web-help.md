@@ -14,10 +14,12 @@ at `50d88a4bcfba6c1f853607ce0ee84a5c9663c0a3`.
 
 - Answer “What am I looking at?” first, in plain English. A simple field needs one
   sentence, not a standard-size card. Do not lead with internal implementation names.
-- Separate independent facts with concise `•` bullets or `\n`. Use blank lines to group metric components;
-  let CSS wrap naturally, never insert arbitrary hard-wrapped lines.
-- Example: `Estimated prompt cost, not your bill.\nI — First request’s incoming
-  context cost.\nE — Output, later requests and linked subagents.`
+- One concept gets one compact, natural sentence. Two or more distinct concepts
+  get separate short paragraphs separated by one blank line (`\n\n`). Let CSS
+  wrap naturally, never insert arbitrary hard line wraps or a long formula dump.
+- Example: `Reference-price ratio to the cheapest comparable model (1.0x).\n\nUses
+  the same recent token mix for every model and price tier; not task performance.`
+- Apply this to all new/edited help, not a bulk rewrite of unrelated tooltips.
 - Say **N/A = unavailable, not zero** and **? = partial pricing/data** where they
   affect interpretation. Keep intrinsic estimates and unsupported work honest. Once
   useful content exists, ordinary retained refresh is silent, including hidden help
@@ -115,7 +117,8 @@ without changing the rate signature. See [classification and evidence](../../jou
 | Mini: session title/cost and prompt/history status | Both tables' Session text reveals the full title and represented canonical Prompt # (unknown stays unavailable). Both paired-cost values use the same compact prompt model/effort/duration/known-calls renderer, with linked/mixed/pricing/outcome facts. Running uses its focal; history its actual representative. No row-wide popup, native title, cue, detailed I/C/W/O breakdown, passive source-refresh flags or raw prompt text |
 | Mini: Today, freshness, Earlier Sessions, quota bars, return-to-tab | No global Today or Earlier Sessions help, table-level replacement or progress-bar popup. Loaded rows and certified empty history refresh silently, with no timed refresh warning. Keep useful return action help with immediate activation dismissal. Critical host/auth/source failures stay actionable, not observation logs |
 | Mini: subscriptions | Primary-window Capacity, then Next reset; applicable raw Capacity/current Remaining estimate help follows. Select canonical unit/provenance and reset tokens; no secondary or unrelated CCost prose. Warnings remain visible; Full Watch/Accounts retain richer help |
-| Models: checkboxes and multi-sort | Four semantic label-only definitions preserve full sorting click/keyboard/Shift actions and accessible action names; Relative CCost groups ratio, actual global completed sample, token categories, hidden fallback and source thresholds |
+| Models: reference checkboxes and multi-sort | Four semantic label-only definitions preserve click/keyboard/Shift actions and accessible sort names. Relative Price List Cost has two compact paragraphs: reference ratio, then shared recent token mix rather than task performance. Internal `relative_cost`, tiers and sample semantics are unchanged |
+| Models: independent coding benchmark | Six sortable intrinsic header targets explain configuration, effort, per-attempt USD/relative cost and solved percentage. Section help separates configuration dependence from nonbilling scope with one blank line; client value help separates published version, source date and official row ID. Missing versions are not inferred; no promotions or benchmark-driven New clock |
 | Models: price refresh and promotion help | Explicit price action and genuine fetch time precede the table. One highlighted postfix star follows the complete relative tier chain; the row's structured offer supplies multiline Price Promotion/model/discount/end/resume help. No numbered footer, native duplicate title or routine catalog/source caveat. Unitless ratios distinguish the Copilot-credit basis from Credits/reference USD and billing/native quotas |
 | Sessions/detail, Token Mix, active-hour | Shared sort and intrinsic metric help remain. Compact Export Sanitized JSON owns action-style native sanitization/review/snapshot/save help; activation and programmatic picker-focus restoration leave it dismissed. No separate export helper/idle caption; operational status remains. No retained-source/as-of/refresh caveat or finite progress footer on the loaded Sessions catalog. The retired Reports date form has no help surface |
 | Accounts | Shared Watch subscription help retains exact native-money/pace/billing facts and genuine provider restrictions/auth failures; usable retained quotas have no passive source aria or timed refresh captions |

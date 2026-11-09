@@ -293,25 +293,21 @@ const ReportView = (() => {
     draw();
   }
   function modelHeadingHelp(view) {
-    const count = view.model_comparison_sample_size;
     return ['The model’s developer/manufacturer, not your subscription or account.',
-      'The model name/identity in the published catalog. OpenCode availability is not verified subscription entitlement.',
-      'Relative reference-price ratio for one identical token workload across every model and price tier, including models you have not used.\n1.0x is the cheapest comparable positive rate in the complete catalog; higher ratios mean proportionally more reference cost, not capability or speed.\n\n' +
-      'Token Mix % = Input (new) / Cached input (reused) / Cache write (stored) / Output (generated, including reasoning). These are proportions of tokens, not CCost.\n' +
-      (count ? `The same shared mix comes from the latest ${count} qualifying completed, priceable ${count === 1 ? 'prompt' : 'prompts'} globally (up to 100).` :
-        'No qualifying completed priceable prompts: the hidden fixed 2/96/1/1 mix ranks prices only; observed comparison ratios remain blank.') +
-      '\n\nArrows mean larger-input-context price tiers; > / ≥ are the published token thresholds.\nRatios are unitless and unchanged between Credits and reference USD (100 credits = $1.00). The basis is Copilot AI-credit-equivalent pricing, not your subscription bill or native quota use.',
-      'The actual published/verified model release date when known. N/A means unavailable; no date is inferred.'];
+      'The model identity in the published catalog.\n\nOpenCode availability is not verified subscription entitlement.',
+      'Reference-price ratio to the cheapest comparable model (1.0x).\n\nUses the same recent token mix for every model and price tier; not task performance.',
+      'The published/verified model release date; N/A means unavailable.'];
   }
   function overviewModels(parent, view, state) {
     const catalog = view.model_catalog;
     const models = catalog?.rows || view.model_comparison;
     state.models ||= {all: false, latest: true, sorts: [{index: 2, direction: -1}]};
     const choice = state.models;
+    parent.append(element('h2', 'Models Reference Pricing'));
     const tools = element('div', undefined, 'model-tools'), notices = element('div', undefined, 'model-notices');
     const prices = element('div', undefined, 'model-price-controls'), refresh = element('button', 'Refresh price list');
     refresh.setAttribute('data-model-control', 'refresh');
-    const fetched = element('span', 'Prices last fetched: ' + (view.pricing_retrieved_at_ms > 0 ? display(view, 'pricing_retrieved_at_ms') : 'Unavailable'));
+    const fetched = element('span', 'GitHub Copilot · Prices last fetched: ' + (view.pricing_retrieved_at_ms > 0 ? display(view, 'pricing_retrieved_at_ms') : 'Unavailable'));
     const progress = element('span'); progress.setAttribute('role', 'status');
     state.priceControls = writable => {
       refresh.disabled = !writable || !!state.priceRefreshing;
@@ -328,7 +324,7 @@ const ReportView = (() => {
       input.addEventListener('change', () => { choice[key] = input.checked; draw(); });
       wrap.append(input, element('span', label)); filters.append(wrap);
     }
-    checkbox('Show all Copilot-priced models', 'all', 'Off — Show models in OpenCode’s available list, not verified subscription entitlements.\nIf availability cannot be checked, show the catalog with a warning.');
+    checkbox('Show all Copilot-priced models', 'all', 'Off — Show models in OpenCode’s available list, not verified subscription entitlements.\n\nIf availability cannot be checked, show the full catalog.');
     checkbox('Latest versions only', 'latest', 'Hide recognized older stable versions among the models selected by the other filter.');
     tools.append(prices, filters); parent.append(tools, notices);
     const scroll = element('div', undefined, 'overview-models');
@@ -347,7 +343,7 @@ const ReportView = (() => {
     const head = element('thead'), header = element('tr'), body = element('tbody');
     head.setAttribute('role', 'rowgroup'); body.setAttribute('role', 'rowgroup');
     header.setAttribute('role', 'row');
-    const names = ['Publisher', 'Model', 'Relative CCost', 'Release date'], headers = [];
+    const names = ['Publisher', 'Model', 'Relative Price List Cost', 'Release date'], headers = [];
     const help = modelHeadingHelp(view);
     names.forEach((name, index) => {
       const cell = element('th'), button = element('button', name); cell.scope = 'col';
@@ -418,6 +414,9 @@ const ReportView = (() => {
     }
     grid.append(head, body); scroll.append(grid); parent.append(scroll);
     parent.append(empty); draw();
+    if (typeof BenchmarkView !== 'undefined') {
+      state.benchmark ||= new BenchmarkView.View(); state.benchmark.attach(parent);
+    }
   }
   function modelRelative(row, sampled, evidence = true) {
     const cell = element('span', undefined, 'model-relative' + (row.promotional ? ' promotion' : ''));
@@ -657,5 +656,5 @@ const ReportView = (() => {
     return ['Complete session', costValue(block, 'total_ccost'), known(block.total_calls),
       display(block, 'duration_ms'), '—', known(block.total_ictx_cost_text), known(block.total_extra_cost_text), known(block.total_mix_text)];
   }
-  return {render, renderLive, element, detailCells, detailTotals, compare, overviewAccounts, display, contextSummary, text, setUnit, syncUnits, defaultUnit, mixLegend, hourlySummary, historyWarning, bind, setQuotaMode, quotaView, quotaHelp, estimateValue, LiveStatus, costHelp, costValue, accountHeading};
+  return {render, renderLive, element, detailCells, detailTotals, compare, sortedCompare, overviewAccounts, display, contextSummary, text, setUnit, syncUnits, defaultUnit, mixLegend, hourlySummary, historyWarning, bind, setQuotaMode, quotaView, quotaHelp, estimateValue, LiveStatus, costHelp, costValue, accountHeading};
 })();

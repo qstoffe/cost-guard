@@ -21,6 +21,16 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000652: `src/benchmarks.py` validates fixed public Harbor Terminal-Bench 4.0
+aggregates; `cache/benchmark.py` owns its separate versioned last-good file.
+`web/benchmark.py` reuses an independent `ReportJobs` instance under the existing
+host tick/close owner, without source/price-job dependency. `application/benchmark.py`
+prepares raw Decimal keys, per-attempt values and exact reference-release-only New;
+`web/assets/benchmark.js` owns the independent retained six-column table.
+Coverage: `test_web_benchmark.py`, existing Models/tiers/price-refresh/overview tests,
+`web_models.cjs`, hidden Chrome/Edge Models and toolbar/help probes, and read-only
+`probe_web_live.py --benchmark --benchmark-cold`. [Evidence](../../journal/web/models-benchmark.md).
+
 FR000650: `cost-guard.py` / `src/product_entry.py` route default desktop intent to
 existing managed Web; `cost-guard-cli.py` preserves independent report/Watch.
 Public Web launchers are `windows/Cost-Guard-Web.cmd` / `macos/Cost-Guard-Web.command`;
