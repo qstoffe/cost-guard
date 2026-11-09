@@ -1,15 +1,76 @@
 # Mini Watch and finished history
 
-Source revision: 4d7eca5a1f073a405a62dfeb2d93fdfa6b1410c6
-Checked revision: 4d7eca5a1f073a405a62dfeb2d93fdfa6b1410c6
+Source revision: 217e835d5d16734f5333b690cfa649b5de1be350
+Checked revision: 217e835d5d16734f5333b690cfa649b5de1be350
 Last checked: 2026-11-09
 Status: current
 
-## Summary
+## Historical foreground correction (FR000643)
+
+v80.223 fixes a category-versus-outcome regression: `View.drawSessions` previously
+colored every successful representative green, including certified history. It now
+checks the existing `historical` category first. Historical rows always inherit the
+theme foreground; active/grace rows retain running/yellow, success/green and
+abort/error/red. Outcome accessibility is unchanged. Server grace eligibility,
+duration, source acquisition, selection, ranking, CCost and Full Watch are unchanged.
+No timer, CSS palette, setting, badge or warning was added.
+
+Verification against the source revision above, in this delivery working tree:
+
+- A new cold-success-history assertion failed on the original code and passed after
+  the guard. `mini_sessions.cjs` covers neutral old success/failure, same-node grace
+  handoff and consecutive/concurrent resumption. `mini_watch.cjs` checks source
+  membership handoff, accessible outcomes and retained/repeated retry publications.
+- Local **Full: 179 bounded test files, zero failures, 170.3s**. The new browser-only
+  fixture initially used a DTO-only `has_error` field; correcting it to canonical
+  `watch_error` repaired that failed exploratory browser run, not product behavior.
+  Package validation passed **11 checks, zero failures, seven advisory warnings**.
+  No budget/structural baseline was raised. Backlog-only updates through `7334126`
+  were fast-forwarded before delivery; they changed no tested runtime surface.
+- Owned **headless Edge 157.0.4341.42**, real Document PiP and shipped HTTP/CSP/SSE,
+  passed **91 layouts** through `probe_mini_watch.cjs`: 12 new lifecycle/color cases
+  plus the existing 79-layout width/density/Activity/help/AX/history/Fit matrix.
+  The new `probe_mini_theme.cjs` covers Classic/Web light/Web dark × Credits/USD ×
+  650/280 widths. It asserts computed row and all four value foregrounds, cold five
+  successful histories, same-node running → success → history, abort/error → history,
+  repeated/retained SSE, reopen, unverified work and proof invalidation/arrival.
+  Full Watch historical classes stay neutral and running/success classes unchanged.
+  A final 12-case color-only supplement also passed explicit unit and theme switches
+  while historical rows remained mounted, without losing their neutral foreground.
+  Membership changes are **synthetic canonical source publications**, not observed
+  natural terminal transitions in the personal installation.
+- The read-only actual-installation `probe_web_live.py --accounts` passed: V2,
+  three account cards, one owner, two coherent advancing streams, stable run origin,
+  **6.0313s**, zero remaining owned threads/processes and no cleanup failures.
+  No model calls or finite jobs were started; shared OpenCode was untouched.
+- Earlier real-source exploratory checks remain **FAILED**, not retrospective PASS:
+  `--tool-invocations` observed no invocation in its bounded window; `--watch-cards`
+  lost the owned HTTP host after about 75s (history completion inconclusive).
+  A concurrent version-file edit could have triggered the existing source guard;
+  the shutdown reason was not captured, so this explanation is unproved.
+  The default probe passed continuity subchecks but failed its immediate final
+  owned-worker assertion with one Claude quota worker still awaiting a response.
+  Delegate source inspection found deliberately nonblocking 0.2s joins and bounded
+  provider work; it directed the distinct `--accounts` run above, which passed its
+  final cleanup gate. No cleanup assertion or provider deadline was suppressed.
+- Decision Delegate assessed these scoped presentation checks as sufficient, with
+  the successful relevant live check and normal final validation: **no acceptance
+  waiver**, Suggestion or hold. The extra probes do not prove private history
+  completeness or real-source lifecycle colors. The integrated browser was tried;
+  its initial embedded page exposed no Document PiP API. The owned headless route
+  supplies the actual PiP evidence without external desktop interaction.
+
+Physical desktop/work-area frames, monitor transitions, macOS pixels and screen-reader
+speech remain unverified. These are not changed by this foreground correction.
+See the completed FR report for final validator/delivery evidence. Raw local outputs:
+`scratch:/mini-regression.json`, `scratch:/mini-colors-final.json`; public compact
+evidence is under `development/architecture/governance/verification/mini-history-643.json`.
+
+## Unified table baseline (FR000642)
 
 FR 000642 / v80.222 replaces the two Mini tables with one **Activity | Session |
 CCost (Total) | Ctx** table. These are delivery-working-tree observations against
-the base above, not a fresh audit of every older Mini feature. Full Watch retains
+base `4d7eca5a1f073a405a62dfeb2d93fdfa6b1410c6`, not a fresh audit of every older Mini feature. Full Watch retains
 its per-prompt active cards and independently certified five historical sessions.
 
 `src/web/assets/mini.js` selects one representative per canonical session ID from

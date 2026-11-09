@@ -324,6 +324,11 @@ population; no provisional latest-set assertion, scanner, identity inference or 
 Selected rows sort by actual start/finish ascending with deterministic unknown fallback.
 Full Watch retains its prompt multiplicity and independent five-history presentation.
 
+FR000643 / v80.223 gates Mini's foreground on that canonical category: historical
+rows always inherit neutral ink; active/grace rows retain outcome-based running,
+success and error roles. The same keyed row loses its old class on the server's
+history handoff. Outcome labels remain accurate; no client grace clock is added.
+
 Activity uses Python-prepared `clock` / additive `start_date_time` with UTC offset while
 unfinished, and `finished_clock` / `finished_date_time` for supported endings. Unknown
 finish stays honest. The cost cell pairs representative prompt CCost with independent

@@ -112,6 +112,7 @@ def main():
                 "probe_ccost_unavailable": ccost_frames,
                 "probe_models": promotion_models,
                 "probe_accounts": with_display(project_accounts(value.quota), now_ms=value.now_ms).to_json()})
+            return value.now_ms
 
         try:
             host.start()
@@ -255,6 +256,16 @@ def main():
                         for index, instant in enumerate(instants))
                     publish(value=replace(frame, active_cards=cards[:1], history_cards=history,
                         quota=replace(frame.quota, accounts=frame.quota.accounts[:1])), timezone_name='Europe/Stockholm')
+                elif command.startswith('mini-lifecycle-'):
+                    from development.tests.fixtures.mini_lifecycle import lifecycle_frame
+                    phase = command.removeprefix('mini-lifecycle-')
+                    if phase == 'retry':
+                        lifecycle = replace(lifecycle, cards_state='unavailable', active_cards=(), history_state='refreshing')
+                    else:
+                        lifecycle = lifecycle_frame(frame, phase)
+                    published = publish(value=lifecycle)
+                    print(json.dumps({'ok': True, 'published': published}), flush=True)
+                    continue
                 elif command.startswith('history-'):
                     _, count, prompt_count, *account_count = command.split('-')
                     history = tuple(replace(frame.history_cards[0], session_id=f'earlier-{index}',

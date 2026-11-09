@@ -1,0 +1,46 @@
+{
+  "fr": "000643",
+  "version": "80.223",
+  "date": "2026-11-09",
+  "testedBase": "217e835d5d16734f5333b690cfa649b5de1be350",
+  "scope": "Historical foreground guard; no producer lifecycle, selection, accounting or CSS change",
+  "full": {"outcome": "PASS", "files": 179, "failures": 0, "seconds": 170.3},
+  "validation": {"outcome": "PASS", "passes": 11, "failures": 0, "warnings": 7},
+  "browser": {
+    "product": "Edg/157.0.4341.42",
+    "mode": "owned headless Document PiP, synthetic canonical publications, shipped HTTP/CSP/SSE",
+    "regression": {"outcome": "PASS", "layouts": 91},
+    "finalColors": {
+      "outcome": "PASS",
+      "layouts": 12,
+      "matrix": "Classic dark/Web light/Web dark x Credits/USD x 650/280 widths",
+      "checks": ["five successful cold histories neutral", "same-node running-success-history", "abort/error to neutral history", "retained and repeated SSE", "PiP reopen", "in-place unit and theme switches while historical", "unverified not successful", "history proof invalidation and late arrival", "all four cell values inherit proper foreground", "Full Watch history neutral and active/grace classes unchanged"]
+    },
+    "normalForegrounds": {"classic": "rgb(229, 229, 229)", "webLight": "rgb(23, 37, 59)", "webDark": "rgb(230, 237, 248)"},
+    "screenshot": "mini-history-643-light.png"
+  },
+  "actualInstallation": {
+    "command": "py -3 development/tests/integration/probe_web_live.py --accounts",
+    "outcome": "PASS",
+    "source": "V2", "owners": 1, "streams": 2, "accounts": 3,
+    "sequenceAdvanced": true, "runOriginPreserved": true, "streamIdsVerified": true,
+    "seconds": 6.0313, "remainingOwnedThreads": 0, "remainingOwnedProcesses": 0,
+    "cleanupFailures": [], "modelCallsStarted": 0, "sharedOpenCodeUntouched": true
+  },
+  "failedExplorations": [
+    "Original cold-history regression failed before the fix, then passed",
+    "Initial browser fixture used has_error instead of canonical watch_error; repaired fixture run passed",
+    "Real --tool-invocations failed: no invocation observed",
+    "Real --watch-cards failed: owned HTTP host ended during observation, history inconclusive; concurrent source edit is a plausible but unproved cause",
+    "Real default probe passed continuity but failed immediate cleanup with one pending Claude quota worker; subsequent directed --accounts passed including cleanup"
+  ],
+  "decision": "Decision Delegate assessed presentation coverage sufficient with passing relevant live check and normal validation; no acceptance waiver or deferred product scope",
+  "limitations": ["No observed natural personal-source terminal/history color transition", "No private history completeness claim", "No physical desktop/work-area, monitor, macOS or screen-reader speech proof"],
+  "reproduce": [
+    "py -3 development/tools/run_tests.py --suite full",
+    "py -3 development/tools/validate_package.py --working-tree",
+    "node development/tests/integration/probe_mini_watch.cjs <absolute-Chromium> <owned-output.json> 1",
+    "node development/tests/integration/probe_mini_fit.cjs <absolute-Chromium> <owned-output.json> 1 1 colors-only",
+    "py -3 development/tests/integration/probe_web_live.py --accounts"
+  ]
+}

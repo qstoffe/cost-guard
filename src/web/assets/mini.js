@@ -414,7 +414,7 @@ const MiniWatch = (() => {
         const session = this.drawSession(row.children[1], card);
         this.rowHelp(row, session, item, card);
         row.setAttribute('aria-label', `${session} · Prompt ${prompt?.prompt_number ?? 'unknown'} · ${outcome}${reason}`);
-        row.className = prompt?.execution_unverified ? '' : prompt?.in_progress ? 'mini-running' : prompt?.aborted || prompt?.has_error ? 'mini-error' : prompt?.completed_successfully ? 'mini-success' : '';
+        row.className = historical || prompt?.execution_unverified ? '' : prompt?.in_progress ? 'mini-running' : prompt?.aborted || prompt?.has_error ? 'mini-error' : prompt?.completed_successfully ? 'mini-success' : '';
         const known = running ? prompt?.at_ms != null : prompt?.completed_at_ms != null;
         row.activityHelp = known ? (running ? prompt.display?.start_date_time : prompt.display?.finished_date_time) : null;
         text(row.children[0].children[0], known ? (running ? prompt.display?.clock : prompt.display?.finished_clock) || '—' : '—');

@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v80.222, 2026-11-09), the supported distribution.
+Use **current `main`** (v80.223, 2026-11-09), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -365,7 +365,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.221 (2026-11-09):** Web Watch, Accounts and Mini Watch round quota guesstimates to sensible significant digits in Credits before USD conversion, with unrounded calculations in accessible help. Provider-confirmed balances, observed Used and other costs keep their normal precision. See [Web Beta](docs/web-beta.md).
+**v80.223 (2026-11-09):** Mini Watch historical session rows use the theme's normal foreground. Green success and red abort/error highlights last only through the existing recent-terminal grace; resumed sessions turn yellow in the same keyed row. See [Mini Watch](docs/web-mini-watch.md).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

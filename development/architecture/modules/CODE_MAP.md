@@ -21,6 +21,12 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000643: `mini.js::View.drawSessions` gates terminal foreground on the existing
+historical category, matching Full Watch without a second grace clock. Coverage:
+`mini_sessions.cjs`, `mini_watch.cjs`, synthetic `fixtures/mini_lifecycle.py` and
+`probe_mini_theme.cjs` through `probe_mini_fit.cjs` / `probe_mini_watch.cjs`.
+See [foreground evidence](../../journal/web/mini-watch.md#historical-foreground-correction-fr000643).
+
 FR000642: `mini.js::sessions` selects one canonical session representative and
 chronological five-slot finished fillers without changing Full Watch or the verified
 server history population. `boundTable` measures a five-row internal viewport;

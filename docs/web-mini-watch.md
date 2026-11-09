@@ -53,8 +53,11 @@ sessions produce fewer real rows, never duplicates or fabricated entries.
 The selected rows are ordered by **Activity ascending**, oldest at the top, newest at
 the bottom, with deterministic identity ties and a conservative unknown-time fallback.
 Resumed sessions promote the same keyed row and move with their actual new start.
-Running is yellow, successful ending green, abort/error red; accessible outcome text
-does not rely on color. Full Watch keeps its separate per-prompt cards and Earlier list.
+Running is yellow. Successful endings are green and abort/errors red **only during
+the existing server-owned recent-terminal grace**. Historical rows use the theme's
+normal foreground, including on first opening; their accessible outcome text remains
+accurate after the highlight expires. Refresh/reopen does not restart that grace.
+Full Watch keeps its separate per-prompt cards and Earlier list.
 
 The shared server still certifies five eligible historical winners **after excluding
 active/grace sessions**. Provisional candidates are not presented as the newest set.
