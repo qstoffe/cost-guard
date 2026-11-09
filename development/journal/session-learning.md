@@ -1,4 +1,6 @@
-# Repository Session Learning — milestone 50
+# Repository Session Learning
+
+## Milestone 50 — 2026-11-06
 
 Assessment date: 2026-11-06. Cost Guard base:
 `dd27df2a77206a615f212877ae4d6d7470ebab8f`.
@@ -78,3 +80,70 @@ publication checks and verified GitHub delivery results are recorded in the PR.
 Architecture overview/module diagrams need no update: no runtime responsibility,
 interface, dependency or flow changed. This journal entry is the useful retained
 learning; no separate repetitive incident announcement is added.
+
+## Milestone 100 — 2026-11-09
+
+Cost Guard base: `f92fdb3a3811a382c93e069f2bcb26ecf78158fb`.
+Outcome: **INCONCLUSIVE; milestone 100 explicitly DEFERRED by the Decision Delegate**.
+This publishes the evidence gap, not a completed assessment or NO_SUGGESTION.
+
+### Bounded evidence and limitations
+
+The installed analyzer used the supported local OpenCode API for the originating
+repository, not the implementation clone: one newest-eight catalog page, eight
+metadata-checked sequential exports, eight analyzed observations and no incomplete
+transport observations. The existing per-export exclusive 100-MiB limit, metadata,
+identity, time and 24,000-character semantic-context bounds remained in force.
+The helper reported 6,103,351 acquisition bytes and 2.972 seconds for its batch;
+these are not historical cost, wasted time, savings or total maintenance duration.
+Its normal sequential lifecycle disposes of owned raw-export spools; raw exports
+were not archived. Abrupt-death disposal was not tested by this assessment.
+
+All eight projections were marked relevant and INCONCLUSIVE, with truncated
+windows and semantic-context loss; most also lacked follow-up. Final retained
+windows contained only an initial event rather than a usable authority, attempted
+action, actual response, recovery and later-outcome sequence. Seven tentative
+logical groups do not establish seven independent incidents. Two observations
+had uncertain logical identity. Independent incidents, avoidable interventions,
+historical test/Git outcomes and cost impact remain unknown. Outcome labels and
+successful tool transport are not test PASS or verified delivery. Source/application
+versions remain unestablished; observed release reads do not prove installation.
+This newest-page sample is not whole-history coverage or a clean-history finding.
+
+No additional catalog lookup, private retrieval or sample substitution followed.
+The supported helper contract did not expose an addressable causal-window target
+in its returned projection. This does not prove every supported API recovery route
+impossible or establish the current source-level cause. No other-session scratch,
+processes, stashes, private persistence or Memory was inspected. Only manually
+reviewed mechanism observations and aggregate acquisition facts are published;
+private projections, session locators/hashes, transcripts and identifying paths
+are excluded.
+
+### Existing planning and decision
+
+A fresh authorized GitHub read found [Toolkit FR000463](https://github.com/qstoffe/opencode-toolkit/blob/main/development/backlog/ready-to-develop/000010-000463-session-learning-progressive-scan-one-session-causal-review/FR.md)
+still in Ready at specification blob `f3dcc5458b63b552352bbd584ce3c3cfee28e065`.
+It explicitly covers loss of causal windows during first-event fitting, bounded
+candidate-centered extraction and one-session deep review, preserving privacy and
+size limits. It incorporates the removed proposals described above. This is
+current planning evidence, not proof of implementation, installation or a newly
+available recovery interface. No duplicate suggestion was created, removed
+proposal restored, or Toolkit change implemented.
+
+The Decision Delegate authorized this scoped deferral: another identical export
+batch would not repair the missing causal sequence, and an ad hoc identity/extraction
+workflow was disproportionate for this occurrence. The prerequisite is supported,
+usable causal sequences within existing privacy, identity, sample, size, time and
+context limits. `ordinaryCount` remains **100**, `completed.session-learning`
+remains **0**, every other completed value and `lastOrdinaryId` remain unchanged;
+only the deferred learning milestone advances **50 → 100** with its reason.
+The queue's completion snapshot is not applied. The historical milestone-50
+report remains intact above. Deferral prevents immediate repetition of this
+occurrence; it completes neither assessment and does not release other work.
+
+Changes are confined to this journal and maintenance state. The Decision Delegate
+authorized omission of product suites, live probes, package/version work and
+architecture changes for this development-only delivery. No runtime responsibility,
+interface or flow changed. Applicable document/state and Git publication checks
+are recorded in the PR; no historical-task PASS, measured improvement or completed
+causal review is claimed.
