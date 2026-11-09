@@ -1,25 +1,29 @@
 # Test system health
 
-Source revision: d9d39caf05f4b68f15a38a2006d398f34e036334
-Checked revision: d9d39caf05f4b68f15a38a2006d398f34e036334
-Last checked: 2026-11-08
+Source revision: 139c25f3292f33f71b8ac57bff856af07860c48b
+Checked revision: 139c25f3292f33f71b8ac57bff856af07860c48b
+Last checked: 2026-11-09
 Status: current
 
 ## Summary
 
-Milestone 75 removes three sibling-test dependencies and restores seven omitted AI Stats recovery tests to the existing runner. Product behavior, assertions, deadlines, platforms and release policy are unchanged. [Assessment](../architecture/governance/verification/test-health-75-20261108.md). Metadata names the observed base; candidate CI belongs in its PR. Historical success is not current PASS or desktop acceptance.
+Milestone 90 moves unchanged synthetic provider pricing Markdown to its existing fixture owner, removing an unrelated account-provider test import. All 37 affected test methods, 181 assertion ASTs and both payload variants remain equal. [Assessment](../architecture/governance/verification/test-health-90-20261109.md) records the source-backed sample, 102 focused passes, deliberate negatives and current hosted cancellation. No runtime, gate, budget, timeout, release or desktop-proof claim changes.
 
 ## Evidence
 
+### Pricing fixture ownership and current fanout — milestone 90
+
+`fixtures/pricing_catalog.py` owns `pricing_markdown` directly for provider and presentation tests. Previously presentation imported `test_step6_pricing_accounts.py` solely for this text, coupling it to unrelated account tests. Existing fixture ownership is simpler than copying data, a new wrapper or a fixture framework. Function AST/promo and non-promo bytes are identical; all 37 method and 181 assertion ASTs match. Isolated presentation imports no longer load the provider test module or `src.accounts.github_copilot`; other account contracts remain legitimate transitive dependencies. Sibling-test edges are three → two, without a new module, test deletion or speedup claim. Removing promotion evidence and contaminating a second model's promotion each cause one existing assertion failure before/after; four expected failures, zero harness errors. Initial missing-promotion characterization in the presentation case produced a KeyError; the final independent contamination negative gives a direct assertion failure instead.
+
+Current runner: Quick/Full 172/178 groups, 176 distinct top-level files, no missing entries; only the documented developer benchmark is unregistered. Eight bounded Windows patterns pass 102 tests with zero skips/failures/errors. FR000640 follows independent native amounts/observed cost through Watch/Accounts tokens; FR000629 preserves unverified aliases and selective persisted-cache rebuild across real child restarts; FR000637/639 follows Mini activation/clamp/race policy through the existing Node VM. Those layers do not replace hidden real-browser or installed-source evidence reported by their completions. CI triggers and mandatory/optional boundaries remain unchanged.
+
+Fresh latest-eight main runs: seven success, one failure. [42614424444](https://github.com/qstoffe/cost-guard/actions/runs/42614424444) has Linux Full/validator/browser and Windows/macOS Intel success; macOS ARM was cancelled with no steps, not an assertion failure or PASS. Exact cancellation cause is unavailable. Linux records 178 groups, 2,143 passed/21 platform skips, regression+validation 199.72s, Chromium smoke 13.75s, on `54f613d`; historical, not candidate verification or a controlled speed comparison. No private session history, paid calls, real-provider sweep or visible desktop work was used. Long-run flakiness, agent effort and billing remain unknown.
+
 ### Fixture ownership and missing admission — milestone 75
 
-`fixtures/session_snapshots.py` now owns unchanged `one_request`; Token Mix and subtotal tests import it directly. Subtotals also import `inputs`/`prompt` directly from their existing `fixtures/watch_rows.py` owner. Economics calls `tracker.observe(snapshot, analyze_snapshot(...))` directly instead of importing a sibling's helper and computing an unused unpriced projection before the priced one. No new helper/module, compatibility layer or assertion-shape test.
+Historical [milestone 75](../architecture/governance/verification/test-health-75-20261108.md): unchanged `one_request` moved to `session_snapshots`, subtotal inputs route directly to `watch_rows`, economics removes a sibling helper's unused unpriced projection. Sibling edges six → three; fixture/function/assertion AST parity and cumulative-usage/subtotal negatives preserved. Seven accidentally omitted AI Stats recovery tests rejoin Quick; only the developer benchmark remains unregistered. Final nine-file sample: 146 pass, no skips/failures/errors. No runtime, assertion, timeout, platform or release change. Detailed before/after counts and the scoped one-time journal-helper exception remain in that assessment, not standing permission for future edits.
 
-Static sibling-test edges fall six → three. Isolated economics/subtotal imports no longer load Token Mix/grouping tests. Six old/new snapshot values and the moved helper AST match; all assertion ASTs and 60/61 test-method ASTs match. The sole execution change removes the unused projection. Deliberately reinstating cumulative usage after step replacement, or using run cost for visible-row subtotals, causes the same two existing assertion failures before and after; no harness errors.
-
-FR 000619 added `test_ai_stats_recovery.py`, but neither runner list nor another test loaded it. Its seven tests protect safe observed subtotals, unavailable ratios, temporal exclusion, unknown-not-zero and explicit compaction ends. Restore one Quick entry, without a new selector/gate or timeout change: Quick/Full 163/169 → 164/170 groups. The developer-only benchmark remains intentionally unregistered. Direct recovery runs pass in 2.76/2.88s. Final bounded nine-file sample: 146 passed, zero skips/failures/errors. No local product Full/validator/live proof was selected for development-only work; actual candidate CI remains separate.
-
-Recent eight main runs initially show five successes, two failures and one in progress. Failed [42325700358](https://github.com/qstoffe/cost-guard/actions/runs/42325700358) timed out Sessions scalar indexing at 8/55; current `test_web_views.py` already sets a 50ms server timeout so its single-thread fixture can pump independently of HTTP arrival. Current focused test passes; no claim of exact historical causation or measured flake-rate reduction. Failed [42333270967](https://github.com/qstoffe/cost-guard/actions/runs/42333270967) raised ProcessLookupError/identity-unavailable while observing an exiting owned child. Current strict identity reader/test still expose that possible race; one passing Windows dispatch run does not close Linux's cause. Do not suppress unknown ownership or relax force-stop safety. [42506711399](https://github.com/qstoffe/cost-guard/actions/runs/42506711399) passes all four jobs on another revision: Linux 2,053 passed/21 skips, validator/browser pass. It is not this candidate's PASS. No foreign scratch/processes/private transcripts were read.
+Historical milestone-75 CI: [42325700358](https://github.com/qstoffe/cost-guard/actions/runs/42325700358) timed out Sessions scalar indexing at 8/55; current fixture already had a 50ms HTTP-server pump timeout. [42333270967](https://github.com/qstoffe/cost-guard/actions/runs/42333270967) raised ProcessLookupError/identity-unavailable while observing an exiting owned child. The Linux ownership race remains unclosed; Windows success is no substitute. Do not suppress unknown ownership or relax force-stop safety. [42506711399](https://github.com/qstoffe/cost-guard/actions/runs/42506711399) passed all four jobs on another revision, not current/candidate PASS.
 
 ### Earlier causal simplifications (historical, not current suite proof)
 
@@ -57,7 +61,7 @@ Keep 55 roots/151 rows without unrelated analyses, warm separate observed-histor
 
 ## Next investigations
 
-Investigate Linux's exiting-child identity race using exact owned handles/evidence before changing the reader or its test; do not equate one Windows pass with closure. Inspect per-file durations before tuning Quick deadlines; the VM child's 60s cap does not authorize loosening the 25s outer bound. Three remaining test-import edges are localized debt, not a count target. Long-run flake rates, agent effort and paid cost remain unknown. Architecture: no-update; runtime responsibilities and verification triggers remain unchanged.
+Investigate Linux's exiting-child identity race using exact owned handles/evidence before changing the reader or its test; do not equate one Windows pass with closure. Inspect per-file durations before tuning Quick deadlines; the VM child's 60s cap does not authorize loosening the 25s outer bound. Two remaining test-import edges are localized debt, not a count target. Long-run flake rates, agent effort and paid cost remain unknown. Architecture: no-update; runtime responsibilities and verification triggers remain unchanged.
 
 ## Rejected hypotheses
 

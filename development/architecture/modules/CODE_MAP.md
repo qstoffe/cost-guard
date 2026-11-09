@@ -9,9 +9,10 @@ Scoped v80.200 update: canonical subagent prompt counts and shared subscription 
 responsive alignment; earlier dispatcher/evidence/partial-history and Sessions restoration
 owners and tests. Baseline revisions above retain the other module checks.
 
-Test Health 75 scoped check on `d9d39caf05f4b68f15a38a2006d398f34e036334`
-(2026-11-08): direct snapshot/row fixture routes, three remaining sibling-test
-edges, and restored AI Stats recovery runner admission; no runtime boundary change.
+Test Health 90 scoped check on `139c25f3292f33f71b8ac57bff856af07860c48b`
+(2026-11-09): provider pricing Markdown joins its existing fixture owner; two
+remaining sibling-test edges. Earlier snapshot/row routes and restored AI Stats
+recovery admission remain; no runtime boundary or runner selection change.
 
 Navigation, not another architecture authority: [OVERVIEW.md](../OVERVIEW.md) owns the source contracts; installed OpenCode Toolkit skills own the workflow. This map routes implementation and tests without importing the application or loading historical releases.
 
@@ -321,7 +322,7 @@ Quota Used display is shared by `src/display.py`, `src/presentation/accounts.py`
 
 - `development/tests/fixtures/session_snapshots.py`: canonical root/child/task/continuation/compaction/running snapshots (also without the /compact work, or after a location move), shared single `one_request`, explicit start/end `history` snapshots and message/part/provenance builders.
 - `development/tests/fixtures/active_hour.py`: finite hourly-cost service/capture setup shared by rate tests and the synthetic browser probe, without importing test modules.
-- `development/tests/fixtures/pricing_catalog.py`: the small deterministic two-model reference catalog and a two-tier 100K-threshold catalog.
+- `development/tests/fixtures/pricing_catalog.py`: the small deterministic two-model reference catalog, two-tier 100K-threshold catalog and synthetic provider pricing Markdown, imported directly by provider/presentation tests.
 - `development/tests/fixtures/warning_projections.py`: single-prompt report/Watch projections carrying one Next-Ictx warning severity.
 - `development/tests/fixtures/report_runtime.py`: in-memory source/pricing/quota boundaries and a stale-root/recent-child scenario.
 - `development/tests/fixtures/compact_reports.py`: cache-backed `report_service(test, ...)` factory, fixed model `Availability`, plain `rendered` reports and their `START`/`NOW` clock.
