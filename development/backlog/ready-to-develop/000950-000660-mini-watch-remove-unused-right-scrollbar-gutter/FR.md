@@ -1,0 +1,37 @@
+# FR 000660 — Mini Watch: remove the unused right-side scrollbar gap
+
+**Owner-approved Ready Feature Request, 2026-11-09.** Permanent identity **000660**, Ready priority **000950**, following the currently Ready FR000659 (000940). FR000651 remains the owner's highest-priority Ready item (000001). **Documentation/backlog publication only:** add this FR and advance `development/backlog/identity-state.json` highWatermark **659 → 660** in one commit on `main`. No product, test or release changes in this publication.
+
+## Problem
+
+In the separate **Cost Guard Web → Mini Watch (Document Picture-in-Picture)** window, the unified **Activity | Session | CCost | Total | Ctx** table appears to leave an unnecessary strip of empty space **to its right**, making its outer left and right margins visibly unequal. The owner suspects the gap is a legacy reservation for a scrollbar from the earlier two-table layout. Now the activity and historical rows are combined in a single table, the **Session** column is the flexible width absorber, and ordinary short-window content can scroll with the PiP document. The owner wants the visible table to extend equally toward both sides, respecting only the existing outer window padding.
+
+**Relevant source verified while authoring:** `src/web/assets/mini.css` sets `body { padding: .5rem; }`, `.mini-prompts { min-height: 0; overflow: auto; scrollbar-gutter: stable; flex: 0 0 auto; }`, and `.mini-prompt-table { width: 100%; }`. A **stable scrollbar gutter reserves lateral space even when no vertical scrollbar is present** in non-overlay scrollbar environments. This is a strong candidate for the reported blank strip; **confirm with computed DOM geometry**, not visual assumption alone. `src/web/assets/mini.js` also measures actual `scrollbarWidth(view)` for initial/fit-on-open width, which must be considered independently from the CSS blank gutter.
+
+**Important existing behavior:** FR000642 combined the active/history presentation into one table, but the latest Mini guide still intentionally limits the unified table to a **five-row visible viewport when more than five active sessions exist**: the sixth and later active rows scroll **within `.mini-prompts`**, keeping its table header and Today/subscription blocks accessible. Separately, an undersized native PiP **document** can scroll vertically. Do **not** remove either functioning scroll behavior just to close the margin gap.
+
+## Requested presentation fix
+
+1. Remove the **unnecessary permanent right-side scrollbar reservation** in the unified Mini Watch table when its own vertical scrollbar is **not needed**, e.g. stop applying `scrollbar-gutter: stable` indiscriminately or otherwise eliminate the equivalent unused width. **Do not** hide a real scrollbar, overlay rows, or add compensating fake padding on the left.
+2. In an ordinary no-table-scroll state, the table's **visible border/shell** should sit at **equal left and right inset** from the PiP window's content/body, determined by its existing outer padding (currently `.5rem`). There must be no additional right-only gutter, reserved track, ghost scrollbar rail or right indent. Table header/body alignment remains flush and the Session column still expands/contracts with available space.
+3. When a **real internal vertical scrollbar is needed** (six or more active session rows), the scrollbar may consume its authentic browser-owned width at the right edge of that table region. Preserve actual internal scrolling and sticky headers; do not reserve a blank gutter when the scrollbar disappears again. Browser overlay scrollbars and classic-width scrollbars must both behave sensibly, without horizontal layout thrash or clipped columns.
+4. Preserve ordinary **native PiP document scrolling** when the window becomes shorter than the total header/table/accounts content, and horizontal panning if the PiP is genuinely narrower than the compact metric-column minimum. Avoid a page-level horizontal scrollbar created by the fix.
+5. Recheck `mini.js::tableWidth()`, `scrollbarWidth()`, `OpeningMeasure.read()` and the explicit Fit-height measurement. The **measured gutter used to select opening width for genuinely scrollable content** is different from an unconditional blank gutter; change the calculation **only if actual DOM measurements demonstrate over-reservation**. Do not break fit-on-open sizing, five-row density, manual resizing, Remember last size, the explicitly requested Fit action, zoom/DPR/native frame clamping or passive no-auto-resize behavior.
+6. Keep the existing five columns, fonts, column padding, metrics, row ordering, cost and help data, colors, subscription bars, Mini/owner communication, keyboard/focus semantics, Classic/Web light/dark themes and single shared Live/SSE source. This is a **minimal CSS/geometry polish**, not another Mini Watch redesign.
+
+## Likely implementation and focused verification
+
+- Primary target: `src/web/assets/mini.css` — `.mini-prompts`' existing `scrollbar-gutter: stable` and any adjacent width/overflow rules.
+- Check only as needed: `src/web/assets/mini.js` width/height measurement helpers and PiP initialization. Avoid unrelated app stylesheet changes.
+- Existing test entry points: `development/tests/integration/probe_mini_width.cjs`, `probe_mini_fit.cjs`, shared Mini integration and `development/tests/fixtures/mini_sessions.cjs`. Reuse their owned, synthetic live/session fixtures; no model calls.
+
+**Acceptance criteria:**
+
+1. **No internal scrollbar:** with 0, 1, 3 and 5 visible session rows, verify the table's measured left and right outer offsets inside the PiP content area are equal to the same ordinary body padding (allow only small measured border/pixel rounding tolerance). No permanent blank strip at the table's right.
+2. **Internal scrollbar legitimately present:** six and ten active distinct session rows still scroll within the same unified table; sticky header, all five columns, reachable rows and non-overlapping Today/subscription areas work. When returning to at most five rows, the scrollbar disappears and no empty gutter remains. Do not mistake native document scrollbar width for an extra table margin.
+3. **Narrow/resized PiP:** shrinking native width makes Session truncate/absorb space as before; compact metric columns stay readable, horizontal pan works when genuinely needed, and there is no avoidable overall document overflow or asymmetric padding.
+4. **Sizing stability:** Fit on open, Remember last, a manual width/height resize and deliberate Fit height keep their current semantics. Repeated live updates or table scroll changes never automatically resize/reposition the native window or trigger a scrollbar/width feedback loop.
+5. **Actual browser proof:** compare measured `body`, `.mini-watch`, `.mini-prompts`, `.mini-prompt-table` rectangles, `clientWidth/offsetWidth/scrollWidth`, computed `scrollbar-gutter` and scroll state in classic-width and overlay-scrollbar environments where available. Capture before/after screenshot(s) at normal and 125–150% zoom for both Classic and Web themes. Validate no unusable regressions in touch, focus, selected text or sticky headers.
+6. Confirm this change affects **Mini Watch only**; Full Watch and Models/other tables' legitimate scrollbar gutter and presentation are unchanged.
+
+**Outcome:** A balanced, edge-to-edge-within-existing-body-padding unified Mini table, without wasting visible space on the right merely to reserve an inactive internal scrollbar.
