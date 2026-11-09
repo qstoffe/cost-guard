@@ -11,6 +11,8 @@ body { padding: .5rem; max-width: none; }
   border-radius: .4rem; transition: none; }
 .mini-summary { color: var(--accent); border-color: transparent; background: none; }
 .mini-earlier-toggle { color: var(--ink); border-color: var(--control-line); background: none; }
+.mini-header .mini-fit-height { display: inline-flex; align-items: center; justify-content: center;
+  flex: 0 0 auto; width: 1.75rem; padding: .2rem; color: var(--ink); border-color: var(--control-line); background: none; }
 .mini-header .mini-earlier-toggle[aria-pressed="true"],
 .mini-header button.mini-earlier-toggle[aria-pressed="true"]:not(:disabled):hover {
   color: var(--accent-ink); background: var(--accent); border-color: var(--accent);

@@ -27,7 +27,7 @@ async function main() {
     const id=++sequence,timer=setTimeout(()=>reject(new Error('CDP timeout '+method)),15000);
     pending.set(id,{resolve,reject,timer}); child.stdio[3].write(JSON.stringify({id,method,params,...(sessionId?{sessionId}:{})})+'\0');
   });
-  const deadline=setTimeout(()=>{child.kill();server.kill();},180000);
+  const deadline=setTimeout(()=>{child.kill();server.kill();},300000);
   const evidence={outcome:'FAIL',scale,zoom,layouts:[],checks:[]};
   try {
     evidence.browser=await command('Browser.getVersion');
@@ -80,8 +80,10 @@ async function main() {
        await require('./probe_mini_clamp.cjs')({evaluate,command,targetId,open,close,read,capture:captureOpening,fixture,until,layouts,checks:evidence.checks});
        evidence.outcome='PASS';return;
      }
-     await require('./probe_mini_width.cjs')({evaluate,command,sessionId,targetId,open,close,read,capture:captureOpening,layouts,checks:evidence.checks});
-     if(scope==='width-only'){evidence.outcome='PASS';return;}
+      if(scope!=='manual-only')await require('./probe_mini_width.cjs')({evaluate,command,sessionId,targetId,open,close,read,capture:captureOpening,layouts,checks:evidence.checks});
+      if(scope==='width-only'){evidence.outcome='PASS';return;}
+      await require('./probe_mini_disclosure.cjs').fit({evaluate,until,fixture,command,sessionId,targetId,open,close,read,capture:captureOpening,layouts,checks:evidence.checks});
+      if(scope==='manual-only'){evidence.outcome='PASS';return;}
     for(const [prompts,accounts,flags] of [[0,0,''],[1,1,''],[2,3,''],[4,6,'-long'],[2,6,'-long-warning']]) {
       await fixture(`density-${prompts}-${accounts}${flags.replace('-warning','')}`);
       await until(`liveValue.view.active_cards.length===${prompts} && liveValue.view.accounts.accounts.length===${accounts}`);

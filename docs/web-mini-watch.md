@@ -22,7 +22,7 @@ Symbolic Default follows shipped defaults; explicit choices stay pinned. Missing
 preferences inherit without creating a user file.
 
 Fit on open measures the themed header before requesting PiP: **Cost Guard · Watch,
-Earlier Sessions and the complete CCost Today cost/prompt count fit on one row in
+Earlier Sessions, the ↕ Fit Height action and the complete CCost Today cost/prompt count fit on one row in
 both disclosure states**, where browser/native limits permit. It reserves at least
 the formatted reference **CCost Today 90 000 · 999 prompts**, or wider real opening
 text, plus **8 CSS pixels** for focus/rounding and a measured stable scrollbar gutter.
@@ -57,6 +57,22 @@ Fresh headless Chrome/Edge tests exercise real PiP, pointer/keyboard activation,
 native clamps, browser zoom and emulated device scales. These are not physical
 Windows-frame, manual-drag, monitor-transition, macOS or screen-reader proof.
 Exact measurements and verification limits are in the [Mini journal](../development/journal/web/mini-watch.md).
+
+## Fit the current height
+
+The small **↕** button next to Earlier Sessions is a one-shot **Fit Mini Watch height**
+action. Click, tap, or focus it with Tab and press Enter/Space to shrink or grow Mini
+to its **currently visible** header, messages, prompt rows and subscriptions. Expanded
+Earlier rows count; collapsed history, help overlays and the opening's artificial
+two-row reserve do not. Hover, keyboard focus or touch explains the action.
+
+It works with either size preference and a manually resized window. It uses the
+current width, requests height only, and neither toggles Earlier nor refreshes data,
+repositions the window or changes settings. Another click fits later content changes;
+ordinary publications never resize. A browser/native minimum, maximum, zoom or work-area
+clamp may prevent a snug fit: normal vertical scrolling remains available. This cannot
+remove the prompt tables' legitimate horizontal panning at a narrow width. Native
+rounding/clamps can affect achieved bounds despite a height-only request.
 
 ## What the figures mean
 
@@ -116,7 +132,7 @@ grace policy. No browser timer invents cost, completion or growing elapsed time.
 ### Earlier Sessions
 
 The **Earlier Sessions** header button is outlined when collapsed and filled when
-expanded. Its text never changes and has no arrow. The title action, toggle and
+expanded. Its text never changes and has no arrow. The title action, toggle, ↕ and
 Today readout share one font size, line height and vertical rhythm. When width is
 constrained, the title and toggle stay together and the complete readout moves to
 a deliberate secondary row; exceptionally narrow widths can wrap the actions too.

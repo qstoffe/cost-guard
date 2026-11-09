@@ -90,14 +90,15 @@ const MiniWatch = (() => {
       return keys.some(key => now - (this.clocks.get(key)?.at ?? this.started) >= 600000);
     }
   }
-  // Natural layout, including all accounts/warnings and a height-only two-row reserve.
+  // Natural visible layout; opening/disclosure alone reserve two running rows.
   // Clones are invisible, inert measurement artifacts, never published prompt data.
-  function contentHeight(view, width) {
+  function contentHeight(view, width, reserve = true) {
     const {doc, root} = view, win = doc.defaultView;
     const copy = root.cloneNode(true); copy.classList.add('mini-measuring');
     copy.inert = true; copy.setAttribute('aria-hidden', 'true'); copy.style.width = width + 'px';
     root.parentNode.append(copy);
     try {
+      if (!reserve) return Math.ceil(copy.getBoundingClientRect().height);
       const body = copy.querySelector('.mini-prompts > table > tbody');
       const rows = [...body.children].filter(row => !row.querySelector('.mini-empty'));
       const emptyHeight = rows.length ? 0 : body.getBoundingClientRect().height;
@@ -146,13 +147,16 @@ const MiniWatch = (() => {
     const scale = win.outerWidth > frameWidth && win.innerWidth > 0 ? (win.outerWidth - frameWidth) / win.innerWidth : 1;
     return {scale, frame: Math.max(0, win.outerHeight - win.innerHeight * scale)};
   }
-  function targetHeight(view) {
-    const win = view.doc.defaultView, {scale, frame} = geometry(win);
+  function targetHeight(view, reserve = true) {
+    // Exclude the same conservative side frame as opening for explicit shrink.
+    // Treating it as zoom makes the inferred top frame depend on the OLD height.
+    const win = view.doc.defaultView, {scale, frame} = geometry(win, reserve ? 0 : 16);
     const style = win.getComputedStyle(view.doc.body);
-    const padding = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
-    return Math.min(heightCap(win), Math.ceil((contentHeight(view, view.root.getBoundingClientRect().width) + padding + 4) * scale + frame));
+    const padding = (parseFloat(style.paddingTop) + parseFloat(style.paddingBottom)) * (view.doc.body.currentCSSZoom || 1);
+    const width = view.root.getBoundingClientRect().width / (view.root.currentCSSZoom || 1);
+    return Math.min(heightCap(win), Math.ceil((contentHeight(view, width, reserve) + padding + 4) * scale + frame));
   }
-  // One bounded native adjustment per user disclosure, never per publication.
+  // One bounded native adjustment per user disclosure/fit, never per publication.
   class DisclosureSize {
     constructor(view, mode) {
       this.view = view; this.win = view.doc.defaultView; this.mode = mode;
@@ -166,12 +170,13 @@ const MiniWatch = (() => {
     }
     bounds() { return {width: this.win.outerWidth, height: this.win.outerHeight}; }
     same(a, b) { return Math.abs(a.width - b.width) <= 1 && Math.abs(a.height - b.height) <= 1; }
-    resize(width, height) {
+    resize(width, height, heightOnly) {
       // Start vertical-only. Some real page-zoom/native-DPI combinations still
       // round width upward; compensate that observed single DIP on the NEXT
       // eligible click, never by a second call, loop or passive correction.
-      if (typeof this.win.resizeBy === 'function') this.win.resizeBy(this.widthCorrection, height - this.win.outerHeight);
-      else this.win.resizeTo(width + this.widthCorrection, height);
+      const correction = heightOnly ? 0 : this.widthCorrection;
+      if (typeof this.win.resizeBy === 'function') this.win.resizeBy(correction, height - this.win.outerHeight);
+      else this.win.resizeTo(width + correction, height);
     }
     confirm(request) {
       const after = this.bounds();
@@ -199,19 +204,42 @@ const MiniWatch = (() => {
       // Remembered mode must not restore stale bounds after an intervening resize.
       if (earlier.hidden && this.mode === 'remember-last' &&
           (!restore || !this.same(before, restore.after))) return;
-      if (win.navigator?.userActivation && !win.navigator.userActivation.isActive) return;
-      if (!(typeof win.resizeBy === 'function' || typeof win.resizeTo === 'function') || !win.innerWidth) return;
+      if (!this.available()) return;
       const compact = view.fitHeight();
       const height = earlier.hidden ? this.mode === 'remember-last' ?
         Math.min(heightCap(win), restore.before.height) : compact : Math.max(before.height, compact);
+      this.adjust(before, height, !earlier.hidden);
+    }
+    available() {
+      const win = this.win;
+      return !win.closed && this.view.root.isConnected !== false && win.innerWidth > 0 &&
+        (!win.navigator?.userActivation || win.navigator.userActivation.isActive) &&
+        (typeof win.resizeBy === 'function' || typeof win.resizeTo === 'function');
+    }
+    fit() {
+      // Supersede any disclosure restoration/observation, including rapid clicks.
+      if (this.pending) this.confirm(this.pending);
+      this.pending = this.restore = null;
+      if (!this.available()) return;
+      const before = this.bounds(), height = this.view.fitHeight(false);
+      const scroll = this.view.doc.scrollingElement;
+      // Native zoom quantizes achieved CSS pixels. An already scroll-free fit
+      // within the small rounding margin must not oscillate on identical clicks.
+      if (scroll && scroll.scrollHeight <= scroll.clientHeight + 1 &&
+          Math.abs(height - before.height) <= 4 * geometry(this.win, 16).scale) return;
+      this.adjust(before, height, false, true);
+    }
+    adjust(before, height, expanded, heightOnly = false) {
+      const win = this.win;
       if (Math.abs(height - before.height) <= 1) return;
-      const request = {before, expanded:!earlier.hidden}; this.pending = request;
-      try { this.resize(before.width, height); }
+      const request = {before, expanded}; this.pending = request;
+      try { this.resize(before.width, height, heightOnly); }
       catch (_) { this.pending = null; return; }
       // Observe achieved bounds, not API return success. No later resize/retry.
       win.requestAnimationFrame(() => win.requestAnimationFrame(() => {
         if (this.pending !== request) return;
-        this.confirm(request); this.pending = null;
+        if (!win.closed && this.view.root.isConnected !== false) this.confirm(request);
+        this.pending = null;
       }));
     }
   }
@@ -245,7 +273,11 @@ const MiniWatch = (() => {
         this.disclosureSize.toggle(this.earlier);
         this.historyChanged?.();
       });
-      const actions = el('div', undefined, 'mini-actions'); actions.append(this.summary, this.earlierToggle);
+      this.fitButton = el('button', '↕', 'mini-fit-height'); this.fitButton.type = 'button';
+      this.fitButton.setAttribute('aria-label', 'Fit Mini Watch height');
+      ContextHelp.attach(this.fitButton, 'Fit Mini Watch height — shrink or grow the window to show all currently visible content. Width stays unchanged.', true);
+      this.fitButton.addEventListener('click', () => this.disclosureSize?.fit());
+      const actions = el('div', undefined, 'mini-actions'); actions.append(this.summary, this.earlierToggle, this.fitButton);
       const top = el('header', undefined, 'mini-header'); top.append(actions, this.daily);
       this.health = el('p', '', 'mini-health'); this.health.setAttribute('role', 'status');
       this.prompts = el('div', undefined, 'mini-prompts'); this.prompts.tabIndex = 0;
@@ -279,7 +311,7 @@ const MiniWatch = (() => {
       }
       head.append(header); const body = this.el('tbody'); table.append(head, body); parent.append(table); return body;
     }
-    fitHeight() { return targetHeight(this); }
+    fitHeight(reserve = true) { return targetHeight(this, reserve); }
     emptyRow(columns) {
       const row = this.el('tr'), cell = this.el('td'); cell.colSpan = columns;
       cell.append(this.el('span', '', 'mini-empty')); row.append(cell); return row;

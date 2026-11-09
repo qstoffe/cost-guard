@@ -20,6 +20,13 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000637: Mini's ↕ manual actual-content fit stays in `mini.js` / `mini.css` and
+the existing `DisclosureSize` owner. `fixtures/mini_opening.cjs` pins reserve-free
+measurement/frame/zoom; `mini_disclosure.cjs` pins bounded explicit-fit races/guards.
+`probe_mini_fit.cjs` invokes `probe_mini_disclosure.cjs::fit` for native grow/shrink,
+idempotence, help, bounds and passive-publication invariants in both sizing modes;
+`probe_mini_width.cjs` measures all four header components. No acquisition boundary changes.
+
 FR000638: Web-only reference-CCost remaining pace is owned by
 `application/quota_ccost.py`, `display.py`, identity-bound `projection.py` /
 `watch_accounts.py`, `account-cards.js` and legacy `render.js`. Focused coverage:

@@ -389,6 +389,17 @@ current width where unclamped. Vertical-only `resizeBy` is preferred, with `resi
 fallback; an observed one-DIP zoom-rounding bias is compensated on subsequent eligible
 clicks, never by an extra/passive call. Native events/two-frame confirmation record achieved
 bounds and cancel stale work. Missing activation/refusal/clamps retain disclosure/scroll.
+FR000637 adds one measured ↕ action to the same header group and `DisclosureSize` owner.
+Its explicit fit uses an inert clone at the current actual width, with CSS zoom/padding,
+visible history/messages/accounts and no synthetic running-row reserve or help overlay.
+It grows or shrinks in either size mode, clears stale disclosure restoration, and makes
+at most one native call: `resizeBy(0, delta)` or `resizeTo(actualOuterWidth, height)`.
+Only disclosure retains the historical one-DIP width-correction policy. Manual fit's
+side-frame-adjusted zoom estimate avoids old-height-dependent shrink targets; an already
+scroll-free snug fit tolerates small native quantization rather than oscillating.
+Native frame/work-area estimates remain platform-dependent, not physical OS proof.
+Opening/reference width includes all four components, without measuring the tooltip.
+See [implementation and verification](../../journal/web/mini-fit-height.md).
 No rendering/data event invokes native sizing. Shared presentation-only `ReportView.LiveStatus`
 keeps useful retained Full Watch card/day and Watch/Accounts quota values quiet throughout
 ordinary failed coverage; initial missing-data guidance retains its own bounded delay.

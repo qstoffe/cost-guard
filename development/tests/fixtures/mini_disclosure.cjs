@@ -50,6 +50,28 @@ module.exports = function disclosure(view, win, controller, input) {
   for(let index=0;index<4;index++){toggle();settle();toggle();settle();}
   assert.equal(win.outerWidth,601,'observed one-DIP native rounding cannot accumulate across clicks');
   delete win.resizeBy;
+  let desired=270;
+  view.fitHeight=reserve=>{assert.equal(reserve,false,'manual fit excludes the opening reserve');return desired;};
+  size.mode='remember-last';size.widthCorrection=-1;calls.length=0;
+  win.resizeTo=(width,height)=>{calls.push([width,height]);win.outerWidth=width;win.outerHeight=height;win.fire('resize');};
+  const fit=()=>view.fitButton.fire('click');
+  const width=win.outerWidth;fit();settle();assert.deepEqual(calls,[[width,270]]);
+  assert.equal(view.earlier.hidden,true);assert.equal(size.restore,null);
+  fit();settle();assert.equal(calls.length,1,'unchanged fit is idempotent');
+  desired=570;fit();fit();settle();assert.deepEqual(calls.at(-1),[width,570]);assert.equal(calls.length,2);
+  desired=230;fit();win.outerHeight=400;win.fire('resize');settle();
+  assert.equal(win.outerHeight,400,'late observations never undo a manual native resize');assert.equal(size.restore,null);
+  win.navigator.userActivation.isActive=false;fit();assert.equal(calls.length,3);
+  win.navigator.userActivation.isActive=true;win.closed=true;fit();assert.equal(calls.length,3);win.closed=false;
+  Object.defineProperty(view.root,'isConnected',{value:false,configurable:true});fit();assert.equal(calls.length,3);delete view.root.isConnected;
+  win.resizeTo=()=>{calls.push('refused');throw new Error('NotAllowedError');};fit();settle();assert.equal(size.pending,null);
+  win.resizeTo=undefined;fit();assert.equal(calls.at(-1),'refused');
+  desired=397;win.outerHeight=400;const snugCalls=calls.length;
+  view.doc.scrollingElement={scrollHeight:100,clientHeight:100};
+  win.resizeTo=(width,height)=>{calls.push([width,height]);win.outerHeight=height;};
+  fit();assert.equal(calls.length,snugCalls,'do not chase native rounding of an already scroll-free snug fit');
+  view.doc.scrollingElement.scrollHeight=102;fit();settle();assert.equal(calls.length,snugCalls+1,'real overflow is not waived by the rounding guard');
+  delete view.doc.scrollingElement;
   delete view.fitHeight; delete win.navigator;
   win.resizeTo=originalResize;
 };

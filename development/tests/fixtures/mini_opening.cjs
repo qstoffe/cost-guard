@@ -2,7 +2,7 @@
 const assert = require('node:assert/strict'), fs = require('node:fs'), vm = require('node:vm');
 const source = fs.readFileSync('src/web/assets/mini.js','utf8');
 const context = vm.createContext({});
-vm.runInContext(source.replace('return {Controller};','return {headerWidth};'),context);
+vm.runInContext(source.replace('return {Controller};','return {headerWidth, contentHeight, targetHeight};'),context);
 const measure = vm.runInContext('MiniWatch.headerWidth',context);
 function fixture(real, widths) {
   const reads=[], original={text:real,expanded:'false'}, daily={textContent:real};
@@ -31,3 +31,23 @@ assert.equal(actual.reads.length,2);
 const failed=fixture(lower,null);
 assert.throws(()=>measure(failed.view,true),/layout failed/);
 assert.equal(failed.removed(),true,'failed measurements must not leave clones');
+const contentHeight=vm.runInContext('MiniWatch.contentHeight',context);
+let removed=false, appended=false;
+const copy={classList:{add(){}},setAttribute(){},style:{},getBoundingClientRect:()=>({height:123.25}),
+  querySelector(){throw new Error('Manual fit must not inspect/sample future rows');},remove(){removed=true;}};
+const visible={doc:{},root:{cloneNode:()=>copy,parentNode:{append(node){assert.equal(node,copy);appended=true;}}},
+  sessionRow(){throw new Error('No synthetic running-row reserve in manual fit');}};
+assert.equal(contentHeight(visible,417,false),124);
+assert.equal(copy.style.width,'417px');assert.equal(copy.inert,true);
+assert.ok(appended && removed,'manual measurement removes its inert artifact');
+copy.getBoundingClientRect=()=>{throw new Error('layout failed');};removed=false;
+assert.throws(()=>contentHeight(visible,417,false),/layout failed/);assert.equal(removed,true);
+const targetHeight=vm.runInContext('MiniWatch.targetHeight',context);
+copy.getBoundingClientRect=()=>({height:123.25});visible.root.getBoundingClientRect=()=>({width:417});
+visible.doc.body={};visible.doc.defaultView={outerWidth:600,innerWidth:584,outerHeight:220,innerHeight:178,
+  screen:{availHeight:1200},getComputedStyle:()=>({paddingTop:'7.5px',paddingBottom:'7.5px'})};
+assert.equal(targetHeight(visible,false),185);
+Object.assign(visible.doc.defaultView,{outerHeight:850,innerHeight:808});
+assert.equal(targetHeight(visible,false),185,'old tall bounds must not distort native frame/zoom');
+visible.root.currentCSSZoom=2;visible.doc.body.currentCSSZoom=2;
+assert.equal(targetHeight(visible,false),200);assert.equal(copy.style.width,'208.5px','measure CSS width, not twice-zoomed viewport width');
