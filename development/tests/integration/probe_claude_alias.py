@@ -12,7 +12,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
 
-from development.tests.fixtures.claude_alias import LABEL, service
+from development.tests.fixtures.claude_alias import LABEL, service, desktop_service
 from src.application.projection import project
 from src.reports import ReportKind, ReportRequest
 
@@ -21,11 +21,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('browser', type=Path)
     parser.add_argument('evidence', type=Path)
+    parser.add_argument('--desktop-catalog', action='store_true')
     args = parser.parse_args()
     assert args.browser.is_file() and args.evidence.parent.is_dir()
     test = unittest.TestCase()
     try:
-        original = service(test)
+        original = desktop_service(test) if args.desktop_catalog else service(test)
         result = dict(view=project(original.build(ReportRequest(ReportKind.COMPARISONS))).to_json())
     finally:
         test.doCleanups()
@@ -63,8 +64,12 @@ setTimeout(() => {
             match = re.search(r'<pre id="probe-result">(.*?)</pre>', completed.stdout, re.S)
             assert match, 'missing_dom_result'
             value = json.loads(html.unescape(match[1]))
-            assert value['label'] == 'claude-agent/' + LABEL and value['stable'], value
-            assert LABEL in value['help'] and '[sonnet]' in value['help'], value
+            label = 'Sonnet 5.5' if args.desktop_catalog else LABEL
+            assert value['label'] == 'claude-agent/' + label and value['stable'], value
+            if args.desktop_catalog:
+                assert 'historic executed version unconfirmed' in value['help'] and 'Selected: sonnet' in value['help'], value
+            else:
+                assert LABEL in value['help'] and '[sonnet]' in value['help'], value
             assert 'Claude Sonnet 4' not in value['label'] + value['help'], value
             checks.append(value)
     args.evidence.write_text(json.dumps(dict(outcome='PASS', restarts=checks), indent=2), encoding='utf-8')

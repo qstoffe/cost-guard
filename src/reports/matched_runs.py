@@ -4,6 +4,7 @@ from decimal import Decimal
 import re
 
 from src.analysis.input_identity import first_input, fingerprint
+from src.analysis.model_identity import dependencies
 from src.analysis.matched_runs import MatchedRun
 from src.analysis.token_mix import MIX_FIELDS
 from src.analysis.valuation import comparison_cost, unique_usage
@@ -50,7 +51,8 @@ def project_run(snapshot, bundle, reference, config):
         row.extra_ccost if known else None,
         duration, row.next_context_tokens if status == 'complete' else None, row.token_mix_percent if known else None,
         (record.input_tokens, record.cache_read_tokens, record.cache_write_tokens, record.output_tokens),
-        len(entries), row.linked_agent_count, sum(bool(entry.error_name) for entry in entries), tuple(groups))
+        len(entries), row.linked_agent_count, sum(bool(entry.error_name) for entry in entries), tuple(groups),
+        model_label=row.watch_model, model_identities=tuple(dependencies(bundle.trace_entries)))
 
 
 def encode_run(run):
@@ -70,6 +72,8 @@ def decode_run(payload):
         return None
     values = dict(payload)
     semantics = values.pop('model_identity_semantics', None)
+    values.setdefault('model_label', '')
+    values['model_identities'] = tuple(values.get('model_identities', ()))
     models = [(values.get('provider', ''), values.get('model', ''))]
     models.extend((group[0], group[1]) for group in values.get('contributors', ()))
     if not identity_cache_current(semantics, models):

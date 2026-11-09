@@ -144,7 +144,9 @@ class ReportService:
         self.progress = progress or _noop_progress
         self.catalog: PricingCatalog | None = None
         self.comparison_pricing_catalog: PricingCatalog | None = None
-        self._derived = DerivedAnalysisCache(cache_repository, metrics=self.metrics)
+        from src.analysis.model_identity import current
+        self._derived = DerivedAnalysisCache(cache_repository, metrics=self.metrics,
+            identity_validator=lambda models: current(self.source, models))
         self._acquisition = RootAcquisition(self.source, self._derived,
             dependencies=lambda: self._dependencies(self._load_catalog()), analyzer=self._analyze_snapshot,
             progress=lambda label: self.progress(label), metrics=self.metrics)
@@ -304,7 +306,8 @@ class ReportService:
             provider = models[primary].provider if primary in models else next((
                 record.main_provider_id for record in reversed(item.bundle.prompts)
                 if record.main_model_id == primary), "")
-            name = catalog.display_name(primary, provider)
+            name = (models[primary].display_name if primary in models and models[primary].resolution
+                    and models[primary].display_name else catalog.display_name(primary, provider))
             prompt_count = len(item.bundle.prompts)
             identities = sorted({f"{entry.model.provider}/{entry.model.model}"
                 for entry in item.bundle.trace_entries if entry.model.provider and entry.model.model})

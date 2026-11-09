@@ -1,0 +1,14 @@
+{
+  "provenance": {
+    "catalog": "Observed read-only location model.list on 2026-11-09; location anonymized, fields minimized. Not a historical request capture.",
+    "stream": "Synthetic event matching the converter at OpenCode v2.2.6 dc2ffcf8bf26f9e669b6aa22b95f50e12be15e06. Not an observed execution."
+  },
+  "catalog": {
+    "location": {"directory": "/synthetic"},
+    "data": [{"providerID": "claude-agent", "id": "sonnet", "name": "Sonnet 5.5", "modelID": "claude-sonnet-5-5", "enabled": true}]
+  },
+  "selected": {"providerID": "claude-agent", "id": "sonnet", "variant": "default"},
+  "syntheticStreamEvent": {"type": "response-metadata", "id": "synthetic-response", "modelId": "claude-sonnet-5-5"},
+  "observedHistoricalResponse": null,
+  "upstreamLoss": "core/src/aisdk.ts:748-753 streamPartEvents discards response-metadata with Effect.succeed([])."
+}

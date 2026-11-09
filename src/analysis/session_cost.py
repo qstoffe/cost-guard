@@ -35,7 +35,8 @@ def session_cost_source_key(snapshot):
     """Constant-time source identity/revision gate, not a capture or wall clock."""
     provenance = snapshot.root.provenance
     return (provenance.source_type, provenance.source_generation, provenance.source_instance,
-        snapshot.root.session_id, snapshot.source_revision, snapshot.complete)
+        snapshot.root.session_id, snapshot.source_revision, snapshot.complete,
+        tuple(dict.fromkeys(request.model.resolution for request in snapshot.invocations if request.model.resolution)))
 
 
 def _checkpoint(payload):

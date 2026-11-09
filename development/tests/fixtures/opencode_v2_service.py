@@ -105,6 +105,12 @@ class FakeV2Service:
                 if parsed.path == "/api/project":
                     self._json(owner.fixture["projects"])
                     return
+                if parsed.path in {"/api/model", "/api/provider"} and "desktop_catalogs" in owner.fixture:
+                    directory = query.get("location[directory]", [""])[0]
+                    catalog = owner.fixture["desktop_catalogs"].get(directory, [])
+                    self._json({"location": {"directory": directory}, "data":
+                        [{"id": "claude-agent"}] if parsed.path == "/api/provider" else catalog})
+                    return
                 if parsed.path == "/api/model" and "models" in owner.fixture:
                     self._json(owner.fixture["models"])
                     return

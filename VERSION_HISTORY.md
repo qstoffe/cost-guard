@@ -1,5 +1,11 @@
 # Cost Guard version history
 
+## v81.6 — 2026-11-09
+
+- Claude Agent alias-only history uses the exact provider/alias entry in that session's current OpenCode location catalog, matching Desktop's label. A supported concrete catalog model ID enables estimated reference CCost using the original request tokens and tiers, not provider billing.
+- Preserve selected aliases, provider and effort, with compact catalog-estimate provenance in model/cost help. Recorded concrete request models never follow alias turnover. Missing mappings, prices and usage remain genuinely unknown.
+- Revalidate only catalog-dependent derived analysis, Sessions summaries, Token Mix, AI Stats/Comparisons and root-cost contributions, including negative lookups and fresh processes. No raw-history rewrite, paid replay, private transcript enumeration or upstream persistence claim.
+
 ## v81.5 — 2026-11-09
 
 - Models uses matching source toolbars, official links and configured-local last-successful-fetch dates. The unboxed five-column benchmark has independent forced Harbor refresh, Copilot/latest filters and a source-driven multiselect Effort menu; only exact GitHub-catalog matches appear.

@@ -5,6 +5,7 @@ from src.analysis.timezones import format_local_timestamp
 from src.display import duration_text, context_tokens
 from src.numbers import ccost_amount
 from src.pricing.identities import unverified_alias
+from src.domain.model_identity import CATALOG_ESTIMATE_HELP
 from .contracts import record
 
 
@@ -13,9 +14,12 @@ def run(value):
     names = '''session_id title started_at_ms completed_at_ms status provider model effort mixed ccost
         cost_complete main_ccost subagent_ccost incoming_context_ccost extra_ccost duration_ms
         next_context_tokens token_mix_percent token_totals calls linked_agents errors'''.split()
+    labels = {(item['provider'], item['model']): item.get('display_name') for item in value.model_identities}
     return record(**{name: getattr(value, name) for name in names}, match_run=True,
-        model_label=unverified_alias(value.model, value.provider) or value.model,
-        contributors=tuple(record(provider=p, model=m, model_label=unverified_alias(m, p) or m,
+        model_label=value.model_label or unverified_alias(value.model, value.provider) or value.model,
+        model_identity_help=CATALOG_ESTIMATE_HELP if value.model_identities else '',
+        selected_models=tuple(sorted({item['resolution']['selected_model'] for item in value.model_identities})),
+        contributors=tuple(record(provider=p, model=m, model_label=labels.get((p, m)) or unverified_alias(m, p) or m,
                                   effort=e, calls=n, ccost=c, complete=known)
                            for p, m, e, n, c, known in value.contributors))
 

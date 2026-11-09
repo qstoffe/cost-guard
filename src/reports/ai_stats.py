@@ -94,7 +94,7 @@ class StatsAcquisition:
 
     def _restore_batch(self, roots, cached):
         stable = {root.session_id: self._decode(cached.get(self.keys[root.session_id]), root,
-            self.revisions[root.session_id]) if root.session_id not in self.active else None for root in roots}
+            self.revisions[root.session_id], self.service.source) if root.session_id not in self.active else None for root in roots}
         missing = [self.keys[r.session_id] for r in roots if stable[r.session_id] is None]
         transient = _read(self.service, TRANSIENT, missing) if self.scan and missing else {}
         for root in roots:
@@ -104,7 +104,8 @@ class StatsAcquisition:
             if value is None and self.scan:
                 checkpoint = transient.get(key)
                 if checkpoint and isinstance(checkpoint.payload, dict) and checkpoint.payload.get('scan') == self.scan:
-                    value = self._decode(replace(checkpoint, payload=checkpoint.payload.get('evidence')), root, revision)
+                    value = self._decode(replace(checkpoint, payload=checkpoint.payload.get('evidence')), root, revision,
+                                         self.service.source)
                 volatile = value is not None
             self.service.metrics.add('ai_stats_cache_hits' if value else 'ai_stats_cache_misses')
             if value:
@@ -113,10 +114,10 @@ class StatsAcquisition:
                 self.pending.append(root)
 
     @staticmethod
-    def _decode(item, root, revision):
+    def _decode(item, root, revision, source=None):
         if item and item.source_revision == revision and item.algorithm_version == ALGORITHM:
             try:
-                return decoded(item.payload, root)
+                return decoded(item.payload, root, source)
             except INVALID:
                 pass
         return None
@@ -152,7 +153,7 @@ class StatsAcquisition:
             bundle = service._analyze_snapshot(snapshot)
             with service.metrics.measure('ai_stats_evidence'):
                 value = payload(bundle, self.reference, snapshot, service.config)
-                facts = decoded(value, root)
+                facts = decoded(value, root, service.source)
             volatile = not bundle.cacheable or root.session_id in self.active
             self._retain(root.session_id, facts, volatile)
             self.fresh.add(root.session_id)

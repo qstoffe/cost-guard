@@ -31,6 +31,8 @@ class MatchedRun:
     contributors: tuple  # (provider, model, effort, calls, known CCost, complete)
     title: str = ''  # Current catalog display only; not persisted by the index.
     activity_ms: int = 0
+    model_label: str = ''
+    model_identities: tuple = ()  # Compact source-qualified mutable dependencies.
 
 
 @dataclass(frozen=True, slots=True)

@@ -58,6 +58,7 @@ class PricingCatalog:
         semantics = [asdict(model) for model in self.models]
         for model in semantics:
             model.pop("metadata", None)
+            model['model'].pop('resolution', None)  # Preserve unrelated legacy rate signatures.
         payload = json.dumps(semantics, ensure_ascii=False, separators=(",", ":"), sort_keys=True, default=str)
         object.__setattr__(self, "analysis_signature", hashlib.sha256(payload.encode("utf-8")).hexdigest())
 
@@ -143,6 +144,8 @@ class PricingCatalog:
 
     def estimate(self, model_ref: ModelRef, tokens: TokenUsage) -> Decimal | None:
         """Legacy monetary billing fallback; never used for CCost analysis."""
+        if model_ref.resolution is not None:
+            return None  # Owner approval covers reference CCost, not provider billing.
         if unverified_alias(model_ref.model, model_ref.provider):
             return None
         model = self.resolve(model_ref.model)
@@ -177,7 +180,7 @@ class PricingCatalog:
         """Diagnostic reference usage, preserving the context resolver's selection."""
         if unverified_alias(model_ref.model, model_ref.provider):
             return None
-        model = self.reference_prices(model_ref.model, exact=False)
+        model = self.reference_prices(model_ref.model, exact=model_ref.resolution is not None)
         return None if model is None else price_token_usage(model, tokens, tokens.input + tokens.cache_read + tokens.cache_write)
 
     def reference_input_context(
@@ -191,7 +194,7 @@ class PricingCatalog:
     ) -> Decimal | None:
         if unverified_alias(model_ref.model, model_ref.provider):
             return None
-        model = self.reference_prices(model_ref.model, exact=False)
+        model = self.reference_prices(model_ref.model, exact=model_ref.resolution is not None)
         if model is None:
             return None
         tier = self.select_tier(model, request_input_tokens)

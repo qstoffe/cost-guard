@@ -2,6 +2,7 @@
 from decimal import Decimal
 
 from src.numbers import ccost_amount
+from src.domain.model_identity import CATALOG_ESTIMATE_HELP
 from .contracts import record
 from .reference_cost import issue_records, unavailable_help
 
@@ -23,6 +24,8 @@ def grouped_parts(parts):
             sum((item.categories[index] for item in items), Decimal(0)) for index in range(4))
         result.append(record(role=role, provider_id=provider, model_id=model_id, variant=variant,
             model=first.model, effort=first.effort, price_tier=tier,
+            selected_models=tuple(sorted({model for item in items for model in item.selected_models})),
+            catalog_estimate=any(item.catalog_estimate for item in items),
             qualify_model=len(identities[first.model or model_id]) > 1,
             agent_count=len({item.session_id for item in items if item.agent and item.session_id}),
             prompt_count=len({identity for item in items for identity in item.prompt_ids}),
@@ -77,6 +80,10 @@ def detail_tokens(values):
             "\n  Provider/model identity unrecorded") + ("\n  Effort unreported" if part["effort"] in {None, "", "N/A"} else ""))
         calls.append(f"{call_heading}: {part['calls']}")
         lines = [heading]
+        if part.get('catalog_estimate'):
+            note = CATALOG_ESTIMATE_HELP + " Selected: " + ", ".join(part['selected_models'])
+            lines.append(note)
+            models[-1] += "\n" + note
         if part["role"] == "subagents":
             count = str(part["prompt_count"]) if part["prompts_complete"] else (
                 f"at least {part['prompt_count']} observed (incomplete boundaries)" if part["prompt_count"] else
@@ -118,5 +125,6 @@ def detail_tokens(values):
         calls.append(("Total Calls: " if detail["calls_complete"] else "Observed Calls (incomplete request evidence): ")
             + str(detail["observed_calls"]))
     return {"cost_detail_help": "\n\n".join(sections),
-            "model_detail_help": model_help if detail["model_count"] > 1 or linked else "",
+             "model_detail_help": model_help if detail["model_count"] > 1 or linked or any(
+                 dict(part.fields).get('catalog_estimate') for part in detail['parts']) else "",
             "calls_help": "\n".join(calls) if detail["group_count"] > 1 or linked and calls else ""}

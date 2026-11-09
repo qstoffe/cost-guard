@@ -4,6 +4,8 @@ from decimal import Decimal, InvalidOperation
 import sqlite3
 
 from src.analysis.cache import dependency_signature
+from src.analysis.model_identity import dependencies, payload_current, current
+from src.domain import ModelRef
 from src.domain.reference_cost import ReferenceCostIssue, REASONS
 from src.cache.session_scope import snapshot_scope
 from src.pricing.identities import MODEL_IDENTITY_SEMANTICS, identity_cache_current
@@ -31,6 +33,10 @@ def session_summary(service, root, revision, *, active=False):
         try:
             values = dict(cached.payload)
             semantics = values.pop("model_identity_semantics", None)
+            identity_values = values.pop('model_identity_dependencies', ())
+            if not payload_current(service.source, identity_values) or not identity_values and not current(service.source,
+                    (ModelRef(*value.split('/', 1)) for value in values.get('contributor_models', ()))):
+                raise ValueError('changed_model_catalog')
             # Older zero-request summaries retain only a derived label, not the
             # selected source ID. Reacquire this root rather than trust that label.
             if (semantics != MODEL_IDENTITY_SEMANTICS and not values.get("contributor_models")
@@ -74,6 +80,7 @@ def session_summary(service, root, revision, *, active=False):
     if item.bundle.cacheable and not row.running:
         values = asdict(row)
         values["model_identity_semantics"] = MODEL_IDENTITY_SEMANTICS
+        values['model_identity_dependencies'] = dependencies(item.bundle.trace_entries)
         values["ccost"] = str(row.ccost)
         try:
             service.cache_repository.put(NAMESPACE, key, values,

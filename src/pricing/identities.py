@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 import re
+from src.domain.model_identity import unverified_alias
 
 _NON_ALNUM = re.compile(r"[^a-z0-9]+")
 CONTEXT_MODELS = frozenset({
@@ -21,33 +22,7 @@ DATED_ALIASES = {"claude-haiku-4-5-20251001": "claude-haiku-4-5"}
 
 # Per-entry semantic admission, not a global pricing/cache generation. Old
 # unaffected entries remain reusable; alias-derived conclusions rebuild lazily.
-MODEL_IDENTITY_SEMANTICS = 1
-_CLAUDE_ROUTES = frozenset({"claude-agent", "claude-code", "anthropic", "github-copilot",
-    "amazon-bedrock", "google-vertex-anthropic", "openrouter"})
-_FAMILY_ALIAS = re.compile(r"^(?:claude-)?(sonnet|opus|haiku|fable)(?:-latest)?(?:\[1m\])?$")
-
-
-@lru_cache(maxsize=8192)
-def unverified_alias(value: str, provider: str = "") -> str | None:
-    """Moving selections are never concrete execution or reference-rate proof.
-
-    A familiar word on an unknown/custom route does not prove its publisher.
-    Neither today's provider catalog nor SDK default can resolve past requests.
-    """
-    raw = (value or "").strip().lower()
-    if "/" in raw:
-        provider, raw = raw.split("/", 1)
-    route = provider.strip().lower()
-    match = _FAMILY_ALIAS.fullmatch(raw)
-    if match:
-        family = match[1].title()
-        name = f"Claude {family}" if raw.startswith("claude-") or route in _CLAUDE_ROUTES else raw
-        return f"{name} (version unverified)"
-    if route in _CLAUDE_ROUTES and raw in {"default", "best", "opusplan"}:
-        return f"Claude {raw} (version unverified)"
-    return None
-
-
+MODEL_IDENTITY_SEMANTICS = 2
 def identity_cache_current(semantics, models) -> bool:
     """Admit legacy derived entries only when no moving selection influenced them.
 

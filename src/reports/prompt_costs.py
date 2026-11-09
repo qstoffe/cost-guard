@@ -29,6 +29,8 @@ class PromptCostPart:
     prompt_ids: tuple[tuple[str | None, str, str], ...] = ()
     prompts_complete: bool = False
     unavailable: tuple[ReferenceCostIssue, ...] = ()
+    selected_models: tuple[str, ...] = ()
+    catalog_estimate: bool = False
 
 
 def _price_tier(entry, catalog):
@@ -74,10 +76,14 @@ def prompt_cost_parts(record: PromptRecord, catalog: PricingCatalog) -> tuple[Pr
                     amounts[index] += parts[index]
         model, effort = effort_model_parts(catalog, model_id,
             interpret_effort(variant, attributable=bool(variant)), provider)
+        model = next((entry.model.display_name for entry in entries
+                      if entry.model.resolution and entry.model.display_name), model)
         result.append(PromptCostPart(session, agents[session], provider, model_id, variant,
             model, effort, len(entries), total.known_ccost, total.priced_requests, total.complete,
             tuple(value if supported else None for value, supported in zip(amounts, known)), tier,
             tuple(dict.fromkeys((entry.source_instance, entry.session_id, entry.logical_prompt_id)
                 for entry in entries if entry.logical_prompt_id)),
-            all(entry.logical_prompt_id is not None for entry in entries), total.unavailable))
+            all(entry.logical_prompt_id is not None for entry in entries), total.unavailable,
+            tuple(sorted({entry.model.recorded_model for entry in entries})),
+            any(entry.model.resolution is not None for entry in entries)))
     return tuple(result)
