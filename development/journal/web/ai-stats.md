@@ -5,7 +5,64 @@ Checked revision: 441b30a3aa6835a922598e32a5b9357bd062d8f7
 Last checked: 2026-11-09
 Status: current
 
-## Summary
+## Three perspectives on the first card — FR000644
+
+Implementation delta from `a835c7881f368cb82fd1363e856183b1d45f7d45` (2026-11-09),
+not a fresh audit of unchanged reports. `analysis/ai_stats_rates.py` computes
+nominal local date/workday denominators and hypothetical shifts from the existing
+period cost and unioned/bounded duration. `Stat.value` retains the original capped
+active-hour rate for compatibility/traits; explicit raw `rates` retain the uncapped
+active basis, calendar/workday averages, robot shift and workday-count projection.
+All amounts are canonical reference Credits; only final application tokens use
+`ccost_amount()` (100 Credits/$1). No browser division, source scan or price lookup
+is added. Shared compact evidence/cache identities remain reusable.
+
+Today is one date, rolling 7/30 use exactly 7/30 local slots ending today while
+their cost membership remains trailing hours, month ends today, and All time starts
+at the earliest positive included request/activity evidence. Gaps count; guessed
+interval recovery never supplies an invented calendar beginning. Existing timezone,
+`is_workday()` and configured SE/weekend-only calendar own eligibility. DST retains
+nominal 24/8-hour divisors without changing measured work. No-workdays is distinct
+from zero cost; zero active time keeps the other rows and a neutral zero robot.
+
+Only the retained first card gets three labeled accessible groups. Existing grid,
+trait and title ContextHelp remain; Python prepares all unit variants and math help.
+Focused heading/card identity and unit bindings survive updates. Other nine metrics,
+matched facts, Watch, CLI and canonical valuation are unchanged.
+
+Deterministic coverage: 840/7 dates/5 workdays/28 active hours yields 5, 21 and 240
+Credits; changing active time alone to 7h yields a 960-Credit robot. Christmas SE
+versus weekend-only changes W=4/5 and workday/period projections, not the shift.
+Tests also cover morning Today, weekend/holiday zero workdays, DST/year/month edges,
+exact rolling cost boundaries, local All-time gaps/request beginnings, overlap,
+broken/zero duration, both unit tokens and configuration through warm evidence.
+
+Read-only real-installation cold/warm probe completed four requests, all five
+periods × ten metrics, with all rate identities and both-unit tokens checked:
+cold30 **116.184s**, warm30 **6.114s**, All reuse **0s** (not a cold scan), fresh
+warmAll **5.512s**. No job/result errors. It used a disposable owned cache and did
+not stop or write OpenCode. Mutable-source timings overlapped Full tests and are
+not a paired performance comparison. Evidence: `scratch:/ai-stats-live.jsonl`.
+
+Full: **179 files, zero failures, 123.6s**. Validator: **11 passes, zero failures,
+seven existing advisory warnings**, no budget increase. Later targeted checks cover
+the final exact active-hour help formatting (Stats/recovery/resume all passed).
+Evidence: `scratch:/full-tests.log`.
+Final hidden Edge browser probe: **PASS, 16 checks, 72 state/theme/unit cases,
+9 layouts, 80 text layouts, 1,350 contrast samples; zero runtime errors**. It checks
+the three-way example, independent faster robot, no-workdays, ten stable cards,
+both units and focused help, actual text/clipping geometry at 360/520/1280 widths,
+100–200% text and 125% zoom, Classic/Web light/dark, keyboard/touch/Escape, session
+links, retained failure/update behavior and production finite slices/two-tab reuse.
+Owned browser/host processes exited cleanly. Evidence:
+`scratch:/ai-stats-browser-final.json`. An initial probe found a fixture period
+selection mismatch after the new Today case; correcting that harness state preserved
+the product assertions and the full rerun passed.
+The integrated desktop browser was disconnected; hidden Chromium is the
+non-disruptive browser route. No physical touch, native desktop or actual
+screen-reader speech is claimed, and no permission/acceptance exception is inferred.
+
+## Earlier fun-first implementation
 
 FR000633 implementation delta against the revision above, not a fresh audit of
 unchanged reports. The owner deliberately replaced conservative AI Stats-only

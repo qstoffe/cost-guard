@@ -78,7 +78,7 @@ async function main() {
     checks.push('automatic default, retired-route alias, ten cards, five exact periods, safe real record links, no healthy toolbar');
     await require('./probe_ai_stats_states.cjs')({command,evaluate,until,fixture,tab,contrasts,states,checks});
     await require('./probe_ai_stats_layout.cjs')({command,evaluate,until,tab,textLayouts,checks});
-    for(const theme of ['classic','light','dark']) for(const width of [360,1366,1920]) {
+    for(const theme of ['classic','light','dark']) for(const width of [360,520,1280]) {
       await command('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false},tab);
       await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:theme==='dark'?'dark':'light'}]},tab);
       const layout=await evaluate(`(() => {
@@ -95,7 +95,7 @@ async function main() {
       assert.equal(new Set(layout.widths).size,1); assert.notEqual(layout.foreground,layout.background);
       layouts.push({theme,width,...layout});
     }
-    checks.push('Classic/Web light/dark, 360/1366/1920px, equal column widths, no page overflow or nested scrolling (row heights checked with text geometry)');
+    checks.push('Classic/Web light/dark, 360/520/1280px, three rate rows, equal column widths, no page overflow or nested scrolling (row heights checked with text geometry)');
     await evaluate(`window.__root=current.stats.root; window.__cards=[...document.querySelectorAll('.ai-stat')];
       window.__observation=current.result.observed_at_ms; selectStats(current,'today'); selectStats(current,'7-days'); selectStats(current,'30-days');`);
     assert.equal(await evaluate(`current.result.observed_at_ms===__observation && !current.loading && __cards.every((c,i)=>c===document.querySelectorAll('.ai-stat')[i])`),true);
@@ -110,7 +110,13 @@ async function main() {
       assert.ok(ax.nodes.some(node=>node.name?.value===name));
     await evaluate(`document.querySelectorAll('.ai-stat h4 button')[0].focus()`);
     await until(`!document.getElementById('context-help')?.hidden`);
-    assert.match(await evaluate(`document.getElementById('context-help').textContent`),/silicon crew burns per hour/);
+    assert.match(await evaluate(`document.getElementById('context-help').textContent`),/hypothetical shift/);
+    await evaluate(`window.__ratesHelp=document.getElementById('context-help').textContent;
+      ReportView.setUnit('usd',output);`);
+    assert.match(await evaluate(`document.getElementById('context-help').textContent`),/\$/);
+    assert.equal(await evaluate(`document.querySelectorAll('.ai-stat-rate-value').length`),3);
+    await evaluate(`ReportView.setUnit('credits',output)`);
+    assert.equal(await evaluate(`document.getElementById('context-help').textContent===__ratesHelp`),true);
     await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape',code:'Escape'},tab);
     await command('Input.dispatchKeyEvent',{type:'keyUp',key:'Escape',code:'Escape'},tab);
     await until(`document.getElementById('context-help').hidden`);

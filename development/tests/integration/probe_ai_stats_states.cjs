@@ -19,7 +19,7 @@ module.exports = async function({command,evaluate,until,fixture,tab,contrasts,st
   await until(`!current.loading && current.result?.view.ai_stats.some(row=>row.period==='all')`);
   const original = await evaluate(`current.result`);
   const move = (x,y) => command('Input.dispatchMouseEvent',{type:'mouseMoved',x,y},tab);
-  for (const theme of ['classic','light','dark']) for (const width of [360,1366,1920])
+  for (const theme of ['classic','light','dark']) for (const width of [360,520,1280])
     for (const [scale,font,zoom] of [['normal','15px','1'],['text-200','30px','1'],['zoom-125','15px','1.25']]) {
       await command('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false},tab);
       await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:theme==='dark'?'dark':'light'}]},tab);
@@ -48,7 +48,7 @@ module.exports = async function({command,evaluate,until,fixture,tab,contrasts,st
         }
       }
     }
-  checks.push('all five selected/unselected controls: actual label/padding hover, press and departure, Classic/light/dark, 360/1366/1920, 200% text and 125% CSS zoom; computed contrast >=4.5');
+  checks.push('all five selected/unselected controls: actual label/padding hover, press and departure, Classic/light/dark, 360/520/1280, 200% text and 125% CSS zoom; computed contrast >=4.5');
   await evaluate(`document.documentElement.style.fontSize=''; document.documentElement.style.zoom='';
     selectStats(current,'all'); window.__statsCalls=0; window.__statsApi=api;
     api=async (...args)=>{if(args[0]==='/api/reports')__statsCalls++;return __statsApi(...args);};`);
@@ -82,7 +82,7 @@ module.exports = async function({command,evaluate,until,fixture,tab,contrasts,st
   const cases=await fixture('stats-evidence');
   for(const item of cases) for(const theme of ['classic','light','dark']) for(const unit of ['credits','usd']) {
     await evaluate(`document.documentElement.dataset.theme=${JSON.stringify(theme==='classic'?'classic':'web')};
-      current.result=${JSON.stringify(item.result)};current.period='all';current.stats.update(current);
+      current.result=${JSON.stringify(item.result)};current.period=current.result.view.ai_stats[0].period;current.stats.update(current);
       ReportView.setUnit(${JSON.stringify(unit)},output);`);
     const rendered=await evaluate(`[...document.querySelectorAll('.ai-stat')].map(card=>({
       value:card.querySelector('.ai-stat-value').textContent,trait:card.querySelector('.ai-stat-trait').textContent,
@@ -90,11 +90,20 @@ module.exports = async function({command,evaluate,until,fixture,tab,contrasts,st
     const expected=item.result.view.ai_stats[0].metrics;
     assert.equal(rendered.length,10);
     rendered.forEach((card,index)=>{
-      assert.equal(card.value,expected[index].display_units?.[unit]?.value || expected[index].display.value);
+      if (index !== 0) assert.equal(card.value,expected[index].display_units?.[unit]?.value || expected[index].display.value);
       assert.equal(card.trait,expected[index].display.trait);
       assert.equal(card.state,false);
       assert.doesNotMatch(JSON.stringify(card),/Unavailable|Partial|Provisional|No data|N\/A|Unknown|Observed|≥|NaN|Infinity|vault/i);
     });
+    const rates=await evaluate(`[...document.querySelectorAll('.ai-stat-rate')].map(row=>({
+      label:row.getAttribute('aria-label'),value:row.querySelector('.ai-stat-rate-value').textContent}))`);
+    assert.deepEqual(rates.map(row=>row.label),['24h average','Workday average','Robot · 8h shift']);
+    assert.deepEqual(rates.map(row=>row.value),['calendar_rate','workday_rate','robot_day'].map(key=>
+      expected[0].display_units?.[unit]?.[key] || expected[0].display[key]));
+    if (item.name==='three-rates') assert.deepEqual(rates.map(row=>row.value),unit==='credits' ?
+      ['5 CCost/h','21 CCost/h','240 CCost/8h day'] : ['$0.05/h','$0.21/h','$2.40/8h day']);
+    if (item.name==='faster-robot') assert.equal(rates[2].value,unit==='credits'?'960 CCost/8h day':'$9.60/8h day');
+    if (item.name==='no-workdays') assert.equal(rates[1].value,'No workdays');
     assert.equal(await evaluate(`document.querySelectorAll('.ai-stat-state,.ai-stats-status').length`),0);
     const forbidden=/Unavailable|Partial|Provisional|No data|N\/A|Unknown|Observed|≥|Some executions|Historical source coverage|not a verified overall winner|missing reference-price evidence|snapshot interval|The evidence is still in the vault|estimated|approximate|lower bound/i;
     assert.doesNotMatch(await evaluate(`output.textContent`),forbidden);
@@ -108,17 +117,17 @@ module.exports = async function({command,evaluate,until,fixture,tab,contrasts,st
     }
     const ax=await command('Accessibility.getFullAXTree',{},tab);
     assert.doesNotMatch(ax.nodes.filter(node=>!node.ignored).map(node=>[node.name?.value,node.description?.value].join(' ')).join('\n'),forbidden);
-    states.push({case:item.name,theme,unit,rendered});
+    states.push({case:item.name,theme,unit,rendered,rates});
   }
-  await evaluate(`current.result=${JSON.stringify(cases.find(item=>item.name==='source-gap').result)}; current.stats.update(current);
+  await evaluate(`current.result=${JSON.stringify(cases.find(item=>item.name==='source-gap').result)}; current.period='all'; current.stats.update(current);
     document.activeElement.blur(); document.dispatchEvent(new KeyboardEvent('keydown',{key:'Tab',bubbles:true}));
     window.__focusedStat=document.querySelector('.ai-stat h4 button'); __focusedStat.focus();`);
   await until(`!document.getElementById('context-help').hidden`);
   await evaluate(`current.result=${JSON.stringify(cases.find(item=>item.name==='unknown-duration').result)};
     current.stats.update(current); ReportView.setUnit('credits',output);`);
   assert.equal(await evaluate(`document.activeElement===__focusedStat`),true);
-  assert.match(await evaluate(`document.getElementById('context-help').textContent`),/silicon crew burns per hour/);
+  assert.match(await evaluate(`document.getElementById('context-help').textContent`),/hypothetical shift/);
   await escape();
   await evaluate(`current.result=${JSON.stringify(original)};current.period='30-days';current.stats.update(current);`);
-  checks.push('nine canonical evidence cases: ten numbers and playful traits in both units/three themes; no state/reason DOM, caveats in values/help/AX/live text; focused heading retained');
+  checks.push('twelve canonical evidence cases: ten cards with three Python-prepared rates, example/faster robot/no-workdays, both units/three themes; no state/reason DOM, focused heading retained');
 };

@@ -344,7 +344,7 @@ global footer is removed; guarantees remain in relevant optional report help.
 
 ## AI Stats
 
-**AI Stats** at `/#/ai-stats` turns your robot adventures into ten numbers and a
+**AI Stats** at `/#/ai-stats` turns your robot adventures into ten playful cards and a
 little friendly banter. Old `/#/cost-per-hour` bookmarks arrive here too.
 
 The emoji cards keep two sections:
@@ -353,7 +353,7 @@ The emoji cards keep two sections:
 - **Fun Facts:** Most Expensive Session, Longest Session, Busiest Day, Night Owl,
   Coding Streak, Peak Parallel Sessions.
 
-Every card gets a number and a playful trait, even when the silicon crew has taken
+Every card gets a figure and a playful trait, even when the silicon crew has taken
 the whole period off. Real session records link to their session pages. Hover,
 focus or tap a card title for a short explanation of its meaning. Long names and
 enlarged text wrap naturally, with equal-height cards within each responsive row.
@@ -365,14 +365,30 @@ The rolling choices cover 7/30 × 24 hours; Today and This month follow your con
 local calendar. All five buttons have friendly hover, keyboard-focus and touch help.
 Switch Credits/USD to change the money display while keeping your period and cards.
 
+The first **💸 AI Hourly Rate** card has three compact rows, not three cards:
+
+- **24h average:** the period's Total AI Cost divided by 24 nominal hours per selected local date.
+- **Workday average:** the same total (including night/weekend spending) divided by eight scheduled hours per eligible workday. Weekends and configured `SE` public holidays are excluded; an empty `workdayCalendar` excludes weekends only. With none, the row says **No workdays**.
+- **Robot · 8h shift:** the original cost per actively running AI hour × eight. This is the **hypothetical** price of a full robot shift at that period's intensity, not actual cost per workday. Title help includes the active-hour basis and the imaginary total for all eligible shifts; these are not extra headline figures.
+
+For 840 Credits and 28 active hours over seven dates/five workdays, these are
+**5 CCost/h**, **21 CCost/h** and **240 CCost/8h day** (USD: **$0.05/h**,
+**$0.21/h**, **$2.40/8h day**). Robot is not Workday × eight.
+Today always has one nominal date, even in the morning. Rolling 7/30-day cost
+windows stay exact trailing hours, but normalization uses exactly 7/30 local dates
+ending today. Month counts only dates through today; All time includes cost-free
+gaps from its earliest supported activity/request date. DST dates still contribute
+24 nominal hours. Empty activity keeps safe zero-style figures, not an invented
+active-hour basis. Currency switching updates all rows and help without fetching.
+
 Working Time counts overlapping robot activity once. Night Owl follows the
 22:00–06:00 shift; Coding Streak celebrates consecutive active calendar dates.
 Session records, busiest dates and parallel parties keep their familiar places.
 
 A cold visit may briefly say the robots are warming up. Numbers arrive as the
 history is collected and improve along the way. Already loaded cards stay visible
-during refresh, period changes and interrupted updates; an empty period gets ten
-cheerful zeros. There is no permanent Load/Refresh toolbar or Cancel button.
+during refresh, period changes and interrupted updates; an empty period gets
+cheerful zero-style figures (and **No workdays** where appropriate). There is no permanent Load/Refresh toolbar or Cancel button.
 Automatic refresh targets about **15 minutes** in the foreground and **30 minutes**
 inactive, reusing collected history across periods, reloads and host restarts.
 Leaving the page does not discard requested work. Watch, Sessions, CLI, Token Mix

@@ -1,10 +1,11 @@
 """AI Stats-only fun figures; canonical accounting and timing remain unchanged."""
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from bisect import bisect_right
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 
 from .active_hour import HOUR_MS, USAGE_FIELDS, deduplicated_requests
+from .ai_stats_rates import HourlyRates, hourly_rates
 from .timezones import local_day_start_ms, local_month_start_ms, resolve_timezone
 
 DAY_MS = 24 * HOUR_MS
@@ -34,6 +35,7 @@ class Stat:
     session_title: str = ''
     detail: str = ''
     reasons: tuple[str, ...] = ()
+    rates: HourlyRates | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -238,9 +240,10 @@ def _cost_metrics(roots, entries, valuation, source_complete, duration, time_rea
 
 class StatsObservation:
     """Share only immutable preparation within one pinned multi-period calculation."""
-    def __init__(self, roots, valuation, *, now, zone):
+    def __init__(self, roots, valuation, *, now, zone, workday_calendar='SE'):
         self.roots, self.valuation = tuple(roots), valuation
         self.now, self.zone = now, zone
+        self.workday_calendar = workday_calendar
         self._timelines, self._requests = {}, {}
 
     def timing(self, root):
@@ -262,12 +265,19 @@ class StatsObservation:
         per_root, unknown, provisional = _timing(roots, start, self.now, self)
         duration, _status, reasons, timed = _time_metrics(roots, per_root, unknown, provisional, self.zone, complete)
         cost = _cost_metrics(roots, entries, self.valuation, complete, duration, reasons, per_root)
-        return StatsPeriod(period, start, self.now, (cost[0], cost[1], timed[0], *cost[2:], *timed[1:]))
+        # Original positive evidence only: no session metadata, epoch or guessed age.
+        stamps = [entry.completed_at_ms for entry in entries if 0 < entry.completed_at_ms <= self.now]
+        stamps.extend(left for root in roots for left, _duration, _running in root.intervals
+                      if 0 < left <= self.now)
+        rates = hourly_rates(cost[1].value, duration, period=period, now=self.now, zone=self.zone,
+            calendar=self.workday_calendar, evidence_start=min(stamps, default=None))
+        return StatsPeriod(period, start, self.now,
+            (replace(cost[0], rates=rates), cost[1], timed[0], *cost[2:], *timed[1:]))
 
 
-def period_stats(roots, valuation, *, period, start, now, zone, source_complete=True):
+def period_stats(roots, valuation, *, period, start, now, zone, source_complete=True, workday_calendar='SE'):
     """Cost uses request event time; guesses never escape this fun-page owner."""
-    return StatsObservation(roots, valuation, now=now, zone=zone).period(
+    return StatsObservation(roots, valuation, now=now, zone=zone, workday_calendar=workday_calendar).period(
         period=period, start=start, source_complete=source_complete)
 
 

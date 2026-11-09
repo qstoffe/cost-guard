@@ -6,6 +6,7 @@ from pathlib import Path
 import sys
 import tempfile
 import time
+from decimal import Decimal
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -20,6 +21,27 @@ def isolated_report(sender, request):
     from src.cache import CacheDatabase
     with patch('src.web.composition.CacheDatabase', lambda _root: CacheDatabase(Path(os.environ['COST_GUARD_PROBE_CACHE']))):
         measured_report(sender, request)
+
+
+def check_rates(result):
+    checks = []
+    for row in (result.get('view') or {}).get('ai_stats', []):
+        hourly, cost, working = row['metrics'][:3]
+        rates = hourly['rates']
+        total, duration = Decimal(cost['value']), Decimal(working['value'])
+        active = total * 3_600_000 / duration if duration else Decimal(0)
+        assert Decimal(rates['total']) == total
+        assert Decimal(rates['active_rate']) == active
+        assert Decimal(rates['robot_day']) == active * 8
+        assert Decimal(rates['robot_period']) == active * 8 * rates['workdays']
+        assert Decimal(rates['calendar_rate']) == (total / rates['calendar_hours'] if rates['calendar_hours'] else 0)
+        assert (Decimal(rates['workday_rate']) if rates['workday_rate'] is not None else None) == (
+            total / rates['workday_hours'] if rates['workday_hours'] else None)
+        for unit in ('credits', 'usd'):
+            for key in ('calendar_rate', 'workday_rate', 'robot_day', 'rate_help'):
+                assert isinstance(hourly.get('display_units', {}).get(unit, {}).get(key, hourly['display'].get(key)), str)
+        checks.append(row['period'])
+    return checks
 
 
 def main():
@@ -52,7 +74,8 @@ def main():
                             for metric in row['metrics']] for row in (result.get('view') or {}).get('ai_stats', [])}
                         print(json.dumps(dict(scope=scope, attempt=attempt, status=job['status'],
                             seconds=round(time.monotonic() - started, 3), error=job['error'],
-                            result_error=result.get('error'), periods=len((result.get('view') or {}).get('ai_stats', [])),
+                             result_error=result.get('error'), periods=len((result.get('view') or {}).get('ai_stats', [])),
+                             rate_checks=check_rates(result),
                              progress=job.get('progress'), work=job.get('work'), metric_states=states)), flush=True)
                         break
                     time.sleep(.05)

@@ -181,15 +181,26 @@ period's clipping, fallback-rate pooling or completeness calculation. Shared
 deduplication requires identical ordered root populations; no cross-slice cache.
 Private `Stat` reason codes
 and source completeness remain diagnostic facts, not display/admission gates.
-`src/application/ai_stats.py` emits unit-aware value/trait tokens only; projection
+`src/application/ai_stats.py` emits unit-aware fun value/trait tokens; projection
 marks `ai_stats_policy=fun-1`. `assets/ai-stats.js` validates that policy and retains
 usable period figures, renders playful loading/zero outcomes and removes state,
 explanation and technical-summary DOM. Shared historical summaries skip Stats only.
 JS never revalues. Canonical valuation/duration, Watch, Sessions, CLI, Token Mix,
 Comparisons and independent `active_hour.py` contracts remain unchanged.
 
+FR000644 delta (2026-11-09, base `a835c7881f368cb82fd1363e856183b1d45f7d45`):
+`analysis/ai_stats_rates.py` adds nominal configured-local calendar/workday rates and
+an eight-active-hour hypothetical robot shift over each already-calculated period's
+same cost/duration. It reuses `quota_pace.is_workday`, never source/account data or
+JavaScript holiday logic. `StatsAcquisition` threads `workdayCalendar`; observation
+retains the original active-hour `value` and adds typed `rates`. Projection explicitly
+allowlists those scalars; application prepares three values plus unit-aware math help.
+No-workday is a distinct neutral label; zero active duration never erases the other
+rows. Rolling membership, source/cache lifetimes and the other nine metrics stay
+unchanged. Only the first retained Web card gains three accessible label/value rows.
+
 Focused tests are `development/tests/test_ai_stats.py`, `test_ai_stats_recovery.py`,
-`test_ai_stats_resume.py` and Stats-only branches in `test_web_dispatch.py`.
+`test_ai_stats_rates.py`, `test_ai_stats_resume.py` and Stats-only branches in `test_web_dispatch.py`.
 Browser, fixed-history parity and read-only real-source evidence, heuristic constants
 and the scoped documentation-method exception are in [AI Stats findings](../../journal/web/ai-stats.md).
 

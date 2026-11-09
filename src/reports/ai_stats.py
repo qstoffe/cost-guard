@@ -255,7 +255,8 @@ class StatsAcquisition:
                 costs[entry.model, entry.tokens] = None if parts is None else sum(parts, Decimal(0))
         rows, scopes = [], {}
         calculation = StatsObservation(evidence, lambda model, tokens: costs[model, tokens],
-                                       now=service.now_ms, zone=service.timezone_id)
+                                       now=service.now_ms, zone=service.timezone_id,
+                                       workday_calendar=service.config.get('workdayCalendar', 'SE'))
         for name, start in self.periods:
             excluded = [self.bounds.get(coverage_key(r)) for r in self.pending
                         if r.session_id not in self.unavailable and self._excludes(r, start)]

@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.224 — 2026-11-09
+
+- AI Stats keeps ten cards; AI Hourly Rate now holds 24h average, workday average and the hypothetical cost of one eight-hour robot shift. The two averages spread actual period spending over nominal local calendar/scheduled hours; the robot keeps the original unioned active-hour intensity.
+- Configured timezone and weekend/Swedish-holiday calendar determine the denominators without changing cost windows. No-workday and zero-active-time cases remain safe; both units and explanatory math update together without fetching. Other metrics, Watch, CLI, valuation and acquisition remain unchanged.
+
 ## v80.223 — 2026-11-09
 
 - Mini Watch leaves historical session rows neutral, including successful/failed history on first opening. Running remains yellow and recent success/abort/error retains its existing transient green/red emphasis; the source-owned history handoff clears it in the same keyed row.
