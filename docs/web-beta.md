@@ -28,7 +28,7 @@ button retains focus. Keyboard-focus help and deliberately pinned passive help a
 distinct; action activation dismisses its help immediately. Live updates never reopen
 dismissed help without a new interaction.
 
-Full Watch’s **CCost (I + E)** help separates first-request incoming-context cost
+Full Watch’s **CCost** value help separates first-request incoming-context cost
 from output/later/linked-subagent work. **Token Mix %** explains I/C/W/O token
 shares, not prices. **Model** names the main model even when other linked models
 contribute to totals. **N/A** means unavailable, not zero; **?** marks partial
@@ -699,7 +699,7 @@ another lane's progress and cost-only updates cannot prove source recovery. Pric
 N/A and actionable provider/auth/host failures remain explicit. Finite historical
 results retain their original observation internally; positive age alone does not withhold
 qualified completed data, and their refresh cadence is not a live retry caption.
-The ten columns are **Started, Duration, Prompt, Model, Effort, CCost (I + E), Calls,
+The ten columns are **Started, Duration, Prompt, Model, Effort, CCost, Calls,
 Token Mix %, Ictx, Δ Ctx**. Ictx is the first request's effective incoming context;
 the footer's Context remains the estimated next incoming context.
 Running keeps **Started** and start-ascending order. Earlier replaces only column 1 with
@@ -711,29 +711,29 @@ its canonical session-local `#N`, never a visible-row index. Only preview text e
 the number stays visible, with no per-row preview question mark or full-text popup,
 and lifecycle state remains accessible on the row. Every header explains its metric
 on hover, keyboard focus or touch/click; Escape or leaving focus dismisses the explanation.
-Both prompt tables show **total CCost (Incoming Context CCost + Extra CCost)** in
-the single **CCost (I + E)** column. I values the initial incoming context on the
+Both prompt tables show **only total CCost** in the single **CCost** column.
+Hover, keyboard-focus or tap the exact value for **Incoming Context CCost (I)** and
+**Extra CCost (E)** before the existing rich model/subagent detail. I values the initial incoming context on the
 first attributed request; E covers the remaining canonical usage, including output,
 later requests and linked-child contributions. These are the CLI session report's
 existing diagnostics, not billing, quota usage or Token Mix's Input category. Raw
 I + E reconciles to the total when known; separately rounded Credits/USD values
 need not visually sum. All three use the selected Web unit and shared formatting.
-Partial totals retain `?`. Whenever the **displayed total is zero** in the selected
-unit, both displayed components are zero: `0 (0 + 0)` or `$0.00 ($0.00 + $0.00)`,
-even with observed calls or missing component evidence. This presentation override
-also covers tiny positive costs rounded to USD zero; it never changes precise values.
-Positive displayed totals keep independently unavailable components as `N/A`.
+Partial totals retain `?`. Zero totals display just `0` or `$0.00`; a tiny positive
+amount may round to USD zero without proving either component is zero. The value
+tooltip always keeps independently unavailable components as `N/A`, including when
+the total displays zero. No browser subtraction or forced-zero override is used.
 Report-owned evidence flags require first-request input/cache-read/
 cache-write counters for I, and every attributed request's four token categories for E.
 Full Watch can therefore withhold an unsupported component even when the existing CLI
 diagnostic uses normalized placeholders; raw costs and CLI behavior are unchanged.
 Wholly unavailable totals stay `N/A`; sparse non-billed compaction
-cells stay empty. Accepted captures/SSE update the same prompt's split without
+cells stay empty. Accepted captures/SSE update the same prompt's total and paired help without
 browser valuation, polling or extra history scans. Mini Watch remains total-only.
-The Full Watch CCost value has separate detail: main prompt and distinct causally linked
+That same Full Watch CCost value tooltip retains main prompt and distinct causally linked
 subagents, split by actual model/recorded effort, with Input, Cached input, Cache write
 and Output reference costs, subtotals and full prompt total. These are charged token
-categories, not the header's first-request I + E decomposition. Credits/USD use canonical
+categories, not the first-request I + E decomposition. Credits/USD use canonical
 unrounded request prices; rounded lines need not visibly sum. Unknown categories are
 omitted, partial pricing qualified and long detail bounded with an honest omitted subtotal.
 Token Mix % is raw observed **Input / Cached input / Cache write / Output** token volume,

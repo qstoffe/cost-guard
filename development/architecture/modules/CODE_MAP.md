@@ -333,10 +333,10 @@ heights/retained figures across transient and virtual sustained refresh failures
 indefinitely quiet retained refresh, nonfresh/cost-only replay, real partial quotas and actionable
 auth failures. `web_report_lifetime.cjs` covers quiet host retry/ownership and immediate
 offline/auth/source errors; Mini's independent clocks and configured-day expiry stay in `mini_watch.cjs`.
-`integration/probe_watch_presentation.cjs` runs that proof plus displayed-zero I/E,
+`integration/probe_watch_presentation.cjs` runs that proof plus total-only CCost and independent I/E value help,
 confirmed focal title/row colors, focus/selection and contrast in Classic/Web light/dark
 at wide/narrow widths. `test_watch_prompt_cost.py`, `test_watch_daily.py` and
-`integration/web_live.cjs` own the matching formatted-zero, initial/delayed status and
+`integration/web_live.cjs` own the matching total-token/paired-help, initial/delayed status and
 SSE/lifecycle regressions; no backend pricing/acquisition change is implied.
 `integration/probe_watch_loading.cjs` adds three virtual minutes per independent
 history/accounts/daily/partial lane to that theme/width matrix.

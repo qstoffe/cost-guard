@@ -113,7 +113,7 @@ async function main() {
          if (width === 360) assert.equal(layout.horizontalPan, true);
        await command('Input.dispatchKeyEvent', {type:'keyDown',key:'Tab',code:'Tab',windowsVirtualKeyCode:9}, sessionId);
        const headers = await evaluate(`(() => {
-           const names=['Started','Duration','Prompt','Model','Effort','CCost (I + E)','Calls','Token Mix %','Ictx','Δ Ctx'];
+           const names=['Started','Duration','Prompt','Model','Effort','CCost','Calls','Token Mix %','Ictx','Δ Ctx'];
            const help=n=>{n.focus({preventScroll:true});return document.querySelector('#context-help').textContent;};
           return [...document.querySelectorAll('table')].every(table=>[...table.querySelectorAll('th')]
              .every((th,i)=>th.querySelector('button').textContent===(i===0&&table.closest('.watch-history')?'Finished':names[i]) && help(th.querySelector('button')).length>20))

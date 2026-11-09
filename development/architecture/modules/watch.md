@@ -15,6 +15,13 @@ Optional notice history uses `cache/model_notices.py` for resource-error classif
 
 ## Public contract
 
+FR000647 is Full Watch presentation only: both prompt tables show the canonical
+CCost total token, with independently source-verified Incoming Context CCost (I)
+and Extra CCost (E) in the existing value help before unchanged grouped cost detail.
+Displayed zero never invents component evidence. Projection, CLI, Mini, valuation,
+acquisition and publication cadence are unchanged; `test_watch_prompt_cost.py`,
+`web_live.cjs` and the existing Watch/help browser probes cover this scoped delta.
+
 `WatchCoordinator.acquire_cycle` is the shared renderer-independent initialize/poll/history-slice seam. CLI keeps its terminal wait/render adapter; `src/watch/acquisition.py:LiveAcquisition` supplies headless cadence, hint buffering, selected-source recovery and source-free account wakes to one application-owned Web runtime. Both reuse the same tracker, valuation, retention, Today and account mechanisms. Web run origin is engine start, never tab open; live/account mutable state is not shared with finite report cleanup. The source hint pump bounds its queue to 1024, converting overflow to authoritative resync rather than blocking acquisition or inventing usage. Browser disconnect is independent of source state and never a terminal prompt event.
 
 `watch/token_mix.py` owns run CCost and priced-only Token Mix keyed by source/session/message/step; completed pre-Watch requests stay excluded. `today_ccost.py` reconciles exact local-day requests with shared clone de-duplication, retaining deleted observations without a ledger. Interactive startup renders `Total today: Pending` (or the overnight date) before daily revision/history work. Once published, same-day CCost remains visible throughout subsequent enrichment/failure/recovery until atomic replacement; corrections may lower it. Midnight never relabels yesterday's publication. Main-thread slices acquire at most four necessary roots, reuse unchanged stable analysis and publish only after reconciliation. Midnight/DST resets the plan/day; native account publication reuses unchanged local totals. `Total YYYY-MM-DD` replaces `Total today` from 00:00–03:00, with idle redraws. [History acquisition](history-loading.md) owns scopes/evidence.

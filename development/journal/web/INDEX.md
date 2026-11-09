@@ -14,6 +14,9 @@ Status: current
   read-only V2 evidence without new acquisition or a test exception.
 - [Watch cards](watch-cards.md): isolated two-phase acquisition, continuous history,
   canonical totals, nine-case rendered-browser evidence and separate V2/detail proof.
+- [Watch prompt CCost](watch-prompt-tables.md#compact-prompt-ccost--fr-000647-2026-11-09):
+  total-only Full Watch cells and independently verified I/E in preserved rich value
+  help; zero/unknown/unit/SSE regressions and explicitly separated installation proof.
 - [Watch tool outcomes](watch-polish.md): canonical failed/cancelled subsets,
   focus-coherent disclosures, semantic running-tool colors, six-case browser and
   read-only V2 evidence with real cancellation/Daily proof limits.

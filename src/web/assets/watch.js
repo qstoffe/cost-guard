@@ -67,14 +67,14 @@ const WatchView = (() => {
     text(parent.children[1], value ? () => display(value, 'daily_ccost') : state === 'unavailable' ? 'Unavailable' : '—');
     text(parent.children[2], value ? `${value.prompt_count} prompts` : '');
   }
-  function promptCost(prompt) {
-    const total = display(prompt, 'ccost');
-    if (!total || total === 'N/A') return total;
-    // Match only the selected unit's displayed zero, never missing/partial data
-    // or a small positive Credits token such as <0.1. Canonical values stay intact.
-    const zero = /^(\??)(\$?0(?:\.0+)?)$/.exec(total);
-    if (zero) return `${total} (${zero[2]} + ${zero[2]})`;
-    return `${total} (${display(prompt, 'incoming_context_ccost')} + ${display(prompt, 'extra_ccost')})`;
+  function promptCostHelp(prompt) {
+    if (!display(prompt, 'ccost')) return '';
+    const split = `Incoming Context CCost (I): ${display(prompt, 'incoming_context_ccost')}\n` +
+      `Extra CCost (E): ${display(prompt, 'extra_ccost')}\n\n` +
+      'I — Incoming context on the first attributed request.\nE — Output, later requests and linked subagents.\n' +
+      'N/A means unavailable, not zero. ? marks partial pricing or source data.';
+    return [split, ReportView.costHelp(prompt), display(prompt, 'cost_detail_help')]
+      .filter(value => value && value !== 'N/A').join('\n\n');
   }
   function promptRole(prompt) {
     return !prompt ? '' : prompt.in_progress ? 'running' : prompt.aborted || prompt.has_error ? 'error' :
@@ -86,7 +86,7 @@ const WatchView = (() => {
     ['Prompt', 'The prompt’s number within its session and a short preview of your message.'],
     ['Model', '• Main prompt — The model shown in this column.\n• Linked subagents — If marked *, hover, focus or tap the Model value to see their recorded models and effort.'],
     ['Effort', 'How much reasoning the model was asked to do.'],
-    ['CCost (I + E)', 'Estimated reference cost of this prompt, not your bill.\n\nI — Incoming context cost on the first model request.\nE — Other cost: output, later requests and linked subagents.\nTotal = I + E when fully priced, before display rounding.'],
+    ['CCost', 'Estimated reference cost of this prompt, not your bill.\nHover, focus or tap the value for Incoming/Extra CCost and model/subagent details.'],
     ['Calls', 'Model requests for this prompt, including linked subagents.\nNot tool calls.'],
     ['Token Mix %', 'Token percentages in I / C / W / O order, not cost.\n\nI — Input: new input.\nC — Cached input: reused input.\nW — Cache write: input saved for reuse.\nO — Output: generated tokens, including reasoning.\n\nN/A or running — No reliable breakdown yet. Requires recorded usage with all four categories.'],
     ['Ictx', 'Input context size on this prompt’s first request; may be estimated.\nN/A — First-request data unavailable, not zero.\nNot the next session context or a sum of requests.'],
@@ -228,8 +228,7 @@ const WatchView = (() => {
              const model = metricValue(row, 3, item.model + (prompt.linked_agent_count ? '*' : ''), display(prompt, 'model_detail_help'));
              if (prompt.linked_agent_count) model.setAttribute('aria-label', `${item.model} · Linked subagents participated (${prompt.linked_agent_count})`);
              else model.removeAttribute('aria-label');
-              const cost = metricValue(row, 5, () => promptCost(prompt), () =>
-                [ReportView.costHelp(prompt), display(prompt, 'cost_detail_help')].filter(value => value && value !== 'N/A').join('\n\n'));
+              const cost = metricValue(row, 5, () => display(prompt, 'ccost'), () => promptCostHelp(prompt));
              const calls = metricValue(row, 6, String(prompt.calls), display(prompt, 'calls_help'));
             const cells = [started, display(item, 'watch_duration_ms'), label, model, item.effort,
               cost, calls, display(prompt, 'token_mix_percent'),

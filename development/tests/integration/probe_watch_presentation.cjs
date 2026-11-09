@@ -58,9 +58,11 @@ async function main() {
          const stillExpanded=view.earlier.open;view.update(INPUT);summary.click();
          return {heading,collapsed,expanded,stable,empty,unavailable,loading,stillExpanded};
        })()`);
-       assert.deepEqual(historyLabels,{heading:'Earlier Sessions',collapsed:true,expanded:true,stable:true,
-          empty:'No earlier sessions',unavailable:'No earlier sessions',loading:'No earlier sessions',stillExpanded:true});
-       const layouts = [], checks = [];
+        assert.deepEqual(historyLabels,{heading:'Earlier Sessions',collapsed:true,expanded:true,stable:true,
+           empty:'No earlier sessions',unavailable:'No earlier sessions',loading:'No earlier sessions',stillExpanded:true});
+        await evaluate('state.watch.earlier.open=true');
+        const promptCost=await require('../fixtures/watch_cost_browser.cjs')(evaluate,'33','$0.33');
+        const layouts = [], checks = [];
       await require('./probe_watch_quiet.cjs')({evaluate,layouts,checks});
       await require('./probe_watch_loading.cjs')({evaluate,layouts,checks});
       const transitions = await evaluate(`(() => {
@@ -108,11 +110,11 @@ async function main() {
       assert.equal(transitions.success.href,'#/sessions/root'); assert.equal(transitions.success.historical,'');
       assert.deepEqual(transitions.terminal.map(value=>value.title),['','','','watch-running-title']);
       assert.deepEqual(transitions.terminal.map(value=>value.row),['','watch-error','watch-error','watch-running']);
-      assert.deepEqual(transitions.credits,['0 (0 + 0)','0 (0 + 0)']);
-      assert.deepEqual(transitions.usd,['$0.00 ($0.00 + $0.00)','$0.00 ($0.00 + $0.00)']);
+       assert.deepEqual(transitions.credits,['0','0']);
+       assert.deepEqual(transitions.usd,['$0.00','$0.00']);
       for (const key of ['selected','updated','earlier']) assert.equal(transitions[key],true,key);
       assert.equal(transitions.pageOverflow,false);
-      cases.push({theme,scheme,width,historyLabels,transitions,layouts,checks});
+       cases.push({theme,scheme,width,historyLabels,promptCost,transitions,layouts,checks});
       await command('Target.closeTarget',{targetId});
     }
     await fs.writeFile(path.join(output,'browser.json'),JSON.stringify({outcome:'PASS',browser:version.product,cases,

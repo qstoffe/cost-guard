@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.227 — 2026-11-09
+
+- Full Watch's Running and Earlier prompt tables show a compact **CCost** total only. The same value tooltip starts with independently verified Incoming Context CCost (I) and Extra CCost (E), retaining the complete grouped main/subagent breakdown and unavailable-cost reasons.
+- Zero/rounded USD zero never fabricates component evidence; units, partial totals, sparse compactions, live publication and pricing are unchanged. Mini Watch and whole-session/day costs keep their existing presentation.
+
 ## v80.226 — 2026-11-09
 
 - Session detail: compact **Export Sanitized JSON** matches the Models refresh control. Contextual help belongs to the action and dismisses on activation/picker focus return; no separate helper or idle caption. Operational feedback and native sanitized export/save semantics are preserved.
