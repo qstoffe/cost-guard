@@ -16,6 +16,7 @@ from development.tests.fixtures.warning_projections import warning_prompt, warni
 from development.tests.fixtures.opencode_v2_service import source_with_current_service
 from development.tests.fixtures.pricing_catalog import catalog as sample_catalog, threshold_catalog
 from development.tests.fixtures.watch_runtime import MutableSource, make_service
+from development.tests.fixtures.context_deltas import context_snapshot, context_block
 from src.analysis import analyze_snapshot
 from src.analysis.context import PriceWarningSeverity, watch_context_state
 from src.domain import ContextBoundary, EventKind, MessageRole, ModelInvocation, NormalizedEvent, TokenUsage
@@ -60,6 +61,19 @@ def row(block, event_id):
 
 
 class ContextEpochTests(unittest.TestCase):
+    def test_archived_moved_history_keeps_local_pair_without_reviving_session_context(self):
+        base = context_snapshot(active=False)
+        archived = replace(base.root, archived_at_ms=3000)
+        snapshot = replace(base, root=archived, sessions=(archived,),
+            context_boundaries=(ContextBoundary('root', 'later-move', 2500),))
+
+        _, block = context_block(snapshot, sample_catalog())
+
+        self.assertEqual((100_000, 112_000, 12_000), (block.rows[0].incoming_context_tokens,
+            block.rows[0].watch_next_context_tokens, block.rows[0].watch_delta_context_tokens))
+        self.assertIsNone(block.next_context_tokens)
+        self.assertIsNone(block.session_context.tokens)
+
     def test_move_invalidates_old_baseline_estimate_and_warning(self):
         history = make_uncompacted_snapshot()
         large = replace(history, invocations=tuple(replace(i, tokens=TokenUsage(input=80_000, output=5))

@@ -9,7 +9,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
-from development.tests.fixtures.session_snapshots import make_snapshot
+from development.tests.fixtures.session_snapshots import make_snapshot, make_uncompacted_snapshot
 from development.tests.fixtures.watch_runtime import MutableSource, make_service
 from development.tests.test_v783_regressions import _Pricing, _Source
 from src.cache import CacheDatabase, CacheRepository
@@ -125,7 +125,9 @@ class V784RegressionTests(unittest.TestCase):
 
     def test_running_prompt_uses_live_session_context_instead_of_na(self) -> None:
         with tempfile.TemporaryDirectory() as td:
-            source = MutableSource(make_snapshot(running=True))
+            # This case is before compaction. The old shared fixture included a
+            # later completed rewrite, which must invalidate this live estimate.
+            source = MutableSource(make_uncompacted_snapshot(running=True))
             config, selection, service, _db = make_service(td, source)
             projection = WatchCoordinator(selection=selection, report_service=service, config=config, clock_ms=lambda: 2_200).initialize().projection
             row = next(item for item in projection.rows if item.prompt.event_id == "u_next")

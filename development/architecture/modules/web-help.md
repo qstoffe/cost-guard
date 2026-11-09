@@ -12,6 +12,15 @@ at `50d88a4bcfba6c1f853607ce0ee84a5c9663c0a3`.
 
 ## Writing patterns
 
+FR000653 scoped update (v81.2): Mini Ctx help has separate Next and Δ paragraphs,
+then independent threshold/price guidance. `analysis/context.py` retains a complete
+prompt-local pair independently of current history membership, with epoch/model/input
+guards; `reports/prompts.py` retains richer comparable adjacent anchors. Live exports
+the canonical short unavailable/provisional explanation, never browser subtraction.
+Historical visible Next remains session-scoped and its delta prompt-scoped, explicitly
+not necessarily the same timestamp. Running source revisions refresh existing help
+and focus; exact zero is 0, unsupported comparisons N/A. No new acquisition or layout.
+
 - Answer “What am I looking at?” first, in plain English. A simple field needs one
   sentence, not a standard-size card. Do not lead with internal implementation names.
 - One concept gets one compact, natural sentence. Two or more distinct concepts

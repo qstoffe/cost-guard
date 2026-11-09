@@ -47,7 +47,9 @@ def _coherent_watch_deltas(rows: list[PromptProjection], *, epochs: ContextEpoch
             if delta is not None and delta < 0:
                 delta = None
             if delta != row.watch_delta_context_tokens:
-                row = replace(row, watch_delta_context_tokens=delta)
+                row = replace(row, watch_delta_context_tokens=delta,
+                    watch_context_detail="comparison baseline unavailable" if delta is None else
+                    row.watch_context_detail if row.watch_context_detail == "provisional text estimate" else "")
         result.append(row)
         last_root_by_session[row_session] = row
     return result

@@ -192,6 +192,7 @@ class PromptRowProjector:
             ictx_price_threshold=input_context_above_price_threshold(catalog, record.main_model_id, record.input_context_tokens),
             watch_delta_context_tokens=watch_state.delta_tokens,
             watch_next_context_tokens=watch_state.next_tokens,
+            watch_context_detail=watch_state.detail,
             watch_next_context_cached_ccost=watch_state.cached_ccost,
             watch_next_context_fresh_ccost=watch_state.fresh_ccost,
             watch_next_context_warning=watch_warning.text,

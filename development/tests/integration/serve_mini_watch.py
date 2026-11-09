@@ -132,6 +132,20 @@ def main():
                     host.stop()
                     print('{"ok":true}', flush=True)
                     break
+                if command.startswith('context-'):
+                    from development.tests.fixtures.context_deltas import context_snapshot, context_frame
+                    from development.tests.fixtures.pricing_catalog import catalog
+                    from src.domain import ContextBoundary
+                    phase = command.removeprefix('context-')
+                    historical = phase in {'history', 'zero'}
+                    outputs = () if phase == 'waiting' else (0,) if phase == 'zero' else (12_000, 5_000) if phase == 'later' else (12_000,)
+                    snapshot = context_snapshot(outputs=outputs, running=not historical, active=not historical)
+                    if phase == 'boundary':
+                        snapshot = replace(snapshot, context_boundaries=(ContextBoundary('root', 'move', 1250),))
+                    publish(value=context_frame(frame, snapshot, catalog(), historical=historical,
+                        session_next=300_000 if historical else None))
+                    print('{"ok":true}', flush=True)
+                    continue
                 if command.startswith('loading-') and sys.argv[2:] == ['--report-loading']:
                     action = command.removeprefix('loading-')
                     if action == 'hold':

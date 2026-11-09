@@ -21,6 +21,15 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000653: `analysis/context.py` owns guarded prompt-local input/next fallback and
+running invalidation; `reports/prompts.py` retains richer adjacent baselines.
+`live_projection.py` exports the short canonical context detail; `mini.js` separates
+Next/Δ/guidance paragraphs without changing scope or columns. Source-shaped fixtures:
+`fixtures/context_deltas.py`, context-history/comparison/move/V1/V2/Mini tests;
+`probe_mini_help.cjs` through the real PiP fit probe checks source→SSE→Full/Mini.
+`probe_web_live.py --context-deltas --detail` checks real export/formatting, not the
+owner's private incident or an independent reconstruction of every baseline.
+
 FR000652: `src/benchmarks.py` validates fixed public Harbor Terminal-Bench 4.0
 aggregates; `cache/benchmark.py` owns its separate versioned last-good file.
 `web/benchmark.py` reuses an independent `ReportJobs` instance under the existing

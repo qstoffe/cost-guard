@@ -13,7 +13,7 @@ module.exports = function miniHelp(controller, view, input, helpText) {
   };
   const row = show(), title = row.children[1].children[0].children[0], ctx = row.children[3];
   assert.equal(helpText(title), 'Example Session\nPrompt #21 in this session: Implement pagination for…');
-  assert.match(helpText(ctx), /^Next Ctx: 128k .*\nΔ Ctx: \+4k \(represented prompt change\)/);
+  assert.match(helpText(ctx), /^Next Ctx: 128k .*\n\nΔ Ctx: \+4k \(represented prompt change\)/);
   const visible = row.textContent;
   for (const [preview, expected] of [
     ['Short hint','Short hint'], ['1234567890123456789012345','1234567890123456789012345'],
@@ -42,7 +42,7 @@ module.exports = function miniHelp(controller, view, input, helpText) {
   show([], [history]);
   assert.equal(view.promptRows.get('help-a'),row);
   assert.equal(ctx.textContent,'900k');
-  assert.match(helpText(ctx),/^Next Ctx: 900k .*\nΔ Ctx: \+12k \(historical prompt change; session estimate may be later\)/);
+  assert.match(helpText(ctx),/^Next Ctx: 900k .*\n\nΔ Ctx: \+12k \(historical prompt change; session estimate may be later\)/);
   assert.equal(helpText(title),'Example Session\nPrompt #20 in this session: Historical hint');
   history.rows[0].live_context = null; show([], [history]);
   assert.match(helpText(ctx),/Δ Ctx: N\/A/);
@@ -50,14 +50,14 @@ module.exports = function miniHelp(controller, view, input, helpText) {
   assert.equal(helpText(title),'Example Session\nPrompt number unavailable');
   assert.match(helpText(ctx),/Next Ctx: 900k[\s\S]*Δ Ctx: N\/A/);
   prompt.prompt_number = 21; prompt.preview = 'Original hint'; show();
-  for (const delta of ['0k','+4k','-12k','N/A','~source-token']) {
+  for (const delta of ['0','+4k','-12k','N/A','~source-token']) {
     item.live_context.display.watch_delta_context_tokens = delta; show();
     assert.ok(helpText(ctx).includes('Δ Ctx: '+delta+' (represented prompt change)'));
     assert.equal(ctx.textContent,'128k');
   }
   item.live_context = null; show();
   assert.match(helpText(ctx),/^Next Ctx: N\/A[\s\S]*Δ Ctx: N\/A/);
-  item.live_context = {display:{watch_next_context_tokens:'0k',watch_delta_context_tokens:'0k'}};
+  item.live_context = {display:{watch_next_context_tokens:'0k',watch_delta_context_tokens:'0'}};
   for (const [text, cost, state] of [
     ['', '', 'ready'], ['[Approaching price threshold >200k]', '(2.4x more expensive)', 'ready'],
     ['[Price threshold >200k exceeded]', '(2.4x more expensive)', 'ready'],
@@ -65,10 +65,11 @@ module.exports = function miniHelp(controller, view, input, helpText) {
     ['[Price threshold >200k exceeded]', '(Price comparison refreshing)', 'refreshing'],
     ['[Price threshold >200k exceeded]', '(Price comparison unavailable; retrying)', 'unavailable']]) {
     base.session_summary.context.warning = {text,guidance_state:state,display:{warning_cost:cost}}; show();
-    const lines = helpText(ctx).split('\n');
-    assert.equal(lines[0],'Next Ctx: 0k (estimated next incoming context)');
-    assert.equal(lines[1],'Δ Ctx: 0k (represented prompt change)');
-    assert.deepEqual(lines.slice(3),[text.replace(/^\[|\]$/g,''),cost.replace(/^\(|\)$/g,'')].filter(Boolean));
+    const paragraphs = helpText(ctx).split('\n\n');
+    assert.equal(paragraphs[0],'Next Ctx: 0k (estimated next incoming context). Not remaining model capacity.');
+    assert.equal(paragraphs[1],'Δ Ctx: 0 (represented prompt change)');
+    assert.deepEqual(paragraphs.slice(2),[text.replace(/^\[|\]$/g,''),cost.replace(/^\(|\)$/g,'')].filter(Boolean).length ?
+      [[text.replace(/^\[|\]$/g,''),cost.replace(/^\(|\)$/g,'')].filter(Boolean).join('\n')] : []);
     assert.equal(ctx.dataset.guidance,state);
   }
   const other = structuredClone(base); other.session_id = 'help-b'; other.title = 'Other session';

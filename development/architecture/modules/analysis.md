@@ -49,6 +49,16 @@ The causal core uses `TraceEntry`, `PromptRecord`, `CompactionRecord` and `RootA
 
 Context/comparison consumes canonical messages/parts/invocations. `analysis/context_history.py` separates request-local input from persisted history; unsupported decreases stay unknown. `estimate_event_context` preserves historical completion estimates independently of current anchor retirement. Model-selection boundaries allow historical comparison only with compatible telemetry and complete retained same-model history; resets remain separate epochs. Accounting stays independent. Completed compaction owns its summary/tail and negative delta. Next-Ictx never predicts cache hits; current warnings require eligible anchors. Comparison prices every target model/tier under one shared pooled I/C/W/O mix from the latest up to 100 completed priceable prompts globally, with a common cheapest positive base reference. `src/analysis/comparisons.py` uses `normalized_average_token_mix`; model/publisher profiles do not affect ranking or tier-warning ratios. The independent dashboard usage mix may include running/interrupted usage. Full-Decimal sorting orders base/next-tier prices descending, earlier boundaries, then name, recursively. Without samples, hidden 2/96/1/1 sorts while Relative CCost stays blank. Diagnostics never feed billing.
 
+FR000653 (v81.2) separates historical pair evidence from active-history eligibility:
+retained complete root input and same-epoch next context can support a prompt-local
+delta after undo/compaction removes current membership. This never revives session
+continuation or warnings. Different root/provider/model, missing first input and
+in-prompt rewrites cannot create that fallback; richer comparable prior anchors still
+win. Running compaction invalidation cannot fall through to pre-rewrite provisional
+text. Short canonical unavailable/provisional detail travels through report/Live;
+Mini retains session-scoped historical Next and prompt-scoped delta. Coverage:
+context history/comparison, move, V1/V2 normalization, Mini/Live and browser probes.
+
 Stable complete analysis requires exact source revision, algorithm/config compatibility and a semantic pricing signature (identities/aliases, currency, rates/tiers), not retrieval timestamps/document labels. Malformed/incompatible, running or incomplete results never persist. Revisions remain conservative gates, not semantic truth.
 
 Dates use `zoneinfo`; clean Windows Python may lack IANA data, so dependency-free current rules cover shipped `Europe/Stockholm` and UTC. Other IANA zones fail actionably without host data; never substitute local time.

@@ -4,6 +4,7 @@ import tempfile
 import unittest
 
 from development.tests.fixtures.pricing_catalog import catalog, threshold_catalog
+from development.tests.fixtures.context_deltas import context_snapshot, context_block
 from development.tests.fixtures.session_snapshots import MODEL, make_native_v2_compaction_snapshot, make_uncompacted_snapshot, message, part, prov
 from development.tests.fixtures.watch_runtime import MutableSource, make_service
 from src.analysis import analyze_snapshot
@@ -56,6 +57,43 @@ def project(snapshot, prices=None):
 
 
 class HistoricalContextTests(unittest.TestCase):
+    def test_single_prompt_retains_its_own_pair_when_no_longer_in_active_history(self):
+        for active in (True, False):
+            for output in (12_000, 0):
+                snapshot = context_snapshot(outputs=(output,), active=active)
+                bundle, block = context_block(snapshot, catalog())
+                epochs = ContextEpochs(snapshot, bundle)
+                row = block.rows[0]
+                with self.subTest(active=active, output=output):
+                    self.assertEqual(active, epochs.active_prompt(bundle.prompts[0]))
+                    self.assertEqual(100_000, row.incoming_context_tokens)
+                    self.assertEqual(100_000 + output, row.next_context_tokens)
+                    self.assertEqual(100_000 + output, row.watch_next_context_tokens)
+                    self.assertEqual(output, row.watch_delta_context_tokens)
+                    self.assertEqual(output, row.delta_context_tokens)
+                    if not active:
+                        self.assertIsNone(block.next_context_tokens, "history does not revive live continuation")
+
+    def test_retained_history_still_requires_complete_same_epoch_root_evidence(self):
+        base = context_snapshot(outputs=(12_000, 5_000), active=False)
+        missing_input = replace(base, invocations=tuple(replace(i, tokens=TokenUsage(
+            input=100_000, output=12_000, known_fields=("input", "output"))) if n == 0 else i
+            for n, i in enumerate(base.invocations)))
+        missing_output = replace(base, invocations=tuple(replace(i, tokens=TokenUsage(
+            input=112_000, known_fields=("input", "cache_read", "cache_write"))) if n == 1 else i
+            for n, i in enumerate(base.invocations)))
+        boundary = replace(base, context_boundaries=(ContextBoundary("root", "reset", 1250),))
+        alternate = replace(MODEL, provider="another-provider")
+        switched = replace(base, invocations=(base.invocations[0], replace(base.invocations[1], model=alternate)),
+            messages=tuple(replace(m, model=alternate) if m.message_id == 'a1' else m for m in base.messages))
+        for name, snapshot in (("input", missing_input), ("output", missing_output),
+                               ("boundary", boundary), ("model", switched),
+                               ("zero incoming", context_snapshot(incoming=0, active=False))):
+            with self.subTest(reason=name):
+                _, block = context_block(snapshot, catalog())
+                self.assertIsNone(block.rows[0].watch_delta_context_tokens)
+
+
     def test_alternating_history_is_stable_at_every_stage_and_current_anchor_reestablishes(self):
         totals = (51000, 51481, 99813, 100088, 142934)
         # Comparable retained history permits exact subtraction, not screenshot rounding.
@@ -167,7 +205,8 @@ class HistoricalContextTests(unittest.TestCase):
             self.assertEqual(left.calls, right.calls)
             self.assertEqual(left.ccost, right.ccost)
             self.assertEqual(left.token_mix_percent, right.token_mix_percent)
-        self.assertIsNone(undo_block.rows[-1].watch_delta_context_tokens)
+        self.assertEqual(700, undo_block.rows[-1].watch_delta_context_tokens,
+                         "retained complete event-local input/next survives undo, not cross-prompt continuity")
         self.assertIsNone(undo_block.next_context_tokens, "later boundaries still retire the restored older anchor")
         self.assertEqual(142934, redo_block.next_context_tokens)
         old_prefix = replace(restored, active_contexts=(ActiveContext("root", tuple(

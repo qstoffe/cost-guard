@@ -49,6 +49,23 @@ class V1DiscoveryTests(unittest.TestCase):
 
 
 class OpenCodeV1SourceTests(unittest.TestCase):
+    def test_single_prompt_context_pair_survives_sqlite_acquisition_and_live_projection(self):
+        from development.tests.fixtures.context_deltas import context_v1_database, context_frame
+        from development.tests.fixtures.pricing_catalog import catalog
+        from development.tests.fixtures.watch_summary import summary_watch
+        from src.application.live_projection import project_live
+
+        path = Path(self.temp.name) / 'context.db'
+        context_v1_database(path)
+        snapshot = OpenCodeV1Source(path).load_session_snapshot('root')
+        wire = project_live(context_frame(summary_watch(), snapshot, catalog())).to_json()
+        row = wire['active_cards'][0]['rows'][0]
+
+        self.assertEqual(100_000, row['prompt']['incoming_context_tokens'])
+        self.assertEqual((112_000, 12_000), (row['live_context']['watch_next_context_tokens'],
+                                          row['live_context']['watch_delta_context_tokens']))
+        self.assertEqual('+12k', row['live_context']['display']['watch_delta_context_tokens'])
+
     def test_structured_errors_hydrate_consistently_with_v2(self) -> None:
         errors = [
             ({"name": "MessageAbortedError"}, True),

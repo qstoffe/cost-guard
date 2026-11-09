@@ -17,6 +17,20 @@ def assistant_bundle():
 
 
 class V2NormalizationTests(unittest.TestCase):
+    def test_complete_first_request_context_categories_feed_canonical_prompt_delta(self):
+        from development.tests.fixtures.context_deltas import context_snapshot, context_block
+        from development.tests.fixtures.pricing_catalog import catalog
+
+        snapshot = context_snapshot()
+        bundle, block = context_block(snapshot, catalog())
+
+        self.assertEqual({'input', 'cache_read', 'cache_write', 'output'},
+                         set(snapshot.invocations[0].tokens.known_fields))
+        self.assertEqual(0, snapshot.invocations[0].tokens.reasoning)
+        self.assertEqual(100_000, bundle.prompts[0].input_context_tokens)
+        self.assertEqual((112_000, 12_000), (block.rows[0].watch_next_context_tokens,
+                                          block.rows[0].watch_delta_context_tokens))
+
     def test_parts_and_structured_metadata_are_defensive_copies(self):
         bundle = assistant_bundle()
         bundle["info"]["structured"] = {"values": [1]}

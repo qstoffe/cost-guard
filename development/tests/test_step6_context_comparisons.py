@@ -8,6 +8,7 @@ from development.tests.fixtures.session_snapshots import (
     MODEL, make_native_v2_compaction_snapshot, make_snapshot, make_uncompacted_snapshot, message, part, prov,
 )
 from development.tests.fixtures.pricing_catalog import catalog
+from development.tests.fixtures.context_deltas import context_snapshot, context_block
 from src.analysis.comparisons import (
     model_comparison_rows, model_timeline_name,
 )
@@ -27,6 +28,30 @@ from src.reports.prompts import _coherent_watch_deltas
 
 
 class ContextEngineTests(unittest.TestCase):
+    def test_running_root_requests_update_one_baseline_and_later_rewrite_cannot_restore_it(self):
+        for outputs, expected in (((12_000,), (112_000, 12_000)),
+                                  ((12_000, 5_000), (117_000, 17_000))):
+            snapshot = context_snapshot(outputs=outputs, running=True)
+            bundle, block = context_block(snapshot, catalog())
+            self.assertTrue(bundle.prompts[0].in_progress)
+            self.assertEqual(expected, (block.rows[0].watch_next_context_tokens,
+                                       block.rows[0].watch_delta_context_tokens))
+            self.assertIsNone(block.rows[0].next_context_tokens, 'report continuation eligibility stays distinct')
+        moved = replace(snapshot, context_boundaries=(ContextBoundary('root', 'move', 1550),))
+        _, block = context_block(moved, catalog())
+        self.assertIsNone(block.rows[0].watch_next_context_tokens)
+        self.assertIsNone(block.rows[0].watch_delta_context_tokens)
+
+    def test_running_compaction_cannot_resurrect_provisional_pre_compaction_context(self):
+        snapshot = make_native_v2_compaction_snapshot()
+        bundle = analyze_snapshot(snapshot, now_ms=5000)
+        record = next(r for r in bundle.prompts if r.prompt_id == 'u_next')
+        compact = replace(bundle.compactions[0], created_at_ms=2400, completed_at_ms=2500)
+        bundle = replace(bundle, compactions=(compact,))
+        state = watch_context_state(snapshot, bundle, replace(record, in_progress=True), catalog())
+        self.assertIsNone(state.next_tokens)
+        self.assertIsNone(state.delta_tokens)
+
     @staticmethod
     def replacement_snapshot(requests, *, active_context=True):
         snapshot = make_uncompacted_snapshot()
