@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.215 — 2026-11-09
+
+- Web Watch and Accounts remaining per-day/workday lines now use each quota's accepted reference CCost Remaining and the selected USD/Credits display unit. Switching units updates existing nodes without fetching or reanalysis; native quota amounts, bars, reset calendars, Mini and CLI pace remain unchanged.
+- Unknown, stale, unlimited or expired reference budgets omit pace rather than relabeling native tokens/messages as money. Known zero and no-workdays states remain distinct; Credits remaining rounds down and USD uses normal two-decimal reference formatting.
+
 ## v80.214 — 2026-11-09
 
 - Mini Watch uses coordinated header typography, grouped responsive reflow and an outlined/filled Earlier Sessions toggle with stable text and synchronized accessible pressed/disclosure state. Measured opening fit and bounded user-activated height adjustment remain; passive updates never resize.

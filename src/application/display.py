@@ -12,7 +12,7 @@ from src.numbers import balanced_share_percents, ccost_amount, ccost_display, cc
 
 from .contracts import ObjectValue, record
 from .quota_display import quota_displays
-from .quota_ccost import quota_ccost_tokens
+from .quota_ccost import quota_ccost_pace, quota_ccost_tokens
 from .prompt_costs import detail_tokens
 from .ai_stats import stat_tokens
 from .comparisons import display_tokens as comparison_tokens
@@ -67,6 +67,11 @@ def amount_tokens(values):
     for key in ("per_day", "per_workday"):
         if key in values:
             tokens[key] = "N/A" if values[key] is None else remaining_capacity(decimal(values[key]))
+    for key in ("ccost_per_day", "ccost_per_workday"):
+        if key in values:
+            amount = decimal(values[key])
+            tokens[key] = ("N/A" if amount is None else ccost_amount(amount) if ccost_unit() == "usd"
+                           else remaining_capacity(amount))
     if "unaccounted_usage" in values:
         tokens["unaccounted_usage"] = unaccounted_usage(decimal(values["unaccounted_usage"]))
     if "remaining_fraction" in values:
@@ -277,6 +282,8 @@ def _with_display(value, timezone_id, now_ms):
         return value
     values = dict(value.fields)
     now_ms = values.get("now_ms", now_ms)
+    if "native_pace" in values:
+        value = ObjectValue(value.fields + (("ccost_pace", quota_ccost_pace(values, now_ms)),))
     # Only differing CCost tokens need a second wire representation. Native
     # amounts and canonical sort/analysis values never participate in switching.
     variants = {}

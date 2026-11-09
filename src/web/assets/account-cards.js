@@ -46,11 +46,15 @@ const AccountCards = (() => {
     const reset = el('p', undefined, 'detail'), clock = el('span', () => display(value(), 'watch_reset')); reset.append(clock);
     if (value().quota.reset_at_ms != null) ContextHelp.value(clock, () => display(value().quota, 'reset_at_ms'));
     parent.append(reset);
-    if (value().pace) {
-      parent.append(el('p', () => `Remaining: ${display(value().pace, 'per_day')}/day`, 'detail'));
-      parent.append(el('p', () => value().pace.workdays === 0 ? 'Remaining: no workdays left' :
-        `Remaining: ${display(value().pace, 'per_workday')}/workday`, 'detail'));
-    }
+    const pace = () => value().quota.ccost_pace;
+    const day = el('p', () => `Remaining: ${display(pace(), 'ccost_per_day')}/day`, 'detail');
+    const workday = el('p', () => pace()?.workdays === 0 ? 'Remaining: no workdays left' :
+      `Remaining: ${display(pace(), 'ccost_per_workday')}/workday`, 'detail');
+    ReportView.bind(parent, () => {
+      if (pace() && day.parentNode !== parent) {
+        parent.insertBefore(day, parent.children[1] || null); parent.insertBefore(workday, parent.children[2] || null);
+      } else if (!pace()) { day.remove(); workday.remove(); }
+    });
     if (value().restricted) parent.append(el('p', () => value().quota.label + ' · Provider restriction reported', 'warning'));
   }
   function warnings(item, quiet) {
@@ -112,8 +116,11 @@ const AccountCards = (() => {
       const quiet = (this.verified || [value.primary, ...value.secondary].some(q =>
         q.used_fraction != null || q.quota.unlimited)) && !this.partialObservation;
       const lines = warnings(value, quiet);
-      if (!usable && this.value && ![value.primary, ...value.secondary].some(q => q.restricted || q.exhausted))
-        value = {...this.value, observation: obs};
+      if (!usable && this.value && ![value.primary, ...value.secondary].some(q => q.restricted || q.exhausted)) {
+        // Keep observed figures quietly, but never retain a stale forward budget.
+        const observed = q => ({...q, quota:{...q.quota, ccost_pace:null}});
+        value = {...this.value, observation: obs, primary:observed(this.value.primary), secondary:this.value.secondary.map(observed)};
+      }
       if (usable) { this.lastObserved = obs.observed_at_ms; if (obs.availability === 'available') this.verified = true; }
       const signature = JSON.stringify([value, lines]);
       if (signature === this.signature) return;
@@ -122,7 +129,7 @@ const AccountCards = (() => {
       // reset clocks, warnings and settings update bound nodes and active help.
       const shape = JSON.stringify([value.primary, ...value.secondary].map(q => [q.quota.label,
         q.quota.period, q.quota.scope, q.quota.model_id, q.quota.unlimited, q.used_fraction != null,
-        q.quota.reset_at_ms != null, Boolean(q.pace), q.restricted,
+        q.quota.reset_at_ms != null, q.restricted,
         Boolean(q.quota.quota_display?.used.note || q.quota.quota_display?.remaining.note),
         Boolean(display(q.quota, 'monthly_capacity'))]));
       if (shape !== this.shape) { this.draw(); this.shape = shape; }

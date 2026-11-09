@@ -466,8 +466,9 @@ const ReportView = (() => {
       if ((!compact && detailed && !watch) || account.billed_month != null) card.append(element('p', 'Billed month: ' + display(account, 'billed_month')));
       for (const quota of obs.quotas) {
         accountQuota(card, quota, compact);
+        const pace = quota.ccost_pace;
+        if (pace) card.append(element('p', () => `${quota.label} Remaining: ${display(pace, 'ccost_per_day')}/day · ${pace.days} days · ${pace.workdays === 0 ? 'no workdays left' : display(pace, 'ccost_per_workday') + '/workday'}`, 'detail'));
       }
-      for (const pace of account.pace) card.append(element('p', `${pace.label} Remaining: ${display(pace, 'per_day')} ${pace.unit}/day · ${pace.days} days · ${pace.per_workday == null ? 'no workdays left' : display(pace, 'per_workday') + ' per workday'}`, 'detail'));
       if (!watch && (['github-copilot', 'github-copilot-enterprise'].includes(obs.provider_id) || account.unaccounted_usage != null)) card.append(element('p', 'Unaccounted usage (estimate): ' + display(account, 'unaccounted_usage')));
       if (!detailed && (obs.has_error || obs.has_warning || ['stale', 'unavailable', 'error', 'paused', 'blocked'].includes(obs.status))) card.append(element('p', `${obs.availability} · ${obs.status} · ${obs.error_code || 'Account warning'}`, 'warning'));
       if (detailed && !obs.quotas.length) card.append(element('p', 'Quota unavailable; not zero or unlimited.', 'detail'));

@@ -188,6 +188,9 @@ class QuotaPeriodLifecycleTests(unittest.TestCase):
         self.assertIs(row.pace[0], row.quota_periods[0].pace)
         self.assertEqual('200', wire['primary']['cost']['display']['account_ccost'])
         self.assertEqual('11', wire['primary']['pace']['display']['per_day'])  # 78 / 7, rounded down by CLI.
+        reference = wire['primary']['quota']['ccost_pace']
+        self.assertEqual(str(D(78) / 7), reference['ccost_per_day'])
+        self.assertEqual('$0.11', reference['display_units']['usd']['ccost_per_day'])
         self.assertEqual([], wire['secondary'])
         # Partial daily acquisition must not claim the full month or erase Today.
         pending = account_projections((native,), entries, FakePricingProvider().catalog, now_ms=NOW,

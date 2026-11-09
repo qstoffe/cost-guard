@@ -5,7 +5,7 @@ from decimal import Decimal as D
 from src.analysis.quota_pace import QuotaPace
 from src.analysis.valuation import ComparisonCost
 from src.domain import AccountRef, AccountSnapshot, AccountUsageStatus as Status, BillingComponent, QuotaComponent
-from src.reports.models import AccountProjection, AccountsQuotasProjection, ReportKind, ReportProjection
+from src.reports.models import AccountProjection, AccountsQuotasProjection, QuotaPeriodProjection, ReportKind, ReportProjection
 
 NOW = 1_793_052_000_000
 
@@ -22,6 +22,7 @@ def account_report():
     base = AccountProjection(native, "Available account", billed_today=D("0"), billed_month=D("1.23456789"),
         ccost_scopes=(("today", ComparisonCost(D("1.23456789"))), ("this month", ComparisonCost(D("12.3456789")))),
         pace=(QuotaPace("Monthly", "AI credits", D("29.958847737"), 3, 0, None),), unaccounted_usage=D("-0.123456"))
+    base = replace(base, quota_periods=(QuotaPeriodProjection(quota, None, base.pace[0]),))
     accounts = [base]
     for label, state, availability, quotas, reason in (
         ("Blocked", Status.BLOCKED, "available", (replace(quota, used=D(100), remaining=D(0), remaining_fraction=D(0), remaining_money=D(0), status=Status.BLOCKED),), None),

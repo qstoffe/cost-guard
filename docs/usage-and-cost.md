@@ -48,6 +48,11 @@ withhold the extrapolation. Zero native usage alone cannot establish numeric Cap
 Full Watch shows Capacity above every quota bar; Mini keeps it in accessible help;
 Accounts uses only matching cost already present in its report, without more scans.
 Credits/USD converts all reference figures, not native allocation/billing or percentages.
+Full Web Watch and Accounts remaining/day/workday also use this same accepted reference
+Remaining, divided before formatting by the unchanged local calendar counts. Credits
+round down; USD uses two decimals (a tiny positive value may display `$0.00`). Unknown,
+stale, unlimited, inactive or expired reference budgets omit pace rather than relabeling
+native units. CLI/native remaining pace and Mini's compact account list are unchanged.
 Clean figures have no estimate suffix; help explains their basis and uncertainty.
 
 Normal `Accounts Overview` sections show numeric `CCost today` and a separate `CCost this month`, with rolling CCost beside each existing quota percentage (`5h … 35% (37)`, `Week … 62% (150)`). No separate rolling-cost rows, provenance paragraphs or account footer are printed. Month-to-date uses the configured local calendar month from its first day's 00:00 through now for **all** detected providers, including subscriptions without a native monthly quota. It is not an extrapolation or sum of overlapping windows. History acquisition is independent of the latest-100 model-comparison sample; missing/deleted source history cannot be reconstructed.
@@ -58,7 +63,7 @@ The **canonical request provider** owns grouping, not the model publisher: GPT t
 
 Native reset plus duration defines a rolling accounting interval only while its reset is usable. A fresh provider-confirmed `not started`/empty window without a reset shows **0** current-period CCost, independently of historical requests or history loading. It never borrows a trailing lookback. Contradictory inactive/reset/usage evidence, stale observations, missing boundaries and expired windows remain unavailable until current evidence arrives. An active interval can legitimately have nonzero CCost while its native usage rounds to 0%; the percentage is never a cost conversion. Each five-hour, weekly or model-specific window is resolved independently. Delayed Web history is indexed evidence, rebound to the current account/window rather than copying an older period's costs.
 
-Full Web Watch explicitly shows **CCost Today**: it can remain 604 beside a newly empty five-hour quota. CLI monthly components without a duration likewise retain their **Today** field. **CCost this month** uses the configured local calendar month, including DST; this is distinct from a supported provider-native fixed UTC month used for Copilot residual accounting. Unknown billing anchors never become trailing 30-day or guessed local-month intervals. CCost is reference valuation, not native quota consumption, remaining allowance or billed spend; percentages, units, resets and Remaining/day/workday retain their independent native meaning.
+Full Web Watch explicitly shows **CCost Today**: it can remain 604 beside a newly empty five-hour quota. CLI monthly components without a duration likewise retain their **Today** field. **CCost this month** uses the configured local calendar month, including DST; this is distinct from a supported provider-native fixed UTC month used for Copilot residual accounting. Unknown billing anchors never become trailing 30-day or guessed local-month intervals. CCost is reference valuation, not native quota consumption or billed spend; percentages, units, resets and CLI Remaining/day/workday retain their independent native meaning. Web account-card pace is reference CCost, not a provider-promised monetary balance.
 
 Watch acquires necessary daily/rolling history after its first useful dashboard in bounded slices and reuses revision-proven analysis. Unchanged quota refreshes query a cached period index rather than initiating history scans or repricing a month. Observed requests survive source deletion within the process-local retained scope; restart can use only then-available history.
 

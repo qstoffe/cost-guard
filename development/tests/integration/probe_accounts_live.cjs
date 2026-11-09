@@ -55,12 +55,12 @@ async function main() {
       await evaluate(`location.hash='#/${section}'`);
       await until(`document.body.dataset.section === '${section}'`);
     };
-    await command('Page.addScriptToEvaluateOnNewDocument', {source:`window.probeStreams=0;window.probeReports=0;
+    await command('Page.addScriptToEvaluateOnNewDocument', {source:`window.probeStreams=0;window.probeReports=0;window.probeFetches=0;
       const Stream=EventSource;window.EventSource=class extends Stream {constructor(...args){super(...args);window.probeStreams++;}};
-      const request=fetch;window.fetch=(url,options)=>{if(url==='/api/reports')window.probeReports++;return request(url,options);};`}, sessionId);
+      const request=fetch;window.fetch=(url,options)=>{window.probeFetches++;if(url==='/api/reports')window.probeReports++;return request(url,options);};`}, sessionId);
     await command('Page.navigate', {url:launch.url}, sessionId);
     await until(`typeof current !== 'undefined' && csrf && liveConnection`);
-    const reportCount = await evaluate('probeReports');
+    let reportCount = await evaluate('probeReports');
     await navigate('accounts');
     assert.equal(await evaluate(`document.getElementById('result').textContent`), 'Loading accounts…');
     assert.equal(await evaluate(`[...views.values()].some(state=>Boolean(state.watch))`), false, 'Accounts starts without a Watch view');
@@ -83,6 +83,13 @@ async function main() {
     assert.deepEqual(await fingerprint(),accountsCards);
     assert.deepEqual(await evaluate('({streams:probeStreams,reports:probeReports})'),{streams:1,reports:reportCount});
     checks.push('Watch ↔ Accounts parity, retained navigation, one SSE and no route report jobs');
+    await require('./probe_quota_pace.cjs')({evaluate,navigate,checks});
+    await evaluate(`(async()=>applySettings(await api('/api/settings/ccost',{ccostDisplayUnit:'credits'})))()`);
+    await command('Page.reload',{},sessionId);
+    await until(`document.querySelector('.watch-primary-details')?.textContent.includes('Remaining: 3818/day')`);
+    reportCount = await evaluate('probeReports'); // Counters belong to the reloaded document, not the previous one.
+    await evaluate(`(async()=>applySettings(await api('/api/settings/ccost',{ccostDisplayUnit:'usd'})))()`);
+    checks.push('Explicit Credits reference pace survives a real Settings save and page reload');
     await evaluate(`window.savedCard=document.querySelector('.watch-subscription');window.savedBar=savedCard.querySelector('progress');
       window.savedHelp=savedCard.querySelector('.watch-quota-capacity span');savedHelp.focus();
       window.savedText=savedCard.querySelector('h4').firstChild;const selection=getSelection();selection.setBaseAndExtent(savedText,0,savedText,6);
@@ -159,7 +166,11 @@ async function main() {
     await until(`document.getElementById('settings-feedback').textContent==='CCost display saved.'`);
     await navigate('accounts');
     assert.match(await evaluate(`document.querySelector('.watch-quota-summary').textContent`),/\$/);
+    assert.match(await evaluate(`document.querySelector('.watch-primary-details').textContent`),/Remaining: \$38\.19\/day/);
     assert.deepEqual(await evaluate('({streams:probeStreams,reports:probeReports})'),{streams:1,reports:reportCount});
+    await command('Page.reload',{},sessionId);
+    await until(`document.querySelector('.watch-primary-details')?.textContent.includes('Remaining: $38.19/day')`);
+    checks.push('Default USD reference pace survives Settings reset and a real page reload');
     // The server's real terminal event is not hidden with the Accounts report shell.
     await fixture('stop');
     await until('hostState.terminal');
