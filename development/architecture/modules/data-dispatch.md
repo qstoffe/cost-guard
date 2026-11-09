@@ -5,6 +5,14 @@ FR 000617, v80.197 ownership with FR000624's scoped loading/recovery delta. See 
 the [foreground-recovery ledger](../../journal/web/foreground-recovery.md) owns the
 new evidence and explicit tradeoffs. The delivery PR/default branch own merge status.
 
+Architecture-90 static recheck (2026-11-09, source
+`54f613db6777eb4fc7fc3c5c193ad774df6c3ece`): host/dispatcher/jobs/quantum,
+application export, compact-evidence and browser-interest/recovery paths were read
+against their source and representative dispatcher tests. These remain separate
+demand, process, report-proof and presentation owners, not duplicate source truth.
+No runtime change or new executed parity/performance/native acceptance is claimed;
+[the assessment](../../journal/architecture.md) records alternatives and limits.
+
 ## Ownership and admission
 
 `web/dispatch.py::DataDispatcher` owns authenticated route leases, twelve retained
