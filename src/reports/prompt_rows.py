@@ -133,9 +133,10 @@ class PromptRowProjector:
         valuation = comparison_cost(record.entries, catalog.reference_valuation, diagnose=catalog.reference_issue)
         main = comparison_cost(record.entries[:record.root_entry_count], catalog.reference_valuation)
         subagent = comparison_cost(record.entries[record.root_entry_count:], catalog.reference_valuation)
-        model_label = effort_model_name(catalog, record.main_model_id, prompt_effort(record, self.snapshot, replies=self.replies))
+        model_label = effort_model_name(catalog, record.main_model_id,
+            prompt_effort(record, self.snapshot, replies=self.replies), record.main_provider_id)
         model, effort = effort_model_parts(catalog, record.main_model_id,
-            prompt_effort(record, self.snapshot, replies=self.replies))
+            prompt_effort(record, self.snapshot, replies=self.replies), record.main_provider_id)
         return PromptProjection(
             at_ms=record.prompt_time_ms,
             prompt_number=record.prompt_number,
@@ -205,7 +206,7 @@ class PromptRowProjector:
     def compaction(self, record: CompactionRecord, number: int) -> PromptProjection:
         catalog = self.catalog
         state = self.timeline.get(record.user_message_id)
-        label = compaction_model_timeline_name(catalog, record.model_id, record.variant)
+        label = compaction_model_timeline_name(catalog, record.model_id, record.variant, record.provider_id)
         valuation = comparison_cost(record.entries, catalog.reference_valuation, diagnose=catalog.reference_issue)
         return PromptProjection(
             at_ms=record.created_at_ms,

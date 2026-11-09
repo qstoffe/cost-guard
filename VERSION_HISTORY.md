@@ -1,5 +1,10 @@
 # Cost Guard version history
 
+## v80.218 — 2026-11-09
+
+- Moving Claude aliases no longer inherit a concrete release from fuzzy catalog matching. Sessions, CLI, Watch/Mini, timelines, Token Mix and Comparisons retain the raw request identity and show version-unverified labels; CCost help reports unresolved identity rather than an invented missing Sonnet 4 rate.
+- Previously persisted alias-derived analysis, summaries, compact Token Mix/AI Stats/matched-run facts and incremental session costs repair lazily on access, including across restarts. Unaffected cache entries, raw source evidence, counts and token totals remain reusable. Pinned request versions keep exact reference pricing; today's alias default never rewrites historical identity.
+
 ## v80.217 — 2026-11-09
 
 - Web Watch and Accounts card headings open trusted provider usage/settings pages in a new tab, with text-only hover links and keyboard focus. Copilot, Claude and ChatGPT use the requested direct destinations; API accounts and MiniMax regions retain their own console/billing destinations, while unknown providers remain plain headings.

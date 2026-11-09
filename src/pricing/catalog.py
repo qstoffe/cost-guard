@@ -12,7 +12,7 @@ from typing import Iterable
 from src.domain import ModelPricing, ModelRef, PricingTier, TokenUsage
 from src.domain.ccost import CCostPricing, ccost_pricing
 from src.domain.reference_cost import ReferenceCostIssue
-from .identities import reference_identity
+from .identities import reference_identity, unverified_alias
 from .reference_diagnostics import reference_issue
 
 _COPILOT_PREFIX = re.compile(r"^github-copilot/")
@@ -80,6 +80,8 @@ class PricingCatalog:
         return cached  # type: ignore[return-value]
 
     def _match_reference(self, model_id_or_name: str) -> ModelPricing | None:
+        if unverified_alias(model_id_or_name):
+            return None
         exact = canonical_model_name(model_id_or_name.split("/", 1)[-1])
         target = reference_identity(model_id_or_name)
         # An explicitly priced variant takes precedence over a base alias. Never
@@ -101,6 +103,8 @@ class PricingCatalog:
         return cached  # type: ignore[return-value]
 
     def _match_closest(self, model_id_or_name: str) -> ModelPricing | None:
+        if unverified_alias(model_id_or_name):
+            return None
         exact = self.resolve_reference(model_id_or_name)
         if exact is not None or reference_identity(model_id_or_name).startswith("claude"):
             return exact
@@ -125,11 +129,22 @@ class PricingCatalog:
                     best = model
         return best if best_score >= 0 else None
 
+    def display_name(self, model_id: str, provider: str = "", *, exact: bool = False) -> str:
+        """One display owner; a catalog label must not invent an alias release."""
+        alias = unverified_alias(model_id, provider)
+        if alias:
+            return alias
+        model = self.resolve_reference(model_id) if exact else self.resolve(model_id)
+        return (model.model.display_name if model and model.model.display_name else
+                _COPILOT_PREFIX.sub("", model_id or "")) or "N/A"
+
     def select_tier(self, model: ModelPricing | CCostPricing, request_input_tokens: int) -> PricingTier | None:
         return model.selected_tier(max(0, int(request_input_tokens)))
 
     def estimate(self, model_ref: ModelRef, tokens: TokenUsage) -> Decimal | None:
         """Legacy monetary billing fallback; never used for CCost analysis."""
+        if unverified_alias(model_ref.model, model_ref.provider):
+            return None
         model = self.resolve(model_ref.model)
         if model is None:
             return None
@@ -137,6 +152,8 @@ class PricingCatalog:
 
     def reference_valuation(self, model_ref: ModelRef, tokens: TokenUsage) -> Decimal | None:
         """CCost permits only exact or explicitly verified reference identities."""
+        if unverified_alias(model_ref.model, model_ref.provider):
+            return None
         model = self.reference_prices(model_ref.model)
         if model is None:
             return None
@@ -149,6 +166,8 @@ class PricingCatalog:
         self, model_ref: ModelRef, tokens: TokenUsage,
     ) -> tuple[Decimal, Decimal, Decimal, Decimal] | None:
         """The same CCost as reference_valuation, split into I/C/W/O components."""
+        if unverified_alias(model_ref.model, model_ref.provider):
+            return None
         model = self.reference_prices(model_ref.model)
         if model is None:
             return None
@@ -156,6 +175,8 @@ class PricingCatalog:
 
     def reference_usage(self, model_ref: ModelRef, tokens: TokenUsage) -> Decimal | None:
         """Diagnostic reference usage, preserving the context resolver's selection."""
+        if unverified_alias(model_ref.model, model_ref.provider):
+            return None
         model = self.reference_prices(model_ref.model, exact=False)
         return None if model is None else price_token_usage(model, tokens, tokens.input + tokens.cache_read + tokens.cache_write)
 
@@ -168,6 +189,8 @@ class PricingCatalog:
         cache_write_tokens: int,
         request_input_tokens: int,
     ) -> Decimal | None:
+        if unverified_alias(model_ref.model, model_ref.provider):
+            return None
         model = self.reference_prices(model_ref.model, exact=False)
         if model is None:
             return None

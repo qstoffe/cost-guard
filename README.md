@@ -18,7 +18,7 @@ Cost Guard analyzes [OpenCode](https://opencode.ai/) usage, relative model costs
 
 ## Quick start
 
-Use **current `main`** (v80.217, 2026-11-09), the supported distribution.
+Use **current `main`** (v80.218, 2026-11-09), the supported distribution.
 
 Without Git: [repository](https://github.com/qstoffe/cost-guard) → **main → Code → Download ZIP**. Preserve the extracted structure; download again to update.
 
@@ -83,6 +83,8 @@ Distinct signals:
 - **Quotas / limits:** independent account-native windows, credits, budgets and availability.
 
 Reference costs—including Watch **Today**—are **CCost**, unless labeled otherwise, not native **Used** or actual **Billed**. Included work can have CCost with Billed $0. Quota bars default to **Used / Total**; Web Settings can instead show finite native **Remaining / Total**. **Remaining** pace describes capacity left independently. Quota credentials do not prove historical attribution.
+
+Moving Claude aliases show **version unverified** unless the request records a concrete release. Current picker/catalog defaults cannot resolve older requests. Affected historical cache projections repair automatically on access; raw history remains unchanged.
 
 ### Symbols and token categories
 
@@ -363,7 +365,7 @@ Bundles omit prompts/titles, raw payloads/auth, tokens and account labels/IDs; s
 
 ## Current version
 
-**v80.217 (2026-11-09):** Web Watch and Accounts card headings link directly to trusted provider usage/settings pages in a new tab, with hover and keyboard-focus styling. API accounts use their own consoles; quotas, costs and live refresh remain unchanged. See [Web Beta](docs/web-beta.md#live-accounts).
+**v80.218 (2026-11-09):** Claude aliases retain version-unverified identity instead of a fuzzy concrete release. Affected persisted historical labels and reference-cost projections repair automatically on access; pinned request versions retain exact pricing. See [usage and cost](docs/usage-and-cost.md).
 
 Earlier changes: [version history](VERSION_HISTORY.md). [Live-proof limits](development/architecture/modules/history-loading.md#startup-presentation-and-launcher-evidence). Claude quotas remain experimental.
 

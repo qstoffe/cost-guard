@@ -18,6 +18,14 @@ Candidate roots are ordered by whole-tree activity. Hydrated snapshots/analysis 
 
 ## Public contract
 
+FR000629 scoped delta (2026-11-09): Sessions, prompt/effort/compaction projections
+and Token Mix share `PricingCatalog.display_name` with the actual request provider.
+Unresolved alias groups retain provider-qualified keys and unknown publisher evidence.
+Comparisons exports `model_label` from the same identity rule alongside unchanged
+raw provider/model/contributor IDs; the browser never resolves aliases. Full/Mini
+Watch and CLI consume canonical projections. Persisted repair follows the
+[analysis contract](analysis.md#session-cache-lifecycle-fr-000626), not UI-only substitution.
+
 FR 000534 updates the comparison policy below in the same delivery; module boundaries are unchanged.
 
 Immutable projections cover dashboard/catalog, lists and detail/date. Global latest-100 samples stop below whole-tree activity cutoffs (ties qualify); historical Token Mix has an independent deep scope below. Hydration is authoritative. Quotas remain native observations; normal account CCost independently loads local-day/rolling/month history. Other modes fetch no accounts. Lists hydrate requested roots; detail/date project prompts. Web pages reject catalog membership/order revision drift and report truthful root totals, but row observations are per-page, not cross-page transactions; sorting/filtering stays page-local.

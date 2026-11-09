@@ -4,6 +4,7 @@ from decimal import Decimal
 from src.analysis.timezones import format_local_timestamp
 from src.display import duration_text, context_tokens
 from src.numbers import ccost_amount
+from src.pricing.identities import unverified_alias
 from .contracts import record
 
 
@@ -13,7 +14,9 @@ def run(value):
         cost_complete main_ccost subagent_ccost incoming_context_ccost extra_ccost duration_ms
         next_context_tokens token_mix_percent token_totals calls linked_agents errors'''.split()
     return record(**{name: getattr(value, name) for name in names}, match_run=True,
-        contributors=tuple(record(provider=p, model=m, effort=e, calls=n, ccost=c, complete=known)
+        model_label=unverified_alias(value.model, value.provider) or value.model,
+        contributors=tuple(record(provider=p, model=m, model_label=unverified_alias(m, p) or m,
+                                  effort=e, calls=n, ccost=c, complete=known)
                            for p, m, e, n, c, known in value.contributors))
 
 

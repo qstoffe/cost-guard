@@ -73,7 +73,7 @@ def prompt_cost_parts(record: PromptRecord, catalog: PricingCatalog) -> tuple[Pr
                 if supported:
                     amounts[index] += parts[index]
         model, effort = effort_model_parts(catalog, model_id,
-            interpret_effort(variant, attributable=bool(variant)))
+            interpret_effort(variant, attributable=bool(variant)), provider)
         result.append(PromptCostPart(session, agents[session], provider, model_id, variant,
             model, effort, len(entries), total.known_ccost, total.priced_requests, total.complete,
             tuple(value if supported else None for value, supported in zip(amounts, known)), tier,

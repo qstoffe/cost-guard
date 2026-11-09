@@ -32,6 +32,14 @@ First-class adapters (including MiniMax) own complex auth; Simple HTTP handles D
 
 ## Allowed dependencies
 
+FR000629 scoped delta (2026-11-09): `pricing/identities.py::unverified_alias`
+recognizes moving Claude selections with provider-aware display, never a concrete
+release or publisher guess on custom routes. `PricingCatalog.display_name` shares
+that label; reference/estimated/category/context valuation and diagnostics reject
+unresolved aliases before fuzzy lookup. Pinned exact/verified dated identities keep
+their existing rates. Current provider catalogs/SDK defaults are not historical
+request evidence. [Source inspection and telemetry limits](../../journal/claude-alias-identity.md).
+
 Provider adapters depend on standard-library transports, credential contracts and normalized domain values, never presentation, Watch or report orchestration. TLS policy stays inside the OpenAI adapter; shared rendering consumes only normalized safe categories.
 
 ## Entrypoints

@@ -20,6 +20,14 @@ checked 2026-11-08: AI Stats fun-first owners/tests below; no whole-map revalida
 
 ## Start here
 
+FR000629: `pricing/identities.py` and `catalog.py` share conservative alias labels
+and valuation gates. `analysis/cache.py`, `session_cost.py`, `reports/session_summary.py`,
+`token_mix_cache.py` and `matched_runs.py` repair affected historical projections lazily;
+`application/comparisons.py` retains raw identity separately from `model_label`.
+`test_claude_alias_identity.py`, `test_claude_alias_cache.py` and
+`fixtures/claude_alias.py` cover current V2 shape, pinned rates, cross-projection
+repair, unaffected hits and real subprocess restarts. [Evidence](../../journal/claude-alias-identity.md).
+
 FR000636: `render.js::accountHeading` owns the reviewed static provider destinations
 and bound text-only external heading links for shared `account-cards.js` and legacy
 cards. `fixtures/account_links.cjs` (via `web_watch_summary.cjs`) covers every supported
