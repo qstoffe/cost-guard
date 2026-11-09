@@ -28,6 +28,22 @@ def run(command, timeout):
     return subprocess.run(command, cwd=ROOT, timeout=timeout, check=False).returncode
 
 
+def observe_preflight(run, record):
+    """Observe the actual bounded child call without changing its contract."""
+    def observed(*args, **kwargs):
+        started = time.monotonic()
+        try:
+            result = run(*args, **kwargs)
+        except (subprocess.TimeoutExpired, OSError) as error:
+            outcome = 'TimeoutExpired' if isinstance(error, subprocess.TimeoutExpired) else 'OSError'
+            record(dict(outcome=outcome, seconds=round(time.monotonic() - started, 3)))
+            raise
+        record(dict(outcome='returned', returncode=result.returncode,
+                    seconds=round(time.monotonic() - started, 3)))
+        return result
+    return observed
+
+
 def notice(name, value):
     # Structured read-only Checks API evidence as well as downloadable artifacts.
     # This contains allowlisted facts/counts/test names, never raw subprocess logs.

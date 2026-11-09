@@ -35,27 +35,59 @@ import time, json
 from pathlib import Path
 started = time.monotonic()
 mode = 'wrapper' if sys.argv[1:] in (['--launch-macos'], ['--launch-windows']) else 'preflight' if sys.argv[1:] == ['--preflight-macos'] else 'host'
-trace = Path(os.environ['CG_CI_STATE']) / ('ci-startup-' + mode + '.json')
+case = os.environ['CG_CI_CASE']
+trace = Path(os.environ['CG_CI_STATE']) / ('ci-startup-' + case + '-' + mode + '.json')
+marks = []
 def mark(stage):
-    trace.write_text(json.dumps(dict(stage=stage, seconds=round(time.monotonic()-started, 3))))
+    elapsed = round(time.monotonic()-started, 3)
+    marks.append(dict(stage=stage, seconds=elapsed))
+    trace.write_text(json.dumps(dict(stage=stage, seconds=elapsed, events=marks[-24:])))
 mark('imports')
 from unittest.mock import patch
+mark('mock_imported')
 from src.web.host import WebHost
+mark('host_imported')
 from src.web.jobs import ReportJobs
 from src.web.instance_state import InstanceStore
 from src.web.lifecycle import launch
+mark('core_imported')
 from src.web.main import main
-from development.tools.ci_web_beta import hosted_only
+mark('main_imported')
+from development.tools.ci_web_beta import hosted_only, observe_preflight
 mark('imports_complete')
 if sys.platform == 'darwin':
-    from src.web.objc_bridge import ObjC
-    original_send = ObjC.send
-    def traced_send(api, receiver, selector, *args):
-        mark(selector)
-        result = original_send(api, receiver, selector, *args)
-        mark(selector + ':returned')
-        return result
-    ObjC.send = traced_send
+    from src.web.macos_status import StatusItem
+    def native_boundary(method, phase):
+        def observed(item, *args, **kwargs):
+            flag = '_ci_observed_' + phase
+            if getattr(item, flag, False):
+                return method(item, *args, **kwargs)
+            setattr(item, flag, True)
+            mark('native_' + phase)
+            result = method(item, *args, **kwargs)
+            mark('native_' + phase + ':returned')
+            return result
+        return observed
+    for phase in ('install', 'poll', 'close'):
+        setattr(StatusItem, phase, native_boundary(getattr(StatusItem, phase), phase))
+    from src.web.startup import StartupProgress, STAGES
+    progress_call = StartupProgress.__call__
+    def progress(self, stage):
+        if stage in STAGES:
+            mark('launcher_' + stage)
+        return progress_call(self, stage)
+    StartupProgress.__call__ = progress
+    if mode == 'wrapper':
+        import subprocess
+        real_run = subprocess.run
+        receipt = Path(os.environ['CG_CI_STATE']) / ('ci-preflight-' + case + '.json')
+        observed = observe_preflight(real_run, lambda value: receipt.write_text(json.dumps(value)))
+        def traced_run(*args, **kwargs):
+            command = args[0] if args else kwargs.get('args')
+            if isinstance(command, (list, tuple)) and len(command) == 3 and command[-1] == '--preflight-macos':
+                return observed(*args, **kwargs)
+            return real_run(*args, **kwargs)
+        subprocess.run = traced_run
 root = Path(__file__).resolve().parent
 real_connect = socket.socket.connect
 def offline_connect(stream, address):
@@ -121,10 +153,24 @@ def command_failure(result, store):
     return evidence
 
 
+def preflight_observations(home):
+    values = []
+    for case in ('shell-1', 'shell-2'):
+        path = home / ('ci-preflight-' + case + '.json')
+        if path.is_file():
+            value = dict(case=case, **json.loads(path.read_text()))
+            trace = home / ('ci-startup-' + case + '-preflight.json')
+            if trace.is_file():
+                value['child'] = json.loads(trace.read_text())
+            values.append(value)
+    return values
+
+
 def detached(root, home):
     store = InstanceStore(root, data_home=home)
     module = "src.web.native_windows" if os.name == "nt" else "src.web.native_macos"
-    environment = dict(os.environ, CG_CI_STATE=str(home))
+    case = 'lifecycle-first'
+    environment = dict(os.environ, CG_CI_STATE=str(home), CG_CI_CASE=case)
     original_spawn = subprocess.Popen
     identities = {}
     identity_checks = []
@@ -151,6 +197,7 @@ def detached(root, home):
             assert not first.browser_opened
             assert control(state, "open")["ready"]
             assert store.read()["nonce"] == first.instance
+            case = environment['CG_CI_CASE'] = 'lifecycle-restart'
             second = launch(root, module, opener=lambda url: False)
             assert not second.browser_opened and control(store.read(), "status")["ready"]
             assert second.instance != first.instance
@@ -176,6 +223,7 @@ def detached(root, home):
             if sys.platform == 'darwin':
                 assert os.access(entry, os.X_OK)
             for attempt in range(2):
+                case = environment['CG_CI_CASE'] = 'shell-' + str(attempt + 1)
                 previous = store.read()
                 result = subprocess.run(command, cwd=home, env=environment, capture_output=True, timeout=60)
                 assert result.returncode in (0, 4), 'production_launch_wrapper_failed'
@@ -203,15 +251,17 @@ def detached(root, home):
             error.ci_command = command_failure(result, store)
         error.ci_trace = {}
         for mode in ('wrapper', 'preflight', 'host'):
-            trace = home / ('ci-startup-' + mode + '.json')
+            trace = home / ('ci-startup-' + case + '-' + mode + '.json')
             if trace.is_file():
                 error.ci_trace[mode] = json.loads(trace.read_text())
+        error.ci_preflight = preflight_observations(home)
         raise
     finally:
         current = store.read()
         if current:
             stop_existing(store, current)
-    return dict(outcome="PASS", registered_browser_handoff=handoff, startup_identity_checks=identity_checks, checks=["detached native host / private OS locks / HTTP ownership",
+    return dict(outcome="PASS", registered_browser_handoff=handoff, startup_identity_checks=identity_checks,
+        preflight_observations=preflight_observations(home), checks=["detached native host / private OS locks / HTTP ownership",
         "Open retains instance", "deliberate restart retires original PID", "owned Exit/stop",
          "spaces and Unicode source path", "production launcher preflight / restart / unchanged preferences and checkout identity",
          "source change removes native host and private record"],
@@ -320,6 +370,8 @@ def main():
             evidence["command_failure"] = error.ci_command
         if hasattr(error, "ci_trace"):
             evidence["last_child_stage"] = error.ci_trace
+        if hasattr(error, "ci_preflight"):
+            evidence['preflight_observations'] = error.ci_preflight
         # Preserve causal source locations, not raw paths/state/exception payloads.
         import traceback
         evidence["failure_locations"] = [dict(file=Path(frame.filename).name, line=frame.lineno, function=frame.name)
