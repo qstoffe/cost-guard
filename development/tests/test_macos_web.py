@@ -304,7 +304,7 @@ class MacWebTests(unittest.TestCase):
             python.write_text('''#!/bin/sh
 if [ "$1" = "-c" ]; then exit 0; fi
 printf 'Cost Guard startup: Checking native support\\n'
-printf 'ENTRY:%s|%s\\n' "$1" "$2"
+printf 'ENTRY:%s|%s|%s\\n' "$1" "$2" "$3"
 sleep 0.4
 exit "$CG_FAKE_EXIT"
 ''', encoding='utf-8')
@@ -318,7 +318,7 @@ exit "$CG_FAKE_EXIT"
                             stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=slave, timeout=5)
                         self.assertEqual(code, child.returncode)
                         self.assertIn(b'Checking native support', child.stdout)
-                        self.assertIn(('ENTRY:' + str(root / 'cost-guard-web.py') + '|--launch-macos').encode(), child.stdout)
+                        self.assertIn(('ENTRY:-u|' + str(root / 'cost-guard-web.py') + '|--launch-macos').encode(), child.stdout)
                         # Darwin may discard queued PTY output on the last slave
                         # close. Read while our slave remains open, with a deadline.
                         readable, _, _ = select.select([master], [], [], 1)

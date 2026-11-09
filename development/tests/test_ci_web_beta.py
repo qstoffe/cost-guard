@@ -231,6 +231,20 @@ class CiEvidenceTests(unittest.TestCase):
             with self.assertRaisesRegex(SystemExit, "not authorized on a workstation"):
                 ci_web_beta.hosted_only()
 
+    def test_native_command_failure_keeps_only_allowlisted_lifecycle_codes(self):
+        from development.tests.integration.ci_native_web import command_failure
+
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            (directory / 'lifecycle.log').write_text(
+                '1 starting\n2 private-source-value\n3 tray_unavailable\n4 instance_conflict\n', encoding='ascii')
+            result = SimpleNamespace(returncode=1, stderr=b'private traceback/path\nInstanceConflict: instance_start_timeout\n')
+
+            evidence = command_failure(result, SimpleNamespace(directory=directory))
+
+        self.assertEqual(dict(returncode=1, lifecycle_errors=['tray_unavailable', 'instance_conflict'],
+                              error_code='instance_start_timeout'), evidence)
+
     def test_synthetic_sessions_fixture_captures_and_joins_without_watch_publication(self):
         import shutil
         from development.tests.fixtures.web_reports import SyntheticSessionsRuntime

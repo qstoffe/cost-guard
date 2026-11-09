@@ -26,15 +26,16 @@ from src.web.lifecycle import control, launch, stop_existing
 from src.web.process_identity import process_identity
 
 LAUNCH_ERRORS = {"tray_unavailable", "unsafe_instance_path", "app_preparation_failed",
-                 "instance_start_timeout", "instance_start_conflict", "gui_or_server_start_failed",
-                 "safe_force_stop_unavailable"}
+                  "instance_start_timeout", "instance_start_conflict", "gui_or_server_start_failed",
+                  "safe_force_stop_unavailable", "configuration_unavailable", "instance_conflict"}
 
 SHIM = '''import os, sys
 import socket
 import time, json
 from pathlib import Path
 started = time.monotonic()
-trace = Path(os.environ['CG_CI_STATE']) / 'ci-startup.json'
+mode = 'wrapper' if sys.argv[1:] in (['--launch-macos'], ['--launch-windows']) else 'preflight' if sys.argv[1:] == ['--preflight-macos'] else 'host'
+trace = Path(os.environ['CG_CI_STATE']) / ('ci-startup-' + mode + '.json')
 def mark(stage):
     trace.write_text(json.dumps(dict(stage=stage, seconds=round(time.monotonic()-started, 3))))
 mark('imports')
@@ -102,6 +103,22 @@ def until(predicate, seconds=25):
             return
         time.sleep(0.05)
     raise AssertionError("bounded_native_condition_timeout")
+
+
+def command_failure(result, store):
+    # The production wrapper handles exceptions and prints user guidance. Its
+    # bounded lifecycle log retains the exact safe code even without a traceback.
+    evidence = dict(returncode=result.returncode)
+    path = store.directory / 'lifecycle.log'
+    if path.is_file():
+        codes = [line.split()[-1] for line in path.read_text(encoding='ascii').splitlines()[-16:] if line.split()]
+        evidence['lifecycle_errors'] = [code for code in codes if code in LAUNCH_ERRORS]
+    for code in sorted(LAUNCH_ERRORS):
+        suffix = b'InstanceConflict: ' + code.encode('ascii')
+        if any(line.endswith(suffix) for line in result.stderr.splitlines()):
+            evidence['error_code'] = code
+            break
+    return evidence
 
 
 def detached(root, home):
@@ -183,15 +200,12 @@ def detached(root, home):
         if result is not None and result.returncode:
             # The captured traceback can contain private state/paths. Publish only
             # the exit status and exact known lifecycle code, never raw output.
-            error.ci_command = dict(returncode=result.returncode)
-            for code in sorted(LAUNCH_ERRORS):
-                suffix = b"InstanceConflict: " + code.encode("ascii")
-                if any(line.endswith(suffix) for line in result.stderr.splitlines()):
-                    error.ci_command["error_code"] = code
-                    break
-        trace = home / "ci-startup.json"
-        if trace.is_file():
-            error.ci_trace = json.loads(trace.read_text())
+            error.ci_command = command_failure(result, store)
+        error.ci_trace = {}
+        for mode in ('wrapper', 'preflight', 'host'):
+            trace = home / ('ci-startup-' + mode + '.json')
+            if trace.is_file():
+                error.ci_trace[mode] = json.loads(trace.read_text())
         raise
     finally:
         current = store.read()
