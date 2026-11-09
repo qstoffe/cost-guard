@@ -246,8 +246,9 @@ above each quota bar all use the same provider snapshot, converted to reference 
 Usage in other clients counts here, but never changes OpenCode-observed **CCost Today**
 or prompt/session costs. Other eligible percentage-only windows retain the
 `observed period CCost / raw fraction used` Capacity guesstimate and estimated Remaining.
-Reference USD is not provider cash, a guaranteed budget or a billed balance. Unknown evidence
-shows **?**, Unlimited Capacity **N/A**. Focus/tap the visible label/value for native amounts,
+Reference USD is not provider cash, a guaranteed budget or a billed balance. Unknown reference
+usage can show **?**; unknown/unlimited Capacity rows are omitted, while native unlimited
+status remains visible. Focus/tap the visible label/value for native amounts,
 attribution and limitations. Credits/USD converts all three reference figures together.
 A provider-confirmed idle 0%-Used window shows a healthy **100% remaining** bar while
 its CCost Capacity/Remaining can remain unknown; **Window not started** is preserved.
@@ -893,19 +894,20 @@ without smaller text. Native declarations/order, never depletion or
 provider identity, select the primary. Missing primary stays unavailable; weekly-only
 accounts have no invented five-hour slot or duplicate secondary.
 
-Each quota shows **period · N% used/remaining (CCost)**, then factual **Monthly Capacity**,
-**5-hour Capacity**, **Weekly Capacity**, etc. Unknown periods retain **Capacity**.
-Every nonmonthly primary/secondary quota adds a visible **Monthly Capacity** line
-directly underneath and before its own bar: full-window reference Capacity ×
-2,592,000 / verified full-window seconds, calculated with unrounded Decimal.
-This standardized 30-day equivalent is always **(guesstimate)**, never an entitlement,
-bill or forecast. Compare independent restrictions separately; never add them together.
-Unknown duration/recurrence, inactive/expired/stale data, incompatible reference units,
-contradictory native data or incomplete pricing show **Monthly Capacity: N/A**, with
-the reason in the existing Capacity help. Native monthly windows have just one line.
-An empty, aria-hidden noninteractive primary row aligns monthly peers beside an extra
-monthly-equivalent line; it disappears for single/all-monthly or separately wrapped
-cards. Watch and Accounts use the same full-size card contract by default, including
+Each quota shows **period · N% used/remaining (CCost)**, then a known numerical
+**Monthly Capacity**, **5-hour Capacity**, **Weekly Capacity**, etc. Displayed window
+names capitalize only their first letter; internal provider identifiers are unchanged.
+Unknown period Capacity rows are omitted entirely, not replaced by placeholders or blank lines.
+A nonmonthly primary/secondary quota adds **Monthly Capacity** only when its numerical
+30-day equivalent is valid: full-window reference Capacity × 2,592,000 / verified
+full-window seconds, calculated with unrounded Decimal. This equivalent has a leading
+**~**, never an entitlement, bill or forecast. Compare independent restrictions separately;
+never add them together. Unknown duration/recurrence, inactive/expired/stale data,
+incompatible reference units, contradictory native data or incomplete pricing omit
+the derived row. Native monthly windows have just their own Capacity line.
+An empty, aria-hidden noninteractive row aligns a known period-only primary beside a
+known monthly-equivalent peer on the same responsive row. Unknown primaries never
+get this spacer. Watch and Accounts use the same full-size card contract, including
 ordered text, controls, help, warnings, percentages, reset and accessibility; future
 deliberate divergence requires explicit owner approval. Mini stays separately compact.
 The bar is followed by a tightly adjacent reset and applicable canonical
@@ -924,14 +926,17 @@ show Used **(0)** independently of Today. Unlimited, sub-100% precision and genu
 remain distinct. Today keeps daily scope/attribution without an estimate suffix (basis
 on hover). Accessible help retains native Used/Total and Remaining/Total, native money,
 reset and partial/estimated attribution without raw source/observation logs.
-Each quota’s Capacity label and number share one compact help target explaining usage
-and reference capacity. Account CCost Today label and number explain daily scope and real attribution notes.
+Each known Capacity label and number share one intrinsic help target: one explanatory
+sentence, then separated native window/Used/Remaining/reset facts and essential warnings.
+These card Capacity tooltips omit raw calculation, arithmetic and rounding methodology.
+The native summary remains a help target even when Capacity is unknown.
+Account CCost Today label and number explain daily scope and real attribution notes.
 Copilot's verified reference Used and Remaining use one provider snapshot and sum to
 Capacity internally; independent OpenCode-observed period cost can differ.
 For percentage-only quotas Capacity/Remaining are explicitly explained extrapolations, not
-provider-promised allocation. Numeric ratio-derived Capacity shows exactly **(guesstimate)**
-after the number; verified directly comparable native allowances do not. Unknown **?**,
-missing and **N/A** never get the suffix. Provenance follows each quota across units
+provider-promised allocation. Numeric ratio-derived Capacity shows a leading **~**
+directly before the amount; verified directly comparable native allowances do not.
+Unknown/missing figures never get a marker. Provenance follows each quota across units
 and orientations, including Accounts and Mini's Capacity help. Missing native usage never borrows CCost. Credits/USD
 changes CCost, not native units. Accounts shares Full Watch's identity-matched
 period costs and reference figures; Mini keeps one compact primary line with
@@ -939,8 +944,9 @@ period costs and reference figures; Mini keeps one compact primary line with
 followed only by applicable primary unrounded-estimate help.
 Both facts belong only to the visible primary window, with canonical local reset/countdown,
 **Window not started** or honest unknowns. No secondary-quota or unrelated CCost prose
-is repeated there; warnings remain visible on the Mini line. Full Watch/Accounts retain
-their richer help. All three follow the same choice immediately, without more polling.
+is repeated there; warnings remain visible on the Mini line. Full Watch/Accounts use
+concise Capacity help while retaining other native and pace help. All three follow
+the same choice immediately, without more polling.
 
 **Quota guesstimate precision:** ratio-derived Remaining/Capacity, every theoretical
 30-day Monthly Capacity and genuinely estimated Remaining/day or /workday use the
@@ -951,13 +957,13 @@ monthly equivalents from a rounded display. For example, 613 → **600 / $6.00**
 2,343 → **2300 / $23.00**, 52,343 → **50000 / $500.00**, 250 → **250 / $2.50**.
 Conversion to USD happens after Credit-space rounding and keeps `$` plus two decimals.
 Fractional Credits retain necessary precision; positive amounts below USD display
-precision use **<$0.01**, not zero. Help explains when two-decimal USD cannot represent
-the 10% Credit-space tolerance.
+precision use **<$0.01**, not zero. Detailed estimate help outside the two shared-card
+Capacity metrics explains the USD precision limitation.
 
-Focus, hover or tap the rounded amount for its **guesstimate before display rounding**
-in full retained Decimal Credits (plus ordinary USD in USD mode), not verified provider
-usage. Capacity and Monthly Capacity have their own help; Mini extends its existing
-primary-line help. Used/Remaining, unit switches and Live updates refresh the same
+Remaining and pace help retains the **guesstimate before display rounding** in full
+Decimal Credits (plus ordinary USD in USD mode), not verified provider usage. Shared-card
+Capacity/Monthly Capacity instead use the short explanations above; Mini retains its
+existing primary-line calculation help. Unit switches and Live updates refresh the same
 bound help without fetching. Source-confirmed allowances, observed period Used, Today,
 prompt/session costs, native percentages/bars, billing and CLI formatting are unchanged.
 
@@ -1048,15 +1054,18 @@ valuation disclosure and model announcements. Exceptional host/source/offline no
 remain. No Observation details, Copilot Unaccounted usage or global warning list returns.
 
 **[Mini Watch](web-mini-watch.md)** is an explicit, highlighted-while-On floating view with
-one **Activity | Session | CCost (Total) | Ctx** table and thin primary-subscription
+one **Activity | Session | CCost | Total | Ctx** table and thin primary-subscription
 bars on supported desktop browsers. All distinct running sessions appear once;
 canonical finished sessions fill remaining slots up to five. Activity uses configured-local
-start/finish HH:mm with date/offset help. Prompt cost and whole-session cost remain separate.
+start/finish HH:mm with date/offset help. Prompt cost and whole-session cost have separate
+header/data cells and independent value help, without total parentheses. Only a genuinely
+running represented prompt colors the entire **Duration: time** fragment yellow in both
+cost tooltips; open help keeps ticking and removes the cue on non-running outcomes.
 Ctx help separates the exact visible Next and represented prompt's Δ into short paragraphs.
 Historical visible Next is session-scoped and can be later than its prompt delta: **300k**
 and **+12k** are compatible, not grounds to calculate +200k from an older 100k input.
 Running source revisions refresh the same open tooltip; provisional/missing comparisons
-get concise canonical explanations. No fifth column or browser-owned calculation.
+get concise canonical explanations. No separate delta column or browser-owned calculation.
 Default opening measures five rows; extra running rows scroll within the table. Explicit
 Fit changes height only; live updates never auto-fit. Native clamping retains document
 scrolling and narrow table panning. Mini reuses the tab's live publication and persisted

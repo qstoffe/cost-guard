@@ -1,5 +1,11 @@
 # Cost Guard version history
 
+## v81.3 — 2026-11-09
+
+- Shared Accounts/Full Watch cards omit unknown period and unavailable derived Monthly Capacity rows, retain native usage/reset/warnings, and capitalize only a quota label’s first letter. Numeric capacity estimates use leading `~`; verified native amounts remain unmarked.
+- Capacity tooltips start with a short explanation and retain useful native facts without raw arithmetic or rounding essays. Canonical Decimal calculations and other estimate diagnostics are unchanged.
+- Mini uses five real Activity/Session/CCost/Total/Ctx columns, with separate accessible cost scopes and no total parentheses. Measured opening fit is slightly narrower. Both cost tooltips highlight only a genuinely running prompt’s complete Duration line, retaining live updates, selection and safe literal text.
+
 ## v81.2 — 2026-11-09
 
 - Retain a completed prompt's supported incoming/next context pair after it leaves current active history, without reviving live continuation or warnings. Missing input/categories, incompatible epochs/models and unexplained shrink remain unavailable; a single prompt never implies a zero baseline.

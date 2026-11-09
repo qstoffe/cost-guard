@@ -36,15 +36,14 @@ const ReportView = (() => {
     });
     return target;
   }
-  function quotaHelp(quota, compact = false) {
+  const quotaLabel = quota => quota.label.replace(/^\p{L}/u, letter => letter.toUpperCase());
+  const capacityKnown = (quota, monthly = false) => quota.ccost_reference?.[monthly ? 'monthly_capacity' : 'capacity'] != null;
+  function quotaHelp(quota, compact = false, monthly = false) {
     const view = quotaView(quota), native = quota.quota_display;
-    const scope = [quota.label, quota.period !== 'unknown' && quota.period,
+    const scope = [quotaLabel(quota), quota.period !== 'unknown' && quota.period,
       quota.duration_seconds && display(quota, 'window') + ' window',
       quota.scope !== 'account' && quota.scope, quota.model_id].filter(Boolean).join(' · ');
-    const monthly = display(quota, 'monthly_capacity');
-    return (compact ? '' : `${display(quota, 'ccost_help')}\n${display(quota, 'capacity_label')}: ${display(quota, 'ccost_capacity')}\n` +
-      (quota.display?.ccost_capacity_help ? display(quota, 'ccost_capacity_help') + '\n' : '') +
-      (monthly ? `Monthly Capacity: ${monthly}\n${display(quota, 'monthly_capacity_help')}\n` : '') + '\n') + scope + '\n' +
+    return (compact ? '' : display(quota, monthly ? 'monthly_capacity_help' : 'capacity_help') + '\n\n') + scope + '\n' +
       `Native Used: ${native?.used.native || view.native}\nNative Remaining: ${native?.remaining.mode === 'remaining' ? native.remaining.native : 'unknown / inapplicable'}\n` +
       (quota.limit_money != null || quota.remaining_money != null ? `Native money ${view.mode}: ${view.money} / ${display(quota, 'limit_money')}\n` : '') +
       (compact ? `CCost Used: ${display(quota, 'ccost_used')} · Capacity: ${display(quota, 'ccost_capacity')}\n${display(quota, 'ccost_brief')}\n` : '') +
@@ -79,7 +78,7 @@ const ReportView = (() => {
     effects.get(root)?.();
     const binding = bindings.get(root);
     if (binding) text(root, binding);
-    for (const child of root.children) syncUnits(child, true);
+    for (const child of [...root.children]) syncUnits(child, true);
     if (!nested) ContextHelp.refresh(root);
   }
   function setUnit(value, root) {
@@ -656,5 +655,5 @@ const ReportView = (() => {
     return ['Complete session', costValue(block, 'total_ccost'), known(block.total_calls),
       display(block, 'duration_ms'), '—', known(block.total_ictx_cost_text), known(block.total_extra_cost_text), known(block.total_mix_text)];
   }
-  return {render, renderLive, element, detailCells, detailTotals, compare, sortedCompare, overviewAccounts, display, contextSummary, text, setUnit, syncUnits, defaultUnit, mixLegend, hourlySummary, historyWarning, bind, setQuotaMode, quotaView, quotaHelp, estimateValue, LiveStatus, costHelp, costValue, accountHeading};
+  return {render, renderLive, element, detailCells, detailTotals, compare, sortedCompare, overviewAccounts, display, contextSummary, text, setUnit, syncUnits, defaultUnit, mixLegend, hourlySummary, historyWarning, bind, setQuotaMode, quotaView, quotaHelp, quotaLabel, capacityKnown, estimateValue, LiveStatus, costHelp, costValue, accountHeading};
 })();

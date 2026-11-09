@@ -64,8 +64,8 @@ and focus; exact zero is 0, unsupported comparisons N/A. No new acquisition or l
   scope while retaining normal selection. Default sorting/action dismissal is unchanged.
   Selector labels inherit their button's foreground, including on hover; selected
   foreground/background do not cross-fade through unreadable intermediate colors.
-  Mini's Session and CCost (Total) are separate column headings. Each cost heading
-  explains prompt cost followed by the entire session's cost in parentheses.
+  Mini has separate Session, CCost and Total headings. CCost explains the represented
+  prompt; Total explains the entire session including attributed linked subagents.
 - Functions read current display tokens. `ContextHelp.refresh(container)` updates
   open help without reopening it; `ReportView.syncUnits` refreshes once after text
   updates. Never price or total data inside a help function.
@@ -76,7 +76,10 @@ and focus; exact zero is 0, unsupported comparisons N/A. No new acquisition or l
 - One manual Popover per document holds noninteractive `role="tooltip"` text with
   preserved line breaks. The active trigger references it via `aria-describedby`;
   other description IDs survive. No duplicate native `title`/`aria-description`,
-  HTML injection, storage, request or dependency.
+  HTML injection, storage, request or dependency. The sole structured exception is
+  `ContextHelp.runningDuration(before, duration, after)`: privately branded text parts,
+  rendered as TextNode / fixed running-color span / TextNode, never interpreted HTML.
+  Live fragment updates retain text/selection identity; non-running help returns to plain text.
 - Pointer hover opens after the single shared **600ms** delay; keyboard focus and
   explicit passive taps open promptly. A separate **150ms** exit grace permits pointer transfer into help. Escape closes
   without moving focus and rendering cannot reopen it. Tap/click pins passive help;
@@ -120,10 +123,10 @@ without changing the rate signature. See [classification and evidence](../../jou
 | Full Watch: all ten active/historical headings | Shared buttons; explicit I/C/W/O, concise CCost directs to value details, exactly two Model bullets, concise Effort without N/A tautology, Ictx versus next context |
 | Watch: Started/Finished, Model, Calls, CCost cells | Clock text reveals real dates; accessible model star and help expose causal linked agents even for one shared model. Main-only model switches retain help without a star. Model/CCost omit tier prose without changing tier grouping/rates; Calls copy is unchanged. CCost shows only the total; value help starts with independent I/E amounts, then retains all grouped category/child-prompt counts, qualified missing evidence and one total. Unknown I/E never becomes zero from total rounding. Token Mix remains header-only; no preview popups or generic noncost N/A help |
 | Watch: session Context/CCost and price warning | Concise shared context/cost help; severity and canonical threshold remain visible |
-| Watch: daily summary, account Today, primary/secondary quotas, exact reset | Global Today label, amount and prompt count are plain semantic text with no help targets, title, source aria or completeness disclaimer. Account-specific Today and quota help remain. Period Capacity and nonmonthly 30-day equivalent share one intrinsic explanation. Inferred period Capacity and every numeric monthly extrapolation use `(guesstimate)`; native and unknown figures do not. Preserve native factual lower block |
+| Watch: daily summary, account Today, primary/secondary quotas, exact reset | Global Today label, amount and prompt count remain plain semantic text. Account Today and native quota-summary help remain. Unknown Capacity/Monthly Capacity rows and their help targets are absent. Known values have distinct concise explanations plus native facts, without raw arithmetic/rounding. Ratio period Capacity and every numerical monthly equivalent use leading `~`; native amounts do not. Display-only first-letter normalization also applies to help/ARIA |
 | Watch: activity and Earlier Sessions | Native disclosures retain full lists/counts; expanded activity cues explain all-call totals, red outcome subsets, missing evidence and direct skill failures without repeating lists |
-| Mini: both tables’ headings | Session names only; CCost (Total) explains prompt versus whole-session reference cost, not billing. Active-next versus historical-last-valid-next context remains distinct |
-| Mini: session title/cost and prompt/history status | Both tables' Session text reveals the full title and represented canonical Prompt # (unknown stays unavailable). Both paired-cost values use the same compact prompt model/effort/duration/known-calls renderer, with linked/mixed/pricing/outcome facts. Running uses its focal; history its actual representative. No row-wide popup, native title, cue, detailed I/C/W/O breakdown, passive source-refresh flags or raw prompt text |
+| Mini: table headings | Activity / Session / CCost / Total / Ctx; independent cost headings explain prompt versus whole-session reference cost, not billing. Active-next versus historical-last-valid-next context remains distinct |
+| Mini: session title/cost and prompt/history status | Session text reveals full title and represented canonical Prompt # (unknown stays unavailable). Separate CCost/Total cells retain independent value help over compact prompt model/effort/duration/calls and linked/mixed/pricing/outcome facts. Only genuinely running represented prompts use yellow for the complete Duration fragment in both cost tooltips, ticking/removing it in already-open help. History uses its actual representative. No row-wide popup, unsafe HTML, native title, detailed I/C/W/O or raw prompt text |
 | Mini: Today, freshness, Earlier Sessions, quota bars, return-to-tab | No global Today or Earlier Sessions help, table-level replacement or progress-bar popup. Loaded rows and certified empty history refresh silently, with no timed refresh warning. Keep useful return action help with immediate activation dismissal. Critical host/auth/source failures stay actionable, not observation logs |
 | Mini: subscriptions | Primary-window Capacity, then Next reset; applicable raw Capacity/current Remaining estimate help follows. Select canonical unit/provenance and reset tokens; no secondary or unrelated CCost prose. Warnings remain visible; Full Watch/Accounts retain richer help |
 | Models: reference checkboxes and multi-sort | Four semantic label-only definitions preserve click/keyboard/Shift actions and accessible sort names. Relative Price List Cost has two compact paragraphs: reference ratio, then shared recent token mix rather than task performance. Internal `relative_cost`, tiers and sample semantics are unchanged |
@@ -153,10 +156,11 @@ coverage. Headless evidence does not prove physical OS pointer/window transition
 
 ## Server-owned detail boundary
 
-FR000641 scoped delta: ratio Capacity/Remaining, theoretical Monthly Capacity and
-estimated Web pace expose their unrounded Decimal calculation in intrinsic value help.
-Mini appends only its primary Capacity/current Remaining estimate to the existing
-Capacity/reset facts. Provider-confirmed figures do not get a before-rounding claim.
+FR000641's raw calculation help remains for ratio Remaining, estimated Web pace and
+Mini's primary Capacity/current Remaining detail. FR000654 intentionally replaces only
+shared-card Capacity/Monthly Capacity help with one explanatory sentence and native facts;
+canonical unrounded Decimal calculations and estimate precision are unchanged.
+Provider-confirmed figures do not get a before-rounding claim.
 Server-prepared help follows live identity, mode and unit; `quota-estimates.md` in the
 Web journal records the precise rounding rule, exception and verification limits.
 

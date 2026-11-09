@@ -8,7 +8,7 @@ function inspect(view) {
     return {text:node.textContent,left:r.left,right:r.right,top:r.top,bottom:r.bottom,font:style.fontFamily,size:style.fontSize,
       fits:rects.every(n=>n.left>=r.left-1&&n.right<=r.right+1)&&node.scrollWidth<=node.clientWidth+1};});
   const widths=[...view.body.parentNode.tHead.rows[0].cells].map(n=>n.getBoundingClientRect().width);
-  const other=widths[0]+widths[2]+widths[3];
+  const other=widths[0]+widths[2]+widths[3]+widths[4];
   return {fits:parts.every(p=>p.fits&&p.left>=bounds.left-1&&p.right<=bounds.right+1),parts,width:bounds.width,
     columns:widths,ratio:widths[1]/other,gutter:view.prompts.offsetWidth-view.prompts.clientWidth,
     documentOverflow:view.doc.documentElement.scrollWidth>w.innerWidth+1};
@@ -47,10 +47,10 @@ module.exports=async({evaluate,command,sessionId,open,close,read,capture,layouts
     const value=await evaluate(`(()=>{const v=miniWatch.view,w=miniWatch.window;return {
       documentOverflow:v.doc.documentElement.scrollWidth>w.innerWidth+1,
       horizontal:v.prompts.scrollWidth>v.prompts.clientWidth+1,
-      costs:[...v.promptRows.values()].map(row=>{const cell=row.cells[2],n=cell.firstChild,r=v.doc.createRange();r.selectNodeContents(n);
-        return {text:n.textContent,fits:[...r.getClientRects()].every(x=>x.left>=cell.getBoundingClientRect().left-1&&x.right<=cell.getBoundingClientRect().right+1)};})};})()`);
+       costs:[...v.promptRows.values()].flatMap(row=>[2,3].map(index=>{const cell=row.cells[index],n=cell.firstChild,r=v.doc.createRange();r.selectNodeContents(n);
+         return {index,text:n.textContent,fits:[...r.getClientRects()].every(x=>x.left>=cell.getBoundingClientRect().left-1&&x.right<=cell.getBoundingClientRect().right+1)};}))};})()`);
     assert.equal(value.documentOverflow,false);assert.ok(value.costs.length>0);
-    for(const cost of value.costs){assert.equal(cost.text,`${amount} (${total})`);assert.equal(cost.fits,true);}
+    for(const cost of value.costs){assert.equal(cost.text,cost.index===2?amount:total);assert.equal(cost.fits,true);}
     if(width===280)assert.equal(value.horizontal,true,'oversized independent amounts pan within the table, never clip');
     layouts.push({case:`paired-cost-${unit}-${width}`,...value});await close();
   }

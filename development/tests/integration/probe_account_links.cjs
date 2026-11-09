@@ -7,7 +7,9 @@ module.exports = async ({command,evaluate,sessionId,navigate,checks,layouts,open
     linkCase.accounts.accounts[0].observation.label='GitHub Copilot — long account heading with wrapping at narrow widths';
     linkCase.accounts.accounts[1].observation.provider_id='unknown';
     linkCase.accounts.accounts[1].observation.label='Unknown provider';
-    ReportView.setQuotaMode('used');`);
+    ReportView.setQuotaMode('used');
+    window.linkUpdate=AccountCards.View.prototype.update;
+    AccountCards.View.prototype.update=function(){return linkUpdate.call(this,linkCase)};`);
   for (const width of [360,1280]) for (const zoom of [1,1.25]) for (const theme of ['classic','light','dark']) {
     await command('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false},sessionId);
     await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:theme==='dark'?'dark':'light'},
@@ -84,6 +86,7 @@ module.exports = async ({command,evaluate,sessionId,navigate,checks,layouts,open
   // may overlap a popup. Both only read/present the same host-owned publication.
   assert.ok(retained.requests.every(url=>['/api/interest','/api/live'].includes(url)),JSON.stringify(retained.requests));
   await command('Emulation.setTouchEmulationEnabled',{enabled:false},sessionId);
-  await evaluate(`document.documentElement.dataset.theme=linkTheme;current.accounts.update(linkOriginal)`);
+  await evaluate(`AccountCards.View.prototype.update=linkUpdate;delete window.linkUpdate;
+    document.documentElement.dataset.theme=linkTheme;current.accounts.update(linkOriginal)`);
   checks.push('Account links: Watch/Accounts normal/exhausted Classic/Web light/dark at 360/1280 and 100/125% zoom; hover/leave, native Tab focus, AX purpose, plain unknown, header padding inert, pointer/touch each open one new tab; same Live connection/CSRF/route, only ordinary snapshot/interest heartbeats permitted');
 };

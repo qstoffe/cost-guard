@@ -17,7 +17,8 @@ async function main() {
   const next = async () => JSON.parse((await lines.next()).value);
   const fixture = async command => { server.stdin.write(JSON.stringify({command})+'\n'); assert.equal((await next()).ok, true); };
   const child = spawn(browser, ['--headless=new', '--no-first-run', '--no-default-browser-check',
-    '--disable-extensions', '--disable-background-networking', '--remote-debugging-pipe',
+     // The synthetic route matrix exceeds Chromium's rapid-navigation IPC quota.
+     '--disable-ipc-flooding-protection', '--disable-extensions', '--disable-background-networking', '--remote-debugging-pipe',
     '--user-data-dir='+profile, 'about:blank'], {windowsHide:true, stdio:['ignore','ignore','ignore','pipe','pipe']});
   const pending = new Map(), errors = [], openEvents = []; let sequence = 0, buffer = '';
   child.stdio[4].on('data', chunk => {
@@ -116,7 +117,7 @@ async function main() {
     await evaluate(`(async()=>{applySettings(await api('/api/settings/ccost',{ccostDisplayUnit:'usd'}));
       applySettings(await api('/api/settings/quota-display',{quotaDisplayMode:'remaining'}));})()`);
     assert.match(await evaluate(`savedCard.querySelector('.watch-quota-summary').textContent`), /remaining.*\$/);
-    assert.match(await evaluate(`document.getElementById('context-help').textContent`), /Capacity: \$/);
+    assert.match(await evaluate(`document.getElementById('context-help').textContent`), /^Provider-reported full-window allowance/);
     assert.equal(await evaluate('document.activeElement===savedHelp'),true);
     for (const width of [1200,360]) for (const theme of ['classic','light','dark']) {
       await command('Emulation.setDeviceMetricsOverride', {width,height:800,deviceScaleFactor:1.5,mobile:false},sessionId);
@@ -193,7 +194,7 @@ async function main() {
     evidence={outcome:'PASS',browser:version.product,browserZoom,checks,layouts,streams:1,route_report_jobs:0,
       limitations:['Synthetic acquisition; real-installation account-owner proof is separate.',
         'Headless DOM/layout/input, not physical desktop, assistive technology or macOS proof.']};
-  } catch(error) { evidence={outcome:'FAIL',checks,layouts,reason:error.message,errors};process.exitCode=1; }
+  } catch(error) { evidence={outcome:'FAIL',checks,layouts,reason:error.stack||error.message,errors};process.exitCode=1; }
   finally {
     clearTimeout(deadline);
     try {await command('Browser.close');} catch {}

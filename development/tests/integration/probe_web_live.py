@@ -77,10 +77,13 @@ def check_estimate_quotas(accounts):
                     if value is None:
                         continue
                     original = Decimal(value)
-                    rendered = Decimal(display[key].removesuffix(' (guesstimate)'))
+                    rendered = Decimal(display[key].removeprefix('~'))
                     assert abs(rendered - original) <= original / 10, 'estimate display tolerance'
                     assert original == 0 or rendered > 0, 'positive estimate display'
-                    assert 'not verified provider usage' in display[key + '_help'], 'estimate provenance help'
+                    if key == 'monthly_capacity':
+                        assert 'not a guaranteed monthly entitlement' in display[key + '_help'], 'monthly provenance help'
+                    else:
+                        assert 'not verified provider usage' in display[key + '_help'], 'estimate provenance help'
                     count += 1
     return dict(checked_amounts=count)
 

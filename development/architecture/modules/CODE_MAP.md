@@ -345,12 +345,16 @@ observation policy, never a product computation timeout or independent oracle.
 Unwrapped CPU remains unknown; nested/cross-thread inclusive spans are not additive.
 
 Mini's session totals/history presentation, canonical Finished clock and unknown-finish help are covered by `test_mini_watch.py`,
-`fixtures/mini_sessions.cjs`; `integration/probe_mini_session_alignment.cjs`, invoked
-by current `probe_mini_fit.cjs`, pins both four-column layouts, name-only Session,
-independent prompt (whole-session) cost scopes and symmetric Session/cost help for each
+`fixtures/mini_sessions.cjs`; `integration/probe_mini_help.cjs`, invoked
+by current `probe_mini_fit.cjs`, pins the five-column layout, name-only Session,
+independent prompt / whole-session cost cells and symmetric Session/cost help for each
 focal or canonical historical representative (including unknown ordinals). Stable
 focus/live help, Escape suppression, pointer/keyboard/touch and intrinsic cost widths
-are checked across widths, font/CSS zoom, themes and units. Older
+are checked across widths, font/CSS zoom, themes and units. `probe_mini_duration.cjs`
+checks the safe running-only Duration span, ticking/selection and open-help outcome changes.
+`fixtures/account_capacity.cjs` and `probe_subscription_capacity.cjs` cover shared-card
+numeric availability, unknown/known transitions, first-letter labels and native help/ARIA.
+Older
 `integration/probe_mini_sessions.cjs` belongs to the pre-fit/pre-paired-cost probe.
 `integration/probe_mini_activity.cjs`, invoked by the current `probe_mini_fit.cjs`,
 checks historical-only column indices, midnight/DST tokens, live tooltip/focus identity,

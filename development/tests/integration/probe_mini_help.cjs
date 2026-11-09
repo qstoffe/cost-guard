@@ -16,17 +16,17 @@ module.exports = async function help({evaluate,until,fixture,command,pip,checks}
       text:'[Approaching price threshold >200k]',display:{warning_cost:'(2.4x more expensive)'}}};
     miniWatch.update(helpPublication);}
     window.helpRow=miniWatch.view.promptRows.get('help-synthetic');
-    window.helpTitle=helpRow.querySelector('.mini-session');window.helpCtx=helpRow.cells[3];`);
+    window.helpTitle=helpRow.querySelector('.mini-session');window.helpCtx=helpRow.cells[4];`);
   const panel = `miniWatch.view.doc.getElementById('context-help')`;
   const read = () => evaluate(`({session:helpRow.sessionHelp,context:helpRow.contextHelp,
-    visible:helpRow.cells[3].textContent,columns:helpRow.cells.length,
+     visible:helpRow.cells[4].textContent,columns:helpRow.cells.length,
     buttons:helpRow.querySelectorAll('button').length,native:!!helpRow.querySelector('[title]'),
     overflow:miniWatch.view.doc.documentElement.scrollWidth>miniWatch.window.innerWidth+1,
     table:[miniWatch.view.prompts.clientWidth,miniWatch.view.prompts.clientHeight]})`);
   const before = await read();
   assert.equal(before.session,'Example Session\nPrompt #21 in this session: Implement pagination for…');
   assert.match(before.context,/^Next Ctx: 128k .*\n\nΔ Ctx: \+4k[\s\S]*Approaching price threshold >200k\n2.4x more expensive$/);
-  assert.equal(before.visible,'128k');assert.equal(before.columns,4);assert.equal(before.buttons,0);assert.equal(before.native,false);
+  assert.equal(before.visible,'128k');assert.equal(before.columns,5);assert.equal(before.buttons,0);assert.equal(before.native,false);
   await command('Page.bringToFront',{},pip);
   await key('Tab');await evaluate('helpRow.cells[0].firstChild.focus()');await key('Tab');
   await until(`${panel}?.matches(':popover-open') && miniWatch.view.doc.activeElement===helpTitle`);
@@ -62,21 +62,21 @@ module.exports = async function help({evaluate,until,fixture,command,pip,checks}
   const after = await read();assert.deepEqual(after.table,before.table);assert.equal(after.overflow,false);
   await key('Escape');assert.equal(await evaluate(`${panel}.matches(':popover-open')`),false);
   await evaluate('miniWatch.update(liveValue)');
-  checks.push('Mini value help: exact Next/representative delta, historical source handoff/N/A, approaching/exceeded cost guidance, short Unicode/text-only preview, real Tab/hover/touch/Escape and open-help refresh; unchanged four-column geometry');
+  checks.push('Mini value help: exact Next/representative delta, historical source handoff/N/A, approaching/exceeded cost guidance, short Unicode/text-only preview, real Tab/hover/touch/Escape and open-help refresh; five-column geometry');
   await fixture('context-running');
   await until(`miniWatch.view.promptRows.has('root') && liveValue.view.active_cards[0]?.rows[0]?.live_context.watch_next_context_tokens===112000`);
-  await evaluate(`window.sourceRow=miniWatch.view.promptRows.get('root');sourceRow.cells[3].focus()`);
+  await evaluate(`window.sourceRow=miniWatch.view.promptRows.get('root');sourceRow.cells[4].focus()`);
   await until(`${panel}.matches(':popover-open')`);
   assert.match(await evaluate(`${panel}.textContent`),/^Next Ctx: 112k[^\n]*\n\nΔ Ctx: \+12k/);
   assert.equal(await evaluate(`document.querySelector('.watch-card .watch-prompt-table')?.textContent.includes('+12k')`),true,'Full Watch uses same canonical delta');
   for(const [phase,next,delta] of [['later','117k','+17k'],['boundary','N/A','N/A'],
       ['running','112k','+12k'],['history','300k','+12k'],['zero','300k','0'],['waiting','N/A','N/A']]) {
     await fixture('context-'+phase);
-    await until(`miniWatch.view.promptRows.get('root')?.cells[3].textContent===${JSON.stringify(next)} &&
+    await until(`miniWatch.view.promptRows.get('root')?.cells[4].textContent===${JSON.stringify(next)} &&
       miniWatch.view.promptRows.get('root')?.contextHelp.includes(${JSON.stringify('Δ Ctx: '+delta+' (')})`);
-    assert.equal(await evaluate(`miniWatch.view.promptRows.get('root')===sourceRow && miniWatch.view.doc.activeElement===sourceRow.cells[3]`),true);
+    assert.equal(await evaluate(`miniWatch.view.promptRows.get('root')===sourceRow && miniWatch.view.doc.activeElement===sourceRow.cells[4]`),true);
     assert.match(await evaluate(`${panel}.textContent`),new RegExp('Δ Ctx: '+delta.replace('+','\\+')+' \\('));
-    assert.equal(await evaluate('sourceRow.cells.length'),4);
+    assert.equal(await evaluate('sourceRow.cells.length'),5);
     if(phase==='history')assert.match(await evaluate(`${panel}.textContent`),/historical prompt change; session estimate may be later/);
     if(phase==='waiting')assert.match(await evaluate(`${panel}.textContent`),/waiting for comparable request context/);
   }

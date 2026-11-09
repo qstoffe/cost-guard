@@ -11,7 +11,7 @@ module.exports = function miniHelp(controller, view, input, helpText) {
     input.view = {...saved,active_cards:active,history_cards:history,history_state:'observed',history_epoch:1};
     controller.update(input); return view.promptRows.get('help-a');
   };
-  const row = show(), title = row.children[1].children[0].children[0], ctx = row.children[3];
+  const row = show(), title = row.children[1].children[0].children[0], ctx = row.children[4];
   assert.equal(helpText(title), 'Example Session\nPrompt #21 in this session: Implement pagination for…');
   assert.match(helpText(ctx), /^Next Ctx: 128k .*\n\nΔ Ctx: \+4k \(represented prompt change\)/);
   const visible = row.textContent;
@@ -82,8 +82,8 @@ module.exports = function miniHelp(controller, view, input, helpText) {
   assert.equal(helpText(title),'Renamed session\nPrompt #22 in this session: Replacement hint');
   assert.match(helpText(ctx),/^Next Ctx: 256k[\s\S]*Δ Ctx: -4k/);
   assert.doesNotMatch(helpText(ctx),/threshold|Original/);
-  assert.match(helpText(view.promptRows.get('help-b').children[3]),/Next Ctx: 0k[\s\S]*exceeded/);
-  assert.equal(row.children.length,4); assert.equal(row.querySelectorAll('button').length,0);
+  assert.match(helpText(view.promptRows.get('help-b').children[4]),/Next Ctx: 0k[\s\S]*exceeded/);
+  assert.equal(row.children.length,5); assert.equal(row.querySelectorAll('button').length,0);
   assert.equal(title.tabIndex,0); assert.equal(ctx.tabIndex,0);
   input.view = saved; controller.update(input);
 };

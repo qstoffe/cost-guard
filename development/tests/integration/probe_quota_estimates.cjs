@@ -19,8 +19,8 @@ module.exports = async ({evaluate,until,command,sessionId,pipSession,checks,fixt
           streams:probeStreams,reports:probeReports,bars:[...root.querySelectorAll('progress')].map(b=>b.value)};})()`);
         assert.ok(data.text.includes(`Monthly · ${mode==='used'?'10%':'90%'} ${mode} (${amount})`));
         assert.ok(data.mini.includes(`${mode} (${amount})`));
-        assert.ok(data.text.includes(`Monthly Capacity: ${unit==='usd'?'$60.00':'6000'} (guesstimate)`));
-        assert.ok(data.text.includes(`5-hour Capacity: ${unit==='usd'?'$6.00':'600'} (guesstimate)`));
+        assert.ok(data.text.includes(`Monthly Capacity: ~${unit==='usd'?'$60.00':'6000'}`));
+        assert.ok(data.text.includes(`5-hour Capacity: ~${unit==='usd'?'$6.00':'600'}`));
         assert.ok(data.text.includes(`Remaining: ${unit==='usd'?'$6.00':'600'}/day`));
         assert.ok(data.text.includes(`Remaining: ${unit==='usd'?'$20.00':'2000'}/workday`));
         assert.match(data.help,/6130 Credits/);
@@ -32,13 +32,12 @@ module.exports = async ({evaluate,until,command,sessionId,pipSession,checks,fixt
   }
   await change('quota-display','remaining'); await change('ccost-unit','credits'); await route('watch');
   // Keyboard focus and refresh stay on the same intrinsic parenthetical target.
-  for (const [selector,raw] of [['.watch-secondary-quota .watch-monthly-capacity span','88272'],
-      ['.watch-primary-details p:nth-child(2) span','613'],['.watch-primary-details p:nth-child(3) span','1839']]) {
+  for (const [selector,raw] of [['.watch-primary-details p:nth-child(2) span','613'],['.watch-primary-details p:nth-child(3) span','1839']]) {
     await evaluate(`document.querySelector('${selector}').focus()`);
     await until(`document.querySelector('[role=tooltip]')?.textContent.includes('${raw} Credits')`);
     assert.equal(await evaluate(`document.activeElement.hasAttribute('aria-describedby')`),true);
   }
-  await evaluate(`document.querySelector('.watch-subscription > .metric-value .help-value').focus()`);
+  await evaluate(`document.querySelector('.watch-subscription > .watch-quota-summary > .help-value').focus()`);
   await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Tab',code:'Tab',windowsVirtualKeyCode:9},sessionId);
   await command('Input.dispatchKeyEvent',{type:'keyUp',key:'Tab',code:'Tab',windowsVirtualKeyCode:9},sessionId);
   await until(`document.querySelector('[role=tooltip]')?.textContent.includes('5517 Credits')`);
@@ -56,7 +55,8 @@ module.exports = async ({evaluate,until,command,sessionId,pipSession,checks,fixt
   const point = await evaluate(`(() => {document.activeElement.blur();const n=document.querySelector('.watch-secondary-quota .watch-quota-capacity span');
     n.scrollIntoView({block:'center'});const r=n.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`);
   await command('Input.dispatchMouseEvent',{type:'mouseMoved',...point},sessionId);
-  await until(`document.querySelector('[role=tooltip]')?.matches(':popover-open') && document.querySelector('[role=tooltip]').textContent.includes('613 Credits ($6.13)')`);
+  await until(`document.querySelector('[role=tooltip]')?.matches(':popover-open') && document.querySelector('[role=tooltip]').textContent.startsWith('Estimated full-window reference CCost')`);
+  assert.doesNotMatch(await evaluate(`document.querySelector('[role=tooltip]').textContent`),/613 Credits|rounding|÷/);
   await command('Input.dispatchMouseEvent',{type:'mouseMoved',x:1,y:1},sessionId);
   // Touch the compact line; it uses the same raw primary estimate and its own document controller.
   const touch = await evaluate(`(() => {const d=miniWatch.window.document,n=miniWatch.view.accounts.children[0].children[0].children[0];
