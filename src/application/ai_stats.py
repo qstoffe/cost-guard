@@ -2,7 +2,7 @@
 from decimal import Decimal, InvalidOperation
 
 from src.display import duration_text
-from src.numbers import ccost_amount, ccost_unit, exact_number
+from src.numbers import ccost_amount, ccost_unit
 
 COPY = {
     'hourly-rate': ('Budget build. Dangerous potential.', 'Standard-issue silicon. Surprisingly functional.', 'Premium silicon has expensive tastes.'),
@@ -29,25 +29,28 @@ def number(value):
         return Decimal(0)
 
 
-def rate_tokens(raw):
+def rate_tokens(raw, reasons=()):
     rates = dict(raw.fields) if hasattr(raw, 'fields') else raw
     def amount(key):
         return ccost_amount(number(rates[key])) + ('' if ccost_unit() == 'usd' else ' CCost')
     calendar = amount('calendar_rate') + '/h'
     workday = amount('workday_rate') + '/h' if rates['workdays'] else 'No workdays'
     robot = amount('robot_day') + '/8h day'
-    hours = exact_number(number(rates['active_hours']))
-    workday_help = (f"Workday: the same total ÷ {rates['workday_hours']} scheduled hours = {workday}."
-                   if rates['workdays'] else 'Workday: No workdays, so no scheduled hours to spread the tab over.')
-    help_text = ('24h lets the robots burn credits around the clock. Workday squeezes the same tab into '
-        'eight scheduled hours per workday. Robot day imagines eight full hours at their active-hour burn rate: '
-        'a hypothetical shift, not a historical invoice.\n'
-        f"24h: {amount('total')} ÷ {rates['calendar_hours']} nominal calendar hours = {calendar}. "
-        'Rolling 7/30-day views use local date slots ending today; cost keeps its trailing-hour window.\n'
-        f'{workday_help}\n')
-    help_text += (f"Robot: {amount('total')} ÷ {hours} active hours = {amount('active_rate')}/h; "
-        f"× 8 = {robot}. {rates['workdays']} such shifts = {amount('robot_period')}."
-        if rates['active_hours'] else 'Robot clock is taking a nap. No active-hour basis for a shift yet.')
+    workday_help = ('Workday: The same tab squeezed into eight-hour days, skipping weekends and configured holidays; HR calls that mercy.'
+        if rates['workdays'] else 'Workday: No scheduled workdays to carry the tab; even imaginary payroll gets weekends and holidays off.')
+    shift = number(rates['robot_day'])
+    robot_help = 'Robot 8h shift: Imagine eight hours of nonstop silicon; the robot wants a charging dock and a promotion.'
+    if not number(rates['active_hours']) or not number(rates['total']) or not shift:
+        robot_help = "Robot 8h shift: The imaginary shift hasn't started; HR is still writing the robot's job description."
+    # Fictional copy tiers in raw reference Credits, not wages or rounded currency.
+    elif not reasons:
+        if shift < 80:
+            robot_help = 'Robot 8h shift: At this imaginary eight-hour bargain, your replacement has already requested your parking spot.'
+        elif shift >= 800:
+            robot_help = "Robot 8h shift: Imagine eight nonstop hours at this price. Relax, HR just shredded the robot's job application."
+    help_text = '\n\n'.join((
+        '24h: The same robot tab, spread around the clock; even your beauty sleep gets a budget line.',
+        workday_help, robot_help))
     return {'calendar_rate': calendar, 'workday_rate': workday, 'robot_day': robot, 'rate_help': help_text}
 
 
@@ -79,5 +82,5 @@ def stat_tokens(values):
         text = f'{Decimal(value):.0f}%'
     else:
         text = str(int(value)) + (' days' if metric == 'streak' else '')
-    return {'value': text, 'trait': line, **(rate_tokens(values['rates'])
+    return {'value': text, 'trait': line, **(rate_tokens(values['rates'], values.get('reasons', ()))
         if metric == 'hourly-rate' and values.get('rates') else {})}

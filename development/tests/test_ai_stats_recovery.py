@@ -181,7 +181,8 @@ class ObservedStatsTests(unittest.TestCase):
         self.assertEqual(0, values['working-time'].value)
         self.assertEqual((1, 0, 0), (hourly.rates.calendar_rate, hourly.rates.active_rate, hourly.rates.robot_day))
         self.assertEqual('No workdays', tokens['workday_rate'])
-        self.assertIn('No active-hour basis', tokens['rate_help'])
+        self.assertIn("The imaginary shift hasn't started", tokens['rate_help'])
+        self.assertNotIn('replacement', tokens['rate_help'])
 
     def test_unanchored_or_extreme_history_never_invents_records_or_nonfinite_values(self):
         unanchored = StatsRoot('real', 'Real record', (), ((0, None, False), (-1, -1, False)))
