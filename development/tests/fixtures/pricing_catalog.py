@@ -1,10 +1,27 @@
-"""Small deterministic reference-price catalogs for analysis/report fixtures."""
+"""Deterministic reference catalogs and synthetic provider pricing Markdown."""
 from __future__ import annotations
 
 from decimal import Decimal
 
 from src.domain import ModelPricing, ModelRef, PricingTier
 from src.pricing.catalog import PricingCatalog
+
+
+def pricing_markdown(*, promo: bool = False) -> str:
+    rows = "\n".join(
+        f"GPT-Test-{i} | GA | Test | Default | Not applicable | ${i}.00 | $0.{i}0 | "
+        f"{'$0.50' if i == 1 else 'Not applicable'} | ${i * 2}.00"
+        for i in range(1, 6)
+    )
+    tail = ""
+    if promo:
+        tail = "\nGPT-Test-1 is available at promotional pricing at 50% off through December 31, 2026.\n"
+    return (
+        "## OpenAI\n"
+        "Model | Release status | Category | Tier | Threshold (input tokens) | Input | Cached input | Cache write | Output\n"
+        "--- | --- | --- | --- | --- | --- | --- | --- | ---\n"
+        + rows + "\n" + tail
+    )
 
 
 def catalog() -> PricingCatalog:

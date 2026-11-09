@@ -8,6 +8,7 @@ import unittest
 from decimal import Decimal
 from pathlib import Path
 
+from development.tests.fixtures.pricing_catalog import pricing_markdown
 from src.accounts.github_copilot import (
     ENTITLEMENT_URL,
     INTERNAL_USER_URL,
@@ -26,23 +27,6 @@ from src.accounts.openai_subscription import (
 from src.cache import CacheDatabase, CacheRepository
 from src.domain import AccountUsageStatus, ModelRef, TokenUsage
 from src.pricing.github_copilot import GitHubCopilotPricingProvider, parse_pricing_markdown
-
-
-def pricing_markdown(*, promo: bool = False) -> str:
-    rows = "\n".join(
-        f"GPT-Test-{i} | GA | Test | Default | Not applicable | ${i}.00 | $0.{i}0 | "
-        f"{'$0.50' if i == 1 else 'Not applicable'} | ${i * 2}.00"
-        for i in range(1, 6)
-    )
-    tail = ""
-    if promo:
-        tail = "\nGPT-Test-1 is available at promotional pricing at 50% off through December 31, 2026.\n"
-    return (
-        "## OpenAI\n"
-        "Model | Release status | Category | Tier | Threshold (input tokens) | Input | Cached input | Cache write | Output\n"
-        "--- | --- | --- | --- | --- | --- | --- | --- | ---\n"
-        + rows + "\n" + tail
-    )
 
 
 class PricingProviderTests(unittest.TestCase):
